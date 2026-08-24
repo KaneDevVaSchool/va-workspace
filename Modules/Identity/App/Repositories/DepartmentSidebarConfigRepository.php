@@ -28,6 +28,21 @@ class DepartmentSidebarConfigRepository implements DepartmentSidebarConfigReposi
             ->get();
     }
 
+    public function departmentIdsWithConfig(array $departmentIds): array
+    {
+        if ($departmentIds === []) {
+            return [];
+        }
+
+        return DepartmentSidebarConfig::query()
+            ->whereIn('department_id', $departmentIds)
+            ->distinct()
+            ->pluck('department_id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
     public function findByDepartmentAndKey(int $departmentId, string $menuKey): ?DepartmentSidebarConfig
     {
         return DepartmentSidebarConfig::query()

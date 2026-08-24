@@ -25,18 +25,9 @@ Route::middleware(['auth'])->group(function () {
     // Danh sách phòng ban — dùng cho dropdown (team, scope filter...).
     Route::get('/departments', [DepartmentController::class, 'index'])->name('departments.index');
 
-    // CRUD Team theo phòng ban — quyền team.manage (department_director/team_lead...).
-    // Middleware chỉ chặn thô ở mức "role có key team.manage ở đâu đó";
-    // TeamController tự kiểm tra lại đúng scope department cụ thể (xem
-    // TeamController::denyUnlessCanManage — department_id đến từ query/body
-    // chứ không phải route param nên middleware permission:...,department
-    // không tự lấy được scope_id).
+    // Danh sách nhóm theo phòng ban (dropdown scope trên ma trận phân quyền).
+    // CRUD nhóm: WorkspaceConfig members API — không còn trang /manager/teams.
     Route::middleware(['permission:team.manage'])
-        ->prefix('teams')->name('teams.')
-        ->group(function () {
-            Route::get('/', [TeamController::class, 'index'])->name('index');
-            Route::post('/', [TeamController::class, 'store'])->name('store');
-            Route::put('/{team}', [TeamController::class, 'update'])->name('update');
-            Route::delete('/{team}', [TeamController::class, 'destroy'])->name('destroy');
-        });
+        ->get('/teams', [TeamController::class, 'index'])
+        ->name('teams.index');
 });

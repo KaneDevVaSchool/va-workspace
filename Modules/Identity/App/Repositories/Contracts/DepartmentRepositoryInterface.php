@@ -15,5 +15,13 @@ interface DepartmentRepositoryInterface
     /** @return Collection<int, Department> */
     public function allActive(): Collection;
 
+    /**
+     * Mọi phòng ban, kể cả ngừng hoạt động — bảng tổng hợp workspace
+     * superadmin cần thấy cả hai trạng thái.
+     *
+     * @return Collection<int, Department>
+     */
+    public function all(): Collection;
+
     public function find(int $id): ?Department;
 }

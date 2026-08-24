@@ -17,6 +17,14 @@ interface DepartmentSidebarConfigRepositoryInterface
     /** Toàn bộ override hiện có của 1 phòng ban (kể cả is_visible=true nếu có row). */
     public function allByDepartment(int $departmentId): Collection;
 
+    /**
+     * Phòng ban nào đã lưu ít nhất một override menu — dùng cho cờ "đã có cấu hình".
+     *
+     * @param  list<int>  $departmentIds
+     * @return list<int>
+     */
+    public function departmentIdsWithConfig(array $departmentIds): array;
+
     public function findByDepartmentAndKey(int $departmentId, string $menuKey): ?DepartmentSidebarConfig;
 
     public function setVisibility(int $departmentId, string $menuKey, bool $isVisible, ?int $updatedBy): DepartmentSidebarConfig;

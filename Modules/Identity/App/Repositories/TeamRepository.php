@@ -20,6 +20,21 @@ class TeamRepository implements TeamRepositoryInterface
             ->get();
     }
 
+    public function departmentIdsWithTeams(array $departmentIds): array
+    {
+        if ($departmentIds === []) {
+            return [];
+        }
+
+        return Team::query()
+            ->whereIn('department_id', $departmentIds)
+            ->distinct()
+            ->pluck('department_id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
     public function find(int $id): ?Team
     {
         return Team::query()->with(['department', 'teamLead'])->find($id);

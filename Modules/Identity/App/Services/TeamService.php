@@ -27,7 +27,10 @@ class TeamService
     {
         $this->validateTeamLead($data['department_id'], $data['team_lead_id'] ?? null);
 
-        return $this->teams->create($data);
+        $team = $this->teams->create($data);
+        $this->syncLeadTeamMembership($team);
+
+        return $team;
     }
 
     /**
@@ -41,7 +44,13 @@ class TeamService
             $this->validateTeamLead($departmentId, $data['team_lead_id']);
         }
 
-        return $this->teams->update($team, $data);
+        $updated = $this->teams->update($team, $data);
+
+        if (array_key_exists('team_lead_id', $data)) {
+            $this->syncLeadTeamMembership($updated);
+        }
+
+        return $updated;
     }
 
     public function delete(Team $team): void
@@ -62,6 +71,38 @@ class TeamService
 
         if (! $lead || (int) $lead->department_id !== $departmentId || ! $lead->isActive()) {
             throw new TeamLeadNotInDepartment();
+        }
+    }
+
+    /** Trưởng nhóm được coi là thành viên nhóm — gán `users.team_id` khi chỉ định lead. */
+    private function syncLeadTeamMembership(Team $team): void
+    {
+        if ($team->team_lead_id === null) {
+            return;
+        }
+
+        $lead = $this->users->findById((int) $team->team_lead_id);
+
+        if (
+            $lead === null
+            || (int) $lead->department_id !== (int) $team->department_id
+            || ! $lead->isActive()
+        ) {
+            return;
+        }
+
+        if ((int) $lead->team_id === (int) $team->id) {
+            return;
+        }
+
+        $this->users->update($lead, ['team_id' => $team->id]);
+    }
+
+    /** Đồng bộ `users.team_id` cho mọi trưởng nhóm đã chỉ định trong phòng ban. */
+    public function syncDepartmentLeadMemberships(int $departmentId): void
+    {
+        foreach ($this->teams->allByDepartment($departmentId) as $team) {
+            $this->syncLeadTeamMembership($team);
         }
     }
 }

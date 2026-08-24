@@ -63,7 +63,7 @@ class WorkspaceConfigSidebarController extends Controller
 
         $this->activityLogs->record(
             'workspace_config.sidebar.update',
-            ($data['is_visible'] ? 'Bật' : 'Tắt').' menu "'.$data['menu_key'].'" cho phòng ban',
+            ($data['is_visible'] ? 'Bật' : 'Tắt').' menu "'.$this->service->menuLabel($data['menu_key']).'" cho phòng ban',
             $request->user(),
             'department_sidebar_config',
             $config->id,

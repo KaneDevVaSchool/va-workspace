@@ -12,14 +12,19 @@ import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
+import StatusBadge from '../components/StatusBadge.vue';
 import {
   COLUMN_STORAGE_KEY,
   COLUMN_WIDTH_KEY,
+  CONFIG_FILTER_OPTIONS,
   DIRECTOR_FILTER_OPTIONS,
   FILTER_STORAGE_KEY,
   OVERVIEW_COLUMNS,
   OVERVIEW_FILTERS,
+  STATUS_FILTER_OPTIONS,
   ZOOM_STORAGE_KEY,
+  departmentConfigLabel,
+  departmentStatusLabel,
   directorEmail,
   directorName,
   loadVisibility,
@@ -36,6 +41,8 @@ const loading = ref(false);
 const selected = ref(null);
 
 const query = ref('');
+const isActive = ref('');
+const hasConfig = ref('');
 const hasDirector = ref('');
 const page = ref(1);
 const perPage = ref(20);
@@ -59,6 +66,10 @@ const filteredDepartments = computed(() => {
       const hay = `${department.name ?? ''} ${department.code ?? ''} ${directorName(department)} ${directorEmail(department)}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
+    if (isActive.value === 'yes' && !department.is_active) return false;
+    if (isActive.value === 'no' && department.is_active) return false;
+    if (hasConfig.value === 'yes' && !department.has_config) return false;
+    if (hasConfig.value === 'no' && department.has_config) return false;
     if (hasDirector.value === 'yes' && !department.director) return false;
     if (hasDirector.value === 'no' && department.director) return false;
     return true;
@@ -81,7 +92,11 @@ const pageDepartments = computed(() => {
 });
 
 const hasActiveFilters = computed(
-  () => Boolean(query.value.trim()) || Boolean(hasDirector.value),
+  () =>
+    Boolean(query.value.trim()) ||
+    Boolean(isActive.value) ||
+    Boolean(hasConfig.value) ||
+    Boolean(hasDirector.value),
 );
 
 const hiddenActiveFilterLabels = computed(() =>
@@ -104,6 +119,8 @@ const tableWidthPx = computed(() => {
 
 function filterHasValue(key) {
   if (key === 'q') return Boolean(query.value.trim());
+  if (key === 'is_active') return Boolean(isActive.value);
+  if (key === 'has_config') return Boolean(hasConfig.value);
   if (key === 'has_director') return Boolean(hasDirector.value);
   return false;
 }
@@ -133,6 +150,8 @@ function goPage(nextPage) {
 
 function clearFilters() {
   query.value = '';
+  isActive.value = '';
+  hasConfig.value = '';
   hasDirector.value = '';
   page.value = 1;
 }
@@ -143,6 +162,8 @@ function inspect(department) {
 
 function cellText(department, key) {
   if (key === 'name') return department.name || '—';
+  if (key === 'is_active') return departmentStatusLabel(department.is_active);
+  if (key === 'has_config') return departmentConfigLabel(department.has_config);
   if (key === 'director') return directorName(department) || 'Chưa gán trưởng đơn vị';
   if (key === 'member_count') return String(department.member_count ?? 0);
   if (key === 'code') return department.code || '—';
@@ -214,6 +235,9 @@ function columnContentWidth(key, fonts) {
     } else {
       maxW = Math.max(maxW, measureText(cellText(department, key), fonts.cell));
     }
+  }
+  if (key === 'is_active' || key === 'has_config') {
+    maxW += 14;
   }
   return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA));
 }
@@ -324,7 +348,7 @@ watch(selected, () => nextTick(fitColumnsToContent));
 watch(shownColumns, () => nextTick(fitColumnsToContent));
 watch(pageDepartments, () => nextTick(fitColumnsToContent));
 
-watch([query, hasDirector, perPage], () => {
+watch([query, isActive, hasConfig, hasDirector, perPage], () => {
   page.value = 1;
 });
 
@@ -367,7 +391,6 @@ onBeforeUnmount(() => {
     <PageHeader
       title="Cấu hình Workspace"
       icon="settings"
-      description="Xem tổng hợp workspace của tất cả phòng ban. Bấm một dòng để xem chi tiết — chỉ xem, không sửa thay trưởng phòng."
       :breadcrumbs="[
         { label: 'Trang chủ', to: { name: 'home' } },
         { label: 'Cấu hình Workspace' },
@@ -395,6 +418,24 @@ onBeforeUnmount(() => {
                 placeholder="Phòng ban, trưởng đơn vị, email…"
                 @keydown.enter="page = 1"
               />
+            </div>
+
+            <div v-if="visibleFilters.is_active" class="wc-overview__field">
+              <label class="wc-overview__label" for="wc-overview-status">Trạng thái</label>
+              <select id="wc-overview-status" v-model="isActive" class="wc-overview__input">
+                <option v-for="item in STATUS_FILTER_OPTIONS" :key="item.value || 'all-status'" :value="item.value">
+                  {{ item.label }}
+                </option>
+              </select>
+            </div>
+
+            <div v-if="visibleFilters.has_config" class="wc-overview__field">
+              <label class="wc-overview__label" for="wc-overview-config">Cấu hình</label>
+              <select id="wc-overview-config" v-model="hasConfig" class="wc-overview__input">
+                <option v-for="item in CONFIG_FILTER_OPTIONS" :key="item.value || 'all-config'" :value="item.value">
+                  {{ item.label }}
+                </option>
+              </select>
             </div>
 
             <div v-if="visibleFilters.has_director" class="wc-overview__field">
@@ -506,6 +547,18 @@ onBeforeUnmount(() => {
                     </template>
                     <span v-else class="wc-overview__muted">Chưa gán trưởng đơn vị</span>
                   </template>
+                  <template v-else-if="col.key === 'is_active'">
+                    <StatusBadge
+                      :on="department.is_active"
+                      :label="departmentStatusLabel(department.is_active)"
+                    />
+                  </template>
+                  <template v-else-if="col.key === 'has_config'">
+                    <StatusBadge
+                      :on="department.has_config"
+                      :label="departmentConfigLabel(department.has_config)"
+                    />
+                  </template>
                   <span v-else>{{ cellText(department, col.key) }}</span>
                 </td>
               </tr>
@@ -541,6 +594,24 @@ onBeforeUnmount(() => {
           <div class="wc-overview__row">
             <span class="wc-overview__row-label">Mã phòng ban</span>
             <span class="wc-overview__row-value">{{ selected.code || '—' }}</span>
+          </div>
+          <div class="wc-overview__row">
+            <span class="wc-overview__row-label">Trạng thái</span>
+            <span class="wc-overview__row-value">
+              <StatusBadge
+                :on="selected.is_active"
+                :label="departmentStatusLabel(selected.is_active)"
+              />
+            </span>
+          </div>
+          <div class="wc-overview__row">
+            <span class="wc-overview__row-label">Cấu hình</span>
+            <span class="wc-overview__row-value">
+              <StatusBadge
+                :on="selected.has_config"
+                :label="departmentConfigLabel(selected.has_config)"
+              />
+            </span>
           </div>
           <div class="wc-overview__row">
             <span class="wc-overview__row-label">Trưởng đơn vị</span>
@@ -653,6 +724,12 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
   width: 100%;
+}
+
+@media (min-width: 1280px) {
+  .wc-overview__filters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .wc-overview__field {
@@ -785,6 +862,14 @@ onBeforeUnmount(() => {
 .wc-overview__table tbody td span {
   display: block;
   white-space: nowrap;
+}
+
+.wc-overview__table tbody td :deep(.status-badge) {
+  display: inline-flex;
+}
+
+.wc-overview__table tbody td :deep(.status-badge span) {
+  display: inline-block;
 }
 
 .wc-overview__empty {

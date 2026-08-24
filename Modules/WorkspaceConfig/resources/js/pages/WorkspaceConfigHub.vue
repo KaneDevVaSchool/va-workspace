@@ -5,22 +5,39 @@
 // sau này tiêu chí đánh giá) điều hướng qua tab nội bộ trang này, không
 // phải mục sidebar riêng.
 //
-import { computed, provide, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, provide, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 
 const route = useRoute();
+const router = useRouter();
 const auth = useAuthStore();
 
 const TABS = [
-  { name: 'manager.workspace-config.members', label: 'Thành viên' },
-  { name: 'manager.workspace-config.sidebar', label: 'Menu hiển thị' },
+  {
+    name: 'manager.workspace-config.members',
+    label: 'Thành viên',
+    permission: 'workspace_config.view_department',
+  },
+  {
+    name: 'manager.workspace-config.sidebar',
+    label: 'Menu hiển thị',
+    permission: 'workspace_config.manage_sidebar_department',
+  },
 ];
 
 const activeTab = computed(() => route.name);
 const departmentLabel = computed(() => auth.user?.department?.name || 'Chưa gắn phòng ban');
+
+const visibleTabs = computed(() =>
+  TABS.filter((tab) => {
+    if (tab.permission && !auth.can(tab.permission)) return false;
+    if (auth.hiddenMenuKeys.includes(tab.name)) return false;
+    return true;
+  }),
+);
 
 const reloadChild = ref(null);
 const reloading = ref(false);
@@ -55,6 +72,18 @@ async function reload() {
     reloading.value = false;
   }
 }
+
+watch(
+  [visibleTabs, activeTab],
+  () => {
+    if (visibleTabs.value.some((tab) => tab.name === activeTab.value)) return;
+    const fallback = visibleTabs.value[0];
+    if (fallback) {
+      router.replace({ name: fallback.name });
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -63,7 +92,6 @@ async function reload() {
       title="Cấu hình phòng ban"
       :subtitle="departmentLabel"
       icon="settings"
-      description="Xem thành viên, tạo nhóm, gán vai trò và tuỳ chỉnh menu hiển thị riêng cho phòng ban mình."
       :breadcrumbs="[
         { label: 'Trang chủ', to: { name: 'home' } },
         { label: 'Cấu hình phòng ban' },
@@ -78,13 +106,14 @@ async function reload() {
       </template>
     </PageHeader>
 
-    <nav class="wc-hub__tabs">
+    <nav v-if="visibleTabs.length" class="wc-hub__tabs hide-scrollbar" aria-label="Mục cấu hình phòng ban">
       <router-link
-        v-for="tab in TABS"
+        v-for="tab in visibleTabs"
         :key="tab.name"
         :to="{ name: tab.name }"
         class="wc-hub__tab"
         :class="{ 'wc-hub__tab--active': activeTab === tab.name }"
+        :aria-current="activeTab === tab.name ? 'page' : undefined"
       >
         {{ tab.label }}
       </router-link>
@@ -143,21 +172,32 @@ async function reload() {
 }
 
 .wc-hub__tabs {
+  position: relative;
+  z-index: 8;
   flex-shrink: 0;
   display: flex;
+  align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--space-4);
-  box-shadow: 0 1px 0 var(--color-border);
+  min-height: 2.25rem;
+  margin-bottom: var(--space-3);
+  padding: 0.25rem 0;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-border) 75%, transparent);
 }
 
 .wc-hub__tab {
   padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
   color: var(--color-text-muted);
   font-family: var(--font-family-base);
   font-size: 0.875rem;
   font-weight: 600;
   text-decoration: none;
   box-shadow: 0 2px 0 transparent;
+}
+
+.wc-hub__tab:hover {
+  color: var(--color-text);
 }
 
 .wc-hub__tab--active {
@@ -178,6 +218,7 @@ async function reload() {
 
   .wc-hub__tabs {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 

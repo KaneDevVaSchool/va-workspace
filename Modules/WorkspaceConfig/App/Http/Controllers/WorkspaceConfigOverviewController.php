@@ -25,7 +25,7 @@ class WorkspaceConfigOverviewController extends Controller
     public function index(): JsonResponse
     {
         return response()->json([
-            'departments' => $this->members->overviewRows($this->departments->allActive()),
+            'departments' => $this->members->overviewRows($this->departments->all()),
         ]);
     }
 
@@ -41,6 +41,7 @@ class WorkspaceConfigOverviewController extends Controller
                 'id' => $model->id,
                 'code' => $model->code,
                 'name' => $model->name,
+                'is_active' => (bool) $model->is_active,
                 'director' => $this->members->directorForDepartment($model->id),
             ],
             'members' => $this->members->forDepartment($model->id),

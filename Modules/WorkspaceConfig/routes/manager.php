@@ -30,6 +30,9 @@ Route::middleware('auth')
         Route::put('/teams/{team}', [WorkspaceConfigMemberController::class, 'updateTeam'])
             ->middleware('permission:team.manage')
             ->name('teams.update');
+        Route::put('/{user}/team', [WorkspaceConfigMemberController::class, 'assignMemberTeam'])
+            ->middleware('permission:team.manage')
+            ->name('members.team.assign');
         Route::post('/roles', [WorkspaceConfigMemberController::class, 'assignRole'])
             ->middleware('permission:workspace_config.assign_role_department')
             ->name('roles.assign');

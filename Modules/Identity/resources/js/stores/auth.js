@@ -151,5 +151,19 @@ export const useAuthStore = defineStore('auth', {
       const { data } = await window.axios.delete('/api/view-as');
       this.setUserFromApi(data);
     },
+
+    /**
+     * Cập nhật hidden_menu_keys ngay trên client sau khi bật/tắt menu
+     * phòng ban — sidebar/tab phản ánh tức thì, không cần tải lại trang.
+     */
+    setMenuKeyVisible(menuKey, isVisible) {
+      if (!this.user || !menuKey) return;
+      const hidden = new Set(
+        Array.isArray(this.user.hidden_menu_keys) ? this.user.hidden_menu_keys : [],
+      );
+      if (isVisible) hidden.delete(menuKey);
+      else hidden.add(menuKey);
+      this.user.hidden_menu_keys = [...hidden];
+    },
   },
 });

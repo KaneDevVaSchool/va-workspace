@@ -31,6 +31,8 @@ class ActivityLogService
         'team.update' => 'Cập nhật nhóm',
         'team.delete' => 'Xoá nhóm',
         'role.assign' => 'Gán vai trò',
+        'member.team.assign' => 'Gán nhóm cho thành viên',
+        'workspace_config.sidebar.update' => 'Cập nhật menu phòng ban',
         'shortcut.create' => 'Tạo lối tắt',
         'shortcut.update' => 'Cập nhật lối tắt',
         'shortcut.delete' => 'Xoá lối tắt',
@@ -43,6 +45,7 @@ class ActivityLogService
         'permission' => 'Quyền',
         'shortcut' => 'Lối tắt',
         'role' => 'Vai trò',
+        'department_sidebar_config' => 'Menu phòng ban',
     ];
 
     /** @var array<string, string> */

@@ -141,6 +141,45 @@ class WorkspaceConfigMembersTest extends TestCase
 
         $this->assertSame('Nhóm B', $team->fresh()->name);
         $this->assertSame($lead->id, $team->fresh()->team_lead_id);
+        $this->assertSame($team->id, $lead->fresh()->team_id);
+    }
+
+    public function test_director_can_assign_member_team(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+        $member = $this->makeUser(['department_id' => $dept->id], ['member']);
+        $team = Team::query()->create(['department_id' => $dept->id, 'name' => 'Phần mềm']);
+
+        $this->actingAs($director)
+            ->putJson('/api/workspace-config/members/'.$member->id.'/team', [
+                'team_id' => $team->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('member.team.id', $team->id);
+
+        $this->assertSame($team->id, $member->fresh()->team_id);
+    }
+
+    public function test_setting_team_lead_syncs_member_team_id(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+        $lead = $this->makeUser(['department_id' => $dept->id], ['team_lead']);
+        $team = Team::query()->create(['department_id' => $dept->id, 'name' => 'Phần mềm']);
+
+        $this->actingAs($director)
+            ->putJson('/api/workspace-config/members/teams/'.$team->id, [
+                'name' => 'Phần mềm',
+                'team_lead_id' => $lead->id,
+            ])
+            ->assertOk();
+
+        $this->assertSame($team->id, $lead->fresh()->team_id);
     }
 
     public function test_cannot_update_team_of_another_department(): void

@@ -12,6 +12,7 @@ import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import WorkspaceConfigPicker from '../components/WorkspaceConfigPicker.vue';
+import StatusBadge from '../components/StatusBadge.vue';
 import {
   COLUMN_STORAGE_KEY,
   COLUMN_WIDTH_KEY,
@@ -48,6 +49,8 @@ const brokenAvatarIds = ref(new Set());
 const dialogKind = ref(null);
 const dialogTab = ref('create');
 const formSaving = ref(false);
+const teamAssignId = ref('');
+const teamAssignSaving = ref(false);
 const form = reactive({ id: '', name: '', team_lead_id: '' });
 const roleForm = reactive({ user_id: '', role_code: '' });
 
@@ -123,6 +126,17 @@ function toMemberPickerItems(members) {
 
 const rolePickerItems = computed(() => toMemberPickerItems(roleTabCandidates.value));
 
+const listFilter = ref('');
+
+function matchesListFilter(item) {
+  const q = listFilter.value.trim().toLowerCase();
+  if (!q) return true;
+  return `${item.label ?? ''} ${item.sublabel ?? ''} ${item.meta ?? ''}`.toLowerCase().includes(q);
+}
+
+const visibleTeamItems = computed(() => teamPickerItems.value.filter(matchesListFilter));
+const visibleRoleItems = computed(() => rolePickerItems.value.filter(matchesListFilter));
+
 const leadPickerItems = computed(() =>
   leadCandidates.value.map((member) => ({
     id: member.id,
@@ -149,10 +163,6 @@ const selectedTeam = computed(() =>
   allTeams.value.find((team) => team.id === Number(form.id)) ?? null,
 );
 
-const selectedLead = computed(() =>
-  allMembers.value.find((member) => member.id === Number(form.team_lead_id)) ?? null,
-);
-
 const selectedRoleOption = computed(
   () => assignableRoles.value.find((item) => item.code === roleForm.role_code) ?? null,
 );
@@ -177,19 +187,15 @@ const teamUnchanged = computed(() => {
   return form.name.trim() === (selectedTeam.value.name || '') && leadId === (currentLead == null ? null : Number(currentLead));
 });
 
-const roleDialogTitle = computed(() => (dialogTab.value === 'edit' ? 'Sửa vai trò' : 'Gán vai trò'));
-const roleDialogDesc = computed(() =>
-  dialogTab.value === 'edit'
-    ? 'Chọn thành viên đang có vai trò phòng ban và đổi sang vai trò khác.'
-    : 'Tìm thành viên chưa có vai trò phòng ban và gán vai trò mới.',
-);
+const memberTeamAssignUnchanged = computed(() => {
+  if (!selected.value) return true;
+  const current = selected.value.team?.id ?? '';
+  const next = teamAssignId.value === '' || teamAssignId.value == null ? '' : Number(teamAssignId.value);
+  return current === next || (current === '' && next === '');
+});
 
+const roleDialogTitle = computed(() => (dialogTab.value === 'edit' ? 'Sửa vai trò' : 'Gán vai trò'));
 const teamDialogTitle = computed(() => (dialogTab.value === 'edit' ? 'Sửa nhóm' : 'Thêm nhóm mới'));
-const teamDialogDesc = computed(() =>
-  dialogTab.value === 'edit'
-    ? 'Chọn nhóm hiện có để đổi tên hoặc trưởng nhóm.'
-    : 'Tạo nhóm trong phòng ban và tuỳ chọn gán trưởng nhóm.',
-);
 
 const roleSubmitLabel = computed(() => {
   if (formSaving.value) return 'Đang lưu…';
@@ -365,6 +371,7 @@ function currentAssignableRole(member) {
 
 function openCreateForm() {
   dialogTab.value = 'create';
+  listFilter.value = '';
   form.id = '';
   form.name = '';
   form.team_lead_id = '';
@@ -388,6 +395,7 @@ function openRoleForm() {
   }
 
   const seed = inEdit || inAssign ? selected.value : null;
+  listFilter.value = '';
   roleForm.user_id = seed ? seed.id : '';
   roleForm.role_code = seed && inEdit ? currentAssignableRole(seed) : '';
   dialogKind.value = 'role';
@@ -397,6 +405,7 @@ function openRoleForm() {
 function setDialogTab(tab) {
   if (formSaving.value || dialogTab.value === tab) return;
   dialogTab.value = tab;
+  listFilter.value = '';
   if (dialogKind.value === 'team') {
     form.id = '';
     form.name = '';
@@ -414,12 +423,8 @@ function closeDialog() {
 }
 
 function focusDialog() {
-  let id = 'wc-team-name';
-  if (dialogKind.value === 'team' && dialogTab.value === 'edit') {
-    id = 'wc-team-pick';
-  } else if (dialogKind.value === 'role') {
-    id = 'wc-role-user';
-  }
+  if (dialogTab.value === 'edit') return;
+  const id = dialogKind.value === 'role' ? 'wc-role-user' : 'wc-team-name';
   document.getElementById(id)?.focus();
 }
 
@@ -460,6 +465,34 @@ async function submitTeamForm() {
     showClientToast('error', message || 'Không lưu được nhóm. Vui lòng thử lại.');
   } finally {
     formSaving.value = false;
+  }
+}
+
+async function saveMemberTeam() {
+  if (!selected.value || memberTeamAssignUnchanged.value) return;
+
+  teamAssignSaving.value = true;
+  try {
+    const payload = {
+      team_id:
+        teamAssignId.value === '' || teamAssignId.value == null ? null : Number(teamAssignId.value),
+    };
+    const { data } = await window.axios.put(
+      `/api/workspace-config/members/${selected.value.id}/team`,
+      payload,
+    );
+    const member = data.member;
+    const index = allMembers.value.findIndex((item) => item.id === member.id);
+    if (index >= 0) {
+      allMembers.value[index] = member;
+    }
+    selected.value = member;
+    showClientToast('success', member.team?.name ? `Đã gán nhóm "${member.team.name}".` : 'Đã bỏ gán nhóm.');
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không lưu được nhóm. Vui lòng thử lại.');
+  } finally {
+    teamAssignSaving.value = false;
   }
 }
 
@@ -512,7 +545,6 @@ function registerPrimaryAction() {
     items.push({
       key: 'team',
       label: 'Thêm nhóm',
-      description: 'Tạo nhóm mới hoặc sửa nhóm hiện có',
       icon: 'users',
       onSelect: openCreateForm,
     });
@@ -521,7 +553,6 @@ function registerPrimaryAction() {
     items.push({
       key: 'role',
       label: 'Gán vai trò',
-      description: 'Gán hoặc đổi vai trò thành viên phòng ban',
       icon: 'userPlus',
       onSelect: openRoleForm,
     });
@@ -720,7 +751,10 @@ watch(tableZoom, (value) => {
   }
   nextTick(fitColumnsToContent);
 });
-watch(selected, () => nextTick(fitColumnsToContent));
+watch(selected, (member) => {
+  teamAssignId.value = member?.team?.id != null ? String(member.team.id) : '';
+  nextTick(fitColumnsToContent);
+});
 watch(shownColumns, () => nextTick(fitColumnsToContent));
 watch(pageMembers, () => nextTick(fitColumnsToContent));
 
@@ -956,13 +990,10 @@ onBeforeUnmount(() => {
                     </span>
                   </template>
                   <template v-else-if="col.key === 'status'">
-                    <span class="wc-members__status">
-                      <span
-                        class="wc-members__dot"
-                        :class="member.status === 'active' ? 'wc-members__dot--on' : 'wc-members__dot--off'"
-                      />
-                      {{ memberStatusLabel(member.status) }}
-                    </span>
+                    <StatusBadge
+                      :on="member.status === 'active'"
+                      :label="memberStatusLabel(member.status)"
+                    />
                   </template>
                   <template v-else-if="col.key === 'team'">
                     <span v-if="member.team">{{ member.team.name }}</span>
@@ -1025,7 +1056,32 @@ onBeforeUnmount(() => {
           </div>
           <div class="wc-members__row">
             <span class="wc-members__row-label">Nhóm</span>
-            <span class="wc-members__row-value">{{ selected.team?.name || 'Chưa thuộc nhóm nào' }}</span>
+            <template v-if="auth.can('team.manage')">
+              <div class="wc-members__row-team">
+                <select
+                  id="wc-member-team-assign"
+                  v-model="teamAssignId"
+                  class="wc-members__input wc-members__input--side"
+                  :disabled="teamAssignSaving"
+                >
+                  <option value="">Chưa thuộc nhóm nào</option>
+                  <option v-for="item in teamOptions" :key="item.value" :value="item.value">
+                    {{ item.label }}
+                  </option>
+                </select>
+                <button
+                  type="button"
+                  class="wc-members__side-btn"
+                  :disabled="teamAssignSaving || memberTeamAssignUnchanged"
+                  @click="saveMemberTeam"
+                >
+                  {{ teamAssignSaving ? 'Đang lưu…' : 'Lưu nhóm' }}
+                </button>
+              </div>
+            </template>
+            <span v-else class="wc-members__row-value">{{
+              selected.team?.name || 'Chưa thuộc nhóm nào'
+            }}</span>
           </div>
           <div class="wc-members__row">
             <span class="wc-members__row-label">Vai trò</span>
@@ -1033,7 +1089,12 @@ onBeforeUnmount(() => {
           </div>
           <div class="wc-members__row">
             <span class="wc-members__row-label">Trạng thái</span>
-            <span class="wc-members__row-value">{{ memberStatusLabel(selected.status) }}</span>
+            <span class="wc-members__row-value">
+              <StatusBadge
+                :on="selected.status === 'active'"
+                :label="memberStatusLabel(selected.status)"
+              />
+            </span>
           </div>
           <div class="wc-members__row">
             <span class="wc-members__row-label">Mã thành viên</span>
@@ -1064,7 +1125,6 @@ onBeforeUnmount(() => {
                 </span>
                 <div class="wc-dialog__head-copy">
                   <h2 id="wc-team-form-title" class="wc-dialog__title">{{ teamDialogTitle }}</h2>
-                  <p class="wc-dialog__desc">{{ teamDialogDesc }}</p>
                 </div>
                 <button
                   type="button"
@@ -1102,63 +1162,75 @@ onBeforeUnmount(() => {
                 </button>
               </div>
 
-              <div class="wc-dialog__stack">
-                <div v-if="dialogTab === 'edit'" class="wc-dialog__field">
-                  <label class="wc-dialog__label" for="wc-team-pick">
-                    Nhóm <span class="wc-dialog__req" aria-hidden="true">*</span>
-                  </label>
-                  <WorkspaceConfigPicker
-                    id="wc-team-pick"
-                    v-model="form.id"
-                    :items="teamPickerItems"
-                    placeholder="Tìm nhóm theo tên hoặc trưởng nhóm…"
-                    empty-text="Không tìm thấy nhóm nào."
-                    :disabled="formSaving"
-                  />
-                </div>
-
-                <div class="wc-dialog__field">
-                  <label class="wc-dialog__label" for="wc-team-name">
-                    Tên nhóm <span class="wc-dialog__req" aria-hidden="true">*</span>
-                  </label>
+              <div class="wc-dialog__body" :class="{ 'wc-dialog__body--edit': dialogTab === 'edit' }">
+                <div v-if="dialogTab === 'edit'" class="wc-dialog__list-panel">
+                  <label class="wc-dialog__label" for="wc-team-list-q">Nhóm</label>
                   <input
-                    id="wc-team-name"
-                    v-model="form.name"
-                    type="text"
+                    id="wc-team-list-q"
+                    v-model="listFilter"
+                    type="search"
                     class="wc-dialog__input"
-                    placeholder="Ví dụ: Nhóm phát triển sản phẩm"
+                    placeholder="Lọc theo tên nhóm…"
                     autocomplete="off"
-                    required
-                    :disabled="formSaving || (dialogTab === 'edit' && !form.id)"
-                    @keydown.enter="submitTeamForm"
+                    :disabled="formSaving || allTeams.length === 0"
                   />
+                  <ul class="wc-dialog__list hide-scrollbar" role="listbox" aria-label="Danh sách nhóm">
+                    <li v-if="allTeams.length === 0" class="wc-dialog__list-empty">
+                      {{ teamEmptyMessage }}
+                    </li>
+                    <li v-else-if="visibleTeamItems.length === 0" class="wc-dialog__list-empty">
+                      Không tìm thấy nhóm khớp.
+                    </li>
+                    <li
+                      v-for="item in visibleTeamItems"
+                      :key="item.id"
+                      class="wc-dialog__list-item"
+                      :class="{ 'wc-dialog__list-item--active': String(form.id) === String(item.id) }"
+                      role="option"
+                      :aria-selected="String(form.id) === String(item.id) ? 'true' : 'false'"
+                      @click="form.id = item.id"
+                    >
+                      <span class="wc-dialog__list-copy">
+                        <span class="wc-dialog__list-name">{{ item.label }}</span>
+                        <span v-if="item.sublabel" class="wc-dialog__list-sub">{{ item.sublabel }}</span>
+                      </span>
+                      <span v-if="item.meta" class="wc-dialog__list-meta">{{ item.meta }}</span>
+                    </li>
+                  </ul>
                 </div>
 
-                <div class="wc-dialog__field">
-                  <label class="wc-dialog__label" for="wc-team-lead">Trưởng nhóm</label>
-                  <WorkspaceConfigPicker
-                    id="wc-team-lead"
-                    v-model="form.team_lead_id"
-                    :items="leadPickerItems"
-                    placeholder="Tìm thành viên theo tên hoặc email…"
-                    empty-text="Không tìm thấy thành viên đang hoạt động."
-                    show-avatar
-                    clearable
-                    :disabled="formSaving || (dialogTab === 'edit' && !form.id)"
-                  />
-                </div>
+                <div class="wc-dialog__stack">
+                  <div class="wc-dialog__field">
+                    <label class="wc-dialog__label" for="wc-team-name">
+                      Tên nhóm <span class="wc-dialog__req" aria-hidden="true">*</span>
+                    </label>
+                    <input
+                      id="wc-team-name"
+                      v-model="form.name"
+                      type="text"
+                      class="wc-dialog__input"
+                      placeholder="Ví dụ: Nhóm phát triển sản phẩm"
+                      autocomplete="off"
+                      :disabled="formSaving || (dialogTab === 'edit' && !form.id)"
+                      @keydown.enter="submitTeamForm"
+                    />
+                  </div>
 
-                <div v-if="dialogTab === 'create' || selectedTeam" class="wc-dialog__preview">
-                  <p class="wc-dialog__preview-kicker">{{ dialogTab === 'edit' ? 'Sẽ lưu' : 'Sẽ tạo' }}</p>
-                  <p class="wc-dialog__preview-title">{{ form.name.trim() || 'Chưa nhập tên nhóm' }}</p>
-                  <p class="wc-dialog__preview-sub">
-                    {{ selectedLead ? `Trưởng nhóm: ${selectedLead.name}` : 'Chưa chọn trưởng nhóm' }}
-                  </p>
+                  <div class="wc-dialog__field">
+                    <label class="wc-dialog__label" for="wc-team-lead">Trưởng nhóm</label>
+                    <WorkspaceConfigPicker
+                      id="wc-team-lead"
+                      :key="`lead-${dialogTab}-${form.id}`"
+                      v-model="form.team_lead_id"
+                      :items="leadPickerItems"
+                      placeholder="Gõ tên hoặc email để tìm…"
+                      empty-text="Không tìm thấy thành viên đang hoạt động."
+                      show-avatar
+                      clearable
+                      :disabled="formSaving || (dialogTab === 'edit' && !form.id)"
+                    />
+                  </div>
                 </div>
-
-                <p v-if="dialogTab === 'edit' && allTeams.length === 0" class="wc-dialog__empty">
-                  {{ teamEmptyMessage }}
-                </p>
               </div>
 
               <div class="wc-dialog__actions">
@@ -1187,7 +1259,6 @@ onBeforeUnmount(() => {
                 </span>
                 <div class="wc-dialog__head-copy">
                   <h2 id="wc-role-form-title" class="wc-dialog__title">{{ roleDialogTitle }}</h2>
-                  <p class="wc-dialog__desc">{{ roleDialogDesc }}</p>
                 </div>
                 <button
                   type="button"
@@ -1225,97 +1296,119 @@ onBeforeUnmount(() => {
                 </button>
               </div>
 
-              <div class="wc-dialog__stack">
-                <div class="wc-dialog__field">
-                  <label class="wc-dialog__label" for="wc-role-user">
-                    Thành viên <span class="wc-dialog__req" aria-hidden="true">*</span>
-                  </label>
-                  <WorkspaceConfigPicker
-                    id="wc-role-user"
-                    v-model="roleForm.user_id"
-                    :items="rolePickerItems"
-                    :placeholder="
-                      dialogTab === 'edit'
-                        ? 'Tìm thành viên đang có vai trò…'
-                        : 'Tìm thành viên chưa có vai trò…'
-                    "
-                    empty-text="Không tìm thấy thành viên khớp."
-                    show-avatar
-                    :disabled="formSaving || roleTabCandidates.length === 0"
+              <div class="wc-dialog__body" :class="{ 'wc-dialog__body--edit': dialogTab === 'edit' }">
+                <div v-if="dialogTab === 'edit'" class="wc-dialog__list-panel">
+                  <label class="wc-dialog__label" for="wc-role-list-q">Thành viên</label>
+                  <input
+                    id="wc-role-list-q"
+                    v-model="listFilter"
+                    type="search"
+                    class="wc-dialog__input"
+                    placeholder="Lọc theo tên hoặc email…"
+                    autocomplete="off"
+                    :disabled="formSaving || editRoleCandidates.length === 0"
                   />
-                </div>
-
-                <div v-if="selectedRoleMember" class="wc-dialog__person">
-                  <span class="wc-members__avatar wc-members__avatar--lg" aria-hidden="true">
-                    <img
-                      v-if="usesPhoto(selectedRoleMember)"
-                      :src="selectedRoleMember.avatar_url"
-                      alt=""
-                      class="wc-members__avatar-img"
-                      referrerpolicy="no-referrer"
-                      @error="onAvatarError(selectedRoleMember.id)"
-                    />
-                    <img
-                      v-else
-                      :src="FALLBACK_AVATAR_SRC"
-                      :srcset="FALLBACK_AVATAR_SRCSET"
-                      alt=""
-                      class="wc-members__avatar-fallback"
-                    />
-                  </span>
-                  <div class="wc-dialog__person-copy">
-                    <p class="wc-dialog__person-name">{{ selectedRoleMember.name }}</p>
-                    <p v-if="selectedRoleMember.email" class="wc-dialog__person-email">
-                      {{ selectedRoleMember.email }}
-                    </p>
-                    <p class="wc-dialog__person-meta">
-                      {{ selectedRoleMember.team?.name || 'Chưa thuộc nhóm nào' }}
-                      ·
-                      {{ currentRoleOfSelected?.name || 'Chưa có vai trò phòng ban' }}
-                    </p>
-                  </div>
-                </div>
-
-                <div class="wc-dialog__field">
-                  <span class="wc-dialog__label" id="wc-role-code-label">
-                    {{ dialogTab === 'edit' ? 'Vai trò mới' : 'Vai trò' }}
-                    <span class="wc-dialog__req" aria-hidden="true">*</span>
-                  </span>
-                  <div class="wc-dialog__roles" role="listbox" aria-labelledby="wc-role-code-label">
-                    <button
-                      v-for="item in assignableRoles"
-                      :key="item.code"
-                      type="button"
-                      class="wc-dialog__role"
-                      :class="{ 'wc-dialog__role--active': roleForm.role_code === item.code }"
+                  <ul class="wc-dialog__list hide-scrollbar" role="listbox" aria-label="Thành viên có vai trò">
+                    <li v-if="editRoleCandidates.length === 0" class="wc-dialog__list-empty">
+                      {{ roleEmptyMessage }}
+                    </li>
+                    <li v-else-if="visibleRoleItems.length === 0" class="wc-dialog__list-empty">
+                      Không tìm thấy thành viên khớp.
+                    </li>
+                    <li
+                      v-for="item in visibleRoleItems"
+                      :key="item.id"
+                      class="wc-dialog__list-item"
+                      :class="{ 'wc-dialog__list-item--active': String(roleForm.user_id) === String(item.id) }"
                       role="option"
-                      :aria-selected="roleForm.role_code === item.code ? 'true' : 'false'"
-                      :disabled="formSaving || !roleForm.user_id"
-                      @click="roleForm.role_code = item.code"
+                      :aria-selected="String(roleForm.user_id) === String(item.id) ? 'true' : 'false'"
+                      @click="roleForm.user_id = item.id"
                     >
-                      <span class="wc-dialog__role-name">{{ item.name }}</span>
-                      <span v-if="item.description" class="wc-dialog__role-desc">{{ item.description }}</span>
-                    </button>
-                  </div>
+                      <span class="wc-members__avatar" aria-hidden="true">
+                        <img
+                          v-if="usesPhoto(item)"
+                          :src="item.avatar_url"
+                          alt=""
+                          class="wc-members__avatar-img"
+                          referrerpolicy="no-referrer"
+                          @error="onAvatarError(item.id)"
+                        />
+                        <img
+                          v-else
+                          :src="FALLBACK_AVATAR_SRC"
+                          :srcset="FALLBACK_AVATAR_SRCSET"
+                          alt=""
+                          class="wc-members__avatar-fallback"
+                        />
+                      </span>
+                      <span class="wc-dialog__list-copy">
+                        <span class="wc-dialog__list-name">{{ item.label }}</span>
+                        <span v-if="item.sublabel" class="wc-dialog__list-sub">{{ item.sublabel }}</span>
+                      </span>
+                      <span v-if="item.meta" class="wc-dialog__list-meta">{{ item.meta }}</span>
+                    </li>
+                  </ul>
                 </div>
 
-                <p v-if="roleTabCandidates.length === 0" class="wc-dialog__empty">
-                  {{ roleEmptyMessage }}
-                </p>
-                <p
-                  v-else-if="selectedRoleMember && selectedRoleOption && !roleUnchanged"
-                  class="wc-dialog__summary"
-                >
-                  <template v-if="dialogTab === 'edit'">
-                    Đổi vai trò của <strong>{{ selectedRoleMember.name }}</strong>
-                    từ {{ currentRoleOfSelected?.name || '—' }}
-                    sang {{ selectedRoleOption.name }}.
-                  </template>
-                  <template v-else>
-                    Gán vai trò <strong>{{ selectedRoleOption.name }}</strong>
-                    cho {{ selectedRoleMember.name }}.
-                  </template>
-                </p>
+                <div class="wc-dialog__stack">
+                  <div v-if="dialogTab === 'create'" class="wc-dialog__field">
+                    <label class="wc-dialog__label" for="wc-role-user">
+                      Thành viên <span class="wc-dialog__req" aria-hidden="true">*</span>
+                    </label>
+                    <WorkspaceConfigPicker
+                      id="wc-role-user"
+                      :key="`role-user-${dialogTab}`"
+                      v-model="roleForm.user_id"
+                      :items="rolePickerItems"
+                      placeholder="Gõ tên hoặc email để tìm…"
+                      empty-text="Không tìm thấy thành viên khớp."
+                      show-avatar
+                      :disabled="formSaving || assignCandidates.length === 0"
+                    />
+                  </div>
+
+                  <p v-if="dialogTab === 'create' && assignCandidates.length === 0" class="wc-dialog__empty">
+                    {{ roleEmptyMessage }}
+                  </p>
+
+                  <div class="wc-dialog__field">
+                    <span class="wc-dialog__label" id="wc-role-code-label">
+                      {{ dialogTab === 'edit' ? 'Vai trò mới' : 'Vai trò' }}
+                      <span class="wc-dialog__req" aria-hidden="true">*</span>
+                    </span>
+                    <div class="wc-dialog__roles" role="listbox" aria-labelledby="wc-role-code-label">
+                      <button
+                        v-for="item in assignableRoles"
+                        :key="item.code"
+                        type="button"
+                        class="wc-dialog__role"
+                        :class="{ 'wc-dialog__role--active': roleForm.role_code === item.code }"
+                        role="option"
+                        :aria-selected="roleForm.role_code === item.code ? 'true' : 'false'"
+                        :disabled="formSaving || !roleForm.user_id"
+                        @click="roleForm.role_code = item.code"
+                      >
+                        <span class="wc-dialog__role-name">{{ item.name }}</span>
+                        <span v-if="item.description" class="wc-dialog__role-desc">{{ item.description }}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <p
+                    v-if="selectedRoleMember && selectedRoleOption && !roleUnchanged"
+                    class="wc-dialog__summary"
+                  >
+                    <template v-if="dialogTab === 'edit'">
+                      Đổi vai trò của <strong>{{ selectedRoleMember.name }}</strong>
+                      từ {{ currentRoleOfSelected?.name || '—' }}
+                      sang {{ selectedRoleOption.name }}.
+                    </template>
+                    <template v-else>
+                      Gán vai trò <strong>{{ selectedRoleOption.name }}</strong>
+                      cho {{ selectedRoleMember.name }}.
+                    </template>
+                  </p>
+                </div>
               </div>
 
               <div class="wc-dialog__actions">
@@ -1579,27 +1672,6 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
 }
 
-.wc-members__status {
-  display: inline-flex;
-  align-items: center;
-}
-
-.wc-members__dot {
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  margin-right: 0.375rem;
-  border-radius: var(--radius-full);
-}
-
-.wc-members__dot--on {
-  background: var(--color-primary);
-}
-
-.wc-members__dot--off {
-  background: var(--color-text-muted);
-}
-
 .wc-members__side {
   flex-shrink: 0;
   width: 20rem;
@@ -1687,6 +1759,37 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
 }
 
+.wc-members__row-team {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.wc-members__input--side {
+  font-size: 0.8125rem;
+}
+
+.wc-members__side-btn {
+  align-self: flex-end;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wc-members__side-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 @media (max-width: 1024px) {
   .wc-members__body {
     flex-direction: column;
@@ -1724,12 +1827,12 @@ onBeforeUnmount(() => {
 }
 
 .wc-dialog__panel {
-  width: min(52rem, 100%);
+  width: min(48rem, 100%);
   max-height: min(46rem, calc(100vh - 2.5rem));
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  padding: 1.75rem;
+  gap: var(--space-4);
+  padding: 1.5rem 1.75rem 1.25rem;
   overflow: auto;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
@@ -1738,7 +1841,7 @@ onBeforeUnmount(() => {
 
 .wc-dialog__head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-3);
 }
 
@@ -1768,13 +1871,6 @@ onBeforeUnmount(() => {
   line-height: 1.35;
 }
 
-.wc-dialog__desc {
-  margin: 0.25rem 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
 .wc-dialog__close {
   display: inline-flex;
   flex-shrink: 0;
@@ -1782,7 +1878,6 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 1.75rem;
   height: 1.75rem;
-  margin-top: 0.125rem;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -1828,23 +1923,127 @@ onBeforeUnmount(() => {
   opacity: 0.6;
 }
 
-.wc-dialog__stack {
+.wc-dialog__body {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  min-width: 0;
 }
 
-.wc-dialog__field {
+.wc-dialog__body--edit {
+  display: grid;
+  grid-template-columns: minmax(16rem, 18.5rem) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.wc-dialog__list-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
 }
 
-.wc-dialog__label {
+.wc-dialog__list {
+  flex: 1;
+  min-height: 12rem;
+  max-height: 22rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.wc-dialog__list-empty {
+  padding: 0.875rem 0.75rem;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.wc-dialog__list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.wc-dialog__list-item:hover {
+  background: var(--color-surface-muted);
+}
+
+.wc-dialog__list-item--active {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+.wc-dialog__list-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.wc-dialog__list-name,
+.wc-dialog__list-sub,
+.wc-dialog__list-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wc-dialog__list-name {
   color: var(--color-text);
   font-size: 0.8125rem;
   font-weight: 600;
+  line-height: 1.35;
+}
+
+.wc-dialog__list-sub,
+.wc-dialog__list-meta {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.wc-dialog__list-meta {
+  flex-shrink: 0;
+  max-width: 6.5rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.wc-dialog__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.wc-dialog__field {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  column-gap: 0.875rem;
+  row-gap: 0.375rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.wc-dialog__label {
+  padding-top: 0.65rem;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.wc-dialog__field > :not(.wc-dialog__label) {
+  min-width: 0;
 }
 
 .wc-dialog__req {
@@ -1880,48 +2079,19 @@ onBeforeUnmount(() => {
   background: var(--color-surface-muted);
 }
 
-.wc-dialog__person {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-}
-
-.wc-dialog__person-copy {
-  min-width: 0;
-}
-
-.wc-dialog__person-name {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 0.9375rem;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
-.wc-dialog__person-email,
-.wc-dialog__person-meta {
-  margin: 0.125rem 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-  line-height: 1.4;
-}
-
 .wc-dialog__roles {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
 }
 
 .wc-dialog__role {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.25rem;
-  min-height: 4.75rem;
-  padding: 0.875rem 1rem;
+  gap: 0.125rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -1956,38 +2126,21 @@ onBeforeUnmount(() => {
   line-height: 1.45;
 }
 
-.wc-dialog__preview {
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-}
-
-.wc-dialog__preview-kicker {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.wc-dialog__preview-title {
-  margin: 0.25rem 0 0;
-  color: var(--color-text);
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.wc-dialog__preview-sub {
-  margin: 0.125rem 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-}
-
 .wc-dialog__empty,
 .wc-dialog__summary {
   margin: 0;
   color: var(--color-text-muted);
   font-size: 0.8125rem;
   line-height: 1.5;
+}
+
+.wc-dialog__stack > .wc-dialog__empty,
+.wc-dialog__stack > .wc-dialog__summary {
+  margin-left: calc(7.5rem + 0.875rem);
+}
+
+.wc-dialog__list-panel > .wc-dialog__label {
+  padding-top: 0;
 }
 
 .wc-dialog__summary strong {
@@ -2057,8 +2210,21 @@ onBeforeUnmount(() => {
     padding: var(--space-4);
   }
 
-  .wc-dialog__roles {
+  .wc-dialog__body--edit {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wc-dialog__field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wc-dialog__label {
+    padding-top: 0;
+  }
+
+  .wc-dialog__stack > .wc-dialog__empty,
+  .wc-dialog__stack > .wc-dialog__summary {
+    margin-left: 0;
   }
 }
 

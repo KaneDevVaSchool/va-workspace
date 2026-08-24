@@ -176,6 +176,17 @@ function inspect(log) {
   selected.value = log;
 }
 
+function actionTone(action) {
+  if (!action) return 'neutral';
+  if (action.includes('delete') || action.includes('deny') || action.includes('logout') || action === 'view_as.deactivate') {
+    return 'danger';
+  }
+  if (action.includes('create') || action.includes('grant') || action.includes('login')) {
+    return 'success';
+  }
+  return 'info';
+}
+
 function cellText(log, key) {
   if (key === 'created_at') return formatDateTime(log.created_at) || '—';
   if (key === 'actor') return log.actor_name || 'Hệ thống';
@@ -683,7 +694,13 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <p class="activity-page__side-lead">{{ selected.description }}</p>
+        <div class="activity-page__side-lead" :class="`activity-page__side-lead--${actionTone(selected.action)}`">
+          <span class="activity-page__dot" :class="`activity-page__dot--${actionTone(selected.action)}`" />
+          <div>
+            <span class="activity-page__side-lead-action">{{ selected.action_label || selected.action }}</span>
+            <p class="activity-page__side-lead-desc">{{ selected.description }}</p>
+          </div>
+        </div>
 
         <div class="activity-page__rows">
           <div class="activity-page__row">
@@ -705,10 +722,6 @@ onBeforeUnmount(() => {
           <div v-if="selected.actor_email" class="activity-page__row">
             <span class="activity-page__row-label">Email</span>
             <span class="activity-page__row-value">{{ selected.actor_email }}</span>
-          </div>
-          <div class="activity-page__row">
-            <span class="activity-page__row-label">Loại thao tác</span>
-            <span class="activity-page__row-value">{{ selected.action_label || selected.action }}</span>
           </div>
           <div class="activity-page__row">
             <span class="activity-page__row-label">Đối tượng</span>
@@ -1089,7 +1102,7 @@ onBeforeUnmount(() => {
   padding: var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-surface-muted);
 }
 
 .activity-page__side-head {
@@ -1120,15 +1133,83 @@ onBeforeUnmount(() => {
 }
 
 .activity-page__icon-btn:hover {
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
 }
 
 .activity-page__side-lead {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
   margin: var(--space-3) 0 var(--space-4);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.activity-page__side-lead::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.activity-page__side-lead--success::before {
+  background: var(--color-success);
+}
+
+.activity-page__side-lead--danger::before {
+  background: var(--color-danger);
+}
+
+.activity-page__side-lead--info::before {
+  background: var(--color-info);
+}
+
+.activity-page__side-lead-action {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.activity-page__side-lead-desc {
+  margin: 0;
   color: var(--color-text);
   font-weight: 600;
   font-size: 0.9375rem;
   line-height: 1.45;
+}
+
+.activity-page__dot {
+  flex-shrink: 0;
+  margin-top: 0.375rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-text-muted);
+}
+
+.activity-page__dot--success {
+  background: var(--color-success);
+}
+
+.activity-page__dot--danger {
+  background: var(--color-danger);
+}
+
+.activity-page__dot--info {
+  background: var(--color-info);
+}
+
+.activity-page__dot--neutral {
+  background: var(--color-text-muted);
 }
 
 .activity-page__rows {

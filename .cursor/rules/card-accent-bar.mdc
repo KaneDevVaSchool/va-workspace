@@ -1,0 +1,62 @@
+---
+description: Dải màu nhấn bên trái card/khối nổi bật — không dùng border-left
+alwaysApply: false
+---
+
+# Dải màu nhấn bên trái card (accent bar)
+
+Khi cần nhấn 1 khối/card bằng dải màu mỏng bên trái (ví dụ: khối tóm tắt
+đầu panel chi tiết, card phân loại theo trạng thái/tone) — **không** dùng
+`border-left` (cấm theo mục 2 `.claude/CLAUDE.md`) và cũng không dùng
+`box-shadow: inset ... 0` phủ hết chiều cao card (dải sẽ bị bo cong theo
+`border-radius` của card ở 2 đầu, không phải đoạn thẳng góc vuông).
+
+## Cách làm đúng
+
+Dải màu là 1 `::before` `position: absolute` độc lập, thụt vào card theo
+`--space-2` ở cả 4 phía (top/bottom/left) — không chạm mép trên/dưới/trái
+của card, không bo góc (`border-radius: 0`).
+
+```css
+.card {
+  position: relative; /* bắt buộc để ::before định vị theo card */
+  padding-left: calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border); /* tone mặc định */
+}
+
+.card--success::before { background: var(--color-success); }
+.card--danger::before  { background: var(--color-danger); }
+.card--info::before    { background: var(--color-info); }
+```
+
+## Quy tắc
+
+- Dải **không** chạm top/bottom/left của card — luôn có khoảng hở `--space-2`.
+- Dải là hình chữ nhật góc vuông thật (`border-radius: 0`), không bo cong
+  theo card cha.
+- Card chứa dải nên nổi trên nền hơi tối hơn 1 cấp (`background:
+  var(--color-surface)` trong khi khối bao ngoài dùng
+  `var(--color-surface-muted)`) kèm `box-shadow: var(--shadow-sm)` để có độ
+  nổi — không hard-code màu/hex, luôn dùng token trong `resources/css/theme.css`.
+- Đổi tone bằng class biến thể (`--success/--danger/--info/...`) trên
+  `::before`, không đổi nền hay border toàn card.
+
+## Ví dụ áp dụng
+
+`Modules/Identity/resources/js/pages/ActivityLog.vue` — khối
+`.activity-page__side-lead` trong panel "Chi tiết thao tác": dải màu đổi
+theo tone hành động (tạo/cấp quyền = xanh lá, xoá/thu hồi = đỏ, còn lại =
+xanh dương), thụt vào 4 phía, không đụng viền card.

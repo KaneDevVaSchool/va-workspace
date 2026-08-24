@@ -75,7 +75,6 @@ const MENU_SECTIONS = [
       // mục này khỏi sidebar phòng ban mình (xem WorkspaceConfigSidebar.vue).
       // Đồng bộ thủ công với danh sách CONFIGURABLE_MENUS trong
       // DepartmentSidebarConfigService (backend).
-      { name: 'manager.teams', label: 'Quản lý nhóm', icon: 'users', configurableByDepartment: true },
       {
         name: 'manager.workspace-config.hub',
         label: 'Cấu hình phòng ban',

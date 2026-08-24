@@ -11,6 +11,7 @@ import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
+import StatusBadge from '../components/StatusBadge.vue';
 import {
   COLUMN_STORAGE_KEY,
   COLUMN_WIDTH_KEY,
@@ -458,7 +459,6 @@ onBeforeUnmount(() => {
       :title="department ? department.name : 'Chi tiết phòng ban'"
       :subtitle="directorSubtitle"
       icon="building"
-      description="Xem thành viên của phòng ban này. Bấm một dòng để xem chi tiết thành viên và menu hiển thị — chỉ xem, không sửa thay trưởng phòng."
       :breadcrumbs="[
         { label: 'Trang chủ', to: { name: 'home' } },
         { label: 'Cấu hình Workspace', to: { name: 'superadmin.workspace-config.overview' } },
@@ -636,13 +636,10 @@ onBeforeUnmount(() => {
                     </span>
                   </template>
                   <template v-else-if="col.key === 'status'">
-                    <span class="wc-detail__status">
-                      <span
-                        class="wc-detail__dot"
-                        :class="member.status === 'active' ? 'wc-detail__dot--on' : 'wc-detail__dot--off'"
-                      />
-                      {{ memberStatusLabel(member.status) }}
-                    </span>
+                    <StatusBadge
+                      :on="member.status === 'active'"
+                      :label="memberStatusLabel(member.status)"
+                    />
                   </template>
                   <template v-else-if="col.key === 'team'">
                     <span v-if="member.team">{{ member.team.name }}</span>
@@ -713,7 +710,12 @@ onBeforeUnmount(() => {
           </div>
           <div class="wc-detail__row">
             <span class="wc-detail__row-label">Trạng thái</span>
-            <span class="wc-detail__row-value">{{ memberStatusLabel(selected.status) }}</span>
+            <span class="wc-detail__row-value">
+              <StatusBadge
+                :on="selected.status === 'active'"
+                :label="memberStatusLabel(selected.status)"
+              />
+            </span>
           </div>
           <div class="wc-detail__row">
             <span class="wc-detail__row-label">Mã thành viên</span>
@@ -727,11 +729,10 @@ onBeforeUnmount(() => {
             <div v-for="menu in sidebarMenus" :key="menu.menu_key" class="wc-detail__row">
               <span class="wc-detail__row-label">{{ menu.label }}</span>
               <span class="wc-detail__row-value">
-                <span
-                  class="wc-detail__dot"
-                  :class="menu.is_visible ? 'wc-detail__dot--on' : 'wc-detail__dot--off'"
+                <StatusBadge
+                  :on="menu.is_visible"
+                  :label="menuVisibilityLabel(menu.is_visible)"
                 />
-                {{ menuVisibilityLabel(menu.is_visible) }}
               </span>
             </div>
           </div>
@@ -1011,27 +1012,6 @@ onBeforeUnmount(() => {
   margin-top: 0.125rem;
   color: var(--color-text-muted);
   font-size: 0.75rem;
-}
-
-.wc-detail__status {
-  display: inline-flex;
-  align-items: center;
-}
-
-.wc-detail__dot {
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  margin-right: 0.375rem;
-  border-radius: var(--radius-full);
-}
-
-.wc-detail__dot--on {
-  background: var(--color-primary);
-}
-
-.wc-detail__dot--off {
-  background: var(--color-text-muted);
 }
 
 .wc-detail__side {

@@ -16,7 +16,6 @@ class DepartmentSidebarConfigService
 {
     /** @var array<string, string> menu_key => nhãn tiếng Việt hiển thị trên UI cấu hình */
     private const CONFIGURABLE_MENUS = [
-        'manager.teams' => 'Quản lý nhóm',
         'manager.workspace-config.members' => 'Thành viên phòng ban',
     ];
 
@@ -27,6 +26,12 @@ class DepartmentSidebarConfigService
     public function isConfigurable(string $menuKey): bool
     {
         return array_key_exists($menuKey, self::CONFIGURABLE_MENUS);
+    }
+
+    /** Nhãn tiếng Việt của 1 menu_key, trả về chính key nếu không nằm trong whitelist. */
+    public function menuLabel(string $menuKey): string
+    {
+        return self::CONFIGURABLE_MENUS[$menuKey] ?? $menuKey;
     }
 
     /** Toàn bộ menu có thể cấu hình + trạng thái is_visible hiện tại của 1 phòng ban. */

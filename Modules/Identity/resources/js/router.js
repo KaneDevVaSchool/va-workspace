@@ -14,12 +14,6 @@ export default [
     component: () => import('./pages/AuthCallback.vue'),
   },
   {
-    path: '/manager/teams',
-    name: 'manager.teams',
-    component: () => import('./pages/TeamManagement.vue'),
-    meta: { requiresAuth: true, title: 'Quản lý nhóm' },
-  },
-  {
     path: '/superadmin/permissions',
     name: 'superadmin.permissions',
     component: () => import('./pages/PermissionMatrix.vue'),

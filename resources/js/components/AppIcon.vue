@@ -63,6 +63,7 @@ const PATHS = {
   gitBranch: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9',
   activity: 'M22 12h-4l-3 9L9 3l-3 9H2',
   target: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+  move: 'M12 2v20M2 12h20M5 9l-3 3 3 3M19 9l3 3-3 3M9 5l3-3 3 3M9 19l3 3 3-3',
 };
 
 const STROKE_ICONS = [
@@ -113,6 +114,7 @@ const STROKE_ICONS = [
   'gitBranch',
   'activity',
   'target',
+  'move',
 ];
 
 defineProps({

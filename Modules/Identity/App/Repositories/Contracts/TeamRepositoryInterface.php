@@ -15,6 +15,14 @@ interface TeamRepositoryInterface
     /** @return Collection<int, Team> */
     public function allByDepartment(int $departmentId): Collection;
 
+    /**
+     * Phòng ban nào đã có ít nhất một nhóm — dùng cho cờ "đã có cấu hình".
+     *
+     * @param  list<int>  $departmentIds
+     * @return list<int>
+     */
+    public function departmentIdsWithTeams(array $departmentIds): array;
+
     public function find(int $id): ?Team;
 
     public function create(array $data): Team;

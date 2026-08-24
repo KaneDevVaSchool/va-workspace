@@ -8,7 +8,9 @@ use Illuminate\Http\Request;
 use Modules\Identity\App\Exceptions\TeamLeadNotInDepartment;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
+use Modules\WorkspaceConfig\App\Exceptions\MemberTeamNotAssignable;
 use Modules\WorkspaceConfig\App\Exceptions\RoleNotAssignable;
+use Modules\WorkspaceConfig\App\Http\Requests\AssignWorkspaceConfigMemberTeamRequest;
 use Modules\WorkspaceConfig\App\Http\Requests\AssignWorkspaceConfigRoleRequest;
 use Modules\WorkspaceConfig\App\Http\Requests\StoreWorkspaceConfigTeamRequest;
 use Modules\WorkspaceConfig\App\Services\WorkspaceConfigMemberService;
@@ -52,6 +54,8 @@ class WorkspaceConfigMemberController extends Controller
         if ($departmentId instanceof JsonResponse) {
             return $departmentId;
         }
+
+        $this->service->syncDepartmentTeamLeadMemberships($departmentId);
 
         $user = $request->user();
         $user->loadMissing('department');
@@ -163,6 +167,48 @@ class WorkspaceConfigMemberController extends Controller
             'user',
             $member->id,
             ['role_code' => $data['role_code']],
+        );
+
+        return response()->json(['member' => $presented]);
+    }
+
+    public function assignMemberTeam(AssignWorkspaceConfigMemberTeamRequest $request, int $user): JsonResponse
+    {
+        $departmentId = $this->departmentIdOrFail($request);
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
+        }
+
+        if (! $this->permissions->allows($request->user(), 'team.manage', 'department', $departmentId)) {
+            return response()->json(['message' => 'Bạn không có quyền quản lý nhóm của phòng ban này.'], 403);
+        }
+
+        $teamId = $request->validated()['team_id'] ?? null;
+        $teamId = $teamId === null ? null : (int) $teamId;
+
+        try {
+            $member = $this->service->assignMemberTeam(
+                $departmentId,
+                (int) $request->user()->id,
+                $user,
+                $teamId,
+            );
+        } catch (MemberTeamNotAssignable $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $presented = $this->service->presentMember($member);
+        $teamName = $presented['team']['name'] ?? null;
+
+        $this->activityLogs->record(
+            'member.team.assign',
+            $teamName
+                ? 'Gán nhóm '.$teamName.' cho '.$member->name
+                : 'Bỏ gán nhóm cho '.$member->name,
+            $request->user(),
+            'user',
+            $member->id,
+            ['team_id' => $teamId],
         );
 
         return response()->json(['member' => $presented]);

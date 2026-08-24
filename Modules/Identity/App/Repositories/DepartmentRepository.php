@@ -17,6 +17,14 @@ class DepartmentRepository implements DepartmentRepositoryInterface
         return Department::query()->where('is_active', true)->orderBy('name')->get();
     }
 
+    public function all(): Collection
+    {
+        return Department::query()
+            ->orderByDesc('is_active')
+            ->orderBy('name')
+            ->get();
+    }
+
     public function find(int $id): ?Department
     {
         return Department::query()->find($id);

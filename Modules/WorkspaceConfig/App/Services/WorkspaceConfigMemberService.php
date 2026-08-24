@@ -6,10 +6,12 @@ use App\Models\User;
 use Illuminate\Support\Collection;
 use Modules\Identity\App\Models\Role;
 use Modules\Identity\App\Models\Team;
+use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\RoleRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\TeamRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Services\TeamService;
+use Modules\WorkspaceConfig\App\Exceptions\MemberTeamNotAssignable;
 use Modules\WorkspaceConfig\App\Exceptions\RoleNotAssignable;
 
 /**
@@ -32,6 +34,7 @@ class WorkspaceConfigMemberService
         private readonly TeamRepositoryInterface $teams,
         private readonly TeamService $teamService,
         private readonly RoleRepositoryInterface $roles,
+        private readonly DepartmentSidebarConfigRepositoryInterface $sidebarConfigs,
     ) {}
 
     public function forDepartment(int $departmentId): Collection
@@ -132,6 +135,46 @@ class WorkspaceConfigMemberService
         return $user->fresh(['team', 'roles']) ?? $user;
     }
 
+    /**
+     * Gán hoặc bỏ nhóm cho thành viên cùng phòng ban (`users.team_id`).
+     *
+     * @throws MemberTeamNotAssignable
+     */
+    public function assignMemberTeam(int $departmentId, int $actorId, int $userId, ?int $teamId): User
+    {
+        if ($actorId === $userId) {
+            throw new MemberTeamNotAssignable('Không thể đổi nhóm của chính mình.');
+        }
+
+        $user = $this->users->findById($userId);
+
+        if (! $user || (int) $user->department_id !== $departmentId) {
+            throw new MemberTeamNotAssignable('Thành viên không thuộc phòng ban này.');
+        }
+
+        if (! $user->isActive()) {
+            throw new MemberTeamNotAssignable('Chỉ gán nhóm cho thành viên đang hoạt động.');
+        }
+
+        if ($teamId !== null) {
+            $team = $this->teams->find($teamId);
+
+            if ($team === null || (int) $team->department_id !== $departmentId) {
+                throw new MemberTeamNotAssignable('Nhóm không thuộc phòng ban này.');
+            }
+        }
+
+        $this->users->update($user, ['team_id' => $teamId]);
+
+        return $user->fresh(['team', 'roles']) ?? $user;
+    }
+
+    /** Đồng bộ thành viên đã được chỉ định trưởng nhóm nhưng chưa có `users.team_id`. */
+    public function syncDepartmentTeamLeadMemberships(int $departmentId): void
+    {
+        $this->teamService->syncDepartmentLeadMemberships($departmentId);
+    }
+
     public function teamsForDepartment(int $departmentId): Collection
     {
         return $this->teams->allByDepartment($departmentId)
@@ -199,11 +242,18 @@ class WorkspaceConfigMemberService
         $ids = $departments->pluck('id')->all();
         $counts = $this->users->countByDepartmentIds($ids);
         $directors = $this->users->departmentDirectorsByDepartmentIds($ids);
+        $configuredIds = array_flip([
+            ...$this->teams->departmentIdsWithTeams($ids),
+            ...$this->sidebarConfigs->departmentIdsWithConfig($ids),
+        ]);
 
         return $departments->map(fn ($department) => [
             'id' => $department->id,
             'code' => $department->code,
             'name' => $department->name,
+            'is_active' => (bool) $department->is_active,
+            // Đã tạo nhóm hoặc đã lưu override menu sidebar.
+            'has_config' => isset($configuredIds[$department->id]),
             'member_count' => (int) $counts->get($department->id, 0),
             // Số tiêu chí đánh giá — giá trị thật khi Giai đoạn B (module Evaluation).
             'criteria_count' => 0,

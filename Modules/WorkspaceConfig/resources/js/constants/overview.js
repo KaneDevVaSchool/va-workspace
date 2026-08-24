@@ -1,5 +1,7 @@
 export const OVERVIEW_COLUMNS = [
   { key: 'name', label: 'Phòng ban', defaultOn: true },
+  { key: 'is_active', label: 'Trạng thái', defaultOn: true },
+  { key: 'has_config', label: 'Cấu hình', defaultOn: true },
   { key: 'director', label: 'Quản lý phòng ban', defaultOn: true },
   { key: 'member_count', label: 'Số thành viên', defaultOn: true },
   { key: 'code', label: 'Mã phòng ban', defaultOn: false },
@@ -9,6 +11,8 @@ export const OVERVIEW_COLUMNS = [
 
 export const OVERVIEW_FILTERS = [
   { key: 'q', label: 'Tìm kiếm', defaultOn: true },
+  { key: 'is_active', label: 'Trạng thái', defaultOn: true },
+  { key: 'has_config', label: 'Cấu hình', defaultOn: true },
   { key: 'has_director', label: 'Quản lý phòng ban', defaultOn: true },
 ];
 
@@ -18,7 +22,19 @@ export const DIRECTOR_FILTER_OPTIONS = [
   { value: 'no', label: 'Chưa gán trưởng đơn vị' },
 ];
 
-export const COLUMN_STORAGE_KEY = 'va-wc-overview-columns-v1';
+export const STATUS_FILTER_OPTIONS = [
+  { value: '', label: 'Tất cả trạng thái' },
+  { value: 'yes', label: 'Đang hoạt động' },
+  { value: 'no', label: 'Ngừng hoạt động' },
+];
+
+export const CONFIG_FILTER_OPTIONS = [
+  { value: '', label: 'Tất cả cấu hình' },
+  { value: 'yes', label: 'Đã có cấu hình' },
+  { value: 'no', label: 'Chưa có cấu hình' },
+];
+
+export const COLUMN_STORAGE_KEY = 'va-wc-overview-columns-v2';
 export const FILTER_STORAGE_KEY = 'va-wc-overview-filters';
 export const COLUMN_WIDTH_KEY = 'va-wc-overview-column-widths';
 export const ZOOM_STORAGE_KEY = 'va-wc-overview-zoom';
@@ -29,6 +45,14 @@ export function directorName(department) {
 
 export function directorEmail(department) {
   return department?.director?.email || '';
+}
+
+export function departmentStatusLabel(isActive) {
+  return isActive ? 'Đang hoạt động' : 'Ngừng hoạt động';
+}
+
+export function departmentConfigLabel(hasConfig) {
+  return hasConfig ? 'Đã có cấu hình' : 'Chưa có cấu hình';
 }
 
 export function loadVisibility(storageKey, items) {

@@ -30,6 +30,7 @@ const stageRef = ref(null);
 const positions = reactive({});
 const draggingId = ref(null);
 const panning = ref(false);
+const hasPanned = ref(false);
 
 function posOf(node) {
   const stored = positions[node.id];
@@ -96,6 +97,7 @@ function startPan(event) {
   const startScrollTop = stage.scrollTop;
   const pointerId = event.pointerId;
   panning.value = true;
+  hasPanned.value = true;
 
   function onMove(moveEvent) {
     if (moveEvent.pointerId !== pointerId) return;
@@ -319,6 +321,11 @@ function pathD(edge) {
       class="dsw__stage hide-scrollbar"
       :class="{ 'dsw__stage--panning': panning, 'dsw__stage--dragging': draggingId }"
     >
+      <div v-if="!hasPanned" class="dsw__pan-hint">
+        <AppIcon name="move" :size="13" :stroke-width="1.75" />
+        <span>Nắm và kéo vào khoảng trống để di chuyển sơ đồ</span>
+      </div>
+
       <div class="dsw__canvas-wrap" :style="canvasWrapStyle" @pointerdown="startPan">
 
         <!-- SVG connectors -->
@@ -560,15 +567,14 @@ function pathD(edge) {
 
 /* ── Stage ────────────────────────────────────────────────────────────────── */
 .dsw__stage {
+  position: relative;
   overflow: auto;
   min-height: 360px;
   padding: 12px;
   background: #f5f6f8;
-  cursor: grab;
 }
 
 .dsw__stage--panning {
-  cursor: grabbing;
   user-select: none;
 }
 
@@ -576,10 +582,47 @@ function pathD(edge) {
   user-select: none;
 }
 
+/* ── Pan hint ─────────────────────────────────────────────────────────────── */
+.dsw__pan-hint {
+  position: absolute;
+  z-index: 5;
+  top: 10px;
+  right: 10px;
+  left: 10px;
+  max-width: max-content;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+  pointer-events: none;
+  user-select: none;
+}
+
+@media (max-width: 480px) {
+  .dsw__pan-hint span { display: none; }
+  .dsw__pan-hint { padding: 6px; }
+}
+
+.dsw__pan-hint svg { flex-shrink: 0; color: var(--color-primary); }
+
 /* ── Canvas wrap ──────────────────────────────────────────────────────────── */
 .dsw__canvas-wrap {
   display: block;
+  min-width: 100%;
+  min-height: 100%;
   will-change: transform;
+  cursor: grab;
+}
+
+.dsw__stage--panning .dsw__canvas-wrap {
+  cursor: grabbing;
 }
 
 /* ── SVG ──────────────────────────────────────────────────────────────────── */

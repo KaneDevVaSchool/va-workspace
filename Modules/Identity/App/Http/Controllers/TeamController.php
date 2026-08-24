@@ -5,34 +5,22 @@ namespace Modules\Identity\App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Modules\Identity\App\Exceptions\TeamLeadNotInDepartment;
 use Modules\Identity\App\Models\Team;
-use Modules\Identity\App\Http\Requests\StoreTeamRequest;
-use Modules\Identity\App\Http\Requests\UpdateTeamRequest;
 use Modules\Identity\App\Repositories\Contracts\TeamRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
-use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
-use Modules\Identity\App\Services\TeamService;
 
 /**
- * manager/teams — CRUD team đầy đủ theo phòng ban (mẫu department_director
- * quản lý team của phòng mình).
- *
- * Route chỉ bọc `permission:team.manage` (global) ở routes/manager.php vì
- * department_id đến từ query/body, không phải route param — middleware
- * `permission:...,department,{param}` chỉ đọc được scope_id từ route
- * parameter nên không áp dụng được ở đây. Enforce đúng phạm vi department
- * ngay trong controller bằng PermissionService::allows() với scope thật.
+ * GET manager/teams — danh sách nhóm theo department_id (query).
+ * Dùng cho PermissionScopeFilter trên ma trận phân quyền.
+ * Tạo/sửa/xoá nhóm: API WorkspaceConfig members.
  */
 class TeamController extends Controller
 {
     public function __construct(
         private readonly TeamRepositoryInterface $teams,
         private readonly UserRepositoryInterface $users,
-        private readonly TeamService $service,
         private readonly PermissionService $permissions,
-        private readonly ActivityLogService $activityLogs,
     ) {}
 
     /** Từ chối nếu user không có quyền team.manage trong đúng department này. */
@@ -80,83 +68,5 @@ class TeamController extends Controller
                 'email' => $u->email,
             ])->values(),
         ]);
-    }
-
-    public function store(StoreTeamRequest $request): JsonResponse
-    {
-        $data = $request->validated();
-
-        if ($deny = $this->denyUnlessCanManage($request, (int) $data['department_id'])) {
-            return $deny;
-        }
-
-        try {
-            $team = $this->service->create($data);
-        } catch (TeamLeadNotInDepartment $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
-
-        $this->activityLogs->record(
-            'team.create',
-            'Tạo nhóm '.$team->name,
-            $request->user(),
-            'team',
-            $team->id,
-        );
-
-        return response()->json(['team' => $this->present($team)], 201);
-    }
-
-    public function update(UpdateTeamRequest $request, int $team): JsonResponse
-    {
-        $model = $this->teams->find($team);
-        if (! $model) {
-            return response()->json(['message' => 'Không tìm thấy nhóm.'], 404);
-        }
-
-        if ($deny = $this->denyUnlessCanManage($request, $model->department_id)) {
-            return $deny;
-        }
-
-        try {
-            $model = $this->service->update($model, $request->validated());
-        } catch (TeamLeadNotInDepartment $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
-
-        $this->activityLogs->record(
-            'team.update',
-            'Cập nhật nhóm '.$model->name,
-            $request->user(),
-            'team',
-            $model->id,
-        );
-
-        return response()->json(['team' => $this->present($model)]);
-    }
-
-    public function destroy(Request $request, int $team): JsonResponse
-    {
-        $model = $this->teams->find($team);
-        if (! $model) {
-            return response()->json(['message' => 'Không tìm thấy nhóm.'], 404);
-        }
-
-        if ($deny = $this->denyUnlessCanManage($request, $model->department_id)) {
-            return $deny;
-        }
-
-        $name = $model->name;
-        $this->service->delete($model);
-
-        $this->activityLogs->record(
-            'team.delete',
-            'Xoá nhóm '.$name,
-            $request->user(),
-            'team',
-            $team,
-        );
-
-        return response()->json(['message' => 'Đã xoá nhóm.']);
     }
 }
