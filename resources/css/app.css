@@ -66,6 +66,17 @@ svg {
   background-color: var(--scrollbar-thumb-hover);
 }
 
+/* Bảng dữ liệu: vẫn cuộn được (bánh xe / trackpad) nhưng không hiện thanh scroll */
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* Container chính: luôn responsive, tự scroll nội bộ khi tràn thay vì
    để cả trang cuộn (quy tắc 6 + 7). */
 .app-shell {
