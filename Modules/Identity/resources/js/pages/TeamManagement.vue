@@ -7,6 +7,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { showClientToast } from '@/lib/clientToast';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import PageHeader from '@/components/PageHeader.vue';
 
 const departments = ref([]);
 const selectedDepartmentId = ref(null);
@@ -146,6 +147,13 @@ const selectedDepartmentLabel = computed(
   () => departments.value.find((d) => d.id === selectedDepartmentId.value)?.name ?? '',
 );
 
+const addTeamAction = computed(() => ({
+  label: 'Thêm nhóm',
+  icon: 'plus',
+  disabled: !selectedDepartmentId.value,
+  onClick: openCreateForm,
+}));
+
 onMounted(async () => {
   await loadDepartments();
   await loadTeams();
@@ -154,13 +162,16 @@ onMounted(async () => {
 
 <template>
   <section class="team-mgmt">
-    <header class="team-mgmt__header">
-      <h1 class="team-mgmt__title">Quản lý nhóm</h1>
-      <p class="team-mgmt__subtitle">
-        Tạo, sửa, xoá nhóm trong phòng ban và gán trưởng nhóm. Team là dữ liệu do Workspace tự
-        quản lý, không đồng bộ từ hệ thống nhân sự.
-      </p>
-    </header>
+    <PageHeader
+      title="Quản lý nhóm"
+      icon="users"
+      description="Tạo, sửa, xoá nhóm trong phòng ban và gán trưởng nhóm. Team là dữ liệu do Workspace tự quản lý, không đồng bộ từ hệ thống nhân sự."
+      :breadcrumbs="[
+        { label: 'Trang chủ', to: { name: 'home' } },
+        { label: 'Quản lý nhóm' },
+      ]"
+      :primary-action="addTeamAction"
+    />
 
     <div class="team-mgmt__toolbar">
       <div class="team-mgmt__field">
@@ -177,15 +188,6 @@ onMounted(async () => {
           </option>
         </select>
       </div>
-
-      <button
-        type="button"
-        class="team-mgmt__btn team-mgmt__btn--primary"
-        :disabled="!selectedDepartmentId"
-        @click="openCreateForm"
-      >
-        + Thêm nhóm
-      </button>
     </div>
 
     <div class="team-mgmt__table-wrap">
@@ -291,26 +293,8 @@ onMounted(async () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
   padding: var(--space-5);
   overflow: hidden;
-}
-
-.team-mgmt__header {
-  flex-shrink: 0;
-}
-
-.team-mgmt__title {
-  margin: 0 0 var(--space-1);
-  color: var(--color-text);
-  font-size: 1.375rem;
-  font-weight: 700;
-}
-
-.team-mgmt__subtitle {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
 }
 
 .team-mgmt__toolbar {
@@ -319,6 +303,7 @@ onMounted(async () => {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .team-mgmt__field {

@@ -294,6 +294,10 @@ return [
     | key wildcard 'module.*' (đại diện "Toàn bộ module X"). PermissionMatrixController
     | build danh sách permissions cho UI hoàn toàn từ đây — frontend không tự
     | suy luận label.
+    |
+    | 'active' => true: chức năng đã có trong app (trang/API đang dùng). Ma trận
+    | UI chỉ hiện các key này; key còn lại giữ trong catalog để Phase sau bật
+    | khi module tương ứng được dựng, không lộ quyền "treo" cho super_admin.
     */
     'catalog' => [
 
@@ -337,15 +341,15 @@ return [
 
         // ---------- Dashboard ----------
         'dashboard.*' => ['label' => 'Toàn bộ Dashboard', 'module' => 'Dashboard', 'description' => 'Toàn quyền xem/tuỳ biến dashboard'],
-        'dashboard.view' => ['label' => 'Xem Dashboard', 'module' => 'Dashboard', 'description' => 'Xem tổng quan dashboard'],
+        'dashboard.view' => ['label' => 'Xem tổng quan', 'module' => 'Tổng quan', 'description' => 'Xem trang tổng quan sau khi đăng nhập', 'active' => true],
 
         // ---------- Phòng ban (department) ----------
-        'department.*' => ['label' => 'Toàn bộ phòng ban', 'module' => 'Phòng ban', 'description' => 'Toàn quyền quản lý phòng ban'],
+        'department.*' => ['label' => 'Toàn bộ phòng ban', 'module' => 'Phòng ban', 'description' => 'Toàn quyền quản lý phòng ban', 'active' => true],
 
         // ---------- Nhóm (team) ----------
         'team.*' => ['label' => 'Toàn bộ nhóm', 'module' => 'Nhóm', 'description' => 'Toàn quyền quản lý nhóm'],
-        'team.view' => ['label' => 'Xem nhóm', 'module' => 'Nhóm', 'description' => 'Xem danh sách nhóm trong phòng ban'],
-        'team.manage' => ['label' => 'Quản lý nhóm', 'module' => 'Nhóm', 'description' => 'Tạo/sửa/xoá nhóm, gán trưởng nhóm'],
+        'team.view' => ['label' => 'Xem nhóm', 'module' => 'Nhóm', 'description' => 'Xem danh sách nhóm trong phòng ban', 'active' => true],
+        'team.manage' => ['label' => 'Quản lý nhóm', 'module' => 'Nhóm', 'description' => 'Tạo/sửa/xoá nhóm, gán trưởng nhóm', 'active' => true],
 
         // ---------- Đánh giá (evaluation) ----------
         'evaluation.*' => ['label' => 'Toàn bộ đánh giá', 'module' => 'Đánh giá', 'description' => 'Toàn quyền quản lý đánh giá nhân sự'],
@@ -420,7 +424,7 @@ return [
 
         // ---------- Reserved: Hệ thống (system) ----------
         'system.settings.*' => ['label' => 'Cấu hình hệ thống', 'module' => 'Hệ thống', 'description' => 'Toàn quyền cấu hình hệ thống (chỉ super_admin)'],
-        'permissions.manage' => ['label' => 'Quản lý phân quyền', 'module' => 'Hệ thống', 'description' => 'Cấp/thu hồi quyền của các role (chỉ super_admin)'],
+        'permissions.manage' => ['label' => 'Quản lý phân quyền', 'module' => 'Hệ thống', 'description' => 'Cấp/thu hồi quyền của các role (chỉ super_admin)', 'active' => true],
         'roles.assign' => ['label' => 'Gán vai trò', 'module' => 'Hệ thống', 'description' => 'Gán/gỡ vai trò hệ thống cho user (chỉ super_admin)'],
         'workspace.hub.manage' => ['label' => 'Quản lý Hub Workspace', 'module' => 'Hệ thống', 'description' => 'Quản lý cấu hình trung tâm của Workspace (chỉ super_admin)'],
         'workspace.evaluation.*' => ['label' => 'Toàn bộ cấu hình đánh giá hệ thống', 'module' => 'Hệ thống', 'description' => 'Cấu hình khung đánh giá toàn hệ thống (chỉ super_admin)'],

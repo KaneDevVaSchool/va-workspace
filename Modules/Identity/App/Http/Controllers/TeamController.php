@@ -11,6 +11,7 @@ use Modules\Identity\App\Http\Requests\StoreTeamRequest;
 use Modules\Identity\App\Http\Requests\UpdateTeamRequest;
 use Modules\Identity\App\Repositories\Contracts\TeamRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
+use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Identity\App\Services\TeamService;
 
@@ -31,6 +32,7 @@ class TeamController extends Controller
         private readonly UserRepositoryInterface $users,
         private readonly TeamService $service,
         private readonly PermissionService $permissions,
+        private readonly ActivityLogService $activityLogs,
     ) {}
 
     /** Từ chối nếu user không có quyền team.manage trong đúng department này. */
@@ -94,6 +96,14 @@ class TeamController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        $this->activityLogs->record(
+            'team.create',
+            'Tạo nhóm '.$team->name,
+            $request->user(),
+            'team',
+            $team->id,
+        );
+
         return response()->json(['team' => $this->present($team)], 201);
     }
 
@@ -114,6 +124,14 @@ class TeamController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        $this->activityLogs->record(
+            'team.update',
+            'Cập nhật nhóm '.$model->name,
+            $request->user(),
+            'team',
+            $model->id,
+        );
+
         return response()->json(['team' => $this->present($model)]);
     }
 
@@ -128,7 +146,16 @@ class TeamController extends Controller
             return $deny;
         }
 
+        $name = $model->name;
         $this->service->delete($model);
+
+        $this->activityLogs->record(
+            'team.delete',
+            'Xoá nhóm '.$name,
+            $request->user(),
+            'team',
+            $team,
+        );
 
         return response()->json(['message' => 'Đã xoá nhóm.']);
     }

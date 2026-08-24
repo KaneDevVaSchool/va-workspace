@@ -294,6 +294,28 @@ class PermissionMatrixTest extends TestCase
         ])->assertStatus(403);
     }
 
+    public function test_matrix_api_returns_only_active_permissions(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $superAdmin = $this->makeUser([], ['super_admin']);
+
+        $response = $this->actingAs($superAdmin)->getJson('/api/permissions/matrix');
+        $response->assertOk();
+
+        $keys = collect($response->json('permissions'))->pluck('key')->all();
+
+        $this->assertContains('team.manage', $keys);
+        $this->assertContains('dashboard.view', $keys);
+        $this->assertNotContains('task.delegate', $keys);
+        $this->assertNotContains('ai_account.*', $keys);
+        $this->assertNotContains('initiative.create', $keys);
+
+        $firstRoleRow = collect($response->json('matrix'))->first();
+        $this->assertIsArray($firstRoleRow);
+        $this->assertArrayHasKey('team.manage', $firstRoleRow);
+        $this->assertArrayNotHasKey('task.delegate', $firstRoleRow);
+    }
+
     public function test_super_admin_viewing_as_another_role_cannot_access_permission_api(): void
     {
         $this->seed(RoleSeeder::class);

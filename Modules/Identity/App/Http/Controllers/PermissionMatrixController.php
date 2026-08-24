@@ -39,12 +39,19 @@ class PermissionMatrixController extends Controller
 
         $modules = [];
         $permissions = [];
+        $activeKeys = [];
         foreach ($catalog as $key => $meta) {
+            // Chỉ đưa lên UI các quyền của chức năng đang có thật trong app.
+            if (empty($meta['active'])) {
+                continue;
+            }
+
             $moduleLabel = $meta['module'] ?? $key;
             if (! isset($modules[$moduleLabel])) {
                 $modules[$moduleLabel] = ['key' => $moduleLabel, 'label' => $moduleLabel];
             }
 
+            $activeKeys[$key] = true;
             $permissions[] = [
                 'key' => $key,
                 'label' => $meta['label'] ?? $key,
@@ -54,12 +61,18 @@ class PermissionMatrixController extends Controller
             ];
         }
 
+        $fullMatrix = $this->permissions->matrixFor($scopeType, $scopeId);
+        $matrix = [];
+        foreach ($fullMatrix as $roleCode => $row) {
+            $matrix[$roleCode] = array_intersect_key($row, $activeKeys);
+        }
+
         return response()->json([
             'roles' => $roles,
             'modules' => array_values($modules),
             'permissions' => $permissions,
             'scope' => ['type' => $scopeType, 'id' => $scopeId],
-            'matrix' => $this->permissions->matrixFor($scopeType, $scopeId),
+            'matrix' => $matrix,
         ]);
     }
 }

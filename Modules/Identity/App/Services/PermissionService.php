@@ -186,37 +186,63 @@ class PermissionService
             $roleRow = [];
 
             foreach ($catalogKeys as $key) {
-                $default = $this->checkConfigDefault($roleCode, $key);
-                $globalOverride = $this->lookupOverride($globalGrants, $key);
-                $scopedOverride = $scopeType !== 'global'
-                    ? $this->lookupOverride($scopedGrants, $key)
-                    : null;
-
-                if ($scopedOverride !== null) {
-                    $effective = $scopedOverride;
-                    $source = 'scoped';
-                } elseif ($globalOverride !== null) {
-                    $effective = $globalOverride;
-                    $source = 'global';
-                } else {
-                    $effective = $default;
-                    $source = 'config';
-                }
-
-                $roleRow[$key] = [
-                    'default' => $default,
-                    'effective' => $effective,
-                    'reserved' => $this->isReserved($key),
-                    'global_override' => $globalOverride,
-                    'scoped_override' => $scopedOverride,
-                    'effective_source' => $source,
-                ];
+                $roleRow[$key] = $this->buildCell($roleCode, $key, $scopeType, $globalGrants, $scopedGrants);
             }
 
             $result[$roleCode] = $roleRow;
         }
 
         return $result;
+    }
+
+    /**
+     * Tính 1 cell đơn lẻ (default/effective/override/source) — dùng sau khi
+     * setGrant()/revokeGrant() để trả về ngay cho frontend patch tại chỗ,
+     * không cần gọi lại matrixFor() cho toàn bộ ma trận. Cùng logic với
+     * matrixFor(), chỉ khác đầu vào là 1 key thay vì cả catalog.
+     */
+    public function cellFor(string $roleCode, string $key, string $scopeType, ?int $scopeId): array
+    {
+        $globalGrants = $this->grants->getGrantsForRole($roleCode, 'global', null);
+        $scopedGrants = $scopeType !== 'global'
+            ? $this->grants->getGrantsForRole($roleCode, $scopeType, $scopeId)
+            : [];
+
+        return $this->buildCell($roleCode, $key, $scopeType, $globalGrants, $scopedGrants);
+    }
+
+    /**
+     * @param  array<string, bool>  $globalGrants
+     * @param  array<string, bool>  $scopedGrants
+     * @return array{default: bool, effective: bool, reserved: bool, global_override: bool|null, scoped_override: bool|null, effective_source: string}
+     */
+    private function buildCell(string $roleCode, string $key, string $scopeType, array $globalGrants, array $scopedGrants): array
+    {
+        $default = $this->checkConfigDefault($roleCode, $key);
+        $globalOverride = $this->lookupOverride($globalGrants, $key);
+        $scopedOverride = $scopeType !== 'global'
+            ? $this->lookupOverride($scopedGrants, $key)
+            : null;
+
+        if ($scopedOverride !== null) {
+            $effective = $scopedOverride;
+            $source = 'scoped';
+        } elseif ($globalOverride !== null) {
+            $effective = $globalOverride;
+            $source = 'global';
+        } else {
+            $effective = $default;
+            $source = 'config';
+        }
+
+        return [
+            'default' => $default,
+            'effective' => $effective,
+            'reserved' => $this->isReserved($key),
+            'global_override' => $globalOverride,
+            'scoped_override' => $scopedOverride,
+            'effective_source' => $source,
+        ];
     }
 
     /**

@@ -5,6 +5,7 @@
 //
 import { computed, ref, watch } from 'vue';
 import { showClientToast } from '@/lib/clientToast';
+import AppIcon from '@/components/AppIcon.vue';
 
 const props = defineProps({
   modelValue: { type: Object, required: true }, // { type, id }
@@ -48,11 +49,21 @@ async function loadTeams() {
 
 function emitChange() {
   if (scopeType.value === 'global') {
-    emit('update:modelValue', { type: 'global', id: null });
+    emit('update:modelValue', { type: 'global', id: null, label: 'Toàn hệ thống' });
   } else if (scopeType.value === 'department') {
-    emit('update:modelValue', { type: 'department', id: departmentId.value });
+    const dept = departments.value.find((d) => d.id === departmentId.value);
+    emit('update:modelValue', {
+      type: 'department',
+      id: departmentId.value,
+      label: dept ? `Phòng ban: ${dept.name}` : 'Phòng ban',
+    });
   } else if (scopeType.value === 'team') {
-    emit('update:modelValue', { type: 'team', id: teamId.value });
+    const team = teams.value.find((t) => t.id === teamId.value);
+    emit('update:modelValue', {
+      type: 'team',
+      id: teamId.value,
+      label: team ? `Nhóm: ${team.name}` : 'Nhóm',
+    });
   }
 }
 
@@ -96,12 +107,12 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
       <select id="scope-type" v-model="scopeType" class="scope-filter__select" @change="onScopeTypeChange">
         <option value="global">Toàn hệ thống</option>
         <option value="department">Phòng ban</option>
-        <option value="team">Nhóm (team)</option>
+        <option value="team">Nhóm</option>
       </select>
     </div>
 
     <div v-if="showDepartmentSelect" class="scope-filter__field">
-      <label class="scope-filter__label" for="scope-department">Phòng ban</label>
+      <label class="scope-filter__label" for="scope-department">Phòng ban <span class="scope-filter__required">*</span></label>
       <select
         id="scope-department"
         v-model="departmentId"
@@ -116,7 +127,7 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
     </div>
 
     <div v-if="showTeamSelect" class="scope-filter__field">
-      <label class="scope-filter__label" for="scope-team">Team</label>
+      <label class="scope-filter__label" for="scope-team">Nhóm <span class="scope-filter__required">*</span></label>
       <select
         id="scope-team"
         v-model="teamId"
@@ -124,11 +135,20 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
         :disabled="!departmentId || loadingTeams"
         @change="onTeamChange"
       >
-        <option :value="null" disabled>{{ departmentId ? 'Chọn team' : 'Chọn phòng ban trước' }}</option>
+        <option :value="null" disabled>{{ departmentId ? 'Chọn nhóm' : 'Chọn phòng ban trước' }}</option>
         <option v-for="team in teams" :key="team.id" :value="team.id">
           {{ team.name }}
         </option>
       </select>
+    </div>
+
+    <div class="scope-filter__hint">
+      <AppIcon name="info" :size="18" class="scope-filter__hint-icon" />
+      <span>
+        Bấm vào ô để cấp hoặc thu hồi quyền — hệ thống sẽ hỏi lại trước khi lưu.
+        Bấm tên quyền để xem chi tiết. Quyền hệ thống (biểu tượng khoá) không thể thay đổi.
+        Chấm màu trên ô là quyền đã được chỉnh riêng cho phạm vi đang xem.
+      </span>
     </div>
   </div>
 </template>
@@ -137,20 +157,25 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
 .scope-filter {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  align-items: flex-end;
+  gap: var(--space-4);
 }
 
 .scope-filter__field {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  min-width: 10rem;
+  min-width: 11rem;
 }
 
 .scope-filter__label {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
+  color: var(--color-text);
+  font-size: 0.8125rem;
   font-weight: 600;
+}
+
+.scope-filter__required {
+  color: var(--color-danger);
 }
 
 .scope-filter__select {
@@ -168,9 +193,38 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
   cursor: not-allowed;
 }
 
-@media (max-width: 480px) {
+.scope-filter__hint {
+  flex: 1 1 16rem;
+  min-width: 16rem;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-info-tint-bg);
+  color: var(--color-info-tint-fg);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.scope-filter__hint-icon {
+  flex-shrink: 0;
+  margin-top: 0.0625rem;
+  color: var(--color-info);
+}
+
+@media (max-width: 768px) {
   .scope-filter {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .scope-filter__field {
+    min-width: 0;
+  }
+
+  .scope-filter__hint {
+    min-width: 0;
   }
 }
 </style>
