@@ -1,0 +1,43 @@
+---
+description: VA Workspace luôn light theme — không dark mode
+alwaysApply: true
+---
+
+# Không dark mode (bắt buộc)
+
+Ứng dụng **chỉ** giao diện sáng (light). Không theme tối, không toggle dark/light, không theo `prefers-color-scheme: dark`.
+
+## Cấm khi implement UI
+
+- `@media (prefers-color-scheme: dark)` để đổi token/màu nội dung chính
+- `:root[data-theme='dark']` hoặc logic JS đặt `data-theme="dark"`
+- Tailwind `dark:` cho màn SPA / module (trang `welcome.blade.php` Laravel mặc định có thể bỏ qua nếu không dùng)
+- Hard-code palette “dark UI” cho vùng nội dung (main, form, bảng, modal) thay vì token light trong `resources/css/theme.css`
+
+## Phải làm
+
+- Token màu nền/chữ/border: chỉ bộ **light** trong `resources/css/theme.css` (`:root`)
+- Layout gốc SPA: `data-theme="light"` trên `<html>` (`resources/views/app.blade.php`)
+- `color-scheme: light` trên `html` (`resources/css/app.css`) để widget native không bám OS dark
+
+## Ngoại lệ (không phải dark mode app)
+
+- **Sidebar brand**: nền `--color-sidebar*` (đỏ đậm) — đây là brand surface, không phải dark theme toàn app
+- `color-scheme: dark` **chỉ** trên control nằm trong sidebar (ví dụ `<select>`) để popup native khớp nền sidebar
+
+## Mẫu đúng / sai
+
+```css
+/* ❌ */
+@media (prefers-color-scheme: dark) {
+  :root { --color-bg: #121214; }
+}
+
+/* ✅ — một bộ token light; override cục bộ nếu cần (Login.vue) */
+.login-page {
+  --color-text: #1a1a1a;
+  --color-surface: #ffffff;
+}
+```
+
+Khi thêm component: dùng `var(--color-*)`, giả định nền sáng; không thêm nhánh theme tối.
