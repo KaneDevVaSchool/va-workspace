@@ -9,6 +9,8 @@ use Illuminate\Validation\Rule;
 use Modules\Identity\App\Exceptions\NotSuperAdmin;
 use Modules\Identity\App\Exceptions\RoleNotFound;
 use Modules\Identity\App\Models\Role;
+use Modules\Identity\App\Repositories\Contracts\RoleRepositoryInterface;
+use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\AuthenticatedUserPresenter;
 use Modules\Identity\App\Services\ViewAsService;
 
@@ -20,6 +22,8 @@ class ViewAsController extends Controller
     public function __construct(
         private readonly ViewAsService $viewAs,
         private readonly AuthenticatedUserPresenter $presenter,
+        private readonly ActivityLogService $activityLogs,
+        private readonly RoleRepositoryInterface $roles,
     ) {}
 
     public function activate(Request $request): JsonResponse
@@ -40,6 +44,15 @@ class ViewAsController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        $role = $this->roles->findByCode($data['role_code']);
+        $roleName = $role?->name ?? $data['role_code'];
+        $this->activityLogs->record(
+            'view_as.activate',
+            'Xem thử vai trò '.$roleName,
+            $request->user(),
+            properties: ['role_code' => $data['role_code']],
+        );
+
         $request->session()->save();
 
         return response()->json([
@@ -50,6 +63,7 @@ class ViewAsController extends Controller
     public function deactivate(Request $request): JsonResponse
     {
         $this->viewAs->deactivate();
+        $this->activityLogs->record('view_as.deactivate', 'Thoát xem thử vai trò', $request->user());
         $request->session()->save();
 
         return response()->json([

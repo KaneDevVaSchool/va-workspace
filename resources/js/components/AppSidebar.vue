@@ -1,88 +1,27 @@
 <script setup>
 //
 // Sidebar điều hướng chính sau khi đăng nhập (layout dạng admin: logo trên
-// cùng, menu theo nhóm, khối user + đăng xuất dưới cùng).
+// cùng, menu theo nhóm). Tài khoản nằm trên header.
 //
 // - Desktop (>=1280px): sidebar cố định, thu gọn được (chỉ icon + flyout
-//   nhãn) qua nút chevron, trạng thái lưu vào localStorage.
+//   nhãn) qua nút menu trên header, trạng thái lưu vào localStorage.
 // - Tablet/mobile (<1280px): sidebar ẩn mặc định, mở dạng off-canvas qua
 //   prop `open` (điều khiển từ AppLayout) + lớp phủ để đóng khi bấm ra ngoài.
 //
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
-import { roleLabel as formatRoleLabel } from '@modules/Identity/resources/js/constants/roles.js';
-import { showClientToast } from '../lib/clientToast';
 import AppIcon from './AppIcon.vue';
-import ConfirmDialog from './ConfirmDialog.vue';
-import ViewAsSwitcher from '@modules/Identity/resources/js/components/ViewAsSwitcher.vue';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
+  collapsed: { type: Boolean, default: false },
 });
 const emit = defineEmits(['close']);
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
-const logoutConfirmOpen = ref(false);
-const loggingOut = ref(false);
-
-const STORAGE_KEY = 'va-sidebar-collapsed';
-const collapsed = ref(localStorage.getItem(STORAGE_KEY) === '1');
-watch(collapsed, (value) => {
-  localStorage.setItem(STORAGE_KEY, value ? '1' : '0');
-});
-
-const userMenuRef = ref(null);
-const userMenuOpen = ref(false);
-
-function toggleUserMenu() {
-  userMenuOpen.value = !userMenuOpen.value;
-}
-
-function isNativeSelectEvent(event) {
-  const target = event.target;
-  if (target instanceof HTMLSelectElement || target instanceof HTMLOptionElement) {
-    return true;
-  }
-  if (typeof target?.closest === 'function' && target.closest('select')) {
-    return true;
-  }
-  const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
-  return path.some((node) => node instanceof HTMLSelectElement || node instanceof HTMLOptionElement);
-}
-
-function handleClickOutside(event) {
-  if (!userMenuOpen.value || !userMenuRef.value) {
-    return;
-  }
-  if (userMenuRef.value.contains(event.target) || isNativeSelectEvent(event)) {
-    return;
-  }
-  // Dropdown native của <select> nằm ngoài DOM Vue. Đợi 1 tick để @change
-  // kịp chạy trước khi đóng menu.
-  window.setTimeout(() => {
-    const active = document.activeElement;
-    if (userMenuRef.value?.contains(active) && active?.tagName === 'SELECT') {
-      return;
-    }
-    userMenuOpen.value = false;
-  }, 0);
-}
-
-function handleKeydown(event) {
-  if (event.key !== 'Escape') {
-    return;
-  }
-  if (userMenuOpen.value) {
-    userMenuOpen.value = false;
-    return;
-  }
-  if (props.open) {
-    emit('close');
-  }
-}
 
 watch(
   () => props.open,
@@ -95,12 +34,16 @@ watch(
   },
 );
 
+function handleKeydown(event) {
+  if (event.key === 'Escape' && props.open) {
+    emit('close');
+  }
+}
+
 onMounted(() => {
-  document.addEventListener('click', handleClickOutside);
   document.addEventListener('keydown', handleKeydown);
 });
 onBeforeUnmount(() => {
-  document.removeEventListener('click', handleClickOutside);
   document.removeEventListener('keydown', handleKeydown);
   document.body.style.overflow = '';
 });
@@ -121,6 +64,7 @@ const MENU_SECTIONS = [
       { name: 'users', label: 'Người dùng', icon: 'users', requiresSuperAdmin: true },
       { name: 'departments', label: 'Phòng ban', icon: 'building', requiresSuperAdmin: true },
       { name: 'superadmin.permissions', label: 'Phân quyền', icon: 'settings', requiresSuperAdmin: true },
+      { name: 'superadmin.activity', label: 'Nhật ký hoạt động', icon: 'clock', requiresAdmin: true },
     ],
   },
   {
@@ -140,30 +84,11 @@ const visibleSections = computed(() =>
     items: section.items.filter(
       (item) =>
         registeredRouteNames.value.has(item.name) &&
-        (!item.requiresSuperAdmin || auth.showSuperAdminNav),
+        (!item.requiresSuperAdmin || auth.showSuperAdminNav) &&
+        (!item.requiresAdmin || auth.canViewActivityLog),
     ),
   })).filter((section) => section.items.length > 0),
 );
-
-const userLabel = computed(() => auth.user?.name ?? auth.user?.email ?? 'Người dùng');
-const userInitial = computed(() => userLabel.value.trim().charAt(0).toUpperCase() || '?');
-
-const roleLabel = computed(() => formatRoleLabel(auth.activeRole));
-
-async function confirmLogout() {
-  loggingOut.value = true;
-  try {
-    await auth.logout();
-    logoutConfirmOpen.value = false;
-    userMenuOpen.value = false;
-    await router.push({ name: 'login' });
-    showClientToast('success', 'Đã đăng xuất.');
-  } catch {
-    showClientToast('error', 'Đăng xuất thất bại. Vui lòng thử lại.');
-  } finally {
-    loggingOut.value = false;
-  }
-}
 
 function isActive(routeName) {
   return route.name === routeName || route.matched.some((r) => r.name === routeName);
@@ -189,15 +114,6 @@ function closeDrawer() {
       data-tour="sidebar"
       :aria-label="collapsed ? 'Menu thu gọn' : 'Menu chính'"
     >
-      <button
-        type="button"
-        class="sidebar__collapse-btn"
-        :aria-label="collapsed ? 'Mở rộng menu' : 'Thu gọn menu'"
-        @click="collapsed = !collapsed"
-      >
-        <AppIcon :name="collapsed ? 'chevronRight' : 'chevronLeft'" :size="16" />
-      </button>
-
       <div class="sidebar__header">
         <router-link :to="{ name: 'home' }" class="sidebar__brand" @click="closeDrawer">
           <img
@@ -247,69 +163,7 @@ function closeDrawer() {
           </router-link>
         </section>
       </nav>
-
-      <div class="sidebar__footer" ref="userMenuRef">
-        <div
-          v-show="userMenuOpen"
-          class="sidebar__user-menu"
-          role="menu"
-          :aria-hidden="!userMenuOpen"
-          @click.stop
-          @mousedown.stop
-        >
-          <div class="sidebar__user-menu-header">
-            <span class="sidebar__user-menu-name">{{ userLabel }}</span>
-            <span v-if="auth.user?.email" class="sidebar__user-menu-email">{{ auth.user.email }}</span>
-            <span v-if="roleLabel" class="sidebar__user-menu-role">Vai trò: {{ roleLabel }}</span>
-          </div>
-          <ViewAsSwitcher />
-          <button
-            type="button"
-            class="sidebar__user-menu-logout"
-            role="menuitem"
-            @click="logoutConfirmOpen = true"
-          >
-            <AppIcon name="logout" :size="18" />
-            <span>Đăng xuất</span>
-          </button>
-        </div>
-
-        <button
-          type="button"
-          class="sidebar__user"
-          :class="{ 'sidebar__user--open': userMenuOpen }"
-          aria-haspopup="menu"
-          :aria-expanded="userMenuOpen"
-          @click="toggleUserMenu"
-        >
-          <span class="sidebar__avatar">
-            <img
-              v-if="auth.user?.avatar_url"
-              :src="auth.user.avatar_url"
-              :alt="userLabel"
-              class="sidebar__avatar-img"
-              referrerpolicy="no-referrer"
-            />
-            <template v-else>{{ userInitial }}</template>
-          </span>
-          <span v-if="!collapsed" class="sidebar__user-info">
-            <span class="sidebar__user-name">{{ userLabel }}</span>
-            <span v-if="roleLabel" class="sidebar__user-role">{{ roleLabel }}</span>
-          </span>
-          <AppIcon v-if="!collapsed" name="chevronDown" :size="14" class="sidebar__user-caret" />
-        </button>
-      </div>
     </aside>
-
-    <ConfirmDialog
-      v-model:open="logoutConfirmOpen"
-      title="Xác nhận đăng xuất"
-      description="Bạn có chắc muốn đăng xuất khỏi VA Workspace? Phiên làm việc hiện tại sẽ kết thúc."
-      confirm-label="Đăng xuất"
-      danger
-      :loading="loggingOut"
-      @confirm="confirmLogout"
-    />
   </div>
 </template>
 
@@ -387,26 +241,6 @@ function closeDrawer() {
   filter: brightness(1.04);
 }
 
-.sidebar__collapse-btn {
-  position: absolute;
-  top: 1.375rem;
-  right: 0;
-  z-index: 6;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-full);
-  background: var(--color-surface);
-  color: var(--color-primary);
-  box-shadow: var(--shadow-md);
-  cursor: pointer;
-  transform: translateX(50%);
-}
-
 .sidebar__close-btn {
   flex-shrink: 0;
   display: none;
@@ -419,11 +253,6 @@ function closeDrawer() {
   background: transparent;
   color: var(--color-sidebar-text-muted);
   cursor: pointer;
-}
-
-.sidebar__collapse-btn:hover {
-  background: var(--color-surface-muted);
-  color: var(--color-primary-800);
 }
 
 .sidebar__close-btn:hover {
@@ -554,154 +383,6 @@ function closeDrawer() {
   opacity: 1;
 }
 
-/* ---------- Footer / user ---------- */
-.sidebar__footer {
-  position: relative;
-  flex-shrink: 0;
-  padding: var(--space-3);
-  box-shadow: 0 -1px 0 var(--color-sidebar-divider);
-}
-
-.sidebar__user {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1);
-  border: none;
-  border-radius: var(--radius-md);
-  background: transparent;
-  overflow: hidden;
-  cursor: pointer;
-  font-family: var(--font-family-base);
-  text-align: left;
-}
-
-.sidebar--collapsed .sidebar__user {
-  justify-content: center;
-  padding: var(--space-1) 0;
-}
-
-.sidebar__user:hover,
-.sidebar__user--open {
-  background: var(--color-sidebar-hover);
-}
-
-.sidebar__avatar {
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  width: 2.125rem;
-  height: 2.125rem;
-  border-radius: var(--radius-full);
-  background: var(--color-sidebar-well-strong);
-  box-shadow: inset 0 0 0 1px var(--color-sidebar-ring);
-  color: var(--color-on-primary);
-  font-weight: 600;
-  font-size: 0.8125rem;
-  overflow: hidden;
-}
-
-.sidebar__avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.sidebar__user-info {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  line-height: 1.3;
-}
-
-.sidebar__user-name {
-  color: var(--color-on-primary);
-  font-weight: 600;
-  font-size: 0.8125rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sidebar__user-role {
-  color: var(--color-sidebar-text-muted);
-  font-size: 0.75rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sidebar__user-caret {
-  flex-shrink: 0;
-  color: var(--color-sidebar-text-muted);
-}
-
-.sidebar__user-menu {
-  position: absolute;
-  bottom: calc(100% + var(--space-2));
-  left: var(--space-3);
-  right: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  max-height: min(28rem, calc(100vh - 8rem));
-  overflow-x: hidden;
-  overflow-y: auto;
-  border-radius: var(--radius-md);
-  background: var(--color-sidebar);
-  box-shadow: var(--shadow-lg);
-}
-
-.sidebar__user-menu-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  padding: var(--space-3);
-  box-shadow: 0 1px 0 var(--color-sidebar-divider);
-}
-
-.sidebar__user-menu-name {
-  color: var(--color-on-primary);
-  font-weight: 700;
-  font-size: 0.875rem;
-  overflow-wrap: break-word;
-}
-
-.sidebar__user-menu-email,
-.sidebar__user-menu-role {
-  color: var(--color-sidebar-text-muted);
-  font-size: 0.75rem;
-  overflow-wrap: break-word;
-}
-
-.sidebar__user-menu-logout {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: none;
-  background: transparent;
-  color: var(--color-sidebar-text);
-  font-family: var(--font-family-base);
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.sidebar__user-menu-logout:hover {
-  background: var(--color-sidebar-hover);
-  color: var(--color-on-primary);
-}
-
-.sidebar--collapsed .sidebar__user-menu {
-  left: calc(100% + var(--space-2));
-  right: auto;
-  bottom: var(--space-3);
-  width: 16rem;
-}
-
 /* ---------- Responsive: off-canvas dưới desktop ---------- */
 @media (max-width: 1279px) {
   .sidebar-wrap {
@@ -744,10 +425,6 @@ function closeDrawer() {
     animation: drawer-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .sidebar__collapse-btn {
-    display: none !important;
-  }
-
   .sidebar__close-btn {
     display: flex;
   }
@@ -767,12 +444,6 @@ function closeDrawer() {
 
   .sidebar__flyout {
     display: none;
-  }
-}
-
-@media (min-width: 1280px) {
-  .sidebar__collapse-btn {
-    display: flex;
   }
 }
 

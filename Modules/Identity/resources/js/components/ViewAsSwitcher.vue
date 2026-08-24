@@ -94,11 +94,11 @@ async function onExit() {
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3);
-  box-shadow: 0 1px 0 var(--color-sidebar-divider);
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
 .view-as__label {
-  color: var(--color-sidebar-text-muted);
+  color: var(--color-text-muted);
   font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -108,21 +108,14 @@ async function onExit() {
 .view-as__select {
   width: 100%;
   padding: 0.5rem 0.625rem;
-  border: none;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-sidebar);
-  color: var(--color-on-primary);
+  background: var(--color-surface);
+  color: var(--color-text);
   font-family: var(--font-family-base);
   font-size: 0.8125rem;
   font-weight: 500;
-  box-shadow: inset 0 0 0 1px var(--color-sidebar-divider);
-  color-scheme: dark;
   cursor: pointer;
-}
-
-.view-as__select option {
-  background: var(--color-sidebar);
-  color: var(--color-on-primary);
 }
 
 .view-as__select:disabled,
@@ -137,7 +130,7 @@ async function onExit() {
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-sidebar-text);
+  color: var(--color-text);
   font-family: var(--font-family-base);
   font-size: 0.8125rem;
   font-weight: 500;
@@ -146,7 +139,7 @@ async function onExit() {
 }
 
 .view-as__exit:hover:not(:disabled) {
-  background: var(--color-sidebar-hover);
-  color: var(--color-on-primary);
+  background: var(--color-surface-muted);
+  color: var(--color-primary);
 }
 </style>

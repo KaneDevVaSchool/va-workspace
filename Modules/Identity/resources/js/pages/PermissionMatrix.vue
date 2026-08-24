@@ -98,7 +98,7 @@ function onScopeChange(newScope) {
 
 // Ghi cell mới vào đúng vị trí trong matrix + đồng bộ panel chi tiết nếu
 // đang mở đúng ô đó — patch tại chỗ bằng response của API, KHÔNG gọi lại
-// loadMatrix() (tránh tải lại toàn bộ 168 quyền chỉ để đổi 1 ô).
+// loadMatrix() (tránh tải lại toàn bộ ma trận chỉ để đổi 1 ô).
 function applyCellUpdate(roleCode, permissionKey, cell) {
   if (!matrix.value[roleCode]) matrix.value[roleCode] = {};
   matrix.value[roleCode][permissionKey] = cell;
@@ -205,7 +205,9 @@ async function onConfirmAction() {
 
 async function applyToggle({ roleCode, permissionKey, cell }) {
   const cellKey = `${roleCode}|${permissionKey}`;
-  if (pendingCells[cellKey]) return;
+  if (pendingCells[cellKey]) {
+    throw new Error('pending');
+  }
 
   const newValue = !cell.effective;
   const scopeType = scope.value.type;
@@ -214,7 +216,7 @@ async function applyToggle({ roleCode, permissionKey, cell }) {
   // Nếu scope != global mà chưa chọn scope_id cụ thể → không có gì để ghi
   if (scopeType !== 'global' && !scopeId) {
     showClientToast('error', 'Vui lòng chọn phòng ban hoặc nhóm trước khi thay đổi quyền.');
-    return;
+    throw new Error('missing-scope');
   }
 
   pendingCells[cellKey] = true;

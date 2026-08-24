@@ -16,11 +16,79 @@ const PATHS = {
   chevronDown: 'M6 9l6 6 6-6',
   menu: 'M4 6h16M4 12h16M4 18h16',
   close: 'M6 6l12 12M18 6L6 18',
+  shield: 'M12 2 4 5v6c0 5.25 3.4 9.74 8 11 4.6-1.26 8-5.75 8-11V5l-8-3Z',
+  info: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 5a1.15 1.15 0 1 1 0 2.3A1.15 1.15 0 0 1 12 7Zm1.25 10.5h-2.5v-1h.6v-4.5h-.6v-1h1.9v5.5h.6v1Z',
+  refresh: 'M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z',
+  search: 'M10 4a6 6 0 1 0 3.76 10.66l4.79 4.8 1.41-1.42-4.79-4.79A6 6 0 0 0 10 4Zm-4 6a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z',
+  lock: 'M12 2a4 4 0 0 0-4 4v3H7a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a4 4 0 0 0-4-4Zm-2 7V6a2 2 0 1 1 4 0v3h-4Z',
+  home: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10',
+  plus: 'M12 5v14M5 12h14',
+  layoutList: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+  layoutGrid: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
+  fileDown: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M12 18v-6M9 15l3 3 3-3',
+  fileSpreadsheet: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h2M8 17h2M14 13h2M14 17h2',
+  fileText: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8',
+  fileUp: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M12 12v6M9 15l3-3 3 3',
+  download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+  chevronsUp: 'M17 11l-5-5-5 5M17 18l-5-5-5 5',
+  chevronsDown: 'M7 13l5 5 5-5M7 6l5 5 5-5',
+  layers: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+  fullscreen: 'M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3',
+  minimize: 'M8 3v3a2 2 0 0 1-2 2H3M16 3v3a2 2 0 0 0 2 2h3M8 21v-3a2 2 0 0 0-2-2H3M16 21v-3a2 2 0 0 1 2-2h3',
+  star: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',
+  starFilled: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',
+  bookmark: 'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z',
+  pencil: 'M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z',
+  trash: 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
+  clock: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2',
+  link: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
+  plusCircle: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 9V7h-2v4H7v2h4v4h2v-4h4v-2h-4Z',
+  check: 'M5 12l5 5L20 7',
+  minus: 'M5 12h14',
+  columns: 'M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7m0-18H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7m0-18v18',
+  sliders: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
 };
+
+const STROKE_ICONS = [
+  'chevronLeft',
+  'chevronRight',
+  'chevronDown',
+  'chevronsUp',
+  'chevronsDown',
+  'menu',
+  'close',
+  'refresh',
+  'search',
+  'home',
+  'plus',
+  'layoutList',
+  'layoutGrid',
+  'fileDown',
+  'fileSpreadsheet',
+  'fileText',
+  'fileUp',
+  'download',
+  'calendar',
+  'layers',
+  'fullscreen',
+  'minimize',
+  'star',
+  'bookmark',
+  'pencil',
+  'trash',
+  'clock',
+  'link',
+  'check',
+  'minus',
+  'columns',
+  'sliders',
+];
 
 defineProps({
   name: { type: String, required: true },
   size: { type: [Number, String], default: 20 },
+  strokeWidth: { type: [Number, String], default: 2 },
 });
 </script>
 
@@ -35,9 +103,9 @@ defineProps({
   >
     <path
       :d="PATHS[name] ?? PATHS.dashboard"
-      :stroke="['chevronLeft', 'chevronRight', 'chevronDown', 'menu', 'close'].includes(name) ? 'currentColor' : 'none'"
-      :fill="['chevronLeft', 'chevronRight', 'chevronDown', 'menu', 'close'].includes(name) ? 'none' : 'currentColor'"
-      stroke-width="2"
+      :stroke="STROKE_ICONS.includes(name) ? 'currentColor' : 'none'"
+      :fill="STROKE_ICONS.includes(name) ? 'none' : 'currentColor'"
+      :stroke-width="strokeWidth"
       stroke-linecap="round"
       stroke-linejoin="round"
     />

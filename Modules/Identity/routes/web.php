@@ -1,10 +1,12 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\Identity\App\Http\Controllers\ActivityLogController;
 use Modules\Identity\App\Http\Controllers\GoogleAuthController;
 use Modules\Identity\App\Http\Controllers\MeController;
 use Modules\Identity\App\Http\Controllers\PermissionGrantController;
 use Modules\Identity\App\Http\Controllers\PermissionMatrixController;
+use Modules\Identity\App\Http\Controllers\ShortcutController;
 use Modules\Identity\App\Http\Controllers\ViewAsController;
 
 /*
@@ -35,6 +37,17 @@ Route::middleware(['auth', 'throttle:60,1'])->prefix('api')->group(function () {
     Route::get('/me', MeController::class)->name('me');
     Route::post('/view-as', [ViewAsController::class, 'activate'])->name('view-as.activate');
     Route::delete('/view-as', [ViewAsController::class, 'deactivate'])->name('view-as.deactivate');
+
+    Route::get('/shortcuts', [ShortcutController::class, 'index'])->name('shortcuts.index');
+    Route::post('/shortcuts', [ShortcutController::class, 'store'])->name('shortcuts.store');
+    Route::put('/shortcuts/{shortcut}', [ShortcutController::class, 'update'])->name('shortcuts.update');
+    Route::patch('/shortcuts/{shortcut}/favorite', [ShortcutController::class, 'toggleFavorite'])->name('shortcuts.favorite');
+    Route::delete('/shortcuts/{shortcut}', [ShortcutController::class, 'destroy'])->name('shortcuts.destroy');
+
+    Route::middleware(['role:super_admin,admin'])->prefix('activity-logs')->name('activity-logs.')->group(function () {
+        Route::get('/recent', [ActivityLogController::class, 'recent'])->name('recent');
+        Route::get('/', [ActivityLogController::class, 'index'])->name('index');
+    });
 
     // Ma trận phân quyền (superadmin/permissions) — cùng session/CSRF với
     // phần còn lại của SPA, đặt ở đây (không phải routes/api.php module,

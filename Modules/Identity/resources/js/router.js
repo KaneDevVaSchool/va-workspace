@@ -25,4 +25,10 @@ export default [
     component: () => import('./pages/PermissionMatrix.vue'),
     meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Quản lý phân quyền' },
   },
+  {
+    path: '/superadmin/activity',
+    name: 'superadmin.activity',
+    component: () => import('./pages/ActivityLog.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Nhật ký hoạt động' },
+  },
 ];

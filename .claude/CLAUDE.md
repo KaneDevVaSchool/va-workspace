@@ -86,7 +86,7 @@ width/height cố định bằng px cho container lớn.
 
 ## 9. Font
 
-`Gabarito` (Google Font) là font mặc định toàn dự án, khai báo qua biến
+`Be Vietnam Pro` (Google Font, có đủ dấu tiếng Việt) là font mặc định toàn dự án, khai báo qua biến
 `--font-family-base` trong `theme.css`, nạp bằng `@import` Google Fonts trong
 `resources/css/app.css`. Không đổi font per-component trừ khi được yêu cầu.
 
@@ -121,6 +121,38 @@ hiển thị sẵn (label chữ thật), không được giấu vào hint chỉ 
 - Input/textarea: không dùng `placeholder` để truyền ý nghĩa chính của field
   (ý nghĩa phải nằm ở `<label>` hiển thị sẵn); placeholder chỉ được dùng cho
   ví dụ định dạng ngắn nếu thực sự cần, không thay thế label.
+
+## 14. UI đơn giản, dễ hiểu — không badge/pill, chữ phổ thông, field ngay hàng
+
+Người dùng cuối không rành công nghệ. Mọi màn hình quản trị (đặc biệt bảng
+dữ liệu + panel chi tiết) phải ưu tiên rõ ràng, dễ đọc hơn là "đẹp kỹ thuật".
+
+- **Không dùng badge/pill/tag bo tròn nền màu** để hiển thị trạng thái
+  (kiểu `<span class="...badge">Được cấp</span>` nền xanh bo tròn). Thay bằng
+  chữ thường + 1 chấm màu nhỏ (`width/height: 0.5rem`, `border-radius:
+  var(--radius-full)`) đặt trước chữ — xem `PermissionMatrix.vue`
+  (`.perm-side__dot` + `.perm-side__row-value`) làm ví dụ.
+- **Ngôn ngữ dùng câu tiếng Việt phổ thông**, không thuật ngữ kỹ thuật/tiếng Anh
+  lẫn vào UI (tránh "Global override", "Scope override", "effective_source",
+  "reserved"...). Nếu cần giải thích "vì sao có giá trị này", viết thành 1 câu
+  đầy đủ (vd. "Do có thiết lập riêng cho Team Backend") thay vì nhãn viết tắt.
+- **Field trong panel/form chi tiết phải ngay hàng, đều nhau**: mỗi field là
+  1 dòng ngang `display: flex; justify-content: space-between` — nhãn bên
+  trái (`color: var(--color-text-muted)`), giá trị bên phải, cách dòng bằng
+  `box-shadow: 0 1px 0 var(--color-border)` (không dùng `border-bottom`, xem
+  mục 2). Không dùng bố cục `<dl>` 2 cột lệch trái/phải kiểu bảng biểu kỹ thuật.
+- **Panel/khối phụ chỉ hiện khi có dữ liệu thật để hiện** — không giữ chỗ
+  (placeholder rỗng) chiếm layout khi chưa có gì để xem; dùng `v-if` trên
+  chính phần tử đó thay vì `v-if` bên trong + trạng thái rỗng.
+- **Thao tác đổi dữ liệu (ghi/xoá) nên cập nhật ngay tại chỗ bằng response
+  API**, không gọi lại toàn bộ danh sách/ma trận chỉ để phản ánh 1 thay đổi
+  nhỏ — endpoint ghi/xoá nên trả về bản ghi vừa đổi để frontend patch trực
+  tiếp vào state hiện có (xem `PermissionGrantController::upsert/destroy`
+  trả `cell`, `PermissionMatrix.vue::applyCellUpdate()`).
+- **Click 1 lần = xem, không đổi gì** khi 1 ô/dòng vừa mang tính hiển thị vừa
+  có thể sửa — dùng double-click (hoặc 1 nút hành động rõ ràng trong panel
+  chi tiết) cho thao tác thực sự đổi dữ liệu, tránh đổi nhầm khi người dùng
+  chỉ muốn xem thông tin.
 
 ---
 

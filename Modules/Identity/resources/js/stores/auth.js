@@ -43,6 +43,24 @@ export const useAuthStore = defineStore('auth', {
       return userCanViewAs(user);
     },
 
+    /**
+     * Nhật ký hoạt động: super_admin / admin thật, hoặc đang xem thử đúng
+     * vai trò admin (API cũng lọc theo role hiệu lực).
+     */
+    canViewActivityLog: (state) => {
+      const user = state.user;
+      if (!user) {
+        return false;
+      }
+
+      if (user.is_impersonating) {
+        return user.active_role === 'admin' || user.active_role === 'super_admin';
+      }
+
+      const roles = Array.isArray(user.roles) ? user.roles : [];
+      return roles.includes('super_admin') || roles.includes('admin');
+    },
+
     isImpersonating: (state) => state.user?.is_impersonating ?? false,
     activeRole: (state) => state.user?.active_role ?? null,
 

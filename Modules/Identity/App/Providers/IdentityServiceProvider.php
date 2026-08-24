@@ -4,16 +4,20 @@ namespace Modules\Identity\App\Providers;
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Modules\Identity\App\Repositories\ActivityLogRepository;
+use Modules\Identity\App\Repositories\Contracts\ActivityLogRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\PermissionGrantRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\RoleRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\TeamRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
+use Modules\Identity\App\Repositories\Contracts\UserShortcutRepositoryInterface;
 use Modules\Identity\App\Repositories\DepartmentRepository;
 use Modules\Identity\App\Repositories\PermissionGrantRepository;
 use Modules\Identity\App\Repositories\RoleRepository;
 use Modules\Identity\App\Repositories\TeamRepository;
 use Modules\Identity\App\Repositories\UserRepository;
+use Modules\Identity\App\Repositories\UserShortcutRepository;
 
 class IdentityServiceProvider extends ServiceProvider
 {
@@ -29,6 +33,8 @@ class IdentityServiceProvider extends ServiceProvider
         $this->app->bind(RoleRepositoryInterface::class, RoleRepository::class);
         $this->app->bind(PermissionGrantRepositoryInterface::class, PermissionGrantRepository::class);
         $this->app->bind(TeamRepositoryInterface::class, TeamRepository::class);
+        $this->app->bind(UserShortcutRepositoryInterface::class, UserShortcutRepository::class);
+        $this->app->bind(ActivityLogRepositoryInterface::class, ActivityLogRepository::class);
     }
 
     public function boot(): void

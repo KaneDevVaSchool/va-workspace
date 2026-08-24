@@ -14,9 +14,9 @@ use Modules\Identity\App\Services\SuperAdminBootstrap;
  * Xử lý callback Google OAuth: kiểm domain → tìm/tạo user → lưu.
  *
  * Rút gọn từ va-hrm (GoogleAuthenticator) — KHÔNG có employee linking,
- * superadmin bootstrap, lockout, login activity log (chưa cần ở giai đoạn
- * này). department_id KHÔNG được gán tự động khi login vì chưa có nguồn
- * ánh xạ thật (API HRM) — giữ null, gán tay qua seeder/DB.
+ * lockout. Nhật ký đăng nhập được ghi ở GoogleAuthController. department_id
+ * KHÔNG được gán tự động khi login vì chưa có nguồn ánh xạ thật (API HRM)
+ * — giữ null, gán tay qua seeder/DB.
  *
  * TẠM THỜI: user giả lập qua UserRepositoryInterface (Eloquent). Sẽ thay
  * bằng client gọi API HRM khi HRM cung cấp — Service này không cần sửa.

@@ -12,6 +12,7 @@ use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
 use Modules\Identity\App\Exceptions\AccountNotUsable;
 use Modules\Identity\App\Exceptions\EmailDomainNotAllowed;
+use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\GoogleAuthenticator;
 use Modules\Identity\App\Services\ViewAsService;
 
@@ -26,6 +27,7 @@ class GoogleAuthController extends Controller
 {
     public function __construct(
         private readonly GoogleAuthenticator $authenticator,
+        private readonly ActivityLogService $activityLogs,
     ) {}
 
     /** Chuyển hướng sang Google consent screen. */
@@ -111,6 +113,7 @@ class GoogleAuthController extends Controller
 
         Auth::login($user, remember: true);
         $request->session()->regenerate();
+        $this->activityLogs->record('auth.login', 'Đăng nhập vào hệ thống', $user);
 
         $redirect = $request->session()->pull('login.redirect');
 
@@ -122,6 +125,7 @@ class GoogleAuthController extends Controller
 
     public function logout(Request $request, ViewAsService $viewAs): RedirectResponse|JsonResponse
     {
+        $this->activityLogs->record('auth.logout', 'Đăng xuất khỏi hệ thống', $request->user());
         $viewAs->deactivate();
         Auth::logout();
         $request->session()->invalidate();

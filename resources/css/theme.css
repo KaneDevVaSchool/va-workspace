@@ -87,7 +87,13 @@
   --color-info-tint-border: #c3d7fb;
 
   /* ---------- Typography ---------- */
-  --font-family-base: 'Gabarito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-family-base: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --text-h1: clamp(1.625rem, 1.4rem + 0.9vw, 2rem);
+  --text-h1-line-height: 1.2;
+  --text-h1-letter-spacing: -0.02em;
+  --text-h2: clamp(1.375rem, 1.25rem + 0.6vw, 1.625rem);
+  --text-h2-line-height: 1.2;
+  --text-h2-letter-spacing: -0.01em;
 
   /* ---------- Spacing scale ---------- */
   --space-1: 4px;

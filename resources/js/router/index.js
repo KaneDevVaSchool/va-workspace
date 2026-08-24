@@ -48,6 +48,10 @@ router.beforeEach(async (to) => {
         return { name: 'home' };
     }
 
+    if (to.meta.requiresAdmin && !auth.canViewActivityLog) {
+        return { name: 'home' };
+    }
+
     if (to.meta.guestOnly && auth.isAuthenticated) {
         return { name: 'home' };
     }
