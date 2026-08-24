@@ -1,0 +1,114 @@
+/*
+ * Design tokens (CSS variables) cho toàn bộ dự án.
+ * Import file này TRƯỚC mọi CSS khác (app.css, module css...).
+ *
+ * QUY TẮC BẮT BUỘC (xem thêm .claude/CLAUDE.md mục 1):
+ * KHÔNG dùng border-left / border-right / border-top / border-bottom
+ * hoặc *-color tương ứng theo từng hướng riêng lẻ.
+ * Luôn dùng shorthand: border, outline, box-shadow (để giả lập 1 cạnh)
+ * hoặc border-width dạng shorthand "top right bottom left" nếu cần khác nhau.
+ */
+
+:root {
+  /* ---------- Màu chính (Primary) ---------- */
+  --color-primary: #9a0036;
+
+  /* ---------- Thang màu Primary (50 -> 900) ---------- */
+  --color-primary-50: #ffeff1;
+  --color-primary-100: #ffe0e4;
+  --color-primary-200: #ffc5cf;
+  --color-primary-300: #ff96a7;
+  --color-primary-400: #ff5b7a;
+  --color-primary-500: #ff2251;
+  --color-primary-600: #ff0043;
+  --color-primary-700: #da003f;
+  --color-primary-800: #b6003a;
+  --color-primary-900: #9a0036;
+
+  /* ---------- Alias ngữ nghĩa (dùng trong component) ---------- */
+  --color-primary-hover: var(--color-primary-700);
+  --color-primary-active: var(--color-primary-800);
+  --color-primary-surface: var(--color-primary-50);
+  --color-primary-surface-strong: var(--color-primary-100);
+  --color-on-primary: #ffffff;
+
+  /* ---------- Neutral / nền / chữ (mặc định - light) ---------- */
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f7f7f8;
+  --color-text: #1a1a1a;
+  --color-text-muted: #6b6b6f;
+  --color-border: #e5e5e8;
+
+  /* ---------- Trạng thái ---------- */
+  --color-success: #1a9c5c;
+  --color-warning: #d98c00;
+  --color-danger: var(--color-primary-600);
+  --color-info: #2563eb;
+
+  /* ---------- Typography ---------- */
+  --font-family-base: 'Gabarito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* ---------- Spacing scale ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+
+  /* ---------- Bo góc ---------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* ---------- Bóng đổ ---------- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
+
+  /* ---------- Breakpoints (dùng trong JS/comment, CSS dùng media query trực tiếp) ---------- */
+  --bp-mobile: 480px;
+  --bp-tablet: 768px;
+  --bp-desktop: 1280px;
+
+  /* ---------- Scrollbar mỏng, hạn chế chiếm diện tích (quy tắc 7) ---------- */
+  --scrollbar-size: 6px;
+  --scrollbar-thumb: rgba(0, 0, 0, 0.25);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.4);
+}
+
+/* ---------- Dark theme ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: #121214;
+    --color-surface: #1a1a1d;
+    --color-surface-muted: #202023;
+    --color-text: #f2f2f3;
+    --color-text-muted: #a3a3a8;
+    --color-border: #2e2e32;
+
+    --color-primary-surface: #2a0b14;
+    --color-primary-surface-strong: #3a0f1c;
+
+    --scrollbar-thumb: rgba(255, 255, 255, 0.25);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.4);
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #121214;
+  --color-surface: #1a1a1d;
+  --color-surface-muted: #202023;
+  --color-text: #f2f2f3;
+  --color-text-muted: #a3a3a8;
+  --color-border: #2e2e32;
+
+  --color-primary-surface: #2a0b14;
+  --color-primary-surface-strong: #3a0f1c;
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.25);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.4);
+}
