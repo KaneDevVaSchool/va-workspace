@@ -5,7 +5,6 @@
 //
 import { computed, ref, watch } from 'vue';
 import { showClientToast } from '@/lib/clientToast';
-import AppIcon from '@/components/AppIcon.vue';
 
 const props = defineProps({
   modelValue: { type: Object, required: true }, // { type, id }
@@ -141,15 +140,6 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
         </option>
       </select>
     </div>
-
-    <div class="scope-filter__hint">
-      <AppIcon name="info" :size="18" class="scope-filter__hint-icon" />
-      <span>
-        Bấm vào ô để cấp hoặc thu hồi quyền — hệ thống sẽ hỏi lại trước khi lưu.
-        Bấm tên quyền để xem chi tiết. Quyền hệ thống (biểu tượng khoá) không thể thay đổi.
-        Chấm màu trên ô là quyền đã được chỉnh riêng cho phạm vi đang xem.
-      </span>
-    </div>
   </div>
 </template>
 
@@ -159,6 +149,7 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-4);
+  flex-shrink: 0;
 }
 
 .scope-filter__field {
@@ -193,26 +184,6 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
   cursor: not-allowed;
 }
 
-.scope-filter__hint {
-  flex: 1 1 16rem;
-  min-width: 16rem;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--color-info-tint-bg);
-  color: var(--color-info-tint-fg);
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-
-.scope-filter__hint-icon {
-  flex-shrink: 0;
-  margin-top: 0.0625rem;
-  color: var(--color-info);
-}
-
 @media (max-width: 768px) {
   .scope-filter {
     flex-direction: column;
@@ -220,10 +191,6 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
   }
 
   .scope-filter__field {
-    min-width: 0;
-  }
-
-  .scope-filter__hint {
     min-width: 0;
   }
 }

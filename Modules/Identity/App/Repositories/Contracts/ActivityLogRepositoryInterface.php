@@ -14,7 +14,22 @@ interface ActivityLogRepositoryInterface
     public function recent(int $limit = 20): Collection;
 
     /**
-     * @param  array{q?: string, action?: string}  $filters
+     * @param  array<string, mixed>  $filters
      */
     public function paginate(array $filters, int $perPage = 20): LengthAwarePaginator;
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return Collection<int, ActivityLog>
+     */
+    public function forExport(array $filters, int $limit): Collection;
+
+    /** @param  array<string, mixed>  $filters */
+    public function countFiltered(array $filters): int;
+
+    /** @return Collection<int, ActivityLog> */
+    public function distinctActors(): Collection;
+
+    /** @return Collection<int, string> */
+    public function distinctSubjectTypes(): Collection;
 }

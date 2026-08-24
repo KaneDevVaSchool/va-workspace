@@ -46,6 +46,8 @@ Route::middleware(['auth', 'throttle:60,1'])->prefix('api')->group(function () {
 
     Route::middleware(['role:super_admin,admin'])->prefix('activity-logs')->name('activity-logs.')->group(function () {
         Route::get('/recent', [ActivityLogController::class, 'recent'])->name('recent');
+        Route::get('/options', [ActivityLogController::class, 'options'])->name('options');
+        Route::get('/export', [ActivityLogController::class, 'export'])->name('export');
         Route::get('/', [ActivityLogController::class, 'index'])->name('index');
     });
 

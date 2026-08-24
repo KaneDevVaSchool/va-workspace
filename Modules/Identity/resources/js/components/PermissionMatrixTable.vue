@@ -16,6 +16,8 @@ const props = defineProps({
   matrix: { type: Object, required: true }, // { [roleCode]: { [key]: cell } }
   pendingCells: { type: Object, default: () => ({}) }, // { "roleCode|key": true }
   activeKey: { type: String, default: null }, // "roleCode|key" của ô đang mở panel chi tiết
+  loading: { type: Boolean, default: false },
+  blockedMessage: { type: String, default: null },
 });
 const emit = defineEmits(['toggle', 'inspect']);
 
@@ -142,6 +144,8 @@ function isActive(roleCode, key) {
 <template>
   <div class="perm-table-shell">
     <div class="perm-table-shell__toolbar">
+      <slot name="leading" />
+
       <div class="perm-table-shell__search">
         <label class="perm-table-shell__search-label" for="perm-search">Tìm quyền</label>
         <div class="perm-table-shell__search-input-wrap">
@@ -202,7 +206,9 @@ function isActive(roleCode, key) {
       </div>
     </div>
 
-    <div class="perm-table-wrap">
+    <div v-if="blockedMessage" class="perm-table-shell__status">{{ blockedMessage }}</div>
+    <div v-else-if="loading" class="perm-table-shell__status">Đang tải…</div>
+    <div v-else class="perm-table-wrap">
       <table class="perm-table">
         <thead>
           <tr>
@@ -262,7 +268,7 @@ function isActive(roleCode, key) {
       </table>
     </div>
 
-    <div class="perm-table-shell__pagination">
+    <div v-if="!loading && !blockedMessage" class="perm-table-shell__pagination">
       <span class="perm-table-shell__range">{{ rangeLabel }}</span>
 
       <div v-if="totalPages > 1 || totalCount > 20" class="perm-table-shell__pagination-controls">
@@ -322,7 +328,11 @@ function isActive(roleCode, key) {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: var(--space-3);
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .perm-table-shell__search {
@@ -436,6 +446,20 @@ function isActive(roleCode, key) {
   height: 0.4375rem;
   border-radius: var(--radius-full);
   background: var(--color-info);
+}
+
+.perm-table-shell__status {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .perm-table-wrap {

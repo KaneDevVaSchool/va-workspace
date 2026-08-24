@@ -342,27 +342,26 @@ loadMatrix();
 
     <div class="perm-page__body">
       <div class="perm-page__main">
-        <div class="perm-page__toolbar">
-          <PermissionScopeFilter :model-value="scope" @update:model-value="onScopeChange" />
-        </div>
-
-        <div v-if="scope.type !== 'global' && !scope.id" class="perm-page__hint">
-          Vui lòng chọn {{ scope.type === 'department' ? 'phòng ban' : 'nhóm' }} để xem ma trận theo phạm vi này.
-        </div>
-
-        <div v-else-if="isLoading" class="perm-page__hint">Đang tải…</div>
-
         <PermissionMatrixTable
-          v-else
           :roles="roles"
           :modules="modules"
           :permissions="permissions"
           :matrix="matrix"
           :pending-cells="pendingCells"
           :active-key="activeCellKey"
+          :loading="isLoading"
+          :blocked-message="
+            scope.type !== 'global' && !scope.id
+              ? `Vui lòng chọn ${scope.type === 'department' ? 'phòng ban' : 'nhóm'} để xem ma trận theo phạm vi này.`
+              : null
+          "
           @toggle="requestToggle"
           @inspect="onInspect"
-        />
+        >
+          <template #leading>
+            <PermissionScopeFilter :model-value="scope" @update:model-value="onScopeChange" />
+          </template>
+        </PermissionMatrixTable>
       </div>
 
       <aside v-if="inspectPanel" class="perm-page__side">
@@ -513,22 +512,6 @@ loadMatrix();
   flex-direction: column;
   gap: var(--space-4);
   overflow: hidden;
-}
-
-.perm-page__toolbar {
-  flex-shrink: 0;
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-}
-
-.perm-page__hint {
-  padding: var(--space-5);
-  text-align: center;
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
 }
 
 .perm-page__side {

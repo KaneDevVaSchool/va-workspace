@@ -4,9 +4,10 @@ namespace Modules\Identity\App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Modules\Identity\App\Models\ActivityLog;
+use Modules\Identity\App\Http\Requests\ActivityLogExportRequest;
+use Modules\Identity\App\Http\Requests\ActivityLogIndexRequest;
 use Modules\Identity\App\Services\ActivityLogService;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ActivityLogController extends Controller
 {
@@ -16,33 +17,42 @@ class ActivityLogController extends Controller
 
     public function recent(): JsonResponse
     {
-        $logs = $this->activityLogs->recent(20)
-            ->map(fn (ActivityLog $log) => $this->activityLogs->present($log))
-            ->values();
+        $logs = $this->activityLogs->presentMany($this->activityLogs->recent(20));
 
         return response()->json(['logs' => $logs]);
     }
 
-    public function index(Request $request): JsonResponse
+    public function options(): JsonResponse
+    {
+        return response()->json($this->activityLogs->filterOptions());
+    }
+
+    public function index(ActivityLogIndexRequest $request): JsonResponse
     {
         $paginator = $this->activityLogs->paginate(
-            [
-                'q' => (string) $request->query('q', ''),
-                'action' => (string) $request->query('action', ''),
-            ],
-            20,
+            $request->filters(),
+            $request->perPage(),
         );
 
         return response()->json([
-            'logs' => collect($paginator->items())
-                ->map(fn (ActivityLog $log) => $this->activityLogs->present($log))
-                ->values(),
+            'logs' => $this->activityLogs->presentMany($paginator->items()),
             'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
             ],
         ]);
+    }
+
+    public function export(ActivityLogExportRequest $request): BinaryFileResponse
+    {
+        return $this->activityLogs->export(
+            $request->filters(),
+            $request->exportKind(),
+            $request->user(),
+        );
     }
 }
