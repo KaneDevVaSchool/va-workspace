@@ -7,6 +7,7 @@
 import { onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { showClientToast } from '@/lib/clientToast';
 
 const route = useRoute();
 const router = useRouter();
@@ -31,7 +32,12 @@ onMounted(async () => {
   }
 
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/';
-  router.replace(redirect);
+  await router.replace(redirect);
+  // Hiện toast sau khi đã điều hướng vào app (ToastHost mount ở App.vue,
+  // sống xuyên suốt route change nên vẫn nhận được event dù AuthCallback
+  // đã unmount).
+  const name = auth.user?.name;
+  showClientToast('success', name ? `Xin chào, ${name}!` : 'Đăng nhập thành công.');
 });
 </script>
 

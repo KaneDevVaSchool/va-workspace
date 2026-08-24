@@ -5,10 +5,12 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Modules\Identity\App\Models\Department;
+use Modules\Identity\App\Models\Role;
 
 class User extends Authenticatable
 {
@@ -63,5 +65,24 @@ class User extends Authenticatable
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    /**
+     * RBAC tối giản (Modules/Identity) — 1 user có thể giữ nhiều role,
+     * xem docs/VA_WORKSPACE_OVERVIEW.md §4.1 cho danh sách 7 role hệ thống.
+     */
+    public function roles(): BelongsToMany
+    {
+        return $this->belongsToMany(Role::class);
+    }
+
+    public function hasRole(string $code): bool
+    {
+        return $this->roles->contains('code', $code);
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole('super_admin');
     }
 }

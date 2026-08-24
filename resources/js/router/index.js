@@ -15,7 +15,7 @@ const routes = [
         path: '/',
         name: 'home',
         component: () => import('../pages/Home.vue'),
-        meta: { requiresAuth: true },
+        meta: { requiresAuth: true, title: 'Tổng quan' },
     },
     ...identityRoutes,
 ];

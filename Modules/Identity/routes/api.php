@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Identity\App\Http\Controllers\MeController;
+use Modules\Identity\App\Http\Controllers\ViewAsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,4 +15,9 @@ use Modules\Identity\App\Http\Controllers\MeController;
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', MeController::class)->name('me');
+
+    // "Xem thử" vai trò khác — chỉ super_admin (kiểm tra trong
+    // ViewAsService, không phải ở route). Xem Modules/Identity/App/Services/ViewAsService.php.
+    Route::post('/view-as', [ViewAsController::class, 'activate'])->name('view-as.activate');
+    Route::delete('/view-as', [ViewAsController::class, 'deactivate'])->name('view-as.deactivate');
 });

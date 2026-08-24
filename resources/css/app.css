@@ -15,6 +15,13 @@ body,
   height: 100%;
 }
 
+html {
+  /* Thu nhỏ toàn trang về tỉ lệ --app-scale (mặc định 0.9) mà không ảnh
+     hưởng zoom trình duyệt của người dùng. Chỉ hỗ trợ trình duyệt Chromium
+     (Chrome/Edge/Brave); nếu cần hỗ trợ Firefox/Safari, đổi sang transform. */
+  zoom: var(--app-scale);
+}
+
 body {
   margin: 0;
   background: var(--color-bg);

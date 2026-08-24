@@ -101,6 +101,21 @@ Màu chính: `#9a0036` (token `--color-primary` / `--color-primary-900`), thang 
 50–900 trong `resources/css/theme.css`. Không hard-code mã hex trong component —
 luôn dùng `var(--color-primary-*)`. Chi tiết: `docs/theme.md`.
 
+## 12. Không dùng hint/tooltip
+
+**Cấm tuyệt đối**: thuộc tính `title="..."` (tooltip mặc định của trình duyệt)
+và mọi dạng tooltip-on-hover tương tự trên nút, icon, link — ở BẤT KỲ đâu
+(Blade, `.vue`, component dùng chung). Ý nghĩa của một nút/icon phải luôn
+hiển thị sẵn (label chữ thật), không được giấu vào hint chỉ hiện khi hover.
+
+- Nút chỉ có icon (ví dụ icon-only trên desktop khi sidebar thu gọn) → vẫn
+  phải có `aria-label` cho accessibility, nhưng KHÔNG dùng `title` để hiện
+  tooltip trực quan. Nếu cần giải thích cho người dùng thấy được, hiện label
+  chữ thật cạnh icon hoặc trong dropdown/menu, không phụ thuộc hover.
+- Input/textarea: không dùng `placeholder` để truyền ý nghĩa chính của field
+  (ý nghĩa phải nằm ở `<label>` hiển thị sẵn); placeholder chỉ được dùng cho
+  ví dụ định dạng ngắn nếu thực sự cần, không thay thế label.
+
 ---
 
 Skill riêng cho dự án (quy trình tạo module mới, checklist route, v.v.):

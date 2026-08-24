@@ -6,6 +6,8 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Modules\Identity\Database\Seeders\DemoUserSeeder;
 use Modules\Identity\Database\Seeders\DepartmentSeeder;
+use Modules\Identity\Database\Seeders\RoleSeeder;
+use Modules\Identity\Database\Seeders\SuperAdminSeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -21,11 +23,14 @@ class DatabaseSeeder extends Seeder
         //     'email' => 'test@example.com',
         // ]);
 
-        // Modules/Identity — TẠM THỜI giả lập User/Department, xem
-        // Modules/Identity/module.json và README.md. Xoá 2 dòng dưới khi
-        // tích hợp API HRM thật.
+        // Modules/Identity — RoleSeeder/SuperAdminSeeder là dữ liệu hệ
+        // thống (chạy mọi environment). DepartmentSeeder/DemoUserSeeder
+        // TẠM THỜI giả lập User/Department, xem Modules/Identity/module.json
+        // và README.md — xoá khi tích hợp API HRM thật.
         $this->call([
+            RoleSeeder::class,
             DepartmentSeeder::class,
+            SuperAdminSeeder::class,
             DemoUserSeeder::class,
         ]);
     }

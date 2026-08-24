@@ -19,3 +19,17 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('app');
 });
+
+/*
+| Fallback SPA: mọi path còn lại (chưa khớp route Laravel nào ở trên,
+| và không thuộc /api, /manager, /superadmin, /auth/*, /storage...) đều
+| trả về cùng view "app" để Vue Router (createWebHistory) tự nhận path
+| và render đúng trang — bắt buộc để load thẳng URL như /login,
+| /auth/callback (Google OAuth redirect full-page) không bị 404, và để
+| F5/refresh giữa chừng trên bất kỳ route SPA nào cũng hoạt động.
+| Đặt cuối cùng để không nuốt route thật (VD callback GET /auth/google
+| đăng ký ở Modules/Identity/routes/web.php vẫn được match trước).
+*/
+Route::fallback(function () {
+    return view('app');
+});

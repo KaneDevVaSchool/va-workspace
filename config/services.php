@@ -47,4 +47,11 @@ return [
         ))),
     ],
 
+    /*
+    | Email super_admin mặc định (Modules/Identity/Database/Seeders/SuperAdminSeeder.php)
+    | — gán đủ 7 role hệ thống cho user này khi seed. Fallback hard-code
+    | trong seeder nếu env trống, để seeder luôn chạy được.
+    */
+    'superadmin_email' => env('SUPERADMIN_EMAIL'),
+
 ];

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
 use Modules\Identity\App\Exceptions\AccountNotUsable;
@@ -42,6 +43,16 @@ class GoogleAuthController extends Controller
             $this->sanitizeRedirect($request->query('redirect')),
         );
 
+        // TẠM THỜI: log để đối chiếu session_id với log lúc callback — xem
+        // ghi chú ở callback(). Xoá cùng lúc.
+        Log::warning('Google OAuth redirect() — session trước khi sang Google', [
+            'session_id' => $request->session()->getId(),
+            'has_session_cookie' => $request->hasCookie(config('session.cookie')),
+            'is_secure' => $request->isSecure(),
+            'scheme_forwarded' => $request->header('X-Forwarded-Proto'),
+            'host' => $request->getHost(),
+        ]);
+
         $domains = (array) config('services.google.allowed_domains', []);
 
         $params = array_filter([
@@ -68,7 +79,22 @@ class GoogleAuthController extends Controller
 
         try {
             $googleUser = Socialite::driver('google')->user();
-        } catch (InvalidStateException) {
+        } catch (InvalidStateException $e) {
+            // TẠM THỜI: log chi tiết để chẩn đoán nguyên nhân session/state
+            // OAuth không khớp trên production (proxy/cookie domain/secure).
+            // Xoá log này sau khi xác định và sửa xong nguyên nhân gốc.
+            Log::warning('Google OAuth InvalidStateException', [
+                'message' => $e->getMessage(),
+                'session_id' => $request->session()->getId(),
+                'has_session_cookie' => $request->hasCookie(config('session.cookie')),
+                'session_cookie_name' => config('session.cookie'),
+                'is_secure' => $request->isSecure(),
+                'scheme_forwarded' => $request->header('X-Forwarded-Proto'),
+                'host' => $request->getHost(),
+                'full_url' => $request->fullUrl(),
+                'query_state' => $request->query('state'),
+            ]);
+
             return $this->failLogin('Phiên đăng nhập đã hết hạn. Vui lòng thử lại.');
         }
 

@@ -5,8 +5,10 @@ namespace Modules\Identity\App\Providers;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
+use Modules\Identity\App\Repositories\Contracts\RoleRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Repositories\DepartmentRepository;
+use Modules\Identity\App\Repositories\RoleRepository;
 use Modules\Identity\App\Repositories\UserRepository;
 
 class IdentityServiceProvider extends ServiceProvider
@@ -20,6 +22,7 @@ class IdentityServiceProvider extends ServiceProvider
     {
         $this->app->bind(UserRepositoryInterface::class, UserRepository::class);
         $this->app->bind(DepartmentRepositoryInterface::class, DepartmentRepository::class);
+        $this->app->bind(RoleRepositoryInterface::class, RoleRepository::class);
     }
 
     public function boot(): void

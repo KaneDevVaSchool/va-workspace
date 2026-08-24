@@ -46,6 +46,22 @@
   --color-danger: var(--color-primary-600);
   --color-info: #2563eb;
 
+  /* ---------- Trạng thái - bản "soft tint" (nền nhạt + chữ/icon đậm) ----------
+   * Dùng cho toast/banner/alert thay vì nền đặc màu bão hòa cao (dịu mắt hơn).
+   */
+  --color-success-tint-bg: #e9f7f0;
+  --color-success-tint-fg: #146b40;
+  --color-success-tint-border: #b7e6cd;
+  --color-danger-tint-bg: #fdecec;
+  --color-danger-tint-fg: #9a0036;
+  --color-danger-tint-border: #f6c6cf;
+  --color-warning-tint-bg: #fdf3e0;
+  --color-warning-tint-fg: #8a5a00;
+  --color-warning-tint-border: #f3ddab;
+  --color-info-tint-bg: #e8f0fe;
+  --color-info-tint-fg: #1d4ed8;
+  --color-info-tint-border: #c3d7fb;
+
   /* ---------- Typography ---------- */
   --font-family-base: 'Gabarito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
@@ -78,6 +94,9 @@
   --scrollbar-size: 6px;
   --scrollbar-thumb: rgba(0, 0, 0, 0.25);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.4);
+
+  /* ---------- Tỉ lệ hiển thị toàn trang (áp dụng ở app.css qua `zoom`) ---------- */
+  --app-scale: 0.9;
 }
 
 /* ---------- Dark theme ---------- */
@@ -95,6 +114,19 @@
 
     --scrollbar-thumb: rgba(255, 255, 255, 0.25);
     --scrollbar-thumb-hover: rgba(255, 255, 255, 0.4);
+
+    --color-success-tint-bg: #113325;
+    --color-success-tint-fg: #6fdba6;
+    --color-success-tint-border: #1e5c3d;
+    --color-danger-tint-bg: #3a141d;
+    --color-danger-tint-fg: #ff96a7;
+    --color-danger-tint-border: #6b1f2e;
+    --color-warning-tint-bg: #3a2c0d;
+    --color-warning-tint-fg: #f0c264;
+    --color-warning-tint-border: #614a17;
+    --color-info-tint-bg: #12233f;
+    --color-info-tint-fg: #8fb4fb;
+    --color-info-tint-border: #24406e;
   }
 }
 
@@ -111,4 +143,17 @@
 
   --scrollbar-thumb: rgba(255, 255, 255, 0.25);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.4);
+
+  --color-success-tint-bg: #113325;
+  --color-success-tint-fg: #6fdba6;
+  --color-success-tint-border: #1e5c3d;
+  --color-danger-tint-bg: #3a141d;
+  --color-danger-tint-fg: #ff96a7;
+  --color-danger-tint-border: #6b1f2e;
+  --color-warning-tint-bg: #3a2c0d;
+  --color-warning-tint-fg: #f0c264;
+  --color-warning-tint-border: #614a17;
+  --color-info-tint-bg: #12233f;
+  --color-info-tint-fg: #8fb4fb;
+  --color-info-tint-border: #24406e;
 }
