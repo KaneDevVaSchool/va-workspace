@@ -24,6 +24,20 @@ class UserRepository implements UserRepositoryInterface
         return User::query()->whereRaw('LOWER(email) = ?', [strtolower($email)])->first();
     }
 
+    public function findById(int $id): ?User
+    {
+        return User::query()->find($id);
+    }
+
+    public function allActiveByDepartment(int $departmentId): \Illuminate\Support\Collection
+    {
+        return User::query()
+            ->where('department_id', $departmentId)
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get();
+    }
+
     public function create(array $data): User
     {
         return User::query()->create($data);

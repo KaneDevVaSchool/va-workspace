@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Identity\App\Http\Controllers\GoogleAuthController;
 use Modules\Identity\App\Http\Controllers\MeController;
+use Modules\Identity\App\Http\Controllers\PermissionGrantController;
+use Modules\Identity\App\Http\Controllers\PermissionMatrixController;
 use Modules\Identity\App\Http\Controllers\ViewAsController;
 
 /*
@@ -33,4 +35,14 @@ Route::middleware(['auth', 'throttle:60,1'])->prefix('api')->group(function () {
     Route::get('/me', MeController::class)->name('me');
     Route::post('/view-as', [ViewAsController::class, 'activate'])->name('view-as.activate');
     Route::delete('/view-as', [ViewAsController::class, 'deactivate'])->name('view-as.deactivate');
+
+    // Ma trận phân quyền (superadmin/permissions) — cùng session/CSRF với
+    // phần còn lại của SPA, đặt ở đây (không phải routes/api.php module,
+    // vốn dùng middleware 'api' stateless và không hoạt động với session
+    // hiện tại) để nhất quán với /api/me, /api/view-as.
+    Route::middleware(['role:super_admin'])->prefix('permissions')->name('permissions.')->group(function () {
+        Route::get('/matrix', [PermissionMatrixController::class, 'matrix'])->name('matrix');
+        Route::put('/grants', [PermissionGrantController::class, 'upsert'])->name('grants.upsert');
+        Route::delete('/grants', [PermissionGrantController::class, 'destroy'])->name('grants.destroy');
+    });
 });

@@ -45,6 +45,35 @@ export const useAuthStore = defineStore('auth', {
 
     isImpersonating: (state) => state.user?.is_impersonating ?? false,
     activeRole: (state) => state.user?.active_role ?? null,
+
+    /**
+     * Kiểm tra permission key từ granted_permissions (cache từ /api/me).
+     * Hỗ trợ hierarchy: '*', 'module.*', 'module.action'.
+     *
+     * Dùng trong component: authStore.can('task.delegate')
+     * Dùng trong template: v-if="authStore.can('project.create')"
+     *
+     * @returns {(key: string) => boolean}
+     */
+    can: (state) => (key) => {
+      const perms = state.user?.granted_permissions;
+      if (!perms || perms.length === 0) return false;
+      if (perms.includes('*')) return true;
+
+      if (perms.includes(key)) return true;
+
+      // module.* match
+      const dotIdx = key.lastIndexOf('.');
+      if (dotIdx > 0) {
+        const moduleWild = key.slice(0, dotIdx) + '.*';
+        if (perms.includes(moduleWild)) return true;
+      }
+
+      return false;
+    },
+
+    /** Toàn bộ permission keys hiệu lực. Dùng để debug hoặc render UI điều kiện. */
+    grantedPermissions: (state) => state.user?.granted_permissions ?? [],
   },
 
   actions: {

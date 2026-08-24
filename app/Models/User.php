@@ -11,6 +11,8 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\Role;
+use Modules\Identity\App\Models\Team;
+use Modules\Identity\App\Services\PermissionService;
 
 class User extends Authenticatable
 {
@@ -28,6 +30,7 @@ class User extends Authenticatable
         // Đăng nhập Google (Modules/Identity) — TẠM THỜI giả lập, xem
         // Modules/Identity/App/Repositories/UserRepository.php.
         'department_id',
+        'team_id',
         'google_id',
         'avatar_url',
         'status',
@@ -62,6 +65,15 @@ class User extends Authenticatable
         return $this->belongsTo(Department::class);
     }
 
+    /**
+     * Team của user (Modules/Identity) — sở hữu lâu dài của Workspace,
+     * KHÔNG sync từ HRM (khác department, xem Modules/Identity/App/Models/Team.php).
+     */
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';
@@ -84,5 +96,23 @@ class User extends Authenticatable
     public function isSuperAdmin(): bool
     {
         return $this->hasRole('super_admin');
+    }
+
+    /**
+     * Kiểm tra quyền granular (global scope) — shorthand cho PermissionService.
+     * Dùng: $user->allows('task.delegate')
+     */
+    public function allows(string $permissionKey): bool
+    {
+        return app(PermissionService::class)->allows($this, $permissionKey);
+    }
+
+    /**
+     * Kiểm tra quyền granular với scope cụ thể (department hoặc team).
+     * Dùng: $user->allowsScoped('project.create', 'department', $deptId)
+     */
+    public function allowsScoped(string $permissionKey, string $scopeType, ?int $scopeId = null): bool
+    {
+        return app(PermissionService::class)->allows($this, $permissionKey, $scopeType, $scopeId);
     }
 }

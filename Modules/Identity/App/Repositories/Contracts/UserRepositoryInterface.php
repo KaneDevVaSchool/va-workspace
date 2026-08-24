@@ -19,7 +19,17 @@ interface UserRepositoryInterface
 
     public function findByEmail(string $email): ?User;
 
+    public function findById(int $id): ?User;
+
     public function create(array $data): User;
 
     public function update(User $user, array $data): User;
+
+    /**
+     * Danh sách user active thuộc 1 phòng ban — dùng cho dropdown chọn
+     * team_lead_id (chỉ liệt kê user cùng phòng ban với team).
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public function allActiveByDepartment(int $departmentId): \Illuminate\Support\Collection;
 }

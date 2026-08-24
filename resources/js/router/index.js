@@ -44,6 +44,10 @@ router.beforeEach(async (to) => {
         return { name: 'login', query: { redirect: to.fullPath } };
     }
 
+    if (to.meta.requiresSuperAdmin && !auth.showSuperAdminNav) {
+        return { name: 'home' };
+    }
+
     if (to.meta.guestOnly && auth.isAuthenticated) {
         return { name: 'home' };
     }

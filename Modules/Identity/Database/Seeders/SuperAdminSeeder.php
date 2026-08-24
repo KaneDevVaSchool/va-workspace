@@ -4,6 +4,7 @@ namespace Modules\Identity\Database\Seeders;
 
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Services\SuperAdminBootstrap;
 
 /**
@@ -14,6 +15,10 @@ use Modules\Identity\App\Services\SuperAdminBootstrap;
  *
  * User đăng nhập thật qua Google SSO (Modules/Identity) — 'name' ở đây chỉ
  * là placeholder, sẽ được GoogleAuthenticator ghi đè ở lần đăng nhập đầu.
+ *
+ * department_id KHÔNG tự gán khi login Google (chưa có nguồn HRM — xem
+ * GoogleAuthenticator), nên gán tay ở đây: user giả lập thuộc phòng CNTT
+ * (Công nghệ thông tin) để test RBAC scope=department cho đúng ngữ cảnh.
  */
 class SuperAdminSeeder extends Seeder
 {
@@ -32,6 +37,14 @@ class SuperAdminSeeder extends Seeder
 
         $user->name = $user->name ?: 'Super Admin';
         $user->status = 'active';
+
+        if ($user->department_id === null) {
+            $department = Department::query()->where('code', 'CNTT')->first();
+            if ($department !== null) {
+                $user->department_id = $department->id;
+            }
+        }
+
         $user->save();
 
         $bootstrap->ensureRolesForUser($user);

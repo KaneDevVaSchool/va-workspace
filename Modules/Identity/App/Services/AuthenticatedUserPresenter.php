@@ -13,6 +13,7 @@ class AuthenticatedUserPresenter
     public function __construct(
         private readonly ViewAsService $viewAs,
         private readonly SuperAdminBootstrap $superAdminBootstrap,
+        private readonly PermissionService $permissions,
     ) {}
 
     public function forUser(User $user): array
@@ -36,6 +37,9 @@ class AuthenticatedUserPresenter
             'active_role' => $this->viewAs->displayActiveRole($user),
             'is_impersonating' => $this->viewAs->isImpersonating(),
             'can_view_as' => $user->isSuperAdmin(),
+            // Permission keys hiệu lực (có tính view-as) — frontend cache trong Pinia store.
+            // ['*'] nếu là super_admin thực sự; danh sách keys cụ thể nếu đang view-as.
+            'granted_permissions' => $this->permissions->resolveGrantedKeys($user),
         ];
     }
 }

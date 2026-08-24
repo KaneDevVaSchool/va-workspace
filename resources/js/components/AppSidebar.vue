@@ -120,6 +120,14 @@ const MENU_SECTIONS = [
     items: [
       { name: 'users', label: 'Người dùng', icon: 'users', requiresSuperAdmin: true },
       { name: 'departments', label: 'Phòng ban', icon: 'building', requiresSuperAdmin: true },
+      { name: 'superadmin.permissions', label: 'Phân quyền', icon: 'settings', requiresSuperAdmin: true },
+    ],
+  },
+  {
+    id: 'manager',
+    label: 'Quản lý',
+    items: [
+      { name: 'manager.teams', label: 'Quản lý nhóm', icon: 'users' },
     ],
   },
 ];

@@ -67,7 +67,9 @@ class Kernel extends HttpKernel
         'signed' => \App\Http\Middleware\ValidateSignature::class,
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
-        // RBAC tối giản (Modules/Identity) — vd: role:super_admin
+        // RBAC — role-level: role:super_admin | role:department_director,team_lead
         'role' => \App\Http\Middleware\EnsureHasRole::class,
+        // RBAC — permission granular: permission:task.delegate | permission:project.create,department
+        'permission' => \App\Http\Middleware\EnsureHasPermission::class,
     ];
 }

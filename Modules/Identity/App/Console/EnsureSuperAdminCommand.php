@@ -4,6 +4,7 @@ namespace Modules\Identity\App\Console;
 
 use App\Models\User;
 use Illuminate\Console\Command;
+use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Services\SuperAdminBootstrap;
 use Modules\Identity\Database\Seeders\DepartmentSeeder;
 use Modules\Identity\Database\Seeders\RoleSeeder;
@@ -40,6 +41,17 @@ class EnsureSuperAdminCommand extends Command
         }
 
         $user->status = 'active';
+
+        // department_id không tự gán khi login Google (chưa có nguồn HRM —
+        // xem GoogleAuthenticator). Ở local/testing, gán tạm phòng CNTT để
+        // super admin có ngữ cảnh phòng ban khi test RBAC scope=department.
+        if ($user->department_id === null && app()->environment('local', 'testing')) {
+            $department = Department::query()->where('code', 'CNTT')->first();
+            if ($department !== null) {
+                $user->department_id = $department->id;
+            }
+        }
+
         $user->save();
 
         $bootstrap->ensureRolesForUser($user);
