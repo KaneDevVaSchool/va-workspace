@@ -81,8 +81,12 @@ width/height cố định bằng px cho container lớn.
 
 - Ưu tiên bố cục vừa màn hình (flex column + `overflow: hidden` ở shell,
   `overflow-y: auto` chỉ ở vùng nội dung cần cuộn — xem `.app-shell` trong `app.css`).
-- Khi phải có thanh scroll, dùng style mỏng đã định nghĩa sẵn (`--scrollbar-size`,
+- Khi phải có thanh scroll **ở shell/panel phụ**, dùng style mỏng đã định nghĩa sẵn (`--scrollbar-size`,
   `--scrollbar-thumb`) — không dùng scrollbar mặc định to của trình duyệt.
+- **Bảng dữ liệu**: cột nắm mép phải để kéo đổi độ rộng; **không hiện thanh scroll**
+  (class `.hide-scrollbar`). Mẫu vàng: trang Nhật ký hoạt động
+  (`Modules/Identity/resources/js/pages/ActivityLog.vue`). Chi tiết:
+  `.cursor/rules/data-table.mdc` + skill `data-table`.
 
 ## 9. Font
 

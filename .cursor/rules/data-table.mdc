@@ -1,0 +1,32 @@
+---
+description: Bảng danh sách admin — mẫu ActivityLog (kéo cột, 2 thanh trang, panel chi tiết đẩy ngang)
+globs: "**/*.{vue,css,js}"
+alwaysApply: true
+---
+
+# Bảng dữ liệu (bắt buộc)
+
+**Mẫu vàng:** `Modules/Identity/resources/js/pages/ActivityLog.vue` + `TablePagesBar.vue`.
+
+Skill: `.cursor/skills/data-table/SKILL.md`
+
+Khi làm/sửa trang danh sách (nhật ký, nhân sự, nhóm…): **copy cấu trúc trang này**, không bịa layout khác.
+
+## Bố cục
+
+```
+PageHeader
+filter fields (nếu có)
+TablePagesBar trên (Tìm · Bộ lọc · Cỡ chữ · Cột · Hiển thị · Trang · Trước/Sau)
+bảng (hide-scrollbar, kéo cột)
+TablePagesBar dưới paging-only (Hiển thị · Trang · Trước/Sau)
+panel chi tiết bên phải khi chọn dòng — đẩy bảng sang, không modal
+```
+
+## Bắt buộc
+
+- Cột mặc định **ít**; phần còn lại chỉ trong panel chi tiết.
+- Mỗi `<th>` có tay nắm kéo; cột kề co/giãn bù; độ rộng ≥ nội dung dài nhất rồi giãn kín bảng.
+- `hide-scrollbar`; không hiện thanh scroll. Không `title`.
+- Người + email **một cột** (tên trên, email dưới chữ mờ).
+- Thanh trên: gạch chân nhẹ (`box-shadow: 0 1px 0 …`). Không nút chia màn hình.

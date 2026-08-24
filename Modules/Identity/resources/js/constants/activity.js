@@ -17,13 +17,12 @@ export const ACTIVITY_ACTIONS = [
 
 export const ACTIVITY_COLUMNS = [
   { key: 'created_at', label: 'Thời gian', defaultOn: true },
-  { key: 'actor_name', label: 'Người thực hiện', defaultOn: true },
-  { key: 'actor_email', label: 'Email', defaultOn: false },
-  { key: 'action', label: 'Loại thao tác', defaultOn: true },
+  { key: 'actor', label: 'Người thực hiện', defaultOn: true },
+  { key: 'action', label: 'Loại thao tác', defaultOn: false },
   { key: 'description', label: 'Việc đã làm', defaultOn: true },
   { key: 'subject', label: 'Đối tượng', defaultOn: false },
   { key: 'properties', label: 'Chi tiết thêm', defaultOn: false },
-  { key: 'ip_address', label: 'Địa chỉ mạng', defaultOn: true },
+  { key: 'ip_address', label: 'Địa chỉ mạng', defaultOn: false },
   { key: 'browser', label: 'Trình duyệt', defaultOn: false },
   { key: 'id', label: 'Mã bản ghi', defaultOn: false },
 ];
@@ -31,14 +30,15 @@ export const ACTIVITY_COLUMNS = [
 export const ACTIVITY_FILTERS = [
   { key: 'q', label: 'Tìm kiếm', defaultOn: true },
   { key: 'action', label: 'Loại thao tác', defaultOn: true },
-  { key: 'actor_id', label: 'Người dùng', defaultOn: false },
-  { key: 'date_range', label: 'Khoảng ngày', defaultOn: true },
-  { key: 'ip', label: 'Địa chỉ mạng', defaultOn: false },
-  { key: 'subject_type', label: 'Đối tượng', defaultOn: false },
+  { key: 'actor_id', label: 'Người dùng', defaultOn: true },
+  { key: 'date_from', label: 'Từ ngày', defaultOn: true },
+  { key: 'date_to', label: 'Đến ngày', defaultOn: true },
 ];
 
-export const COLUMN_STORAGE_KEY = 'va-activity-columns';
+export const COLUMN_STORAGE_KEY = 'va-activity-columns-v2';
 export const FILTER_STORAGE_KEY = 'va-activity-filters';
+export const COLUMN_WIDTH_KEY = 'va-activity-column-widths';
+export const ZOOM_STORAGE_KEY = 'va-activity-zoom';
 
 export function activityActionLabel(action) {
   return ACTIVITY_ACTIONS.find((item) => item.value === action)?.label ?? action ?? '';
