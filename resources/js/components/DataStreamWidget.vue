@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick, getCurrentInstance } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, getCurrentInstance, reactive } from 'vue';
 import AppIcon from './AppIcon.vue';
 
 const props = defineProps({
@@ -25,18 +25,96 @@ const zoom = ref(0.75);
 function zoomIn()  { zoom.value = Math.min(MAX_ZOOM, Math.round((zoom.value + 0.1) * 10) / 10); }
 function zoomOut() { zoom.value = Math.max(MIN_ZOOM, Math.round((zoom.value - 0.1) * 10) / 10); }
 
-const canvasWrapStyle = computed(() => {
-  const w = canvasW.value, h = canvasH.value, z = zoom.value;
-  return {
-    position: 'relative',
-    transform: `scale(${z})`,
-    transformOrigin: 'top left',
-    width:  w + 'px',
-    height: h + 'px',
-    marginRight:  `-${Math.round(w * (1 - z))}px`,
-    marginBottom: `-${Math.round(h * (1 - z))}px`,
-  };
-});
+// ─── Drag nodes + pan canvas ──────────────────────────────────────────────────
+const stageRef = ref(null);
+const positions = reactive({});
+const draggingId = ref(null);
+const panning = ref(false);
+
+function posOf(node) {
+  const stored = positions[node.id];
+  return stored ?? { x: node.x ?? 0, y: node.y ?? 0 };
+}
+
+function resetPositions() {
+  Object.keys(positions).forEach((key) => delete positions[key]);
+}
+
+function isInteractiveTarget(target) {
+  return Boolean(target?.closest?.('button, a, input, select, textarea'));
+}
+
+function startDrag(event, node) {
+  if (event.button !== 0) return;
+  if (isInteractiveTarget(event.target)) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const origin = posOf(node);
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const pointerId = event.pointerId;
+  draggingId.value = node.id;
+
+  function onMove(moveEvent) {
+    if (moveEvent.pointerId !== pointerId) return;
+    const dx = (moveEvent.clientX - startX) / zoom.value;
+    const dy = (moveEvent.clientY - startY) / zoom.value;
+    positions[node.id] = {
+      x: Math.max(0, origin.x + dx),
+      y: Math.max(0, origin.y + dy),
+    };
+  }
+
+  function onUp(upEvent) {
+    if (upEvent.pointerId !== pointerId) return;
+    draggingId.value = null;
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
+  }
+
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
+}
+
+function startPan(event) {
+  if (event.button !== 0) return;
+  if (draggingId.value) return;
+  if (isInteractiveTarget(event.target)) return;
+  if (event.target.closest('.dsw-node')) return;
+
+  const stage = stageRef.value;
+  if (!stage) return;
+
+  event.preventDefault();
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const startScrollLeft = stage.scrollLeft;
+  const startScrollTop = stage.scrollTop;
+  const pointerId = event.pointerId;
+  panning.value = true;
+
+  function onMove(moveEvent) {
+    if (moveEvent.pointerId !== pointerId) return;
+    stage.scrollLeft = startScrollLeft - (moveEvent.clientX - startX);
+    stage.scrollTop = startScrollTop - (moveEvent.clientY - startY);
+  }
+
+  function onUp(upEvent) {
+    if (upEvent.pointerId !== pointerId) return;
+    panning.value = false;
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
+  }
+
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
+}
 
 // ─── Fullscreen ───────────────────────────────────────────────────────────────
 const widgetRef     = ref(null);
@@ -86,9 +164,15 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', syncFullscreen);
+  draggingId.value = null;
+  panning.value = false;
 });
 
-watch(activeTab, () => { measuredH.value = {}; nextTick(measureAll); });
+watch(activeTab, () => {
+  measuredH.value = {};
+  resetPositions();
+  nextTick(measureAll);
+});
 
 // ─── Connector path ───────────────────────────────────────────────────────────
 function estimateH(node) {
@@ -107,12 +191,45 @@ function estimateH(node) {
 function nodeRect(id) {
   const node = nodes.value.find(n => n.id === id);
   if (!node) return null;
+  const pos = posOf(node);
   return {
-    x: node.x ?? 0, y: node.y ?? 0,
+    x: pos.x, y: pos.y,
     w: node.w ?? 220,
     h: measuredH.value[id] ?? node.h ?? estimateH(node),
   };
 }
+
+const liveCanvasW = computed(() => {
+  let max = canvasW.value;
+  for (const node of nodes.value) {
+    const pos = posOf(node);
+    max = Math.max(max, pos.x + (node.w ?? 220) + 24);
+  }
+  return max;
+});
+
+const liveCanvasH = computed(() => {
+  let max = canvasH.value;
+  for (const node of nodes.value) {
+    const pos = posOf(node);
+    const h = measuredH.value[node.id] ?? node.h ?? estimateH(node);
+    max = Math.max(max, pos.y + h + 24);
+  }
+  return max;
+});
+
+const canvasWrapStyle = computed(() => {
+  const w = liveCanvasW.value, h = liveCanvasH.value, z = zoom.value;
+  return {
+    position: 'relative',
+    transform: `scale(${z})`,
+    transformOrigin: 'top left',
+    width:  w + 'px',
+    height: h + 'px',
+    marginRight:  `-${Math.round(w * (1 - z))}px`,
+    marginBottom: `-${Math.round(h * (1 - z))}px`,
+  };
+});
 
 function anchorPt(r, side) {
   switch (side) {
@@ -197,11 +314,15 @@ function pathD(edge) {
     </div>
 
     <!-- ── Canvas stage ──────────────────────────────────────────────── -->
-    <div class="dsw__stage hide-scrollbar">
-      <div class="dsw__canvas-wrap" :style="canvasWrapStyle">
+    <div
+      ref="stageRef"
+      class="dsw__stage hide-scrollbar"
+      :class="{ 'dsw__stage--panning': panning, 'dsw__stage--dragging': draggingId }"
+    >
+      <div class="dsw__canvas-wrap" :style="canvasWrapStyle" @pointerdown="startPan">
 
         <!-- SVG connectors -->
-        <svg class="dsw__svg" :width="canvasW" :height="canvasH" xmlns="http://www.w3.org/2000/svg">
+        <svg class="dsw__svg" :width="liveCanvasW" :height="liveCanvasH" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <marker :id="arrowId" markerWidth="6.5" markerHeight="6.5"
               refX="6" refY="3.25" viewBox="0 0 6.5 6.5" orient="auto" fill="#bbbbbb">
@@ -224,7 +345,9 @@ function pathD(edge) {
             v-if="node.type === 'icon'"
             :ref="el => setNodeRef(node.id, el)"
             class="dsw-node dsw-node--icon"
-            :style="{ left: node.x + 'px', top: node.y + 'px', width: node.w + 'px' }"
+            :class="{ 'dsw-node--dragging': draggingId === node.id }"
+            :style="{ left: posOf(node).x + 'px', top: posOf(node).y + 'px', width: node.w + 'px' }"
+            @pointerdown="startDrag($event, node)"
           >
             <div class="dsw-box-icon">
               <AppIcon :name="node.icon || 'users'" :size="20" :stroke-width="1.75" />
@@ -237,8 +360,9 @@ function pathD(edge) {
             v-else-if="node.type === 'card'"
             :ref="el => setNodeRef(node.id, el)"
             class="dsw-node dsw-node--card"
-            :class="{ 'dsw-node--hl': node.highlight }"
-            :style="{ left: node.x + 'px', top: node.y + 'px', width: node.w + 'px' }"
+            :class="{ 'dsw-node--hl': node.highlight, 'dsw-node--dragging': draggingId === node.id }"
+            :style="{ left: posOf(node).x + 'px', top: posOf(node).y + 'px', width: node.w + 'px' }"
+            @pointerdown="startDrag($event, node)"
           >
             <!-- Header -->
             <div v-if="!node.compact && node.title" class="dsw-card-head">
@@ -280,7 +404,9 @@ function pathD(edge) {
             v-else-if="node.type === 'group'"
             :ref="el => setNodeRef(node.id, el)"
             class="dsw-node dsw-node--group"
-            :style="{ left: node.x + 'px', top: node.y + 'px', width: node.w + 'px' }"
+            :class="{ 'dsw-node--dragging': draggingId === node.id }"
+            :style="{ left: posOf(node).x + 'px', top: posOf(node).y + 'px', width: node.w + 'px' }"
+            @pointerdown="startDrag($event, node)"
           >
             <div class="dsw-group-label">{{ node.label }}</div>
             <div class="dsw-group-body">
@@ -438,6 +564,16 @@ function pathD(edge) {
   min-height: 360px;
   padding: 12px;
   background: #f5f6f8;
+  cursor: grab;
+}
+
+.dsw__stage--panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.dsw__stage--dragging {
+  user-select: none;
 }
 
 /* ── Canvas wrap ──────────────────────────────────────────────────────────── */
@@ -455,7 +591,25 @@ function pathD(edge) {
 }
 
 /* ── Base node ────────────────────────────────────────────────────────────── */
-.dsw-node { position: absolute; }
+.dsw-node {
+  position: absolute;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dsw-node--dragging {
+  z-index: 4;
+  cursor: grabbing;
+}
+
+.dsw-node--dragging.dsw-node--card,
+.dsw-node--dragging.dsw-node--group {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+.dsw-node .dsw-card-btn {
+  cursor: pointer;
+}
 
 /* ── Icon node ────────────────────────────────────────────────────────────── */
 .dsw-node--icon {
