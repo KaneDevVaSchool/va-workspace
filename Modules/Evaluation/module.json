@@ -1,0 +1,11 @@
+{
+    "name": "Evaluation",
+    "alias": "evaluation",
+    "description": "Tiêu chí đánh giá nhân sự theo phòng ban (Giai đoạn B). Mỗi phòng ban tự tạo tiêu chí riêng — 2 kiểu: thang điểm nhiều mức và cộng/trừ theo hành vi. Giai đoạn C (mẫu + phiếu đánh giá) là module riêng tách sau.",
+    "keywords": ["evaluation", "criteria", "scoring"],
+    "priority": 0,
+    "providers": [
+        "Modules\\Evaluation\\App\\Providers\\EvaluationServiceProvider"
+    ],
+    "files": []
+}

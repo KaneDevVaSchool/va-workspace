@@ -4,6 +4,7 @@ namespace Modules\WorkspaceConfig\App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
+use Modules\Evaluation\App\Services\EvaluationCriteriaService;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\WorkspaceConfig\App\Services\DepartmentSidebarConfigService;
 use Modules\WorkspaceConfig\App\Services\WorkspaceConfigMemberService;
@@ -20,6 +21,7 @@ class WorkspaceConfigOverviewController extends Controller
         private readonly DepartmentRepositoryInterface $departments,
         private readonly WorkspaceConfigMemberService $members,
         private readonly DepartmentSidebarConfigService $sidebarConfigs,
+        private readonly EvaluationCriteriaService $evaluationCriteria,
     ) {}
 
     public function index(): JsonResponse
@@ -46,6 +48,7 @@ class WorkspaceConfigOverviewController extends Controller
             ],
             'members' => $this->members->forDepartment($model->id),
             'sidebar_menus' => $this->sidebarConfigs->forDepartment($model->id),
+            'evaluation_criteria' => $this->evaluationCriteria->listForDepartment($model->id),
         ]);
     }
 }

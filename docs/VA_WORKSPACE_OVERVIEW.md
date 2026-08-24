@@ -4,9 +4,35 @@
 >
 > Tài liệu này là **bản overview tổng thể** cho toàn bộ hệ thống — bao gồm lõi quản lý dự án/công việc/hiệu suất, phân cấp vai trò tổ chức, entity Hạng mục (Initiative) chiến lược xuyên phòng ban, uỷ quyền task xuyên phòng ban, hệ chấm điểm hợp nhất, cùng các module quản trị dự án nâng cao: dự án — dashboard, workload, tài chính dự án, vật tư/dự toán, và quy trình/BPM.
 >
-> Đây là **bản kế hoạch (plan)** — hệ thống chưa được xây dựng, chỉ có bộ khung (`Modules/Example` mẫu). Mọi schema/route dưới đây là đề xuất triển khai theo đúng quy tắc kiến trúc đã chốt ở `.claude/CLAUDE.md`, không mô tả code đã tồn tại.
+> Đây là **tài liệu sống**: phần nền tảng đã có trong repo, phần nghiệp vụ (Project, Initiative, KPI…) vẫn là kế hoạch. Schema/route của các module chưa dựng là đề xuất theo `.claude/CLAUDE.md`.
 >
-> Cập nhật: 2026-08-24 — viết lại để khớp kiến trúc thật của repo (Modular Monolith Laravel 10 + Vue 3 SPA độc lập, không dùng Inertia).
+> Cập nhật: 2026-08-24 — khớp kiến trúc repo (Modular Monolith Laravel 10 + Vue 3 SPA, không Inertia) **và trạng thái code thật** (Identity + WorkspaceConfig đã chạy).
+
+---
+
+## Trạng thái triển khai
+
+Nền tảng **Phase 0 + Phase 1 đã xong**. Các module nghiệp vụ (Project, Initiative, DailyReport…) **chưa dựng**.
+
+### Đã có trong repo
+
+| Module | Đã chạy | Ghi chú quan trọng |
+|---|---|---|
+| `Identity` | Google SSO (Sanctum **session/cookie**, không Bearer stateless), User/Department (stub chờ HRM), **9 role**, RBAC engine + UI ma trận `/superadmin/permissions`, View-as, Team, nhật ký hoạt động, shortcut | Gộp Auth + Department + Team + một phần Audit/SystemConfig — **không** tách module riêng |
+| `WorkspaceConfig` | Hub trưởng phòng: thành viên, CRUD nhóm, gán vai trò, bật/tắt menu; super_admin: overview + chi tiết phòng ban (chỉ xem) | Tab **Tiêu chí đánh giá** chưa có — đây là việc tiếp theo |
+| `Example` | Module mẫu | Copy khi tạo module mới (`new-module`) |
+
+**Quyết định đã chốt khi làm Identity/WorkspaceConfig (khác bản plan gốc):**
+
+- **9 role**, không phải 7: thêm `deputy_department_director` (Phó phòng) và `section_head` (Trưởng bộ phận).
+- **Team** thuộc `Identity` (sở hữu lâu dài của Workspace, `team_lead_id` không sync HRM). CRUD nhóm nằm trong tab Thành viên của WorkspaceConfig, không có trang `/manager/teams` riêng. `GET /manager/teams` chỉ còn dropdown cho ma trận phân quyền.
+- **User/Department** vẫn stub local; khi HRM có API chỉ đổi binding Repository.
+- JSON SPA của Identity/WorkspaceConfig đi middleware `web` + session (`/api/me`, `/api/workspace-config/*`), không dùng `routes/api.php` stateless — rủi ro §20.11 đã chốt.
+- Trưởng phòng chỉ gán được: `deputy_department_director`, `section_head`, `team_lead`, `member`, `viewer` — **không** tự gán `super_admin` / `admin` / `director_officer` / `department_director`.
+
+### Việc nên làm tiếp — đọc §21
+
+**Bước kế tiếp: module `Evaluation` (Giai đoạn B)** — tab «Tiêu chí đánh giá» trong `WorkspaceConfigHub`. Không nhảy sang Initiative/Project khi hub cấu hình phòng ban còn thiếu đúng tab đã hứa với trưởng phòng.
 
 ---
 
@@ -14,7 +40,7 @@
 
 VA Workspace vận hành trong một tổ chức nhiều phòng ban, nơi công việc không chỉ nằm gọn trong 1 đơn vị mà thường xuyên cần phối hợp xuyên phòng ban — từ cấp lãnh đạo giao chủ đề chiến lược cho nhiều phòng ban cùng lúc, đến việc một phòng ban cần nhờ nhân sự phòng ban khác hỗ trợ một đầu việc cụ thể. Hệ thống được thiết kế theo các nguyên tắc nghiệp vụ sau ngay từ đầu:
 
-1. **Phân cấp vai trò rõ ràng theo 3 tầng quản lý** (`director_officer` → `department_director` → `team_lead`) thay vì gộp chung một vai trò "quản lý", để phân biệt rạch ròi giữa giám đốc điều hành liên phòng ban, quản lý phòng ban, và trưởng nhóm.
+1. **Phân cấp vai trò rõ ràng** (`director_officer` → `department_director` → `deputy_department_director` → `section_head` → `team_lead`) thay vì gộp chung một vai trò "quản lý".
 2. **Hạng mục (Initiative)** là container chiến lược nằm trên Project, cho phép lãnh đạo giao một chủ đề cho nhiều phòng ban cùng lúc mà không cần Project phải gắn cứng vào 1 phòng ban duy nhất.
 3. **Uỷ quyền công việc xuyên phòng ban (Cross-department Task Delegation)**: task tạo ở phòng ban A có thể giao trực tiếp cho người ở phòng ban B, trạng thái đồng bộ hai chiều, dữ liệu vẫn cô lập đúng phạm vi từng bên.
 4. **Chấm điểm Task riêng theo từng phòng ban**, cùng pattern với chấm điểm Báo cáo ngày, để mỗi phòng ban tự cấu hình tiêu chí phù hợp nghiệp vụ của mình.
@@ -29,7 +55,7 @@ VA Workspace vận hành trong một tổ chức nhiều phòng ban, nơi công 
 **Nguyên tắc kiến trúc chung (bắt buộc — theo `.claude/CLAUDE.md`):**
 
 - **Modular Monolith**: mỗi tính năng lớn là 1 module độc lập trong `Modules/{TenModule}/` (`nwidart/laravel-modules`), tự chứa backend lẫn frontend Vue riêng — chỉ những gì thực sự dùng chung nhiều module mới đặt ở `app/` cấp gốc.
-- **Vue 3 SPA gọi API JSON** — không dùng Inertia.js, không server-render Vue qua Controller. Frontend (`resources/js/` gốc + `Modules/{Ten}/resources/js`) là SPA độc lập, giao tiếp với backend hoàn toàn qua `routes/api.php` (JSON), điều hướng bằng Vue Router.
+- **Vue 3 SPA gọi API JSON** — không dùng Inertia.js, không server-render Vue qua Controller. Frontend (`resources/js/` gốc + `Modules/{Ten}/resources/js`) là SPA độc lập, điều hướng bằng Vue Router. JSON hiện tại đi middleware `web` + session (`/api/me`, `/api/workspace-config/*`…), không dùng `routes/api.php` stateless (đã chốt §20.11).
 - **Controller → Service → Repository → Model** là pattern bắt buộc cho **mọi** module mới (xem §3), không có ngoại lệ "MVC thuần" hay "Clean Architecture riêng" như các dự án Inertia khác — thống nhất một pattern duy nhất trong toàn hệ thống.
 - **4 file route cố định** ở cấp global (`web`, `manager`, `superadmin`, `api`) — module có thể có route riêng cùng tên nếu cần tách biệt nhưng mặc định ưu tiên đăng ký cấp global (xem §10).
 - Chuẩn Import/Export 3-tab thống nhất, và RBAC theo mô hình matrix-grant OR ownership-grant (xem §4).
@@ -60,7 +86,7 @@ VA Workspace vận hành trong một tổ chức nhiều phòng ban, nơi công 
 | 18 | Giao chủ đề/hạng mục chiến lược xuyên phòng ban, theo dõi roll-up tiến độ | Initiative (Hạng mục) |
 | 19 | Một phòng ban giao việc trực tiếp cho người ở phòng ban khác, nhận lại trạng thái | Task Delegation (mở rộng module Project/Task) |
 | 20 | Chấm điểm Task riêng theo từng phòng ban, gộp vào KPI tổng | TaskScoringConfig + KPI Rollup |
-| 21 | Phân quyền theo chuỗi báo cáo tổ chức (không chỉ theo phòng ban phẳng) | RBAC — 7 role, scope = department/team |
+| 21 | Phân quyền theo chuỗi báo cáo tổ chức (không chỉ theo phòng ban phẳng) | RBAC — 9 role, scope = department/team |
 | 22 | Chuẩn hoá quy trình nhiều bước có phê duyệt, mỗi bước tự sinh nghiệp vụ liên quan (phiếu chi, vật tư…) | ProcessEngine (Quy trình/BPM) |
 | 23 | Theo dõi tổng giá trị dự án, chi phí thực chi, dòng tiền theo thời gian thực | ProjectFinance |
 | 24 | Lập kế hoạch vật tư/dự toán theo phòng ban, sản phẩm, tháng | MaterialPlanning |
@@ -72,16 +98,26 @@ VA Workspace vận hành trong một tổ chức nhiều phòng ban, nơi công 
 
 ## 2. Bản đồ module (`Modules/`)
 
-Mỗi dòng dưới đây là 1 module Laravel-modules độc lập trong `Modules/{Ten}/`, trừ khi ghi chú "mở rộng trong module khác". Đặt tên module theo PascalCase, alias kebab-case (xem `.claude/skills/new-module`).
+Đặt tên module theo PascalCase, alias kebab-case (xem `.claude/skills/new-module`). **Không** tạo thêm module `Auth` / `Department` / `SystemConfig` / `Audit` riêng — những phần đó đã nằm trong `Identity` (và một phần trong `WorkspaceConfig`).
 
 ```
 VA Workspace
-├── Auth                 Xác thực — guard "system", SSO qua HRM hoặc Google
-├── Notification         Thông báo in-app — bắn được xuyên phòng ban
-├── Project              Dự án · Sprint · Epic · Task (WBS đa cấp) · Worklog · Gantt/Calendar
-├── ProjectFinance        Tổng giá trị, đã chi, dòng tiền, ngân sách theo phase
+│
+│  ── ĐÃ CÓ ─────────────────────────────────────────────────────────
+├── Identity               SSO Google, User/Department (stub HRM), 9 role,
+│                          RBAC + ma trận, View-as, Team, activity log, shortcut
+├── WorkspaceConfig        Hub cấu hình phòng ban (thành viên, nhóm, menu)
+│                          + overview super_admin (chỉ xem)
+├── Example                Module mẫu — copy khi tạo module mới
+│
+│  ── KẾ HOẠCH (chưa dựng) ──────────────────────────────────────────
+├── Evaluation             ★ việc tiếp theo — tiêu chí đánh giá (Giai đoạn B)
+│                          rồi mẫu/phiếu (Giai đoạn C); tab trong WorkspaceConfigHub
+├── Notification           Thông báo in-app — bắn được xuyên phòng ban
+├── Project                Dự án · Sprint · Epic · Task (WBS đa cấp) · Worklog · Gantt
+├── ProjectFinance         Tổng giá trị, đã chi, dòng tiền, ngân sách theo phase
 ├── DocumentManager        Tài liệu dự án (thư mục) tách biệt Đính kèm công việc
-├── ProcessEngine          Quy trình BPM đa bước, action tự sinh entity (Phiếu chi, Vật tư…)
+├── ProcessEngine          Quy trình BPM đa bước, action tự sinh entity
 ├── MaterialPlanning       Dự toán/kế hoạch vật tư theo phòng ban · sản phẩm · tháng
 ├── Initiative             Hạng mục liên phòng ban, roll-up trạng thái/trọng số
 │   └── (Task Delegation mở rộng trực tiếp trong Project, không tách module riêng)
@@ -90,12 +126,9 @@ VA Workspace
 ├── Blocker                Vướng mắc / rủi ro dự án
 ├── TestCase               QA / Test case theo dự án
 ├── Feedback               Góp ý & đề xuất từ nhân viên
-├── Comment                Thảo luận đa hình (dùng chung nhiều module qua polymorphic)
-├── Department             Phòng ban + Team (đơn vị scope cho team_lead)
-├── SystemConfig           Cấu hình hệ thống — super-admin-only
-├── Evaluation             Tiêu chí / mẫu / phiếu đánh giá nhân sự định kỳ
-├── TaskScoringConfig       Template chấm điểm Task theo từng phòng ban
-├── WorkspaceConfig        Hub cấu hình scoped theo phòng ban, gồm tab Task Scoring
+├── Comment                Thảo luận đa hình (polymorphic, dùng chung)
+├── TaskScoringConfig      Template chấm điểm Task theo từng phòng ban
+│                          (tab thêm vào WorkspaceConfigHub, giống Evaluation)
 ├── Kpi                    Roll-up có trọng số từ Daily Report + Evaluation + Task Scoring
 ├── Profile                Hồ sơ cá nhân
 ├── AiAccount              Quản lý tài khoản AI
@@ -104,13 +137,12 @@ VA Workspace
 ├── KnowledgeBase          Tri thức nội bộ
 ├── Contract               Quản lý hợp đồng, NCC (CLM)
 ├── Credential             Kho tài khoản/mật khẩu hạ tầng
-├── Performance            Hiệu suất & audit — nguồn dữ liệu cho KPI Dashboard
-├── Audit                  Nhật ký truy vết bảo mật
+├── Performance            Hiệu suất — nguồn dữ liệu cho KPI Dashboard
 ├── WeeklyReport           Báo cáo tuần Executive Dashboard
-└── Onboarding             Tour tương tác theo vai trò (7 role)
+└── Onboarding             Tour tương tác theo vai trò (9 role)
 ```
 
-> `Modules/Example/` là module mẫu — copy cấu trúc `App/Http`, `App/Services`, `App/Repositories`, `App/Models`, `routes/{web,api,manager,superadmin}.php`, `resources/js` từ đó khi tạo module mới (dùng skill `new-module`).
+> Tạo module mới: skill `new-module`, copy `Modules/Example/`. Model/migration/repository của **Team** và `department_sidebar_configs` đặt trong Identity; WorkspaceConfig chỉ có Controller/Service điều phối UI.
 
 ---
 
@@ -137,7 +169,7 @@ flowchart TB
   subgraph ext ["Hệ thống ngoài"]
     HRM["VA-HRM (SSOT nhân sự, SSO IdP)"]
   end
-  VUE -->|"axios → JSON (routes/api.php)"| ROUTES
+  VUE -->|"axios → JSON (session web /api/…)"| ROUTES
   ROUTES --> CTRL
   CTRL --> SVC
   SVC --> REPO
@@ -160,24 +192,32 @@ flowchart TB
 
 ## 4. RBAC — Phân cấp vai trò
 
-### 4.1 7 vai trò hệ thống
+### 4.1 9 vai trò hệ thống
 
-| Role | Mô tả | Phạm vi (scope) | Vào `/settings`? | Cấu hình template? |
+Nguồn sự thật trong code: `Modules/Identity/Database/Seeders/RoleSeeder.php` + `resources/js/constants/roles.js`.
+
+| Role | Mô tả | Phạm vi (scope) | Vào ma trận phân quyền? | Hub cấu hình PB? |
 |---|---|---|---|---|
-| `super_admin` | God-mode, toàn quyền + độc quyền ma trận phân quyền | Toàn hệ thống | ✅ (duy nhất) | ✅ |
+| `super_admin` | God-mode, toàn quyền + độc quyền ma trận phân quyền | Toàn hệ thống | ✅ (duy nhất sửa) | Overview mọi PB (chỉ xem) |
 | `admin` | Toàn quyền nghiệp vụ | Toàn hệ thống | ❌ | ❌ |
 | `director_officer` | Giao Hạng mục liên phòng ban, đánh giá mục tiêu quý/tháng/năm | Đa phòng ban (không gắn cứng 1 PB) | ❌ | ❌ |
-| `department_director` | Quản lý phòng ban: task, phân công, hợp đồng, NCC, KB của PB mình | 1 phòng ban | ❌ | ❌ |
+| `department_director` | Quản lý phòng ban: task, phân công, hub workspace của PB mình | 1 phòng ban | ❌ | ✅ (sửa) |
+| `deputy_department_director` | Phó phòng — điều hành khi trưởng phòng vắng; quyền nghiệp vụ gần trưởng phòng | 1 phòng ban | ❌ | ✅ (sửa) |
+| `section_head` | Trưởng bộ phận — task & nhân sự trong một bộ phận thuộc phòng ban | 1 bộ phận / phòng ban | ❌ | ❌ |
 | `team_lead` | Quản lý task & thành viên trong 1 nhóm | 1 team trong phòng ban | ❌ | ❌ |
 | `member` | Làm việc, viết báo cáo ngày, tạo test case/đề xuất/KB của mình | Cá nhân | ❌ | ❌ |
 | `viewer` | Chỉ xem (dashboard, hiệu suất, hợp đồng, dự án) | Theo cấu hình | ❌ | ❌ |
+
+Trưởng phòng **không** tự gán `super_admin` / `admin` / `director_officer` / `department_director`. Danh sách gán được: `WorkspaceConfigMemberService::ASSIGNABLE_ROLE_CODES`.
 
 ```mermaid
 flowchart TD
   SA["super_admin<br/>toàn quyền + cấu hình"] -.nhìn xuyên suốt.-> DO
   AD["admin<br/>toàn quyền, không cấu hình"] -.nhìn xuyên suốt.-> DO
-  DO["director_officer<br/>hạng mục liên phòng ban"] --> DD["department_director<br/>giao việc trong phòng ban"]
-  DD --> TL["team_lead<br/>quản lý task trong nhóm"]
+  DO["director_officer<br/>hạng mục liên phòng ban"] --> DD["department_director<br/>trưởng phòng"]
+  DD --> DPD["deputy_department_director<br/>phó phòng"]
+  DPD --> SH["section_head<br/>trưởng bộ phận"]
+  SH --> TL["team_lead<br/>trưởng nhóm"]
   TL --> MB["member (nhân viên)<br/>thực hiện & báo cáo"]
 ```
 
@@ -192,13 +232,14 @@ SystemAccount::allows('module.action', scope?)
   → nếu scope=team: chỉ áp dụng trong phạm vi team của user
 ```
 
-**Reserved keys** (chỉ `super_admin`): `system.settings.*`, `permissions.manage`, `roles.assign`, `workspace.hub.manage`, `workspace.evaluation.*`, `workspace.daily_report_scoring.*`, `workspace.task_scoring.*`, `initiative.assign_department` (chỉ `director_officer` trở lên).
+**Reserved keys** (chỉ `super_admin`, xem `config/permissions.php`): `system.settings.*`, `permissions.manage`, `roles.assign`, `workspace.hub.manage`, `workspace.evaluation.*`, `workspace.daily_report_scoring.*`, `workspace.task_scoring.*`, `workspace_config.view_all`, `initiative.assign_department` (ngoại lệ: cấp cho `director_officer` trở lên).
 
 ### 4.3 Ma trận quyền theo module (tóm tắt)
 
-| Module | super_admin | admin | director_officer | department_director | team_lead | member |
+| Module | super_admin | admin | director_officer | department_director / phó phòng | team_lead | member |
 |---|---|---|---|---|---|---|
-| Cấu hình template điểm (Daily Report / Evaluation / Task) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Cấu hình template điểm toàn hệ thống (Daily Report / Evaluation / Task) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Hub cấu hình phòng ban (thành viên, nhóm, menu) | xem tổng hợp | ❌ | ❌ | ✅ | ❌ | ❌ |
 | Tạo & giao Hạng mục xuyên PB | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Xem tiến độ Hạng mục (roll-up) | ✅ | ✅ | ✅ (của mình) | ✅ (PB nhận) | ❌ | ❌ |
 | Tạo Project/Task trong PB | ✅ | ✅ | ❌ | ✅ | ✅ (trong team) | ❌ |
@@ -207,6 +248,8 @@ SystemAccount::allows('module.action', scope?)
 | Viết Daily Report của bản thân | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Xem KPI Dashboard toàn hệ thống | ✅ | ✅ | ✅ (PB liên quan) | ✅ (PB mình) | ✅ (team mình) | ❌ |
 | Xem KPI cá nhân | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+> `section_head` nằm giữa phó phòng và `team_lead` (tạo/giao task, không vào hub WorkspaceConfig). Ma trận mặc định đầy đủ: `config/permissions.php`.
 
 ---
 
@@ -319,17 +362,27 @@ w1, w2, w3: trọng số cấu hình theo phòng ban qua Workspace Config
 
 ## 8. Team
 
-Để `team_lead` có scope hoạt động, hệ thống cần cấu trúc "nhóm" tối thiểu ngay từ đầu, không phụ thuộc vào việc HRM có org-chart đầy đủ hay chưa. Bảng `teams` thuộc module `Department`:
+Để `team_lead` có scope hoạt động, hệ thống tự quản lý nhóm ngay từ đầu — **không chờ HRM org-chart**. Bảng `teams` thuộc module **`Identity`** (cạnh Department/Role), không tách module `Department` riêng.
 
 ```
-teams
-  id, department_id, name, team_lead_id (employee_id), hrm_team_uuid (nullable), created_at
+teams                          -- sở hữu lâu dài của Workspace
+  id, department_id, name, team_lead_id (users.id), hrm_team_uuid (nullable), created_at
 
-employees
-  id, ..., team_id (nullable FK → teams.id)
+users
+  id, ..., department_id, team_id (nullable FK → teams.id)
 ```
 
-> Cột `hrm_team_uuid` được thiết kế sẵn (nullable) để khi HRM API cung cấp đầy đủ org-chart, có thể đồng bộ/migrate dữ liệu về nguồn HRM mà không phá vỡ phân quyền đã build trên `team_id`.
+**Đã chốt với stakeholder:**
+
+- `team_lead_id` **luôn do Workspace gán tay**, không đọc/sync từ HRM (HRM có thể có "team lead" riêng ngoài org-chart).
+- `hrm_team_uuid` chỉ là tham chiếu đối chiếu (nullable), không phải nguồn sự thật.
+- 1 user có thể là `team_lead_id` của **nhiều** team cùng lúc.
+- CRUD nhóm + gán thành viên vào team: tab **Thành viên** của WorkspaceConfig (`/manager/workspace-config/members`). `GET /manager/teams` chỉ phục vụ dropdown scope trên ma trận phân quyền.
+
+Hai tầng "lead" (không nhầm):
+
+1. **Team lead** (tầng này) — tổ chức, cố định, dùng cho `permission_grants.scope_type = team`.
+2. **Project lead** — linh hoạt theo từng dự án (`projects.lead_id` khi có module Project). Đây là ownership-grant, **không** thêm `scope_type` mới vào ma trận.
 
 ---
 
@@ -366,27 +419,35 @@ erDiagram
   PROCESS_INSTANCE }o--o| PROJECT : "gắn hoặc không gắn"
 ```
 
-> Mọi bảng trên dùng tiền tố `va_workspace_` tự động qua `DB_PREFIX` — không gõ tiền tố trong migration (xem §10 CLAUDE.md).
+> Hiện tại nhân sự là bảng `users` (Identity, stub HRM), không có bảng `employees` riêng. ERD trên mô tả mô hình đích; khi có HRM, `UserRepository` đổi implementation, không đổi tên entity nghiệp vụ ở các module sau. Mọi bảng dùng tiền tố `va_workspace_` tự động qua `DB_PREFIX` — không gõ tiền tố trong migration (xem §10 CLAUDE.md).
 
 ---
 
 ## 10. Bản đồ route → module
 
-Theo đúng quy tắc 4 file route cố định (§2 CLAUDE.md): `web.php` (public/guest), `manager.php` (prefix `manager`, cần đăng nhập + role quản lý trở lên), `superadmin.php` (prefix `superadmin`, chỉ `super_admin`), `api.php` (JSON, middleware `api`, có thể `prefix('v1')`). Module có thể có route riêng cùng tên trong `Modules/{Ten}/routes/` nếu cần tách biệt, nhưng **mặc định đăng ký ở cấp global trước**.
+Theo đúng quy tắc 4 file route cố định (§2 CLAUDE.md). **Thực tế hiện tại:** JSON của Identity/WorkspaceConfig đăng ký middleware `web` + prefix `/api/...` (cùng session/CSRF với SPA), không đi `routes/api.php` stateless.
+
+| Module | File route thật (đã có) | Nhóm route chính | Ghi chú |
+|---|---|---|---|
+| `Identity` (SSO) | `Modules/Identity/routes/web.php` | `/auth/google`, `/auth/google/callback`, `/logout`, `/login` | guest + session |
+| `Identity` (SPA session) | cùng `web.php`, prefix `/api` | `/api/me`, `/api/view-as`, `/api/shortcuts`, `/api/activity-logs`, `/api/permissions/*` | không dùng Sanctum Bearer |
+| `Identity` (dropdown) | `routes/manager.php` global | `GET /manager/departments`, `GET /manager/teams` | teams = list cho scope filter |
+| `WorkspaceConfig` (manager) | `Modules/WorkspaceConfig/routes/manager.php` → `/api/workspace-config/*` | members, teams CRUD, gán role, sidebar | `department_id` lấy từ user đang đăng nhập, không nhận query |
+| `WorkspaceConfig` (superadmin) | `Modules/WorkspaceConfig/routes/superadmin.php` → `/api/workspace-config/*` | `/overview`, `/departments/{id}` | reserved `workspace_config.view_all` |
+| Vue SPA | `Modules/*/resources/js/router.js` + fallback `routes/web.php` | `/manager/workspace-config/*`, `/superadmin/permissions`, `/superadmin/activity`, `/superadmin/workspace-config` | F5 luôn trả `app.blade.php` |
+
+**Kế hoạch (module chưa dựng) — mặc định đăng ký cấp global trước:**
 
 | Module | File route (global mặc định) | Nhóm route chính | Ghi chú scope |
 |---|---|---|---|
-| `Initiative` | `routes/manager.php` (tạo/giao) + `routes/api.php` (đọc/roll-up) | `manager/initiatives`, `api/v1/initiatives`, assign, roll-up progress | Tạo/giao chỉ `director_officer`+ |
-| `Project` | `routes/manager.php` + `routes/api.php` | `manager/projects`, tham số `initiative_id` khi tạo project từ hạng mục | — |
-| `Department` (Team) | `routes/manager.php` | `manager/teams` (department_director quản lý) | scope = department |
-| `WorkspaceConfig` | `routes/manager.php` | tab `manager/workspace-config/w/{code}/task-scoring` | reserved key `workspace.task_scoring.*` |
-| `Kpi` | `routes/api.php` + `routes/manager.php` (trang dashboard) | `manager/kpi` — dashboard roll-up 3 nguồn điểm | scope theo role (§4.3) |
-| `ProcessEngine` | `routes/manager.php` | `manager/process-templates`, `manager/processes` (instance list + detail từng bước) | tạo template — xem rủi ro §20.7 |
+| `Initiative` | `routes/manager.php` (tạo/giao) + JSON session `/api/...` | `manager/initiatives`, assign, roll-up progress | Tạo/giao chỉ `director_officer`+ |
+| `Project` | `routes/manager.php` + JSON | `manager/projects`, tham số `initiative_id` khi tạo từ hạng mục | — |
+| `WorkspaceConfig` (tab sau) | JSON module | tab `.../evaluation`, sau này `.../task-scoring` | `evaluation.manage_department` / `workspace.task_scoring.*` |
+| `Kpi` | JSON + trang dashboard | `manager/kpi` | scope theo role (§4.3) |
+| `ProcessEngine` | `routes/manager.php` | `manager/process-templates`, `manager/processes` | tạo template — xem rủi ro §20.7 |
 | `MaterialPlanning` | `routes/manager.php` | `manager/products`, `manager/material-plans` | `products` là danh mục toàn hệ thống |
-| `Project` (tab con) | `routes/manager.php` | tab con `?tab=finance`, `?tab=supplies`, `?tab=report`, `?tab=attachment-project` trong `manager/projects/{id}` | đọc từ module `ProjectFinance`/`MaterialPlanning`/`DocumentManager` |
-| `DailyReport`, `Blocker`, `TestCase`, `Feedback`, `Contract`, `Credential`, `KnowledgeBase`, `AiAccount`, `WeeklyReport`, … | `routes/manager.php` (chính) + `routes/web.php` (nếu có phần public) | các module vận hành còn lại | tương ứng theo module |
-| `SystemConfig`, permission matrix | `routes/superadmin.php` | `superadmin/settings`, `superadmin/permissions` | chỉ `super_admin` |
-| Auth (login, SSO callback) | `routes/web.php` | `login`, `auth/sso/callback` | guest |
+| `Project` (tab con) | `routes/manager.php` | tab `?tab=finance`, `?tab=supplies`, `?tab=report`, `?tab=attachment-project` | đọc từ Finance / Material / Document |
+| `DailyReport`, `Blocker`, `TestCase`, `Feedback`, `Contract`, `Credential`, `KnowledgeBase`, `AiAccount`, `WeeklyReport`, … | `routes/manager.php` + JSON | các module vận hành còn lại | tương ứng theo module |
 
 ---
 
@@ -398,7 +459,7 @@ Theo đúng quy tắc 4 file route cố định (§2 CLAUDE.md): `web.php` (publ
 | Frontend | Vue 3.4 (SPA, `<script setup>`) + Vue Router 4.3 + Pinia 2.1, Vite 5.0 |
 | HTTP client | axios (SPA → `routes/api.php`, JSON thuần — không Inertia) |
 | Database | MySQL, prefix `va_workspace_` (`DB_PREFIX` trong `.env`) |
-| Auth | Custom guard `system` + Laravel Sanctum, SSO qua HRM |
+| Auth | Session Laravel (guard mặc định) + Sanctum CSRF cookie cho SPA; SSO Google Workspace (`GOOGLE_ALLOWED_DOMAINS`). JSON đi middleware `web`, không Bearer token trên `routes/api.php` |
 | CSS | `resources/css/theme.css` (design tokens) + `resources/css/app.css`, font Gabarito qua Google Fonts |
 | Alias | `@` → `resources/js`, `@modules` → `resources/js/Modules`, `@theme` → `resources/css` |
 
@@ -564,25 +625,27 @@ project_documents          -- "Tài liệu dự án": có folder, người dùng
 
 ## 19. Lộ trình triển khai
 
-| Phase | Nội dung | Phụ thuộc |
-|---|---|---|
-| **0** | Nền tảng: Auth (module), RBAC engine, Department/Employee/HRM sync, 4 file route global đã đăng ký trong `RouteServiceProvider` | — (đã có sẵn ở mức skeleton) |
-| **1** | Bảng `teams` tối thiểu (module `Department`), 3 role quản lý (`director_officer`, `department_director`, `team_lead`), PermissionCatalog | Phase 0 |
-| **2** | Module `Initiative`: schema, Service/Repository, UI Vue giao/nhận, roll-up trạng thái | Phase 1 |
-| **3** | Cross-department Task Delegation: mở rộng module `Project` (`tasks` + Service), `NotificationService` | Phase 1 |
-| **4** | Module `TaskScoringConfig` theo phòng ban + `ScoringRollupService` + module `Kpi` (KPI Dashboard) | Phase 1, độc lập với Phase 2/3 |
-| **5** | Các module vận hành nền tảng: `DailyReport`, `Blocker`, `TestCase`, `Feedback`, `Contract`, `Credential`, `KnowledgeBase`, `AiAccount`, `WeeklyReport`, `Evaluation`… | Phase 0 |
-| **6** | Module `Onboarding` cho 7 role, Import/Export cho `initiatives`/`task_scoring_configs`, polish | Phase 2–5 |
-| **7** | Task WBS đa cấp (§16) + cấu hình `progress_calculation_method` + UI Gantt trong module `Project` | Phase 0 |
-| **8** | Module `DocumentManager` tách lớp (§18): `project_documents` + query "Đính kèm công việc" | Phase 0 |
-| **9** | Module `ProjectFinance` (§15): `budget_total`, `project_expenses`, tab Tài chính | Phase 0 |
-| **10** | Performance Report theo dự án (§17): query `project_employee_report`, tích hợp vào `task_scoring_configs` | Phase 4, Phase 7 |
-| **11** | Module `MaterialPlanning` (§14): `products`, `material_plans`, `material_plan_items`, tab Vật tư | Phase 0 |
-| **12** | Module `ProcessEngine` (§13): `process_templates`, `process_instances`, action Strategy pattern, tích hợp action `create_material_plan` với Phase 11 và `create_payment_voucher` với Phase 9 | Phase 9, Phase 11 |
+| Phase | Nội dung | Phụ thuộc | Trạng thái (2026-08-24) |
+|---|---|---|---|
+| **0** | Nền tảng: Auth, RBAC engine, Department/User (stub HRM), 4 file route global | — | **Xong** — nằm trong `Identity` |
+| **1** | Bảng `teams`, 9 role, PermissionCatalog + UI ma trận, View-as, activity log | Phase 0 | **Xong** — Team trong Identity; CRUD nhóm trên hub WorkspaceConfig |
+| **1b** | Hub `WorkspaceConfig`: thành viên, gán role, sidebar theo phòng ban, overview super_admin | Phase 1 | **Xong** — thiếu tab Evaluation |
+| **1c** | Module `Evaluation` Giai đoạn B: tiêu chí đánh giá (2 kiểu), tab trong WorkspaceConfigHub | Phase 1b | **← LÀM TIẾP** |
+| **2** | Module `Initiative`: schema, Service/Repository, UI Vue giao/nhận, roll-up trạng thái | Phase 1 | Chưa |
+| **3** | Cross-department Task Delegation: mở rộng module `Project` (`tasks` + Service), `NotificationService` | Phase 1, cần Project | Chưa |
+| **4** | Module `TaskScoringConfig` theo phòng ban + `ScoringRollupService` + module `Kpi` | Phase 1, độc lập Phase 2/3 | Chưa — tab thêm vào hub, sau Evaluation |
+| **5** | Module vận hành: `DailyReport`, `Blocker`, `TestCase`, `Feedback`, `Contract`, `Credential`, `KnowledgeBase`, `AiAccount`, `WeeklyReport`; Evaluation Giai đoạn C (mẫu + phiếu) | Phase 0 / 1c | Chưa |
+| **6** | Module `Onboarding` cho 9 role, Import/Export cho `initiatives`/`task_scoring_configs`, polish | Phase 2–5 | Chưa |
+| **7** | Task WBS đa cấp (§16) + `progress_calculation_method` + UI Gantt trong `Project` | Phase 0, cần Project | Chưa |
+| **8** | Module `DocumentManager` tách lớp (§18) | Phase 0, cần Project | Chưa |
+| **9** | Module `ProjectFinance` (§15) | Phase 0, cần Project | Chưa |
+| **10** | Performance Report theo dự án (§17), tích hợp `task_scoring_configs` | Phase 4, Phase 7 | Chưa |
+| **11** | Module `MaterialPlanning` (§14) | Phase 0 | Chưa |
+| **12** | Module `ProcessEngine` (§13) + action `create_material_plan` / `create_payment_voucher` | Phase 9, Phase 11 | Chưa — làm **cuối** |
 
-**Gợi ý nhóm song song:** Phase 7–9 có thể chạy song song với Phase 1–4 (không phụ thuộc vào RBAC nâng cao). Phase 12 (Process Engine) nên làm **sau cùng** vì các action của nó phụ thuộc trực tiếp vào Finance (9) và Material Planning (11).
+**Gợi ý nhóm song song:** Phase 7–9 có thể chạy song song với Phase 2–4 *sau khi* có skeleton `Project`. Phase 12 (Process Engine) làm sau cùng.
 
-**Trước mỗi Phase**: dùng skill `new-module` để scaffold đúng khung `Modules/{Ten}/` (copy từ `Modules/Example/`), đảm bảo có đủ 4 file route + `App/Http`, `App/Services`, `App/Repositories`, `App/Models`, `resources/js`.
+**Trước mỗi Phase mới:** skill `new-module` scaffold `Modules/{Ten}/` từ `Modules/Example/`. Evaluation **không** copy nhầm thành module Auth/Department riêng.
 
 ---
 
@@ -590,18 +653,56 @@ project_documents          -- "Tài liệu dự án": có folder, người dùng
 
 | # | Rủi ro / câu hỏi mở | Cần quyết định |
 |---|---|---|
-| 1 | `director_officer` có gắn cứng 1 phòng ban "ảo" (VD: Văn phòng Tổng công ty) hay hoàn toàn phi phòng ban? | Ảnh hưởng đến `employees.department_id` — có cho phép null hoặc thêm `department_type=virtual` |
-| 2 | Bảng `teams` tự quản có bị thay thế hoàn toàn khi HRM API sẵn sàng không, hay chạy song song? | Thiết kế `teams.hrm_team_uuid` (nullable) ngay từ đầu, theo đúng pattern `hrm_employee_uuid` đã dùng cho Employee |
+| 1 | `director_officer` có gắn cứng 1 phòng ban "ảo" (VD: Văn phòng Tổng công ty) hay hoàn toàn phi phòng ban? | Ảnh hưởng đến `users.department_id` — có cho phép null hoặc thêm `department_type=virtual`. **Chưa chốt** — cần trước Phase 2 |
+| 2 | Bảng `teams` tự quản có bị thay thế hoàn toàn khi HRM API sẵn sàng không, hay chạy song song? | **Đã chốt:** Team là sở hữu lâu dài của Workspace; `hrm_team_uuid` chỉ đối chiếu; `team_lead_id` không sync HRM |
 | 3 | Công thức roll-up trọng số Hạng mục khi 1 PB không hoàn thành đúng hạn có phạt điểm không? | Cần spec rõ trước khi code `ScoringRollupService` |
 | 4 | Task bị uỷ quyền (delegated) có tính vào KPI của PB nguồn hay PB nhận? | Ảnh hưởng trực tiếp công thức ở §7.3 |
 | 5 | `viewer` role có cần mở rộng thêm scope theo Hạng mục không? | Xác nhận với stakeholder trước Phase 2 |
 | 6 | Process Engine cho phép sửa template khi đã có instance đang chạy không? | Nên khoá sửa `process_templates` khi có `process_instances.status = in_progress`, chỉ cho tạo version mới |
 | 7 | Ai được quyền tạo `process_templates` — chỉ `admin`/`super_admin` hay cả `department_director`? | Ảnh hưởng bảng ma trận quyền §4.3 — cần thêm dòng "Cấu hình Process Template" |
-| 8 | `project_expenses` có cần workflow phê duyệt trước khi ghi nhận không, hay ghi trực tiếp? | Nếu cần duyệt, nên tận dụng chính Process Engine (§13) làm cơ chế duyệt chi phí thay vì code riêng |
-| 9 | WBS đa cấp có giới hạn tối đa bao nhiêu tầng để tránh vấn đề hiệu năng khi tính roll-up tiến độ đệ quy? | Đề xuất giới hạn mềm (VD: cảnh báo UI ở tầng 6+) thay vì cấm cứng trong DB |
-| 10 | Lib Gantt/Calendar, Chart.js, rich text editor, Excel export, realtime notification chưa có trong `package.json`/`composer.json` — chọn lib nào tương thích SPA Vue 3 thuần (không Inertia)? | Chốt danh sách lib cụ thể trước khi bắt đầu Phase 7 (Gantt), Phase 15 (chart), Phase 6 (Excel import/export) |
-| 11 | API auth cho SPA — dùng Sanctum SPA (cookie-based) hay token Bearer riêng cho `routes/api.php`? | Ảnh hưởng cấu hình CORS/CSRF và cách `manager.php`/`superadmin.php` (session-based) phối hợp với `api.php` (có thể stateless) |
+| 8 | `project_expenses` có cần workflow phê duyệt trước khi ghi nhận không, hay ghi trực tiếp? | Nếu cần duyệt, nên tận dụng chính Process Engine (§13) |
+| 9 | WBS đa cấp có giới hạn tối đa bao nhiêu tầng để tránh vấn đề hiệu năng khi tính roll-up tiến độ đệ quy? | Đề xuất giới hạn mềm (cảnh báo UI ở tầng 6+) thay vì cấm cứng trong DB |
+| 10 | Lib Gantt/Calendar, Chart.js, rich text editor, Excel export, realtime notification chưa có trong `package.json`/`composer.json` | Chốt lib trước Phase 7 (Gantt), Phase 9 (chart), Phase 6 (Excel). Activity log đã export Excel riêng (`ActivityLogExcelExporter`) |
+| 11 | API auth cho SPA — Sanctum SPA cookie hay Bearer trên `routes/api.php`? | **Đã chốt:** session/cookie + CSRF, JSON trên middleware `web`. Module mới làm giống Identity/WorkspaceConfig, không mở `api` stateless trừ khi có client ngoài SPA |
 
 ---
 
-*Tài liệu này là bản overview tổng hợp cho toàn bộ dự án — khi triển khai từng phase, tạo doc chi tiết riêng theo convention `docs/{MODULE}.md` (`INITIATIVE.md`, `TASK_DELEGATION.md`, `KPI_DASHBOARD.md`, `TEAM_MANAGEMENT.md`, `PROCESS_ENGINE.md`, `MATERIAL_PLANNING.md`, `PROJECT_FINANCE.md`, `DOCUMENT_MANAGER.md`), theo đúng gợi ý cấu trúc ở `docs/README.md`.*
+## 21. Việc nên làm tiếp (khuyến nghị)
+
+Nền tảng Identity + hub WorkspaceConfig **đủ để dừng mở rộng RBAC/thành viên**. Việc tiếp theo không phải Initiative hay Project.
+
+### Bước 1 — Module `Evaluation` Giai đoạn B (làm ngay)
+
+Tab thứ 3 trên `WorkspaceConfigHub`: **Tiêu chí đánh giá**.
+
+- Module mới `Modules/Evaluation/` (skill `new-module`), pattern Controller → Service → Repository.
+- 2 kiểu tiêu chí (đã ghi trong `Modules/WorkspaceConfig/README.md`):
+  1. Thang điểm nhiều mức
+  2. Cộng/trừ theo hành vi
+- Quyền: `evaluation.manage_department` (đã có trên ma trận trưởng phòng / phó phòng). Catalog hệ thống (`workspace.evaluation.*`) reserved cho super_admin — chưa cần Giai đoạn B nếu trưởng phòng tự tạo tiêu chí của PB mình.
+- UI: thêm tab vào `WorkspaceConfigHub.vue` + `router.js`, **không** thêm mục sidebar riêng (cùng pattern Thành viên / Menu).
+- Super_admin: chỉ xem tiêu chí trên trang chi tiết phòng ban, không sửa thay trưởng phòng (cùng rule overview hiện tại).
+
+**Không làm trong Bước 1:** mẫu đánh giá, phiếu, hội đồng, % trọng số, kỳ đánh giá (Giai đoạn C — Phase 5).
+
+### Bước 2 — sau khi tab tiêu chí chạy
+
+Chọn một, không song song cả hai cho đến khi Bước 1 ổn:
+
+| Ưu tiên | Khi nào chọn |
+|---|---|
+| Evaluation Giai đoạn C (mẫu + phiếu) | Cần khép quy trình đánh giá nhân sự trước khi có Project |
+| Skeleton `Project` rồi `Initiative` (Phase 2) | Cần giao hạng mục / công việc. Phải chốt §20.1, §20.3, §20.5 trước |
+
+### Không làm lúc này
+
+- ProcessEngine, ProjectFinance, MaterialPlanning, Gantt/WBS — phụ thuộc Project, dễ đứt nếu làm sớm.
+- Tách module `Auth` / `Department` / `Audit` khỏi Identity.
+- Đổi Laravel 10 → 11/12 (nợ bảo mật, xem `docs/known-issues.md`) — không chặn Evaluation.
+- Tích hợp HRM API — chưa có API; giữ stub Repository.
+
+Khi triển khai từng phase, tạo `docs/modules/{TenModule}.md` theo `docs/README.md`.
+
+---
+
+*Tài liệu sống của toàn dự án. Phần đã có: `Identity`, `WorkspaceConfig`. Việc tiếp theo: §21 (`Evaluation` Giai đoạn B).*

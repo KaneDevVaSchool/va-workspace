@@ -32,10 +32,13 @@ class ActivityLogService
         'team.delete' => 'Xoá nhóm',
         'role.assign' => 'Gán vai trò',
         'member.team.assign' => 'Gán nhóm cho thành viên',
-        'workspace_config.sidebar.update' => 'Cập nhật menu phòng ban',
-        'shortcut.create' => 'Tạo lối tắt',
-        'shortcut.update' => 'Cập nhật lối tắt',
-        'shortcut.delete' => 'Xoá lối tắt',
+        'workspace_config.sidebar.update'  => 'Cập nhật menu phòng ban',
+        'shortcut.create'                  => 'Tạo lối tắt',
+        'shortcut.update'                  => 'Cập nhật lối tắt',
+        'shortcut.delete'                  => 'Xoá lối tắt',
+        'evaluation_criteria.create'       => 'Tạo tiêu chí đánh giá',
+        'evaluation_criteria.update'       => 'Cập nhật tiêu chí đánh giá',
+        'evaluation_criteria.delete'       => 'Xoá tiêu chí đánh giá',
     ];
 
     /** @var array<string, string> */
@@ -46,6 +49,7 @@ class ActivityLogService
         'shortcut' => 'Lối tắt',
         'role' => 'Vai trò',
         'department_sidebar_config' => 'Menu phòng ban',
+        'evaluation_criteria'      => 'Tiêu chí đánh giá',
     ];
 
     /** @var array<string, string> */

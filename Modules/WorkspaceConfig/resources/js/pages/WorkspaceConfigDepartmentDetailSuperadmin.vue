@@ -40,6 +40,7 @@ const route = useRoute();
 const department = ref(null);
 const allMembers = ref([]);
 const sidebarMenus = ref([]);
+const evaluationCriteria = ref([]);
 const loading = ref(false);
 const selected = ref(null);
 const brokenAvatarIds = ref(new Set());
@@ -177,6 +178,7 @@ async function loadDetail() {
     department.value = data.department;
     allMembers.value = data.members ?? [];
     sidebarMenus.value = data.sidebar_menus ?? [];
+    evaluationCriteria.value = data.evaluation_criteria ?? [];
     if (selected.value && !allMembers.value.some((member) => member.id === selected.value.id)) {
       selected.value = null;
     }
@@ -185,6 +187,7 @@ async function loadDetail() {
     department.value = null;
     allMembers.value = [];
     sidebarMenus.value = [];
+    evaluationCriteria.value = [];
     selected.value = null;
     const message = error?.response?.data?.message;
     showClientToast('error', message || 'Không tải được chi tiết phòng ban.');
@@ -737,6 +740,34 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </template>
+
+        <template v-if="evaluationCriteria.length">
+          <h3 class="wc-detail__side-subtitle">Tiêu chí đánh giá</h3>
+          <div class="wc-detail__rows">
+            <div
+              v-for="criterion in evaluationCriteria"
+              :key="criterion.id"
+              class="wc-detail__row wc-detail__row--eval"
+            >
+              <span class="wc-detail__row-label">
+                {{ criterion.name }}
+                <span class="wc-detail__eval-type">
+                  {{ criterion.type === 'scale' ? 'Thang điểm' : 'Cộng/trừ' }}
+                </span>
+              </span>
+              <span class="wc-detail__row-value">
+                {{ criterion.level_count }} mức · max {{ criterion.max_score }}đ
+                <StatusBadge
+                  :on="criterion.is_active"
+                  :label="criterion.is_active ? 'Dùng' : 'Tắt'"
+                />
+              </span>
+            </div>
+          </div>
+        </template>
+        <p v-else-if="!loading" class="wc-detail__eval-empty">
+          Phòng ban chưa có tiêu chí đánh giá nào.
+        </p>
       </aside>
     </div>
   </section>
@@ -1106,6 +1137,32 @@ onBeforeUnmount(() => {
   font-weight: 600;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.wc-detail__row--eval .wc-detail__row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.wc-detail__eval-type {
+  font-size: 0.6875rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.wc-detail__row--eval .wc-detail__row-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+}
+
+.wc-detail__eval-empty {
+  margin: var(--space-3) 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 1024px) {

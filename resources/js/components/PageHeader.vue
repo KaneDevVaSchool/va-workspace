@@ -115,7 +115,8 @@ function onPrimaryClick(event) {
     primaryOpen.value = !primaryOpen.value;
     return;
   }
-  props.primaryAction?.onClick?.(event);
+  const run = props.primaryAction?.onClick ?? props.primaryAction?.action;
+  run?.(event);
 }
 
 function onPrimarySelect(item) {

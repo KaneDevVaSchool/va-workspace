@@ -26,6 +26,11 @@ const TABS = [
     label: 'Menu hiển thị',
     permission: 'workspace_config.manage_sidebar_department',
   },
+  {
+    name: 'manager.workspace-config.evaluation',
+    label: 'Tiêu chí đánh giá',
+    permission: 'evaluation.manage_department',
+  },
 ];
 
 const activeTab = computed(() => route.name);
@@ -43,10 +48,8 @@ const reloadChild = ref(null);
 const reloading = ref(false);
 const primaryAction = ref(null);
 
-const headerPrimaryAction = computed(() => {
-  if (activeTab.value !== 'manager.workspace-config.members') return null;
-  return primaryAction.value;
-});
+// Mọi tab con đều có thể đặt primary action của mình qua inject 'workspaceConfigHub'.
+const headerPrimaryAction = computed(() => primaryAction.value);
 
 provide('workspaceConfigHub', {
   registerReload(fn) {

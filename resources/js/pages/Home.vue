@@ -31,7 +31,7 @@ const workData = {
         { icon: 'clock',       label: 'Quy định giờ công' },
         { icon: 'sliders',     label: 'Tiêu chí nghiệm thu' },
       ],
-      button: { label: 'Cài đặt chấm điểm', to: '/workspace-config' } },
+      button: { label: 'Cài đặt chấm điểm', to: { name: 'manager.workspace-config.hub' } } },
 
     { id: 'n4', type: 'card', x: 350, y: 124, w: 300,
       icon: 'users', title: 'Tạo mới công việc', teaser: 'Trưởng nhóm giao',
@@ -120,7 +120,7 @@ const projectData = {
         { icon: 'calendar',   label: 'Cài sprint / giai đoạn' },
         { icon: 'users',      label: 'Vai trò trong dự án' },
       ],
-      button: { label: 'Cài đặt dự án', to: '/workspace-config' } },
+      button: { label: 'Cài đặt dự án', to: { name: 'manager.workspace-config.hub' } } },
 
     { id: 'n4', type: 'card', x: 350, y: 124, w: 300,
       icon: 'layoutList', title: 'Tạo dự án mới', teaser: 'Người phụ trách',
@@ -209,7 +209,7 @@ const workspaceData = {
         { icon: 'link',        label: 'Địa chỉ truy cập' },
         { icon: 'calendar',    label: 'Múi giờ & ngôn ngữ' },
       ],
-      button: { label: 'Vào cài đặt chung', to: '/workspace-config' } },
+      button: { label: 'Vào cài đặt chung', to: { name: 'manager.workspace-config.hub' } } },
 
     { id: 'n4', type: 'card', x: 350, y: 124, w: 300,
       icon: 'users', title: 'Quản lý người dùng', teaser: 'Quản trị viên',
@@ -219,7 +219,7 @@ const workspaceData = {
         { icon: 'shield',      label: 'Chọn vai trò phù hợp' },
         { icon: 'lock',        label: 'Khoá / xoá tài khoản' },
       ],
-      button: { label: 'Danh sách người dùng', to: '/workspace-config/members' } },
+      button: { label: 'Danh sách người dùng', to: { name: 'manager.workspace-config.members' } } },
 
     { id: 'n5', type: 'card', x: 700, y: 124, w: 300,
       icon: 'layoutList', title: 'Menu & Màn hình', teaser: 'Quản trị viên · Trưởng phòng',
@@ -228,7 +228,7 @@ const workspaceData = {
         { icon: 'building',    label: 'Mỗi phòng thấy menu riêng' },
         { icon: 'sliders',     label: 'Thay đổi thứ tự hiển thị' },
       ],
-      button: { label: 'Cài đặt menu', to: '/workspace-config/sidebar' } },
+      button: { label: 'Cài đặt menu', to: { name: 'manager.workspace-config.sidebar' } } },
 
     { id: 'n6', type: 'card', x: 1050, y: 124, w: 300, highlight: true,
       icon: 'shield', title: 'Nhật ký & Bảo mật', teaser: 'Quản trị viên',
@@ -237,7 +237,7 @@ const workspaceData = {
         { icon: 'lock',        label: 'Đăng nhập gần đây' },
         { icon: 'bell',        label: 'Cảnh báo bất thường' },
       ],
-      button: { label: 'Xem nhật ký hoạt động', to: '/identity/activity-log' } },
+      button: { label: 'Xem nhật ký hoạt động', to: { name: 'superadmin.activity' } } },
 
     { id: 'n7', type: 'icon', x: 100, y: 450, w: 150,
       icon: 'users', label: 'Trưởng phòng' },
@@ -254,7 +254,7 @@ const workspaceData = {
         { icon: 'bell',          label: 'Cài thông báo nội bộ' },
         { icon: 'refresh',       label: 'Đặt lại về mặc định' },
       ],
-      button: { label: 'Tuỳ chỉnh phòng ban', to: '/workspace-config' } },
+      button: { label: 'Tuỳ chỉnh phòng ban', to: { name: 'manager.workspace-config.hub' } } },
 
     { id: 'n10', type: 'group', x: 700, y: 420, w: 340,
       label: 'CÔNG CỤ HỖ TRỢ',

@@ -28,9 +28,12 @@ function zoomOut() { zoom.value = Math.max(MIN_ZOOM, Math.round((zoom.value - 0.
 // ─── Drag nodes + pan canvas ──────────────────────────────────────────────────
 const stageRef = ref(null);
 const positions = reactive({});
+const panX = ref(0);
+const panY = ref(0);
 const draggingId = ref(null);
 const panning = ref(false);
 const hasPanned = ref(false);
+let stopPointer = null;
 
 function posOf(node) {
   const stored = positions[node.id];
@@ -41,8 +44,69 @@ function resetPositions() {
   Object.keys(positions).forEach((key) => delete positions[key]);
 }
 
+function resetPan() {
+  panX.value = 0;
+  panY.value = 0;
+  hasPanned.value = false;
+}
+
+function eventElement(target) {
+  if (!target) return null;
+  return target.nodeType === 1 ? target : target.parentElement;
+}
+
 function isInteractiveTarget(target) {
-  return Boolean(target?.closest?.('button, a, input, select, textarea'));
+  return Boolean(eventElement(target)?.closest?.('button, a, input, select, textarea'));
+}
+
+function listenPointer(onMove, onEnd) {
+  stopPointer?.();
+
+  const opts = { capture: true };
+  let lastKey = '';
+  function move(event) {
+    if (event.pointerType && event.pointerType !== 'mouse' && event.buttons === 0) {
+      up();
+      return;
+    }
+    const key = `${event.clientX},${event.clientY}`;
+    if (key === lastKey) return;
+    lastKey = key;
+    onMove(event);
+  }
+  function up() {
+    stopPointer?.();
+    onEnd();
+  }
+  function teardown() {
+    document.removeEventListener('pointermove', move, opts);
+    document.removeEventListener('mousemove', move, opts);
+    document.removeEventListener('pointerup', up, opts);
+    document.removeEventListener('pointercancel', up, opts);
+    document.removeEventListener('mouseup', up, opts);
+    stopPointer = null;
+  }
+
+  document.addEventListener('pointermove', move, opts);
+  document.addEventListener('mousemove', move, opts);
+  document.addEventListener('pointerup', up, opts);
+  document.addEventListener('pointercancel', up, opts);
+  document.addEventListener('mouseup', up, opts);
+  stopPointer = teardown;
+}
+
+function captureStage(event) {
+  if (event.pointerId == null) return;
+  const candidates = [event.currentTarget, stageRef.value];
+  for (const el of candidates) {
+    if (!el?.setPointerCapture) continue;
+    try {
+      el.setPointerCapture(event.pointerId);
+      return;
+    } catch {
+      // Try the next candidate.
+    }
+  }
 }
 
 function startDrag(event, node) {
@@ -51,71 +115,53 @@ function startDrag(event, node) {
 
   event.preventDefault();
   event.stopPropagation();
+  captureStage(event);
 
   const origin = posOf(node);
   const startX = event.clientX;
   const startY = event.clientY;
-  const pointerId = event.pointerId;
   draggingId.value = node.id;
 
-  function onMove(moveEvent) {
-    if (moveEvent.pointerId !== pointerId) return;
-    const dx = (moveEvent.clientX - startX) / zoom.value;
-    const dy = (moveEvent.clientY - startY) / zoom.value;
-    positions[node.id] = {
-      x: Math.max(0, origin.x + dx),
-      y: Math.max(0, origin.y + dy),
-    };
-  }
-
-  function onUp(upEvent) {
-    if (upEvent.pointerId !== pointerId) return;
-    draggingId.value = null;
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
-    window.removeEventListener('pointercancel', onUp);
-  }
-
-  window.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp);
-  window.addEventListener('pointercancel', onUp);
+  listenPointer(
+    (moveEvent) => {
+      const dx = (moveEvent.clientX - startX) / zoom.value;
+      const dy = (moveEvent.clientY - startY) / zoom.value;
+      positions[node.id] = {
+        x: Math.max(0, origin.x + dx),
+        y: Math.max(0, origin.y + dy),
+      };
+    },
+    () => {
+      draggingId.value = null;
+    },
+  );
 }
 
 function startPan(event) {
   if (event.button !== 0) return;
   if (draggingId.value) return;
   if (isInteractiveTarget(event.target)) return;
-  if (event.target.closest('.dsw-node')) return;
-
-  const stage = stageRef.value;
-  if (!stage) return;
+  if (eventElement(event.target)?.closest?.('.dsw-node')) return;
 
   event.preventDefault();
+  captureStage(event);
+
   const startX = event.clientX;
   const startY = event.clientY;
-  const startScrollLeft = stage.scrollLeft;
-  const startScrollTop = stage.scrollTop;
-  const pointerId = event.pointerId;
+  const originX = panX.value;
+  const originY = panY.value;
   panning.value = true;
   hasPanned.value = true;
 
-  function onMove(moveEvent) {
-    if (moveEvent.pointerId !== pointerId) return;
-    stage.scrollLeft = startScrollLeft - (moveEvent.clientX - startX);
-    stage.scrollTop = startScrollTop - (moveEvent.clientY - startY);
-  }
-
-  function onUp(upEvent) {
-    if (upEvent.pointerId !== pointerId) return;
-    panning.value = false;
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
-    window.removeEventListener('pointercancel', onUp);
-  }
-
-  window.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp);
-  window.addEventListener('pointercancel', onUp);
+  listenPointer(
+    (moveEvent) => {
+      panX.value = originX + (moveEvent.clientX - startX);
+      panY.value = originY + (moveEvent.clientY - startY);
+    },
+    () => {
+      panning.value = false;
+    },
+  );
 }
 
 // ─── Fullscreen ───────────────────────────────────────────────────────────────
@@ -166,6 +212,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', syncFullscreen);
+  stopPointer?.();
   draggingId.value = null;
   panning.value = false;
 });
@@ -173,6 +220,7 @@ onUnmounted(() => {
 watch(activeTab, () => {
   measuredH.value = {};
   resetPositions();
+  resetPan();
   nextTick(measureAll);
 });
 
@@ -224,12 +272,10 @@ const canvasWrapStyle = computed(() => {
   const w = liveCanvasW.value, h = liveCanvasH.value, z = zoom.value;
   return {
     position: 'relative',
-    transform: `scale(${z})`,
+    transform: `translate(${panX.value}px, ${panY.value}px) scale(${z})`,
     transformOrigin: 'top left',
     width:  w + 'px',
     height: h + 'px',
-    marginRight:  `-${Math.round(w * (1 - z))}px`,
-    marginBottom: `-${Math.round(h * (1 - z))}px`,
   };
 });
 
@@ -301,14 +347,14 @@ function pathD(edge) {
       </div>
       <div class="dsw__controls">
         <button type="button" class="dsw__ctrl"
-          :title="isFullscreen ? 'Thoát toàn màn hình' : 'Xem toàn màn hình'"
+          :aria-label="isFullscreen ? 'Thoát toàn màn hình' : 'Xem toàn màn hình'"
           @click="toggleFullscreen">
           <AppIcon :name="isFullscreen ? 'minimize' : 'fullscreen'" :size="13" :stroke-width="1.75" />
         </button>
-        <button type="button" class="dsw__ctrl" title="Phóng to" @click="zoomIn">
+        <button type="button" class="dsw__ctrl" aria-label="Phóng to" @click="zoomIn">
           <AppIcon name="zoomIn" :size="13" :stroke-width="1.75" />
         </button>
-        <button type="button" class="dsw__ctrl" :title="`Thu nhỏ (${Math.round(zoom * 100)}%)`" @click="zoomOut">
+        <button type="button" class="dsw__ctrl" aria-label="Thu nhỏ" @click="zoomOut">
           <AppIcon name="zoomOut" :size="13" :stroke-width="1.75" />
         </button>
         <span class="dsw__zoom-pct">{{ Math.round(zoom * 100) }}%</span>
@@ -320,25 +366,26 @@ function pathD(edge) {
       ref="stageRef"
       class="dsw__stage hide-scrollbar"
       :class="{ 'dsw__stage--panning': panning, 'dsw__stage--dragging': draggingId }"
+      @pointerdown="startPan"
     >
       <div v-if="!hasPanned" class="dsw__pan-hint">
         <AppIcon name="move" :size="13" :stroke-width="1.75" />
         <span>Nắm và kéo vào khoảng trống để di chuyển sơ đồ</span>
       </div>
 
-      <div class="dsw__canvas-wrap" :style="canvasWrapStyle" @pointerdown="startPan">
+      <div class="dsw__canvas-wrap" :style="canvasWrapStyle">
 
         <!-- SVG connectors -->
         <svg class="dsw__svg" :width="liveCanvasW" :height="liveCanvasH" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <marker :id="arrowId" markerWidth="6.5" markerHeight="6.5"
-              refX="6" refY="3.25" viewBox="0 0 6.5 6.5" orient="auto" fill="#bbbbbb">
+              refX="6" refY="3.25" viewBox="0 0 6.5 6.5" orient="auto" fill="var(--color-border-strong)">
               <polygon points="0,0 6.5,3.25 0,6.5" />
             </marker>
           </defs>
           <path
             v-for="edge in edges" :key="edge.id"
-            :d="pathD(edge)" fill="none" stroke="#bbbbbb"
+            :d="pathD(edge)" fill="none" stroke="var(--color-border-strong)"
             stroke-width="1.4" stroke-linejoin="round"
             :marker-end="`url(#${arrowId})`"
           />
@@ -354,7 +401,7 @@ function pathD(edge) {
             class="dsw-node dsw-node--icon"
             :class="{ 'dsw-node--dragging': draggingId === node.id }"
             :style="{ left: posOf(node).x + 'px', top: posOf(node).y + 'px', width: node.w + 'px' }"
-            @pointerdown="startDrag($event, node)"
+            @pointerdown.stop="startDrag($event, node)"
           >
             <div class="dsw-box-icon">
               <AppIcon :name="node.icon || 'users'" :size="20" :stroke-width="1.75" />
@@ -369,7 +416,7 @@ function pathD(edge) {
             class="dsw-node dsw-node--card"
             :class="{ 'dsw-node--hl': node.highlight, 'dsw-node--dragging': draggingId === node.id }"
             :style="{ left: posOf(node).x + 'px', top: posOf(node).y + 'px', width: node.w + 'px' }"
-            @pointerdown="startDrag($event, node)"
+            @pointerdown.stop="startDrag($event, node)"
           >
             <!-- Header -->
             <div v-if="!node.compact && node.title" class="dsw-card-head">
@@ -413,7 +460,7 @@ function pathD(edge) {
             class="dsw-node dsw-node--group"
             :class="{ 'dsw-node--dragging': draggingId === node.id }"
             :style="{ left: posOf(node).x + 'px', top: posOf(node).y + 'px', width: node.w + 'px' }"
-            @pointerdown="startDrag($event, node)"
+            @pointerdown.stop="startDrag($event, node)"
           >
             <div class="dsw-group-label">{{ node.label }}</div>
             <div class="dsw-group-body">
@@ -463,7 +510,7 @@ function pathD(edge) {
 .dsw__tabs {
   display: flex;
   padding: 0 16px;
-  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 1px 0 var(--color-border);
   flex-shrink: 0;
 }
 
@@ -499,7 +546,7 @@ function pathD(edge) {
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
-  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 1px 0 var(--color-border);
   flex-shrink: 0;
 }
 
@@ -568,18 +615,19 @@ function pathD(edge) {
 /* ── Stage ────────────────────────────────────────────────────────────────── */
 .dsw__stage {
   position: relative;
-  overflow: auto;
+  overflow: hidden;
   min-height: 360px;
   padding: 12px;
-  background: #f5f6f8;
-}
-
-.dsw__stage--panning {
+  background: var(--color-surface-muted);
+  touch-action: none;
   user-select: none;
+  cursor: grab;
+  overscroll-behavior: none;
 }
 
+.dsw__stage--panning,
 .dsw__stage--dragging {
-  user-select: none;
+  cursor: grabbing;
 }
 
 /* ── Pan hint ─────────────────────────────────────────────────────────────── */
@@ -638,6 +686,7 @@ function pathD(edge) {
   position: absolute;
   cursor: grab;
   touch-action: none;
+  user-select: none;
 }
 
 .dsw-node--dragging {
@@ -670,7 +719,7 @@ function pathD(edge) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fff;
+  background: var(--color-surface);
   color: var(--color-primary);
   box-shadow: 0 0 0 1.5px var(--color-border), 0 2px 6px rgba(0,0,0,.07);
 }
@@ -684,7 +733,7 @@ function pathD(edge) {
 
 /* ── Card node ────────────────────────────────────────────────────────────── */
 .dsw-node--card {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: var(--radius-md);
   box-shadow: 0 0 0 1px var(--color-border), 0 2px 6px rgba(0,0,0,.05);
   overflow: hidden;
@@ -701,10 +750,10 @@ function pathD(edge) {
   align-items: flex-start;
   gap: 8px;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
-.dsw-node--hl .dsw-card-head { border-bottom-color: var(--color-primary-200); }
+.dsw-node--hl .dsw-card-head { box-shadow: 0 1px 0 var(--color-primary-200); }
 
 .dsw-card-icon {
   flex-shrink: 0;
@@ -712,7 +761,7 @@ function pathD(edge) {
   height: 26px;
   border-radius: 7px;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -720,7 +769,7 @@ function pathD(edge) {
 
 .dsw-card-icon--sm { width: 22px; height: 22px; border-radius: 5px; }
 
-.dsw-node--hl .dsw-card-icon { background: var(--color-primary-700, #8a0e1e); }
+.dsw-node--hl .dsw-card-icon { background: var(--color-primary-700); }
 
 .dsw-card-hc { flex: 1; min-width: 0; }
 
@@ -799,10 +848,10 @@ function pathD(edge) {
   border-radius: var(--radius-md);
   /* 4-side dashed via gradient strips — matches reference ds-type-dashed */
   background-image:
-    repeating-linear-gradient(0deg,   #c5c5cf 0,#c5c5cf 6px, transparent 6px, transparent 12px),
-    repeating-linear-gradient(90deg,  #c5c5cf 0,#c5c5cf 6px, transparent 6px, transparent 12px),
-    repeating-linear-gradient(180deg, #c5c5cf 0,#c5c5cf 6px, transparent 6px, transparent 12px),
-    repeating-linear-gradient(270deg, #c5c5cf 0,#c5c5cf 6px, transparent 6px, transparent 12px);
+    repeating-linear-gradient(0deg,   var(--color-border-strong) 0,var(--color-border-strong) 6px, transparent 6px, transparent 12px),
+    repeating-linear-gradient(90deg,  var(--color-border-strong) 0,var(--color-border-strong) 6px, transparent 6px, transparent 12px),
+    repeating-linear-gradient(180deg, var(--color-border-strong) 0,var(--color-border-strong) 6px, transparent 6px, transparent 12px),
+    repeating-linear-gradient(270deg, var(--color-border-strong) 0,var(--color-border-strong) 6px, transparent 6px, transparent 12px);
   background-size: 1px 100%, 100% 1px, 1px 100%, 100% 1px;
   background-position: 0 0, 0 0, 100% 0, 0 100%;
   background-repeat: no-repeat;
@@ -813,7 +862,7 @@ function pathD(edge) {
   top: -11px;
   left: 10px;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   padding: 2px 9px;
   font-size: 10px;
   font-weight: 700;
@@ -832,7 +881,7 @@ function pathD(edge) {
   align-items: flex-start;
   gap: 7px;
   padding: 7px 9px;
-  background: #fff;
+  background: var(--color-surface);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
 }

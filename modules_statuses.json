@@ -1,5 +1,6 @@
 {
     "Example": true,
     "Identity": true,
-    "WorkspaceConfig": true
+    "WorkspaceConfig": true,
+    "Evaluation": true
 }

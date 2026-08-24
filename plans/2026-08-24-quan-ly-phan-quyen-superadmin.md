@@ -1,5 +1,9 @@
 # Màn hình Quản lý phân quyền (superadmin/permissions)
 
+> **Trạng thái (2026-08-24):** Plan này **đã triển khai xong** (ma trận, Team trong Identity,
+> CRUD nhóm trên hub WorkspaceConfig). Không làm lại. Việc tiếp theo của repo:
+> `docs/VA_WORKSPACE_OVERVIEW.md` §21 — module `Evaluation` Giai đoạn B.
+
 ## 1. Bối cảnh / mục tiêu
 
 Backend RBAC granular đã hoàn thiện trong `Modules/Identity`:

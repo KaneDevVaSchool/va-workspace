@@ -25,6 +25,12 @@ export default [
         component: () => import('./pages/WorkspaceConfigSidebar.vue'),
         meta: { requiresAuth: true, title: 'Cấu hình menu' },
       },
+      {
+        path: 'evaluation',
+        name: 'manager.workspace-config.evaluation',
+        component: () => import('@modules/Evaluation/resources/js/pages/WorkspaceConfigEvaluation.vue'),
+        meta: { requiresAuth: true, title: 'Tiêu chí đánh giá' },
+      },
     ],
   },
   {
