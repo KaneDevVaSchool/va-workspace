@@ -21,7 +21,10 @@ export default defineConfig({
     resolve: {
         alias: {
             '@': resolve(__dirname, 'resources/js'),
-            '@modules': resolve(__dirname, 'resources/js/Modules'),
+            // Trỏ thẳng vào Modules/{Ten}/resources/js (nơi module Vue code
+            // thực sự nằm — xem Modules/Example, Modules/Identity), không
+            // phải resources/js/Modules (thư mục không tồn tại).
+            '@modules': resolve(__dirname, 'Modules'),
             '@theme': resolve(__dirname, 'resources/css'),
         },
     },
