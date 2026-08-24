@@ -1,0 +1,11 @@
+{
+    "name": "Identity",
+    "alias": "identity",
+    "description": "Đăng nhập Google Workspace (SSO) + User/Department. TẠM THỜI giả lập dữ liệu User/Department (UserRepository, DepartmentRepository) — sẽ thay bằng client gọi API HRM khi HRM cung cấp, xem App/Repositories/Contracts.",
+    "keywords": ["auth", "google", "sso", "identity"],
+    "priority": 0,
+    "providers": [
+        "Modules\\Identity\\App\\Providers\\IdentityServiceProvider"
+    ],
+    "files": []
+}

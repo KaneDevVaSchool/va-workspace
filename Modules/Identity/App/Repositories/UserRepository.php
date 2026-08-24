@@ -1,0 +1,38 @@
+<?php
+
+namespace Modules\Identity\App\Repositories;
+
+use App\Models\User;
+use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
+
+/**
+ * Tầng duy nhất được phép gọi Eloquent (App\Models\User) trực tiếp.
+ *
+ * TẠM THỜI — sẽ bị thay bằng implementation gọi API HRM khi HRM cung cấp
+ * (xem UserRepositoryInterface). Không thêm business logic ở đây ngoài
+ * truy vấn/ghi dữ liệu thuần.
+ */
+class UserRepository implements UserRepositoryInterface
+{
+    public function findByGoogleId(string $googleId): ?User
+    {
+        return User::query()->where('google_id', $googleId)->first();
+    }
+
+    public function findByEmail(string $email): ?User
+    {
+        return User::query()->whereRaw('LOWER(email) = ?', [strtolower($email)])->first();
+    }
+
+    public function create(array $data): User
+    {
+        return User::query()->create($data);
+    }
+
+    public function update(User $user, array $data): User
+    {
+        $user->fill($data)->save();
+
+        return $user;
+    }
+}
