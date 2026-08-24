@@ -93,6 +93,21 @@ watch(teams, () => {
   }
 });
 
+watch(
+  () => props.modelValue,
+  (value) => {
+    if (value.type !== scopeType.value) {
+      scopeType.value = value.type;
+    }
+    if (value.type === 'department' && value.id !== departmentId.value) {
+      departmentId.value = value.id;
+    }
+    if (value.type === 'team' && value.id !== teamId.value) {
+      teamId.value = value.id;
+    }
+  },
+);
+
 loadDepartments();
 
 const showDepartmentSelect = computed(() => scopeType.value === 'department' || scopeType.value === 'team');
@@ -145,23 +160,20 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
 
 <style scoped>
 .scope-filter {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-4);
-  flex-shrink: 0;
+  display: contents;
 }
 
 .scope-filter__field {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  min-width: 11rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .scope-filter__label {
-  color: var(--color-text);
-  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
@@ -170,6 +182,8 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
 }
 
 .scope-filter__select {
+  width: 100%;
+  min-width: 0;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -182,16 +196,5 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
 .scope-filter__select:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-@media (max-width: 768px) {
-  .scope-filter {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .scope-filter__field {
-    min-width: 0;
-  }
 }
 </style>

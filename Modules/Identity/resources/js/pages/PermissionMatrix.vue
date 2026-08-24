@@ -5,13 +5,32 @@
 // Backend (PermissionService::matrixFor()) là single source of truth — trang
 // này không tự suy luận effective/default, chỉ đọc và gọi API khi toggle.
 //
-import { computed, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { showClientToast } from '@/lib/clientToast';
 import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import TablePagesBar from '@/components/TablePagesBar.vue';
 import PermissionScopeFilter from '../components/PermissionScopeFilter.vue';
 import PermissionMatrixTable from '../components/PermissionMatrixTable.vue';
+import {
+  COLUMN_STORAGE_KEY,
+  COLUMN_WIDTH_KEY,
+  FILTER_STORAGE_KEY,
+  PERMISSION_FILTERS,
+  PERMISSION_META_COLUMNS,
+  PERMISSION_STATUS_OPTIONS,
+  ZOOM_STORAGE_KEY,
+  loadVisibility,
+  permissionColumns,
+  saveVisibility,
+} from '../constants/permissions.js';
+
+const CELL_PAD_X = 32;
+const COL_EXTRA = 24;
+const MIN_COL_PX = 72;
+let measureCtx = null;
+let wrapObserver = null;
 
 const scope = ref({ type: 'global', id: null });
 const scopeLabel = ref('Toàn hệ thống');
@@ -26,6 +45,19 @@ const restoring = ref(false);
 const pendingAction = ref(null); // { type: 'toggle'|'restore', roleCode, permissionKey, cell }
 const confirmLoading = ref(false);
 
+const query = ref('');
+const moduleFilter = ref('all');
+const statusFilter = ref('');
+const page = ref(1);
+const perPage = ref(20);
+
+const tableWrap = ref(null);
+const resizing = ref(false);
+const visibleColumns = reactive(loadVisibility(COLUMN_STORAGE_KEY, PERMISSION_META_COLUMNS));
+const visibleFilters = reactive(loadVisibility(FILTER_STORAGE_KEY, PERMISSION_FILTERS));
+const columnWidths = reactive(loadColumnWidths());
+const tableZoom = ref(loadZoom());
+
 const permissionByKey = computed(() => {
   const map = {};
   for (const perm of permissions.value) map[perm.key] = perm;
@@ -38,13 +70,102 @@ const roleByCode = computed(() => {
   return map;
 });
 
+const tableColumns = computed(() => permissionColumns(roles.value));
+const shownColumns = computed(() => tableColumns.value.filter((col) => visibleColumns[col.key]));
+
 const activeCellKey = computed(() =>
   inspectPanel.value ? `${inspectPanel.value.roleCode}|${inspectPanel.value.permissionKey}` : null,
 );
 
-// Câu giải thích "vì sao quyền này đang có/không có" — viết thành câu bình
-// thường thay vì nhãn kỹ thuật (global/scoped/config), cho người không rành
-// hệ thống cũng hiểu được ngay.
+const blockedMessage = computed(() => {
+  if (scope.value.type !== 'global' && !scope.value.id) {
+    return `Vui lòng chọn ${scope.value.type === 'department' ? 'phòng ban' : 'nhóm'} để xem ma trận theo phạm vi này.`;
+  }
+  return null;
+});
+
+const hasActiveFilters = computed(
+  () =>
+    Boolean(query.value.trim()) ||
+    moduleFilter.value !== 'all' ||
+    Boolean(statusFilter.value) ||
+    scope.value.type !== 'global',
+);
+
+const hasVisibleFilterFields = computed(() => PERMISSION_FILTERS.some((item) => visibleFilters[item.key]));
+
+const hiddenActiveFilterLabels = computed(() =>
+  PERMISSION_FILTERS.filter((item) => !visibleFilters[item.key] && filterHasValue(item.key)).map(
+    (item) => item.label,
+  ),
+);
+
+const filteredPermissions = computed(() => {
+  const term = query.value.trim().toLowerCase();
+  return permissions.value.filter((perm) => {
+    if (moduleFilter.value !== 'all' && perm.module !== moduleFilter.value) return false;
+    if (!permissionMatchesStatus(perm)) return false;
+    if (!term) return true;
+    return (
+      perm.key.toLowerCase().includes(term) ||
+      perm.label.toLowerCase().includes(term) ||
+      (perm.description ?? '').toLowerCase().includes(term)
+    );
+  });
+});
+
+const totalCount = computed(() => filteredPermissions.value.length);
+const lastPage = computed(() => Math.max(1, Math.ceil(totalCount.value / perPage.value) || 1));
+const from = computed(() => (totalCount.value === 0 ? 0 : (page.value - 1) * perPage.value + 1));
+const to = computed(() => Math.min(page.value * perPage.value, totalCount.value));
+
+const pagedPermissions = computed(() => {
+  const start = (page.value - 1) * perPage.value;
+  return filteredPermissions.value.slice(start, start + perPage.value);
+});
+
+const tableWidthPx = computed(() => {
+  const keys = shownColumns.value.map((col) => col.key);
+  const sum = keys.reduce((total, key) => total + (Number(columnWidths[key]) || 0), 0);
+  return sum > 0 ? `${sum}px` : '100%';
+});
+
+function emptyCell() {
+  return {
+    default: false,
+    effective: false,
+    reserved: false,
+    global_override: null,
+    scoped_override: null,
+    effective_source: 'config',
+  };
+}
+
+function cellFor(roleCode, key) {
+  return matrix.value?.[roleCode]?.[key] ?? emptyCell();
+}
+
+function permissionMatchesStatus(perm) {
+  if (!statusFilter.value) return true;
+  return roles.value.some((role) => {
+    const cell = cellFor(role.code, perm.key);
+    if (statusFilter.value === 'reserved') return cell.reserved;
+    if (statusFilter.value === 'override') {
+      return cell.global_override !== null || cell.scoped_override !== null;
+    }
+    if (cell.reserved) return false;
+    return statusFilter.value === 'granted' ? cell.effective : !cell.effective;
+  });
+}
+
+function filterHasValue(key) {
+  if (key === 'q') return Boolean(query.value.trim());
+  if (key === 'module') return moduleFilter.value !== 'all';
+  if (key === 'status') return Boolean(statusFilter.value);
+  if (key === 'scope') return scope.value.type !== 'global';
+  return false;
+}
+
 function sourceExplanation(cell) {
   if (cell.effective_source === 'scoped') {
     return `Do có thiết lập riêng cho ${scopeLabel.value}`;
@@ -55,8 +176,11 @@ function sourceExplanation(cell) {
   return 'Theo thiết lập mặc định của hệ thống, chưa có thay đổi riêng';
 }
 
+function cellHasOverride(cell) {
+  return cell.global_override !== null || cell.scoped_override !== null;
+}
+
 async function loadMatrix() {
-  // scope department/team cần scope_id mới có ý nghĩa — chờ người dùng chọn xong
   if (scope.value.type !== 'global' && !scope.value.id) {
     matrix.value = {};
     return;
@@ -72,7 +196,6 @@ async function loadMatrix() {
     permissions.value = data.permissions ?? [];
     matrix.value = data.matrix ?? {};
 
-    // Đồng bộ lại panel chi tiết đang mở (nếu có) với dữ liệu mới nhất
     if (inspectPanel.value) {
       const { roleCode, permissionKey } = inspectPanel.value;
       const freshCell = matrix.value?.[roleCode]?.[permissionKey];
@@ -82,6 +205,7 @@ async function loadMatrix() {
         inspectPanel.value = null;
       }
     }
+    nextTick(fitColumnsToContent);
   } catch (error) {
     const message = error?.response?.data?.message;
     showClientToast('error', message || 'Không tải được ma trận phân quyền.');
@@ -93,12 +217,10 @@ async function loadMatrix() {
 function onScopeChange(newScope) {
   scope.value = { type: newScope.type, id: newScope.id };
   scopeLabel.value = newScope.label ?? 'Toàn hệ thống';
+  page.value = 1;
   loadMatrix();
 }
 
-// Ghi cell mới vào đúng vị trí trong matrix + đồng bộ panel chi tiết nếu
-// đang mở đúng ô đó — patch tại chỗ bằng response của API, KHÔNG gọi lại
-// loadMatrix() (tránh tải lại toàn bộ ma trận chỉ để đổi 1 ô).
 function applyCellUpdate(roleCode, permissionKey, cell) {
   if (!matrix.value[roleCode]) matrix.value[roleCode] = {};
   matrix.value[roleCode][permissionKey] = cell;
@@ -171,6 +293,7 @@ function requestToggle({ roleCode, permissionKey, cell }) {
     return;
   }
 
+  inspectPanel.value = { roleCode, permissionKey, cell };
   pendingAction.value = { type: 'toggle', roleCode, permissionKey, cell };
 }
 
@@ -213,7 +336,6 @@ async function applyToggle({ roleCode, permissionKey, cell }) {
   const scopeType = scope.value.type;
   const scopeId = scope.value.id;
 
-  // Nếu scope != global mà chưa chọn scope_id cụ thể → không có gì để ghi
   if (scopeType !== 'global' && !scopeId) {
     showClientToast('error', 'Vui lòng chọn phòng ban hoặc nhóm trước khi thay đổi quyền.');
     throw new Error('missing-scope');
@@ -221,18 +343,12 @@ async function applyToggle({ roleCode, permissionKey, cell }) {
 
   pendingCells[cellKey] = true;
 
-  // Override tồn tại ĐÚNG tại scope hiện tại (không đụng override ở scope
-  // khác — global_override khi scope=global, scoped_override khi scope=
-  // department/team, xem PermissionService::matrixFor()).
   const overrideAtCurrentScope = scopeType === 'global' ? cell.global_override : cell.scoped_override;
 
   try {
     let cellResult;
 
     if (newValue === cell.default && overrideAtCurrentScope !== null) {
-      // Giá trị mới trùng default VÀ đang có override tại đúng scope này
-      // (override đó chính là lý do effective khác default trước đây) →
-      // xoá override để quay lại default/scope khác, không tạo override "vô nghĩa".
       const { data } = await window.axios.delete('/api/permissions/grants', {
         data: {
           role_code: roleCode,
@@ -243,10 +359,6 @@ async function applyToggle({ roleCode, permissionKey, cell }) {
       });
       cellResult = data.cell;
     } else {
-      // Khác default, hoặc chưa có override tại scope này (kể cả khi giá
-      // trị mới trùng default — vẫn cần ghi rõ override để thắng 1 override
-      // khác giá trị đang tồn tại ở global, xem ca "global=false + scoped=true"
-      // trong matrixFor()) → luôn upsert tại đúng scope hiện tại.
       const { data } = await window.axios.put('/api/permissions/grants', {
         role_code: roleCode,
         permission_key: permissionKey,
@@ -257,8 +369,6 @@ async function applyToggle({ roleCode, permissionKey, cell }) {
       cellResult = data.cell;
     }
 
-    // Server trả về cell mới nhất (default/effective/override/nguồn) —
-    // patch ngay vào đúng ô, không cần tải lại cả bảng.
     applyCellUpdate(roleCode, permissionKey, cellResult);
     showClientToast(
       'success',
@@ -285,6 +395,17 @@ async function applyToggle({ roleCode, permissionKey, cell }) {
 function onInspect({ roleCode, permissionKey, cell }) {
   if (!roleCode || !cell) return;
   inspectPanel.value = { roleCode, permissionKey, cell };
+}
+
+function inspectPermission(perm, roleCode = null) {
+  if (!perm) return;
+  const code =
+    roleCode ||
+    (inspectPanel.value?.permissionKey === perm.key ? inspectPanel.value.roleCode : null) ||
+    shownColumns.value.find((col) => col.roleCode)?.roleCode ||
+    roles.value[0]?.code;
+  if (!code) return;
+  inspectPanel.value = { roleCode: code, permissionKey: perm.key, cell: cellFor(code, perm.key) };
 }
 
 function closeInspect() {
@@ -318,7 +439,252 @@ async function restoreDefault(action = inspectPanel.value) {
   }
 }
 
-loadMatrix();
+function goPage(next) {
+  if (next < 1 || next > lastPage.value || next === page.value) return;
+  page.value = next;
+}
+
+function applySearch() {
+  page.value = 1;
+}
+
+function clearFilters() {
+  query.value = '';
+  moduleFilter.value = 'all';
+  statusFilter.value = '';
+  page.value = 1;
+  onScopeChange({ type: 'global', id: null, label: 'Toàn hệ thống' });
+}
+
+function onColumnToggle(key, checked) {
+  if (!checked) {
+    const remaining = tableColumns.value.filter((col) => visibleColumns[col.key] && col.key !== key).length;
+    if (remaining < 1) {
+      showClientToast('warning', 'Cần giữ ít nhất một cột trên bảng.');
+      return;
+    }
+  }
+  visibleColumns[key] = checked;
+}
+
+function onFilterToggle(key, checked) {
+  visibleFilters[key] = checked;
+}
+
+function loadZoom() {
+  try {
+    const raw = Number(localStorage.getItem(ZOOM_STORAGE_KEY));
+    if (raw === 0.9 || raw === 1 || raw === 1.15) return raw;
+  } catch {
+    // Bỏ qua.
+  }
+  return 1;
+}
+
+function loadColumnWidths() {
+  try {
+    const raw = localStorage.getItem(COLUMN_WIDTH_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    // Bỏ qua nếu trình duyệt chặn localStorage.
+  }
+  return {};
+}
+
+function measureText(text, font) {
+  if (!measureCtx) {
+    measureCtx = document.createElement('canvas').getContext('2d');
+  }
+  measureCtx.font = font;
+  return measureCtx.measureText(String(text ?? '')).width;
+}
+
+function fontOf(el, fallback) {
+  if (!el) return fallback;
+  const style = getComputedStyle(el);
+  return `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+}
+
+function readTableFonts() {
+  const table = tableWrap.value?.querySelector('.perm-table');
+  return {
+    header: fontOf(table?.querySelector('thead th'), '600 12px "Be Vietnam Pro", sans-serif'),
+    cell: fontOf(table?.querySelector('tbody td'), '400 14px "Be Vietnam Pro", sans-serif'),
+    muted: fontOf(table?.querySelector('.perm-table__muted'), '400 12px "Be Vietnam Pro", sans-serif'),
+  };
+}
+
+function cellText(perm, key) {
+  if (key === 'permission') return perm.label || '—';
+  if (key === 'module') return perm.module || '—';
+  if (key === 'key') return perm.key || '—';
+  return '';
+}
+
+function columnContentWidth(key, fonts) {
+  const col = shownColumns.value.find((item) => item.key === key);
+  const label = col?.label ?? '';
+  let maxW = measureText(label, fonts.header);
+  if (col?.roleCode) {
+    return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA));
+  }
+  for (const perm of pagedPermissions.value) {
+    if (key === 'permission') {
+      maxW = Math.max(maxW, measureText(cellText(perm, 'permission'), fonts.cell));
+      const muted = perm.description || perm.key;
+      if (muted) {
+        maxW = Math.max(maxW, measureText(muted, fonts.muted));
+      }
+    } else {
+      maxW = Math.max(maxW, measureText(cellText(perm, key), fonts.cell));
+    }
+  }
+  return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA));
+}
+
+function distributeExtraWidth(widths, keys, available) {
+  const sum = keys.reduce((total, key) => total + widths[key], 0);
+  if (sum <= 0 || available <= sum) return widths;
+
+  const extra = available - sum;
+  const next = { ...widths };
+  let used = 0;
+  keys.forEach((key, index) => {
+    if (index === keys.length - 1) {
+      next[key] = available - used;
+      return;
+    }
+    next[key] = widths[key] + Math.floor((widths[key] / sum) * extra);
+    used += next[key];
+  });
+  return next;
+}
+
+function fitColumnsToContent() {
+  const wrap = tableWrap.value;
+  const keys = shownColumns.value.map((col) => col.key);
+  if (!wrap || keys.length === 0 || resizing.value) return;
+
+  const fonts = readTableFonts();
+  const measured = {};
+  for (const key of keys) {
+    measured[key] = columnContentWidth(key, fonts);
+  }
+
+  const next = distributeExtraWidth(measured, keys, wrap.clientWidth);
+  for (const key of keys) {
+    columnWidths[key] = next[key];
+  }
+}
+
+function startResize(event, key) {
+  const keys = shownColumns.value.map((col) => col.key);
+  const index = keys.indexOf(key);
+  if (index < 0) return;
+
+  const neighbor = keys[index + 1] ?? keys[index - 1];
+  if (!neighbor || neighbor === key) return;
+
+  const towardNext = keys.indexOf(neighbor) > index;
+  const startX = event.clientX;
+  const startA = Number(columnWidths[key]) || MIN_COL_PX;
+  const startB = Number(columnWidths[neighbor]) || MIN_COL_PX;
+  const pair = startA + startB;
+
+  resizing.value = true;
+
+  function onMove(moveEvent) {
+    const delta = (moveEvent.clientX - startX) * (towardNext ? 1 : -1);
+    let nextA = Math.round(startA + delta);
+    nextA = Math.min(Math.max(nextA, MIN_COL_PX), pair - MIN_COL_PX);
+    columnWidths[key] = nextA;
+    columnWidths[neighbor] = pair - nextA;
+  }
+
+  function onUp() {
+    resizing.value = false;
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+  }
+
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+
+function handleDocumentKeydown(event) {
+  if (event.key !== 'Escape') return;
+  if (inspectPanel.value) {
+    inspectPanel.value = null;
+  }
+}
+
+function syncColumnVisibility(roleList) {
+  const cols = permissionColumns(roleList);
+  const loaded = loadVisibility(COLUMN_STORAGE_KEY, cols);
+  const valid = new Set(cols.map((col) => col.key));
+  for (const key of Object.keys(visibleColumns)) {
+    if (!valid.has(key)) delete visibleColumns[key];
+  }
+  for (const col of cols) {
+    if (typeof visibleColumns[col.key] !== 'boolean') {
+      visibleColumns[col.key] = loaded[col.key];
+    }
+  }
+}
+
+watch(roles, (list) => syncColumnVisibility(list), { immediate: true });
+watch(visibleColumns, (value) => saveVisibility(COLUMN_STORAGE_KEY, value), { deep: true });
+watch(visibleFilters, (value) => saveVisibility(FILTER_STORAGE_KEY, value), { deep: true });
+watch(columnWidths, (value) => saveVisibility(COLUMN_WIDTH_KEY, value), { deep: true });
+watch(tableZoom, (value) => {
+  try {
+    localStorage.setItem(ZOOM_STORAGE_KEY, String(value));
+  } catch {
+    // Bỏ qua.
+  }
+  nextTick(fitColumnsToContent);
+});
+watch(inspectPanel, () => nextTick(fitColumnsToContent));
+watch(shownColumns, () => nextTick(fitColumnsToContent));
+watch(pagedPermissions, () => nextTick(fitColumnsToContent));
+watch([query, moduleFilter, statusFilter, perPage], () => {
+  page.value = 1;
+});
+watch(lastPage, (max) => {
+  if (page.value > max) page.value = max;
+});
+watch(filteredPermissions, (list) => {
+  if (inspectPanel.value && !list.some((perm) => perm.key === inspectPanel.value.permissionKey)) {
+    inspectPanel.value = null;
+  }
+});
+
+onMounted(() => {
+  document.addEventListener('keydown', handleDocumentKeydown);
+  loadMatrix();
+  nextTick(() => {
+    fitColumnsToContent();
+    if (tableWrap.value) {
+      let lastWrapWidth = tableWrap.value.clientWidth;
+      wrapObserver = new ResizeObserver((entries) => {
+        const width = Math.round(entries[0]?.contentRect?.width || 0);
+        if (!width || width === lastWrapWidth || resizing.value) return;
+        lastWrapWidth = width;
+        fitColumnsToContent();
+      });
+      wrapObserver.observe(tableWrap.value);
+    }
+  });
+  document.fonts?.ready?.then(() => nextTick(fitColumnsToContent));
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleDocumentKeydown);
+  wrapObserver?.disconnect();
+});
 </script>
 
 <template>
@@ -333,7 +699,7 @@ loadMatrix();
       ]"
     >
       <template #actions>
-        <button type="button" class="perm-page__refresh" :disabled="isLoading" @click="loadMatrix">
+        <button type="button" class="perm-page__header-btn" :disabled="isLoading" @click="loadMatrix">
           <AppIcon name="refresh" :size="16" :class="{ 'perm-page__spin': isLoading }" />
           Làm mới
         </button>
@@ -342,84 +708,211 @@ loadMatrix();
 
     <div class="perm-page__body">
       <div class="perm-page__main">
-        <PermissionMatrixTable
-          :roles="roles"
-          :modules="modules"
-          :permissions="permissions"
-          :matrix="matrix"
-          :pending-cells="pendingCells"
-          :active-key="activeCellKey"
-          :loading="isLoading"
-          :blocked-message="
-            scope.type !== 'global' && !scope.id
-              ? `Vui lòng chọn ${scope.type === 'department' ? 'phòng ban' : 'nhóm'} để xem ma trận theo phạm vi này.`
-              : null
-          "
-          @toggle="requestToggle"
-          @inspect="onInspect"
+        <div v-if="hasVisibleFilterFields" class="perm-page__toolbar">
+          <div class="perm-page__filters">
+            <PermissionScopeFilter
+              v-if="visibleFilters.scope"
+              :model-value="scope"
+              @update:model-value="onScopeChange"
+            />
+
+            <div v-if="visibleFilters.q" class="perm-page__field">
+              <label class="perm-page__label" for="perm-q">Tìm quyền</label>
+              <input
+                id="perm-q"
+                v-model="query"
+                type="search"
+                class="perm-page__input"
+                placeholder="Ví dụ: quản lý nhóm"
+                @keydown.enter="applySearch"
+              />
+            </div>
+
+            <div v-if="visibleFilters.module" class="perm-page__field">
+              <label class="perm-page__label" for="perm-module">Module</label>
+              <select id="perm-module" v-model="moduleFilter" class="perm-page__input">
+                <option value="all">Tất cả</option>
+                <option v-for="item in modules" :key="item.key" :value="item.label">{{ item.label }}</option>
+              </select>
+            </div>
+
+            <div v-if="visibleFilters.status" class="perm-page__field">
+              <label class="perm-page__label" for="perm-status">Trạng thái</label>
+              <select id="perm-status" v-model="statusFilter" class="perm-page__input">
+                <option v-for="item in PERMISSION_STATUS_OPTIONS" :key="item.value || 'all'" :value="item.value">
+                  {{ item.label }}
+                </option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <TablePagesBar
+          placement="top"
+          :from="from"
+          :to="to"
+          :total="totalCount"
+          :page="page"
+          :last-page="lastPage"
+          :per-page="perPage"
+          :zoom="tableZoom"
+          show-search
+          :show-clear-filters="hasActiveFilters"
+          :filters-active="hasActiveFilters"
+          @search="applySearch"
+          @clear-filters="clearFilters"
+          @update:page="goPage"
+          @update:per-page="perPage = $event"
+          @update:zoom="tableZoom = $event"
         >
-          <template #leading>
-            <PermissionScopeFilter :model-value="scope" @update:model-value="onScopeChange" />
+          <template #filters>
+            <label v-for="item in PERMISSION_FILTERS" :key="item.key" class="perm-page__check">
+              <input
+                type="checkbox"
+                :checked="visibleFilters[item.key]"
+                @change="onFilterToggle(item.key, $event.target.checked)"
+              />
+              <span>{{ item.label }}</span>
+            </label>
           </template>
-        </PermissionMatrixTable>
+          <template #settings>
+            <label v-for="col in tableColumns" :key="col.key" class="perm-page__check">
+              <input
+                type="checkbox"
+                :checked="visibleColumns[col.key]"
+                @change="onColumnToggle(col.key, $event.target.checked)"
+              />
+              <span>{{ col.label }}</span>
+            </label>
+          </template>
+        </TablePagesBar>
+
+        <p v-if="hiddenActiveFilterLabels.length" class="perm-page__note">
+          Đang lọc thêm theo: {{ hiddenActiveFilterLabels.join(', ') }} (bộ lọc đang ẩn).
+        </p>
+
+        <div
+          ref="tableWrap"
+          class="perm-page__table-wrap hide-scrollbar"
+          :class="{ 'perm-page__table-wrap--resizing': resizing }"
+          :style="{ '--table-zoom': tableZoom }"
+        >
+          <PermissionMatrixTable
+            :shown-columns="shownColumns"
+            :permissions="pagedPermissions"
+            :matrix="matrix"
+            :pending-cells="pendingCells"
+            :active-key="activeCellKey"
+            :selected-key="inspectPanel?.permissionKey ?? null"
+            :loading="isLoading"
+            :blocked-message="blockedMessage"
+            :column-widths="columnWidths"
+            :table-width-px="tableWidthPx"
+            @toggle="requestToggle"
+            @inspect="onInspect"
+            @inspect-row="inspectPermission"
+            @resize-start="startResize"
+          />
+        </div>
+
+        <TablePagesBar
+          placement="bottom"
+          paging-only
+          :from="from"
+          :to="to"
+          :total="totalCount"
+          :page="page"
+          :last-page="lastPage"
+          :per-page="perPage"
+          @update:page="goPage"
+          @update:per-page="perPage = $event"
+        />
       </div>
 
-      <aside v-if="inspectPanel" class="perm-page__side">
-        <div class="perm-side__header">
-          <h2 class="perm-side__title">Chi tiết quyền</h2>
-          <button type="button" class="perm-side__close" aria-label="Đóng" @click="closeInspect">
+      <aside v-if="inspectPanel" class="perm-page__side" aria-label="Chi tiết quyền">
+        <div class="perm-page__side-head">
+          <h2 class="perm-page__side-title">Chi tiết quyền</h2>
+          <button type="button" class="perm-page__icon-btn" aria-label="Đóng" @click="closeInspect">
             <AppIcon name="close" :size="16" />
           </button>
         </div>
 
-        <p class="perm-side__name">
+        <p class="perm-page__side-lead">
           {{ permissionByKey[inspectPanel.permissionKey]?.label ?? inspectPanel.permissionKey }}
         </p>
-        <p class="perm-side__desc">
-          {{ permissionByKey[inspectPanel.permissionKey]?.description }}
+        <p v-if="permissionByKey[inspectPanel.permissionKey]?.description" class="perm-page__side-desc">
+          {{ permissionByKey[inspectPanel.permissionKey].description }}
         </p>
 
-        <div class="perm-side__rows">
-          <div class="perm-side__row">
-            <span class="perm-side__row-label">Vai trò</span>
-            <span class="perm-side__row-value">{{ roleByCode[inspectPanel.roleCode]?.label ?? inspectPanel.roleCode }}</span>
+        <div class="perm-page__rows">
+          <div class="perm-page__row">
+            <span class="perm-page__row-label">Module</span>
+            <span class="perm-page__row-value">{{ permissionByKey[inspectPanel.permissionKey]?.module || '—' }}</span>
           </div>
-          <div class="perm-side__row">
-            <span class="perm-side__row-label">Phạm vi đang xem</span>
-            <span class="perm-side__row-value">{{ scopeLabel }}</span>
+          <div class="perm-page__row">
+            <span class="perm-page__row-label">Mã quyền</span>
+            <span class="perm-page__row-value">{{ inspectPanel.permissionKey }}</span>
           </div>
-          <div class="perm-side__row">
-            <span class="perm-side__row-label">Hiện tại</span>
-            <span class="perm-side__row-value">
+          <div class="perm-page__row">
+            <span class="perm-page__row-label">Phạm vi đang xem</span>
+            <span class="perm-page__row-value">{{ scopeLabel }}</span>
+          </div>
+        </div>
+
+        <div class="perm-page__roles">
+          <button
+            v-for="role in roles"
+            :key="role.code"
+            type="button"
+            class="perm-page__role"
+            :class="{ 'perm-page__role--on': inspectPanel.roleCode === role.code }"
+            @click="inspectPermission(permissionByKey[inspectPanel.permissionKey], role.code)"
+          >
+            <span>{{ role.label }}</span>
+            <span
+              class="perm-page__dot"
+              :class="cellFor(role.code, inspectPanel.permissionKey).effective ? 'perm-page__dot--granted' : 'perm-page__dot--denied'"
+            />
+          </button>
+        </div>
+
+        <div class="perm-page__rows">
+          <div class="perm-page__row">
+            <span class="perm-page__row-label">Vai trò</span>
+            <span class="perm-page__row-value">{{ roleByCode[inspectPanel.roleCode]?.label ?? inspectPanel.roleCode }}</span>
+          </div>
+          <div class="perm-page__row">
+            <span class="perm-page__row-label">Hiện tại</span>
+            <span class="perm-page__row-value">
               <span
-                class="perm-side__dot"
-                :class="inspectPanel.cell.effective ? 'perm-side__dot--granted' : 'perm-side__dot--denied'"
+                class="perm-page__dot"
+                :class="inspectPanel.cell.effective ? 'perm-page__dot--granted' : 'perm-page__dot--denied'"
               />
               {{ inspectPanel.cell.effective ? 'Được cấp' : 'Không được cấp' }}
             </span>
           </div>
-          <div class="perm-side__row">
-            <span class="perm-side__row-label">Mặc định ban đầu</span>
-            <span class="perm-side__row-value">
+          <div class="perm-page__row">
+            <span class="perm-page__row-label">Mặc định ban đầu</span>
+            <span class="perm-page__row-value">
               <span
-                class="perm-side__dot"
-                :class="inspectPanel.cell.default ? 'perm-side__dot--granted' : 'perm-side__dot--denied'"
+                class="perm-page__dot"
+                :class="inspectPanel.cell.default ? 'perm-page__dot--granted' : 'perm-page__dot--denied'"
               />
               {{ inspectPanel.cell.default ? 'Được cấp' : 'Không được cấp' }}
             </span>
           </div>
         </div>
 
-        <p class="perm-side__explain">{{ sourceExplanation(inspectPanel.cell) }}</p>
+        <p class="perm-page__explain">{{ sourceExplanation(inspectPanel.cell) }}</p>
 
-        <div v-if="inspectPanel.cell.reserved" class="perm-side__reserved-note">
+        <div v-if="inspectPanel.cell.reserved" class="perm-page__reserved">
           <AppIcon name="lock" :size="16" />
           Đây là quyền hệ thống, chỉ super_admin mới giữ được. Không thể đổi ở đây.
         </div>
         <template v-else>
           <button
             type="button"
-            class="perm-side__toggle-btn"
+            class="perm-page__toggle-btn"
             :disabled="pendingCells[`${inspectPanel.roleCode}|${inspectPanel.permissionKey}`]"
             @click="requestToggle({ roleCode: inspectPanel.roleCode, permissionKey: inspectPanel.permissionKey, cell: inspectPanel.cell })"
           >
@@ -427,9 +920,9 @@ loadMatrix();
           </button>
 
           <button
-            v-if="inspectPanel.cell.scoped_override !== null || inspectPanel.cell.global_override !== null"
+            v-if="cellHasOverride(inspectPanel.cell)"
             type="button"
-            class="perm-side__restore-btn"
+            class="perm-page__restore-btn"
             :disabled="restoring"
             @click="requestRestore"
           >
@@ -460,7 +953,7 @@ loadMatrix();
   overflow: hidden;
 }
 
-.perm-page__refresh {
+.perm-page__header-btn {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -478,16 +971,16 @@ loadMatrix();
   cursor: pointer;
 }
 
-.perm-page__refresh:hover:not(:disabled) {
+.perm-page__header-btn:hover:not(:disabled) {
   background: var(--color-surface-muted);
 }
 
-.perm-page__refresh:disabled {
+.perm-page__header-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-:deep(.perm-page__spin) {
+.perm-page__spin {
   animation: perm-page-spin 0.8s linear infinite;
 }
 
@@ -510,8 +1003,80 @@ loadMatrix();
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
   overflow: hidden;
+}
+
+.perm-page__toolbar {
+  position: relative;
+  z-index: 6;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+}
+
+.perm-page__filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.perm-page__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  width: 100%;
+}
+
+.perm-page__label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.perm-page__input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
+}
+
+.perm-page__check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.perm-page__note {
+  flex-shrink: 0;
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.perm-page__table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.perm-page__table-wrap--resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .perm-page__side {
@@ -524,21 +1089,21 @@ loadMatrix();
   background: var(--color-surface);
 }
 
-.perm-side__header {
+.perm-page__side-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
 }
 
-.perm-side__title {
+.perm-page__side-title {
   margin: 0;
   color: var(--color-text);
   font-size: 1.0625rem;
   font-weight: 700;
 }
 
-.perm-side__close {
+.perm-page__icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -551,33 +1116,31 @@ loadMatrix();
   cursor: pointer;
 }
 
-.perm-side__close:hover {
+.perm-page__icon-btn:hover {
   background: var(--color-surface-muted);
 }
 
-.perm-side__name {
+.perm-page__side-lead {
   margin: var(--space-3) 0 0.25rem;
   color: var(--color-text);
   font-weight: 700;
   font-size: 1rem;
 }
 
-.perm-side__desc {
+.perm-page__side-desc {
   margin: 0 0 var(--space-4);
   color: var(--color-text-muted);
   font-size: 0.8125rem;
   line-height: 1.5;
 }
 
-/* Danh sách field ngay hàng, đều nhau — nhãn trái/giá trị phải trên cùng 1 dòng,
-   thay cho bố cục dl 2 cột lệch trước đây. */
-.perm-side__rows {
+.perm-page__rows {
   margin: 0 0 var(--space-3);
   display: flex;
   flex-direction: column;
 }
 
-.perm-side__row {
+.perm-page__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -587,15 +1150,15 @@ loadMatrix();
   font-size: 0.8125rem;
 }
 
-.perm-side__row:last-child {
+.perm-page__row:last-child {
   box-shadow: none;
 }
 
-.perm-side__row-label {
+.perm-page__row-label {
   color: var(--color-text-muted);
 }
 
-.perm-side__row-value {
+.perm-page__row-value {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
@@ -604,29 +1167,65 @@ loadMatrix();
   text-align: right;
 }
 
-.perm-side__dot {
+.perm-page__roles {
+  margin: 0 0 var(--space-3);
+  display: flex;
+  flex-direction: column;
+}
+
+.perm-page__role {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) 0;
+  border: none;
+  background: transparent;
+  box-shadow: 0 1px 0 var(--color-border);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.perm-page__role:last-child {
+  box-shadow: none;
+}
+
+.perm-page__role:hover {
+  color: var(--color-primary);
+}
+
+.perm-page__role--on {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.perm-page__dot {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: var(--radius-full);
   flex-shrink: 0;
 }
 
-.perm-side__dot--granted {
+.perm-page__dot--granted {
   background: var(--color-success);
 }
 
-.perm-side__dot--denied {
+.perm-page__dot--denied {
   background: var(--color-danger);
 }
 
-.perm-side__explain {
+.perm-page__explain {
   margin: 0 0 var(--space-4);
   color: var(--color-text-muted);
   font-size: 0.8125rem;
   line-height: 1.5;
 }
 
-.perm-side__toggle-btn {
+.perm-page__toggle-btn {
   width: 100%;
   padding: 0.625rem;
   border: 1px solid var(--color-primary);
@@ -639,16 +1238,16 @@ loadMatrix();
   cursor: pointer;
 }
 
-.perm-side__toggle-btn:hover:not(:disabled) {
+.perm-page__toggle-btn:hover:not(:disabled) {
   background: var(--color-primary-hover);
 }
 
-.perm-side__toggle-btn:disabled {
+.perm-page__toggle-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.perm-side__restore-btn {
+.perm-page__restore-btn {
   width: 100%;
   margin-top: var(--space-2);
   padding: 0.5rem;
@@ -662,16 +1261,16 @@ loadMatrix();
   cursor: pointer;
 }
 
-.perm-side__restore-btn:hover:not(:disabled) {
+.perm-page__restore-btn:hover:not(:disabled) {
   background: var(--color-surface-muted);
 }
 
-.perm-side__restore-btn:disabled {
+.perm-page__restore-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.perm-side__reserved-note {
+.perm-page__reserved {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
@@ -686,17 +1285,45 @@ loadMatrix();
 @media (max-width: 1024px) {
   .perm-page__body {
     flex-direction: column;
-    overflow-y: auto;
   }
 
   .perm-page__side {
     width: 100%;
+    max-height: 42%;
+  }
+
+  .perm-page__table-wrap {
+    min-height: 16rem;
+  }
+
+  .perm-page__filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 768px) {
   .perm-page {
     padding: var(--space-4);
+  }
+
+  .perm-page__filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .perm-page {
+    padding: var(--space-3);
+  }
+
+  .perm-page__filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .perm-page__spin {
+    animation: none;
   }
 }
 </style>
