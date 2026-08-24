@@ -3,16 +3,13 @@
 namespace Modules\Identity\App\Services;
 
 use App\Models\User;
-use Illuminate\Contracts\Session\Session;
 use Modules\Identity\App\Exceptions\NotSuperAdmin;
 use Modules\Identity\App\Exceptions\RoleNotFound;
 use Modules\Identity\App\Repositories\Contracts\RoleRepositoryInterface;
 
 /**
- * "Xem thử" vai trò khác — chỉ super_admin được dùng. Không đổi user thật,
- * chỉ ghi đè role hiệu lực (effective role) vào session cho request hiện
- * tại. EnsureHasRole (app/Http/Middleware) đọc effectiveRoles() thay vì
- * $user->roles trực tiếp để override có tác dụng ở mọi route.
+ * "Xem thử" vai trò khác — chỉ super_admin được dùng. Override lưu session
+ * request hiện tại (session() helper, không inject Session contract).
  */
 class ViewAsService
 {
@@ -20,8 +17,20 @@ class ViewAsService
 
     public function __construct(
         private readonly RoleRepositoryInterface $roles,
-        private readonly Session $session,
     ) {}
+
+    public function displayActiveRole(User $user): ?string
+    {
+        if ($this->isImpersonating()) {
+            return $this->impersonatedRoleCode();
+        }
+
+        if ($user->isSuperAdmin()) {
+            return 'super_admin';
+        }
+
+        return $user->roles->pluck('code')->first();
+    }
 
     /** @throws NotSuperAdmin|RoleNotFound */
     public function activate(User $user, string $roleCode): void
@@ -34,29 +43,31 @@ class ViewAsService
             throw new RoleNotFound($roleCode);
         }
 
-        $this->session->put(self::SESSION_KEY, $roleCode);
+        if ($roleCode === 'super_admin') {
+            session()->forget(self::SESSION_KEY);
+
+            return;
+        }
+
+        session()->put(self::SESSION_KEY, $roleCode);
     }
 
     public function deactivate(): void
     {
-        $this->session->forget(self::SESSION_KEY);
+        session()->forget(self::SESSION_KEY);
     }
 
     public function isImpersonating(): bool
     {
-        return $this->session->has(self::SESSION_KEY);
+        return session()->has(self::SESSION_KEY);
     }
 
     public function impersonatedRoleCode(): ?string
     {
-        return $this->session->get(self::SESSION_KEY);
+        return session()->get(self::SESSION_KEY);
     }
 
     /**
-     * Vai trò hiệu lực của user cho request hiện tại — nếu super_admin
-     * đang "xem thử" 1 role, trả đúng role đó (và chỉ nó); ngược lại trả
-     * toàn bộ role thật của user.
-     *
      * @return array<int, string>
      */
     public function effectiveRoles(User $user): array

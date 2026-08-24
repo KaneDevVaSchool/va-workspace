@@ -6,7 +6,6 @@
 //
 import { ref } from 'vue';
 import { useRoute } from 'vue-router';
-import ViewAsSwitcher from '@modules/Identity/resources/js/components/ViewAsSwitcher.vue';
 import AppSidebar from './AppSidebar.vue';
 import AppIcon from './AppIcon.vue';
 
@@ -19,13 +18,11 @@ const sidebarOpen = ref(false);
     <AppSidebar :open="sidebarOpen" @close="sidebarOpen = false" />
 
     <div class="app-layout__main">
-      <ViewAsSwitcher />
-
       <header class="app-layout__topbar">
         <button
           type="button"
           class="app-layout__menu-btn"
-          title="Mở menu"
+          aria-label="Mở menu"
           @click="sidebarOpen = true"
         >
           <AppIcon name="menu" :size="20" />
@@ -44,7 +41,6 @@ const sidebarOpen = ref(false);
 .app-layout {
   height: 100%;
   display: flex;
-  overflow: hidden;
 }
 
 .app-layout__main {
@@ -80,7 +76,7 @@ const sidebarOpen = ref(false);
 }
 
 .app-layout__menu-btn:hover {
-  border-color: var(--color-primary-200);
+  border: 1px solid var(--color-primary-200);
   color: var(--color-primary);
 }
 

@@ -1,13 +1,19 @@
 import { defineStore } from 'pinia';
+import { ensureCsrfCookie } from '@/bootstrap';
+
+function userCanViewAs(user) {
+  if (!user) {
+    return false;
+  }
+  if (user.can_view_as) {
+    return true;
+  }
+  return Array.isArray(user.roles) && user.roles.includes('super_admin');
+}
 
 /**
- * State đăng nhập (Sanctum SPA — session/cookie, không lưu token ở client).
- * fetchMe() gọi GET /api/me để lấy user hiện tại (cookie tự gửi kèm nhờ
- * axios withCredentials, xem resources/js/bootstrap.js).
- *
- * RBAC tối giản: `user.roles` là vai trò thật, `user.active_role` là vai
- * trò hiệu lực (ưu tiên view-as override nếu super_admin đang "xem thử"
- * — xem Modules/Identity/App/Services/ViewAsService.php).
+ * Sanctum SPA — session cookie, CSRF qua bootstrap.js.
+ * API session (web middleware): GET /api/me, POST|DELETE /api/view-as.
  */
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -18,23 +24,60 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isAuthenticated: (state) => state.user !== null,
-    isSuperAdmin: (state) => state.user?.roles?.includes('super_admin') ?? false,
+
+    /** Hiện dropdown "Xem thử vai trò" (quyền thật super_admin). */
+    canViewAs: (state) => userCanViewAs(state.user),
+
+    /** @deprecated Dùng canViewAs — giữ alias tránh vỡ import cũ. */
+    isSuperAdmin: (state) => userCanViewAs(state.user),
+
+    /**
+     * Menu quản trị (requiresSuperAdmin) — ẩn khi đang xem thử role khác
+     * để UI phản ánh đúng vai trò hiệu lực.
+     */
+    showSuperAdminNav: (state) => {
+      const user = state.user;
+      if (!user || user.is_impersonating) {
+        return false;
+      }
+      return userCanViewAs(user);
+    },
+
     isImpersonating: (state) => state.user?.is_impersonating ?? false,
     activeRole: (state) => state.user?.active_role ?? null,
   },
 
   actions: {
-    async fetchMe() {
+    resetSession() {
+      this.user = null;
+      this.isReady = false;
+    },
+
+    setUserFromApi(payload) {
+      if (!payload?.user) {
+        throw new Error('API response missing user payload');
+      }
+      this.user = payload.user;
+      this.isReady = true;
+    },
+
+    async fetchMe({ force = false } = {}) {
+      if (!force && this.isReady && this.user) {
+        return;
+      }
+
       this.isLoading = true;
       try {
-        await window.axios.get('/sanctum/csrf-cookie');
+        await ensureCsrfCookie();
         const { data } = await window.axios.get('/api/me');
         this.user = data;
       } catch (error) {
         this.user = null;
-        if (error?.response?.status !== 401) {
-          throw error;
+        if (error?.response?.status === 401) {
+          this.isReady = true;
+          return;
         }
+        throw error;
       } finally {
         this.isLoading = false;
         this.isReady = true;
@@ -42,19 +85,21 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout() {
+      await ensureCsrfCookie();
       await window.axios.post('/logout');
-      this.user = null;
+      this.resetSession();
     },
 
-    /** "Xem thử" 1 role khác — chỉ có tác dụng nếu user thật là super_admin. */
     async viewAs(roleCode) {
-      await window.axios.post('/api/view-as', { role_code: roleCode });
-      await this.fetchMe();
+      await ensureCsrfCookie();
+      const { data } = await window.axios.post('/api/view-as', { role_code: roleCode });
+      this.setUserFromApi(data);
     },
 
     async exitViewAs() {
-      await window.axios.delete('/api/view-as');
-      await this.fetchMe();
+      await ensureCsrfCookie();
+      const { data } = await window.axios.delete('/api/view-as');
+      this.setUserFromApi(data);
     },
   },
 });

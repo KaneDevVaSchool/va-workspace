@@ -32,6 +32,30 @@
   --color-primary-surface-strong: var(--color-primary-100);
   --color-on-primary: #ffffff;
 
+  /* ---------- Sidebar (brand primary-900, hover/active dịu) ---------- */
+  --color-sidebar: var(--color-primary-900);
+  --color-sidebar-active: color-mix(in srgb, var(--color-on-primary) 14%, var(--color-primary-900));
+  --color-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --color-sidebar-well: rgba(255, 255, 255, 0.08);
+  --color-sidebar-well-strong: rgba(255, 255, 255, 0.14);
+  --color-sidebar-text: rgba(255, 255, 255, 0.82);
+  --color-sidebar-text-muted: rgba(255, 255, 255, 0.56);
+  --color-sidebar-divider: rgba(255, 255, 255, 0.1);
+  --color-sidebar-accent: rgba(255, 255, 255, 0.72);
+  --color-sidebar-ring: rgba(255, 255, 255, 0.16);
+  --color-sidebar-sheen-top: rgba(255, 255, 255, 0.06);
+  --color-sidebar-sheen-side: rgba(255, 255, 255, 0.03);
+  --color-sidebar-sheen-bottom: rgba(0, 0, 0, 0.16);
+  --color-sidebar-scroll-thumb: rgba(255, 255, 255, 0.22);
+  --color-sidebar-scroll-thumb-hover: rgba(255, 255, 255, 0.32);
+  --color-sidebar-focus: rgba(255, 255, 255, 0.45);
+  --color-sidebar-flyout: var(--color-surface);
+  --color-sidebar-overlay: color-mix(in srgb, #000000 55%, transparent);
+  --color-sidebar-menu: var(--color-primary-800);
+  --spacing-sidebar-rail: 4rem;
+  --spacing-sidebar-expanded: 15.5rem;
+  --spacing-sidebar-drawer: 17rem;
+
   /* ---------- Neutral / nền / chữ (mặc định - light) ---------- */
   --color-bg: #ffffff;
   --color-surface: #ffffff;
@@ -99,61 +123,4 @@
   --app-scale: 0.9;
 }
 
-/* ---------- Dark theme ---------- */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --color-bg: #121214;
-    --color-surface: #1a1a1d;
-    --color-surface-muted: #202023;
-    --color-text: #f2f2f3;
-    --color-text-muted: #a3a3a8;
-    --color-border: #2e2e32;
-
-    --color-primary-surface: #2a0b14;
-    --color-primary-surface-strong: #3a0f1c;
-
-    --scrollbar-thumb: rgba(255, 255, 255, 0.25);
-    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.4);
-
-    --color-success-tint-bg: #113325;
-    --color-success-tint-fg: #6fdba6;
-    --color-success-tint-border: #1e5c3d;
-    --color-danger-tint-bg: #3a141d;
-    --color-danger-tint-fg: #ff96a7;
-    --color-danger-tint-border: #6b1f2e;
-    --color-warning-tint-bg: #3a2c0d;
-    --color-warning-tint-fg: #f0c264;
-    --color-warning-tint-border: #614a17;
-    --color-info-tint-bg: #12233f;
-    --color-info-tint-fg: #8fb4fb;
-    --color-info-tint-border: #24406e;
-  }
-}
-
-:root[data-theme='dark'] {
-  --color-bg: #121214;
-  --color-surface: #1a1a1d;
-  --color-surface-muted: #202023;
-  --color-text: #f2f2f3;
-  --color-text-muted: #a3a3a8;
-  --color-border: #2e2e32;
-
-  --color-primary-surface: #2a0b14;
-  --color-primary-surface-strong: #3a0f1c;
-
-  --scrollbar-thumb: rgba(255, 255, 255, 0.25);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.4);
-
-  --color-success-tint-bg: #113325;
-  --color-success-tint-fg: #6fdba6;
-  --color-success-tint-border: #1e5c3d;
-  --color-danger-tint-bg: #3a141d;
-  --color-danger-tint-fg: #ff96a7;
-  --color-danger-tint-border: #6b1f2e;
-  --color-warning-tint-bg: #3a2c0d;
-  --color-warning-tint-fg: #f0c264;
-  --color-warning-tint-border: #614a17;
-  --color-info-tint-bg: #12233f;
-  --color-info-tint-fg: #8fb4fb;
-  --color-info-tint-border: #24406e;
-}
+/* Không dark theme — xem .cursor/rules/no-dark-mode.mdc */

@@ -29,6 +29,12 @@ class IdentityServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(module_path('Identity', 'Database/migrations'));
         $this->registerRoutes();
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                \Modules\Identity\App\Console\EnsureSuperAdminCommand::class,
+            ]);
+        }
     }
 
     /**

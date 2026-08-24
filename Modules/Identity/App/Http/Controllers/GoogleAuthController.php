@@ -3,6 +3,7 @@
 namespace Modules\Identity\App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,6 +13,7 @@ use Laravel\Socialite\Two\InvalidStateException;
 use Modules\Identity\App\Exceptions\AccountNotUsable;
 use Modules\Identity\App\Exceptions\EmailDomainNotAllowed;
 use Modules\Identity\App\Services\GoogleAuthenticator;
+use Modules\Identity\App\Services\ViewAsService;
 
 /**
  * Google Workspace SSO — bản rút gọn từ va-hrm (không mobile deep-link,
@@ -43,15 +45,15 @@ class GoogleAuthController extends Controller
             $this->sanitizeRedirect($request->query('redirect')),
         );
 
-        // TẠM THỜI: log để đối chiếu session_id với log lúc callback — xem
-        // ghi chú ở callback(). Xoá cùng lúc.
-        Log::warning('Google OAuth redirect() — session trước khi sang Google', [
-            'session_id' => $request->session()->getId(),
-            'has_session_cookie' => $request->hasCookie(config('session.cookie')),
-            'is_secure' => $request->isSecure(),
-            'scheme_forwarded' => $request->header('X-Forwarded-Proto'),
-            'host' => $request->getHost(),
-        ]);
+        if (config('app.debug')) {
+            Log::warning('Google OAuth redirect() — session trước khi sang Google', [
+                'session_id' => $request->session()->getId(),
+                'has_session_cookie' => $request->hasCookie(config('session.cookie')),
+                'is_secure' => $request->isSecure(),
+                'scheme_forwarded' => $request->header('X-Forwarded-Proto'),
+                'host' => $request->getHost(),
+            ]);
+        }
 
         $domains = (array) config('services.google.allowed_domains', []);
 
@@ -80,20 +82,19 @@ class GoogleAuthController extends Controller
         try {
             $googleUser = Socialite::driver('google')->user();
         } catch (InvalidStateException $e) {
-            // TẠM THỜI: log chi tiết để chẩn đoán nguyên nhân session/state
-            // OAuth không khớp trên production (proxy/cookie domain/secure).
-            // Xoá log này sau khi xác định và sửa xong nguyên nhân gốc.
-            Log::warning('Google OAuth InvalidStateException', [
-                'message' => $e->getMessage(),
-                'session_id' => $request->session()->getId(),
-                'has_session_cookie' => $request->hasCookie(config('session.cookie')),
-                'session_cookie_name' => config('session.cookie'),
-                'is_secure' => $request->isSecure(),
-                'scheme_forwarded' => $request->header('X-Forwarded-Proto'),
-                'host' => $request->getHost(),
-                'full_url' => $request->fullUrl(),
-                'query_state' => $request->query('state'),
-            ]);
+            if (config('app.debug')) {
+                Log::warning('Google OAuth InvalidStateException', [
+                    'message' => $e->getMessage(),
+                    'session_id' => $request->session()->getId(),
+                    'has_session_cookie' => $request->hasCookie(config('session.cookie')),
+                    'session_cookie_name' => config('session.cookie'),
+                    'is_secure' => $request->isSecure(),
+                    'scheme_forwarded' => $request->header('X-Forwarded-Proto'),
+                    'host' => $request->getHost(),
+                    'full_url' => $request->fullUrl(),
+                    'query_state' => $request->query('state'),
+                ]);
+            }
 
             return $this->failLogin('Phiên đăng nhập đã hết hạn. Vui lòng thử lại.');
         }
@@ -119,11 +120,16 @@ class GoogleAuthController extends Controller
         ]));
     }
 
-    public function logout(Request $request): RedirectResponse
+    public function logout(Request $request, ViewAsService $viewAs): RedirectResponse|JsonResponse
     {
+        $viewAs->deactivate();
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Logged out']);
+        }
 
         return redirect()->to($this->frontendUrl('/login'));
     }

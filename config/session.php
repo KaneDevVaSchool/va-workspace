@@ -168,7 +168,10 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    'secure' => filter_var(
+        env('SESSION_SECURE_COOKIE', str_starts_with((string) env('APP_URL', ''), 'https://') ? 'true' : 'false'),
+        FILTER_VALIDATE_BOOLEAN
+    ),
 
     /*
     |--------------------------------------------------------------------------

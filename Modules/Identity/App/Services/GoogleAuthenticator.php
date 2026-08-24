@@ -8,6 +8,7 @@ use Laravel\Socialite\Contracts\User as SocialiteUser;
 use Modules\Identity\App\Exceptions\AccountNotUsable;
 use Modules\Identity\App\Exceptions\EmailDomainNotAllowed;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
+use Modules\Identity\App\Services\SuperAdminBootstrap;
 
 /**
  * Xử lý callback Google OAuth: kiểm domain → tìm/tạo user → lưu.
@@ -24,6 +25,7 @@ class GoogleAuthenticator
 {
     public function __construct(
         private readonly UserRepositoryInterface $users,
+        private readonly SuperAdminBootstrap $superAdminBootstrap,
     ) {}
 
     /**
@@ -42,8 +44,9 @@ class GoogleAuthenticator
             $user = $this->findOrCreateUser($googleUser, $email);
 
             $this->assertUsable($user, $email);
+            $this->superAdminBootstrap->ensureRolesForUser($user);
 
-            return $user;
+            return $user->fresh(['roles']);
         });
 
         return $user;

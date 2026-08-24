@@ -228,25 +228,25 @@ onBeforeUnmount(() => {
 
 .toast-host__item--success {
   background: var(--color-success-tint-bg);
-  border-color: var(--color-success-tint-border);
+  border: 1px solid var(--color-success-tint-border);
   color: var(--color-success-tint-fg);
 }
 
 .toast-host__item--error {
   background: var(--color-danger-tint-bg);
-  border-color: var(--color-danger-tint-border);
+  border: 1px solid var(--color-danger-tint-border);
   color: var(--color-danger-tint-fg);
 }
 
 .toast-host__item--warning {
   background: var(--color-warning-tint-bg);
-  border-color: var(--color-warning-tint-border);
+  border: 1px solid var(--color-warning-tint-border);
   color: var(--color-warning-tint-fg);
 }
 
 .toast-host__item--info {
   background: var(--color-info-tint-bg);
-  border-color: var(--color-info-tint-border);
+  border: 1px solid var(--color-info-tint-border);
   color: var(--color-info-tint-fg);
 }
 

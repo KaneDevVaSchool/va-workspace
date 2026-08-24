@@ -1,0 +1,41 @@
+<?php
+
+namespace Modules\Identity\App\Services;
+
+use App\Models\User;
+
+/**
+ * JSON payload GET /api/me — dùng chung cho view-as để client cập nhật store
+ * ngay từ response POST/DELETE (không phụ thuộc GET tiếp theo).
+ */
+class AuthenticatedUserPresenter
+{
+    public function __construct(
+        private readonly ViewAsService $viewAs,
+        private readonly SuperAdminBootstrap $superAdminBootstrap,
+    ) {}
+
+    public function forUser(User $user): array
+    {
+        $this->superAdminBootstrap->ensureRolesForUser($user);
+        $user->unsetRelation('roles');
+        $user->load(['department', 'roles']);
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'avatar_url' => $user->avatar_url,
+            'status' => $user->status,
+            'department' => $user->department ? [
+                'id' => $user->department->id,
+                'code' => $user->department->code,
+                'name' => $user->department->name,
+            ] : null,
+            'roles' => $user->roles->pluck('code')->values()->all(),
+            'active_role' => $this->viewAs->displayActiveRole($user),
+            'is_impersonating' => $this->viewAs->isImpersonating(),
+            'can_view_as' => $user->isSuperAdmin(),
+        ];
+    }
+}

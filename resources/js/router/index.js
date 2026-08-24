@@ -36,8 +36,8 @@ router.beforeEach(async (to) => {
     const { useAuthStore } = await import('@modules/Identity/resources/js/stores/auth.js');
     const auth = useAuthStore();
 
-    if (!auth.isReady) {
-        await auth.fetchMe();
+    if (!auth.isReady || (to.meta.requiresAuth && !auth.user)) {
+        await auth.fetchMe({ force: !auth.user });
     }
 
     if (to.meta.requiresAuth && !auth.isAuthenticated) {

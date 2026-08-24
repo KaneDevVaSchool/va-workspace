@@ -4,7 +4,7 @@ namespace Modules\Identity\Database\Seeders;
 
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Modules\Identity\App\Models\Role;
+use Modules\Identity\App\Services\SuperAdminBootstrap;
 
 /**
  * Seed 1 user super_admin sở hữu đủ 7 role hệ thống, phục vụ "xem thử"
@@ -17,18 +17,23 @@ use Modules\Identity\App\Models\Role;
  */
 class SuperAdminSeeder extends Seeder
 {
-    private const FALLBACK_EMAIL = 'khoana@hcm.vaschools.edu.vn';
-
     public function run(): void
     {
-        $email = config('services.superadmin_email') ?: self::FALLBACK_EMAIL;
+        $bootstrap = app(SuperAdminBootstrap::class);
+        $email = $bootstrap->configuredEmail();
 
-        $user = User::query()->firstOrNew(['email' => $email]);
+        $user = User::query()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->first();
+
+        if ($user === null) {
+            $user = new User(['email' => $email]);
+        }
+
         $user->name = $user->name ?: 'Super Admin';
         $user->status = 'active';
         $user->save();
 
-        $roleIds = Role::query()->pluck('id');
-        $user->roles()->sync($roleIds);
+        $bootstrap->ensureRolesForUser($user);
     }
 }

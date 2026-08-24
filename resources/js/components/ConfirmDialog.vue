@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
 }
 
 .confirm-dialog__btn--ghost {
-  border-color: var(--color-border);
+  border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-text);
 }
@@ -169,12 +169,12 @@ onBeforeUnmount(() => {
 }
 
 .confirm-dialog__btn--danger {
-  background: var(--color-danger);
+  background: var(--color-primary);
   color: var(--color-on-primary);
 }
 
 .confirm-dialog__btn--danger:hover:not(:disabled) {
-  background: var(--color-primary-700);
+  background: var(--color-primary-hover);
 }
 
 .confirm-dialog-fade-enter-active,

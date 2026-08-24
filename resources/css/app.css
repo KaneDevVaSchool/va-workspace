@@ -16,6 +16,7 @@ body,
 }
 
 html {
+  color-scheme: light;
   /* Thu nhỏ toàn trang về tỉ lệ --app-scale (mặc định 0.9) mà không ảnh
      hưởng zoom trình duyệt của người dùng. Chỉ hỗ trợ trình duyệt Chromium
      (Chrome/Edge/Brave); nếu cần hỗ trợ Firefox/Safari, đổi sang transform. */
@@ -78,4 +79,76 @@ svg {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* ---------- Sidebar surface / nav (dùng chung, không gắn vào 1 component) ---------- */
+.sidebar-surface {
+  background-color: var(--color-sidebar);
+  background-image:
+    linear-gradient(
+      180deg,
+      var(--color-sidebar-sheen-top) 0%,
+      transparent 28%,
+      var(--color-sidebar-sheen-bottom) 100%
+    ),
+    linear-gradient(
+      90deg,
+      var(--color-sidebar-sheen-side) 0%,
+      transparent 40%
+    );
+  color: var(--color-sidebar-text);
+}
+
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-sidebar-scroll-thumb) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--color-sidebar-scroll-thumb);
+  border-radius: var(--radius-full);
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-sidebar-scroll-thumb-hover);
+}
+
+.sidebar-nav-item {
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.sidebar-nav-item:focus-visible {
+  outline: 2px solid var(--color-sidebar-focus);
+  outline-offset: 2px;
+}
+
+.sidebar-nav-item--active {
+  animation: sidebar-active-fade 220ms ease-out;
+}
+
+@keyframes sidebar-active-fade {
+  from {
+    background-color: transparent;
+  }
+  to {
+    background-color: var(--color-sidebar-active);
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+    opacity: 0.85;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }

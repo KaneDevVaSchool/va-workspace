@@ -20,7 +20,8 @@ onMounted(async () => {
   }
 
   try {
-    await auth.fetchMe();
+    auth.resetSession();
+    await auth.fetchMe({ force: true });
   } catch {
     router.replace({ name: 'login', query: { error: 'Không thể xác thực phiên đăng nhập.' } });
     return;
