@@ -32,4 +32,32 @@ interface UserRepositoryInterface
      * @return \Illuminate\Support\Collection<int, User>
      */
     public function allActiveByDepartment(int $departmentId): \Illuminate\Support\Collection;
+
+    /**
+     * Toàn bộ user thuộc 1 phòng ban (kể cả inactive) — dùng cho trang
+     * "Thành viên phòng ban" trong WorkspaceConfig, khác allActiveByDepartment
+     * (chỉ lọc active, dùng cho mục đích hẹp hơn: dropdown chọn team_lead).
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public function allByDepartment(int $departmentId): \Illuminate\Support\Collection;
+
+    /**
+     * Số thành viên (kể cả inactive) theo department_id — bảng tổng hợp
+     * workspace superadmin. Khi HRM thay repository, giữ cùng contract.
+     *
+     * @param  list<int>  $departmentIds
+     * @return \Illuminate\Support\Collection<int, int> keyed by department_id
+     */
+    public function countByDepartmentIds(array $departmentIds): \Illuminate\Support\Collection;
+
+    /**
+     * Trưởng đơn vị (role department_director) theo department_id.
+     * Một phòng nhiều trưởng → lấy người đầu theo tên. Tạm thời từ user
+     * local; sau này HRM org-chart điền cùng shape (id, name, email).
+     *
+     * @param  list<int>  $departmentIds
+     * @return \Illuminate\Support\Collection<int, User> keyed by department_id
+     */
+    public function departmentDirectorsByDepartmentIds(array $departmentIds): \Illuminate\Support\Collection;
 }

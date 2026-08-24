@@ -92,6 +92,9 @@ export const useAuthStore = defineStore('auth', {
 
     /** Toàn bộ permission keys hiệu lực. Dùng để debug hoặc render UI điều kiện. */
     grantedPermissions: (state) => state.user?.granted_permissions ?? [],
+
+    /** Menu sidebar bị phòng ban của user tự tắt (xem AppSidebar.vue). */
+    hiddenMenuKeys: (state) => state.user?.hidden_menu_keys ?? [],
   },
 
   actions: {

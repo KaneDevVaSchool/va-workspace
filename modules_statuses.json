@@ -1,4 +1,5 @@
 {
     "Example": true,
-    "Identity": true
+    "Identity": true,
+    "WorkspaceConfig": true
 }

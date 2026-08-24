@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import identityRoutes from '@modules/Identity/resources/js/router.js';
+import workspaceConfigRoutes from '@modules/WorkspaceConfig/resources/js/router.js';
 
 /**
  * Route Vue (SPA phía client) — KHÔNG nhầm với route Laravel
@@ -18,6 +19,7 @@ const routes = [
         meta: { requiresAuth: true, title: 'Tổng quan' },
     },
     ...identityRoutes,
+    ...workspaceConfigRoutes,
 ];
 
 const router = createRouter({
@@ -46,6 +48,15 @@ router.beforeEach(async (to) => {
 
     if (to.meta.requiresSuperAdmin && !auth.showSuperAdminNav) {
         return { name: 'home' };
+    }
+
+    // Hub /manager/workspace-config/* scope theo phòng ban của user.
+    // super_admin (không view-as) dùng trang tổng hợp mọi phòng ban.
+    if (
+        auth.showSuperAdminNav &&
+        to.matched.some((record) => record.name === 'manager.workspace-config.hub')
+    ) {
+        return { name: 'superadmin.workspace-config.overview' };
     }
 
     if (to.meta.requiresAdmin && !auth.canViewActivityLog) {

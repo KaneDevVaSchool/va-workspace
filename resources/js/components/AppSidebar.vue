@@ -71,7 +71,35 @@ const MENU_SECTIONS = [
     id: 'manager',
     label: 'Quản lý',
     items: [
-      { name: 'manager.teams', label: 'Quản lý nhóm', icon: 'users' },
+      // configurableByDepartment: true — department_director có thể tự ẩn
+      // mục này khỏi sidebar phòng ban mình (xem WorkspaceConfigSidebar.vue).
+      // Đồng bộ thủ công với danh sách CONFIGURABLE_MENUS trong
+      // DepartmentSidebarConfigService (backend).
+      { name: 'manager.teams', label: 'Quản lý nhóm', icon: 'users', configurableByDepartment: true },
+      {
+        name: 'manager.workspace-config.hub',
+        label: 'Cấu hình phòng ban',
+        icon: 'settings',
+        requiresPermission: 'workspace_config.view_department',
+        // super_admin (*) cũng có permission này nhưng dùng trang tổng hợp
+        // /superadmin/workspace-config — API members lấy department_id của
+        // chính user, super_admin thường không có phòng ban.
+        hideWhenSuperAdmin: true,
+        // KHÔNG configurableByDepartment — tránh trưởng phòng tự khoá lối
+        // vào trang cấu hình của chính mình.
+      },
+    ],
+  },
+  {
+    id: 'superadmin-workspace-config',
+    label: 'Cấu hình Workspace',
+    items: [
+      {
+        name: 'superadmin.workspace-config.overview',
+        label: 'Cấu hình Workspace theo phòng ban',
+        icon: 'settings',
+        requiresSuperAdmin: true,
+      },
     ],
   },
 ];
@@ -85,7 +113,10 @@ const visibleSections = computed(() =>
       (item) =>
         registeredRouteNames.value.has(item.name) &&
         (!item.requiresSuperAdmin || auth.showSuperAdminNav) &&
-        (!item.requiresAdmin || auth.canViewActivityLog),
+        (!item.hideWhenSuperAdmin || !auth.showSuperAdminNav) &&
+        (!item.requiresAdmin || auth.canViewActivityLog) &&
+        (!item.requiresPermission || auth.can(item.requiresPermission)) &&
+        !auth.hiddenMenuKeys.includes(item.name),
     ),
   })).filter((section) => section.items.length > 0),
 );

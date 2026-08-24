@@ -3,7 +3,7 @@
 // Content header teleport lên AppHeader — một hàng kiểu 1Office:
 // trái = tạo mới · giữa = title · phải = search/export/actions.
 //
-import { computed, onBeforeUnmount, onMounted, ref, useId, useSlots } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useId, useSlots, watch } from 'vue';
 import { usePageHeaderTarget } from '../composables/usePageHeaderTarget';
 import AppIcon from './AppIcon.vue';
 
@@ -24,6 +24,7 @@ const DEFAULT_EXPORT_ICONS = {
 
 const props = defineProps({
   title: { type: String, required: true },
+  subtitle: { type: String, default: '' },
   breadcrumbs: { type: Array, default: () => [] },
   description: { type: String, default: '' },
   icon: { type: String, default: '' },
@@ -43,7 +44,10 @@ const emit = defineEmits(['update:viewMode', 'export']);
 const slots = useSlots();
 const exportOpen = ref(false);
 const exportRoot = ref(null);
+const primaryOpen = ref(false);
+const primaryRoot = ref(null);
 const menuId = useId();
+const primaryMenuId = useId();
 const pageHeaderTarget = usePageHeaderTarget();
 const teleportTo = computed(() => pageHeaderTarget?.value ?? '#app-content-header');
 const canTeleport = computed(() => Boolean(pageHeaderTarget?.value));
@@ -51,6 +55,7 @@ const canTeleport = computed(() => Boolean(pageHeaderTarget?.value));
 const exportBusy = computed(() => props.exportBusyKey != null);
 const hasExportOptions = computed(() => (props.exportOptions?.length ?? 0) > 0);
 const hasPrimaryAction = computed(() => Boolean(props.primaryAction?.label));
+const hasPrimaryMenu = computed(() => (props.primaryAction?.items?.length ?? 0) > 0);
 const hasLeft = computed(() => hasPrimaryAction.value || Boolean(slots.primary));
 
 const displayTitle = computed(() =>
@@ -105,23 +110,41 @@ function onPrimaryClick(event) {
     event.preventDefault();
     return;
   }
+  if (hasPrimaryMenu.value) {
+    event.preventDefault();
+    primaryOpen.value = !primaryOpen.value;
+    return;
+  }
   props.primaryAction?.onClick?.(event);
 }
 
+function onPrimarySelect(item) {
+  primaryOpen.value = false;
+  item?.onSelect?.();
+}
+
 function handleDocumentClick(event) {
-  if (!exportOpen.value || !exportRoot.value) {
-    return;
-  }
-  if (!exportRoot.value.contains(event.target)) {
+  if (exportOpen.value && exportRoot.value && !exportRoot.value.contains(event.target)) {
     exportOpen.value = false;
+  }
+  if (primaryOpen.value && primaryRoot.value && !primaryRoot.value.contains(event.target)) {
+    primaryOpen.value = false;
   }
 }
 
 function handleDocumentKeydown(event) {
   if (event.key === 'Escape') {
     exportOpen.value = false;
+    primaryOpen.value = false;
   }
 }
+
+watch(
+  () => props.primaryAction,
+  () => {
+    primaryOpen.value = false;
+  },
+);
 
 onMounted(() => {
   document.addEventListener('mousedown', handleDocumentClick);
@@ -139,9 +162,56 @@ onBeforeUnmount(() => {
     <div id="header" class="page-header" data-tour="page-header">
       <div v-if="hasLeft" id="header-left-actions" class="page-header__left">
         <slot name="primary">
+          <div
+            v-if="hasPrimaryAction && primaryAction && hasPrimaryMenu"
+            ref="primaryRoot"
+            class="page-header__add-wrap"
+          >
+            <button
+              type="button"
+              class="page-header__add"
+              :class="{
+                'page-header__add--open': primaryOpen,
+                'page-header__add--disabled': primaryAction.disabled,
+              }"
+              :disabled="primaryAction.disabled"
+              :aria-expanded="primaryOpen"
+              aria-haspopup="menu"
+              :aria-controls="primaryMenuId"
+              :title="primaryAction.label"
+              :aria-label="primaryAction.label"
+              data-tour="page-header-primary"
+              @click="onPrimaryClick"
+            >
+              <AppIcon :name="primaryAction.icon || 'plus'" :size="18" :stroke-width="2" />
+            </button>
+            <div
+              v-if="primaryOpen && !primaryAction.disabled"
+              :id="primaryMenuId"
+              role="menu"
+              class="page-header__menu page-header__add-menu"
+            >
+              <button
+                v-for="item in primaryAction.items"
+                :key="item.key || item.label"
+                type="button"
+                role="menuitem"
+                class="page-header__export-item"
+                @click="onPrimarySelect(item)"
+              >
+                <span class="page-header__export-item-icon">
+                  <AppIcon :name="item.icon || 'plus'" :size="16" :stroke-width="1.75" />
+                </span>
+                <span class="page-header__export-item-copy">
+                  <span class="page-header__export-item-label">{{ item.label }}</span>
+                  <span v-if="item.description" class="page-header__export-item-desc">{{ item.description }}</span>
+                </span>
+              </button>
+            </div>
+          </div>
           <component
             :is="primaryAction.to || primaryAction.href ? 'router-link' : 'button'"
-            v-if="hasPrimaryAction && primaryAction"
+            v-else-if="hasPrimaryAction && primaryAction"
             :to="primaryAction.to || primaryAction.href"
             :type="primaryAction.to || primaryAction.href ? undefined : 'button'"
             class="page-header__add"
@@ -162,6 +232,7 @@ onBeforeUnmount(() => {
         <h1 class="page-header__title" :title="titleHint || displayTitle">
           {{ displayTitle }}
         </h1>
+        <p v-if="subtitle" class="page-header__subtitle">{{ subtitle }}</p>
       </div>
 
       <div v-if="showRight" id="header-right-actions" class="page-header__right">
@@ -227,7 +298,7 @@ onBeforeUnmount(() => {
             />
           </button>
 
-          <div v-if="exportOpen && !exportBusy" :id="menuId" role="menu" class="page-header__export-menu">
+          <div v-if="exportOpen && !exportBusy" :id="menuId" role="menu" class="page-header__menu page-header__export-menu">
             <template v-for="opt in exportOptions" :key="opt.key">
               <div v-if="opt.separatorBefore" class="page-header__export-sep" role="separator" aria-hidden="true" />
               <button type="button" role="menuitem" class="page-header__export-item" @click="onExportSelect(opt)">
@@ -270,18 +341,25 @@ onBeforeUnmount(() => {
   min-width: 0;
   margin: 0;
   padding: 0;
+  overflow: visible;
 }
 
 .page-header__left {
+  position: relative;
   display: flex;
   flex-shrink: 0;
   align-items: center;
   gap: 2px;
+  overflow: visible;
 }
 
 .page-header__title-wrap {
+  display: flex;
   flex: 1;
   min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.0625rem;
 }
 
 .page-header__title {
@@ -294,6 +372,17 @@ onBeforeUnmount(() => {
   font-weight: 600;
   line-height: 1.3;
   letter-spacing: 0;
+}
+
+.page-header__subtitle {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.3;
 }
 
 .page-header__right {
@@ -326,9 +415,17 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 
+.page-header__add--open {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
 .page-header__add--disabled {
   opacity: 0.4;
   pointer-events: none;
+}
+
+.page-header__add-wrap {
+  position: relative;
 }
 
 .page-header__view {
@@ -432,9 +529,8 @@ onBeforeUnmount(() => {
   transform: rotate(180deg);
 }
 
-.page-header__export-menu {
+.page-header__menu {
   position: absolute;
-  right: 0;
   z-index: 40;
   margin-top: 0.375rem;
   width: 18.5rem;
@@ -445,6 +541,15 @@ onBeforeUnmount(() => {
   box-shadow:
     inset 0 0 0 1px var(--color-border),
     var(--shadow-lg);
+}
+
+.page-header__export-menu {
+  right: 0;
+}
+
+.page-header__add-menu {
+  top: 100%;
+  left: 0;
 }
 
 .page-header__export-sep {

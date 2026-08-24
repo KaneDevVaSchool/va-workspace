@@ -3,6 +3,7 @@
 namespace Modules\Identity\App\Services;
 
 use App\Models\User;
+use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositoryInterface;
 
 /**
  * JSON payload GET /api/me — dùng chung cho view-as để client cập nhật store
@@ -14,6 +15,7 @@ class AuthenticatedUserPresenter
         private readonly ViewAsService $viewAs,
         private readonly SuperAdminBootstrap $superAdminBootstrap,
         private readonly PermissionService $permissions,
+        private readonly DepartmentSidebarConfigRepositoryInterface $sidebarConfigs,
     ) {}
 
     public function forUser(User $user): array
@@ -40,6 +42,10 @@ class AuthenticatedUserPresenter
             // Permission keys hiệu lực (có tính view-as) — frontend cache trong Pinia store.
             // ['*'] nếu là super_admin thực sự; danh sách keys cụ thể nếu đang view-as.
             'granted_permissions' => $this->permissions->resolveGrantedKeys($user),
+            // Menu sidebar bị phòng ban của user tự tắt (xem AppSidebar.vue).
+            'hidden_menu_keys' => $user->department
+                ? $this->sidebarConfigs->hiddenKeysForDepartment($user->department->id)
+                : [],
         ];
     }
 }

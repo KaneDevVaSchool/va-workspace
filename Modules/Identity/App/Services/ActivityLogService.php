@@ -30,6 +30,7 @@ class ActivityLogService
         'team.create' => 'Tạo nhóm',
         'team.update' => 'Cập nhật nhóm',
         'team.delete' => 'Xoá nhóm',
+        'role.assign' => 'Gán vai trò',
         'shortcut.create' => 'Tạo lối tắt',
         'shortcut.update' => 'Cập nhật lối tắt',
         'shortcut.delete' => 'Xoá lối tắt',

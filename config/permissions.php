@@ -131,6 +131,11 @@ return [
             // Workload, Báo cáo hiệu suất
             'worklog.view',
             'performance.view_department',
+            // Hub cấu hình Workspace của phòng ban (thành viên, tiêu chí
+            // đánh giá tự tạo, bật/tắt menu sidebar) — xem Modules/WorkspaceConfig
+            'workspace_config.view_department',
+            'workspace_config.manage_sidebar_department',
+            'workspace_config.assign_role_department',
             // Dashboard, My Work
             'dashboard.view',
             'weekly_report.view',
@@ -170,6 +175,9 @@ return [
             'project_finance.manage_department',
             'worklog.view',
             'performance.view_department',
+            'workspace_config.view_department',
+            'workspace_config.manage_sidebar_department',
+            'workspace_config.assign_role_department',
             'dashboard.view',
             'weekly_report.view',
             'my_work.*',
@@ -274,6 +282,7 @@ return [
         'workspace.evaluation.*',
         'workspace.daily_report_scoring.*',
         'workspace.task_scoring.*',
+        'workspace_config.view_all',
     ],
 
     /*
@@ -353,7 +362,7 @@ return [
 
         // ---------- Đánh giá (evaluation) ----------
         'evaluation.*' => ['label' => 'Toàn bộ đánh giá', 'module' => 'Đánh giá', 'description' => 'Toàn quyền quản lý đánh giá nhân sự'],
-        'evaluation.manage_department' => ['label' => 'Quản lý đánh giá phòng ban', 'module' => 'Đánh giá', 'description' => 'Quản lý đánh giá nhân sự trong phòng ban'],
+        'evaluation.manage_department' => ['label' => 'Quản lý đánh giá phòng ban', 'module' => 'Đánh giá', 'description' => 'Tự tạo và quản lý tiêu chí đánh giá nhân sự trong phòng ban mình', 'active' => true],
 
         // ---------- Hợp đồng (contract) ----------
         'contract.*' => ['label' => 'Toàn bộ hợp đồng', 'module' => 'Hợp đồng', 'description' => 'Toàn quyền quản lý hợp đồng'],
@@ -427,9 +436,15 @@ return [
         'permissions.manage' => ['label' => 'Quản lý phân quyền', 'module' => 'Hệ thống', 'description' => 'Cấp/thu hồi quyền của các role (chỉ super_admin)', 'active' => true],
         'roles.assign' => ['label' => 'Gán vai trò', 'module' => 'Hệ thống', 'description' => 'Gán/gỡ vai trò hệ thống cho user (chỉ super_admin)'],
         'workspace.hub.manage' => ['label' => 'Quản lý Hub Workspace', 'module' => 'Hệ thống', 'description' => 'Quản lý cấu hình trung tâm của Workspace (chỉ super_admin)'],
-        'workspace.evaluation.*' => ['label' => 'Toàn bộ cấu hình đánh giá hệ thống', 'module' => 'Hệ thống', 'description' => 'Cấu hình khung đánh giá toàn hệ thống (chỉ super_admin)'],
+        'workspace.evaluation.*' => ['label' => 'Toàn bộ cấu hình đánh giá hệ thống', 'module' => 'Hệ thống', 'description' => 'Tạo tiêu chí đánh giá chung dùng toàn hệ thống (chỉ super_admin)', 'active' => true],
         'workspace.daily_report_scoring.*' => ['label' => 'Cấu hình chấm điểm báo cáo ngày', 'module' => 'Hệ thống', 'description' => 'Cấu hình quy tắc chấm điểm báo cáo ngày toàn hệ thống (chỉ super_admin)'],
-        'workspace.task_scoring.*' => ['label' => 'Cấu hình chấm điểm công việc', 'module' => 'Hệ thống', 'description' => 'Cấu hình quy tắc chấm điểm công việc toàn hệ thống (chỉ super_admin)'],
+        'workspace.task_scoring.*' => ['label' => 'Cấu hình chấm điểm công việc', 'module' => 'Hệ thống', 'description' => 'Quản lý danh mục tiêu chí chấm điểm công việc dùng chung toàn hệ thống (chỉ super_admin)'],
+        'workspace_config.view_all' => ['label' => 'Xem toàn bộ cấu hình workspace', 'module' => 'Hệ thống', 'description' => 'Xem tổng hợp cấu hình workspace mọi phòng ban (chỉ super_admin)', 'active' => true],
+
+        // ---------- Cấu hình Workspace theo phòng ban (workspace_config) ----------
+        'workspace_config.view_department' => ['label' => 'Xem cấu hình phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Xem trang cấu hình workspace của phòng ban mình (thành viên, menu)', 'active' => true],
+        'workspace_config.manage_sidebar_department' => ['label' => 'Cấu hình menu phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Bật/tắt mục menu hiển thị cho phòng ban mình', 'active' => true],
+        'workspace_config.assign_role_department' => ['label' => 'Gán vai trò phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Gán vai trò (phó phòng, trưởng bộ phận, trưởng nhóm, nhân viên, người xem) cho thành viên phòng ban mình', 'active' => true],
 
     ],
 

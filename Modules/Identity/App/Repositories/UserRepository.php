@@ -38,6 +38,44 @@ class UserRepository implements UserRepositoryInterface
             ->get();
     }
 
+    public function allByDepartment(int $departmentId): \Illuminate\Support\Collection
+    {
+        return User::query()
+            ->where('department_id', $departmentId)
+            ->with(['team', 'roles'])
+            ->orderBy('name')
+            ->get();
+    }
+
+    public function countByDepartmentIds(array $departmentIds): \Illuminate\Support\Collection
+    {
+        if ($departmentIds === []) {
+            return collect();
+        }
+
+        return User::query()
+            ->whereIn('department_id', $departmentIds)
+            ->selectRaw('department_id, COUNT(*) as aggregate')
+            ->groupBy('department_id')
+            ->pluck('aggregate', 'department_id')
+            ->mapWithKeys(fn ($count, $id) => [(int) $id => (int) $count]);
+    }
+
+    public function departmentDirectorsByDepartmentIds(array $departmentIds): \Illuminate\Support\Collection
+    {
+        if ($departmentIds === []) {
+            return collect();
+        }
+
+        return User::query()
+            ->whereIn('department_id', $departmentIds)
+            ->whereHas('roles', fn ($query) => $query->where('code', 'department_director'))
+            ->orderBy('name')
+            ->get()
+            ->unique('department_id')
+            ->keyBy('department_id');
+    }
+
     public function create(array $data): User
     {
         return User::query()->create($data);

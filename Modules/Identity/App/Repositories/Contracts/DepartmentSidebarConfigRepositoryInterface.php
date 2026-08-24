@@ -1,0 +1,23 @@
+<?php
+
+namespace Modules\Identity\App\Repositories\Contracts;
+
+use Illuminate\Support\Collection;
+use Modules\Identity\App\Models\DepartmentSidebarConfig;
+
+/**
+ * Contract cho tầng Repository — Service chỉ phụ thuộc interface này,
+ * không phụ thuộc trực tiếp Eloquent.
+ */
+interface DepartmentSidebarConfigRepositoryInterface
+{
+    /** Danh sách menu_key đang bị ẩn (is_visible=false) của 1 phòng ban. */
+    public function hiddenKeysForDepartment(int $departmentId): array;
+
+    /** Toàn bộ override hiện có của 1 phòng ban (kể cả is_visible=true nếu có row). */
+    public function allByDepartment(int $departmentId): Collection;
+
+    public function findByDepartmentAndKey(int $departmentId, string $menuKey): ?DepartmentSidebarConfig;
+
+    public function setVisibility(int $departmentId, string $menuKey, bool $isVisible, ?int $updatedBy): DepartmentSidebarConfig;
+}

@@ -187,7 +187,7 @@ onBeforeUnmount(() => {
 .toast-host {
   position: fixed;
   inset: 0 0 auto 0;
-  z-index: 200;
+  z-index: 400;
   display: flex;
   justify-content: flex-end;
   padding: var(--space-3);

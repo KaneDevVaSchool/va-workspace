@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Pivot user <-> role (many-to-many) — 1 user có thể giữ nhiều role, cần
- * thiết cho super_admin (sở hữu cả 7 role) và cho view-as sau này chọn
+ * thiết cho super_admin (sở hữu cả 9 role) và cho view-as sau này chọn
  * đúng những role user thật sự được gán.
  */
 return new class extends Migration

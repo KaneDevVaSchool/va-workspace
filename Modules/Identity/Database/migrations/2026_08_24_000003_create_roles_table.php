@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\Schema;
 /**
  * RBAC tối giản — chỉ role (chưa có permission chi tiết theo từng hành
  * động, xem docs/VA_WORKSPACE_OVERVIEW.md §4 và §19 lộ trình Phase 1).
- * 7 role hệ thống được seed trong RoleSeeder.
+ * 9 role hệ thống được seed trong RoleSeeder (7 role gốc + phó phòng,
+ * trưởng bộ phận — xem RoleSeeder để biết chi tiết).
  */
 return new class extends Migration
 {

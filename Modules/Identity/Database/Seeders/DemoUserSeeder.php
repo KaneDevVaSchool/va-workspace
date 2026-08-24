@@ -55,6 +55,16 @@ class DemoUserSeeder extends Seeder
             roleCode: 'section_head',
             departmentId: $cntt->id,
         );
+
+        $ns = Department::query()->where('code', 'NS')->first();
+        if ($ns !== null) {
+            $this->seedRoleDemoUser(
+                email: 'truong-phong.ns@example.com',
+                name: 'Demo Trưởng phòng Hành chính Nhân sự',
+                roleCode: 'department_director',
+                departmentId: $ns->id,
+            );
+        }
     }
 
     private function seedRoleDemoUser(

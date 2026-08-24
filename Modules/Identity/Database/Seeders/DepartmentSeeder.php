@@ -18,7 +18,7 @@ class DepartmentSeeder extends Seeder
             ['code' => 'BGH', 'name' => 'Ban Giám hiệu'],
             ['code' => 'CNTT', 'name' => 'Phòng Công nghệ thông tin'],
             ['code' => 'DT', 'name' => 'Phòng Đào tạo'],
-            ['code' => 'NS', 'name' => 'Phòng Nhân sự'],
+            ['code' => 'NS', 'name' => 'Phòng Hành chính Nhân sự'],
             ['code' => 'TC', 'name' => 'Phòng Tài chính - Kế toán'],
         ];
 

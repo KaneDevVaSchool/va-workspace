@@ -305,6 +305,7 @@ class PermissionMatrixTest extends TestCase
         $keys = collect($response->json('permissions'))->pluck('key')->all();
 
         $this->assertContains('team.manage', $keys);
+        $this->assertContains('workspace_config.assign_role_department', $keys);
         $this->assertContains('dashboard.view', $keys);
         $this->assertNotContains('task.delegate', $keys);
         $this->assertNotContains('ai_account.*', $keys);

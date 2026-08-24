@@ -1,0 +1,11 @@
+{
+    "name": "WorkspaceConfig",
+    "alias": "workspace-config",
+    "description": "Hub cấu hình scoped theo phòng ban — department_director/deputy_department_director tự xem thành viên và bật/tắt menu sidebar cho phòng ban mình; super_admin xem tổng hợp workspace mọi phòng ban.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\WorkspaceConfig\\App\\Providers\\WorkspaceConfigServiceProvider"
+    ],
+    "files": []
+}
