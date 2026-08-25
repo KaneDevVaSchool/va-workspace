@@ -177,4 +177,38 @@ class SocialPostContentSanitizeTest extends TestCase
         $this->assertStringNotContainsString('position', $post->content);
         $this->assertStringNotContainsString('fixed', $post->content);
     }
+
+    public function test_animated_sticker_span_is_kept(): void
+    {
+        $user = $this->makeUser();
+
+        $this->actingAs($user)
+            ->postJson('/api/social/posts', [
+                'content' => '<p><span class="social-sticker" data-sticker="1f600">😀</span></p>',
+            ])
+            ->assertCreated();
+
+        $post = SocialPost::query()->latest('id')->first();
+
+        $this->assertStringContainsString('data-sticker="1f600"', $post->content);
+        $this->assertStringContainsString('social-sticker', $post->content);
+        $this->assertStringContainsString('😀', $post->content);
+    }
+
+    public function test_invalid_sticker_id_is_stripped(): void
+    {
+        $user = $this->makeUser();
+
+        $this->actingAs($user)
+            ->postJson('/api/social/posts', [
+                'content' => '<p><span class="social-sticker" data-sticker="javascript:alert(1)">😀</span></p>',
+            ])
+            ->assertCreated();
+
+        $post = SocialPost::query()->latest('id')->first();
+
+        $this->assertStringNotContainsString('javascript', $post->content);
+        $this->assertStringNotContainsString('data-sticker', $post->content);
+        $this->assertStringContainsString('😀', $post->content);
+    }
 }

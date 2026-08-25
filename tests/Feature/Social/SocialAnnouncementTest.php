@@ -102,6 +102,31 @@ class SocialAnnouncementTest extends TestCase
             ->assertJsonCount(0, 'posts');
     }
 
+    public function test_pin_activity_log_strips_html_from_post_content(): void
+    {
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+
+        $this->actingAs($director)
+            ->postJson('/api/social/posts', ['content' => '<p>sdfsdfsd</p>'])
+            ->assertCreated();
+
+        $post = SocialPost::query()->latest('id')->first();
+
+        $this->actingAs($director)
+            ->postJson('/api/social/posts/'.$post->id.'/pin')
+            ->assertOk();
+
+        $this->assertDatabaseHas('activity_logs', [
+            'action' => 'social_post.pin',
+            'description' => 'Ghim bài viết "sdfsdfsd" lên Thông báo công ty',
+        ]);
+        $this->assertDatabaseMissing('activity_logs', [
+            'action' => 'social_post.pin',
+            'description' => 'Ghim bài viết "<p>sdfsdfsd</p>" lên Thông báo công ty',
+        ]);
+    }
+
     public function test_director_cannot_pin_as_system(): void
     {
         $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
