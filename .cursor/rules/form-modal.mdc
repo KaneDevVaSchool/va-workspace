@@ -1,0 +1,20 @@
+---
+description: Modal form tạo/sửa — lưới ngang 2–3 cột, nằm trong viewport, có thể gần full screen
+globs: "**/*.{vue,css,js}"
+alwaysApply: true
+---
+
+# Form modal (bắt buộc)
+
+**Mẫu vàng:** modal **Thêm tiêu chí** trong `Modules/Evaluation/resources/js/pages/WorkspaceConfigEvaluation.vue`.
+
+Skill: `.cursor/skills/form-modal/SKILL.md`
+
+Khi làm/sửa dialog form (tạo/sửa bản ghi, không phải confirm xoá): **copy cấu trúc modal này**, không xếp field dọc 1 cột.
+
+## Bắt buộc
+
+- Form **ngang 2–3 cột** (`grid-template-columns: repeat(2|3, minmax(0, 1fr))`). Field dài (mô tả, danh sách con) mới `grid-column: 1 / -1`.
+- Toàn bộ dialog **nằm trong viewport**: `width/height` ≤ `calc(100vw|vh - padding)`, panel `overflow: hidden`. Không tràn khỏi màn.
+- Được phép **lớn gần full screen** (`calc(100vw - 2.5rem)` / `calc(100vh - 2.5rem)`). Head / tab / actions `flex-shrink: 0`; body `flex: 1; min-height: 0`.
+- Confirm xoá / alertdialog nhỏ: **không** dùng mẫu này.

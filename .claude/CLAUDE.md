@@ -158,6 +158,13 @@ dữ liệu + panel chi tiết) phải ưu tiên rõ ràng, dễ đọc hơn là
   chi tiết) cho thao tác thực sự đổi dữ liệu, tránh đổi nhầm khi người dùng
   chỉ muốn xem thông tin.
 
+## 15. Form modal — lưới ngang, trong viewport
+
+Dialog **tạo/sửa** (không phải confirm xoá): form **ngang 2–3 cột**, toàn bộ
+nằm trong viewport, được phép gần full screen. Mẫu vàng: modal Thêm tiêu chí
+trong `Modules/Evaluation/resources/js/pages/WorkspaceConfigEvaluation.vue`.
+Chi tiết: `.cursor/rules/form-modal.mdc` + skill `form-modal`.
+
 ---
 
 Skill riêng cho dự án (quy trình tạo module mới, checklist route, v.v.):
