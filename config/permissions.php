@@ -65,6 +65,7 @@ return [
             'document_manager.*',
             'my_work.*',
             'notification.*',
+            'social.*',
         ],
 
         'director_officer' => [
@@ -141,6 +142,10 @@ return [
             'weekly_report.view',
             'my_work.*',
             'notification.*',
+            // Bảng tin nội bộ — kiểm duyệt bài/bình luận và ghim thông báo
+            // trong phòng ban mình
+            'social.moderate',
+            'social.pin',
         ],
 
         'deputy_department_director' => [
@@ -182,6 +187,8 @@ return [
             'weekly_report.view',
             'my_work.*',
             'notification.*',
+            'social.moderate',
+            'social.pin',
         ],
 
         'section_head' => [
@@ -206,6 +213,8 @@ return [
             'weekly_report.view',
             'my_work.*',
             'notification.*',
+            'social.moderate',
+            'social.pin',
         ],
 
         'team_lead' => [
@@ -232,6 +241,8 @@ return [
             'dashboard.view',
             'my_work.*',
             'notification.*',
+            'social.moderate',
+            'social.pin',
         ],
 
         'member' => [
@@ -445,6 +456,11 @@ return [
         'workspace_config.view_department' => ['label' => 'Xem cấu hình phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Xem trang cấu hình workspace của phòng ban mình (thành viên, menu)', 'active' => true],
         'workspace_config.manage_sidebar_department' => ['label' => 'Cấu hình menu phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Bật/tắt mục menu hiển thị cho phòng ban mình', 'active' => true],
         'workspace_config.assign_role_department' => ['label' => 'Gán vai trò phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Gán vai trò (phó phòng, trưởng bộ phận, trưởng nhóm, nhân viên, người xem) cho thành viên phòng ban mình', 'active' => true],
+
+        // ---------- Mạng nội bộ (social) ----------
+        'social.*' => ['label' => 'Toàn bộ bảng tin', 'module' => 'Mạng nội bộ', 'description' => 'Toàn quyền quản lý bảng tin nội bộ'],
+        'social.moderate' => ['label' => 'Kiểm duyệt bảng tin', 'module' => 'Mạng nội bộ', 'description' => 'Xoá bài viết/bình luận của người khác trong phòng ban quản lý', 'active' => true],
+        'social.pin' => ['label' => 'Ghim thông báo', 'module' => 'Mạng nội bộ', 'description' => 'Ghim bài viết lên panel Thông báo công ty', 'active' => true],
 
     ],
 

@@ -60,4 +60,11 @@ interface UserRepositoryInterface
      * @return \Illuminate\Support\Collection<int, User> keyed by department_id
      */
     public function departmentDirectorsByDepartmentIds(array $departmentIds): \Illuminate\Support\Collection;
+
+    /**
+     * Tìm user đang hoạt động theo tên — gõ @mention trên bảng tin.
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public function searchActiveByName(string $query, int $limit = 8, ?int $excludeUserId = null): \Illuminate\Support\Collection;
 }

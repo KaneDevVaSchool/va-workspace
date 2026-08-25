@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import identityRoutes from '@modules/Identity/resources/js/router.js';
 import workspaceConfigRoutes from '@modules/WorkspaceConfig/resources/js/router.js';
+import socialRoutes from '@modules/Social/resources/js/router.js';
 
 /**
  * Route Vue (SPA phía client) — KHÔNG nhầm với route Laravel
@@ -20,6 +21,7 @@ const routes = [
     },
     ...identityRoutes,
     ...workspaceConfigRoutes,
+    ...socialRoutes,
 ];
 
 const router = createRouter({

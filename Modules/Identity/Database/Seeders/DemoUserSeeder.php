@@ -23,21 +23,39 @@ class DemoUserSeeder extends Seeder
             return;
         }
 
-        $departmentIds = Department::query()->pluck('id');
+        $departments = Department::query()->where('is_active', true)->get()->keyBy('code');
 
-        if ($departmentIds->isEmpty()) {
+        if ($departments->isEmpty()) {
             return;
         }
 
-        User::factory()
-            ->count(8)
-            ->state(fn () => [
-                'department_id' => $departmentIds->random(),
-                'status' => 'active',
-            ])
-            ->create();
+        // Đồng nghiệp mẫu — idempotent theo email, phân đều các phòng ban
+        // để UI (mention, thành viên, bảng tin) hiện tên phòng.
+        foreach ([
+            ['email' => 'hung.bgh@example.com', 'name' => 'Nguyễn Quốc Hùng', 'code' => 'BGH'],
+            ['email' => 'hoa.bgh@example.com', 'name' => 'Lê Thị Hoa', 'code' => 'BGH'],
+            ['email' => 'duc.cntt@example.com', 'name' => 'Phạm Minh Đức', 'code' => 'CNTT'],
+            ['email' => 'linh.cntt@example.com', 'name' => 'Ngô Thị Linh', 'code' => 'CNTT'],
+            ['email' => 'tuan.dt@example.com', 'name' => 'Vũ Anh Tuấn', 'code' => 'DT'],
+            ['email' => 'mai.dt@example.com', 'name' => 'Đặng Thị Mai', 'code' => 'DT'],
+            ['email' => 'son.ns@example.com', 'name' => 'Bùi Văn Sơn', 'code' => 'NS'],
+            ['email' => 'thao.ns@example.com', 'name' => 'Hoàng Thị Thảo', 'code' => 'NS'],
+            ['email' => 'phong.tc@example.com', 'name' => 'Trịnh Văn Phong', 'code' => 'TC'],
+            ['email' => 'yen.tc@example.com', 'name' => 'Phan Thị Yến', 'code' => 'TC'],
+        ] as $colleague) {
+            $department = $departments->get($colleague['code']);
+            if ($department === null) {
+                continue;
+            }
 
-        $cntt = Department::query()->where('code', 'CNTT')->first();
+            $user = User::query()->firstOrNew(['email' => $colleague['email']]);
+            $user->name = $colleague['name'];
+            $user->status = 'active';
+            $user->department_id = $department->id;
+            $user->save();
+        }
+
+        $cntt = $departments->get('CNTT');
         if ($cntt === null) {
             return;
         }
@@ -56,7 +74,7 @@ class DemoUserSeeder extends Seeder
             departmentId: $cntt->id,
         );
 
-        $ns = Department::query()->where('code', 'NS')->first();
+        $ns = $departments->get('NS');
         if ($ns !== null) {
             $this->seedRoleDemoUser(
                 email: 'truong-phong.ns@example.com',

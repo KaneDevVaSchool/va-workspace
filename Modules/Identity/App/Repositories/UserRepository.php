@@ -76,6 +76,27 @@ class UserRepository implements UserRepositoryInterface
             ->keyBy('department_id');
     }
 
+    public function searchActiveByName(string $query, int $limit = 8, ?int $excludeUserId = null): \Illuminate\Support\Collection
+    {
+        $builder = User::query()
+            ->with('department')
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->limit($limit);
+
+        $needle = trim($query);
+        if ($needle !== '') {
+            $escaped = addcslashes($needle, '%_\\');
+            $builder->where('name', 'like', '%'.$escaped.'%');
+        }
+
+        if ($excludeUserId !== null) {
+            $builder->where('id', '!=', $excludeUserId);
+        }
+
+        return $builder->get();
+    }
+
     public function create(array $data): User
     {
         return User::query()->create($data);

@@ -1,0 +1,11 @@
+{
+    "name": "Social",
+    "alias": "social",
+    "description": "Mạng nội bộ — bảng tin công ty: đăng bài, thích, bình luận, chia sẻ, ghim thông báo.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Social\\App\\Providers\\SocialServiceProvider"
+    ],
+    "files": []
+}

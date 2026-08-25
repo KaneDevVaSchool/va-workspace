@@ -2,5 +2,6 @@
     "Example": true,
     "Identity": true,
     "WorkspaceConfig": true,
-    "Evaluation": true
+    "Evaluation": true,
+    "Social": true
 }
