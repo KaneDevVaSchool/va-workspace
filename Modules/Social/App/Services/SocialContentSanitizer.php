@@ -38,4 +38,30 @@ class SocialContentSanitizer
     {
         return $this->purifier->purify($html);
     }
+
+    /**
+     * @return list<int>
+     */
+    public function mentionIds(string $html): array
+    {
+        if ($html === '' || ! preg_match_all('/data-mention-id=["\'](\d+)["\']/', $html, $matches)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_map('intval', $matches[1])));
+    }
+
+    public function excerpt(string $html, int $limit = 140): string
+    {
+        $plain = trim(html_entity_decode(strip_tags($html), ENT_QUOTES, 'UTF-8'));
+        if ($plain === '') {
+            return '';
+        }
+
+        if (mb_strlen($plain) <= $limit) {
+            return $plain;
+        }
+
+        return rtrim(mb_substr($plain, 0, $limit)).'…';
+    }
 }

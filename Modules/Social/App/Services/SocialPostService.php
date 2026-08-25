@@ -39,6 +39,7 @@ class SocialPostService
         private readonly ViewAsService $viewAs,
         private readonly UserRepositoryInterface $users,
         private readonly SocialPollService $polls,
+        private readonly SocialMentionService $mentions,
     ) {}
 
     public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null): array
@@ -153,7 +154,7 @@ class SocialPostService
             ]);
         }
 
-        return DB::transaction(function () use ($author, $data, $files, $asSystem, $destination) {
+        $post = DB::transaction(function () use ($author, $data, $files, $asSystem, $destination) {
             $payload = [
                 'user_id' => $author->id,
                 'department_id' => $destination['department_id'],
@@ -183,6 +184,10 @@ class SocialPostService
 
             return $post;
         });
+
+        $this->mentions->notifyPost($author, $post);
+
+        return $post;
     }
 
     public function update(SocialPost $post, User $editor, array $data): SocialPost
@@ -212,10 +217,14 @@ class SocialPostService
             'published_at' => $post->content_updated_at ?? $post->created_at ?? now(),
         ]);
 
-        return $this->posts->update($post, [
+        $post = $this->posts->update($post, [
             'content' => $newContent,
             'content_updated_at' => now(),
         ]);
+
+        $this->mentions->notifyPost($editor, $post, $oldContent);
+
+        return $post;
     }
 
     public function revisionHistory(SocialPost $post): array
@@ -259,13 +268,17 @@ class SocialPostService
     {
         $destination = $this->resolveDestination($sharer, $data);
 
-        return $this->posts->create([
+        $post = $this->posts->create([
             'user_id' => $sharer->id,
             'department_id' => $destination['department_id'],
             'wall_user_id' => $destination['wall_user_id'],
             'content' => $caption !== null ? $this->sanitizeContent($caption) : null,
             'shared_from_post_id' => $original->id,
         ]);
+
+        $this->mentions->notifyPost($sharer, $post);
+
+        return $post;
     }
 
     /**
