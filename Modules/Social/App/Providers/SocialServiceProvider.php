@@ -5,8 +5,10 @@ namespace Modules\Social\App\Providers;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Modules\Social\App\Repositories\Contracts\SocialCommentRepositoryInterface;
+use Modules\Social\App\Repositories\Contracts\SocialPollRepositoryInterface;
 use Modules\Social\App\Repositories\Contracts\SocialPostRepositoryInterface;
 use Modules\Social\App\Repositories\SocialCommentRepository;
+use Modules\Social\App\Repositories\SocialPollRepository;
 use Modules\Social\App\Repositories\SocialPostRepository;
 
 class SocialServiceProvider extends ServiceProvider
@@ -20,6 +22,10 @@ class SocialServiceProvider extends ServiceProvider
         $this->app->bind(
             SocialCommentRepositoryInterface::class,
             SocialCommentRepository::class,
+        );
+        $this->app->bind(
+            SocialPollRepositoryInterface::class,
+            SocialPollRepository::class,
         );
     }
 

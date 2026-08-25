@@ -4,23 +4,47 @@ namespace Modules\Social\App\Services;
 
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Services\PermissionService;
+use Modules\Identity\App\Services\ViewAsService;
 use Modules\Social\App\Models\SocialPost;
+use Modules\Social\App\Models\SocialPostLike;
 use Modules\Social\App\Repositories\Contracts\SocialPostRepositoryInterface;
 
 class SocialPostService
 {
+    public const PIN_SCOPE_COMPANY = 'company';
+
+    public const PIN_SCOPE_SYSTEM = 'system';
+
+    public const FEED_SCOPE_ALL = 'all';
+
+    public const FEED_SCOPE_MINE = 'mine';
+
+    public const FEED_SCOPE_REACTED = 'reacted';
+
+    public const POST_SCOPE_COMPANY = 'company';
+
+    public const POST_SCOPE_DEPARTMENT = 'department';
+
+    public const POST_SCOPE_PERSONAL = 'personal';
+
     public function __construct(
         private readonly SocialPostRepositoryInterface $posts,
         private readonly PermissionService $permissions,
         private readonly SocialContentSanitizer $sanitizer,
+        private readonly ViewAsService $viewAs,
+        private readonly UserRepositoryInterface $users,
+        private readonly SocialPollService $polls,
     ) {}
 
-    public function listFeed(User $viewer, int $perPage, int $page): array
+    public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null): array
     {
-        $paginator = $this->posts->paginate($perPage, $page);
+        $scope = $this->normalizeFeedScope($scope);
+        $paginator = $this->posts->paginate($perPage, $page, $scope, $viewer->id, $departmentId, $wallUserId);
 
         return [
             'posts' => collect($paginator->items())
@@ -32,12 +56,48 @@ class SocialPostService
         ];
     }
 
-    public function pinned(User $viewer, int $limit = 5): array
+    public function profileStats(User $user): array
     {
-        return $this->posts->pinned($limit)
+        return $this->posts->profileStats($user->id);
+    }
+
+    private function normalizeFeedScope(string $scope): string
+    {
+        return in_array($scope, [self::FEED_SCOPE_ALL, self::FEED_SCOPE_MINE, self::FEED_SCOPE_REACTED], true)
+            ? $scope
+            : self::FEED_SCOPE_ALL;
+    }
+
+    public function pinned(User $viewer, string $scope = self::PIN_SCOPE_COMPANY, int $limit = 5, ?int $departmentId = null, ?int $wallUserId = null): array
+    {
+        $scope = $this->normalizePinScope($scope);
+
+        return $this->posts->pinned($limit, $scope, $departmentId, $wallUserId)
             ->map(fn (SocialPost $post) => $this->present($post, $viewer))
             ->values()
             ->all();
+    }
+
+    public function wallProfile(int $userId, User $viewer): ?array
+    {
+        $user = $this->users->findById($userId);
+        if ($user === null) {
+            return null;
+        }
+
+        $stats = $this->posts->profileStats($user->id);
+
+        return [
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'avatar_url' => $user->avatar_url,
+                'department' => $user->department?->name,
+                'email' => (int) $user->id === (int) $viewer->id ? $user->email : null,
+            ],
+            'stats' => $stats,
+            'is_own' => (int) $user->id === (int) $viewer->id,
+        ];
     }
 
     /** Quyền kiểm duyệt của $viewer đối với bài viết của tác giả thuộc $authorDepartmentId. */
@@ -52,20 +112,65 @@ class SocialPostService
         return $this->permissions->allows($viewer, 'social.pin', 'department', $viewer->department_id);
     }
 
+    private function isActingSuperAdmin(User $viewer): bool
+    {
+        return ! $this->viewAs->isImpersonating() && $viewer->isSuperAdmin();
+    }
+
+    private function normalizePinScope(string $scope): string
+    {
+        return $scope === self::PIN_SCOPE_SYSTEM
+            ? self::PIN_SCOPE_SYSTEM
+            : self::PIN_SCOPE_COMPANY;
+    }
+
     public function create(User $author, array $data, array $files = []): SocialPost
     {
-        $post = $this->posts->create([
-            'user_id' => $author->id,
-            'content' => isset($data['content']) ? $this->sanitizeContent($data['content']) : null,
-        ]);
+        $asSystem = (bool) ($data['as_system_announcement'] ?? false);
+        $destination = $this->resolveDestination($author, $data);
 
-        if ($files !== []) {
-            $post = $this->posts->update($post, [
-                'attachments' => $this->storeAttachments($post->id, $files),
+        if ($asSystem && ! $this->isActingSuperAdmin($author)) {
+            throw ValidationException::withMessages([
+                'as_system_announcement' => ['Chỉ người quản trị mới được đăng thông báo quan trọng.'],
             ]);
         }
 
-        return $post;
+        if ($asSystem && $destination['post_scope'] !== self::POST_SCOPE_COMPANY) {
+            throw ValidationException::withMessages([
+                'post_scope' => ['Thông báo quan trọng luôn đăng trên bảng tin chung.'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($author, $data, $files, $asSystem, $destination) {
+            $payload = [
+                'user_id' => $author->id,
+                'department_id' => $destination['department_id'],
+                'wall_user_id' => $destination['wall_user_id'],
+                'content' => isset($data['content']) ? $this->sanitizeContent($data['content']) : null,
+            ];
+
+            if ($asSystem) {
+                $payload['is_pinned'] = true;
+                $payload['pin_scope'] = self::PIN_SCOPE_SYSTEM;
+                $payload['pinned_by'] = $author->id;
+                $payload['pinned_at'] = now();
+            }
+
+            $post = $this->posts->create($payload);
+
+            if ($files !== []) {
+                $post = $this->posts->update($post, [
+                    'attachments' => $this->storeAttachments($post->id, $files),
+                ]);
+            }
+
+            if (isset($data['poll']) && is_array($data['poll'])) {
+                $this->polls->createForPost($post, $data['poll']);
+                $post = $this->posts->find($post->id) ?? $post;
+            }
+
+            return $post;
+        });
     }
 
     public function update(SocialPost $post, User $editor, array $data): SocialPost
@@ -76,9 +181,54 @@ class SocialPostService
             ]);
         }
 
-        return $this->posts->update($post, [
-            'content' => $this->sanitizeContent($data['content']),
+        $newContent = $this->sanitizeContent((string) ($data['content'] ?? ''));
+        $oldContent = (string) ($post->content ?? '');
+
+        if ($newContent === '' && $post->poll === null && ($post->attachments ?? []) === []) {
+            throw ValidationException::withMessages([
+                'content' => ['Nội dung bài viết không được để trống.'],
+            ]);
+        }
+
+        if ($newContent === $oldContent) {
+            return $post;
+        }
+
+        $this->posts->addRevision($post, [
+            'user_id' => $editor->id,
+            'content' => $oldContent === '' ? null : $oldContent,
+            'published_at' => $post->content_updated_at ?? $post->created_at ?? now(),
         ]);
+
+        return $this->posts->update($post, [
+            'content' => $newContent,
+            'content_updated_at' => now(),
+        ]);
+    }
+
+    public function revisionHistory(SocialPost $post): array
+    {
+        $currentPublishedAt = $post->content_updated_at ?? $post->created_at;
+
+        $versions = [
+            [
+                'id' => null,
+                'content' => $post->content,
+                'published_at' => $currentPublishedAt?->toIso8601String(),
+                'is_current' => true,
+            ],
+        ];
+
+        foreach ($this->posts->revisions($post) as $revision) {
+            $versions[] = [
+                'id' => $revision->id,
+                'content' => $revision->content,
+                'published_at' => $revision->published_at?->toIso8601String(),
+                'is_current' => false,
+            ];
+        }
+
+        return ['versions' => $versions];
     }
 
     public function delete(SocialPost $post): void
@@ -89,16 +239,89 @@ class SocialPostService
             }
         }
 
+        $this->polls->deleteImage($post->poll);
         $this->posts->delete($post);
     }
 
-    public function share(User $sharer, SocialPost $original, ?string $caption): SocialPost
+    public function share(User $sharer, SocialPost $original, ?string $caption, array $data = []): SocialPost
     {
+        $destination = $this->resolveDestination($sharer, $data);
+
         return $this->posts->create([
             'user_id' => $sharer->id,
+            'department_id' => $destination['department_id'],
+            'wall_user_id' => $destination['wall_user_id'],
             'content' => $caption !== null ? $this->sanitizeContent($caption) : null,
             'shared_from_post_id' => $original->id,
         ]);
+    }
+
+    /**
+     * @return array{post_scope: string, department_id: int|null, wall_user_id: int|null}
+     */
+    private function resolveDestination(User $actor, array $data): array
+    {
+        $postScope = $data['post_scope'] ?? self::POST_SCOPE_COMPANY;
+
+        if ($postScope === self::POST_SCOPE_PERSONAL) {
+            $wallUserId = isset($data['wall_user_id']) ? (int) $data['wall_user_id'] : $actor->id;
+            $wallUser = $this->users->findById($wallUserId);
+
+            if ($wallUser === null || ! $wallUser->isActive()) {
+                throw ValidationException::withMessages([
+                    'wall_user_id' => ['Không tìm thấy tường cá nhân này.'],
+                ]);
+            }
+
+            return [
+                'post_scope' => self::POST_SCOPE_PERSONAL,
+                'department_id' => null,
+                'wall_user_id' => $wallUser->id,
+            ];
+        }
+
+        if ($postScope === self::POST_SCOPE_DEPARTMENT) {
+            if ($actor->department_id === null) {
+                throw ValidationException::withMessages([
+                    'post_scope' => ['Bạn chưa thuộc phòng ban nào nên không thể đăng lên tường phòng ban.'],
+                ]);
+            }
+
+            return [
+                'post_scope' => self::POST_SCOPE_DEPARTMENT,
+                'department_id' => $actor->department_id,
+                'wall_user_id' => null,
+            ];
+        }
+
+        return [
+            'post_scope' => self::POST_SCOPE_COMPANY,
+            'department_id' => null,
+            'wall_user_id' => null,
+        ];
+    }
+
+    private function presentPostScope(SocialPost $post): string
+    {
+        if ($post->wall_user_id !== null) {
+            return self::POST_SCOPE_PERSONAL;
+        }
+
+        return $post->department_id === null ? self::POST_SCOPE_COMPANY : self::POST_SCOPE_DEPARTMENT;
+    }
+
+    private function presentUser(?User $user): ?array
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'avatar_url' => $user->avatar_url,
+            'department' => $user->department?->name,
+        ];
     }
 
     public function setReaction(SocialPost $post, User $user, string $type): array
@@ -111,10 +334,48 @@ class SocialPostService
         ];
     }
 
-    public function pin(SocialPost $post, User $actor): SocialPost
+    public function reactionUsers(SocialPost $post, ?string $type = null): array
     {
+        return [
+            'users' => $this->posts->reactionUsers($post, $type)
+                ->map(fn (SocialPostLike $like) => $this->presentReactionUser($like->user, $like->reaction_type))
+                ->filter()
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /** @return array{type: string, user: array{id: int, name: string, avatar_url: mixed, department: string|null}}|null */
+    private function presentReactionUser(?User $user, string $type): ?array
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        return [
+            'type' => $type,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'avatar_url' => $user->avatar_url,
+                'department' => $user->department?->name,
+            ],
+        ];
+    }
+
+    public function pin(SocialPost $post, User $actor, string $scope = self::PIN_SCOPE_COMPANY): SocialPost
+    {
+        $scope = $this->normalizePinScope($scope);
+
+        if ($scope === self::PIN_SCOPE_SYSTEM && ! $this->isActingSuperAdmin($actor)) {
+            throw ValidationException::withMessages([
+                'scope' => ['Chỉ người quản trị mới được đưa bài viết lên thông báo quan trọng.'],
+            ]);
+        }
+
         return $this->posts->update($post, [
             'is_pinned' => true,
+            'pin_scope' => $scope,
             'pinned_by' => $actor->id,
             'pinned_at' => now(),
         ]);
@@ -124,6 +385,7 @@ class SocialPostService
     {
         return $this->posts->update($post, [
             'is_pinned' => false,
+            'pin_scope' => null,
             'pinned_by' => null,
             'pinned_at' => null,
         ]);
@@ -140,13 +402,12 @@ class SocialPostService
                 'size' => $a['size'],
                 'url' => Storage::disk('public')->url($a['path']),
             ])->all(),
-            'author' => [
-                'id' => $post->user->id,
-                'name' => $post->user->name,
-                'avatar_url' => $post->user->avatar_url,
-                'department' => $post->user->department?->name,
-            ],
+            'author' => $this->presentUser($post->user),
+            'post_scope' => $this->presentPostScope($post),
+            'department' => $post->department?->name,
+            'wall_user' => $post->wall_user_id !== null ? $this->presentUser($post->wallUser) : null,
             'is_pinned' => $post->is_pinned,
+            'pin_scope' => $post->is_pinned ? ($post->pin_scope ?: self::PIN_SCOPE_COMPANY) : null,
             'pinned_by' => $post->pinnedBy?->name,
             'shared_from' => $post->sharedFrom ? [
                 'id' => $post->sharedFrom->id,
@@ -163,8 +424,15 @@ class SocialPostService
             'can_edit' => (int) $post->user_id === (int) $viewer->id,
             'can_delete' => (int) $post->user_id === (int) $viewer->id
                 || $this->canModerate($viewer, $post->user->department_id),
-            'can_pin' => $this->canPin($viewer),
+            'can_pin' => $this->canPin($viewer) && $post->wall_user_id === null,
+            'is_edited' => $post->content_updated_at !== null,
+            'edited_at' => $post->content_updated_at?->toIso8601String(),
             'created_at' => $post->created_at?->toIso8601String(),
+            'poll' => $this->polls->present(
+                $post->poll,
+                $viewer,
+                (int) $post->user_id === (int) $viewer->id,
+            ),
         ];
     }
 

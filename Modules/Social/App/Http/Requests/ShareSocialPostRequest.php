@@ -15,6 +15,8 @@ class ShareSocialPostRequest extends FormRequest
     {
         return [
             'caption' => ['nullable', 'string', 'max:5000'],
+            'post_scope' => ['sometimes', 'in:company,department,personal'],
+            'wall_user_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
         ];
     }
 

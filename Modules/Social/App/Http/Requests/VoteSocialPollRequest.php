@@ -4,7 +4,7 @@ namespace Modules\Social\App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateSocialPostRequest extends FormRequest
+class VoteSocialPollRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -14,14 +14,14 @@ class UpdateSocialPostRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'content' => ['nullable', 'string', 'max:8000'],
+            'option_id' => ['required', 'integer'],
         ];
     }
 
     public function messages(): array
     {
         return [
-            'content.max' => 'Nội dung bài viết không được vượt quá 8000 ký tự.',
+            'option_id.required' => 'Vui lòng chọn 1 phương án.',
         ];
     }
 }

@@ -460,7 +460,7 @@ return [
         // ---------- Mạng nội bộ (social) ----------
         'social.*' => ['label' => 'Toàn bộ bảng tin', 'module' => 'Mạng nội bộ', 'description' => 'Toàn quyền quản lý bảng tin nội bộ'],
         'social.moderate' => ['label' => 'Kiểm duyệt bảng tin', 'module' => 'Mạng nội bộ', 'description' => 'Xoá bài viết/bình luận của người khác trong phòng ban quản lý', 'active' => true],
-        'social.pin' => ['label' => 'Ghim thông báo', 'module' => 'Mạng nội bộ', 'description' => 'Ghim bài viết lên panel Thông báo công ty', 'active' => true],
+        'social.pin' => ['label' => 'Ghim thông báo', 'module' => 'Mạng nội bộ', 'description' => 'Đưa bài viết lên bảng Thông báo công ty. Thông báo quan trọng do người quản trị đăng riêng.', 'active' => true],
 
     ],
 

@@ -11,6 +11,7 @@ use Modules\Social\App\Http\Requests\SetSocialReactionRequest;
 use Modules\Social\App\Http\Requests\ShareSocialPostRequest;
 use Modules\Social\App\Http\Requests\StoreSocialPostRequest;
 use Modules\Social\App\Http\Requests\UpdateSocialPostRequest;
+use Modules\Social\App\Models\SocialPostLike;
 use Modules\Social\App\Repositories\Contracts\SocialPostRepositoryInterface;
 use Modules\Social\App\Services\SocialPostService;
 
@@ -28,15 +29,97 @@ class SocialPostController extends Controller
         $perPage = min((int) $request->query('per_page', 10), 30);
         $page = max((int) $request->query('page', 1), 1);
 
+        $scope = $request->query('scope', 'all');
+        $wall = $this->resolveWall($request);
+
+        if ($wall === false) {
+            return response()->json(['message' => 'Bạn chưa thuộc phòng ban nào.'], 422);
+        }
+
         return response()->json(
-            $this->service->listFeed($request->user(), $perPage, $page)
+            $this->service->listFeed(
+                $request->user(),
+                $perPage,
+                $page,
+                is_string($scope) ? $scope : 'all',
+                $wall['department_id'],
+                $wall['wall_user_id'],
+            )
         );
+    }
+
+    /**
+     * Suy ra tường từ query/body `post_scope` ('company'|'department'|'personal').
+     * Trả về false nếu yêu cầu tường phòng ban nhưng user không thuộc phòng ban nào.
+     *
+     * @return array{department_id: int|null, wall_user_id: int|null}|false
+     */
+    private function resolveWall(Request $request): array|false
+    {
+        $postScope = $request->query('post_scope', $request->input('post_scope', 'company'));
+
+        if ($postScope === 'department') {
+            $departmentId = $request->user()->department_id;
+
+            return $departmentId === null
+                ? false
+                : ['department_id' => $departmentId, 'wall_user_id' => null];
+        }
+
+        if ($postScope === 'personal') {
+            $wallUserId = $request->query('wall_user_id', $request->input('wall_user_id', $request->user()->id));
+
+            return [
+                'department_id' => null,
+                'wall_user_id' => (int) $wallUserId,
+            ];
+        }
+
+        return ['department_id' => null, 'wall_user_id' => null];
+    }
+
+    public function wall(Request $request, int $userId): JsonResponse
+    {
+        $profile = $this->service->wallProfile($userId, $request->user());
+        if (! $profile) {
+            return response()->json(['message' => 'Không tìm thấy người dùng.'], 404);
+        }
+
+        return response()->json($profile);
+    }
+
+    public function meStats(Request $request): JsonResponse
+    {
+        return response()->json($this->service->profileStats($request->user()));
+    }
+
+    public function revisions(Request $request, int $postId): JsonResponse
+    {
+        $post = $this->posts->find($postId);
+        if (! $post) {
+            return response()->json(['message' => 'Không tìm thấy bài viết.'], 404);
+        }
+
+        return response()->json($this->service->revisionHistory($post));
     }
 
     public function pinned(Request $request): JsonResponse
     {
+        $scope = $request->query('scope', 'company');
+        $wall = $this->resolveWall($request);
+
+        if ($wall === false) {
+            return response()->json(['message' => 'Bạn chưa thuộc phòng ban nào.'], 422);
+        }
+
         return response()->json([
-            'posts' => $this->service->pinned($request->user()),
+            'posts' => $this->service->pinned(
+                $request->user(),
+                is_string($scope) ? $scope : 'company',
+                5,
+                $wall['department_id'],
+                $wall['wall_user_id'],
+            ),
         ]);
     }
 
@@ -60,7 +143,18 @@ class SocialPostController extends Controller
             return response()->json(['message' => 'Không tìm thấy bài viết.'], 404);
         }
 
+        $previousContent = (string) ($post->content ?? '');
         $post = $this->service->update($post, $request->user(), $request->validated());
+
+        if ((string) ($post->content ?? '') !== $previousContent) {
+            $this->activityLogs->record(
+                'social_post.update',
+                'Sửa bài viết "'.mb_substr(strip_tags((string) $post->content), 0, 60).'"',
+                $request->user(),
+                'social_post',
+                $post->id,
+            );
+        }
 
         return response()->json(['post' => $this->service->present($post, $request->user())]);
     }
@@ -102,7 +196,12 @@ class SocialPostController extends Controller
             return response()->json(['message' => 'Không tìm thấy bài viết.'], 404);
         }
 
-        $post = $this->service->share($request->user(), $original, $request->validated()['caption'] ?? null);
+        $post = $this->service->share(
+            $request->user(),
+            $original,
+            $request->validated()['caption'] ?? null,
+            $request->validated(),
+        );
 
         return response()->json([
             'post' => $this->service->present($post, $request->user()),
@@ -121,6 +220,35 @@ class SocialPostController extends Controller
         );
     }
 
+    public function reactions(Request $request, int $postId): JsonResponse
+    {
+        $post = $this->posts->find($postId);
+        if (! $post) {
+            return response()->json(['message' => 'Không tìm thấy bài viết.'], 404);
+        }
+
+        $type = $this->validatedReactionType($request->query('type'));
+        if ($type === false) {
+            return response()->json(['message' => 'Loại cảm xúc không hợp lệ.'], 422);
+        }
+
+        return response()->json($this->service->reactionUsers($post, $type));
+    }
+
+    /** @return string|null|false  false = type không hợp lệ */
+    private function validatedReactionType(mixed $type): string|null|false
+    {
+        if ($type === null || $type === '') {
+            return null;
+        }
+
+        if (! is_string($type) || ! in_array($type, SocialPostLike::REACTION_TYPES, true)) {
+            return false;
+        }
+
+        return $type;
+    }
+
     public function pin(Request $request, int $postId): JsonResponse
     {
         $post = $this->posts->find($postId);
@@ -132,11 +260,16 @@ class SocialPostController extends Controller
             return response()->json(['message' => 'Bạn không có quyền ghim bài viết.'], 403);
         }
 
-        $post = $this->service->pin($post, $request->user());
+        $scope = $request->input('scope', 'company');
+        $scope = is_string($scope) ? $scope : 'company';
+
+        $post = $this->service->pin($post, $request->user(), $scope);
+
+        $destination = $post->pin_scope === 'system' ? 'Thông báo quan trọng' : 'Thông báo công ty';
 
         $this->activityLogs->record(
             'social_post.pin',
-            'Ghim bài viết "'.mb_substr((string) $post->content, 0, 60).'" lên Thông báo công ty',
+            'Ghim bài viết "'.mb_substr((string) $post->content, 0, 60).'" lên '.$destination,
             $request->user(),
             'social_post',
             $post->id,

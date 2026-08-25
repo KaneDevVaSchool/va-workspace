@@ -5,6 +5,7 @@ namespace Modules\Social\App\Repositories;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Modules\Social\App\Models\SocialPost;
+use Modules\Social\App\Models\SocialPostComment;
 use Modules\Social\App\Models\SocialPostLike;
 use Modules\Social\App\Repositories\Contracts\SocialPostRepositoryInterface;
 
@@ -13,25 +14,78 @@ class SocialPostRepository implements SocialPostRepositoryInterface
     private function baseQuery()
     {
         return SocialPost::query()
-            ->with(['user', 'pinnedBy', 'sharedFrom.user'])
+            ->with([
+                'user.department',
+                'pinnedBy',
+                'sharedFrom.user',
+                'wallUser.department',
+                'poll.options' => fn ($query) => $query
+                    ->withCount('votes')
+                    ->orderBy('position')
+                    ->orderBy('id'),
+            ])
             ->withCount(['comments']);
     }
 
-    public function paginate(int $perPage, int $page): LengthAwarePaginator
+    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null): LengthAwarePaginator
     {
-        return $this->baseQuery()
+        $query = $this->baseQuery();
+        $this->applyWall($query, $departmentId, $wallUserId);
+
+        if ($userId !== null && $scope === 'mine') {
+            $query->where('user_id', $userId);
+        }
+
+        if ($userId !== null && $scope === 'reacted') {
+            $query->whereHas('likes', fn ($likes) => $likes->where('user_id', $userId));
+        }
+
+        return $query
             ->orderByDesc('is_pinned')
             ->orderByDesc('created_at')
             ->paginate($perPage, ['*'], 'page', $page);
     }
 
-    public function pinned(int $limit): Collection
+    public function profileStats(int $userId): array
     {
-        return $this->baseQuery()
+        $postIds = SocialPost::query()->where('user_id', $userId)->select('id');
+
+        return [
+            'posts_count' => SocialPost::query()->where('user_id', $userId)->count(),
+            'reactions_received' => SocialPostLike::query()->whereIn('post_id', $postIds)->count(),
+            'comments_count' => SocialPostComment::query()->where('user_id', $userId)->count(),
+        ];
+    }
+
+    public function pinned(int $limit, string $scope = 'company', ?int $departmentId = null, ?int $wallUserId = null): Collection
+    {
+        $query = $this->baseQuery()
             ->where('is_pinned', true)
+            ->where('pin_scope', $scope);
+
+        $this->applyWall($query, $departmentId, $wallUserId);
+
+        return $query
             ->orderByDesc('pinned_at')
             ->limit($limit)
             ->get();
+    }
+
+    private function applyWall($query, ?int $departmentId, ?int $wallUserId): void
+    {
+        if ($wallUserId !== null) {
+            $query->where('wall_user_id', $wallUserId)->whereNull('department_id');
+
+            return;
+        }
+
+        if ($departmentId !== null) {
+            $query->where('department_id', $departmentId)->whereNull('wall_user_id');
+
+            return;
+        }
+
+        $query->whereNull('department_id')->whereNull('wall_user_id');
     }
 
     public function find(int $id): ?SocialPost
@@ -56,6 +110,19 @@ class SocialPostRepository implements SocialPostRepositoryInterface
     public function delete(SocialPost $post): void
     {
         $post->delete();
+    }
+
+    public function addRevision(SocialPost $post, array $data): void
+    {
+        $post->revisions()->create($data);
+    }
+
+    public function revisions(SocialPost $post): Collection
+    {
+        return $post->revisions()
+            ->orderByDesc('published_at')
+            ->orderByDesc('id')
+            ->get();
     }
 
     public function setReaction(SocialPost $post, int $userId, string $type): array
@@ -96,5 +163,19 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         $summary['total'] = array_sum($summary);
 
         return $summary;
+    }
+
+    public function reactionUsers(SocialPost $post, ?string $type = null): Collection
+    {
+        $query = $post->likes()
+            ->with(['user.department'])
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id');
+
+        if ($type !== null) {
+            $query->where('reaction_type', $type);
+        }
+
+        return $query->get();
     }
 }
