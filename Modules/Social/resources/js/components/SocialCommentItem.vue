@@ -8,6 +8,7 @@ import { REACTIONS, reactionByType } from '../constants/reactions.js';
 import { formatSocialTime } from '../lib/formatSocialTime.js';
 import { applyOptimistic, cloneReactions, useReactionAction } from '../lib/useReactionAction.js';
 import { sanitizeSocialHtml } from '../lib/sanitizeSocialHtml.js';
+import { vSocialStickers } from '../lib/socialStickers.js';
 import { mentionUserIdFromEvent } from '../lib/mentionClick.js';
 import SocialCommentComposer from './SocialCommentComposer.vue';
 import SocialImageGrid from './SocialImageGrid.vue';
@@ -167,6 +168,7 @@ async function confirmRemove() {
             v-if="sanitizedContent"
             class="comment__content"
             v-html="sanitizedContent"
+            v-social-stickers
             @click="onMentionClick"
           ></div>
 

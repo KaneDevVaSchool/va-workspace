@@ -1,0 +1,115 @@
+.social-sticker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 7rem;
+  height: 7rem;
+  vertical-align: middle;
+  line-height: 0;
+  user-select: none;
+}
+
+.social-sticker[data-node-view-wrapper] {
+  display: inline-flex;
+}
+
+.social-sticker__fallback {
+  font-size: 4.5rem;
+  line-height: 1;
+}
+
+.social-sticker__host {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.social-sticker__anim {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.social-sticker__anim svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.social-sticker--ready .social-sticker__fallback {
+  display: none;
+}
+
+.social-sticker--picker,
+.emoji-picker__sticker .social-sticker {
+  width: 3.25rem;
+  height: 3.25rem;
+}
+
+.social-sticker--picker .social-sticker__fallback,
+.emoji-picker__sticker .social-sticker__fallback {
+  font-size: 2.1rem;
+}
+
+.comment__content .social-sticker {
+  width: 5.5rem;
+  height: 5.5rem;
+}
+
+.comment__content .social-sticker__fallback {
+  font-size: 3.5rem;
+}
+
+.post-editor__content .social-sticker {
+  width: 5.75rem;
+  height: 5.75rem;
+}
+
+.post-editor--compact .post-editor__content .social-sticker {
+  width: 4.5rem;
+  height: 4.5rem;
+}
+
+.post-card__content p:has(.social-sticker):has(:not(.social-sticker)) .social-sticker,
+.comment__content p:has(.social-sticker):has(:not(.social-sticker)) .social-sticker,
+.post-editor__content p:has(.social-sticker):has(:not(.social-sticker)) .social-sticker {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.post-card__content p:has(.social-sticker):has(:not(.social-sticker)) .social-sticker__fallback,
+.comment__content p:has(.social-sticker):has(:not(.social-sticker)) .social-sticker__fallback,
+.post-editor__content p:has(.social-sticker):has(:not(.social-sticker)) .social-sticker__fallback {
+  font-size: 1.5rem;
+}
+
+.social-sticker--selected {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
+
+@media (max-width: 480px) {
+  .social-sticker {
+    width: 5.75rem;
+    height: 5.75rem;
+  }
+
+  .social-sticker__fallback {
+    font-size: 3.5rem;
+  }
+
+  .comment__content .social-sticker {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .social-sticker__anim svg {
+    animation: none;
+  }
+}

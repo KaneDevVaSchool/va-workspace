@@ -12,7 +12,7 @@ class SocialContentSanitizer
     public function __construct()
     {
         $config = HTMLPurifier_Config::createDefault();
-        $config->set('HTML.Allowed', 'p,br,strong,b,em,i,u,h1,h2,h3,ul,ol,li,a[href],span[style|class|data-mention-id]');
+        $config->set('HTML.Allowed', 'p,br,strong,b,em,i,u,h1,h2,h3,ul,ol,li,a[href],span[style|class|data-mention-id|data-sticker]');
         $config->set('CSS.AllowedProperties', 'color,font-size');
         $config->set('URI.AllowedSchemes', ['http' => true, 'https' => true, 'mailto' => true]);
         $config->set('HTML.TargetBlank', true);
@@ -24,11 +24,12 @@ class SocialContentSanitizer
         }
 
         $config->set('Cache.SerializerPath', $cachePath);
-        $config->set('HTML.DefinitionID', 'social-content-mentions');
+        $config->set('HTML.DefinitionID', 'social-content-stickers');
         $config->set('HTML.DefinitionRev', 1);
 
         if ($def = $config->maybeGetRawHTMLDefinition()) {
             $def->addAttribute('span', 'data-mention-id', 'Number');
+            $def->addAttribute('span', 'data-sticker', 'Text');
         }
 
         $this->purifier = new HTMLPurifier($config);
@@ -36,7 +37,30 @@ class SocialContentSanitizer
 
     public function sanitize(string $html): string
     {
-        return $this->purifier->purify($html);
+        return $this->filterStickerIds($this->purifier->purify($html));
+    }
+
+    private function filterStickerIds(string $html): string
+    {
+        return (string) preg_replace_callback(
+            '/<span\b([^>]*)>/i',
+            function (array $match): string {
+                $attrs = $match[1];
+                if (! preg_match('/\sdata-sticker=(["\'])([^"\']*)\1/i', $attrs, $idMatch)) {
+                    return $match[0];
+                }
+
+                $id = strtolower($idMatch[2]);
+                if (! preg_match('/^[0-9a-f]{2,8}(?:_[0-9a-f]{2,8}){0,12}$/', $id)) {
+                    $attrs = preg_replace('/\sdata-sticker=(["\'])([^"\']*)\1/i', '', $attrs) ?? $attrs;
+
+                    return '<span'.$attrs.'>';
+                }
+
+                return '<span'.$attrs.'>';
+            },
+            $html
+        );
     }
 
     /**

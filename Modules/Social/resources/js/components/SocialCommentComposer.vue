@@ -3,8 +3,10 @@ import { computed, nextTick, onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
+import { MAX_COMMENT_ATTACHMENTS } from '../constants/attachments.js';
 import SocialEmojiPicker from './SocialEmojiPicker.vue';
 import SocialPostEditor from './SocialPostEditor.vue';
+import SocialUploadCards from './SocialUploadCards.vue';
 
 const props = defineProps({
   postId: { type: Number, required: true },
@@ -23,11 +25,12 @@ const content = ref('');
 const editorEmpty = ref(true);
 const files = ref([]);
 const submitting = ref(false);
-const emojiOpen = ref(false);
+const pickerOpen = ref(false);
+const pickerPanel = ref('emoji');
 const expanded = ref(props.autoExpand || Boolean(props.mentionedUser));
 const fileInput = ref(null);
 const editorRef = ref(null);
-const emojiWrap = ref(null);
+const pickerWrap = ref(null);
 
 const avatarUrl = computed(() => auth.user?.avatar_url ?? null);
 const authorName = computed(() => auth.user?.name ?? '');
@@ -55,7 +58,7 @@ async function expand() {
 function resetDraft() {
   content.value = '';
   files.value = [];
-  emojiOpen.value = false;
+  pickerOpen.value = false;
 }
 
 function closeComposer() {
@@ -75,10 +78,29 @@ function insertEmoji(emoji) {
   editorRef.value?.insertContent(emoji);
 }
 
+function openPicker(panel) {
+  if (pickerOpen.value && pickerPanel.value === panel) {
+    pickerOpen.value = false;
+    return;
+  }
+  pickerPanel.value = panel;
+  pickerOpen.value = true;
+}
+
+async function insertSticker(sticker) {
+  const sendImmediately = editorEmpty.value && files.value.length === 0;
+  editorRef.value?.insertSticker(sticker);
+  pickerOpen.value = false;
+  if (sendImmediately) {
+    await nextTick();
+    submit();
+  }
+}
+
 function onFilesChosen(event) {
   const chosen = Array.from(event.target.files ?? []);
-  if (files.value.length + chosen.length > 5) {
-    showClientToast('error', 'Chỉ được đính kèm tối đa 5 tệp mỗi bình luận.');
+  if (files.value.length + chosen.length > MAX_COMMENT_ATTACHMENTS) {
+    showClientToast('error', `Chỉ được đính kèm tối đa ${MAX_COMMENT_ATTACHMENTS} tệp mỗi bình luận.`);
     return;
   }
   files.value = [...files.value, ...chosen];
@@ -87,10 +109,6 @@ function onFilesChosen(event) {
 
 function removeFile(index) {
   files.value = files.value.filter((_, i) => i !== index);
-}
-
-function isImageFile(file) {
-  return file.type.startsWith('image/');
 }
 
 function canSubmit() {
@@ -166,38 +184,44 @@ async function submit() {
         @close="closeComposer"
       />
 
-      <div v-if="files.length > 0" class="comment-composer__files">
-        <div v-for="(file, index) in files" :key="index" class="comment-composer__file-chip">
-          <AppIcon :name="isImageFile(file) ? 'fileText' : 'paperclip'" :size="14" />
-          <span class="comment-composer__file-name">{{ file.name }}</span>
-          <button
-            type="button"
-            class="comment-composer__file-remove"
-            aria-label="Bỏ tệp đính kèm"
-            @click="removeFile(index)"
-          >
-            <AppIcon name="close" :size="14" />
-          </button>
-        </div>
-      </div>
+      <SocialUploadCards
+        v-if="files.length > 0"
+        compact
+        :files="files"
+        @remove="removeFile"
+      />
 
       <div class="comment-composer__actions">
         <div class="comment-composer__actions-left">
-          <div ref="emojiWrap" class="comment-composer__emoji-wrap">
+          <div ref="pickerWrap" class="comment-composer__emoji-wrap">
             <button
               type="button"
               class="comment-composer__tool"
+              :class="{ 'comment-composer__tool--on': pickerOpen && pickerPanel === 'emoji' }"
               aria-label="Chèn emoji"
-              @click="emojiOpen = !emojiOpen"
+              @click="openPicker('emoji')"
             >
               😊
               <span>Emoji</span>
             </button>
+            <button
+              type="button"
+              class="comment-composer__tool"
+              :class="{ 'comment-composer__tool--on': pickerOpen && pickerPanel === 'sticker' }"
+              aria-label="Chèn sticker động"
+              @click="openPicker('sticker')"
+            >
+              <AppIcon name="sticker" :size="16" />
+              <span>Sticker</span>
+            </button>
             <SocialEmojiPicker
-              v-if="emojiOpen"
-              :anchor="emojiWrap"
+              v-if="pickerOpen"
+              :anchor="pickerWrap"
+              :panel="pickerPanel"
+              @update:panel="pickerPanel = $event"
               @pick="insertEmoji"
-              @close="emojiOpen = false"
+              @pick-sticker="insertSticker"
+              @close="pickerOpen = false"
             />
           </div>
 
@@ -298,39 +322,6 @@ async function submit() {
   color: var(--color-text);
 }
 
-.comment-composer__files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.comment-composer__file-chip {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  background: var(--color-surface-muted);
-  border-radius: var(--radius-md);
-  padding: var(--space-1) var(--space-2);
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-}
-
-.comment-composer__file-name {
-  max-width: 10rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.comment-composer__file-remove {
-  display: flex;
-  align-items: center;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--color-text-muted);
-}
-
 .comment-composer__actions {
   display: flex;
   align-items: center;
@@ -346,7 +337,12 @@ async function submit() {
 }
 
 .comment-composer__emoji-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
   position: relative;
+  flex-shrink: 0;
 }
 
 .comment-composer__tool {
@@ -366,6 +362,11 @@ async function submit() {
 
 .comment-composer__tool:hover {
   background: var(--color-surface-muted);
+}
+
+.comment-composer__tool--on {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
 }
 
 .comment-composer__file-input {

@@ -1,13 +1,13 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
-import { MAX_POST_ATTACHMENTS, VISIBLE_IMAGE_LIMIT } from '../constants/attachments.js';
+import { MAX_POST_ATTACHMENTS } from '../constants/attachments.js';
 import SocialEmojiPicker from './SocialEmojiPicker.vue';
-import SocialImageGrid from './SocialImageGrid.vue';
 import SocialPollDialog from './SocialPollDialog.vue';
 import SocialPostEditor from './SocialPostEditor.vue';
+import SocialUploadCards from './SocialUploadCards.vue';
 
 const props = defineProps({
   authorAvatarUrl: { type: String, default: null },
@@ -25,13 +25,13 @@ const auth = useAuthStore();
 const content = ref('');
 const editorEmpty = ref(true);
 const files = ref([]);
-const previewUrls = ref([]);
 const submitting = ref(false);
 const expanded = ref(false);
 const fileInput = ref(null);
 const editorRef = ref(null);
-const emojiPickerOpen = ref(false);
-const emojiWrap = ref(null);
+const pickerOpen = ref(false);
+const pickerPanel = ref('emoji');
+const pickerWrap = ref(null);
 const asSystemAnnouncement = ref(false);
 const postScope = ref(props.defaultScope);
 const pollDialogOpen = ref(false);
@@ -50,7 +50,10 @@ async function expand(options = {}) {
   expanded.value = true;
   await nextTick();
   if (options.openFiles) fileInput.value?.click();
-  if (options.openEmoji) emojiPickerOpen.value = true;
+  if (options.openPicker) {
+    pickerPanel.value = options.openPicker;
+    pickerOpen.value = true;
+  }
 }
 
 function onAttachClick() {
@@ -61,12 +64,25 @@ function onAttachClick() {
   fileInput.value?.click();
 }
 
-function onEmojiClick() {
+function openPicker(panel) {
   if (!expanded.value) {
-    expand({ openEmoji: true });
+    expand({ openPicker: panel });
     return;
   }
-  emojiPickerOpen.value = !emojiPickerOpen.value;
+  if (pickerOpen.value && pickerPanel.value === panel) {
+    pickerOpen.value = false;
+    return;
+  }
+  pickerPanel.value = panel;
+  pickerOpen.value = true;
+}
+
+function onEmojiClick() {
+  openPicker('emoji');
+}
+
+function onStickerClick() {
+  openPicker('sticker');
 }
 
 function onPollClick() {
@@ -82,16 +98,14 @@ function insertEmoji(emoji) {
   editorRef.value?.insertContent(emoji);
 }
 
-function revokePreviews() {
-  previewUrls.value.forEach((url) => URL.revokeObjectURL(url));
-  previewUrls.value = [];
+function insertSticker(sticker) {
+  editorRef.value?.insertSticker(sticker);
 }
 
 function closeComposer() {
   content.value = '';
   files.value = [];
-  revokePreviews();
-  emojiPickerOpen.value = false;
+  pickerOpen.value = false;
   asSystemAnnouncement.value = false;
   postScope.value = props.defaultScope;
   expanded.value = false;
@@ -109,41 +123,11 @@ function onFilesChosen(event) {
     return;
   }
   files.value = [...files.value, ...chosen];
-  previewUrls.value = [
-    ...previewUrls.value,
-    ...chosen.map((file) => (isImageFile(file) ? URL.createObjectURL(file) : '')),
-  ];
   event.target.value = '';
 }
 
 function removeFile(index) {
-  const url = previewUrls.value[index];
-  if (url) URL.revokeObjectURL(url);
   files.value = files.value.filter((_, i) => i !== index);
-  previewUrls.value = previewUrls.value.filter((_, i) => i !== index);
-}
-
-function isImageFile(file) {
-  return file.type.startsWith('image/');
-}
-
-const imagePreviews = computed(() =>
-  files.value
-    .map((file, index) => ({ file, index, url: previewUrls.value[index], name: file.name }))
-    .filter((item) => item.url),
-);
-
-const extraImagePreviews = computed(() => imagePreviews.value.slice(VISIBLE_IMAGE_LIMIT));
-
-const otherFiles = computed(() =>
-  files.value
-    .map((file, index) => ({ file, index, name: file.name }))
-    .filter((item) => !isImageFile(item.file)),
-);
-
-function removeImagePreview(imageIndex) {
-  const item = imagePreviews.value[imageIndex];
-  if (item) removeFile(item.index);
 }
 
 async function submit() {
@@ -173,8 +157,7 @@ async function submit() {
     emit('posted', data.post);
     content.value = '';
     files.value = [];
-    revokePreviews();
-    emojiPickerOpen.value = false;
+    pickerOpen.value = false;
     asSystemAnnouncement.value = false;
     postScope.value = props.defaultScope;
     expanded.value = false;
@@ -200,10 +183,6 @@ async function submit() {
 }
 
 defineExpose({ expand });
-
-onBeforeUnmount(() => {
-  revokePreviews();
-});
 </script>
 
 <template>
@@ -247,41 +226,11 @@ onBeforeUnmount(() => {
         @close="closeComposer"
       />
 
-      <div v-if="imagePreviews.length > 0" class="composer__images">
-        <SocialImageGrid
-          compact
-          removable
-          :images="imagePreviews"
-          @remove="removeImagePreview"
-        />
-      </div>
-
-      <div v-if="otherFiles.length > 0 || extraImagePreviews.length > 0" class="composer__files">
-        <div v-for="item in extraImagePreviews" :key="`img-${item.index}`" class="composer__file-chip">
-          <AppIcon name="fileText" :size="14" />
-          <span class="composer__file-name">{{ item.name }}</span>
-          <button
-            type="button"
-            class="composer__file-remove"
-            aria-label="Bỏ tệp đính kèm"
-            @click="removeFile(item.index)"
-          >
-            <AppIcon name="close" :size="14" />
-          </button>
-        </div>
-        <div v-for="item in otherFiles" :key="item.index" class="composer__file-chip">
-          <AppIcon name="paperclip" :size="14" />
-          <span class="composer__file-name">{{ item.name }}</span>
-          <button
-            type="button"
-            class="composer__file-remove"
-            aria-label="Bỏ tệp đính kèm"
-            @click="removeFile(item.index)"
-          >
-            <AppIcon name="close" :size="14" />
-          </button>
-        </div>
-      </div>
+      <SocialUploadCards
+        v-if="files.length > 0"
+        :files="files"
+        @remove="removeFile"
+      />
     </template>
 
     <div class="composer__actions">
@@ -299,21 +248,35 @@ onBeforeUnmount(() => {
           @change="onFilesChosen"
         />
 
-        <div ref="emojiWrap" class="composer__emoji-wrap">
+        <div ref="pickerWrap" class="composer__emoji-wrap">
           <button
             type="button"
             class="composer__attach-btn"
+            :class="{ 'composer__attach-btn--on': pickerOpen && pickerPanel === 'emoji' }"
             aria-label="Chèn emoji"
             @click="onEmojiClick"
           >
             <span class="composer__emoji-icon">😊</span>
             <span>Emoji</span>
           </button>
+          <button
+            type="button"
+            class="composer__attach-btn"
+            :class="{ 'composer__attach-btn--on': pickerOpen && pickerPanel === 'sticker' }"
+            aria-label="Chèn sticker động"
+            @click="onStickerClick"
+          >
+            <AppIcon name="sticker" :size="18" />
+            <span>Sticker</span>
+          </button>
           <SocialEmojiPicker
-            v-if="emojiPickerOpen"
-            :anchor="emojiWrap"
+            v-if="pickerOpen"
+            :anchor="pickerWrap"
+            :panel="pickerPanel"
+            @update:panel="pickerPanel = $event"
             @pick="insertEmoji"
-            @close="emojiPickerOpen = false"
+            @pick-sticker="insertSticker"
+            @close="pickerOpen = false"
           />
         </div>
 
@@ -437,43 +400,6 @@ onBeforeUnmount(() => {
   color: var(--color-text);
 }
 
-.composer__files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.composer__images {
-  min-width: 0;
-}
-
-.composer__file-chip {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  background: var(--color-surface-muted);
-  border-radius: var(--radius-md);
-  padding: var(--space-1) var(--space-2);
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-}
-
-.composer__file-name {
-  max-width: 12rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.composer__file-remove {
-  display: flex;
-  align-items: center;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--color-text-muted);
-}
-
 .composer__actions {
   display: flex;
   align-items: center;
@@ -492,7 +418,12 @@ onBeforeUnmount(() => {
 }
 
 .composer__emoji-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
   position: relative;
+  flex-shrink: 0;
 }
 
 .composer__emoji-icon {

@@ -1,22 +1,36 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { EMOJI_GROUPS } from '../constants/emojiGroups.js';
+import { STICKER_PACKS } from '../constants/stickers.js';
+import SocialAnimatedSticker from './SocialAnimatedSticker.vue';
 
 const props = defineProps({
   /** Nút/khung neo — click vào đây không đóng picker. */
   anchor: { type: Object, default: null },
+  panel: { type: String, default: 'emoji' },
 });
 
-const emit = defineEmits(['pick', 'close']);
+const emit = defineEmits(['pick', 'pick-sticker', 'close', 'update:panel']);
 
 const activeGroup = ref(EMOJI_GROUPS[0].key);
+const activePack = ref(STICKER_PACKS[0].key);
 const root = ref(null);
 const popupStyle = ref({});
 let pageBound = false;
 
+const isStickerPanel = computed(() => props.panel === 'sticker');
+
 function currentEmojis() {
   return EMOJI_GROUPS.find((g) => g.key === activeGroup.value)?.emojis ?? [];
+}
+
+function currentStickers() {
+  return STICKER_PACKS.find((g) => g.key === activePack.value)?.stickers ?? [];
+}
+
+function setPanel(panel) {
+  if (props.panel !== panel) emit('update:panel', panel);
 }
 
 function placePopup() {
@@ -111,10 +125,32 @@ onBeforeUnmount(() => {
       class="emoji-picker"
       :style="popupStyle"
       role="dialog"
-      aria-label="Chọn emoji"
+      :aria-label="isStickerPanel ? 'Chọn sticker động' : 'Chọn emoji'"
     >
+      <div class="emoji-picker__modes">
+        <button
+          type="button"
+          class="emoji-picker__mode"
+          :class="{ 'emoji-picker__mode--active': !isStickerPanel }"
+          @click="setPanel('emoji')"
+        >
+          Emoji
+        </button>
+        <button
+          type="button"
+          class="emoji-picker__mode"
+          :class="{ 'emoji-picker__mode--active': isStickerPanel }"
+          @click="setPanel('sticker')"
+        >
+          Sticker
+        </button>
+        <button type="button" class="emoji-picker__close" aria-label="Đóng bảng sticker" @click="emit('close')">
+          <AppIcon name="close" :size="14" />
+        </button>
+      </div>
+
       <div class="emoji-picker__tabs">
-        <div class="emoji-picker__tab-list">
+        <div v-if="!isStickerPanel" class="emoji-picker__tab-list hide-scrollbar">
           <button
             v-for="group in EMOJI_GROUPS"
             :key="group.key"
@@ -127,12 +163,22 @@ onBeforeUnmount(() => {
             {{ group.icon }}
           </button>
         </div>
-        <button type="button" class="emoji-picker__close" aria-label="Đóng bảng emoji" @click="emit('close')">
-          <AppIcon name="close" :size="14" />
-        </button>
+        <div v-else class="emoji-picker__tab-list hide-scrollbar">
+          <button
+            v-for="group in STICKER_PACKS"
+            :key="group.key"
+            type="button"
+            class="emoji-picker__tab"
+            :class="{ 'emoji-picker__tab--active': activePack === group.key }"
+            :aria-label="group.label"
+            @click="activePack = group.key"
+          >
+            {{ group.icon }}
+          </button>
+        </div>
       </div>
 
-      <div class="emoji-picker__grid">
+      <div v-if="!isStickerPanel" class="emoji-picker__grid hide-scrollbar">
         <button
           v-for="(emoji, index) in currentEmojis()"
           :key="index"
@@ -141,6 +187,18 @@ onBeforeUnmount(() => {
           @click="emit('pick', emoji)"
         >
           {{ emoji }}
+        </button>
+      </div>
+      <div v-else class="emoji-picker__stickers hide-scrollbar">
+        <button
+          v-for="sticker in currentStickers()"
+          :key="sticker.id"
+          type="button"
+          class="emoji-picker__sticker"
+          :aria-label="`Sticker ${sticker.emoji}`"
+          @click="emit('pick-sticker', sticker)"
+        >
+          <SocialAnimatedSticker hover-play :id="sticker.id" :emoji="sticker.emoji" />
         </button>
       </div>
     </div>
@@ -161,12 +219,43 @@ onBeforeUnmount(() => {
   padding: var(--space-3);
 }
 
+.emoji-picker__modes {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-2);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.emoji-picker__mode {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+}
+
+.emoji-picker__mode:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.emoji-picker__mode--active {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
 .emoji-picker__tabs {
   display: flex;
   align-items: center;
   gap: var(--space-1);
   flex-shrink: 0;
-  box-shadow: 0 1px 0 var(--color-border);
   padding-bottom: var(--space-2);
   margin-bottom: var(--space-2);
   min-width: 0;
@@ -175,10 +264,10 @@ onBeforeUnmount(() => {
 .emoji-picker__tab-list {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: var(--space-1);
   flex: 1;
   min-width: 0;
+  overflow-x: auto;
 }
 
 .emoji-picker__tab {
@@ -216,23 +305,50 @@ onBeforeUnmount(() => {
   overscroll-behavior: contain;
 }
 
-.emoji-picker__cell {
+.emoji-picker__stickers {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-1);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.emoji-picker__cell,
+.emoji-picker__sticker {
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 1.375rem;
-  padding: var(--space-1);
   border-radius: var(--radius-md);
   line-height: 1;
 }
 
-.emoji-picker__cell:hover {
+.emoji-picker__cell {
+  font-size: 1.375rem;
+  padding: var(--space-1);
+}
+
+.emoji-picker__sticker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+  min-height: 3.5rem;
+}
+
+.emoji-picker__cell:hover,
+.emoji-picker__sticker:hover {
   background: var(--color-surface-muted);
 }
 
 @media (max-width: 767px) {
   .emoji-picker__grid {
     grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+
+  .emoji-picker__stickers {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .emoji-picker__cell {
@@ -243,6 +359,10 @@ onBeforeUnmount(() => {
 @media (max-width: 480px) {
   .emoji-picker__grid {
     grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .emoji-picker__stickers {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 </style>

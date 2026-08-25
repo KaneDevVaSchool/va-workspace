@@ -10,6 +10,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import AppIcon from '@/components/AppIcon.vue';
 import { FontSize } from '../lib/tiptapFontSize.js';
 import { MentionNode } from '../lib/tiptapMention.js';
+import { StickerNode } from '../lib/tiptapSticker.js';
 import SocialMentionPicker from './SocialMentionPicker.vue';
 
 const props = defineProps({
@@ -159,6 +160,7 @@ editor = new Editor({
     Color,
     FontSize,
     MentionNode,
+    StickerNode,
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
     LinkExtension.configure({
       openOnClick: false,
@@ -196,11 +198,16 @@ function insertContent(text) {
   editor.chain().focus().insertContent(text).run();
 }
 
+function insertSticker(sticker) {
+  if (!sticker?.id) return;
+  editor.chain().focus().insertSticker({ id: sticker.id, emoji: sticker.emoji || '' }).run();
+}
+
 function focusEditor() {
   editor.chain().focus().run();
 }
 
-defineExpose({ insertContent, insertMention, focus: focusEditor });
+defineExpose({ insertContent, insertSticker, insertMention, focus: focusEditor });
 
 function toggleColorPicker() {
   sizePickerOpen.value = false;

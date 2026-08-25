@@ -6,6 +6,7 @@ import { REACTIONS, reactionByType } from '../constants/reactions.js';
 import { formatSocialTime } from '../lib/formatSocialTime.js';
 import { applyOptimistic, cloneReactions, useReactionAction } from '../lib/useReactionAction.js';
 import { sanitizeSocialHtml } from '../lib/sanitizeSocialHtml.js';
+import { vSocialStickers } from '../lib/socialStickers.js';
 import { mentionUserIdFromEvent } from '../lib/mentionClick.js';
 import SocialCommentList from './SocialCommentList.vue';
 import SocialImageGrid from './SocialImageGrid.vue';
@@ -349,6 +350,7 @@ async function saveEdit() {
       v-else-if="post.content"
       class="post-card__content"
       v-html="sanitizedContent"
+      v-social-stickers
       @click="onMentionClick"
     ></div>
 
@@ -374,6 +376,7 @@ async function saveEdit() {
             v-if="version.content"
             class="post-card__history-content"
             v-html="sanitizeSocialHtml(version.content)"
+            v-social-stickers
           ></div>
           <p v-else class="post-card__history-empty">Không có nội dung.</p>
         </li>
@@ -392,6 +395,7 @@ async function saveEdit() {
         v-if="post.shared_from.content"
         class="post-card__shared-content"
         v-html="sanitizedSharedContent"
+        v-social-stickers
         @click="onMentionClick"
       ></div>
     </div>
@@ -499,6 +503,7 @@ async function saveEdit() {
       :department-name="departmentName"
       :default-scope="postScope"
       :default-wall-user="postScope === 'personal' ? (post.wall_user ?? post.author) : null"
+      :default-group="post.group"
       @close="shareOpen = false"
       @shared="onShared"
     />
