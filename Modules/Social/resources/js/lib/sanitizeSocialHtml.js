@@ -2,7 +2,8 @@ import DOMPurify from 'dompurify';
 
 const SANITIZE_OPTIONS = {
   ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'span'],
-  ALLOWED_ATTR: ['href', 'style', 'target', 'rel', 'class'],
+  ALLOWED_ATTR: ['href', 'style', 'target', 'rel', 'class', 'data-mention-id'],
+  ADD_ATTR: ['data-mention-id'],
 };
 
 export function sanitizeSocialHtml(html) {

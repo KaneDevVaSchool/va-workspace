@@ -55,6 +55,7 @@ const PATHS = {
   percent: 'M19 5L5 19M6.5 3.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM17.5 14.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
   messageCircle: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
   paperclip: 'M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48',
+  user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   userPlus: 'M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M8.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM20 8v6M23 11h-6',
   barChart: 'M12 20V10M18 20V4M6 20v-4',
   dollarSign: 'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
@@ -77,6 +78,9 @@ const PATHS = {
   alignRight: 'M4 6h16M10 12h10M7 18h13',
   textColor: 'M6 15l4-10 4 10M7.5 11h5M4 20h16',
   unlink: 'M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71M5.17 11.75 3.46 13.46a5 5 0 0 0 7.07 7.07l1.71-1.71M8 8l8 8M2 2l20 20',
+  heart: 'M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z',
+  mail: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 6l-10 7L2 6',
+  listChecks: 'M11 6h11M11 12h11M11 18h11M3 6l1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17',
 };
 
 const STROKE_ICONS = [
@@ -119,6 +123,7 @@ const STROKE_ICONS = [
   'percent',
   'messageCircle',
   'paperclip',
+  'user',
   'userPlus',
   'barChart',
   'dollarSign',
@@ -141,6 +146,9 @@ const STROKE_ICONS = [
   'alignRight',
   'textColor',
   'unlink',
+  'heart',
+  'mail',
+  'listChecks',
 ];
 
 defineProps({

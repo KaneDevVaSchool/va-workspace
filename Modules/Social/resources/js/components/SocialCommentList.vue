@@ -8,7 +8,7 @@ const props = defineProps({
   canModerate: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['count-changed', 'close']);
+const emit = defineEmits(['count-changed', 'close', 'open-wall']);
 
 const comments = ref([]);
 const loading = ref(false);
@@ -52,6 +52,7 @@ onMounted(load);
         :can-moderate="canModerate"
         @deleted="onItemDeleted"
         @count-changed="onCountChanged"
+        @open-wall="emit('open-wall', $event)"
       />
     </div>
 
@@ -73,6 +74,7 @@ onMounted(load);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  overflow: visible;
 }
 
 .comments__list {

@@ -10,6 +10,7 @@ Route::middleware('auth')->prefix('social')->name('social.')->group(function () 
     Route::get('/walls/{userId}', [SocialPostController::class, 'wall']);
     Route::get('/posts', [SocialPostController::class, 'index']);
     Route::post('/posts', [SocialPostController::class, 'store']);
+    Route::get('/posts/{postId}', [SocialPostController::class, 'show']);
     Route::put('/posts/{postId}', [SocialPostController::class, 'update']);
     Route::get('/posts/{postId}/revisions', [SocialPostController::class, 'revisions']);
     Route::delete('/posts/{postId}', [SocialPostController::class, 'destroy']);

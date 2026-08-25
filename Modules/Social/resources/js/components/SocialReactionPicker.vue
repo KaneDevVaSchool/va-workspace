@@ -2,7 +2,7 @@
 import { nextTick, onBeforeUnmount, ref } from 'vue';
 import { REACTIONS } from '../constants/reactions.js';
 
-defineProps({
+const props = defineProps({
   myReaction: { type: String, default: null },
   compact: { type: Boolean, default: false },
 });
@@ -171,7 +171,7 @@ onBeforeUnmount(() => {
   <div
     ref="root"
     class="reaction-picker"
-    :class="{ 'reaction-picker--compact': compact }"
+    :class="{ 'reaction-picker--compact': props.compact }"
     @mouseenter="scheduleOpen"
     @mouseleave="scheduleClose"
     @click.capture="onTriggerClick"
@@ -282,20 +282,11 @@ onBeforeUnmount(() => {
   transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease;
 }
 
-.reaction-picker__option:hover {
-  background: transparent;
-  transform: translateY(-10px) scale(1.22);
-}
-
 .reaction-picker__option:active {
   transform: translateY(-6px) scale(1.08);
 }
 
 .reaction-picker__option--active {
-  background: var(--color-primary-surface);
-}
-
-.reaction-picker__option--active:hover {
   background: var(--color-primary-surface);
 }
 
@@ -308,9 +299,20 @@ onBeforeUnmount(() => {
   filter: drop-shadow(0 1px 0 rgb(0 0 0 / 0.04));
 }
 
-.reaction-picker__option:hover .reaction-picker__emoji {
-  transform: scale(1.12);
-  filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.16));
+@media (hover: hover) and (pointer: fine) {
+  .reaction-picker__option:hover {
+    background: transparent;
+    transform: translateY(-10px) scale(1.22);
+  }
+
+  .reaction-picker__option:hover .reaction-picker__emoji {
+    transform: scale(1.12);
+    filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.16));
+  }
+
+  .reaction-picker__option--active:hover {
+    background: var(--color-primary-surface);
+  }
 }
 
 .reaction-picker__label {
@@ -326,6 +328,7 @@ onBeforeUnmount(() => {
 
 .reaction-popup-leave-active {
   transition: opacity 0.12s ease, transform 0.12s ease;
+  pointer-events: none;
 }
 
 .reaction-popup-enter-from {
@@ -358,10 +361,6 @@ onBeforeUnmount(() => {
 
   .reaction-picker__option {
     padding: 6px;
-  }
-
-  .reaction-picker__option:hover {
-    transform: translateY(-6px) scale(1.12);
   }
 
   .reaction-picker__label {

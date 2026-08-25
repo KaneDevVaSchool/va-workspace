@@ -42,7 +42,7 @@ onMounted(async () => {
 async function prepareEditor() {
   await nextTick();
   if (props.mentionedUser) {
-    editorRef.value?.insertMention(props.mentionedUser, { replaceQuery: false });
+    editorRef.value?.insertMention(props.mentionedUser, { replaceQuery: false, suffix: ': ' });
   }
   editorRef.value?.focus();
 }
@@ -118,7 +118,7 @@ async function submit() {
       expanded.value = false;
     } else if (props.mentionedUser) {
       await nextTick();
-      editorRef.value?.insertMention(props.mentionedUser, { replaceQuery: false });
+      editorRef.value?.insertMention(props.mentionedUser, { replaceQuery: false, suffix: ': ' });
     }
   } catch (error) {
     showClientToast('error', error?.response?.data?.message ?? 'Không thể gửi bình luận.');
@@ -183,23 +183,23 @@ async function submit() {
 
       <div class="comment-composer__actions">
         <div class="comment-composer__actions-left">
-        <div ref="emojiWrap" class="comment-composer__emoji-wrap">
-          <button
-            type="button"
-            class="comment-composer__tool"
-            aria-label="Chèn emoji"
-            @click="emojiOpen = !emojiOpen"
-          >
-            😊
-            <span>Emoji</span>
-          </button>
-          <SocialEmojiPicker
-            v-if="emojiOpen"
-            :anchor="emojiWrap"
-            @pick="insertEmoji"
-            @close="emojiOpen = false"
-          />
-        </div>
+          <div ref="emojiWrap" class="comment-composer__emoji-wrap">
+            <button
+              type="button"
+              class="comment-composer__tool"
+              aria-label="Chèn emoji"
+              @click="emojiOpen = !emojiOpen"
+            >
+              😊
+              <span>Emoji</span>
+            </button>
+            <SocialEmojiPicker
+              v-if="emojiOpen"
+              :anchor="emojiWrap"
+              @pick="insertEmoji"
+              @close="emojiOpen = false"
+            />
+          </div>
 
           <button type="button" class="comment-composer__tool" @click="fileInput?.click()">
             <AppIcon name="paperclip" :size="16" />

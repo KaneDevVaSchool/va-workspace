@@ -57,18 +57,43 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         ];
     }
 
-    public function pinned(int $limit, string $scope = 'company', ?int $departmentId = null, ?int $wallUserId = null): Collection
-    {
+    public function paginatePinned(
+        int $perPage,
+        int $page,
+        string $scope = 'company',
+        ?int $departmentId = null,
+        ?int $wallUserId = null,
+        ?string $search = null,
+    ): LengthAwarePaginator {
         $query = $this->baseQuery()
             ->where('is_pinned', true)
             ->where('pin_scope', $scope);
 
         $this->applyWall($query, $departmentId, $wallUserId);
+        $this->applyPinnedSearch($query, $search);
 
         return $query
             ->orderByDesc('pinned_at')
-            ->limit($limit)
-            ->get();
+            ->orderByDesc('id')
+            ->paginate($perPage, ['*'], 'page', $page);
+    }
+
+    private function applyPinnedSearch($query, ?string $search): void
+    {
+        $needle = trim((string) $search);
+        if ($needle === '') {
+            return;
+        }
+
+        $like = '%'.addcslashes($needle, '%_\\').'%';
+
+        $query->where(function ($inner) use ($like) {
+            $inner->where('content', 'like', $like)
+                ->orWhereHas('user', fn ($users) => $users->where('name', 'like', $like))
+                ->orWhereHas('poll', fn ($polls) => $polls
+                    ->where('title', 'like', $like)
+                    ->orWhere('content', 'like', $like));
+        });
     }
 
     private function applyWall($query, ?int $departmentId, ?int $wallUserId): void

@@ -68,14 +68,26 @@ class SocialPostService
             : self::FEED_SCOPE_ALL;
     }
 
-    public function pinned(User $viewer, string $scope = self::PIN_SCOPE_COMPANY, int $limit = 5, ?int $departmentId = null, ?int $wallUserId = null): array
-    {
+    public function pinned(
+        User $viewer,
+        string $scope = self::PIN_SCOPE_COMPANY,
+        int $perPage = 5,
+        int $page = 1,
+        ?int $departmentId = null,
+        ?int $wallUserId = null,
+        ?string $search = null,
+    ): array {
         $scope = $this->normalizePinScope($scope);
+        $paginator = $this->posts->paginatePinned($perPage, $page, $scope, $departmentId, $wallUserId, $search);
 
-        return $this->posts->pinned($limit, $scope, $departmentId, $wallUserId)
-            ->map(fn (SocialPost $post) => $this->present($post, $viewer))
-            ->values()
-            ->all();
+        return [
+            'posts' => collect($paginator->items())
+                ->map(fn (SocialPost $post) => $this->present($post, $viewer))
+                ->values(),
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'total' => $paginator->total(),
+        ];
     }
 
     public function wallProfile(int $userId, User $viewer): ?array

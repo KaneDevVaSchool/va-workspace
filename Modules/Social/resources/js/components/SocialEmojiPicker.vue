@@ -21,15 +21,17 @@ function currentEmojis() {
 
 function placePopup() {
   const trigger = props.anchor instanceof HTMLElement ? props.anchor : null;
-  const width = Math.min(320, window.innerWidth - 16);
+  const desktop = window.innerWidth >= 768;
+  const width = Math.min(desktop ? 560 : 360, window.innerWidth - 24);
   const gap = 8;
-  const preferredHeight = 300;
+  const preferredHeight = desktop ? 440 : 320;
   const style = { width: `${width}px` };
 
   if (!trigger) {
+    const height = Math.min(preferredHeight, window.innerHeight - 16);
     style.left = `${Math.max(8, (window.innerWidth - width) / 2)}px`;
     style.top = '8px';
-    style.maxHeight = `${Math.min(preferredHeight, window.innerHeight - 16)}px`;
+    style.height = `${height}px`;
     popupStyle.value = style;
     return;
   }
@@ -40,17 +42,17 @@ function placePopup() {
   const spaceAbove = rect.top - gap - 8;
 
   if (spaceBelow < 180 && spaceAbove > spaceBelow) {
-    const maxHeight = Math.min(preferredHeight, Math.max(160, spaceAbove));
+    const height = Math.min(preferredHeight, Math.max(200, spaceAbove));
     style.left = `${left}px`;
     style.top = 'auto';
     style.bottom = `${window.innerHeight - rect.top + gap}px`;
-    style.maxHeight = `${maxHeight}px`;
+    style.height = `${height}px`;
   } else {
-    const maxHeight = Math.min(preferredHeight, Math.max(160, spaceBelow));
+    const height = Math.min(preferredHeight, Math.max(200, spaceBelow));
     style.left = `${left}px`;
     style.top = `${rect.bottom + gap}px`;
     style.bottom = 'auto';
-    style.maxHeight = `${maxHeight}px`;
+    style.height = `${height}px`;
   }
 
   popupStyle.value = style;
@@ -112,7 +114,7 @@ onBeforeUnmount(() => {
       aria-label="Chọn emoji"
     >
       <div class="emoji-picker__tabs">
-        <div class="emoji-picker__tab-list hide-scrollbar">
+        <div class="emoji-picker__tab-list">
           <button
             v-for="group in EMOJI_GROUPS"
             :key="group.key"
@@ -130,7 +132,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div class="emoji-picker__grid hide-scrollbar">
+      <div class="emoji-picker__grid">
         <button
           v-for="(emoji, index) in currentEmojis()"
           :key="index"
@@ -173,10 +175,10 @@ onBeforeUnmount(() => {
 .emoji-picker__tab-list {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-1);
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
 }
 
 .emoji-picker__tab {
@@ -206,18 +208,19 @@ onBeforeUnmount(() => {
 
 .emoji-picker__grid {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: var(--space-1);
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .emoji-picker__cell {
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 1.25rem;
+  font-size: 1.375rem;
   padding: var(--space-1);
   border-radius: var(--radius-md);
   line-height: 1;
@@ -225,6 +228,16 @@ onBeforeUnmount(() => {
 
 .emoji-picker__cell:hover {
   background: var(--color-surface-muted);
+}
+
+@media (max-width: 767px) {
+  .emoji-picker__grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+
+  .emoji-picker__cell {
+    font-size: 1.25rem;
+  }
 }
 
 @media (max-width: 480px) {

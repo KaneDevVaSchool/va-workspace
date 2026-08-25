@@ -22,7 +22,14 @@ interface SocialPostRepositoryInterface
      * @param  int|null  $departmentId  null trừ khi tường phòng ban
      * @param  int|null  $wallUserId  null trừ khi tường cá nhân
      */
-    public function pinned(int $limit, string $scope = 'company', ?int $departmentId = null, ?int $wallUserId = null): Collection;
+    public function paginatePinned(
+        int $perPage,
+        int $page,
+        string $scope = 'company',
+        ?int $departmentId = null,
+        ?int $wallUserId = null,
+        ?string $search = null,
+    ): LengthAwarePaginator;
 
     public function find(int $id): ?SocialPost;
 

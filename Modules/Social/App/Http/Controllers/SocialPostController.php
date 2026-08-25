@@ -48,6 +48,16 @@ class SocialPostController extends Controller
         );
     }
 
+    public function show(Request $request, int $postId): JsonResponse
+    {
+        $post = $this->posts->find($postId);
+        if (! $post) {
+            return response()->json(['message' => 'Không tìm thấy bài viết.'], 404);
+        }
+
+        return response()->json(['post' => $this->service->present($post, $request->user())]);
+    }
+
     /**
      * Suy ra tường từ query/body `post_scope` ('company'|'department'|'personal').
      * Trả về false nếu yêu cầu tường phòng ban nhưng user không thuộc phòng ban nào.
@@ -112,15 +122,19 @@ class SocialPostController extends Controller
             return response()->json(['message' => 'Bạn chưa thuộc phòng ban nào.'], 422);
         }
 
-        return response()->json([
-            'posts' => $this->service->pinned(
-                $request->user(),
-                is_string($scope) ? $scope : 'company',
-                5,
-                $wall['department_id'],
-                $wall['wall_user_id'],
-            ),
-        ]);
+        $perPage = min(max((int) $request->query('per_page', 5), 1), 30);
+        $page = max((int) $request->query('page', 1), 1);
+        $search = is_string($request->query('q')) ? trim($request->query('q')) : '';
+
+        return response()->json($this->service->pinned(
+            $request->user(),
+            is_string($scope) ? $scope : 'company',
+            $perPage,
+            $page,
+            $wall['department_id'],
+            $wall['wall_user_id'],
+            $search !== '' ? $search : null,
+        ));
     }
 
     public function store(StoreSocialPostRequest $request): JsonResponse

@@ -9,7 +9,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
 import AppIcon from '@/components/AppIcon.vue';
 import { FontSize } from '../lib/tiptapFontSize.js';
-import { MentionMark } from '../lib/tiptapMention.js';
+import { MentionNode } from '../lib/tiptapMention.js';
 import SocialMentionPicker from './SocialMentionPicker.vue';
 
 const props = defineProps({
@@ -71,7 +71,7 @@ function detectMention() {
   fetchMentions(match[1]);
 }
 
-function insertMention(user, { replaceQuery = true } = {}) {
+function insertMention(user, { replaceQuery = true, suffix = ' ' } = {}) {
   if (!editor || !user) return;
   const chain = editor.chain().focus();
   if (replaceQuery) {
@@ -84,8 +84,8 @@ function insertMention(user, { replaceQuery = true } = {}) {
   }
   chain
     .insertContent([
-      { type: 'text', text: `@${user.name}`, marks: [{ type: 'mention' }] },
-      { type: 'text', text: ': ' },
+      { type: 'mention', attrs: { id: String(user.id), label: user.name } },
+      { type: 'text', text: suffix },
     ])
     .run();
   closeMention();
@@ -158,7 +158,7 @@ editor = new Editor({
     TextStyle,
     Color,
     FontSize,
-    MentionMark,
+    MentionNode,
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
     LinkExtension.configure({
       openOnClick: false,

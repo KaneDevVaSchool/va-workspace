@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { showClientToast } from '@/lib/clientToast';
@@ -11,6 +12,7 @@ import SocialPostComposer from '../components/SocialPostComposer.vue';
 import SocialProfilePanel from '../components/SocialProfilePanel.vue';
 
 const auth = useAuthStore();
+const route = useRoute();
 
 const posts = ref([]);
 const loading = ref(false);
@@ -18,27 +20,43 @@ const loadingMore = ref(false);
 const page = ref(1);
 const lastPage = ref(1);
 const pinnedPanel = ref(null);
+const systemPanel = ref(null);
 const composer = ref(null);
+const profilePanel = ref(null);
 const searchQuery = ref('');
 const feedScope = ref('all');
+const postScope = ref('company');
+const wallUserId = ref(null);
+const wallProfile = ref(null);
+const focusedPostId = ref(null);
+const openCommentsPostId = ref(null);
+const suppressFeedReload = ref(false);
+
+const departmentName = computed(() => auth.user?.department?.name ?? '');
+const currentWallUserId = computed(() => wallUserId.value ?? auth.user?.id ?? null);
+const wallUserName = computed(() => wallProfile.value?.user?.name ?? auth.user?.name ?? '');
+const viewingPersonalWall = computed(() => postScope.value === 'personal');
+
+const feedScopes = [
+  { id: 'all', label: 'Bảng tin' },
+  { id: 'mine', label: 'Bài của tôi' },
+  { id: 'reacted', label: 'Đã tương tác' },
+];
 
 const visiblePosts = computed(() => {
-  let list = posts.value;
-
-  if (feedScope.value === 'mine' && auth.user?.id) {
-    list = list.filter((post) => post.author?.id === auth.user.id);
-  }
-
   const needle = searchQuery.value.trim().toLowerCase();
-  if (!needle) return list;
+  if (!needle) return posts.value;
 
-  return list.filter((post) => {
+  return posts.value.filter((post) => {
     const hay = [
       post.content,
       post.author?.name,
       post.author?.department,
       post.shared_from?.content,
       post.shared_from?.author?.name,
+      post.poll?.title,
+      post.poll?.content,
+      ...(post.poll?.options ?? []).map((option) => option.label),
     ]
       .filter(Boolean)
       .join(' ')
@@ -48,14 +66,38 @@ const visiblePosts = computed(() => {
   });
 });
 
+const firstUnpinnedIndex = computed(() =>
+  visiblePosts.value.findIndex((post) => !post.is_pinned),
+);
+
+function belongsToCurrentScope(post) {
+  if (postScope.value === 'personal') {
+    const currentWall = currentWallUserId.value;
+    if (post.post_scope !== 'personal' || post.wall_user?.id !== currentWall) {
+      return false;
+    }
+  } else if ((post.post_scope ?? 'company') !== postScope.value) {
+    return false;
+  }
+  if (feedScope.value === 'mine') {
+    return post.author?.id === auth.user?.id;
+  }
+  if (feedScope.value === 'reacted') {
+    return Boolean(post.my_reaction);
+  }
+  return true;
+}
+
 async function loadFeed(targetPage = 1) {
   const isFirstPage = targetPage === 1;
   isFirstPage ? (loading.value = true) : (loadingMore.value = true);
 
   try {
-    const { data } = await window.axios.get('/api/social/posts', {
-      params: { page: targetPage, per_page: 10 },
-    });
+    const params = { page: targetPage, per_page: 10, scope: feedScope.value, post_scope: postScope.value };
+    if (postScope.value === 'personal' && currentWallUserId.value) {
+      params.wall_user_id = currentWallUserId.value;
+    }
+    const { data } = await window.axios.get('/api/social/posts', { params });
 
     posts.value = isFirstPage ? data.posts : [...posts.value, ...data.posts];
     page.value = data.current_page;
@@ -68,50 +110,215 @@ async function loadFeed(targetPage = 1) {
   }
 }
 
+function onScopeChange(scope) {
+  if (feedScope.value === scope) {
+    document.querySelector('.social-page__main')?.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  feedScope.value = scope;
+}
+
+function onTabChange(tab) {
+  if (tab === 'personal') {
+    openPersonalWall(auth.user?.id);
+    return;
+  }
+  if (postScope.value === tab && wallUserId.value === null) return;
+  postScope.value = tab;
+  wallUserId.value = null;
+  wallProfile.value = null;
+}
+
+async function loadWallProfile(userId) {
+  try {
+    const { data } = await window.axios.get(`/api/social/walls/${userId}`);
+    wallProfile.value = data;
+  } catch {
+    wallProfile.value = null;
+    showClientToast('error', 'Không thể mở tường cá nhân.');
+  }
+}
+
+async function openPersonalWall(userId) {
+  if (!userId) return;
+  const switching = postScope.value !== 'personal' || wallUserId.value !== userId;
+  postScope.value = 'personal';
+  wallUserId.value = userId;
+  await loadWallProfile(userId);
+  if (!switching) {
+    document.querySelector('.social-page__main')?.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
 function loadMore() {
   if (page.value < lastPage.value && !loadingMore.value) {
     loadFeed(page.value + 1);
   }
 }
 
-function focusComposer() {
-  document.getElementById('social-composer')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  composer.value?.expand();
+function refreshAnnouncementPanels() {
+  pinnedPanel.value?.load();
+  systemPanel.value?.load();
+}
+
+function refreshProfileStats() {
+  if (postScope.value === 'personal' && currentWallUserId.value) {
+    loadWallProfile(currentWallUserId.value).then(() => profilePanel.value?.loadStats());
+    return;
+  }
+  profilePanel.value?.loadStats();
 }
 
 function onPosted(post) {
-  posts.value = [post, ...posts.value];
+  if (belongsToCurrentScope(post)) {
+    posts.value = [post, ...posts.value];
+  }
+  refreshAnnouncementPanels();
+  refreshProfileStats();
+}
+
+function onUpdated(updatedPost) {
+  posts.value = posts.value.map((p) => (p.id === updatedPost.id ? updatedPost : p));
+  refreshAnnouncementPanels();
 }
 
 function onShared(post) {
-  posts.value = [post, ...posts.value];
+  if (belongsToCurrentScope(post)) {
+    posts.value = [post, ...posts.value];
+  }
+  refreshProfileStats();
 }
 
 function onDeleted(postId) {
   posts.value = posts.value.filter((p) => p.id !== postId);
+  refreshAnnouncementPanels();
+  refreshProfileStats();
 }
 
 function onPinned(updatedPost) {
   posts.value = posts.value.map((p) => (p.id === updatedPost.id ? updatedPost : p));
   posts.value.sort((a, b) => Number(b.is_pinned) - Number(a.is_pinned));
-  pinnedPanel.value?.load();
+  refreshAnnouncementPanels();
 }
 
 function onUnpinned(updatedPost) {
   posts.value = posts.value.map((p) => (p.id === updatedPost.id ? updatedPost : p));
-  pinnedPanel.value?.load();
+  refreshAnnouncementPanels();
 }
 
-function scrollToPost(postId) {
-  const el = document.getElementById(`social-post-${postId}`);
+async function scrollToPost(post) {
+  const fullPost = post && typeof post === 'object' ? post : null;
+  const postId = fullPost?.id ?? post;
+  if (!postId) return;
+
+  if (fullPost?.pin_scope === 'system' && (postScope.value !== 'company' || wallUserId.value !== null)) {
+    suppressFeedReload.value = true;
+    postScope.value = 'company';
+    wallUserId.value = null;
+    wallProfile.value = null;
+    await loadFeed(1);
+  }
+
+  await nextTick();
+  let el = document.getElementById(`social-post-${postId}`);
+  if (!el && fullPost && !posts.value.some((item) => item.id === postId)) {
+    posts.value = [fullPost, ...posts.value];
+    await nextTick();
+    el = document.getElementById(`social-post-${postId}`);
+  }
   el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-onMounted(() => loadFeed(1));
+async function applyFocusedPost() {
+  const postId = Number(route.query.post);
+  if (!Number.isFinite(postId) || postId < 1) {
+    focusedPostId.value = null;
+    openCommentsPostId.value = null;
+    return;
+  }
+
+  focusedPostId.value = postId;
+  openCommentsPostId.value = postId;
+
+  try {
+    const { data } = await window.axios.get(`/api/social/posts/${postId}`);
+    const post = data.post;
+    if (!post) return;
+
+    let switched = false;
+    if (post.post_scope === 'personal' && post.wall_user?.id) {
+      if (postScope.value !== 'personal' || wallUserId.value !== post.wall_user.id) {
+        suppressFeedReload.value = true;
+        postScope.value = 'personal';
+        wallUserId.value = post.wall_user.id;
+        await loadWallProfile(post.wall_user.id);
+        switched = true;
+      }
+    } else if (post.post_scope === 'department') {
+      if (postScope.value !== 'department' || wallUserId.value !== null) {
+        suppressFeedReload.value = true;
+        postScope.value = 'department';
+        wallUserId.value = null;
+        wallProfile.value = null;
+        switched = true;
+      }
+    } else if (postScope.value !== 'company' || wallUserId.value !== null) {
+      suppressFeedReload.value = true;
+      postScope.value = 'company';
+      wallUserId.value = null;
+      wallProfile.value = null;
+      switched = true;
+    }
+
+    if (switched) {
+      await loadFeed(1);
+    }
+
+    if (!posts.value.some((item) => item.id === post.id)) {
+      posts.value = [post, ...posts.value];
+    }
+    await scrollToPost(post);
+  } catch {
+    showClientToast('error', 'Không tìm thấy bài viết được nhắc.');
+  }
+}
+
+watch(feedScope, () => loadFeed(1));
+watch([postScope, wallUserId], () => {
+  if (suppressFeedReload.value) {
+    suppressFeedReload.value = false;
+    return;
+  }
+  loadFeed(1);
+});
+watch(
+  () => [route.query.post, route.query.comment],
+  () => applyFocusedPost(),
+);
+onMounted(async () => {
+  await loadFeed(1);
+  await applyFocusedPost();
+});
 </script>
 
 <template>
   <section class="social-page">
+    <svg class="social-page__wm-defs" aria-hidden="true" focusable="false">
+      <filter id="social-watermark-boost" color-interpolation-filters="sRGB">
+        <feColorMatrix
+          type="matrix"
+          values="0 0 0 0 0.604  0 0 0 0 0  0 0 0 0 0.212  0 0 0 20 0"
+        />
+      </filter>
+    </svg>
+    <img
+      src="/images/background/background-logo.png"
+      alt=""
+      class="social-page__watermark"
+      aria-hidden="true"
+      :style="{ filter: 'url(#social-watermark-boost)' }"
+    />
+
     <PageHeader
       title="Bảng tin nội bộ"
       icon="megaphone"
@@ -152,53 +359,112 @@ onMounted(() => loadFeed(1));
       </template>
     </PageHeader>
 
-    <div class="social-page__body">
-      <aside class="social-page__rail social-page__rail--left">
+    <div class="social-page__body hide-scrollbar">
+      <aside class="social-page__rail social-page__rail--left hide-scrollbar">
         <SocialProfilePanel
-          v-model:scope="feedScope"
-          @compose="focusComposer"
+          ref="profilePanel"
+          :scope="feedScope"
+          :post-scope="postScope"
+          :wall-profile="wallProfile"
+          @update:scope="onScopeChange"
+          @update:post-scope="onTabChange"
+          @open-wall="openPersonalWall"
         />
       </aside>
 
-      <div class="social-page__main">
-        <nav class="social-page__scope-bar" aria-label="Lọc bảng tin">
+      <div class="social-page__main hide-scrollbar">
+        <nav class="social-page__scope-bar hide-scrollbar" aria-label="Chọn tường">
           <button
             type="button"
             class="social-page__scope-btn"
-            :class="{ 'social-page__scope-btn--active': feedScope === 'all' }"
-            @click="feedScope = 'all'"
+            :class="{ 'social-page__scope-btn--active': postScope === 'company' }"
+            :aria-current="postScope === 'company' ? 'page' : undefined"
+            @click="onTabChange('company')"
           >
             Bảng tin
           </button>
           <button
+            v-if="departmentName"
             type="button"
             class="social-page__scope-btn"
-            :class="{ 'social-page__scope-btn--active': feedScope === 'mine' }"
-            @click="feedScope = 'mine'"
+            :class="{ 'social-page__scope-btn--active': postScope === 'department' }"
+            :aria-current="postScope === 'department' ? 'page' : undefined"
+            @click="onTabChange('department')"
           >
-            Bài của tôi
+            Tường {{ departmentName }}
+          </button>
+          <button
+            type="button"
+            class="social-page__scope-btn"
+            :class="{ 'social-page__scope-btn--active': postScope === 'personal' && wallProfile?.is_own !== false }"
+            :aria-current="postScope === 'personal' && wallProfile?.is_own !== false ? 'page' : undefined"
+            @click="onTabChange('personal')"
+          >
+            Tường của tôi
+          </button>
+          <button
+            v-if="viewingPersonalWall && wallProfile && !wallProfile.is_own"
+            type="button"
+            class="social-page__scope-btn social-page__scope-btn--active"
+            aria-current="page"
+          >
+            Tường {{ wallUserName }}
+          </button>
+        </nav>
+
+        <nav class="social-page__scope-bar hide-scrollbar" aria-label="Lọc bảng tin">
+          <button
+            v-for="item in feedScopes"
+            :key="item.id"
+            type="button"
+            class="social-page__scope-btn"
+            :class="{ 'social-page__scope-btn--active': feedScope === item.id }"
+            :aria-current="feedScope === item.id ? 'page' : undefined"
+            @click="onScopeChange(item.id)"
+          >
+            {{ item.label }}
           </button>
         </nav>
 
         <SocialPostComposer
+          :key="`${postScope}-${currentWallUserId ?? 'none'}`"
           ref="composer"
           :author-avatar-url="auth.user?.avatar_url"
           :author-name="auth.user?.name"
+          :default-scope="postScope"
+          :department-name="departmentName"
+          :wall-user-id="currentWallUserId"
+          :wall-user-name="wallUserName"
           @posted="onPosted"
         />
 
         <div v-if="loading" class="social-page__loading">Đang tải bảng tin...</div>
 
         <div v-else class="social-page__list">
-          <div v-for="post in visiblePosts" :id="`social-post-${post.id}`" :key="post.id">
-            <SocialPostCard
-              :post="post"
-              @deleted="onDeleted"
-              @pinned="onPinned"
-              @unpinned="onUnpinned"
-              @shared="onShared"
-            />
-          </div>
+          <template v-for="(post, index) in visiblePosts" :key="post.id">
+            <div
+              v-if="index === firstUnpinnedIndex && firstUnpinnedIndex > 0"
+              class="social-page__feed-split"
+              role="separator"
+            >
+              Bài viết mới
+            </div>
+            <div :id="`social-post-${post.id}`">
+              <SocialPostCard
+                :post="post"
+                :post-scope="postScope"
+                :department-name="departmentName"
+                :open-comments="openCommentsPostId === post.id"
+                :highlighted="focusedPostId === post.id"
+                @deleted="onDeleted"
+                @pinned="onPinned"
+                @unpinned="onUnpinned"
+                @shared="onShared"
+                @updated="onUpdated"
+                @open-wall="openPersonalWall"
+              />
+            </div>
+          </template>
 
           <div v-if="visiblePosts.length === 0" class="social-page__empty">
             <AppIcon name="megaphone" :size="32" />
@@ -206,6 +472,16 @@ onMounted(() => loadFeed(1));
               Không tìm thấy bài viết khớp với “{{ searchQuery.trim() }}”.
             </p>
             <p v-else-if="feedScope === 'mine'">Bạn chưa đăng bài viết nào.</p>
+            <p v-else-if="feedScope === 'reacted'">Bạn chưa tương tác bài viết nào.</p>
+            <p v-else-if="postScope === 'personal' && wallProfile && !wallProfile.is_own">
+              Chưa có bài viết nào trên tường của {{ wallUserName }}. Hãy là người đăng đầu tiên!
+            </p>
+            <p v-else-if="postScope === 'personal'">
+              Chưa có bài viết nào trên tường của bạn. Hãy là người đăng đầu tiên!
+            </p>
+            <p v-else-if="postScope === 'department'">
+              Chưa có bài viết nào trên tường {{ departmentName }}. Hãy là người đăng đầu tiên!
+            </p>
             <p v-else>Chưa có bài viết nào trên bảng tin. Hãy là người đăng đầu tiên!</p>
           </div>
 
@@ -221,9 +497,21 @@ onMounted(() => loadFeed(1));
         </div>
       </div>
 
-      <aside class="social-page__rail social-page__rail--right">
-        <SocialPinnedPanel ref="pinnedPanel" @select="scrollToPost" />
-        <SocialBirthdayPanel />
+      <aside class="social-page__rail social-page__rail--right hide-scrollbar">
+        <SocialPinnedPanel
+          v-if="postScope !== 'personal'"
+          ref="pinnedPanel"
+          variant="company"
+          :department-scope="postScope === 'department'"
+          :department-name="departmentName"
+          @select="scrollToPost"
+        />
+        <SocialPinnedPanel
+          ref="systemPanel"
+          variant="system"
+          @select="scrollToPost"
+        />
+        <SocialBirthdayPanel v-if="postScope === 'company'" />
       </aside>
     </div>
   </section>
@@ -239,7 +527,30 @@ onMounted(() => loadFeed(1));
   padding: var(--space-2);
   overflow: hidden;
   position: relative;
+  isolation: isolate;
   background: var(--color-surface-muted);
+}
+
+/* Cùng PNG watermark trang login. Ảnh nguồn alpha ~5% (đủ trên nền brand tối
+   sau invert). Ở nền sáng: boost alpha + nhuộm primary-900, không invert. */
+.social-page__wm-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.social-page__watermark {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.05);
+  pointer-events: none;
+  opacity: 0.045;
 }
 
 .social-head {
@@ -557,6 +868,8 @@ onMounted(() => loadFeed(1));
 }
 
 .social-page__body {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-height: 0;
   display: grid;
@@ -576,42 +889,6 @@ onMounted(() => loadFeed(1));
   flex-direction: column;
   gap: var(--space-3);
   overflow-y: auto;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .social-page__body,
-  .social-page__rail,
-  .social-page__main {
-    scrollbar-width: none;
-    scrollbar-color: transparent transparent;
-  }
-
-  .social-page__body:hover,
-  .social-page__body:focus-within,
-  .social-page__rail:hover,
-  .social-page__rail:focus-within,
-  .social-page__main:hover,
-  .social-page__main:focus-within {
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb) transparent;
-  }
-
-  .social-page__body::-webkit-scrollbar,
-  .social-page__rail::-webkit-scrollbar,
-  .social-page__main::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-  }
-
-  .social-page__body:hover::-webkit-scrollbar,
-  .social-page__body:focus-within::-webkit-scrollbar,
-  .social-page__rail:hover::-webkit-scrollbar,
-  .social-page__rail:focus-within::-webkit-scrollbar,
-  .social-page__main:hover::-webkit-scrollbar,
-  .social-page__main:focus-within::-webkit-scrollbar {
-    width: var(--scrollbar-size);
-    height: var(--scrollbar-size);
-  }
 }
 
 .social-page__rail--left {
@@ -635,37 +912,63 @@ onMounted(() => loadFeed(1));
 
 .social-page__scope-bar {
   display: flex;
-  gap: var(--space-2);
+  gap: var(--space-1);
   flex-shrink: 0;
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
 }
 
 .social-page__scope-btn {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
+  flex: 1 0 auto;
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
   font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-full);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .social-page__scope-btn:hover {
-  background: var(--color-primary-surface);
   color: var(--color-primary);
+  background: var(--color-primary-surface);
 }
 
 .social-page__scope-btn--active {
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
-  box-shadow: inset 0 0 0 1px var(--color-primary-200);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 .social-page__list {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.social-page__feed-split {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.social-page__feed-split::before,
+.social-page__feed-split::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
 }
 
 .social-page__loading {
@@ -716,7 +1019,7 @@ onMounted(() => loadFeed(1));
 
 @media (min-width: 1280px) {
   .social-page__body {
-    grid-template-columns: 15rem minmax(0, 1fr) 17rem;
+    grid-template-columns: 16.5rem minmax(0, 1fr) 17rem;
     grid-template-areas: 'left main right';
   }
 
