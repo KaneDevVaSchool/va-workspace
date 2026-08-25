@@ -12,6 +12,7 @@
         "laravel/sanctum": "^3.3",
         "laravel/socialite": "^5.30",
         "laravel/tinker": "^2.8",
+        "minishlink/web-push": "8.0",
         "nwidart/laravel-modules": "^10.0.6",
         "phpoffice/phpspreadsheet": "2.0"
     },

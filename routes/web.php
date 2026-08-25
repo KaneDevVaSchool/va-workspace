@@ -20,6 +20,27 @@ Route::get('/', function () {
     return view('app');
 });
 
+Route::get('/sw.js', function () {
+    $path = public_path('sw.js');
+    abort_unless(is_file($path), 404);
+
+    return response((string) file_get_contents($path), 200, [
+        'Content-Type' => 'application/javascript; charset=UTF-8',
+        'Service-Worker-Allowed' => '/',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
+});
+
+Route::get('/manifest.webmanifest', function () {
+    $path = public_path('manifest.webmanifest');
+    abort_unless(is_file($path), 404);
+
+    return response((string) file_get_contents($path), 200, [
+        'Content-Type' => 'application/manifest+json; charset=UTF-8',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
+});
+
 /*
 | Fallback SPA: mọi path còn lại (chưa khớp route Laravel nào ở trên,
 | và không thuộc /api, /manager, /superadmin, /auth/*, /storage...) đều

@@ -149,8 +149,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   padding: 0;
   border: none;
   border-radius: var(--radius-full);
@@ -172,13 +172,13 @@ onBeforeUnmount(() => {
 .header-account__avatar {
   display: grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   overflow: hidden;
   border-radius: var(--radius-full);
   background: var(--color-primary);
   color: var(--color-on-primary);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 

@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Identity\App\Http\Controllers\ActivityLogController;
 use Modules\Identity\App\Http\Controllers\GoogleAuthController;
 use Modules\Identity\App\Http\Controllers\MeController;
+use Modules\Identity\App\Http\Controllers\NotificationController;
 use Modules\Identity\App\Http\Controllers\PermissionGrantController;
 use Modules\Identity\App\Http\Controllers\PermissionMatrixController;
 use Modules\Identity\App\Http\Controllers\ShortcutController;
@@ -43,6 +44,14 @@ Route::middleware(['auth', 'throttle:60,1'])->prefix('api')->group(function () {
     Route::get('/me', MeController::class)->name('me');
     Route::post('/view-as', [ViewAsController::class, 'activate'])->name('view-as.activate');
     Route::delete('/view-as', [ViewAsController::class, 'deactivate'])->name('view-as.deactivate');
+
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount'])->name('notifications.unread');
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::post('/notifications/{notificationId}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
+    Route::get('/notifications/push/vapid-key', [NotificationController::class, 'vapidPublicKey'])->name('notifications.push.vapid');
+    Route::post('/notifications/push/subscribe', [NotificationController::class, 'subscribe'])->name('notifications.push.subscribe');
+    Route::delete('/notifications/push/subscribe', [NotificationController::class, 'unsubscribe'])->name('notifications.push.unsubscribe');
 
     Route::get('/shortcuts', [ShortcutController::class, 'index'])->name('shortcuts.index');
     Route::post('/shortcuts', [ShortcutController::class, 'store'])->name('shortcuts.store');

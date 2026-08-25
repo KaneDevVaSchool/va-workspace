@@ -97,6 +97,19 @@ class UserRepository implements UserRepositoryInterface
         return $builder->get();
     }
 
+    public function findActiveByIds(array $ids): \Illuminate\Support\Collection
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if ($ids === []) {
+            return collect();
+        }
+
+        return User::query()
+            ->whereIn('id', $ids)
+            ->where('status', 'active')
+            ->get();
+    }
+
     public function create(array $data): User
     {
         return User::query()->create($data);

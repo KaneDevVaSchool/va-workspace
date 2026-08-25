@@ -5,6 +5,7 @@
 //
 import AppIcon from './AppIcon.vue';
 import HeaderShortcuts from './HeaderShortcuts.vue';
+import HeaderNotifications from './HeaderNotifications.vue';
 import HeaderActivityLog from './HeaderActivityLog.vue';
 import HeaderAccountMenu from './HeaderAccountMenu.vue';
 import { usePageHeaderTarget } from '../composables/usePageHeaderTarget';
@@ -43,6 +44,7 @@ function setPageHeaderEl(el) {
 
     <div class="app-header__actions">
       <HeaderShortcuts />
+      <HeaderNotifications />
       <HeaderActivityLog v-if="auth.canViewActivityLog" />
       <HeaderAccountMenu />
     </div>
@@ -97,7 +99,7 @@ function setPageHeaderEl(el) {
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2);
 }
 
 @media (min-width: 640px) {

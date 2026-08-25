@@ -54,4 +54,14 @@ return [
     */
     'superadmin_email' => env('SUPERADMIN_EMAIL'),
 
+    /*
+    | Web Push (VAPID) — chuông header + thông báo đẩy trình duyệt.
+    | Tạo khóa: php artisan identity:vapid-keys
+    */
+    'webpush' => [
+        'public_key' => env('VAPID_PUBLIC_KEY'),
+        'private_key' => env('VAPID_PRIVATE_KEY'),
+        'subject' => env('VAPID_SUBJECT', 'mailto:'.env('MAIL_FROM_ADDRESS', 'workspace@vaschools.edu.vn')),
+    ],
+
 ];

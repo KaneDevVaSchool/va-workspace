@@ -67,4 +67,12 @@ interface UserRepositoryInterface
      * @return \Illuminate\Support\Collection<int, User>
      */
     public function searchActiveByName(string $query, int $limit = 8, ?int $excludeUserId = null): \Illuminate\Support\Collection;
+
+    /**
+     * User đang hoạt động theo danh sách id (mention / thông báo).
+     *
+     * @param  list<int>  $ids
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public function findActiveByIds(array $ids): \Illuminate\Support\Collection;
 }

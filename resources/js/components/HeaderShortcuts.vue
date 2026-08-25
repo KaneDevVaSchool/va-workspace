@@ -221,7 +221,7 @@ onBeforeUnmount(() => {
       aria-label="Lối tắt"
       @click="toggle"
     >
-      <AppIcon name="bookmark" :size="18" :stroke-width="1.75" />
+      <AppIcon name="bookmark" :size="20" :stroke-width="1.75" />
     </button>
 
     <div v-if="isOpen" class="header-pop__panel" role="dialog" aria-label="Lối tắt">
@@ -351,8 +351,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;

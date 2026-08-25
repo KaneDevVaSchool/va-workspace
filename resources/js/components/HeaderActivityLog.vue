@@ -74,7 +74,7 @@ onBeforeUnmount(() => {
       aria-label="Nhật ký hoạt động"
       @click="toggle"
     >
-      <AppIcon name="clock" :size="18" :stroke-width="1.75" />
+      <AppIcon name="clock" :size="20" :stroke-width="1.75" />
     </button>
 
     <div v-if="isOpen" class="header-pop__panel" role="dialog" aria-label="Nhật ký hoạt động">
@@ -107,8 +107,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
