@@ -13,6 +13,11 @@ const emit = defineEmits(['changed']);
 
 const members = ref([]);
 const loading = ref(false);
+const query = ref('');
+const results = ref([]);
+const searching = ref(false);
+const invitingId = ref(null);
+let searchTimer = null;
 
 async function load() {
   loading.value = true;
@@ -32,6 +37,51 @@ function roleLabel(role) {
   if (role === 'owner') return 'Chủ nhóm';
   if (role === 'admin') return 'Quản trị viên';
   return 'Thành viên';
+}
+
+async function searchUsers(needle) {
+  if (!needle) {
+    results.value = [];
+    return;
+  }
+  searching.value = true;
+  try {
+    const { data } = await window.axios.get('/api/social/mentions', { params: { q: needle } });
+    const memberIds = new Set(members.value.map((m) => m.user_id));
+    results.value = (data.users ?? []).filter((user) => !memberIds.has(user.id));
+  } catch {
+    results.value = [];
+  } finally {
+    searching.value = false;
+  }
+}
+
+function onQueryInput(event) {
+  query.value = event.target.value;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => searchUsers(query.value.trim()), 200);
+}
+
+async function inviteUser(user) {
+  invitingId.value = user.id;
+  try {
+    const { data } = await window.axios.post(`/api/social/groups/${props.groupId}/invites`, {
+      user_id: user.id,
+    });
+    if (data.status === 'joined') {
+      showClientToast('success', `${user.name} đã được thêm vào nhóm.`);
+      await load();
+      emit('changed');
+    } else {
+      showClientToast('success', `Đã gửi lời mời tới ${user.name}. Họ phải chấp nhận mới vào nhóm.`);
+    }
+    query.value = '';
+    results.value = [];
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message ?? 'Không thể gửi lời mời.');
+  } finally {
+    invitingId.value = null;
+  }
 }
 
 async function removeMember(member) {
@@ -66,6 +116,40 @@ onMounted(load);
       <AppIcon name="users" :size="16" />
       Thành viên
     </h3>
+
+    <div v-if="canManage" class="group-members-panel__invite">
+      <label class="group-members-panel__search">
+        <AppIcon name="userPlus" :size="14" :stroke-width="1.75" />
+        <input
+          :value="query"
+          type="search"
+          placeholder="Mời đồng nghiệp..."
+          aria-label="Tìm đồng nghiệp để mời vào nhóm"
+          @input="onQueryInput"
+        />
+      </label>
+      <p v-if="searching" class="group-members-panel__hint">Đang tìm...</p>
+      <ul v-else-if="results.length" class="group-members-panel__results">
+        <li v-for="user in results" :key="user.id">
+          <button
+            type="button"
+            class="group-members-panel__person"
+            :disabled="invitingId === user.id"
+            @click="inviteUser(user)"
+          >
+            <img v-if="user.avatar_url" :src="user.avatar_url" alt="" class="group-members-panel__avatar" />
+            <span v-else class="group-members-panel__avatar group-members-panel__avatar--placeholder">
+              {{ (user.name || '?').charAt(0).toUpperCase() }}
+            </span>
+            <span class="group-members-panel__person-copy">
+              <span class="group-members-panel__name">{{ user.name }}</span>
+              <span v-if="user.department" class="group-members-panel__role">{{ user.department }}</span>
+            </span>
+          </button>
+        </li>
+      </ul>
+      <p v-else-if="query.trim()" class="group-members-panel__hint">Không tìm thấy đồng nghiệp khớp.</p>
+    </div>
 
     <div v-if="loading" class="group-members-panel__loading">Đang tải...</div>
 
@@ -121,6 +205,81 @@ onMounted(load);
   font-size: 0.8125rem;
   font-weight: 700;
   color: var(--color-text);
+}
+
+.group-members-panel__invite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.group-members-panel__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.4rem 0.625rem;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+}
+
+.group-members-panel__search:focus-within {
+  color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.group-members-panel__search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.75rem;
+}
+
+.group-members-panel__search input:focus {
+  outline: none;
+}
+
+.group-members-panel__hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.group-members-panel__results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.group-members-panel__person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  border: none;
+  background: none;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.group-members-panel__person:hover:not(:disabled) {
+  background: var(--color-primary-surface);
+}
+
+.group-members-panel__person-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .group-members-panel__loading {

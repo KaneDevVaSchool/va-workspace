@@ -481,6 +481,9 @@ class SocialPostService
             'group' => $post->group_id !== null ? [
                 'id' => $post->group->id,
                 'name' => $post->group->name,
+                'avatar_url' => $post->group->avatar_path
+                    ? Storage::disk('public')->url($post->group->avatar_path)
+                    : null,
             ] : null,
             'is_pinned' => $post->is_pinned,
             'pin_scope' => $post->is_pinned ? ($post->pin_scope ?: self::PIN_SCOPE_COMPANY) : null,

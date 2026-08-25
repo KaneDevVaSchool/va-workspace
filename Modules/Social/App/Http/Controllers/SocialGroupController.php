@@ -5,6 +5,7 @@ namespace Modules\Social\App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Modules\Social\App\Http\Requests\InviteSocialGroupMemberRequest;
 use Modules\Social\App\Http\Requests\StoreSocialGroupRequest;
 use Modules\Social\App\Http\Requests\UpdateGroupMemberRoleRequest;
 use Modules\Social\App\Http\Requests\UpdateSocialGroupRequest;
@@ -75,6 +76,7 @@ class SocialGroupController extends Controller
             $request->user(),
             $request->validated(),
             $request->file('cover'),
+            $request->file('avatar'),
         );
 
         return response()->json(['group' => $this->service->present($group, $request->user())], 201);
@@ -87,7 +89,13 @@ class SocialGroupController extends Controller
             return response()->json(['message' => 'Không tìm thấy nhóm.'], 404);
         }
 
-        $group = $this->service->update($group, $request->user(), $request->validated(), $request->file('cover'));
+        $group = $this->service->update(
+            $group,
+            $request->user(),
+            $request->validated(),
+            $request->file('cover'),
+            $request->file('avatar'),
+        );
 
         return response()->json(['group' => $this->service->present($group, $request->user())]);
     }
@@ -219,5 +227,52 @@ class SocialGroupController extends Controller
         $this->service->rejectJoinRequest($joinRequest, $request->user());
 
         return response()->json(['message' => 'Đã từ chối yêu cầu tham gia.']);
+    }
+
+    public function invite(InviteSocialGroupMemberRequest $request, int $groupId): JsonResponse
+    {
+        $group = $this->groups->find($groupId);
+        if (! $group) {
+            return response()->json(['message' => 'Không tìm thấy nhóm.'], 404);
+        }
+
+        $result = $this->service->invite($group, $request->user(), (int) $request->validated()['user_id']);
+        $fresh = $this->groups->find($group->id);
+
+        return response()->json([
+            'status' => $result['status'],
+            'group' => $fresh ? $this->service->present($fresh, $request->user()) : null,
+            'message' => $result['status'] === 'joined'
+                ? 'Người này đã có yêu cầu tham gia, đã được duyệt.'
+                : 'Đã gửi lời mời. Người được mời phải chấp nhận mới vào nhóm.',
+        ], $result['status'] === 'joined' ? 200 : 201);
+    }
+
+    public function acceptInvite(Request $request, int $requestId): JsonResponse
+    {
+        $joinRequest = $this->groups->findJoinRequest($requestId);
+        if (! $joinRequest) {
+            return response()->json(['message' => 'Không tìm thấy lời mời.'], 404);
+        }
+
+        $this->service->acceptInvite($joinRequest, $request->user());
+        $group = $this->groups->find($joinRequest->group_id);
+
+        return response()->json([
+            'message' => 'Đã chấp nhận lời mời.',
+            'group' => $group ? $this->service->present($group, $request->user()) : null,
+        ]);
+    }
+
+    public function declineInvite(Request $request, int $requestId): JsonResponse
+    {
+        $joinRequest = $this->groups->findJoinRequest($requestId);
+        if (! $joinRequest) {
+            return response()->json(['message' => 'Không tìm thấy lời mời.'], 404);
+        }
+
+        $this->service->declineInvite($joinRequest, $request->user());
+
+        return response()->json(['message' => 'Đã từ chối lời mời.']);
     }
 }

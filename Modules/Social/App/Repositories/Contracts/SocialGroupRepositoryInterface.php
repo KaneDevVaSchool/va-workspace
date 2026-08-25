@@ -38,7 +38,7 @@ interface SocialGroupRepositoryInterface
     /** @return list<int> */
     public function ownerAndAdminIds(int $groupId): array;
 
-    public function findPendingJoinRequest(int $groupId, int $userId): ?SocialGroupJoinRequest;
+    public function findPendingJoinRequest(int $groupId, int $userId, ?string $kind = null): ?SocialGroupJoinRequest;
 
     public function createJoinRequest(array $data): SocialGroupJoinRequest;
 

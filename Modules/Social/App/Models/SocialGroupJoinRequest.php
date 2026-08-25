@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $group_id
  * @property int $user_id
  * @property string $status
+ * @property string $kind
+ * @property int|null $invited_by
  * @property string|null $message
  * @property int|null $responded_by
  * @property \Illuminate\Support\Carbon|null $responded_at
@@ -25,12 +27,20 @@ class SocialGroupJoinRequest extends Model
 
     public const STATUSES = [self::STATUS_PENDING, self::STATUS_APPROVED, self::STATUS_REJECTED];
 
+    public const KIND_REQUEST = 'request';
+
+    public const KIND_INVITE = 'invite';
+
+    public const KINDS = [self::KIND_REQUEST, self::KIND_INVITE];
+
     protected $table = 'social_group_join_requests';
 
     protected $fillable = [
         'group_id',
         'user_id',
         'status',
+        'kind',
+        'invited_by',
         'message',
         'responded_by',
         'responded_at',
@@ -53,5 +63,10 @@ class SocialGroupJoinRequest extends Model
     public function respondedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'responded_by');
+    }
+
+    public function invitedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'invited_by');
     }
 }

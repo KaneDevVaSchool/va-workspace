@@ -22,6 +22,8 @@ class NotificationService
 
     public const TYPE_GROUP_JOIN_REJECTED = 'group_join_rejected';
 
+    public const TYPE_GROUP_INVITE = 'group_invite';
+
     public function __construct(
         private readonly UserNotificationRepositoryInterface $notifications,
         private readonly UserRepositoryInterface $users,

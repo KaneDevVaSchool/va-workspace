@@ -86,12 +86,17 @@ class SocialGroupService
         $membership ??= $this->groups->membership($group->id, $viewer->id);
         $isManager = $membership !== null && in_array($membership->role, [SocialGroupMember::ROLE_OWNER, SocialGroupMember::ROLE_ADMIN], true);
 
+        $pending = $membership === null
+            ? $this->groups->findPendingJoinRequest($group->id, $viewer->id)
+            : null;
+
         return [
             'id' => $group->id,
             'name' => $group->name,
             'description' => $group->description,
             'visibility' => $group->visibility,
             'cover_url' => $group->cover_path ? Storage::disk('public')->url($group->cover_path) : null,
+            'avatar_url' => $group->avatar_path ? Storage::disk('public')->url($group->avatar_path) : null,
             'creator' => $group->creator ? [
                 'id' => $group->creator->id,
                 'name' => $group->creator->name,
@@ -100,8 +105,9 @@ class SocialGroupService
             'members_count' => $group->members_count ?? $this->groups->membersCount($group->id),
             'my_role' => $membership?->role,
             'is_member' => $membership !== null,
-            'has_pending_request' => $membership === null
-                && $this->groups->findPendingJoinRequest($group->id, $viewer->id) !== null,
+            'has_pending_request' => $pending?->kind === SocialGroupJoinRequest::KIND_REQUEST,
+            'has_pending_invite' => $pending?->kind === SocialGroupJoinRequest::KIND_INVITE,
+            'pending_invite_id' => $pending?->kind === SocialGroupJoinRequest::KIND_INVITE ? $pending->id : null,
             'can_manage' => $isManager,
             'can_delete' => $membership?->role === SocialGroupMember::ROLE_OWNER || $viewer->isSuperAdmin(),
             'created_at' => $group->created_at?->toIso8601String(),
@@ -111,16 +117,21 @@ class SocialGroupService
     /** Bản rút gọn cho người ngoài xem nhóm bảo mật — chỉ tên + mô tả, không lộ thành viên/bài viết. */
     public function presentPreview(SocialGroup $group, User $viewer): array
     {
+        $pending = $this->groups->findPendingJoinRequest($group->id, $viewer->id);
+
         return [
             'id' => $group->id,
             'name' => $group->name,
             'description' => $group->description,
             'visibility' => $group->visibility,
             'cover_url' => $group->cover_path ? Storage::disk('public')->url($group->cover_path) : null,
+            'avatar_url' => $group->avatar_path ? Storage::disk('public')->url($group->avatar_path) : null,
             'members_count' => $group->members_count ?? $this->groups->membersCount($group->id),
             'my_role' => null,
             'is_member' => false,
-            'has_pending_request' => $this->groups->findPendingJoinRequest($group->id, $viewer->id) !== null,
+            'has_pending_request' => $pending?->kind === SocialGroupJoinRequest::KIND_REQUEST,
+            'has_pending_invite' => $pending?->kind === SocialGroupJoinRequest::KIND_INVITE,
+            'pending_invite_id' => $pending?->kind === SocialGroupJoinRequest::KIND_INVITE ? $pending->id : null,
             'can_manage' => false,
             'can_delete' => false,
             'created_at' => $group->created_at?->toIso8601String(),
@@ -129,13 +140,19 @@ class SocialGroupService
 
     private function presentJoinRequest(SocialGroupJoinRequest $request): array
     {
+        $group = $request->group;
+
         return [
             'id' => $request->id,
             'status' => $request->status,
+            'kind' => $request->kind ?: SocialGroupJoinRequest::KIND_REQUEST,
             'message' => $request->message,
-            'group' => $request->group ? [
-                'id' => $request->group->id,
-                'name' => $request->group->name,
+            'group' => $group ? [
+                'id' => $group->id,
+                'name' => $group->name,
+                'visibility' => $group->visibility,
+                'cover_url' => $group->cover_path ? Storage::disk('public')->url($group->cover_path) : null,
+                'avatar_url' => $group->avatar_path ? Storage::disk('public')->url($group->avatar_path) : null,
             ] : null,
             'user' => $request->user ? [
                 'id' => $request->user->id,
@@ -143,18 +160,23 @@ class SocialGroupService
                 'avatar_url' => $request->user->avatar_url,
                 'department' => $request->user->department?->name,
             ] : null,
+            'invited_by' => $request->invitedBy ? [
+                'id' => $request->invitedBy->id,
+                'name' => $request->invitedBy->name,
+            ] : null,
             'created_at' => $request->created_at?->toIso8601String(),
         ];
     }
 
-    public function create(User $creator, array $data, ?UploadedFile $cover = null): SocialGroup
+    public function create(User $creator, array $data, ?UploadedFile $cover = null, ?UploadedFile $avatar = null): SocialGroup
     {
-        return DB::transaction(function () use ($creator, $data, $cover) {
+        return DB::transaction(function () use ($creator, $data, $cover, $avatar) {
             $group = $this->groups->create([
                 'name' => trim((string) $data['name']),
                 'description' => $data['description'] ?? null,
                 'visibility' => $data['visibility'] ?? SocialGroup::VISIBILITY_PUBLIC,
-                'cover_path' => $cover ? $this->storeCover($cover) : null,
+                'cover_path' => $cover ? $this->storeImage($cover) : null,
+                'avatar_path' => $avatar ? $this->storeImage($avatar) : null,
                 'created_by' => $creator->id,
             ]);
 
@@ -164,7 +186,7 @@ class SocialGroupService
         });
     }
 
-    public function update(SocialGroup $group, User $actor, array $data, ?UploadedFile $cover = null): SocialGroup
+    public function update(SocialGroup $group, User $actor, array $data, ?UploadedFile $cover = null, ?UploadedFile $avatar = null): SocialGroup
     {
         $this->assertIsOwnerOrAdmin($group, $actor);
 
@@ -174,7 +196,14 @@ class SocialGroupService
             if ($group->cover_path) {
                 Storage::disk('public')->delete($group->cover_path);
             }
-            $payload['cover_path'] = $this->storeCover($cover);
+            $payload['cover_path'] = $this->storeImage($cover);
+        }
+
+        if ($avatar) {
+            if ($group->avatar_path) {
+                Storage::disk('public')->delete($group->avatar_path);
+            }
+            $payload['avatar_path'] = $this->storeImage($avatar);
         }
 
         return $this->groups->update($group, $payload);
@@ -192,10 +221,20 @@ class SocialGroupService
         if ($group->cover_path) {
             Storage::disk('public')->delete($group->cover_path);
         }
+        if ($group->avatar_path) {
+            Storage::disk('public')->delete($group->avatar_path);
+        }
     }
 
     public function join(SocialGroup $group, User $actor, ?string $message = null): array
     {
+        $pending = $this->groups->findPendingJoinRequest($group->id, $actor->id);
+        if ($pending?->kind === SocialGroupJoinRequest::KIND_INVITE) {
+            $this->acceptInvite($pending, $actor);
+
+            return ['status' => 'joined'];
+        }
+
         if ($group->visibility === SocialGroup::VISIBILITY_PRIVATE) {
             $this->requestJoin($group, $actor, $message);
 
@@ -226,6 +265,7 @@ class SocialGroupService
         $request = $this->groups->createJoinRequest([
             'group_id' => $group->id,
             'user_id' => $actor->id,
+            'kind' => SocialGroupJoinRequest::KIND_REQUEST,
             'status' => SocialGroupJoinRequest::STATUS_PENDING,
             'message' => $message !== null && trim($message) !== '' ? trim($message) : null,
         ]);
@@ -246,6 +286,12 @@ class SocialGroupService
     {
         $group = $request->group;
         $this->assertIsOwnerOrAdmin($group, $actor);
+
+        if ($request->kind !== SocialGroupJoinRequest::KIND_REQUEST) {
+            throw ValidationException::withMessages([
+                'request' => ['Đây là lời mời, người được mời phải tự chấp nhận.'],
+            ]);
+        }
 
         if ($request->status !== SocialGroupJoinRequest::STATUS_PENDING) {
             throw ValidationException::withMessages([
@@ -280,6 +326,12 @@ class SocialGroupService
         $group = $request->group;
         $this->assertIsOwnerOrAdmin($group, $actor);
 
+        if ($request->kind !== SocialGroupJoinRequest::KIND_REQUEST) {
+            throw ValidationException::withMessages([
+                'request' => ['Đây là lời mời, người được mời phải tự từ chối.'],
+            ]);
+        }
+
         if ($request->status !== SocialGroupJoinRequest::STATUS_PENDING) {
             throw ValidationException::withMessages([
                 'request' => ['Yêu cầu này đã được xử lý.'],
@@ -313,6 +365,125 @@ class SocialGroupService
         if ($request->status !== SocialGroupJoinRequest::STATUS_PENDING) {
             throw ValidationException::withMessages([
                 'request' => ['Yêu cầu này đã được xử lý.'],
+            ]);
+        }
+
+        $this->groups->updateJoinRequest($request, [
+            'status' => SocialGroupJoinRequest::STATUS_REJECTED,
+            'responded_by' => $actor->id,
+            'responded_at' => now(),
+        ]);
+    }
+
+    public function invite(SocialGroup $group, User $actor, int $targetUserId): array
+    {
+        $this->assertIsOwnerOrAdmin($group, $actor);
+
+        if ((int) $targetUserId === (int) $actor->id) {
+            throw ValidationException::withMessages([
+                'user_id' => ['Bạn đã là thành viên của nhóm này.'],
+            ]);
+        }
+
+        if ($this->groups->membership($group->id, $targetUserId) !== null) {
+            throw ValidationException::withMessages([
+                'user_id' => ['Người này đã là thành viên của nhóm.'],
+            ]);
+        }
+
+        $pending = $this->groups->findPendingJoinRequest($group->id, $targetUserId);
+        if ($pending?->kind === SocialGroupJoinRequest::KIND_REQUEST) {
+            $this->approveJoinRequest($pending, $actor);
+
+            return ['status' => 'joined'];
+        }
+        if ($pending?->kind === SocialGroupJoinRequest::KIND_INVITE) {
+            throw ValidationException::withMessages([
+                'user_id' => ['Đã gửi lời mời cho người này, vui lòng chờ họ chấp nhận.'],
+            ]);
+        }
+
+        $target = User::query()->find($targetUserId);
+        if ($target === null) {
+            throw ValidationException::withMessages([
+                'user_id' => ['Không tìm thấy người dùng.'],
+            ]);
+        }
+
+        $this->groups->createJoinRequest([
+            'group_id' => $group->id,
+            'user_id' => $targetUserId,
+            'kind' => SocialGroupJoinRequest::KIND_INVITE,
+            'invited_by' => $actor->id,
+            'status' => SocialGroupJoinRequest::STATUS_PENDING,
+        ]);
+
+        $this->notifications->notify(
+            $target,
+            $actor,
+            NotificationService::TYPE_GROUP_INVITE,
+            $actor->name.' mời bạn tham gia nhóm "'.$group->name.'"',
+            $group->visibility === SocialGroup::VISIBILITY_PRIVATE
+                ? 'Nhóm bảo mật — hãy chấp nhận lời mời để xem nội dung.'
+                : null,
+            '/social/groups',
+        );
+
+        return ['status' => 'invited'];
+    }
+
+    public function acceptInvite(SocialGroupJoinRequest $request, User $actor): void
+    {
+        if ($request->kind !== SocialGroupJoinRequest::KIND_INVITE) {
+            throw ValidationException::withMessages([
+                'request' => ['Đây không phải lời mời tham gia nhóm.'],
+            ]);
+        }
+
+        if ((int) $request->user_id !== (int) $actor->id) {
+            throw ValidationException::withMessages([
+                'request' => ['Bạn không thể chấp nhận lời mời của người khác.'],
+            ]);
+        }
+
+        if ($request->status !== SocialGroupJoinRequest::STATUS_PENDING) {
+            throw ValidationException::withMessages([
+                'request' => ['Lời mời này đã được xử lý.'],
+            ]);
+        }
+
+        $group = $request->group;
+
+        DB::transaction(function () use ($request, $actor, $group) {
+            $this->groups->updateJoinRequest($request, [
+                'status' => SocialGroupJoinRequest::STATUS_APPROVED,
+                'responded_by' => $actor->id,
+                'responded_at' => now(),
+            ]);
+
+            if ($this->groups->membership($group->id, $actor->id) === null) {
+                $this->groups->addMember($group->id, $actor->id, SocialGroupMember::ROLE_MEMBER);
+            }
+        });
+    }
+
+    public function declineInvite(SocialGroupJoinRequest $request, User $actor): void
+    {
+        if ($request->kind !== SocialGroupJoinRequest::KIND_INVITE) {
+            throw ValidationException::withMessages([
+                'request' => ['Đây không phải lời mời tham gia nhóm.'],
+            ]);
+        }
+
+        if ((int) $request->user_id !== (int) $actor->id) {
+            throw ValidationException::withMessages([
+                'request' => ['Bạn không thể từ chối lời mời của người khác.'],
+            ]);
+        }
+
+        if ($request->status !== SocialGroupJoinRequest::STATUS_PENDING) {
+            throw ValidationException::withMessages([
+                'request' => ['Lời mời này đã được xử lý.'],
             ]);
         }
 
@@ -485,8 +656,8 @@ class SocialGroupService
         }
     }
 
-    private function storeCover(UploadedFile $cover): string
+    private function storeImage(UploadedFile $file): string
     {
-        return $cover->store('social/groups', 'public');
+        return $file->store('social/groups', 'public');
     }
 }

@@ -140,13 +140,18 @@ class SocialGroupRepository implements SocialGroupRepositoryInterface
             ->all();
     }
 
-    public function findPendingJoinRequest(int $groupId, int $userId): ?SocialGroupJoinRequest
+    public function findPendingJoinRequest(int $groupId, int $userId, ?string $kind = null): ?SocialGroupJoinRequest
     {
-        return SocialGroupJoinRequest::query()
+        $query = SocialGroupJoinRequest::query()
             ->where('group_id', $groupId)
             ->where('user_id', $userId)
-            ->where('status', SocialGroupJoinRequest::STATUS_PENDING)
-            ->first();
+            ->where('status', SocialGroupJoinRequest::STATUS_PENDING);
+
+        if ($kind !== null) {
+            $query->where('kind', $kind);
+        }
+
+        return $query->first();
     }
 
     public function createJoinRequest(array $data): SocialGroupJoinRequest
@@ -156,7 +161,7 @@ class SocialGroupRepository implements SocialGroupRepositoryInterface
 
     public function findJoinRequest(int $id): ?SocialGroupJoinRequest
     {
-        return SocialGroupJoinRequest::query()->with(['group', 'user'])->find($id);
+        return SocialGroupJoinRequest::query()->with(['group', 'user', 'invitedBy'])->find($id);
     }
 
     public function updateJoinRequest(SocialGroupJoinRequest $request, array $data): SocialGroupJoinRequest
@@ -171,6 +176,7 @@ class SocialGroupRepository implements SocialGroupRepositoryInterface
         return SocialGroupJoinRequest::query()
             ->where('group_id', $groupId)
             ->where('status', $status)
+            ->where('kind', SocialGroupJoinRequest::KIND_REQUEST)
             ->with(['user.department'])
             ->orderByDesc('created_at')
             ->paginate($perPage, ['*'], 'page', $page);
@@ -181,7 +187,7 @@ class SocialGroupRepository implements SocialGroupRepositoryInterface
         return SocialGroupJoinRequest::query()
             ->where('user_id', $userId)
             ->where('status', SocialGroupJoinRequest::STATUS_PENDING)
-            ->with(['group'])
+            ->with(['group', 'invitedBy'])
             ->orderByDesc('created_at')
             ->paginate($perPage, ['*'], 'page', $page);
     }

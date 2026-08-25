@@ -10,6 +10,7 @@ const props = defineProps({
   departmentName: { type: String, default: '' },
   defaultScope: { type: String, default: 'company' },
   defaultWallUser: { type: Object, default: null },
+  defaultGroup: { type: Object, default: null },
 });
 
 const emit = defineEmits(['close', 'shared']);
@@ -22,7 +23,12 @@ const query = ref('');
 const results = ref([]);
 const searching = ref(false);
 const selectedUser = ref(null);
+const groupQuery = ref('');
+const groupResults = ref([]);
+const searchingGroups = ref(false);
+const selectedGroup = ref(null);
 let searchTimer = null;
+let groupSearchTimer = null;
 
 const hasDepartment = computed(() => Boolean(auth.user?.department?.id && props.departmentName));
 const isOwnDefaultWall = computed(() => {
@@ -32,27 +38,29 @@ const isOwnDefaultWall = computed(() => {
 
 const destinations = computed(() => {
   const items = [
-    { id: 'company', icon: 'megaphone', label: 'Bảng tin chung', hint: 'Mọi người trong công ty đều thấy' },
+    { id: 'company', icon: 'megaphone', label: 'Bảng tin chung' },
   ];
   if (hasDepartment.value) {
     items.push({
       id: 'department',
       icon: 'building',
       label: `Tường phòng ${props.departmentName}`,
-      hint: 'Chỉ thành viên phòng ban',
     });
   }
   items.push({
     id: 'personal',
     icon: 'user',
     label: 'Tường của tôi',
-    hint: 'Đăng lên tường cá nhân của bạn',
+  });
+  items.push({
+    id: 'group',
+    icon: 'users',
+    label: 'Nhóm',
   });
   items.push({
     id: 'other',
     icon: 'users',
     label: 'Tường người khác',
-    hint: 'Chọn đồng nghiệp để chia sẻ lên tường họ',
   });
   return items;
 });
@@ -62,6 +70,9 @@ function resetState() {
   query.value = '';
   results.value = [];
   selectedUser.value = null;
+  groupQuery.value = '';
+  groupResults.value = [];
+  selectedGroup.value = null;
   if (props.defaultScope === 'department' && hasDepartment.value) {
     destination.value = 'department';
     return;
@@ -73,6 +84,11 @@ function resetState() {
   }
   if (props.defaultScope === 'personal') {
     destination.value = 'personal';
+    return;
+  }
+  if (props.defaultScope === 'group') {
+    destination.value = 'group';
+    selectedGroup.value = props.defaultGroup;
     return;
   }
   destination.value = 'company';
@@ -110,6 +126,20 @@ function clearSelectedUser() {
   selectedUser.value = null;
 }
 
+function pickGroup(group) {
+  selectedGroup.value = group;
+  groupQuery.value = '';
+  searchGroups('');
+}
+
+function clearSelectedGroup() {
+  selectedGroup.value = null;
+}
+
+function groupInitial(group) {
+  return (group?.name || '?').trim().charAt(0).toUpperCase() || '?';
+}
+
 async function searchUsers(needle) {
   searching.value = true;
   try {
@@ -122,10 +152,37 @@ async function searchUsers(needle) {
   }
 }
 
+async function searchGroups(needle) {
+  searchingGroups.value = true;
+  try {
+    const { data } = await window.axios.get('/api/social/groups', {
+      params: { tab: 'mine', per_page: 30, q: needle || undefined },
+    });
+    groupResults.value = (data.groups ?? []).filter((group) => group.id !== selectedGroup.value?.id);
+  } catch {
+    groupResults.value = [];
+  } finally {
+    searchingGroups.value = false;
+  }
+}
+
 function onQueryInput(event) {
   query.value = event.target.value;
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => searchUsers(query.value.trim()), 200);
+}
+
+function onGroupQueryInput(event) {
+  groupQuery.value = event.target.value;
+  clearTimeout(groupSearchTimer);
+  groupSearchTimer = setTimeout(() => searchGroups(groupQuery.value.trim()), 200);
+}
+
+function setDestination(id) {
+  destination.value = id;
+  if (id === 'group') {
+    searchGroups(groupQuery.value.trim());
+  }
 }
 
 function payload() {
@@ -143,6 +200,13 @@ function payload() {
       caption: caption.value.trim() || undefined,
     };
   }
+  if (destination.value === 'group') {
+    return {
+      post_scope: 'group',
+      group_id: selectedGroup.value?.id,
+      caption: caption.value.trim() || undefined,
+    };
+  }
   return {
     post_scope: destination.value,
     caption: caption.value.trim() || undefined,
@@ -155,6 +219,9 @@ function successMessage() {
   if (destination.value === 'other') {
     return `Đã chia sẻ bài viết lên tường của ${selectedUser.value?.name ?? 'đồng nghiệp'}.`;
   }
+  if (destination.value === 'group') {
+    return `Đã chia sẻ bài viết lên nhóm "${selectedGroup.value?.name ?? ''}".`;
+  }
   return 'Đã chia sẻ bài viết lên bảng tin chung.';
 }
 
@@ -162,6 +229,10 @@ async function submit() {
   if (submitting.value || !props.postId) return;
   if (destination.value === 'other' && !selectedUser.value?.id) {
     showClientToast('error', 'Hãy chọn người để chia sẻ lên tường của họ.');
+    return;
+  }
+  if (destination.value === 'group' && !selectedGroup.value?.id) {
+    showClientToast('error', 'Hãy chọn nhóm để chia sẻ.');
     return;
   }
 
@@ -184,16 +255,21 @@ watch(
     if (isOpen) {
       resetState();
       bindPage();
+      if (destination.value === 'group') {
+        searchGroups('');
+      }
       return;
     }
     unbindPage();
     clearTimeout(searchTimer);
+    clearTimeout(groupSearchTimer);
   },
 );
 
 onBeforeUnmount(() => {
   unbindPage();
   clearTimeout(searchTimer);
+  clearTimeout(groupSearchTimer);
 });
 </script>
 
@@ -230,15 +306,12 @@ onBeforeUnmount(() => {
                 :class="{ 'share-dialog__dest--active': destination === item.id }"
                 role="radio"
                 :aria-checked="destination === item.id"
-                @click="destination = item.id"
+                @click="setDestination(item.id)"
               >
                 <span class="share-dialog__dest-icon" aria-hidden="true">
                   <AppIcon :name="item.icon" :size="16" />
                 </span>
-                <span class="share-dialog__dest-copy">
-                  <span class="share-dialog__dest-label">{{ item.label }}</span>
-                  <span class="share-dialog__dest-hint">{{ item.hint }}</span>
-                </span>
+                <span class="share-dialog__dest-label">{{ item.label }}</span>
               </button>
             </div>
 
@@ -292,6 +365,65 @@ onBeforeUnmount(() => {
               </ul>
               <p v-else-if="query.trim()" class="share-dialog__empty">
                 Không tìm thấy đồng nghiệp khớp “{{ query.trim() }}”.
+              </p>
+            </div>
+
+            <div v-if="destination === 'group'" class="share-dialog__people">
+              <div v-if="selectedGroup" class="share-dialog__picked">
+                <img
+                  v-if="selectedGroup.avatar_url"
+                  class="share-dialog__avatar"
+                  :src="selectedGroup.avatar_url"
+                  :alt="`Ảnh đại diện nhóm ${selectedGroup.name}`"
+                />
+                <span v-else class="share-dialog__avatar share-dialog__avatar--placeholder">
+                  {{ groupInitial(selectedGroup) }}
+                </span>
+                <span class="share-dialog__picked-name">{{ selectedGroup.name }}</span>
+                <button type="button" class="share-dialog__picked-clear" aria-label="Bỏ chọn nhóm" @click="clearSelectedGroup">
+                  <AppIcon name="close" :size="14" />
+                </button>
+              </div>
+
+              <label class="share-dialog__search">
+                <AppIcon name="search" :size="16" />
+                <input
+                  :value="groupQuery"
+                  type="search"
+                  placeholder="Tìm nhóm của bạn..."
+                  aria-label="Tìm nhóm để chia sẻ"
+                  @input="onGroupQueryInput"
+                />
+              </label>
+
+              <p v-if="searchingGroups" class="share-dialog__empty">Đang tìm...</p>
+              <ul v-else-if="groupResults.length > 0" class="share-dialog__results">
+                <li v-for="group in groupResults" :key="group.id">
+                  <button type="button" class="share-dialog__person" @click="pickGroup(group)">
+                    <img
+                      v-if="group.avatar_url"
+                      class="share-dialog__avatar"
+                      :src="group.avatar_url"
+                      :alt="`Ảnh đại diện nhóm ${group.name}`"
+                    />
+                    <span v-else class="share-dialog__avatar share-dialog__avatar--placeholder">
+                      {{ groupInitial(group) }}
+                    </span>
+                    <span class="share-dialog__person-copy">
+                      <span class="share-dialog__person-name">{{ group.name }}</span>
+                      <span class="share-dialog__person-meta">
+                        {{ group.visibility === 'private' ? 'Nhóm bảo mật' : 'Nhóm công khai' }}
+                        · {{ group.members_count }} thành viên
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              </ul>
+              <p v-else-if="groupQuery.trim()" class="share-dialog__empty">
+                Không tìm thấy nhóm khớp “{{ groupQuery.trim() }}”.
+              </p>
+              <p v-else-if="!selectedGroup" class="share-dialog__empty">
+                Bạn chưa tham gia nhóm nào.
               </p>
             </div>
 
@@ -441,26 +573,10 @@ onBeforeUnmount(() => {
   color: var(--color-primary);
 }
 
-.share-dialog__dest-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 1px;
-}
-
 .share-dialog__dest-label {
+  min-width: 0;
   font-size: 0.875rem;
   font-weight: 700;
-}
-
-.share-dialog__dest-hint {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--color-text-muted);
-}
-
-.share-dialog__dest--active .share-dialog__dest-hint {
-  color: color-mix(in srgb, var(--color-primary) 72%, var(--color-text-muted));
 }
 
 .share-dialog__people {

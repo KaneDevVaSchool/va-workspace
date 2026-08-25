@@ -18,6 +18,7 @@ class StoreSocialGroupRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:2000'],
             'visibility' => ['sometimes', 'in:public,private'],
             'cover' => ['sometimes', 'nullable', 'image', 'max:10240'],
+            'avatar' => ['sometimes', 'nullable', 'image', 'max:5120'],
         ];
     }
 
@@ -30,6 +31,8 @@ class StoreSocialGroupRequest extends FormRequest
             'description.max' => 'Mô tả nhóm không được vượt quá 2000 ký tự.',
             'cover.image' => 'Ảnh bìa không hợp lệ.',
             'cover.max' => 'Ảnh bìa không được vượt quá 10MB.',
+            'avatar.image' => 'Ảnh đại diện không hợp lệ.',
+            'avatar.max' => 'Ảnh đại diện không được vượt quá 5MB.',
         ];
     }
 }

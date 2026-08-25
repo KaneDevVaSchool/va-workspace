@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $description
  * @property string $visibility
  * @property string|null $cover_path
+ * @property string|null $avatar_path
  * @property int $created_by
  */
 class SocialGroup extends Model
@@ -33,6 +34,7 @@ class SocialGroup extends Model
         'description',
         'visibility',
         'cover_path',
+        'avatar_path',
         'created_by',
     ];
 

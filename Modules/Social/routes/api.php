@@ -13,12 +13,15 @@ Route::middleware('auth')->prefix('social')->name('social.')->group(function () 
     Route::post('/groups', [SocialGroupController::class, 'store'])->name('groups.store');
     Route::get('/groups/mine/requests', [SocialGroupController::class, 'myJoinRequests'])->name('groups.my-requests');
     Route::delete('/groups/requests/{requestId}', [SocialGroupController::class, 'cancelJoinRequest'])->name('groups.cancel-request');
+    Route::post('/groups/invites/{requestId}/accept', [SocialGroupController::class, 'acceptInvite'])->name('groups.invites.accept');
+    Route::post('/groups/invites/{requestId}/decline', [SocialGroupController::class, 'declineInvite'])->name('groups.invites.decline');
     Route::get('/groups/{groupId}', [SocialGroupController::class, 'show'])->name('groups.show');
     Route::put('/groups/{groupId}', [SocialGroupController::class, 'update'])->name('groups.update');
     Route::delete('/groups/{groupId}', [SocialGroupController::class, 'destroy'])->name('groups.destroy');
     Route::post('/groups/{groupId}/join', [SocialGroupController::class, 'join'])->name('groups.join');
     Route::post('/groups/{groupId}/leave', [SocialGroupController::class, 'leave'])->name('groups.leave');
     Route::get('/groups/{groupId}/members', [SocialGroupController::class, 'members'])->name('groups.members');
+    Route::post('/groups/{groupId}/invites', [SocialGroupController::class, 'invite'])->name('groups.invites.store');
     Route::delete('/groups/{groupId}/members/{userId}', [SocialGroupController::class, 'removeMember'])->name('groups.members.remove');
     Route::put('/groups/{groupId}/members/{userId}/role', [SocialGroupController::class, 'updateMemberRole'])->name('groups.members.role');
     Route::post('/groups/{groupId}/members/{userId}/transfer-ownership', [SocialGroupController::class, 'transferOwnership'])->name('groups.transfer-ownership');
