@@ -30,9 +30,9 @@ return new class extends Migration
 
             /**
              * Mảng JSON các mức điểm, tuỳ type:
-             *   scale:    [{label: 'Xuất sắc', score: 5}, {label: 'Tốt', score: 4}, ...]
-             *   behavior: [{label: 'Đi muộn', score: -1}, {label: 'Hoàn thành sớm', score: 2}]
-             * Tối thiểu 1 mức; score là số nguyên khác 0 (scale: dương; behavior: bất kỳ).
+             *   scale:    [{code: 'M1', label: 'Không đáp ứng', description: '', score: 1}, ...]
+             *   behavior: [{code: 'H1', label: 'Đi muộn', description: '', score: -1}, ...]
+             * Tối thiểu 1 mức; score (trọng số) bước 0.5 (scale: ≥ 0.5; behavior: khác 0).
              */
             $table->json('levels');
             $table->boolean('is_active')->default(true);

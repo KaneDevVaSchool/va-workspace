@@ -5,7 +5,9 @@ namespace Modules\Evaluation\App\Providers;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriteriaRepositoryInterface;
+use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriterionTypeRepositoryInterface;
 use Modules\Evaluation\App\Repositories\EvaluationCriteriaRepository;
+use Modules\Evaluation\App\Repositories\EvaluationCriterionTypeRepository;
 
 class EvaluationServiceProvider extends ServiceProvider
 {
@@ -14,6 +16,10 @@ class EvaluationServiceProvider extends ServiceProvider
         $this->app->bind(
             EvaluationCriteriaRepositoryInterface::class,
             EvaluationCriteriaRepository::class,
+        );
+        $this->app->bind(
+            EvaluationCriterionTypeRepositoryInterface::class,
+            EvaluationCriterionTypeRepository::class,
         );
     }
 

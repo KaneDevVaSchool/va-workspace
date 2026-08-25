@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Evaluation\App\Http\Controllers\EvaluationCriteriaController;
+use Modules\Evaluation\App\Http\Controllers\EvaluationCriterionTypeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -16,6 +17,12 @@ use Modules\Evaluation\App\Http\Controllers\EvaluationCriteriaController;
 */
 
 Route::prefix('evaluation')->name('evaluation.')->group(function () {
+
+    Route::get('/criterion-types', [EvaluationCriterionTypeController::class, 'index'])
+        ->name('criterion-types.index');
+
+    Route::post('/criterion-types', [EvaluationCriterionTypeController::class, 'store'])
+        ->name('criterion-types.store');
 
     // List tiêu chí — manager: phòng ban của user; superadmin: ?department_id=
     Route::get('/criteria', [EvaluationCriteriaController::class, 'index'])

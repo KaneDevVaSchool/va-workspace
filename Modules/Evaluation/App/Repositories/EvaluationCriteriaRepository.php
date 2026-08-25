@@ -11,6 +11,7 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
     public function allByDepartment(int $departmentId): Collection
     {
         return EvaluationCriteria::query()
+            ->with('criterionType')
             ->where('department_id', $departmentId)
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -25,6 +26,7 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
     public function findByDepartment(int $id, int $departmentId): ?EvaluationCriteria
     {
         return EvaluationCriteria::query()
+            ->with('criterionType')
             ->where('id', $id)
             ->where('department_id', $departmentId)
             ->first();
@@ -32,14 +34,17 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
 
     public function create(array $data): EvaluationCriteria
     {
-        return EvaluationCriteria::query()->create($data);
+        $criterion = EvaluationCriteria::query()->create($data);
+        $criterion->load('criterionType');
+
+        return $criterion;
     }
 
     public function update(EvaluationCriteria $criterion, array $data): EvaluationCriteria
     {
         $criterion->update($data);
 
-        return $criterion->fresh();
+        return $criterion->fresh(['criterionType']);
     }
 
     public function delete(EvaluationCriteria $criterion): bool
@@ -51,7 +56,7 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
     {
         $criterion->update(['is_active' => ! $criterion->is_active]);
 
-        return $criterion->fresh();
+        return $criterion->fresh(['criterionType']);
     }
 
     public function reorder(int $departmentId, array $orderedIds): void

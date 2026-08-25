@@ -752,7 +752,8 @@ onBeforeUnmount(() => {
               <span class="wc-detail__row-label">
                 {{ criterion.name }}
                 <span class="wc-detail__eval-type">
-                  {{ criterion.type === 'scale' ? 'Thang điểm' : 'Cộng/trừ' }}
+                  {{ criterion.criterion_type?.name ? `${criterion.criterion_type.name} · ` : '' }}{{ criterion.type === 'scale' ? 'Thang điểm' : 'Cộng/trừ' }}
+                  <template v-if="criterion.criterion_type?.code"> · {{ criterion.criterion_type.code }}</template>
                 </span>
               </span>
               <span class="wc-detail__row-value">

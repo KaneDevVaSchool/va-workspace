@@ -39,6 +39,7 @@ class ActivityLogService
         'evaluation_criteria.create'       => 'Tạo tiêu chí đánh giá',
         'evaluation_criteria.update'       => 'Cập nhật tiêu chí đánh giá',
         'evaluation_criteria.delete'       => 'Xoá tiêu chí đánh giá',
+        'evaluation_criterion_type.create' => 'Tạo loại tiêu chí đánh giá',
     ];
 
     /** @var array<string, string> */
@@ -49,7 +50,8 @@ class ActivityLogService
         'shortcut' => 'Lối tắt',
         'role' => 'Vai trò',
         'department_sidebar_config' => 'Menu phòng ban',
-        'evaluation_criteria'      => 'Tiêu chí đánh giá',
+        'evaluation_criteria'       => 'Tiêu chí đánh giá',
+        'evaluation_criterion_type' => 'Loại tiêu chí đánh giá',
     ];
 
     /** @var array<string, string> */

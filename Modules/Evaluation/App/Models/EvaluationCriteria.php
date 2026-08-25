@@ -3,6 +3,7 @@
 namespace Modules\Evaluation\App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Identity\App\Models\Department;
 
 /**
@@ -11,8 +12,9 @@ use Modules\Identity\App\Models\Department;
  * @property string      $name
  * @property string      $type           'scale' | 'behavior'
  * @property string|null $description
- * @property array       $levels         [{label, score}]
+ * @property array       $levels         [{code, label, description, score}]
  * @property bool        $is_active
+ * @property bool        $allow_half     cho phép trọng số bước 0.5
  * @property int         $sort_order
  * @property int|null    $created_by
  */
@@ -22,23 +24,31 @@ class EvaluationCriteria extends Model
 
     protected $fillable = [
         'department_id',
+        'criterion_type_id',
         'name',
         'type',
         'description',
         'levels',
         'is_active',
+        'allow_half',
         'sort_order',
         'created_by',
     ];
 
     protected $casts = [
-        'levels'    => 'array',
-        'is_active' => 'boolean',
+        'levels'     => 'array',
+        'is_active'  => 'boolean',
+        'allow_half' => 'boolean',
     ];
 
-    public function department()
+    public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function criterionType(): BelongsTo
+    {
+        return $this->belongsTo(EvaluationCriterionType::class, 'criterion_type_id');
     }
 
     /**
@@ -46,14 +56,14 @@ class EvaluationCriteria extends Model
      *   scale    → mức điểm cao nhất trong levels.
      *   behavior → tổng điểm dương (đóng góp tối đa có thể đạt).
      */
-    public function getMaxScoreAttribute(): int
+    public function getMaxScoreAttribute(): float
     {
         $levels = $this->levels ?? [];
 
         if ($this->type === 'scale') {
-            return (int) collect($levels)->max('score');
+            return (float) collect($levels)->max('score');
         }
 
-        return (int) collect($levels)->where('score', '>', 0)->sum('score');
+        return (float) collect($levels)->where('score', '>', 0)->sum('score');
     }
 }
