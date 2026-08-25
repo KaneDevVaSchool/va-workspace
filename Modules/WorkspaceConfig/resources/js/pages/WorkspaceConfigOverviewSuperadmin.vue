@@ -864,12 +864,8 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.wc-overview__table tbody td :deep(.status-badge) {
+.wc-overview__table tbody td :deep(.status-mark) {
   display: inline-flex;
-}
-
-.wc-overview__table tbody td :deep(.status-badge span) {
-  display: inline-block;
 }
 
 .wc-overview__empty {
