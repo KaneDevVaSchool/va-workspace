@@ -204,9 +204,10 @@ function handleBtnClick(btn) {
   emit('btn-click', { btn });
 }
 
-// ─── SVG arrow marker unique id ───────────────────────────────────────────────
+// ─── SVG arrow marker / watermark filter unique id ─────────────────────────────
 const uid     = getCurrentInstance()?.uid ?? Math.random().toString(36).slice(2);
 const arrowId = `dsw-arrow-${uid}`;
+const wmFilterId = `dsw-watermark-boost-${uid}`;
 
 // ─── Node height measurement ──────────────────────────────────────────────────
 const nodeElMap = {};
@@ -261,16 +262,16 @@ async function layoutCanvas() {
 
 // ─── Connector path ───────────────────────────────────────────────────────────
 function estimateH(node) {
-  if (!node) return 96;
-  if (node.type === 'icon') return 96;
+  if (!node) return 110;
+  if (node.type === 'icon') return 110;
   if (node.type === 'card') {
-    const head  = node.compact ? 0 : 58;
-    const items = (node.items?.length ?? 0) * 30;
-    const btn   = node.button ? 44 : 0;
-    return head + items + btn + 20;
+    const head  = node.compact ? 0 : 64;
+    const items = (node.items?.length ?? 0) * 34;
+    const btn   = node.button ? 47 : 0;
+    return head + items + btn + 23;
   }
-  if (node.type === 'group') return 52 + (node.children?.length ?? 0) * 58;
-  return 96;
+  if (node.type === 'group') return 58 + (node.children?.length ?? 0) * 64;
+  return 110;
 }
 
 function nodeRect(id) {
@@ -403,6 +404,23 @@ function pathD(edge) {
       :class="{ 'dsw__stage--panning': panning, 'dsw__stage--dragging': draggingId }"
       @pointerdown="startPan"
     >
+      <!-- Watermark nền (cùng PNG với trang Đăng nhập / Cộng đồng) -->
+      <svg class="dsw__wm-defs" aria-hidden="true" focusable="false">
+        <filter :id="wmFilterId" color-interpolation-filters="sRGB">
+          <feColorMatrix
+            type="matrix"
+            values="0 0 0 0 0.604  0 0 0 0 0  0 0 0 0 0.212  0 0 0 20 0"
+          />
+        </filter>
+      </svg>
+      <img
+        src="/images/background/background-logo.png"
+        alt=""
+        class="dsw__watermark"
+        aria-hidden="true"
+        :style="{ filter: `url(#${wmFilterId})` }"
+      />
+
       <div v-if="!hasPanned" class="dsw__pan-hint">
         <AppIcon name="move" :size="13" :stroke-width="1.75" />
         <span>Nắm và kéo vào khoảng trống để di chuyển sơ đồ</span>
@@ -665,11 +683,36 @@ function pathD(edge) {
   user-select: none;
   cursor: grab;
   overscroll-behavior: none;
+  isolation: isolate;
 }
 
 .dsw__stage--panning,
 .dsw__stage--dragging {
   cursor: grabbing;
+}
+
+/* ── Watermark nền ────────────────────────────────────────────────────────── */
+/* Cùng PNG watermark trang Đăng nhập / Cộng đồng. Ảnh nguồn alpha thấp,
+   boost alpha + nhuộm primary-900 qua filter SVG (không invert vì nền sáng).
+   Cố định theo khung nhìn của stage, không trôi theo pan/zoom canvas. */
+.dsw__wm-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.dsw__watermark {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.05);
+  pointer-events: none;
+  opacity: 0.05;
 }
 
 /* ── Pan hint ─────────────────────────────────────────────────────────────── */
@@ -704,6 +747,8 @@ function pathD(edge) {
 
 /* ── Canvas wrap ──────────────────────────────────────────────────────────── */
 .dsw__canvas-wrap {
+  position: relative;
+  z-index: 1;
   display: block;
   min-width: 100%;
   min-height: 100%;
@@ -750,14 +795,14 @@ function pathD(edge) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   text-align: center;
 }
 
 .dsw-box-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 14px;
+  width: 76px;
+  height: 76px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -767,7 +812,7 @@ function pathD(edge) {
 }
 
 .dsw-icon-label {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--color-text-muted);
   line-height: 1.3;
@@ -787,11 +832,11 @@ function pathD(edge) {
 }
 
 .dsw-node--compact .dsw-card-body {
-  padding: 10px 14px;
+  padding: 12px 16px;
 }
 
 .dsw-node--compact .dsw-card-item {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   padding: 2px 0;
 }
@@ -800,8 +845,8 @@ function pathD(edge) {
 .dsw-card-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 12px 14px;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
@@ -809,9 +854,9 @@ function pathD(edge) {
 
 .dsw-card-icon {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
   background: var(--color-primary);
   color: var(--color-on-primary);
   display: flex;
@@ -819,14 +864,14 @@ function pathD(edge) {
   justify-content: center;
 }
 
-.dsw-card-icon--sm { width: 26px; height: 26px; border-radius: 6px; }
+.dsw-card-icon--sm { width: 30px; height: 30px; border-radius: 7px; }
 
 .dsw-node--hl .dsw-card-icon { background: var(--color-primary-700); }
 
 .dsw-card-hc { flex: 1; min-width: 0; }
 
 .dsw-card-title {
-  font-size: 13.5px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--color-text);
   line-height: 1.3;
@@ -837,7 +882,7 @@ function pathD(edge) {
   align-items: center;
   gap: 4px;
   margin-top: 3px;
-  font-size: 11.5px;
+  font-size: 13px;
   color: var(--color-text-muted);
 }
 
@@ -845,7 +890,7 @@ function pathD(edge) {
 
 /* Card body */
 .dsw-card-body {
-  padding: 8px 12px 12px;
+  padding: 9px 14px 14px;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -854,10 +899,10 @@ function pathD(edge) {
 .dsw-card-item {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 12.5px;
+  gap: 8px;
+  font-size: 14.5px;
   color: var(--color-text-muted);
-  padding: 3.5px 0;
+  padding: 4px 0;
 }
 
 .dsw-card-item svg {
@@ -871,14 +916,14 @@ function pathD(edge) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 7px 10px;
-  margin-top: 8px;
+  gap: 6px;
+  padding: 8px 12px;
+  margin-top: 9px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text);
-  font: 500 12px/1 var(--font-family-base);
+  font: 500 14px/1 var(--font-family-base);
   cursor: pointer;
   transition: background 120ms, border-color 120ms;
   width: 100%;
@@ -895,7 +940,7 @@ function pathD(edge) {
 
 /* ── Group node ───────────────────────────────────────────────────────────── */
 .dsw-node--group {
-  padding: 26px 10px 10px;
+  padding: 30px 12px 12px;
   position: relative;
   border-radius: var(--radius-md);
   /* 4-side dashed via gradient strips — matches reference ds-type-dashed */
@@ -911,12 +956,12 @@ function pathD(edge) {
 
 .dsw-group-label {
   position: absolute;
-  top: -12px;
-  left: 12px;
+  top: -13px;
+  left: 13px;
   background: var(--color-primary);
   color: var(--color-on-primary);
-  padding: 3px 11px;
-  font-size: 11.5px;
+  padding: 4px 13px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.06em;
   border-radius: var(--radius-sm);
@@ -925,14 +970,14 @@ function pathD(edge) {
 .dsw-group-body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 
 .dsw-group-child {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 9px 11px;
+  gap: 9px;
+  padding: 10px 13px;
   background: var(--color-surface);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
