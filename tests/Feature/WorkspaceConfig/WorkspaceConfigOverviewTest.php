@@ -39,7 +39,7 @@ class WorkspaceConfigOverviewTest extends TestCase
         Team::query()->create(['department_id' => $configuredByTeam->id, 'name' => 'Nhóm A']);
         DepartmentSidebarConfig::query()->create([
             'department_id' => $configuredByMenu->id,
-            'menu_key' => 'manager.workspace-config.members',
+            'menu_key' => 'home',
             'is_visible' => false,
         ]);
 

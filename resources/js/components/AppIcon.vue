@@ -21,6 +21,7 @@ const PATHS = {
   refresh: 'M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z',
   search: 'M10 4a6 6 0 1 0 3.76 10.66l4.79 4.8 1.41-1.42-4.79-4.79A6 6 0 0 0 10 4Zm-4 6a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z',
   lock: 'M12 2a4 4 0 0 0-4 4v3H7a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a4 4 0 0 0-4-4Zm-2 7V6a2 2 0 1 1 4 0v3h-4Z',
+  unlock: 'M7 11V7a5 5 0 0 1 9.9-1M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z',
   home: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10',
   plus: 'M12 5v14M5 12h14',
   layoutList: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
@@ -64,6 +65,18 @@ const PATHS = {
   activity: 'M22 12h-4l-3 9L9 3l-3 9H2',
   target: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   move: 'M12 2v20M2 12h20M5 9l-3 3 3 3M19 9l3 3-3 3M9 5l3-3 3 3M9 19l3 3 3-3',
+  megaphone: 'M3 11v2a2 2 0 0 0 2 2h1l2 6h2l-1.5-6H12l7 4V5l-7 4H6a2 2 0 0 0-2 2Zm5 4v5a2 2 0 0 0 4 0v-5',
+  share: 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13',
+  bold: 'M6 4h8a4 4 0 0 1 0 8H6zM6 12h9a4 4 0 0 1 0 8H6z',
+  italic: 'M19 4h-9M14 20H5M15 4L9 20',
+  heading: 'M6 4v16M18 4v16M6 12h12',
+  listBullet: 'M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01',
+  listNumbered: 'M11 6h10M11 12h10M11 18h10M4 6h1v4M4 10h2M6 14a2 2 0 1 0-2 2h2a2 2 0 1 1-2 2H4',
+  alignLeft: 'M4 6h16M4 12h10M4 18h13',
+  alignCenter: 'M4 6h16M7 12h10M5 18h14',
+  alignRight: 'M4 6h16M10 12h10M7 18h13',
+  textColor: 'M6 15l4-10 4 10M7.5 11h5M4 20h16',
+  unlink: 'M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71M5.17 11.75 3.46 13.46a5 5 0 0 0 7.07 7.07l1.71-1.71M8 8l8 8M2 2l20 20',
 };
 
 const STROKE_ICONS = [
@@ -76,6 +89,7 @@ const STROKE_ICONS = [
   'close',
   'refresh',
   'search',
+  'unlock',
   'home',
   'plus',
   'layoutList',
@@ -115,6 +129,18 @@ const STROKE_ICONS = [
   'activity',
   'target',
   'move',
+  'megaphone',
+  'share',
+  'bold',
+  'italic',
+  'heading',
+  'listBullet',
+  'listNumbered',
+  'alignLeft',
+  'alignCenter',
+  'alignRight',
+  'textColor',
+  'unlink',
 ];
 
 defineProps({

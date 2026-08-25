@@ -19,11 +19,29 @@ const canvasH = computed(() => current.value.canvasH ?? 720);
 
 // ─── Zoom ─────────────────────────────────────────────────────────────────────
 const MIN_ZOOM = 0.3;
-const MAX_ZOOM = 1.5;
-const zoom = ref(0.75);
+const MAX_ZOOM = 2;
+const zoom = ref(1);
+const userZoomed = ref(false);
 
-function zoomIn()  { zoom.value = Math.min(MAX_ZOOM, Math.round((zoom.value + 0.1) * 10) / 10); }
-function zoomOut() { zoom.value = Math.max(MIN_ZOOM, Math.round((zoom.value - 0.1) * 10) / 10); }
+function zoomIn() {
+  userZoomed.value = true;
+  zoom.value = Math.min(MAX_ZOOM, Math.round((zoom.value + 0.1) * 10) / 10);
+}
+function zoomOut() {
+  userZoomed.value = true;
+  zoom.value = Math.max(MIN_ZOOM, Math.round((zoom.value - 0.1) * 10) / 10);
+}
+
+function fitZoom() {
+  const stage = stageRef.value;
+  if (!stage) return;
+  if (stage.clientWidth < 40 || stage.clientHeight < 40) return;
+  const pad = 12;
+  const availW = Math.max(1, stage.clientWidth - pad);
+  const availH = Math.max(1, stage.clientHeight - pad);
+  const z = Math.min(availW / liveCanvasW.value, availH / liveCanvasH.value, MAX_ZOOM);
+  zoom.value = Math.max(MIN_ZOOM, Math.round(z * 20) / 20);
+}
 
 // ─── Drag nodes + pan canvas ──────────────────────────────────────────────────
 const stageRef = ref(null);
@@ -178,6 +196,7 @@ function toggleFullscreen() {
 
 function syncFullscreen() {
   isFullscreen.value = !!document.fullscreenElement;
+  if (!userZoomed.value) nextTick(fitZoom);
 }
 
 // ─── Button click ─────────────────────────────────────────────────────────────
@@ -192,6 +211,7 @@ const arrowId = `dsw-arrow-${uid}`;
 // ─── Node height measurement ──────────────────────────────────────────────────
 const nodeElMap = {};
 const measuredH = ref({});
+let stageObserver = null;
 
 function setNodeRef(id, el) {
   if (el) nodeElMap[id] = el; else delete nodeElMap[id];
@@ -206,12 +226,19 @@ function measureAll() {
 }
 
 onMounted(() => {
-  nextTick(measureAll);
+  layoutCanvas();
   document.addEventListener('fullscreenchange', syncFullscreen);
+  if (stageRef.value && typeof ResizeObserver !== 'undefined') {
+    stageObserver = new ResizeObserver(() => {
+      if (!userZoomed.value) fitZoom();
+    });
+    stageObserver.observe(stageRef.value);
+  }
 });
 
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', syncFullscreen);
+  stageObserver?.disconnect();
   stopPointer?.();
   draggingId.value = null;
   panning.value = false;
@@ -219,23 +246,31 @@ onUnmounted(() => {
 
 watch(activeTab, () => {
   measuredH.value = {};
+  userZoomed.value = false;
   resetPositions();
   resetPan();
-  nextTick(measureAll);
+  layoutCanvas();
 });
+
+async function layoutCanvas() {
+  await nextTick();
+  measureAll();
+  await nextTick();
+  if (!userZoomed.value) fitZoom();
+}
 
 // ─── Connector path ───────────────────────────────────────────────────────────
 function estimateH(node) {
-  if (!node) return 80;
-  if (node.type === 'icon') return 76;
+  if (!node) return 96;
+  if (node.type === 'icon') return 96;
   if (node.type === 'card') {
-    const head  = node.compact ? 0 : 50;
-    const items = (node.items?.length ?? 0) * 25;
-    const btn   = node.button ? 38 : 0;
-    return head + items + btn + 16;
+    const head  = node.compact ? 0 : 58;
+    const items = (node.items?.length ?? 0) * 30;
+    const btn   = node.button ? 44 : 0;
+    return head + items + btn + 20;
   }
-  if (node.type === 'group') return 46 + (node.children?.length ?? 0) * 50;
-  return 80;
+  if (node.type === 'group') return 52 + (node.children?.length ?? 0) * 58;
+  return 96;
 }
 
 function nodeRect(id) {
@@ -386,7 +421,7 @@ function pathD(edge) {
           <path
             v-for="edge in edges" :key="edge.id"
             :d="pathD(edge)" fill="none" stroke="var(--color-border-strong)"
-            stroke-width="1.4" stroke-linejoin="round"
+            stroke-width="1.8" stroke-linejoin="round"
             :marker-end="`url(#${arrowId})`"
           />
         </svg>
@@ -404,7 +439,7 @@ function pathD(edge) {
             @pointerdown.stop="startDrag($event, node)"
           >
             <div class="dsw-box-icon">
-              <AppIcon :name="node.icon || 'users'" :size="20" :stroke-width="1.75" />
+              <AppIcon :name="node.icon || 'users'" :size="26" :stroke-width="1.75" />
             </div>
             <span class="dsw-icon-label">{{ node.label }}</span>
           </div>
@@ -414,19 +449,23 @@ function pathD(edge) {
             v-else-if="node.type === 'card'"
             :ref="el => setNodeRef(node.id, el)"
             class="dsw-node dsw-node--card"
-            :class="{ 'dsw-node--hl': node.highlight, 'dsw-node--dragging': draggingId === node.id }"
+            :class="{
+              'dsw-node--hl': node.highlight,
+              'dsw-node--compact': node.compact,
+              'dsw-node--dragging': draggingId === node.id,
+            }"
             :style="{ left: posOf(node).x + 'px', top: posOf(node).y + 'px', width: node.w + 'px' }"
             @pointerdown.stop="startDrag($event, node)"
           >
             <!-- Header -->
             <div v-if="!node.compact && node.title" class="dsw-card-head">
               <div v-if="node.icon" class="dsw-card-icon">
-                <AppIcon :name="node.icon" :size="14" :stroke-width="1.75" />
+                <AppIcon :name="node.icon" :size="16" :stroke-width="1.75" />
               </div>
               <div class="dsw-card-hc">
                 <div class="dsw-card-title">{{ node.title }}</div>
                 <div v-if="node.teaser" class="dsw-card-teaser">
-                  <AppIcon name="users" :size="10" :stroke-width="1.75" />
+                  <AppIcon name="users" :size="12" :stroke-width="1.75" />
                   <em>{{ node.teaser }}</em>
                 </div>
               </div>
@@ -438,7 +477,7 @@ function pathD(edge) {
                 v-for="item in node.items" :key="item.label"
                 class="dsw-card-item"
               >
-                <AppIcon :name="item.icon || 'check'" :size="11" :stroke-width="1.75" />
+                <AppIcon :name="item.icon || 'check'" :size="13" :stroke-width="1.75" />
                 <span>{{ item.label }}</span>
               </div>
               <button
@@ -447,7 +486,7 @@ function pathD(edge) {
                 class="dsw-card-btn"
                 @click="handleBtnClick(node.button)"
               >
-                <AppIcon name="plus" :size="11" :stroke-width="2" />
+                <AppIcon name="plus" :size="13" :stroke-width="2" />
                 {{ node.button.label }}
               </button>
             </div>
@@ -466,7 +505,7 @@ function pathD(edge) {
             <div class="dsw-group-body">
               <div v-for="child in node.children" :key="child.id" class="dsw-group-child">
                 <div v-if="child.icon" class="dsw-card-icon dsw-card-icon--sm">
-                  <AppIcon :name="child.icon" :size="12" :stroke-width="1.75" />
+                  <AppIcon :name="child.icon" :size="14" :stroke-width="1.75" />
                 </div>
                 <div class="dsw-card-hc">
                   <div class="dsw-card-title">{{ child.title }}</div>
@@ -492,6 +531,8 @@ function pathD(edge) {
   font-family: var(--font-family-base);
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 
 /* fullscreen — Fullscreen API fills viewport automatically; we just fix layout */
@@ -615,9 +656,10 @@ function pathD(edge) {
 /* ── Stage ────────────────────────────────────────────────────────────────── */
 .dsw__stage {
   position: relative;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
-  min-height: 360px;
-  padding: 12px;
+  padding: 8px;
   background: var(--color-surface-muted);
   touch-action: none;
   user-select: none;
@@ -708,24 +750,24 @@ function pathD(edge) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   text-align: center;
 }
 
 .dsw-box-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 11px;
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--color-surface);
   color: var(--color-primary);
-  box-shadow: 0 0 0 1.5px var(--color-border), 0 2px 6px rgba(0,0,0,.07);
+  box-shadow: 0 0 0 1.5px var(--color-border), 0 2px 8px rgba(0,0,0,.08);
 }
 
 .dsw-icon-label {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-text-muted);
   line-height: 1.3;
@@ -744,12 +786,22 @@ function pathD(edge) {
   box-shadow: 0 0 0 1.5px var(--color-primary-200), 0 2px 6px rgba(0,0,0,.05);
 }
 
+.dsw-node--compact .dsw-card-body {
+  padding: 10px 14px;
+}
+
+.dsw-node--compact .dsw-card-item {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 2px 0;
+}
+
 /* Card header */
 .dsw-card-head {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 10px;
+  padding: 10px 12px;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
@@ -757,9 +809,9 @@ function pathD(edge) {
 
 .dsw-card-icon {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   background: var(--color-primary);
   color: var(--color-on-primary);
   display: flex;
@@ -767,14 +819,14 @@ function pathD(edge) {
   justify-content: center;
 }
 
-.dsw-card-icon--sm { width: 22px; height: 22px; border-radius: 5px; }
+.dsw-card-icon--sm { width: 26px; height: 26px; border-radius: 6px; }
 
 .dsw-node--hl .dsw-card-icon { background: var(--color-primary-700); }
 
 .dsw-card-hc { flex: 1; min-width: 0; }
 
 .dsw-card-title {
-  font-size: 11.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--color-text);
   line-height: 1.3;
@@ -783,9 +835,9 @@ function pathD(edge) {
 .dsw-card-teaser {
   display: flex;
   align-items: center;
-  gap: 3px;
-  margin-top: 2px;
-  font-size: 10px;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 11.5px;
   color: var(--color-text-muted);
 }
 
@@ -793,7 +845,7 @@ function pathD(edge) {
 
 /* Card body */
 .dsw-card-body {
-  padding: 6px 10px 8px;
+  padding: 8px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -802,10 +854,10 @@ function pathD(edge) {
 .dsw-card-item {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
+  gap: 7px;
+  font-size: 12.5px;
   color: var(--color-text-muted);
-  padding: 2.5px 0;
+  padding: 3.5px 0;
 }
 
 .dsw-card-item svg {
@@ -819,14 +871,14 @@ function pathD(edge) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 4px 8px;
-  margin-top: 5px;
+  gap: 5px;
+  padding: 7px 10px;
+  margin-top: 8px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text);
-  font: 500 10.5px/1 var(--font-family-base);
+  font: 500 12px/1 var(--font-family-base);
   cursor: pointer;
   transition: background 120ms, border-color 120ms;
   width: 100%;
@@ -843,7 +895,7 @@ function pathD(edge) {
 
 /* ── Group node ───────────────────────────────────────────────────────────── */
 .dsw-node--group {
-  padding: 22px 8px 8px;
+  padding: 26px 10px 10px;
   position: relative;
   border-radius: var(--radius-md);
   /* 4-side dashed via gradient strips — matches reference ds-type-dashed */
@@ -859,12 +911,12 @@ function pathD(edge) {
 
 .dsw-group-label {
   position: absolute;
-  top: -11px;
-  left: 10px;
+  top: -12px;
+  left: 12px;
   background: var(--color-primary);
   color: var(--color-on-primary);
-  padding: 2px 9px;
-  font-size: 10px;
+  padding: 3px 11px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
   border-radius: var(--radius-sm);
@@ -873,14 +925,14 @@ function pathD(edge) {
 .dsw-group-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .dsw-group-child {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
-  padding: 7px 9px;
+  gap: 8px;
+  padding: 9px 11px;
   background: var(--color-surface);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);

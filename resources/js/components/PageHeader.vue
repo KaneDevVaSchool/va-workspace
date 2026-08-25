@@ -230,10 +230,16 @@ onBeforeUnmount(() => {
       </div>
 
       <div id="header-title" class="page-header__title-wrap">
-        <h1 class="page-header__title" :title="titleHint || displayTitle">
+        <h1 v-if="!slots.title" class="page-header__title" :title="titleHint || displayTitle">
           {{ displayTitle }}
         </h1>
-        <p v-if="subtitle" class="page-header__subtitle">{{ subtitle }}</p>
+        <div v-else class="page-header__title">
+          <h1 class="sr-only">{{ displayTitle }}</h1>
+          <slot name="title" />
+        </div>
+        <p v-if="subtitle || slots.subtitle" class="page-header__subtitle">
+          <slot name="subtitle">{{ subtitle }}</slot>
+        </p>
       </div>
 
       <div v-if="showRight" id="header-right-actions" class="page-header__right">
@@ -364,6 +370,11 @@ onBeforeUnmount(() => {
 }
 
 .page-header__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -376,6 +387,8 @@ onBeforeUnmount(() => {
 }
 
 .page-header__subtitle {
+  display: flex;
+  align-items: center;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;

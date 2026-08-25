@@ -53,7 +53,10 @@ const MENU_SECTIONS = [
     id: 'general',
     label: 'Điều hướng',
     items: [
-      { name: 'home', label: 'Tổng quan', icon: 'dashboard' },
+      // configurableByDepartment: true — đồng bộ thủ công với
+      // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
+      { name: 'home', label: 'Tổng quan', icon: 'dashboard', configurableByDepartment: true },
+      { name: 'social.feed', label: 'Bảng tin nội bộ', icon: 'megaphone', configurableByDepartment: true },
       { name: 'settings', label: 'Cài đặt', icon: 'settings' },
     ],
   },
@@ -71,10 +74,6 @@ const MENU_SECTIONS = [
     id: 'manager',
     label: 'Quản lý',
     items: [
-      // configurableByDepartment: true — department_director có thể tự ẩn
-      // mục này khỏi sidebar phòng ban mình (xem WorkspaceConfigSidebar.vue).
-      // Đồng bộ thủ công với danh sách CONFIGURABLE_MENUS trong
-      // DepartmentSidebarConfigService (backend).
       {
         name: 'manager.workspace-config.hub',
         label: 'Cấu hình phòng ban',
@@ -85,7 +84,8 @@ const MENU_SECTIONS = [
         // chính user, super_admin thường không có phòng ban.
         hideWhenSuperAdmin: true,
         // KHÔNG configurableByDepartment — tránh trưởng phòng tự khoá lối
-        // vào trang cấu hình của chính mình.
+        // vào trang cấu hình của chính mình. Tab con của hub (Thành viên,
+        // Menu, Tiêu chí) cũng không phải mục sidebar.
       },
     ],
   },

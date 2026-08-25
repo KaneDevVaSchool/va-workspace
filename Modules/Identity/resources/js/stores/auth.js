@@ -154,7 +154,7 @@ export const useAuthStore = defineStore('auth', {
 
     /**
      * Cập nhật hidden_menu_keys ngay trên client sau khi bật/tắt menu
-     * phòng ban — sidebar/tab phản ánh tức thì, không cần tải lại trang.
+     * phòng ban — sidebar trái phản ánh tức thì, không cần tải lại trang.
      */
     setMenuKeyVisible(menuKey, isVisible) {
       if (!this.user || !menuKey) return;

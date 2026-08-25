@@ -15,16 +15,16 @@ const tabs = [
 const workData = {
   title: 'Công việc',
   description: 'Giao việc, theo dõi tiến độ, chấm điểm và xem kết quả tổng hợp — tất cả trong một luồng liên tục.',
-  canvasW: 1400,
-  canvasH: 720,
+  canvasW: 1480,
+  canvasH: 780,
   nodes: [
-    { id: 'n1', type: 'icon', x: 650, y: 0, w: 100,
+    { id: 'n1', type: 'icon', x: 640, y: 0, w: 124,
       icon: 'users', label: 'Người quản lý' },
 
-    { id: 'n2', type: 'card', x: 790, y: 5, w: 140, compact: true,
+    { id: 'n2', type: 'card', x: 784, y: 6, w: 176, compact: true,
       items: [{ icon: 'clipboardCheck', label: 'Xem đánh giá' }] },
 
-    { id: 'n3', type: 'card', x: 0, y: 180, w: 280,
+    { id: 'n3', type: 'card', x: 0, y: 200, w: 320,
       icon: 'settings', title: 'Cài đặt công việc', teaser: 'Quản trị viên',
       items: [
         { icon: 'star',        label: 'Thang điểm chất lượng' },
@@ -33,7 +33,7 @@ const workData = {
       ],
       button: { label: 'Cài đặt chấm điểm', to: { name: 'manager.workspace-config.hub' } } },
 
-    { id: 'n4', type: 'card', x: 350, y: 124, w: 300,
+    { id: 'n4', type: 'card', x: 360, y: 140, w: 340,
       icon: 'users', title: 'Tạo mới công việc', teaser: 'Trưởng nhóm giao',
       items: [
         { icon: 'layoutList',  label: 'Tên & mô tả công việc' },
@@ -43,7 +43,7 @@ const workData = {
       ],
       button: { label: 'Tạo công việc mới' } },
 
-    { id: 'n5', type: 'card', x: 700, y: 124, w: 300,
+    { id: 'n5', type: 'card', x: 740, y: 140, w: 340,
       icon: 'pieChart', title: 'Báo cáo tiến độ', teaser: 'Người được giao',
       items: [
         { icon: 'trendingUp',  label: '% tiến độ đã xong' },
@@ -53,7 +53,7 @@ const workData = {
       ],
       button: { label: 'Nộp báo cáo tiến độ' } },
 
-    { id: 'n6', type: 'card', x: 1050, y: 124, w: 300, highlight: true,
+    { id: 'n6', type: 'card', x: 1120, y: 140, w: 340, highlight: true,
       icon: 'barChart', title: 'Bảng tổng kết', teaser: 'Tất cả mọi người',
       items: [
         { icon: 'percent',     label: '% hoàn thành' },
@@ -62,13 +62,13 @@ const workData = {
       ],
       button: { label: 'Xem bảng tổng kết' } },
 
-    { id: 'n7', type: 'icon', x: 100, y: 450, w: 150,
+    { id: 'n7', type: 'icon', x: 80, y: 500, w: 176,
       icon: 'users', label: 'Người thực hiện' },
 
-    { id: 'n8', type: 'icon', x: 100, y: 550, w: 150,
+    { id: 'n8', type: 'icon', x: 80, y: 616, w: 176,
       icon: 'users', label: 'Người giao việc' },
 
-    { id: 'n9', type: 'card', x: 350, y: 400, w: 300,
+    { id: 'n9', type: 'card', x: 360, y: 450, w: 340,
       icon: 'settings', title: 'Việc thêm cần làm', teaser: 'Người thực hiện',
       items: [
         { icon: 'messageCircle', label: 'Trao đổi, bình luận' },
@@ -79,7 +79,7 @@ const workData = {
       ],
       button: { label: 'Việc của tôi' } },
 
-    { id: 'n10', type: 'group', x: 700, y: 420, w: 340,
+    { id: 'n10', type: 'group', x: 740, y: 470, w: 400,
       label: 'XEM THÊM',
       children: [
         { id: 'n11', icon: 'barChart',   title: 'Điểm KPI',         teaser: 'Điểm tháng này của tôi' },
@@ -104,16 +104,16 @@ const workData = {
 const projectData = {
   title: 'Dự án',
   description: 'Tạo dự án, phân công việc theo sơ đồ cây, theo dõi lịch biểu và xem kết quả — giao việc được cho cả phòng khác.',
-  canvasW: 1400,
-  canvasH: 720,
+  canvasW: 1480,
+  canvasH: 780,
   nodes: [
-    { id: 'n1', type: 'icon', x: 650, y: 0, w: 100,
+    { id: 'n1', type: 'icon', x: 640, y: 0, w: 124,
       icon: 'target', label: 'Người phụ trách' },
 
-    { id: 'n2', type: 'card', x: 790, y: 5, w: 160, compact: true,
+    { id: 'n2', type: 'card', x: 784, y: 6, w: 196, compact: true,
       items: [{ icon: 'star', label: 'Theo dõi chỉ tiêu lớn' }] },
 
-    { id: 'n3', type: 'card', x: 0, y: 180, w: 280,
+    { id: 'n3', type: 'card', x: 0, y: 200, w: 320,
       icon: 'settings', title: 'Thiết lập dự án', teaser: 'Quản trị viên',
       items: [
         { icon: 'sliders',    label: 'Cách tính % tiến độ' },
@@ -122,7 +122,7 @@ const projectData = {
       ],
       button: { label: 'Cài đặt dự án', to: { name: 'manager.workspace-config.hub' } } },
 
-    { id: 'n4', type: 'card', x: 350, y: 124, w: 300,
+    { id: 'n4', type: 'card', x: 360, y: 140, w: 340,
       icon: 'layoutList', title: 'Tạo dự án mới', teaser: 'Người phụ trách',
       items: [
         { icon: 'star',       label: 'Gắn vào mục tiêu lớn hơn' },
@@ -132,7 +132,7 @@ const projectData = {
       ],
       button: { label: 'Tạo dự án mới' } },
 
-    { id: 'n5', type: 'card', x: 700, y: 124, w: 300,
+    { id: 'n5', type: 'card', x: 740, y: 140, w: 340,
       icon: 'layers', title: 'Sơ đồ & Lịch biểu', teaser: 'Trưởng nhóm · Thành viên',
       items: [
         { icon: 'layoutList',  label: 'Việc con trong việc lớn' },
@@ -142,7 +142,7 @@ const projectData = {
       ],
       button: { label: 'Mở sơ đồ & lịch biểu' } },
 
-    { id: 'n6', type: 'card', x: 1050, y: 124, w: 300, highlight: true,
+    { id: 'n6', type: 'card', x: 1120, y: 140, w: 340, highlight: true,
       icon: 'pieChart', title: 'Báo cáo dự án', teaser: 'Tất cả thành viên',
       items: [
         { icon: 'percent',     label: '% công việc đã xong' },
@@ -151,13 +151,13 @@ const projectData = {
       ],
       button: { label: 'Xem báo cáo dự án' } },
 
-    { id: 'n7', type: 'icon', x: 100, y: 450, w: 150,
+    { id: 'n7', type: 'icon', x: 80, y: 500, w: 176,
       icon: 'users', label: 'Trưởng nhóm' },
 
-    { id: 'n8', type: 'icon', x: 100, y: 550, w: 150,
+    { id: 'n8', type: 'icon', x: 80, y: 616, w: 176,
       icon: 'users', label: 'Thành viên' },
 
-    { id: 'n9', type: 'card', x: 350, y: 400, w: 300,
+    { id: 'n9', type: 'card', x: 360, y: 450, w: 340,
       icon: 'settings', title: 'Việc thêm cần làm', teaser: 'Thành viên dự án',
       items: [
         { icon: 'check',         label: 'Kiểm thử & đảm bảo chất lượng' },
@@ -168,7 +168,7 @@ const projectData = {
       ],
       button: { label: 'Việc của tôi' } },
 
-    { id: 'n10', type: 'group', x: 700, y: 420, w: 340,
+    { id: 'n10', type: 'group', x: 740, y: 470, w: 400,
       label: 'LIÊN KẾT',
       children: [
         { id: 'n11', icon: 'dollarSign', title: 'Chi phí dự án',     teaser: 'Tài chính & dòng tiền' },
@@ -193,16 +193,16 @@ const projectData = {
 const workspaceData = {
   title: 'Cấu hình Workspace',
   description: 'Thiết lập toàn bộ hệ thống — thêm người, phân quyền, bật/tắt tính năng từng phòng ban — không cần biết kỹ thuật.',
-  canvasW: 1400,
-  canvasH: 720,
+  canvasW: 1480,
+  canvasH: 780,
   nodes: [
-    { id: 'n1', type: 'icon', x: 650, y: 0, w: 100,
+    { id: 'n1', type: 'icon', x: 640, y: 0, w: 124,
       icon: 'settings', label: 'Quản trị viên' },
 
-    { id: 'n2', type: 'card', x: 790, y: 5, w: 140, compact: true,
+    { id: 'n2', type: 'card', x: 784, y: 6, w: 176, compact: true,
       items: [{ icon: 'check', label: 'Duyệt thay đổi' }] },
 
-    { id: 'n3', type: 'card', x: 0, y: 180, w: 280,
+    { id: 'n3', type: 'card', x: 0, y: 200, w: 320,
       icon: 'settings', title: 'Cài đặt chung', teaser: 'Quản trị viên',
       items: [
         { icon: 'star',        label: 'Tên & logo workspace' },
@@ -211,7 +211,7 @@ const workspaceData = {
       ],
       button: { label: 'Vào cài đặt chung', to: { name: 'manager.workspace-config.hub' } } },
 
-    { id: 'n4', type: 'card', x: 350, y: 124, w: 300,
+    { id: 'n4', type: 'card', x: 360, y: 140, w: 340,
       icon: 'users', title: 'Quản lý người dùng', teaser: 'Quản trị viên',
       items: [
         { icon: 'userPlus',    label: 'Thêm người mới' },
@@ -221,7 +221,7 @@ const workspaceData = {
       ],
       button: { label: 'Danh sách người dùng', to: { name: 'manager.workspace-config.members' } } },
 
-    { id: 'n5', type: 'card', x: 700, y: 124, w: 300,
+    { id: 'n5', type: 'card', x: 740, y: 140, w: 340,
       icon: 'layoutList', title: 'Menu & Màn hình', teaser: 'Quản trị viên · Trưởng phòng',
       items: [
         { icon: 'check',       label: 'Bật / tắt từng mục trong menu' },
@@ -230,7 +230,7 @@ const workspaceData = {
       ],
       button: { label: 'Cài đặt menu', to: { name: 'manager.workspace-config.sidebar' } } },
 
-    { id: 'n6', type: 'card', x: 1050, y: 124, w: 300, highlight: true,
+    { id: 'n6', type: 'card', x: 1120, y: 140, w: 340, highlight: true,
       icon: 'shield', title: 'Nhật ký & Bảo mật', teaser: 'Quản trị viên',
       items: [
         { icon: 'search',      label: 'Ai làm gì, lúc nào' },
@@ -239,13 +239,13 @@ const workspaceData = {
       ],
       button: { label: 'Xem nhật ký hoạt động', to: { name: 'superadmin.activity' } } },
 
-    { id: 'n7', type: 'icon', x: 100, y: 450, w: 150,
+    { id: 'n7', type: 'icon', x: 80, y: 500, w: 176,
       icon: 'users', label: 'Trưởng phòng' },
 
-    { id: 'n8', type: 'icon', x: 100, y: 550, w: 150,
+    { id: 'n8', type: 'icon', x: 80, y: 616, w: 176,
       icon: 'users', label: 'Nhân viên' },
 
-    { id: 'n9', type: 'card', x: 350, y: 400, w: 300,
+    { id: 'n9', type: 'card', x: 360, y: 450, w: 340,
       icon: 'settings', title: 'Tuỳ chỉnh theo phòng ban', teaser: 'Trưởng phòng',
       items: [
         { icon: 'sliders',       label: 'Bật/tắt tính năng riêng phòng' },
@@ -256,7 +256,7 @@ const workspaceData = {
       ],
       button: { label: 'Tuỳ chỉnh phòng ban', to: { name: 'manager.workspace-config.hub' } } },
 
-    { id: 'n10', type: 'group', x: 700, y: 420, w: 340,
+    { id: 'n10', type: 'group', x: 740, y: 470, w: 400,
       label: 'CÔNG CỤ HỖ TRỢ',
       children: [
         { id: 'n11', icon: 'shield',   title: 'Phân quyền chi tiết',  teaser: 'Ai được làm gì' },
@@ -300,15 +300,26 @@ function handleBtnClick({ btn }) {
 
 <style scoped>
 .home {
-  padding: var(--space-5) var(--space-6);
-  max-width: 1520px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  overflow: hidden;
 }
 
 .home__content {
-  margin-top: var(--space-5);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home__content :deep(.dsw) {
+  flex: 1;
+  min-height: 0;
 }
 
 @media (max-width: 768px) {
-  .home { padding: var(--space-4); }
+  .home { padding: var(--space-2); }
 }
 </style>

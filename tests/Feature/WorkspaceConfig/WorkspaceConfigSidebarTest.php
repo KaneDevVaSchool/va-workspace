@@ -36,28 +36,29 @@ class WorkspaceConfigSidebarTest extends TestCase
         $this->actingAs($director)
             ->getJson('/api/workspace-config/sidebar')
             ->assertOk()
-            ->assertJsonPath('menus.0.menu_key', 'manager.workspace-config.members')
+            ->assertJsonPath('menus.0.menu_key', 'home')
+            ->assertJsonPath('menus.0.label', 'Tổng quan')
             ->assertJsonPath('menus.0.is_visible', true);
 
         $this->actingAs($director)
             ->putJson('/api/workspace-config/sidebar', [
-                'menu_key' => 'manager.workspace-config.members',
+                'menu_key' => 'home',
                 'is_visible' => false,
             ])
             ->assertOk()
-            ->assertJsonPath('menu.menu_key', 'manager.workspace-config.members')
+            ->assertJsonPath('menu.menu_key', 'home')
             ->assertJsonPath('menu.is_visible', false);
 
         $this->assertDatabaseHas('department_sidebar_configs', [
             'department_id' => $dept->id,
-            'menu_key' => 'manager.workspace-config.members',
+            'menu_key' => 'home',
             'is_visible' => false,
         ]);
 
         $this->actingAs($director)
             ->getJson('/api/me')
             ->assertOk()
-            ->assertJsonPath('hidden_menu_keys.0', 'manager.workspace-config.members');
+            ->assertJsonPath('hidden_menu_keys.0', 'home');
     }
 
     public function test_cannot_toggle_unknown_menu_key(): void
@@ -70,6 +71,13 @@ class WorkspaceConfigSidebarTest extends TestCase
         $this->actingAs($director)
             ->putJson('/api/workspace-config/sidebar', [
                 'menu_key' => 'superadmin.permissions',
+                'is_visible' => false,
+            ])
+            ->assertStatus(422);
+
+        $this->actingAs($director)
+            ->putJson('/api/workspace-config/sidebar', [
+                'menu_key' => 'manager.workspace-config.members',
                 'is_visible' => false,
             ])
             ->assertStatus(422);

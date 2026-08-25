@@ -37,11 +37,7 @@ const activeTab = computed(() => route.name);
 const departmentLabel = computed(() => auth.user?.department?.name || 'Chưa gắn phòng ban');
 
 const visibleTabs = computed(() =>
-  TABS.filter((tab) => {
-    if (tab.permission && !auth.can(tab.permission)) return false;
-    if (auth.hiddenMenuKeys.includes(tab.name)) return false;
-    return true;
-  }),
+  TABS.filter((tab) => !tab.permission || auth.can(tab.permission)),
 );
 
 const reloadChild = ref(null);

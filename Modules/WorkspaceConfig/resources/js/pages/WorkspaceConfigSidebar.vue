@@ -1,7 +1,8 @@
 <script setup>
 //
-// manager/workspace-config/sidebar — bật/tắt menu áp dụng cho cả phòng ban.
-// Đổi 1 mục = ghi ngay; patch auth.hidden_menu_keys để tab/sidebar đổi tức thì.
+// manager/workspace-config/sidebar — bật/tắt mục sidebar (menu trái) áp dụng
+// cho cả phòng ban. Đổi 1 mục = ghi ngay; patch auth.hidden_menu_keys để
+// sidebar đổi tức thì. Không đụng tới tab trong hub Cấu hình phòng ban.
 //
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
@@ -10,7 +11,7 @@ import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import StatusBadge from '../components/StatusBadge.vue';
 
 const MENU_ICONS = {
-  'manager.workspace-config.members': 'users',
+  home: 'dashboard',
 };
 
 const hub = inject('workspaceConfigHub', null);

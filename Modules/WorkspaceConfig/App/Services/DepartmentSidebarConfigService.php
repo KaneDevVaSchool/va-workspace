@@ -10,13 +10,15 @@ use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositor
  * Bật/tắt menu sidebar theo phòng ban. CHỈ các menu_key trong whitelist
  * dưới đây được phép cấu hình — đồng bộ THỦ CÔNG với các item đánh dấu
  * `configurableByDepartment: true` trong resources/js/components/AppSidebar.vue.
- * Không bao giờ đưa menu superadmin/admin vào whitelist này.
+ * Không bao giờ đưa menu superadmin/admin, hay tab con của hub
+ * Cấu hình phòng ban (Thành viên / Menu / Tiêu chí), vào whitelist này.
  */
 class DepartmentSidebarConfigService
 {
     /** @var array<string, string> menu_key => nhãn tiếng Việt hiển thị trên UI cấu hình */
     private const CONFIGURABLE_MENUS = [
-        'manager.workspace-config.members' => 'Thành viên phòng ban',
+        'home' => 'Tổng quan',
+        'social.feed' => 'Bảng tin nội bộ',
     ];
 
     public function __construct(
