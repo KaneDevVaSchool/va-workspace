@@ -27,4 +27,11 @@ interface SocialCommentRepositoryInterface
 
     /** @return array<string, int> reaction_type => số lượng, kèm khoá 'total'. */
     public function reactionSummary(SocialPostComment $comment): array;
+
+    /**
+     * Danh sách người đã reaction, mới nhất trước.
+     *
+     * @return Collection<int, \Modules\Social\App\Models\SocialCommentLike>
+     */
+    public function reactionUsers(SocialPostComment $comment, ?string $type = null): Collection;
 }

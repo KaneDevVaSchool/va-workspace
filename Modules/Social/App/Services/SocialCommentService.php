@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Services\PermissionService;
+use Modules\Social\App\Models\SocialCommentLike;
 use Modules\Social\App\Models\SocialPost;
 use Modules\Social\App\Models\SocialPostComment;
 use Modules\Social\App\Models\SocialPostLike;
@@ -20,6 +21,7 @@ class SocialCommentService
         private readonly PermissionService $permissions,
         private readonly SocialContentSanitizer $sanitizer,
         private readonly UserRepositoryInterface $users,
+        private readonly SocialMentionService $mentions,
     ) {}
 
     public function listForPost(SocialPost $post, User $viewer): array
@@ -54,7 +56,7 @@ class SocialCommentService
         ?int $mentionedUserId = null,
         array $files = [],
     ): array {
-        $rootParentId = null;
+        $resolvedParentId = null;
         $resolvedMentionId = $mentionedUserId;
 
         if ($parentCommentId !== null) {
@@ -66,11 +68,16 @@ class SocialCommentService
                 ]);
             }
 
-            if ($parent->parent_comment_id !== null) {
-                $rootParentId = $parent->parent_comment_id;
+            $depth = $this->commentDepth($parent);
+
+            if ($depth >= 2) {
+                $resolvedParentId = $parent->parent_comment_id;
                 $resolvedMentionId = $resolvedMentionId ?? $parent->user_id;
             } else {
-                $rootParentId = $parent->id;
+                $resolvedParentId = $parent->id;
+                if ($depth >= 1) {
+                    $resolvedMentionId = $resolvedMentionId ?? $parent->user_id;
+                }
             }
         }
 
@@ -85,7 +92,7 @@ class SocialCommentService
 
         $comment = $this->comments->create([
             'post_id' => $post->id,
-            'parent_comment_id' => $rootParentId,
+            'parent_comment_id' => $resolvedParentId,
             'user_id' => $author->id,
             'mentioned_user_id' => $resolvedMentionId,
             'content' => $clean,
@@ -96,6 +103,8 @@ class SocialCommentService
                 'attachments' => $this->storeAttachments($comment->id, $files),
             ]);
         }
+
+        $this->mentions->notifyComment($author, $post, $comment, $resolvedMentionId);
 
         return [
             'comment' => $this->present($comment, $author),
@@ -110,6 +119,35 @@ class SocialCommentService
         return [
             'reactions' => $this->comments->reactionSummary($comment),
             'my_reaction' => $result['reaction_type'],
+        ];
+    }
+
+    public function reactionUsers(SocialPostComment $comment, ?string $type = null): array
+    {
+        return [
+            'users' => $this->comments->reactionUsers($comment, $type)
+                ->map(fn (SocialCommentLike $like) => $this->presentReactionUser($like->user, $like->reaction_type))
+                ->filter()
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /** @return array{type: string, user: array{id: int, name: string, avatar_url: mixed, department: string|null}}|null */
+    private function presentReactionUser(?User $user, string $type): ?array
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        return [
+            'type' => $type,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'avatar_url' => $user->avatar_url,
+                'department' => $user->department?->name,
+            ],
         ];
     }
 
@@ -128,16 +166,41 @@ class SocialCommentService
     public function delete(SocialPostComment $comment): int
     {
         $postId = $comment->post_id;
-        $comment->loadMissing('replies');
+        $comment->loadMissing(['replies.replies']);
 
-        $this->deleteStoredAttachments($comment->attachments ?? []);
-        foreach ($comment->replies as $reply) {
-            $this->deleteStoredAttachments($reply->attachments ?? []);
-        }
-
+        $this->deleteTreeAttachments($comment);
         $this->comments->delete($comment);
 
         return $this->comments->countForPost($postId);
+    }
+
+    /** 0 = gốc, 1 = trả lời, 2 = trả lời lồng. */
+    private function commentDepth(SocialPostComment $comment): int
+    {
+        if ($comment->parent_comment_id === null) {
+            return 0;
+        }
+
+        $parent = $this->comments->find($comment->parent_comment_id);
+
+        if (! $parent || $parent->parent_comment_id === null) {
+            return 1;
+        }
+
+        return 2;
+    }
+
+    private function deleteTreeAttachments(SocialPostComment $comment): void
+    {
+        $this->deleteStoredAttachments($comment->attachments ?? []);
+
+        if (! $comment->relationLoaded('replies')) {
+            return;
+        }
+
+        foreach ($comment->replies as $reply) {
+            $this->deleteTreeAttachments($reply);
+        }
     }
 
     public function present(SocialPostComment $comment, User $viewer): array

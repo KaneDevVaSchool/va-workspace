@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Social\App\Http\Requests\SetSocialReactionRequest;
 use Modules\Social\App\Http\Requests\StoreSocialCommentRequest;
+use Modules\Social\App\Models\SocialPostLike;
 use Modules\Social\App\Repositories\Contracts\SocialCommentRepositoryInterface;
 use Modules\Social\App\Repositories\Contracts\SocialPostRepositoryInterface;
 use Modules\Social\App\Services\SocialCommentService;
@@ -86,5 +87,24 @@ class SocialCommentController extends Controller
         return response()->json(
             $this->service->setReaction($comment, $request->user(), $request->validated()['type'])
         );
+    }
+
+    public function reactions(Request $request, int $commentId): JsonResponse
+    {
+        $comment = $this->comments->find($commentId);
+        if (! $comment) {
+            return response()->json(['message' => 'Không tìm thấy bình luận.'], 404);
+        }
+
+        $type = $request->query('type');
+        if ($type === null || $type === '') {
+            return response()->json($this->service->reactionUsers($comment));
+        }
+
+        if (! is_string($type) || ! in_array($type, SocialPostLike::REACTION_TYPES, true)) {
+            return response()->json(['message' => 'Loại cảm xúc không hợp lệ.'], 422);
+        }
+
+        return response()->json($this->service->reactionUsers($comment, $type));
     }
 }

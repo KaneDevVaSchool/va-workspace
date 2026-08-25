@@ -20,6 +20,9 @@ class SocialCommentRepository implements SocialCommentRepositoryInterface
                 'replies.user',
                 'replies.mentionedUser',
                 'replies.likes',
+                'replies.replies.user',
+                'replies.replies.mentionedUser',
+                'replies.replies.likes',
             ])
             ->where('post_id', $postId)
             ->whereNull('parent_comment_id')
@@ -48,10 +51,11 @@ class SocialCommentRepository implements SocialCommentRepositoryInterface
 
     public function delete(SocialPostComment $comment): void
     {
-        SocialPostComment::query()
-            ->where('parent_comment_id', $comment->id)
-            ->get()
-            ->each(fn (SocialPostComment $reply) => $reply->delete());
+        $comment->loadMissing('replies');
+
+        foreach ($comment->replies as $reply) {
+            $this->delete($reply);
+        }
 
         $comment->delete();
     }
@@ -94,5 +98,19 @@ class SocialCommentRepository implements SocialCommentRepositoryInterface
         $summary['total'] = array_sum($summary);
 
         return $summary;
+    }
+
+    public function reactionUsers(SocialPostComment $comment, ?string $type = null): Collection
+    {
+        $query = $comment->likes()
+            ->with(['user.department'])
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id');
+
+        if ($type !== null) {
+            $query->where('reaction_type', $type);
+        }
+
+        return $query->get();
     }
 }
