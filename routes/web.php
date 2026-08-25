@@ -31,8 +31,8 @@ Route::get('/sw.js', function () {
     ]);
 });
 
-Route::get('/manifest.webmanifest', function () {
-    $path = public_path('manifest.webmanifest');
+Route::get('/manifest.json', function () {
+    $path = public_path('manifest.json');
     abort_unless(is_file($path), 404);
 
     return response((string) file_get_contents($path), 200, [

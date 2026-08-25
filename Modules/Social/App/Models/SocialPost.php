@@ -15,6 +15,7 @@ use Modules\Identity\App\Models\Department;
  * @property int $user_id
  * @property int|null $department_id
  * @property int|null $wall_user_id
+ * @property int|null $group_id
  * @property string|null $content
  * @property \Illuminate\Support\Carbon|null $content_updated_at
  * @property array|null $attachments
@@ -34,6 +35,7 @@ class SocialPost extends Model
         'user_id',
         'department_id',
         'wall_user_id',
+        'group_id',
         'content',
         'content_updated_at',
         'attachments',
@@ -64,6 +66,11 @@ class SocialPost extends Model
     public function wallUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'wall_user_id');
+    }
+
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(SocialGroup::class, 'group_id');
     }
 
     public function pinnedBy(): BelongsTo

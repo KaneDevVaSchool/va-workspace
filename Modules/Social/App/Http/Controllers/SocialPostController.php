@@ -12,7 +12,9 @@ use Modules\Social\App\Http\Requests\ShareSocialPostRequest;
 use Modules\Social\App\Http\Requests\StoreSocialPostRequest;
 use Modules\Social\App\Http\Requests\UpdateSocialPostRequest;
 use Modules\Social\App\Models\SocialPostLike;
+use Modules\Social\App\Repositories\Contracts\SocialGroupRepositoryInterface;
 use Modules\Social\App\Repositories\Contracts\SocialPostRepositoryInterface;
+use Modules\Social\App\Services\SocialGroupService;
 use Modules\Social\App\Services\SocialPostService;
 
 class SocialPostController extends Controller
@@ -22,6 +24,8 @@ class SocialPostController extends Controller
         private readonly SocialPostRepositoryInterface $posts,
         private readonly PermissionService $permissions,
         private readonly ActivityLogService $activityLogs,
+        private readonly SocialGroupRepositoryInterface $groups,
+        private readonly SocialGroupService $groupService,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -30,6 +34,11 @@ class SocialPostController extends Controller
         $page = max((int) $request->query('page', 1), 1);
 
         $scope = $request->query('scope', 'all');
+
+        if ($this->groupAccessDenied($request, $this->requestedGroupId($request))) {
+            return response()->json(['message' => 'Bạn không có quyền xem nhóm này.'], 403);
+        }
+
         $wall = $this->resolveWall($request);
 
         if ($wall === false) {
@@ -44,6 +53,7 @@ class SocialPostController extends Controller
                 is_string($scope) ? $scope : 'all',
                 $wall['department_id'],
                 $wall['wall_user_id'],
+                $wall['group_id'],
             )
         );
     }
@@ -59,21 +69,29 @@ class SocialPostController extends Controller
     }
 
     /**
-     * Suy ra tường từ query/body `post_scope` ('company'|'department'|'personal').
+     * Suy ra tường từ query/body `post_scope` ('company'|'department'|'personal'|'group').
      * Trả về false nếu yêu cầu tường phòng ban nhưng user không thuộc phòng ban nào.
      *
-     * @return array{department_id: int|null, wall_user_id: int|null}|false
+     * @return array{department_id: int|null, wall_user_id: int|null, group_id: int|null}|false
      */
     private function resolveWall(Request $request): array|false
     {
         $postScope = $request->query('post_scope', $request->input('post_scope', 'company'));
+
+        if ($postScope === 'group') {
+            $groupId = $this->requestedGroupId($request);
+
+            return $groupId === null
+                ? false
+                : ['department_id' => null, 'wall_user_id' => null, 'group_id' => $groupId];
+        }
 
         if ($postScope === 'department') {
             $departmentId = $request->user()->department_id;
 
             return $departmentId === null
                 ? false
-                : ['department_id' => $departmentId, 'wall_user_id' => null];
+                : ['department_id' => $departmentId, 'wall_user_id' => null, 'group_id' => null];
         }
 
         if ($postScope === 'personal') {
@@ -82,10 +100,40 @@ class SocialPostController extends Controller
             return [
                 'department_id' => null,
                 'wall_user_id' => (int) $wallUserId,
+                'group_id' => null,
             ];
         }
 
-        return ['department_id' => null, 'wall_user_id' => null];
+        return ['department_id' => null, 'wall_user_id' => null, 'group_id' => null];
+    }
+
+    private function requestedGroupId(Request $request): ?int
+    {
+        if ($request->query('post_scope', $request->input('post_scope')) !== 'group') {
+            return null;
+        }
+
+        $groupId = $request->query('group_id', $request->input('group_id'));
+
+        return is_numeric($groupId) && (int) $groupId > 0 ? (int) $groupId : null;
+    }
+
+    /**
+     * Chặn truy cập nhóm bảo mật khi viewer chưa là thành viên. Trả 403 (khác nghĩa
+     * với `false` của resolveWall(), vốn là 422 "chưa thuộc phòng ban").
+     */
+    private function groupAccessDenied(Request $request, ?int $groupId): bool
+    {
+        if ($groupId === null) {
+            return false;
+        }
+
+        $group = $this->groups->find($groupId);
+        if ($group === null) {
+            return true;
+        }
+
+        return ! $this->groupService->assertCanView($group, $request->user());
     }
 
     public function wall(Request $request, int $userId): JsonResponse

@@ -16,8 +16,9 @@ class StoreSocialPostRequest extends FormRequest
         return [
             'content' => ['nullable', 'string', 'max:8000'],
             'as_system_announcement' => ['sometimes', 'boolean'],
-            'post_scope' => ['sometimes', 'in:company,department,personal'],
+            'post_scope' => ['sometimes', 'in:company,department,personal,group'],
             'wall_user_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            'group_id' => ['required_if:post_scope,group', 'nullable', 'integer', 'exists:social_groups,id'],
             'attachments' => ['nullable', 'array', 'max:10'],
             'attachments.*' => [
                 'file', 'max:10240',

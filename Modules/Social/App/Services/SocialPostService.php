@@ -10,8 +10,10 @@ use Illuminate\Validation\ValidationException;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Identity\App\Services\ViewAsService;
+use Modules\Social\App\Models\SocialGroupMember;
 use Modules\Social\App\Models\SocialPost;
 use Modules\Social\App\Models\SocialPostLike;
+use Modules\Social\App\Repositories\Contracts\SocialGroupRepositoryInterface;
 use Modules\Social\App\Repositories\Contracts\SocialPostRepositoryInterface;
 
 class SocialPostService
@@ -32,6 +34,8 @@ class SocialPostService
 
     public const POST_SCOPE_PERSONAL = 'personal';
 
+    public const POST_SCOPE_GROUP = 'group';
+
     public function __construct(
         private readonly SocialPostRepositoryInterface $posts,
         private readonly PermissionService $permissions,
@@ -40,12 +44,13 @@ class SocialPostService
         private readonly UserRepositoryInterface $users,
         private readonly SocialPollService $polls,
         private readonly SocialMentionService $mentions,
+        private readonly SocialGroupRepositoryInterface $groups,
     ) {}
 
-    public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null): array
+    public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null): array
     {
         $scope = $this->normalizeFeedScope($scope);
-        $paginator = $this->posts->paginate($perPage, $page, $scope, $viewer->id, $departmentId, $wallUserId);
+        $paginator = $this->posts->paginate($perPage, $page, $scope, $viewer->id, $departmentId, $wallUserId, $groupId);
 
         return [
             'posts' => collect($paginator->items())
@@ -159,6 +164,7 @@ class SocialPostService
                 'user_id' => $author->id,
                 'department_id' => $destination['department_id'],
                 'wall_user_id' => $destination['wall_user_id'],
+                'group_id' => $destination['group_id'],
                 'content' => isset($data['content']) ? $this->sanitizeContent($data['content']) : null,
             ];
 
@@ -272,6 +278,7 @@ class SocialPostService
             'user_id' => $sharer->id,
             'department_id' => $destination['department_id'],
             'wall_user_id' => $destination['wall_user_id'],
+            'group_id' => $destination['group_id'],
             'content' => $caption !== null ? $this->sanitizeContent($caption) : null,
             'shared_from_post_id' => $original->id,
         ]);
@@ -282,11 +289,33 @@ class SocialPostService
     }
 
     /**
-     * @return array{post_scope: string, department_id: int|null, wall_user_id: int|null}
+     * @return array{post_scope: string, department_id: int|null, wall_user_id: int|null, group_id: int|null}
      */
     private function resolveDestination(User $actor, array $data): array
     {
         $postScope = $data['post_scope'] ?? self::POST_SCOPE_COMPANY;
+
+        if ($postScope === self::POST_SCOPE_GROUP) {
+            $groupId = isset($data['group_id']) ? (int) $data['group_id'] : null;
+            if ($groupId === null) {
+                throw ValidationException::withMessages([
+                    'group_id' => ['Thiếu nhóm để đăng bài.'],
+                ]);
+            }
+
+            if ($this->groups->membership($groupId, $actor->id) === null) {
+                throw ValidationException::withMessages([
+                    'group_id' => ['Bạn chưa là thành viên của nhóm này.'],
+                ]);
+            }
+
+            return [
+                'post_scope' => self::POST_SCOPE_GROUP,
+                'department_id' => null,
+                'wall_user_id' => null,
+                'group_id' => $groupId,
+            ];
+        }
 
         if ($postScope === self::POST_SCOPE_PERSONAL) {
             $wallUserId = isset($data['wall_user_id']) ? (int) $data['wall_user_id'] : $actor->id;
@@ -302,6 +331,7 @@ class SocialPostService
                 'post_scope' => self::POST_SCOPE_PERSONAL,
                 'department_id' => null,
                 'wall_user_id' => $wallUser->id,
+                'group_id' => null,
             ];
         }
 
@@ -316,6 +346,7 @@ class SocialPostService
                 'post_scope' => self::POST_SCOPE_DEPARTMENT,
                 'department_id' => $actor->department_id,
                 'wall_user_id' => null,
+                'group_id' => null,
             ];
         }
 
@@ -323,16 +354,32 @@ class SocialPostService
             'post_scope' => self::POST_SCOPE_COMPANY,
             'department_id' => null,
             'wall_user_id' => null,
+            'group_id' => null,
         ];
     }
 
     private function presentPostScope(SocialPost $post): string
     {
+        if ($post->group_id !== null) {
+            return self::POST_SCOPE_GROUP;
+        }
+
         if ($post->wall_user_id !== null) {
             return self::POST_SCOPE_PERSONAL;
         }
 
         return $post->department_id === null ? self::POST_SCOPE_COMPANY : self::POST_SCOPE_DEPARTMENT;
+    }
+
+    private function isGroupManager(?int $groupId, User $viewer): bool
+    {
+        if ($groupId === null) {
+            return false;
+        }
+
+        $membership = $this->groups->membership($groupId, $viewer->id);
+
+        return $membership !== null && in_array($membership->role, [SocialGroupMember::ROLE_OWNER, SocialGroupMember::ROLE_ADMIN], true);
     }
 
     private function presentUser(?User $user): ?array
@@ -431,6 +478,10 @@ class SocialPostService
             'post_scope' => $this->presentPostScope($post),
             'department' => $post->department?->name,
             'wall_user' => $post->wall_user_id !== null ? $this->presentUser($post->wallUser) : null,
+            'group' => $post->group_id !== null ? [
+                'id' => $post->group->id,
+                'name' => $post->group->name,
+            ] : null,
             'is_pinned' => $post->is_pinned,
             'pin_scope' => $post->is_pinned ? ($post->pin_scope ?: self::PIN_SCOPE_COMPANY) : null,
             'pinned_by' => $post->pinnedBy?->name,
@@ -448,8 +499,9 @@ class SocialPostService
             'comments_count' => $post->comments_count,
             'can_edit' => (int) $post->user_id === (int) $viewer->id,
             'can_delete' => (int) $post->user_id === (int) $viewer->id
-                || $this->canModerate($viewer, $post->user->department_id),
-            'can_pin' => $this->canPin($viewer) && $post->wall_user_id === null,
+                || $this->canModerate($viewer, $post->user->department_id)
+                || $this->isGroupManager($post->group_id, $viewer),
+            'can_pin' => $this->canPin($viewer) && $post->wall_user_id === null && $post->group_id === null,
             'is_edited' => $post->content_updated_at !== null,
             'edited_at' => $post->content_updated_at?->toIso8601String(),
             'created_at' => $post->created_at?->toIso8601String(),

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
@@ -13,6 +14,7 @@ const props = defineProps({
 const emit = defineEmits(['update:scope', 'update:postScope', 'open-wall']);
 
 const auth = useAuthStore();
+const router = useRouter();
 const stats = ref({ posts_count: 0, reactions_received: 0, comments_count: 0 });
 const statsLoaded = ref(false);
 
@@ -99,6 +101,10 @@ function setPostScope(scope) {
 
 function openOwnWall() {
   if (auth.user?.id) emit('open-wall', auth.user.id);
+}
+
+function openGroups() {
+  router.push({ name: 'social.groups.index' });
 }
 
 function isWallActive(itemId) {
@@ -258,6 +264,18 @@ watch(() => props.wallProfile, loadStats);
         <span class="profile-nav__copy">
           <span class="profile-nav__label">{{ item.label }}</span>
           <span class="profile-nav__hint">{{ item.hint }}</span>
+        </span>
+      </button>
+    </nav>
+
+    <nav class="profile-nav" aria-label="Nhóm">
+      <button type="button" class="profile-nav__btn" @click="openGroups">
+        <span class="profile-nav__icon" aria-hidden="true">
+          <AppIcon name="users" :size="16" />
+        </span>
+        <span class="profile-nav__copy">
+          <span class="profile-nav__label">Nhóm của tôi</span>
+          <span class="profile-nav__hint">Nhóm bảo mật & công khai</span>
         </span>
       </button>
     </nav>

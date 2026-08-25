@@ -12,8 +12,9 @@ interface SocialPostRepositoryInterface
      * @param  'all'|'mine'|'reacted'  $scope
      * @param  int|null  $departmentId  null trừ khi tường phòng ban
      * @param  int|null  $wallUserId  null trừ khi tường cá nhân
+     * @param  int|null  $groupId  null trừ khi tường nhóm
      */
-    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null): LengthAwarePaginator;
+    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null): LengthAwarePaginator;
 
     /** @return array{posts_count: int, reactions_received: int, comments_count: int} */
     public function profileStats(int $userId): array;

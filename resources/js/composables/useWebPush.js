@@ -8,6 +8,11 @@ const enabling = ref(false);
 const publicKey = ref(null);
 const lastError = ref('');
 
+const isBraveBrowser = computed(() => {
+  if (typeof navigator === 'undefined') return false;
+  return Boolean(navigator.brave) || /Brave/i.test(navigator.userAgent);
+});
+
 const pushSupported = computed(
   () => typeof window !== 'undefined'
     && window.isSecureContext
@@ -72,7 +77,10 @@ function errorMessage(error) {
     if (/user gesture|user activation|permission/i.test(raw)) {
       return 'Trình duyệt yêu cầu thao tác trực tiếp. Hãy bấm lại nút bật thông báo.';
     }
-    return 'Chrome không đăng ký được với dịch vụ đẩy (Google FCM). Tải lại trang rồi bật lại. Nếu vẫn lỗi, mạng/VPN có thể đang chặn Google.';
+    if (isBraveBrowser.value) {
+      return 'Brave đang chặn dịch vụ đẩy của Google. Mở brave://settings/privacy → bật “Use Google services for push messaging”, tải lại trang, rồi bật lại.';
+    }
+    return 'Trình duyệt không đăng ký được dịch vụ đẩy. Tải lại trang rồi bật lại.';
   }
   if (typeof error?.message === 'string' && error.message) {
     return error.message;
@@ -277,6 +285,7 @@ export function useWebPush() {
     vapidChecked,
     enabling,
     lastError,
+    isBraveBrowser,
     enablePush,
     disablePush,
   };

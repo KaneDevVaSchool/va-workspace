@@ -20,6 +20,7 @@ const {
   vapidChecked,
   enabling,
   lastError,
+  isBraveBrowser,
   enablePush,
   disablePush,
 } = useWebPush();
@@ -45,6 +46,9 @@ const pushHint = computed(() => {
   if (!pushSupported?.value) return '';
   if (permission?.value === 'denied') return 'Trình duyệt đang chặn thông báo đẩy.';
   if (vapidChecked?.value && !configured?.value) return 'Máy chủ chưa cấu hình thông báo đẩy.';
+  if (isBraveBrowser?.value && !pushReady.value) {
+    return 'Brave chặn đẩy Google mặc định. Bật “Use Google services for push messaging” tại brave://settings/privacy.';
+  }
   return '';
 });
 

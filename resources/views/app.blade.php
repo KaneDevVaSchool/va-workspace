@@ -7,7 +7,7 @@
     <meta name="vapid-public-key" content="{{ config('services.webpush.public_key') }}">
     <title>{{ config('app.name', 'VA Workspace') }}</title>
     <link rel="icon" href="/images/favicon.png" type="image/png">
-    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="manifest" href="/manifest.json">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body>

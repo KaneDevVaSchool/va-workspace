@@ -16,6 +16,12 @@ class NotificationService
 
     public const TYPE_MENTION_COMMENT = 'mention_comment';
 
+    public const TYPE_GROUP_JOIN_REQUEST = 'group_join_request';
+
+    public const TYPE_GROUP_JOIN_APPROVED = 'group_join_approved';
+
+    public const TYPE_GROUP_JOIN_REJECTED = 'group_join_rejected';
+
     public function __construct(
         private readonly UserNotificationRepositoryInterface $notifications,
         private readonly UserRepositoryInterface $users,

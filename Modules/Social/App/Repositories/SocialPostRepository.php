@@ -19,6 +19,7 @@ class SocialPostRepository implements SocialPostRepositoryInterface
                 'pinnedBy',
                 'sharedFrom.user',
                 'wallUser.department',
+                'group',
                 'poll.options' => fn ($query) => $query
                     ->withCount('votes')
                     ->orderBy('position')
@@ -27,10 +28,10 @@ class SocialPostRepository implements SocialPostRepositoryInterface
             ->withCount(['comments']);
     }
 
-    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null): LengthAwarePaginator
+    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null): LengthAwarePaginator
     {
         $query = $this->baseQuery();
-        $this->applyWall($query, $departmentId, $wallUserId);
+        $this->applyWall($query, $departmentId, $wallUserId, $groupId);
 
         if ($userId !== null && $scope === 'mine') {
             $query->where('user_id', $userId);
@@ -96,21 +97,27 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         });
     }
 
-    private function applyWall($query, ?int $departmentId, ?int $wallUserId): void
+    private function applyWall($query, ?int $departmentId, ?int $wallUserId, ?int $groupId = null): void
     {
+        if ($groupId !== null) {
+            $query->where('group_id', $groupId)->whereNull('department_id')->whereNull('wall_user_id');
+
+            return;
+        }
+
         if ($wallUserId !== null) {
-            $query->where('wall_user_id', $wallUserId)->whereNull('department_id');
+            $query->where('wall_user_id', $wallUserId)->whereNull('department_id')->whereNull('group_id');
 
             return;
         }
 
         if ($departmentId !== null) {
-            $query->where('department_id', $departmentId)->whereNull('wall_user_id');
+            $query->where('department_id', $departmentId)->whereNull('wall_user_id')->whereNull('group_id');
 
             return;
         }
 
-        $query->whereNull('department_id')->whereNull('wall_user_id');
+        $query->whereNull('department_id')->whereNull('wall_user_id')->whereNull('group_id');
     }
 
     public function find(int $id): ?SocialPost

@@ -16,6 +16,7 @@ const props = defineProps({
   departmentName: { type: String, default: '' },
   wallUserId: { type: Number, default: null },
   wallUserName: { type: String, default: '' },
+  groupId: { type: Number, default: null },
 });
 
 const emit = defineEmits(['posted']);
@@ -160,6 +161,9 @@ async function submit() {
     if (postScope.value === 'personal' && props.wallUserId) {
       form.append('wall_user_id', String(props.wallUserId));
     }
+    if (postScope.value === 'group' && props.groupId) {
+      form.append('group_id', String(props.groupId));
+    }
     files.value.forEach((file) => form.append('attachments[]', file));
 
     const { data } = await window.axios.post('/api/social/posts', form, {
@@ -183,6 +187,8 @@ async function submit() {
       successMessage = data.post?.wall_user?.id === auth.user?.id
         ? 'Đã đăng bài viết lên tường của bạn.'
         : `Đã đăng bài viết lên tường của ${data.post?.wall_user?.name ?? 'đồng nghiệp'}.`;
+    } else if (data.post?.post_scope === 'group') {
+      successMessage = `Đã đăng bài viết lên tường nhóm ${data.post?.group?.name ?? ''}.`.trim();
     }
     showClientToast('success', successMessage);
   } catch (error) {
