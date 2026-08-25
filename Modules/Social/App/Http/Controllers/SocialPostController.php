@@ -211,7 +211,7 @@ class SocialPostController extends Controller
         if ((string) ($post->content ?? '') !== $previousContent) {
             $this->activityLogs->record(
                 'social_post.update',
-                'Sửa bài viết "'.mb_substr(strip_tags((string) $post->content), 0, 60).'"',
+                'Sửa bài viết "'.$this->activityContentSnippet($post->content).'"',
                 $request->user(),
                 'social_post',
                 $post->id,
@@ -331,7 +331,7 @@ class SocialPostController extends Controller
 
         $this->activityLogs->record(
             'social_post.pin',
-            'Ghim bài viết "'.mb_substr((string) $post->content, 0, 60).'" lên '.$destination,
+            'Ghim bài viết "'.$this->activityContentSnippet($post->content).'" lên '.$destination,
             $request->user(),
             'social_post',
             $post->id,
@@ -354,5 +354,12 @@ class SocialPostController extends Controller
         $post = $this->service->unpin($post);
 
         return response()->json(['post' => $this->service->present($post, $request->user())]);
+    }
+
+    private function activityContentSnippet(?string $html, int $limit = 60): string
+    {
+        $plain = trim(html_entity_decode(strip_tags((string) $html), ENT_QUOTES, 'UTF-8'));
+
+        return mb_substr($plain, 0, $limit);
     }
 }

@@ -93,7 +93,7 @@ class ActivityLogService
                 'actor_name' => $actor?->name,
                 'actor_email' => $actor?->email,
                 'action' => $action,
-                'description' => mb_substr($description, 0, 255),
+                'description' => mb_substr($this->plainDescription($description), 0, 255),
                 'subject_type' => $subjectType,
                 'subject_id' => $subjectId,
                 'properties' => $properties === [] ? null : $properties,
@@ -146,7 +146,7 @@ class ActivityLogService
             'id' => $log->id,
             'action' => $log->action,
             'action_label' => self::actionLabel($log->action),
-            'description' => $log->description,
+            'description' => $this->plainDescription($log->description),
             'actor_id' => $log->actor_id,
             'actor_name' => $log->actor_name,
             'actor_email' => $log->actor_email,
@@ -340,5 +340,10 @@ class ActivityLogService
                 ? self::subjectTypeLabel((string) $filters['subject_type'])
                 : 'Tất cả',
         ];
+    }
+
+    private function plainDescription(?string $description): string
+    {
+        return trim(html_entity_decode(strip_tags((string) $description), ENT_QUOTES, 'UTF-8'));
     }
 }
