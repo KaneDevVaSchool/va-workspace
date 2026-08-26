@@ -1678,7 +1678,7 @@ onBeforeUnmount(() => {
 
 .wc-members__side {
   flex-shrink: 0;
-  width: 25rem;
+  width: 28rem;
   overflow-y: auto;
   padding: var(--space-4);
   border: 1px solid var(--color-border);

@@ -1152,7 +1152,7 @@ onBeforeUnmount(() => {
 
 .activity-page__side {
   flex-shrink: 0;
-  width: 22rem;
+  width: 28rem;
   overflow-y: auto;
   padding: var(--space-4);
   border: 1px solid var(--color-border);
