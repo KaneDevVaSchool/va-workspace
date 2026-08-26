@@ -96,6 +96,8 @@ const confirmDelete = ref(null);
 const deletingId = ref(null);
 const togglingId = ref(null);
 const duplicatingId = ref(null);
+const openActionMenuId = ref(null); // id mẫu đang mở dropdown Thao tác trên dòng
+const actionMenuPos = reactive({ top: 0, left: 0 });
 
 const query = ref('');
 const statusFilter = ref('');
@@ -580,8 +582,49 @@ function handleKeydown(e) {
     confirmDelete.value = null;
     return;
   }
+  if (openActionMenuId.value) {
+    openActionMenuId.value = null;
+    return;
+  }
   // Dialog Tạo/Sửa (EvaluationTemplateCreateDialog/EditDialog) tự bắt Escape nội bộ.
   if (selected.value) closePanel();
+}
+
+// Dropdown Thao tác theo dòng (data-table.mdc §"Thao tác theo dòng = 1 nút dropdown").
+// Teleport ra <body> + position:fixed vì bảng nằm trong wrap overflow:auto,
+// nếu để menu absolute trong <td> sẽ bị cắt mất khi cuộn dọc/ngang.
+const ACTION_MENU_WIDTH = 176; // khớp width .evtpl-page__action-menu (11rem)
+
+function toggleActionMenu(id, event) {
+  if (openActionMenuId.value === id) {
+    openActionMenuId.value = null;
+    return;
+  }
+  const rect = event.currentTarget.getBoundingClientRect();
+  actionMenuPos.top = rect.bottom + 4;
+  actionMenuPos.left = Math.max(8, rect.right - ACTION_MENU_WIDTH);
+  openActionMenuId.value = id;
+}
+
+function closeActionMenu() {
+  openActionMenuId.value = null;
+}
+
+function runRowAction(fn, template) {
+  closeActionMenu();
+  fn(template);
+}
+
+function handleDocumentClick(event) {
+  if (!openActionMenuId.value) return;
+  // Menu teleport ra <body> nên không còn nằm trong .evtpl-page__actions (td) —
+  // loại trừ cả 2 để click trigger/click item trong menu không tự đóng nhầm.
+  if (event.target?.closest?.('.evtpl-page__actions, .evtpl-page__action-menu')) return;
+  closeActionMenu();
+}
+
+function handleTableScroll() {
+  if (openActionMenuId.value) closeActionMenu();
 }
 
 watch([query, statusFilter, isGlobalFilter, positionFilter, creatorFilter], () => {
@@ -592,13 +635,19 @@ watch(visibleFilters, (value) => saveVisibility(FILTER_KEY, value), { deep: true
 
 onMounted(async () => {
   document.addEventListener('keydown', handleKeydown);
+  document.addEventListener('click', handleDocumentClick);
   await load();
   wrapObserver = new ResizeObserver(() => computeDefaultWidths());
-  if (tableWrap.value) wrapObserver.observe(tableWrap.value);
+  if (tableWrap.value) {
+    wrapObserver.observe(tableWrap.value);
+    tableWrap.value.addEventListener('scroll', handleTableScroll, { passive: true });
+  }
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown);
+  document.removeEventListener('click', handleDocumentClick);
+  tableWrap.value?.removeEventListener('scroll', handleTableScroll);
   wrapObserver?.disconnect();
 });
 </script>
@@ -801,39 +850,59 @@ onBeforeUnmount(() => {
                   <span class="evtpl-page__actions">
                     <button
                       type="button"
-                      class="evtpl-page__icon-btn"
-                      aria-label="Sửa mẫu đánh giá"
-                      @click="openEdit(template)"
+                      class="evtpl-page__action-trigger"
+                      :class="{ 'evtpl-page__action-trigger--open': openActionMenuId === template.id }"
+                      aria-haspopup="menu"
+                      :aria-expanded="openActionMenuId === template.id"
+                      aria-label="Thao tác"
+                      @click="toggleActionMenu(template.id, $event)"
                     >
-                      <AppIcon name="pencil" :size="15" />
+                      <AppIcon name="moreVertical" :size="16" />
                     </button>
-                    <button
-                      type="button"
-                      class="evtpl-page__icon-btn"
-                      aria-label="Nhân bản mẫu đánh giá"
-                      :disabled="duplicatingId === template.id"
-                      @click="duplicateTemplate(template)"
-                    >
-                      <AppIcon name="layers" :size="15" />
-                    </button>
-                    <button
-                      type="button"
-                      class="evtpl-page__icon-btn evtpl-page__icon-btn--ghost"
-                      :aria-label="template.is_active ? 'Ẩn mẫu đánh giá' : 'Hiện mẫu đánh giá'"
-                      :disabled="togglingId === template.id"
-                      @click="toggleActive(template)"
-                    >
-                      <AppIcon :name="template.is_active ? 'eyeOff' : 'eye'" :size="15" />
-                    </button>
-                    <button
-                      type="button"
-                      class="evtpl-page__icon-btn evtpl-page__icon-btn--danger"
-                      aria-label="Xoá mẫu đánh giá"
-                      :disabled="deletingId === template.id"
-                      @click="confirmDelete = template"
-                    >
-                      <AppIcon name="trash2" :size="15" />
-                    </button>
+                    <Teleport to="body">
+                      <div
+                        v-if="openActionMenuId === template.id"
+                        class="evtpl-page__action-menu"
+                        role="menu"
+                        aria-label="Thao tác mẫu đánh giá"
+                        :style="{ top: actionMenuPos.top + 'px', left: actionMenuPos.left + 'px' }"
+                      >
+                        <button type="button" role="menuitem" class="evtpl-page__action-item" @click="runRowAction(openEdit, template)">
+                          <AppIcon name="pencil" :size="15" />
+                          <span>Sửa</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="evtpl-page__action-item"
+                          :disabled="duplicatingId === template.id"
+                          @click="runRowAction(duplicateTemplate, template)"
+                        >
+                          <AppIcon name="layers" :size="15" />
+                          <span>Nhân bản</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="evtpl-page__action-item"
+                          :disabled="togglingId === template.id"
+                          @click="runRowAction(toggleActive, template)"
+                        >
+                          <AppIcon :name="template.is_active ? 'eyeOff' : 'eye'" :size="15" />
+                          <span>{{ template.is_active ? 'Ẩn' : 'Hiện' }}</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="evtpl-page__action-item evtpl-page__action-item--danger"
+                          :disabled="deletingId === template.id"
+                          @click="closeActionMenu(); confirmDelete = template"
+                        >
+                          <AppIcon name="trash2" :size="15" />
+                          <span>Xoá</span>
+                        </button>
+                      </div>
+                    </Teleport>
                   </span>
                 </td>
               </tr>
@@ -1213,8 +1282,77 @@ onBeforeUnmount(() => {
 }
 
 .evtpl-page__actions {
+  position: relative;
   display: inline-flex;
-  gap: var(--space-1);
+}
+
+.evtpl-page__action-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.evtpl-page__action-trigger:hover,
+.evtpl-page__action-trigger--open {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.evtpl-page__action-menu {
+  position: fixed;
+  z-index: 1200;
+  width: 11rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-lg);
+  text-align: left;
+}
+
+.evtpl-page__action-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.evtpl-page__action-item:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.evtpl-page__action-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.evtpl-page__action-item--danger {
+  color: var(--color-danger);
+}
+
+.evtpl-page__action-item--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
 }
 
 .evtpl-page__icon-btn {
@@ -1271,7 +1409,7 @@ onBeforeUnmount(() => {
 
 .evtpl-page__side {
   flex-shrink: 0;
-  width: 24rem;
+  width: 28rem;
   display: flex;
   flex-direction: column;
   padding: var(--space-4);
