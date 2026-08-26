@@ -805,8 +805,8 @@ onBeforeUnmount(() => {
 }
 
 .eval-view__panel {
-  flex: 0 0 22rem;
-  width: 24rem;
+  flex: 0 0 28rem;
+  width: 28rem;
   min-width: 0;
   display: flex;
   flex-direction: column;
