@@ -24,6 +24,13 @@ interface EvaluationCriteriaRepositoryInterface
     /** Tên tiêu chí (đã lowercase, trim) hiện có trong phòng ban — dùng phát hiện trùng khi nhập Excel. */
     public function namesByDepartment(int $departmentId): array;
 
+    /**
+     * Đã tồn tại tiêu chí cùng tên (không phân biệt hoa/thường, đã trim) trong phòng ban chưa —
+     * dùng chặn đặt trùng tên khi tạo/sửa tiêu chí qua form. $exceptId loại trừ chính bản ghi
+     * đang sửa (update).
+     */
+    public function existsNameInDepartment(int $departmentId, string $name, ?int $exceptId = null): bool;
+
     public function find(int $id): ?EvaluationCriteria;
 
     /** Tìm theo id và đảm bảo thuộc phòng ban được phép. */

@@ -48,6 +48,17 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
             ->all();
     }
 
+    public function existsNameInDepartment(int $departmentId, string $name, ?int $exceptId = null): bool
+    {
+        $normalized = mb_strtolower(trim($name));
+
+        return EvaluationCriteria::query()
+            ->where('department_id', $departmentId)
+            ->whereRaw('LOWER(TRIM(name)) = ?', [$normalized])
+            ->when($exceptId !== null, fn ($query) => $query->where('id', '!=', $exceptId))
+            ->exists();
+    }
+
     public function find(int $id): ?EvaluationCriteria
     {
         return EvaluationCriteria::query()->with(EvaluationCriteria::WITH_PRESENT)->find($id);
