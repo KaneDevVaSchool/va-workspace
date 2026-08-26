@@ -37,6 +37,7 @@ Route::middleware('auth')->prefix('social')->name('social.')->group(function () 
     Route::delete('/posts/{postId}', [SocialPostController::class, 'destroy']);
     Route::post('/posts/{postId}/reactions', [SocialPostController::class, 'setReaction']);
     Route::get('/posts/{postId}/reactions', [SocialPostController::class, 'reactions']);
+    Route::post('/posts/{postId}/view', [SocialPostController::class, 'recordView']);
     Route::post('/posts/{postId}/share', [SocialPostController::class, 'share']);
     Route::post('/posts/{postId}/pin', [SocialPostController::class, 'pin']);
     Route::delete('/posts/{postId}/pin', [SocialPostController::class, 'unpin']);

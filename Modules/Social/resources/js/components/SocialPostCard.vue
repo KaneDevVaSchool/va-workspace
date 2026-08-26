@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { REACTIONS, reactionByType } from '../constants/reactions.js';
@@ -45,12 +45,74 @@ const reactionListType = ref(null);
 const localReactions = ref(cloneReactions(props.post.reactions));
 const localMyReaction = ref(props.post.my_reaction);
 const localCommentsCount = ref(props.post.comments_count);
+const localViewsCount = ref(props.post.views_count ?? 0);
+const viewed = ref(Boolean(props.post.viewed) || Boolean(props.post.can_edit));
+const cardEl = ref(null);
+let viewObserver = null;
+let viewTimer = null;
+let recordingView = false;
 const localPoll = ref(props.post.poll ?? null);
 const { popping, bursts, playFeedback, nextGen, isLatest } = useReactionAction();
 
 watch(() => props.post.poll, (poll) => {
   localPoll.value = poll ?? null;
 });
+
+watch(() => props.post.views_count, (count) => {
+  localViewsCount.value = count ?? 0;
+});
+
+watch(() => props.post.viewed, (value) => {
+  if (value) viewed.value = true;
+});
+
+function unbindViewObserver() {
+  if (viewTimer) {
+    clearTimeout(viewTimer);
+    viewTimer = null;
+  }
+  viewObserver?.disconnect();
+  viewObserver = null;
+}
+
+async function recordView() {
+  if (viewed.value || recordingView || props.post.can_edit) return;
+  recordingView = true;
+  try {
+    const { data } = await window.axios.post(`/api/social/posts/${props.post.id}/view`);
+    localViewsCount.value = data.views_count ?? localViewsCount.value;
+    viewed.value = Boolean(data.viewed);
+    if (viewed.value) unbindViewObserver();
+  } catch {
+    viewed.value = false;
+  } finally {
+    recordingView = false;
+  }
+}
+
+function bindViewObserver() {
+  if (viewed.value || props.post.can_edit || typeof IntersectionObserver === 'undefined') return;
+  const el = cardEl.value;
+  if (!el) return;
+
+  viewObserver = new IntersectionObserver((entries) => {
+    const entry = entries[0];
+    if (!entry) return;
+    if (entry.isIntersecting && entry.intersectionRatio >= 0.4) {
+      viewTimer = setTimeout(() => {
+        recordView();
+      }, 600);
+    } else if (viewTimer) {
+      clearTimeout(viewTimer);
+      viewTimer = null;
+    }
+  }, { threshold: [0.4] });
+
+  viewObserver.observe(el);
+}
+
+onMounted(bindViewObserver);
+onBeforeUnmount(unbindViewObserver);
 
 const topReactions = computed(() =>
   REACTIONS
@@ -72,6 +134,17 @@ const postedOnOtherWall = computed(() => (
   && props.post.wall_user
   && props.post.wall_user.id !== props.post.author?.id
 ));
+const deptVisibilityText = computed(() => {
+  const mode = props.post.department_visibility_mode;
+  const list = props.post.department_visibility ?? [];
+  if (mode === 'include') {
+    return list.length > 0 ? `Chỉ ${list.map((d) => d.name).join(', ')} thấy bài này` : null;
+  }
+  if (mode === 'exclude') {
+    return list.length > 0 ? `Mọi phòng ban thấy, trừ ${list.map((d) => d.name).join(', ')}` : null;
+  }
+  return null;
+});
 const imageAttachments = computed(() =>
   (props.post.attachments ?? []).filter((item) => item.type === 'image'),
 );
@@ -224,8 +297,10 @@ async function saveEdit() {
 
 <template>
   <article
+    ref="cardEl"
     class="post-card"
     :class="{
+      'post-card--poll': localPoll,
       'post-card--pinned': post.is_pinned,
       'post-card--pinned-system': post.is_pinned && isSystemPin,
       'post-card--pinned-company': post.is_pinned && !isSystemPin,
@@ -274,6 +349,10 @@ async function saveEdit() {
         </div>
         <div v-if="post.author.department" class="post-card__meta">
           {{ post.author.department }}
+        </div>
+        <div v-if="deptVisibilityText" class="post-card__meta post-card__meta--visibility">
+          <span class="post-card__dot" aria-hidden="true"></span>
+          <span class="post-card__visibility-text">{{ deptVisibilityText }}</span>
         </div>
       </div>
 
@@ -427,7 +506,7 @@ async function saveEdit() {
       @updated="onPollUpdated"
     />
 
-    <div v-if="topReactions.length > 0 || localCommentsCount > 0" class="post-card__stats">
+    <div v-if="topReactions.length > 0 || localCommentsCount > 0 || localViewsCount > 0" class="post-card__stats">
       <div v-if="topReactions.length > 0" class="post-card__reaction-summary">
         <button
           v-for="reaction in topReactions"
@@ -441,7 +520,17 @@ async function saveEdit() {
           <span class="post-card__reaction-count">{{ reaction.count }}</span>
         </button>
       </div>
-      <span v-if="localCommentsCount > 0">{{ localCommentsCount }} bình luận</span>
+      <div class="post-card__stats-meta">
+        <span v-if="localCommentsCount > 0">{{ localCommentsCount }} bình luận</span>
+        <span
+          v-if="localViewsCount > 0"
+          class="post-card__views"
+          :aria-label="`${localViewsCount} lượt xem`"
+        >
+          <AppIcon name="eye" :size="14" />
+          {{ localViewsCount }} lượt xem
+        </span>
+      </div>
     </div>
 
     <div class="post-card__actions">
@@ -522,6 +611,22 @@ async function saveEdit() {
   gap: var(--space-3);
   box-shadow: var(--shadow-sm);
   overflow: visible;
+}
+
+.post-card--poll {
+  border: none;
+  box-shadow: none;
+  padding: var(--space-3);
+  gap: var(--space-2);
+}
+
+.post-card--poll .post-card__stats {
+  box-shadow: none;
+}
+
+.post-card--poll.post-card--pinned {
+  padding-left: calc(var(--space-3) + var(--space-2) + 3px);
+  box-shadow: none;
 }
 
 .post-card--pinned {
@@ -680,6 +785,27 @@ async function saveEdit() {
 .post-card__meta {
   font-size: 0.8125rem;
   color: var(--color-text-muted);
+}
+
+.post-card__meta--visibility {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.post-card__visibility-text {
+  min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.post-card__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
 }
 
 .post-card__time {
@@ -967,6 +1093,21 @@ async function saveEdit() {
   color: var(--color-text-muted);
   box-shadow: 0 1px 0 var(--color-border);
   padding-bottom: var(--space-2);
+}
+
+.post-card__stats-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.post-card__views {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .post-card__reaction-summary {

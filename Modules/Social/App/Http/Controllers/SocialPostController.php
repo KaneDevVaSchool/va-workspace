@@ -60,7 +60,7 @@ class SocialPostController extends Controller
 
     public function show(Request $request, int $postId): JsonResponse
     {
-        $post = $this->posts->find($postId);
+        $post = $this->posts->find($postId, $request->user()->id);
         if (! $post) {
             return response()->json(['message' => 'Không tìm thấy bài viết.'], 404);
         }
@@ -280,6 +280,16 @@ class SocialPostController extends Controller
         return response()->json(
             $this->service->setReaction($post, $request->user(), $request->validated()['type'])
         );
+    }
+
+    public function recordView(Request $request, int $postId): JsonResponse
+    {
+        $post = $this->posts->find($postId);
+        if (! $post) {
+            return response()->json(['message' => 'Không tìm thấy bài viết.'], 404);
+        }
+
+        return response()->json($this->service->recordView($post, $request->user()));
     }
 
     public function reactions(Request $request, int $postId): JsonResponse

@@ -14,6 +14,7 @@ use Modules\Identity\App\Models\Department;
  * @property int $id
  * @property int $user_id
  * @property int|null $department_id
+ * @property string $department_visibility_mode
  * @property int|null $wall_user_id
  * @property int|null $group_id
  * @property string|null $content
@@ -31,9 +32,16 @@ class SocialPost extends Model
 
     protected $table = 'social_posts';
 
+    public const DEPARTMENT_VISIBILITY_ALL = 'all';
+
+    public const DEPARTMENT_VISIBILITY_INCLUDE = 'include';
+
+    public const DEPARTMENT_VISIBILITY_EXCLUDE = 'exclude';
+
     protected $fillable = [
         'user_id',
         'department_id',
+        'department_visibility_mode',
         'wall_user_id',
         'group_id',
         'content',
@@ -63,6 +71,11 @@ class SocialPost extends Model
         return $this->belongsTo(Department::class);
     }
 
+    public function departmentVisibilities(): HasMany
+    {
+        return $this->hasMany(SocialPostDepartmentVisibility::class, 'post_id');
+    }
+
     public function wallUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'wall_user_id');
@@ -86,6 +99,11 @@ class SocialPost extends Model
     public function likes(): HasMany
     {
         return $this->hasMany(SocialPostLike::class, 'post_id');
+    }
+
+    public function views(): HasMany
+    {
+        return $this->hasMany(SocialPostView::class, 'post_id');
     }
 
     public function comments(): HasMany

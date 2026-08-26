@@ -12,9 +12,13 @@ quyết định thiết kế, nợ kỹ thuật.
 | [`theme.md`](theme.md) | Token CSS, quy tắc border |
 | `.claude/CLAUDE.md` (root repo) | Quy tắc bắt buộc khi viết code |
 
+## Doc theo module
+
+- [`modules/Social.md`](modules/Social.md) — bảng tin nội bộ (đã chạy, ngoài lộ trình gốc)
+
 ## Cấu trúc gợi ý khi thêm doc
 
-- `docs/modules/{TenModule}.md` — tài liệu riêng từng module khi module được dựng (`EVALUATION.md` trước, rồi `INITIATIVE.md`, `PROJECT.md`…)
+- `docs/modules/{TenModule}.md` — tài liệu riêng từng module khi module được dựng (`Social.md` đã có, tiếp theo `EVALUATION.md`, rồi `INITIATIVE.md`, `PROJECT.md`…)
 - `docs/architecture.md` / `docs/routing.md` — tách ra khi overview §3 / §10 quá dài
 
 Không tạo module `Auth` / `Department` / `SystemConfig` / `Audit` riêng: đã nằm trong `Identity` (xem overview §2).

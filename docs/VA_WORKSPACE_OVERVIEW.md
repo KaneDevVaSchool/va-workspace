@@ -20,6 +20,7 @@ Nền tảng **Phase 0 + Phase 1 đã xong**. Các module nghiệp vụ (Project
 |---|---|---|
 | `Identity` | Google SSO (Sanctum **session/cookie**, không Bearer stateless), User/Department (stub chờ HRM), **9 role**, RBAC engine + UI ma trận `/superadmin/permissions`, View-as, Team, nhật ký hoạt động, shortcut | Gộp Auth + Department + Team + một phần Audit/SystemConfig — **không** tách module riêng |
 | `WorkspaceConfig` | Hub trưởng phòng: thành viên, CRUD nhóm, gán vai trò, bật/tắt menu; super_admin: overview + chi tiết phòng ban (chỉ xem) | Tab **Tiêu chí đánh giá** chưa có — đây là việc tiếp theo |
+| `Social` | Bảng tin nội bộ: đăng bài (4 loại tường), cảm xúc, bình luận đa cấp, poll, nhóm, sticker, `@mention`, ghim, lượt xem, giới hạn hiển thị theo phòng ban | **Không nằm trong kế hoạch gốc** — dựng ngoài lộ trình §19, chưa có ở bản đồ §2 trước bản cập nhật này. Chi tiết: `docs/modules/Social.md` |
 | `Example` | Module mẫu | Copy khi tạo module mới (`new-module`) |
 
 **Quyết định đã chốt khi làm Identity/WorkspaceConfig (khác bản plan gốc):**
@@ -108,6 +109,8 @@ VA Workspace
 │                          RBAC + ma trận, View-as, Team, activity log, shortcut
 ├── WorkspaceConfig        Hub cấu hình phòng ban (thành viên, nhóm, menu)
 │                          + overview super_admin (chỉ xem)
+├── Social                 Bảng tin nội bộ — bài đăng/cảm xúc/bình luận/poll/
+│                          nhóm/sticker/mention (ngoài lộ trình gốc, xem docs/modules/Social.md)
 ├── Example                Module mẫu — copy khi tạo module mới
 │
 │  ── KẾ HOẠCH (chưa dựng) ──────────────────────────────────────────
@@ -631,6 +634,7 @@ project_documents          -- "Tài liệu dự án": có folder, người dùng
 | **1** | Bảng `teams`, 9 role, PermissionCatalog + UI ma trận, View-as, activity log | Phase 0 | **Xong** — Team trong Identity; CRUD nhóm trên hub WorkspaceConfig |
 | **1b** | Hub `WorkspaceConfig`: thành viên, gán role, sidebar theo phòng ban, overview super_admin | Phase 1 | **Xong** — thiếu tab Evaluation |
 | **1c** | Module `Evaluation` Giai đoạn B: tiêu chí đánh giá (2 kiểu), tab trong WorkspaceConfigHub | Phase 1b | **← LÀM TIẾP** |
+| **1d** *(ngoài kế hoạch)* | Module `Social`: bảng tin, cảm xúc, bình luận, poll, nhóm — làm song song, không nằm trong lộ trình gốc | — | **Xong phần lõi** — lượt xem + giới hạn hiển thị theo phòng ban đang dở (working tree), xem `docs/modules/Social.md` §5 |
 | **2** | Module `Initiative`: schema, Service/Repository, UI Vue giao/nhận, roll-up trạng thái | Phase 1 | Chưa |
 | **3** | Cross-department Task Delegation: mở rộng module `Project` (`tasks` + Service), `NotificationService` | Phase 1, cần Project | Chưa |
 | **4** | Module `TaskScoringConfig` theo phòng ban + `ScoringRollupService` + module `Kpi` | Phase 1, độc lập Phase 2/3 | Chưa — tab thêm vào hub, sau Evaluation |

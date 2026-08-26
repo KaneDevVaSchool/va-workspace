@@ -19,6 +19,9 @@ class StoreSocialPostRequest extends FormRequest
             'post_scope' => ['sometimes', 'in:company,department,personal,group'],
             'wall_user_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
             'group_id' => ['required_if:post_scope,group', 'nullable', 'integer', 'exists:social_groups,id'],
+            'department_visibility_mode' => ['sometimes', 'in:all,include,exclude'],
+            'department_visibility_ids' => ['required_if:department_visibility_mode,include,exclude', 'array', 'max:200'],
+            'department_visibility_ids.*' => ['integer', 'exists:departments,id'],
             'attachments' => ['nullable', 'array', 'max:10'],
             'attachments.*' => [
                 'file', 'max:10240',
@@ -64,6 +67,7 @@ class StoreSocialPostRequest extends FormRequest
             'poll.options.*.required' => 'Phương án không được để trống.',
             'poll.options.*.max' => 'Mỗi phương án không được vượt quá 200 ký tự.',
             'poll.ends_at.after' => 'Hạn bình chọn phải ở tương lai.',
+            'department_visibility_ids.required_if' => 'Chọn ít nhất 1 phòng ban.',
         ];
     }
 

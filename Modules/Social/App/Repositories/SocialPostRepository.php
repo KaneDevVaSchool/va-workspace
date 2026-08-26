@@ -11,27 +11,37 @@ use Modules\Social\App\Repositories\Contracts\SocialPostRepositoryInterface;
 
 class SocialPostRepository implements SocialPostRepositoryInterface
 {
-    private function baseQuery()
+    private function baseQuery(?int $viewerId = null)
     {
-        return SocialPost::query()
+        $query = SocialPost::query()
             ->with([
                 'user.department',
                 'pinnedBy',
                 'sharedFrom.user',
                 'wallUser.department',
                 'group',
+                'departmentVisibilities.department',
                 'poll.options' => fn ($query) => $query
                     ->withCount('votes')
                     ->orderBy('position')
                     ->orderBy('id'),
             ])
-            ->withCount(['comments']);
+            ->withCount(['comments', 'views']);
+
+        if ($viewerId !== null) {
+            $query->withExists([
+                'views as viewed' => fn ($views) => $views->where('user_id', $viewerId),
+            ]);
+        }
+
+        return $query;
     }
 
-    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null): LengthAwarePaginator
+    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?int $viewerDepartmentId = null): LengthAwarePaginator
     {
-        $query = $this->baseQuery();
+        $query = $this->baseQuery($userId);
         $this->applyWall($query, $departmentId, $wallUserId, $groupId);
+        $this->applyDepartmentVisibility($query, $departmentId, $wallUserId, $groupId, $viewerDepartmentId);
 
         if ($userId !== null && $scope === 'mine') {
             $query->where('user_id', $userId);
@@ -65,12 +75,15 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         ?int $departmentId = null,
         ?int $wallUserId = null,
         ?string $search = null,
+        ?int $viewerId = null,
+        ?int $viewerDepartmentId = null,
     ): LengthAwarePaginator {
-        $query = $this->baseQuery()
+        $query = $this->baseQuery($viewerId)
             ->where('is_pinned', true)
             ->where('pin_scope', $scope);
 
         $this->applyWall($query, $departmentId, $wallUserId);
+        $this->applyDepartmentVisibility($query, $departmentId, $wallUserId, null, $viewerDepartmentId);
         $this->applyPinnedSearch($query, $search);
 
         return $query
@@ -120,9 +133,53 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         $query->whereNull('department_id')->whereNull('wall_user_id')->whereNull('group_id');
     }
 
-    public function find(int $id): ?SocialPost
+    /**
+     * Chỉ áp dụng cho bảng tin chung (department/wall/group đều null): ẩn bài mà
+     * $viewerDepartmentId không được thấy theo department_visibility_mode.
+     * Viewer chưa thuộc phòng ban nào không thể nằm trong danh sách 'include' của
+     * bất kỳ bài nào (nên bỏ nhánh này), nhưng vẫn không thuộc danh sách bị trừ
+     * của bất kỳ bài 'exclude' nào — nên vẫn thấy được các bài đó.
+     */
+    private function applyDepartmentVisibility($query, ?int $departmentId, ?int $wallUserId, ?int $groupId, ?int $viewerDepartmentId): void
     {
-        return $this->baseQuery()->find($id);
+        if ($departmentId !== null || $wallUserId !== null || $groupId !== null) {
+            return;
+        }
+
+        $query->where(function ($outer) use ($viewerDepartmentId) {
+            $outer->where('department_visibility_mode', SocialPost::DEPARTMENT_VISIBILITY_ALL)
+                ->orWhereNull('department_visibility_mode')
+                ->orWhere(function ($exclude) use ($viewerDepartmentId) {
+                    $exclude->where('department_visibility_mode', SocialPost::DEPARTMENT_VISIBILITY_EXCLUDE);
+
+                    if ($viewerDepartmentId === null) {
+                        return;
+                    }
+
+                    $exclude->whereDoesntHave('departmentVisibilities', fn ($v) => $v->where('department_id', $viewerDepartmentId));
+                });
+
+            if ($viewerDepartmentId === null) {
+                return;
+            }
+
+            $outer->orWhere(function ($include) use ($viewerDepartmentId) {
+                $include->where('department_visibility_mode', SocialPost::DEPARTMENT_VISIBILITY_INCLUDE)
+                    ->whereHas('departmentVisibilities', fn ($v) => $v->where('department_id', $viewerDepartmentId));
+            });
+        });
+    }
+
+    public function syncDepartmentVisibility(SocialPost $post, array $departmentIds): void
+    {
+        $post->departmentVisibilities()->createMany(
+            collect($departmentIds)->map(fn (int $id) => ['department_id' => $id])->all()
+        );
+    }
+
+    public function find(int $id, ?int $viewerId = null): ?SocialPost
+    {
+        return $this->baseQuery($viewerId)->find($id);
     }
 
     public function create(array $data): SocialPost
@@ -209,5 +266,25 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         }
 
         return $query->get();
+    }
+
+    public function recordView(SocialPost $post, int $userId): bool
+    {
+        if ((int) $post->user_id === $userId) {
+            return false;
+        }
+
+        try {
+            $view = $post->views()->firstOrCreate(['user_id' => $userId]);
+
+            return $view->wasRecentlyCreated;
+        } catch (\Illuminate\Database\QueryException) {
+            return false;
+        }
+    }
+
+    public function viewsCount(SocialPost $post): int
+    {
+        return $post->views()->count();
     }
 }

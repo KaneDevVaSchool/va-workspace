@@ -12,6 +12,7 @@ use Modules\Identity\App\Services\PermissionService;
 use Modules\Identity\App\Services\ViewAsService;
 use Modules\Social\App\Models\SocialGroupMember;
 use Modules\Social\App\Models\SocialPost;
+use Modules\Social\App\Models\SocialPostDepartmentVisibility;
 use Modules\Social\App\Models\SocialPostLike;
 use Modules\Social\App\Repositories\Contracts\SocialGroupRepositoryInterface;
 use Modules\Social\App\Repositories\Contracts\SocialPostRepositoryInterface;
@@ -36,6 +37,12 @@ class SocialPostService
 
     public const POST_SCOPE_GROUP = 'group';
 
+    public const DEPT_VISIBILITY_ALL = SocialPost::DEPARTMENT_VISIBILITY_ALL;
+
+    public const DEPT_VISIBILITY_INCLUDE = SocialPost::DEPARTMENT_VISIBILITY_INCLUDE;
+
+    public const DEPT_VISIBILITY_EXCLUDE = SocialPost::DEPARTMENT_VISIBILITY_EXCLUDE;
+
     public function __construct(
         private readonly SocialPostRepositoryInterface $posts,
         private readonly PermissionService $permissions,
@@ -50,7 +57,7 @@ class SocialPostService
     public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null): array
     {
         $scope = $this->normalizeFeedScope($scope);
-        $paginator = $this->posts->paginate($perPage, $page, $scope, $viewer->id, $departmentId, $wallUserId, $groupId);
+        $paginator = $this->posts->paginate($perPage, $page, $scope, $viewer->id, $departmentId, $wallUserId, $groupId, $viewer->department_id);
 
         return [
             'posts' => collect($paginator->items())
@@ -84,7 +91,7 @@ class SocialPostService
         ?string $search = null,
     ): array {
         $scope = $this->normalizePinScope($scope);
-        $paginator = $this->posts->paginatePinned($perPage, $page, $scope, $departmentId, $wallUserId, $search);
+        $paginator = $this->posts->paginatePinned($perPage, $page, $scope, $departmentId, $wallUserId, $search, $viewer->id, $viewer->department_id);
 
         return [
             'posts' => collect($paginator->items())
@@ -159,12 +166,15 @@ class SocialPostService
             ]);
         }
 
-        $post = DB::transaction(function () use ($author, $data, $files, $asSystem, $destination) {
+        $visibility = $this->resolveDepartmentVisibility($data, $destination['post_scope']);
+
+        $post = DB::transaction(function () use ($author, $data, $files, $asSystem, $destination, $visibility) {
             $payload = [
                 'user_id' => $author->id,
                 'department_id' => $destination['department_id'],
                 'wall_user_id' => $destination['wall_user_id'],
                 'group_id' => $destination['group_id'],
+                'department_visibility_mode' => $visibility['mode'],
                 'content' => isset($data['content']) ? $this->sanitizeContent($data['content']) : null,
             ];
 
@@ -176,6 +186,11 @@ class SocialPostService
             }
 
             $post = $this->posts->create($payload);
+
+            if ($visibility['department_ids'] !== []) {
+                $this->posts->syncDepartmentVisibility($post, $visibility['department_ids']);
+                $post = $this->posts->find($post->id) ?? $post;
+            }
 
             if ($files !== []) {
                 $post = $this->posts->update($post, [
@@ -358,6 +373,39 @@ class SocialPostService
         ];
     }
 
+    /**
+     * Diễn giải lựa chọn phòng ban được thấy/loại trừ. Chỉ áp dụng khi đăng lên
+     * bảng tin chung; các tường khác (phòng ban, cá nhân, nhóm) luôn 'all'.
+     *
+     * @return array{mode: string, department_ids: int[]}
+     */
+    private function resolveDepartmentVisibility(array $data, string $postScope): array
+    {
+        if ($postScope !== self::POST_SCOPE_COMPANY) {
+            return ['mode' => self::DEPT_VISIBILITY_ALL, 'department_ids' => []];
+        }
+
+        $mode = $data['department_visibility_mode'] ?? self::DEPT_VISIBILITY_ALL;
+        if (! in_array($mode, [self::DEPT_VISIBILITY_INCLUDE, self::DEPT_VISIBILITY_EXCLUDE], true)) {
+            return ['mode' => self::DEPT_VISIBILITY_ALL, 'department_ids' => []];
+        }
+
+        $departmentIds = collect($data['department_visibility_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($departmentIds === []) {
+            throw ValidationException::withMessages([
+                'department_visibility_ids' => ['Chọn ít nhất 1 phòng ban.'],
+            ]);
+        }
+
+        return ['mode' => $mode, 'department_ids' => $departmentIds];
+    }
+
     private function presentPostScope(SocialPost $post): string
     {
         if ($post->group_id !== null) {
@@ -403,6 +451,17 @@ class SocialPostService
         return [
             'reactions' => $this->posts->reactionSummary($post),
             'my_reaction' => $result['reaction_type'],
+        ];
+    }
+
+    public function recordView(SocialPost $post, User $viewer): array
+    {
+        $recorded = $this->posts->recordView($post, $viewer->id);
+
+        return [
+            'views_count' => $this->posts->viewsCount($post),
+            'viewed' => (int) $post->user_id !== (int) $viewer->id,
+            'recorded' => $recorded,
         ];
     }
 
@@ -477,6 +536,8 @@ class SocialPostService
             'author' => $this->presentUser($post->user),
             'post_scope' => $this->presentPostScope($post),
             'department' => $post->department?->name,
+            'department_visibility_mode' => $post->department_visibility_mode ?? self::DEPT_VISIBILITY_ALL,
+            'department_visibility' => $this->presentDepartmentVisibility($post),
             'wall_user' => $post->wall_user_id !== null ? $this->presentUser($post->wallUser) : null,
             'group' => $post->group_id !== null ? [
                 'id' => $post->group->id,
@@ -500,6 +561,8 @@ class SocialPostService
             'reactions' => $this->posts->reactionSummary($post),
             'my_reaction' => $this->posts->myReaction($post, $viewer->id),
             'comments_count' => $post->comments_count,
+            'views_count' => (int) ($post->views_count ?? 0),
+            'viewed' => (int) ($post->getAttributes()['viewed'] ?? 0) === 1,
             'can_edit' => (int) $post->user_id === (int) $viewer->id,
             'can_delete' => (int) $post->user_id === (int) $viewer->id
                 || $this->canModerate($viewer, $post->user->department_id)
@@ -514,6 +577,22 @@ class SocialPostService
                 (int) $post->user_id === (int) $viewer->id,
             ),
         ];
+    }
+
+    /** @return array{id: int, name: string}[]|null null nếu bài không giới hạn phòng ban ('all'). */
+    private function presentDepartmentVisibility(SocialPost $post): ?array
+    {
+        if (($post->department_visibility_mode ?? self::DEPT_VISIBILITY_ALL) === self::DEPT_VISIBILITY_ALL) {
+            return null;
+        }
+
+        return $post->departmentVisibilities
+            ->map(fn (SocialPostDepartmentVisibility $v) => [
+                'id' => $v->department->id,
+                'name' => $v->department->name,
+            ])
+            ->values()
+            ->all();
     }
 
     private function sanitizeContent(string $content): string

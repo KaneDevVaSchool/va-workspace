@@ -103,6 +103,7 @@ const peekHint = computed(() => {
   if (canVote.value || !props.poll.show_results) return null;
   return 'Nhấn phương án để xem ai đã chọn';
 });
+const isPairLayout = computed(() => (props.poll.options ?? []).length === 2);
 
 function padUnit(value, width) {
   return String(value).padStart(width, '0');
@@ -246,59 +247,57 @@ onBeforeUnmount(() => {
     :aria-label="isEnded ? 'Bình chọn đã kết thúc' : 'Bình chọn'"
     :aria-busy="voting || closing"
   >
-    <div class="poll__head">
-      <div class="poll__kicker">
-        <span class="poll__badge">
-          <AppIcon name="listChecks" :size="13" :stroke-width="2" />
-          Bình chọn
-        </span>
-        <span v-if="poll.allow_multiple" class="poll__chip poll__chip--info">Chọn nhiều</span>
-        <span v-if="totalLabel" class="poll__chip poll__chip--votes">
-          <AppIcon name="users" :size="12" />
-          {{ totalLabel }}
-        </span>
-        <span
-          v-if="statusChip"
-          class="poll__chip"
-          :class="poll.is_closed ? 'poll__chip--closed' : 'poll__chip--warn'"
-        >
-          <AppIcon name="clock" :size="12" />
-          {{ statusChip }}
-        </span>
+    <div class="poll__top">
+      <div class="poll__head">
+        <div class="poll__kicker">
+          <span class="poll__badge">
+            <AppIcon name="listChecks" :size="13" :stroke-width="2" />
+            Bình chọn
+          </span>
+          <span v-if="poll.allow_multiple" class="poll__chip poll__chip--info poll__chip--dot">Chọn nhiều</span>
+          <span v-if="totalLabel" class="poll__chip poll__chip--votes">
+            <AppIcon name="users" :size="12" />
+            {{ totalLabel }}
+          </span>
+          <span
+            v-if="statusChip"
+            class="poll__chip"
+            :class="poll.is_closed ? 'poll__chip--closed' : 'poll__chip--warn'"
+          >
+            <AppIcon name="clock" :size="12" />
+            {{ statusChip }}
+          </span>
+        </div>
+        <h3 class="poll__title">{{ pollTitle }}</h3>
+        <p v-if="pollContent" class="poll__content">{{ pollContent }}</p>
       </div>
-      <h3 class="poll__title">{{ pollTitle }}</h3>
-      <p v-if="pollContent" class="poll__content">{{ pollContent }}</p>
-    </div>
 
-    <div
-      v-if="showCountdown && countdown"
-      class="poll__timer"
-      role="timer"
-      :aria-label="countdownAria"
-    >
-      <div class="poll__timer-icon" aria-hidden="true">
-        <svg class="poll__ring" viewBox="0 0 36 36">
-          <circle class="poll__ring-track" cx="18" cy="18" r="15" />
-          <circle class="poll__ring-value" cx="18" cy="18" r="15" />
-        </svg>
-        <AppIcon name="clock" :size="14" />
-      </div>
-      <div class="poll__timer-copy">
-        <span class="poll__timer-kicker">Còn lại</span>
-        <span v-if="deadlineExact" class="poll__timer-until">Hết hạn {{ deadlineExact }}</span>
-      </div>
-      <div class="poll__units">
-        <template v-for="(unit, index) in countdown.units" :key="unit.key">
-          <div class="poll__unit">
-            <div class="poll__flip">
-              <Transition name="poll-tick">
-                <span :key="`${unit.key}-${unit.value}`" class="poll__num">{{ padUnit(unit.value, unit.pad) }}</span>
-              </Transition>
+      <div
+        v-if="showCountdown && countdown"
+        class="poll__timer"
+        role="timer"
+        :aria-label="countdownAria"
+      >
+        <div class="poll__timer-copy">
+          <span class="poll__timer-kicker">
+            <AppIcon name="clock" :size="11" :stroke-width="2.5" />
+            Còn lại
+          </span>
+          <span v-if="deadlineExact" class="poll__timer-until">Hết hạn {{ deadlineExact }}</span>
+        </div>
+        <div class="poll__units">
+          <template v-for="(unit, index) in countdown.units" :key="unit.key">
+            <div class="poll__unit">
+              <div class="poll__flip">
+                <Transition name="poll-tick">
+                  <span :key="`${unit.key}-${unit.value}`" class="poll__num">{{ padUnit(unit.value, unit.pad) }}</span>
+                </Transition>
+              </div>
+              <span class="poll__unit-label">{{ unit.label }}</span>
             </div>
-            <span class="poll__unit-label">{{ unit.label }}</span>
-          </div>
-          <span v-if="index < countdown.units.length - 1" class="poll__colon" aria-hidden="true">:</span>
-        </template>
+            <span v-if="index < countdown.units.length - 1" class="poll__colon" aria-hidden="true">:</span>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -312,13 +311,14 @@ onBeforeUnmount(() => {
       <img :src="poll.image_url" :alt="pollTitle" class="poll__image" />
     </button>
 
-    <div class="poll__options">
+    <div class="poll__options" :class="{ 'poll__options--pair': isPairLayout }">
       <button
         v-for="option in poll.options"
         :key="option.id"
         type="button"
         class="poll__option"
         :class="{
+          'poll__option--pair': isPairLayout,
           'poll__option--selected': selected.has(option.id),
           'poll__option--results': poll.show_results,
           'poll__option--lead': poll.show_results && leadingPercent > 0 && option.percent === leadingPercent,
@@ -333,9 +333,9 @@ onBeforeUnmount(() => {
           v-if="poll.show_results"
           class="poll__fill"
           :class="{ 'poll__fill--on': selected.has(option.id) }"
-          :style="{ width: `${option.percent ?? 0}%` }"
+          :style="isPairLayout ? { height: `${option.percent ?? 0}%` } : { width: `${option.percent ?? 0}%` }"
         />
-        <span class="poll__row">
+        <span class="poll__row" :class="{ 'poll__row--pair': isPairLayout }">
           <span
             class="poll__mark"
             :class="{
@@ -350,6 +350,7 @@ onBeforeUnmount(() => {
           <span
             v-if="poll.show_results && option.percent != null"
             class="poll__stat"
+            :class="{ 'poll__stat--pair': isPairLayout }"
             @click.stop="openVoters(option)"
           >
             <span class="poll__percent">{{ option.percent }}%</span>
@@ -428,24 +429,15 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-4);
-  padding-left: calc(var(--space-2) + 3px + var(--space-3));
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.poll::before {
-  content: '';
-  position: absolute;
-  top: var(--space-2);
-  bottom: var(--space-2);
-  left: var(--space-2);
-  width: 3px;
+  max-height: min(72vh, 36rem);
+  padding: 0;
+  overflow: auto;
+  border: none;
   border-radius: 0;
-  background: var(--poll-accent);
+  background: transparent;
+  box-shadow: none;
 }
 
 .poll--urgent {
@@ -464,9 +456,17 @@ onBeforeUnmount(() => {
   opacity: 0.88;
 }
 
+.poll__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
 .poll__head {
   display: flex;
   flex-direction: column;
+  flex: 1 1 12rem;
   gap: var(--space-2);
   min-width: 0;
 }
@@ -475,126 +475,99 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.6rem;
 }
 
-.poll__badge,
+.poll__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1;
+  color: var(--color-primary);
+}
+
 .poll__chip {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  min-height: 1.55rem;
-  padding: 0 0.65rem;
-  border-radius: var(--radius-full);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: 0.75rem;
+  font-weight: 600;
   line-height: 1;
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 
-.poll__badge {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-}
-
-.poll__chip {
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
+.poll__chip--dot::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  opacity: 0.65;
 }
 
 .poll__chip--info {
-  background: var(--color-info-tint-bg);
   color: var(--color-info-tint-fg);
 }
 
 .poll__chip--votes {
-  background: var(--color-primary-surface);
   color: var(--color-primary);
 }
 
 .poll__chip--warn {
-  background: var(--color-warning-tint-bg);
   color: var(--color-warning-tint-fg);
 }
 
 .poll__chip--closed {
-  background: var(--color-danger-tint-bg);
   color: var(--color-danger-tint-fg);
 }
 
 .poll__title {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 1.0625rem;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.3;
   color: var(--color-text);
 }
 
 .poll__content {
   margin: 0;
-  font-size: 0.875rem;
-  line-height: 1.55;
+  font-size: 0.8125rem;
+  line-height: 1.45;
   color: var(--color-text-muted);
   white-space: pre-wrap;
 }
 
 .poll__timer {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-  padding: 0.7rem 0.85rem;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--poll-accent) 8%, var(--color-surface-muted));
-}
-
-.poll__timer-icon {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  min-width: min(300px, 100%);
   flex-shrink: 0;
-  color: var(--poll-accent);
-}
-
-.poll__ring {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.poll__ring-track,
-.poll__ring-value {
-  fill: none;
-  stroke-width: 2.5;
-}
-
-.poll__ring-track {
-  stroke: color-mix(in srgb, var(--poll-accent) 22%, var(--color-surface));
-}
-
-.poll__ring-value {
-  stroke: var(--poll-accent);
-  stroke-linecap: round;
-  stroke-dasharray: 94.2;
-  stroke-dashoffset: 0;
-  animation: poll-ring 1s linear infinite;
+  padding: 0.5rem 0.7rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--poll-accent) 7%, var(--color-surface-muted));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--poll-accent) 18%, transparent);
 }
 
 .poll__timer-copy {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  align-items: flex-end;
+  gap: 0.15rem;
   min-width: 0;
-  flex: 1 1 7rem;
 }
 
 .poll__timer-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -611,8 +584,7 @@ onBeforeUnmount(() => {
 .poll__units {
   display: flex;
   align-items: flex-start;
-  gap: 0.35rem;
-  margin-left: auto;
+  gap: 0.3rem;
 }
 
 .poll__unit {
@@ -627,9 +599,10 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   overflow: hidden;
-  min-width: 2.15rem;
+  min-width: 2.4rem;
   height: 1.85rem;
-  padding: 0 0.35rem;
+  padding: 0 0.5rem;
+  border: none;
   border-radius: 0.4rem;
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
@@ -643,7 +616,7 @@ onBeforeUnmount(() => {
 
 .poll__num {
   font-variant-numeric: tabular-nums;
-  font-size: 1.05rem;
+  font-size: 1.0625rem;
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -661,7 +634,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   height: 1.85rem;
-  font-size: 1rem;
+  font-size: 1.0625rem;
   font-weight: 800;
   line-height: 1;
   color: var(--poll-accent);
@@ -689,22 +662,13 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 
-@keyframes poll-ring {
-  from {
-    stroke-dashoffset: 0;
-  }
-  to {
-    stroke-dashoffset: 94.2;
-  }
-}
-
 @keyframes poll-pulse {
   0%,
   100% {
-    box-shadow: var(--shadow-sm);
+    background: var(--color-surface);
   }
   50% {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 18%, transparent);
+    background: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
   }
 }
 
@@ -713,15 +677,17 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 14rem;
+  min-height: 0;
+  max-height: min(34vh, 16rem);
   margin: 0;
-  padding: var(--space-2);
+  padding: 0;
   overflow: hidden;
   border: none;
   border-radius: var(--radius-lg);
   background: var(--color-surface-muted);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   cursor: zoom-in;
+  flex-shrink: 0;
 }
 
 .poll__media:hover .poll__image {
@@ -737,7 +703,7 @@ onBeforeUnmount(() => {
   display: block;
   width: auto;
   max-width: 100%;
-  max-height: 24rem;
+  max-height: min(34vh, 16rem);
   object-fit: contain;
   object-position: center;
   border-radius: var(--radius-md);
@@ -747,8 +713,15 @@ onBeforeUnmount(() => {
 .poll__options {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 0.4rem;
   width: 100%;
+  min-height: 0;
+}
+
+.poll__options--pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
 }
 
 .poll__option {
@@ -764,25 +737,28 @@ onBeforeUnmount(() => {
   font-family: inherit;
   text-align: left;
   cursor: pointer;
-  transition: box-shadow 0.15s ease, background 0.15s ease;
+  box-shadow: none;
+  transition: background 0.15s ease;
 }
 
 .poll__option:hover:not(:disabled) {
-  box-shadow: var(--shadow-md);
-  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface-muted));
+  box-shadow: none;
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface-muted));
 }
 
 .poll__option--selected {
   background: var(--color-primary-surface);
-  box-shadow: 0 0 0 1.5px var(--color-primary), var(--shadow-sm);
+  box-shadow: none;
 }
 
 .poll__option--selected:hover:not(:disabled) {
-  box-shadow: 0 0 0 1.5px var(--color-primary), var(--shadow-md);
+  box-shadow: none;
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-surface));
 }
 
 .poll__option--lead:not(.poll__option--selected) {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, var(--color-border)), var(--shadow-sm);
+  box-shadow: none;
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface-muted));
 }
 
 .poll__option:disabled {
@@ -798,12 +774,23 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 
+.poll__option--pair {
+  display: flex;
+  height: 100%;
+}
+
 .poll__fill {
   position: absolute;
   inset: 0 auto 0 0;
   background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface-muted));
   transition: width 0.45s ease;
   pointer-events: none;
+}
+
+.poll__option--pair .poll__fill {
+  inset: auto 0 0 0;
+  height: 0;
+  transition: height 0.45s ease;
 }
 
 .poll__fill--on {
@@ -819,21 +806,33 @@ onBeforeUnmount(() => {
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  min-height: 3rem;
-  padding: 0.7rem 0.9rem;
+  gap: 0.5rem;
+  min-height: 2rem;
+  padding: 0.4rem 0.6rem;
+}
+
+.poll__row--pair {
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 3.25rem;
+  padding: 0.55rem 0.45rem;
+  text-align: center;
 }
 
 .poll__mark {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 0.9rem;
+  height: 0.9rem;
   flex-shrink: 0;
+  border: none;
   border-radius: var(--radius-full);
-  box-shadow: inset 0 0 0 1.5px var(--color-border);
-  background: var(--color-surface);
+  box-shadow: none;
+  background: color-mix(in srgb, var(--color-border) 55%, var(--color-surface));
 }
 
 .poll__mark--multi {
@@ -849,10 +848,15 @@ onBeforeUnmount(() => {
 .poll__label {
   flex: 1;
   min-width: 0;
-  font-size: 0.9375rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.35;
   word-break: break-word;
+}
+
+.poll__row--pair .poll__label {
+  flex: none;
+  width: 100%;
 }
 
 .poll__stat {
@@ -865,9 +869,14 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.poll__stat--pair {
+  align-items: center;
+  min-width: 0;
+}
+
 .poll__percent {
   font-variant-numeric: tabular-nums;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1.2;
   color: var(--color-primary);
@@ -901,14 +910,14 @@ onBeforeUnmount(() => {
 
 .poll__close {
   margin-left: auto;
-  min-height: 2rem;
-  padding: 0 0.85rem;
+  min-height: 1.75rem;
+  padding: 0 0.7rem;
   border: none;
   border-radius: var(--radius-full);
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
   font-family: inherit;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -930,36 +939,39 @@ onBeforeUnmount(() => {
 
 @media (max-width: 640px) {
   .poll {
-    padding: var(--space-3);
-    padding-left: calc(var(--space-2) + 3px + var(--space-3));
-    gap: var(--space-3);
-  }
-
-  .poll__timer {
+    max-height: min(78vh, 34rem);
     gap: var(--space-2);
   }
 
-  .poll__units {
-    margin-left: 0;
-    width: 100%;
-    justify-content: flex-end;
+  .poll__head {
+    flex-basis: 100%;
+  }
+
+  .poll__timer {
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .poll__timer-copy {
+    align-items: flex-start;
   }
 
   .poll__flip {
-    min-width: 1.95rem;
-    height: 1.7rem;
+    min-width: 2.1rem;
+    height: 1.65rem;
+  }
+
+  .poll__colon {
+    height: 1.65rem;
   }
 
   .poll__num {
     font-size: 0.9375rem;
   }
 
-  .poll__media {
-    min-height: 10rem;
-  }
-
+  .poll__media,
   .poll__image {
-    max-height: 18rem;
+    max-height: min(28vh, 11rem);
   }
 }
 
@@ -971,7 +983,6 @@ onBeforeUnmount(() => {
     transition: none;
   }
 
-  .poll__ring-value,
   .poll--critical .poll__flip {
     animation: none;
   }
