@@ -39,4 +39,12 @@ panel chi tiết bên phải khi chọn dòng — đẩy bảng sang, không mod
 - Thanh trên: gạch chân nhẹ (`box-shadow: 0 1px 0 …`). Không nút chia màn hình.
 - **Panel chi tiết**: nhãn trái có dấu `:` cuối (CSS `::after { content: ':' }`,
   không gõ `:` vào text), giá trị phải **chữ thường nghiêng** (`font-style:
-  italic`, không `font-weight: 600`). Panel rộng `22–24rem` (không còn `20rem`).
+  italic`, không `font-weight: 600`). Panel rộng `28rem` (không còn `20rem` hay `22–24rem`).
+- **Thao tác theo dòng = 1 nút dropdown**: mọi hành động của 1 dòng (sửa, xoá,
+  khoá, ghim, duyệt…) gộp vào **1 nút** mở menu collapse, kể cả khi dòng đó
+  chỉ có đúng 1 hành động khả dụng — **không** hiện rời từng icon-button trên
+  bảng. Nút trigger: icon 3 chấm dọc (`more_vert`) + `aria-label="Thao tác"`
+  (không `title`, theo mục cấm hint). Mẫu dropdown tham khảo cấu trúc
+  `resources/js/components/HeaderAccountMenu.vue` (`role="menu"` /
+  `role="menuitem"`, đóng khi click ngoài hoặc Escape). Menu liệt kê hành
+  động bằng **chữ tiếng Việt phổ thông**, không chỉ icon trần.

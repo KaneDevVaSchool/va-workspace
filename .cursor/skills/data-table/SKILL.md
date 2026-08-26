@@ -37,7 +37,7 @@ div.__body (flex row, overflow hidden)
 │   ├── TablePagesBar placement="top"  ← đủ nút, gạch chân nhẹ
 │   ├── table-wrap.hide-scrollbar (flex 1)
 │   └── TablePagesBar placement="bottom" paging-only
-└── aside.__side (v-if selected) — Chi tiết, width 22–24rem, đẩy bảng
+└── aside.__side (v-if selected) — Chi tiết, width 28rem, đẩy bảng
 ```
 
 Thứ tự **không** đảo: filter → thanh đầy đủ → bảng → thanh phân trang.
@@ -101,7 +101,7 @@ không cần thêm CSS ở trang).
 
 Click dòng → `selected = log` → `<aside>` bên phải, bảng co lại. Không modal giữa màn, không overlay. Đóng: nút X hoặc Escape. Màn hẹp: panel dưới bảng, `max-height: 42%`.
 
-Panel rộng `22–24rem` (không dùng `20rem`). Mỗi dòng: nhãn trái chữ mờ có
+Panel rộng `28rem` (không dùng `20rem` hay `22–24rem`). Mỗi dòng: nhãn trái chữ mờ có
 dấu `:` cuối (`::after { content: ':' }` trong CSS, không gõ `:` vào text),
 giá trị bên phải **chữ thường nghiêng** (`font-style: italic`, không
 `font-weight: 600` — quét toàn bộ, không in đậm), cách dòng `box-shadow: 0
@@ -131,6 +131,27 @@ giá trị bên phải **chữ thường nghiêng** (`font-style: italic`, khôn
 
 ---
 
+## 6. Thao tác theo dòng — 1 nút dropdown
+
+Cột/khu vực thao tác cuối mỗi dòng **không** hiện nhiều icon-button rời
+(sửa, xoá, khoá, ghim, duyệt… mỗi cái 1 nút). Gộp tất cả vào **1 nút** mở
+menu collapse — kể cả khi dòng đó chỉ có đúng 1 hành động khả dụng (vẫn qua
+dropdown, không hiện thẳng nút đơn, để cột luôn đồng nhất).
+
+- Nút trigger: icon 3 chấm dọc (`more_vert`), `aria-label="Thao tác"`
+  (không `title` — mục cấm hint áp dụng cả đây).
+- Menu: `role="menu"`, mỗi hành động `role="menuitem"` với **chữ tiếng Việt
+  phổ thông** đứng cạnh icon (không chỉ icon trần) — đúng tinh thần "ý nghĩa
+  nút phải hiển thị sẵn".
+- Đóng khi click ngoài hoặc phím Escape; mở **xuống** nếu đủ chỗ, tự lật
+  **lên** khi gần đáy khung nhìn/bảng.
+- Hành động phá huỷ (xoá, thu hồi quyền…) trong menu vẫn phải qua
+  `ConfirmDialog`, không xoá ngay khi click item.
+- Mẫu cấu trúc dropdown tham khảo: `resources/js/components/HeaderAccountMenu.vue`
+  (trigger button + `<div role="menu">` tuyệt đối định vị, đóng bằng click-outside/Escape).
+
+---
+
 ## Anti-patterns
 
 - Chia màn hình / split view / chi tiết modal.
@@ -140,6 +161,7 @@ giá trị bên phải **chữ thường nghiêng** (`font-style: italic`, khôn
 - `border-bottom` / `border-right` cho gạch — dùng `box-shadow`.
 - Bảng tràn ngang mà không kéo được bằng chuột (chỉ trông chờ wheel/trackpad).
 - Giá trị trong panel chi tiết in đậm (`font-weight: 600`) hoặc nhãn thiếu dấu `:`.
+- Nhiều icon-button thao tác rời nhau trên 1 dòng thay vì gộp 1 dropdown.
 
 ## Checklist
 
@@ -149,5 +171,6 @@ giá trị bên phải **chữ thường nghiêng** (`font-style: italic`, khôn
 - [ ] Mọi cột kéo được; width persist; fit theo nội dung dài nhất
 - [ ] `hide-scrollbar`; không `title`
 - [ ] Bảng tràn ngang kéo được bằng nắm chuột (`useDragScroll`), không hiện thanh scroll
-- [ ] Chi tiết = aside đẩy ngang (rộng 22–24rem), không modal
+- [ ] Chi tiết = aside đẩy ngang (rộng 28rem), không modal
 - [ ] Panel chi tiết: nhãn có `:` (CSS `::after`), giá trị chữ nghiêng không đậm
+- [ ] Thao tác theo dòng gộp 1 nút dropdown (⋮ + "Thao tác"), kể cả chỉ 1 hành động

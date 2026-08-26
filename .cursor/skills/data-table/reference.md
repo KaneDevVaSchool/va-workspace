@@ -153,7 +153,7 @@ Giá trị chữ thường **nghiêng**, không in đậm.
 ```css
 .side {
   flex-shrink: 0;
-  width: 22rem; /* 22–24rem tuỳ độ dài nội dung, không còn 20rem */
+  width: 28rem; /* không còn 20rem hay 22–24rem */
   overflow-y: auto;
   padding: var(--space-4);
   border: 1px solid var(--color-border);

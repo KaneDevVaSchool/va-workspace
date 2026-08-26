@@ -24,4 +24,4 @@ Mẫu: `Modules/Identity/resources/js/pages/ActivityLog.vue` + `resources/js/com
    không hiện thanh scroll.
 5. Không `title`. Gạch 1 cạnh = `box-shadow`, không `border-bottom` / `border-right`.
 6. Panel chi tiết: nhãn có `::after { content: ':' }`, giá trị `font-style:
-   italic` (không đậm), panel rộng `22–24rem`.
+   italic` (không đậm), panel rộng `28rem`.
