@@ -40,6 +40,11 @@ interface SocialPostRepositoryInterface
 
     public function find(int $id, ?int $viewerId = null): ?SocialPost;
 
+    /**
+     * Danh sách bài chờ duyệt (review_status = pending), cũ nhất trước (FIFO).
+     */
+    public function paginatePending(int $perPage, int $page): LengthAwarePaginator;
+
     public function create(array $data): SocialPost;
 
     /** Ghi các phòng ban được chọn (include/exclude) cho bài đăng bảng tin chung. */
@@ -76,4 +81,6 @@ interface SocialPostRepositoryInterface
     public function recordView(SocialPost $post, int $userId): bool;
 
     public function viewsCount(SocialPost $post): int;
+
+    public function countPending(): int;
 }

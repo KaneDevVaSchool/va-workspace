@@ -104,7 +104,7 @@ function belongsToCurrentScope(post) {
         return false;
     }
     if (feedScope.value === "mine") {
-        return post.author?.id === auth.user?.id;
+        return post.can_edit;
     }
     if (feedScope.value === "reacted") {
         return Boolean(post.my_reaction);

@@ -17,6 +17,7 @@ class SocialPostRepository implements SocialPostRepositoryInterface
             ->with([
                 'user.department',
                 'pinnedBy',
+                'reviewedBy',
                 'sharedFrom.user',
                 'wallUser.department',
                 'group',
@@ -43,8 +44,11 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         $query = $this->baseQuery($userId);
         $this->constrainVisibleFeed($query, $departmentId, $wallUserId, $groupId, $viewerDepartmentId);
 
+        // Bài đang chờ duyệt/bị từ chối chỉ hiện cho chính tác giả ở scope 'mine'.
         if ($userId !== null && $scope === 'mine') {
             $query->where('user_id', $userId);
+        } else {
+            $query->where('review_status', SocialPost::REVIEW_APPROVED);
         }
 
         if ($userId !== null && $scope === 'reacted') {
@@ -90,7 +94,8 @@ class SocialPostRepository implements SocialPostRepositoryInterface
     ): LengthAwarePaginator {
         $query = $this->baseQuery($viewerId)
             ->where('is_pinned', true)
-            ->where('pin_scope', $scope);
+            ->where('pin_scope', $scope)
+            ->where('review_status', SocialPost::REVIEW_APPROVED);
 
         $this->applyWall($query, $departmentId, $wallUserId);
         $this->applyDepartmentVisibility($query, $departmentId, $wallUserId, null, $viewerDepartmentId);
@@ -190,6 +195,19 @@ class SocialPostRepository implements SocialPostRepositoryInterface
     public function find(int $id, ?int $viewerId = null): ?SocialPost
     {
         return $this->baseQuery($viewerId)->find($id);
+    }
+
+    public function paginatePending(int $perPage, int $page): LengthAwarePaginator
+    {
+        return $this->baseQuery()
+            ->where('review_status', SocialPost::REVIEW_PENDING)
+            ->orderBy('created_at')
+            ->paginate($perPage, ['*'], 'page', $page);
+    }
+
+    public function countPending(): int
+    {
+        return SocialPost::query()->where('review_status', SocialPost::REVIEW_PENDING)->count();
     }
 
     public function create(array $data): SocialPost

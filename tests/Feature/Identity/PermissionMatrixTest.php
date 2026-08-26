@@ -328,6 +328,43 @@ class PermissionMatrixTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // resolveGrantedKeys — frontend sidebar / route guard
+    // ------------------------------------------------------------------
+
+    public function test_resolve_granted_keys_includes_config_wildcard(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $admin = $this->makeUser([], ['admin']);
+
+        $this->assertContains('social.review', $this->service()->resolveGrantedKeys($admin));
+    }
+
+    public function test_resolve_granted_keys_includes_global_override(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $member = $this->makeUser([], ['member']);
+        $this->assertNotContains('social.review', $this->service()->resolveGrantedKeys($member));
+
+        $this->service()->setGrant('member', 'social.review', true, 'global', null, 1);
+
+        $this->assertContains('social.review', $this->service()->resolveGrantedKeys($member));
+    }
+
+    public function test_resolve_granted_keys_respects_global_revoke(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $director = $this->makeUser([], ['department_director']);
+        $this->assertContains('social.moderate', $this->service()->resolveGrantedKeys($director));
+
+        $this->service()->setGrant('department_director', 'social.moderate', false, 'global', null, 1);
+
+        $this->assertNotContains('social.moderate', $this->service()->resolveGrantedKeys($director));
+    }
+
+    // ------------------------------------------------------------------
     // Team
     // ------------------------------------------------------------------
 

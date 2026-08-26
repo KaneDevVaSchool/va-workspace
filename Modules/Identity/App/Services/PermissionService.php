@@ -132,8 +132,11 @@ class PermissionService
     }
 
     /**
-     * Danh sách tất cả permission keys đang grant cho user (mọi role).
-     * Dùng cho /api/me để frontend cache quyền.
+     * Danh sách permission keys hiệu lực của user (config default + DB override).
+     * Dùng cho /api/me để frontend cache quyền (sidebar, route guard).
+     *
+     * Super admin thật → ['*']. Các role khác: duyệt catalog, gọi allows()
+     * cùng scope global như middleware `permission:` để UI khớp API.
      *
      * @return array<string>
      */
@@ -144,14 +147,18 @@ class PermissionService
         }
 
         $effectiveRoles = $this->viewAs->effectiveRoles($user);
-        $keys = [];
-
-        foreach ($effectiveRoles as $roleCode) {
-            $configKeys = config("permissions.matrix.{$roleCode}", []);
-            $keys = array_merge($keys, $configKeys);
+        if ($effectiveRoles === []) {
+            return [];
         }
 
-        return array_values(array_unique($keys));
+        $granted = [];
+        foreach (array_keys(config('permissions.catalog', [])) as $key) {
+            if ($this->allows($user, $key)) {
+                $granted[] = $key;
+            }
+        }
+
+        return $granted;
     }
 
     /**

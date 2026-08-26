@@ -21,4 +21,12 @@ export default [
     meta: { requiresAuth: true, title: 'Nhóm' },
     props: true,
   },
+  {
+    // Trang duyệt bài viết (toàn trường) — mục sidebar riêng, bất kỳ ai có
+    // quyền social.review (mặc định admin/super_admin, hoặc được cấp thêm).
+    path: '/manager/social/moderation',
+    name: 'manager.social.moderation',
+    component: () => import('./pages/SocialModeration.vue'),
+    meta: { requiresAuth: true, requiresPermission: 'social.review', title: 'Duyệt bài viết' },
+  },
 ];

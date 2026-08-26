@@ -16,6 +16,8 @@ class StoreSocialPostRequest extends FormRequest
         return [
             'content' => ['nullable', 'string', 'max:8000'],
             'as_system_announcement' => ['sometimes', 'boolean'],
+            'is_anonymous' => ['sometimes', 'boolean'],
+            'anonymous_name' => ['sometimes', 'nullable', 'string', 'max:100'],
             'post_scope' => ['sometimes', 'in:company,department,personal,group'],
             'wall_user_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
             'group_id' => ['required_if:post_scope,group', 'nullable', 'integer', 'exists:social_groups,id'],
@@ -41,11 +43,22 @@ class StoreSocialPostRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            if ($this->hasContent() || $this->hasFile('attachments') || $this->hasPoll()) {
+            if (! $this->hasContent() && ! $this->hasFile('attachments') && ! $this->hasPoll()) {
+                $validator->errors()->add('content', 'Bài viết phải có nội dung, tệp đính kèm hoặc bình chọn.');
+            }
+
+            if (! $this->boolean('is_anonymous')) {
                 return;
             }
 
-            $validator->errors()->add('content', 'Bài viết phải có nội dung, tệp đính kèm hoặc bình chọn.');
+            $postScope = $this->input('post_scope', 'company');
+            if ($postScope !== 'company') {
+                $validator->errors()->add('is_anonymous', 'Chỉ có thể đăng ẩn danh lên bảng tin chung.');
+            }
+
+            if ($this->boolean('as_system_announcement')) {
+                $validator->errors()->add('is_anonymous', 'Thông báo quan trọng không thể đăng ẩn danh.');
+            }
         });
     }
 
@@ -68,6 +81,8 @@ class StoreSocialPostRequest extends FormRequest
             'poll.options.*.max' => 'Mỗi phương án không được vượt quá 200 ký tự.',
             'poll.ends_at.after' => 'Hạn bình chọn phải ở tương lai.',
             'department_visibility_ids.required_if' => 'Chọn ít nhất 1 phòng ban.',
+            'is_anonymous.boolean' => 'Giá trị ẩn danh không hợp lệ.',
+            'anonymous_name.max' => 'Tên ẩn danh không được vượt quá 100 ký tự.',
         ];
     }
 

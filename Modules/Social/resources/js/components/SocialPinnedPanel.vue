@@ -271,7 +271,7 @@ defineExpose({ load });
           <span class="announce-panel__item-heading">{{ item.heading }}</span>
           <span v-if="item.excerpt && !isSystem" class="announce-panel__item-excerpt">{{ item.excerpt }}</span>
           <span class="announce-panel__item-meta">
-            <span class="announce-panel__item-author">{{ item.post.author.name }}</span>
+            <span class="announce-panel__item-author">{{ item.post.author?.name ?? 'Người ẩn danh' }}</span>
             <time :datetime="item.post.created_at">{{ formatSocialTime(item.post.created_at) }}</time>
           </span>
         </button>
@@ -341,7 +341,7 @@ defineExpose({ load });
                   <span class="announce-browse__item-heading">{{ item.heading }}</span>
                   <span v-if="item.excerpt" class="announce-browse__item-excerpt">{{ item.excerpt }}</span>
                   <span class="announce-browse__item-meta">
-                    <span class="announce-browse__item-author">{{ item.post.author.name }}</span>
+                    <span class="announce-browse__item-author">{{ item.post.author?.name ?? 'Người ẩn danh' }}</span>
                     <time :datetime="item.post.created_at">{{ formatSocialTime(item.post.created_at) }}</time>
                   </span>
                 </button>

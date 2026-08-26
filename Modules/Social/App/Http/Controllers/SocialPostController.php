@@ -3,6 +3,7 @@
 namespace Modules\Social\App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Identity\App\Services\ActivityLogService;
@@ -11,6 +12,7 @@ use Modules\Social\App\Http\Requests\SetSocialReactionRequest;
 use Modules\Social\App\Http\Requests\ShareSocialPostRequest;
 use Modules\Social\App\Http\Requests\StoreSocialPostRequest;
 use Modules\Social\App\Http\Requests\UpdateSocialPostRequest;
+use Modules\Social\App\Models\SocialPost;
 use Modules\Social\App\Models\SocialPostLike;
 use Modules\Social\App\Repositories\Contracts\SocialGroupRepositoryInterface;
 use Modules\Social\App\Repositories\Contracts\SocialPostRepositoryInterface;
@@ -68,11 +70,25 @@ class SocialPostController extends Controller
     public function show(Request $request, int $postId): JsonResponse
     {
         $post = $this->posts->find($postId, $request->user()->id);
-        if (! $post) {
+        if (! $post || ! $this->canViewUnapproved($post, $request->user())) {
             return response()->json(['message' => 'Không tìm thấy bài viết.'], 404);
         }
 
         return response()->json(['post' => $this->service->present($post, $request->user())]);
+    }
+
+    /**
+     * Bài chưa duyệt (pending/rejected) chỉ tác giả hoặc người có quyền duyệt
+     * (social.review) được xem — người khác coi như bài không tồn tại.
+     */
+    private function canViewUnapproved(SocialPost $post, User $viewer): bool
+    {
+        if ($post->review_status === SocialPost::REVIEW_APPROVED) {
+            return true;
+        }
+
+        return (int) $post->user_id === (int) $viewer->id
+            || $this->permissions->allows($viewer, 'social.review');
     }
 
     /**
@@ -246,9 +262,10 @@ class SocialPostController extends Controller
         $this->service->delete($post);
 
         if (! $isOwner) {
+            $authorLabel = $post->is_anonymous ? 'ẩn danh' : '"'.$post->user->name.'"';
             $this->activityLogs->record(
                 'social_post.moderate_delete',
-                'Xoá bài viết của "'.$post->user->name.'" trên bảng tin',
+                'Xoá bài viết của '.$authorLabel.' trên bảng tin',
                 $request->user(),
                 'social_post',
                 $post->id,

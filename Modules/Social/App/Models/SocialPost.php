@@ -19,6 +19,12 @@ use Modules\Identity\App\Models\Department;
  * @property int|null $wall_user_id
  * @property int|null $group_id
  * @property string|null $content
+ * @property bool $is_anonymous
+ * @property string|null $anonymous_name
+ * @property string $review_status
+ * @property int|null $reviewed_by
+ * @property \Illuminate\Support\Carbon|null $reviewed_at
+ * @property string|null $review_reject_reason
  * @property \Illuminate\Support\Carbon|null $content_updated_at
  * @property array|null $attachments
  * @property bool $is_pinned
@@ -39,6 +45,12 @@ class SocialPost extends Model
 
     public const DEPARTMENT_VISIBILITY_EXCLUDE = 'exclude';
 
+    public const REVIEW_PENDING = 'pending';
+
+    public const REVIEW_APPROVED = 'approved';
+
+    public const REVIEW_REJECTED = 'rejected';
+
     protected $fillable = [
         'user_id',
         'department_id',
@@ -46,6 +58,12 @@ class SocialPost extends Model
         'wall_user_id',
         'group_id',
         'content',
+        'is_anonymous',
+        'anonymous_name',
+        'review_status',
+        'reviewed_by',
+        'reviewed_at',
+        'review_reject_reason',
         'content_updated_at',
         'attachments',
         'is_pinned',
@@ -57,9 +75,11 @@ class SocialPost extends Model
 
     protected $casts = [
         'attachments' => 'array',
+        'is_anonymous' => 'boolean',
         'is_pinned' => 'boolean',
         'pinned_at' => 'datetime',
         'content_updated_at' => 'datetime',
+        'reviewed_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
@@ -90,6 +110,11 @@ class SocialPost extends Model
     public function pinnedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'pinned_by');
+    }
+
+    public function reviewedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
     }
 
     public function sharedFrom(): BelongsTo

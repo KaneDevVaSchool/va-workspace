@@ -38,6 +38,8 @@ class ActivityLogService
         'shortcut.delete' => 'Xoá lối tắt',
         'social_post.update' => 'Sửa bài viết',
         'social_post.pin' => 'Ghim bài viết',
+        'social_post.approve' => 'Duyệt bài viết',
+        'social_post.reject' => 'Từ chối bài viết',
         'evaluation_criteria.create' => 'Tạo tiêu chí đánh giá',
         'evaluation_criteria.update' => 'Cập nhật tiêu chí đánh giá',
         'evaluation_criteria.delete' => 'Xoá tiêu chí đánh giá',

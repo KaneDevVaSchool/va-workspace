@@ -464,6 +464,7 @@ return [
         'social.*' => ['label' => 'Toàn bộ bảng tin', 'module' => 'Mạng nội bộ', 'description' => 'Toàn quyền quản lý bảng tin nội bộ'],
         'social.moderate' => ['label' => 'Kiểm duyệt bảng tin', 'module' => 'Mạng nội bộ', 'description' => 'Xoá bài viết/bình luận của người khác trong phòng ban quản lý', 'active' => true],
         'social.pin' => ['label' => 'Ghim thông báo', 'module' => 'Mạng nội bộ', 'description' => 'Đưa bài viết lên bảng Thông báo công ty. Thông báo quan trọng do người quản trị đăng riêng.', 'active' => true],
+        'social.review' => ['label' => 'Duyệt bài viết', 'module' => 'Mạng nội bộ', 'description' => 'Duyệt hoặc từ chối bài viết mới trước khi hiển thị công khai trên bảng tin, áp dụng toàn trường', 'active' => true],
 
     ],
 

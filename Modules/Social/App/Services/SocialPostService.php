@@ -76,6 +76,46 @@ class SocialPostService
         return $this->posts->profileStats($user->id);
     }
 
+    /** Danh sách bài chờ duyệt, cũ nhất trước — dành cho trang duyệt bài. */
+    public function pendingList(User $reviewer, int $perPage, int $page): array
+    {
+        $paginator = $this->posts->paginatePending($perPage, $page);
+
+        return [
+            'posts' => collect($paginator->items())
+                ->map(fn (SocialPost $post) => $this->present($post, $reviewer))
+                ->values(),
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'total' => $paginator->total(),
+        ];
+    }
+
+    public function pendingCount(): int
+    {
+        return $this->posts->countPending();
+    }
+
+    public function approve(SocialPost $post, User $reviewer): SocialPost
+    {
+        return $this->posts->update($post, [
+            'review_status' => SocialPost::REVIEW_APPROVED,
+            'reviewed_by' => $reviewer->id,
+            'reviewed_at' => now(),
+            'review_reject_reason' => null,
+        ]);
+    }
+
+    public function reject(SocialPost $post, User $reviewer, ?string $reason = null): SocialPost
+    {
+        return $this->posts->update($post, [
+            'review_status' => SocialPost::REVIEW_REJECTED,
+            'reviewed_by' => $reviewer->id,
+            'reviewed_at' => now(),
+            'review_reject_reason' => $reason,
+        ]);
+    }
+
     private function normalizeFeedScope(string $scope): string
     {
         return in_array($scope, [self::FEED_SCOPE_ALL, self::FEED_SCOPE_MINE, self::FEED_SCOPE_REACTED], true)
@@ -169,8 +209,18 @@ class SocialPostService
         }
 
         $visibility = $this->resolveDepartmentVisibility($data, $destination['post_scope']);
+        $isAnonymous = ! $asSystem
+            && $destination['post_scope'] === self::POST_SCOPE_COMPANY
+            && (bool) ($data['is_anonymous'] ?? false);
+        $anonymousName = $isAnonymous
+            ? $this->sanitizeAnonymousName($data['anonymous_name'] ?? null)
+            : null;
 
-        $post = DB::transaction(function () use ($author, $data, $files, $asSystem, $destination, $visibility) {
+        // Thông báo quan trọng do người quản trị đăng → duyệt tự động, khỏi
+        // qua hàng chờ (họ đã là người có quyền duyệt cao nhất).
+        $reviewStatus = $asSystem ? SocialPost::REVIEW_APPROVED : SocialPost::REVIEW_PENDING;
+
+        $post = DB::transaction(function () use ($author, $data, $files, $asSystem, $destination, $visibility, $isAnonymous, $anonymousName, $reviewStatus) {
             $payload = [
                 'user_id' => $author->id,
                 'department_id' => $destination['department_id'],
@@ -178,6 +228,9 @@ class SocialPostService
                 'group_id' => $destination['group_id'],
                 'department_visibility_mode' => $visibility['mode'],
                 'content' => isset($data['content']) ? $this->sanitizeContent($data['content']) : null,
+                'is_anonymous' => $isAnonymous,
+                'anonymous_name' => $anonymousName,
+                'review_status' => $reviewStatus,
             ];
 
             if ($asSystem) {
@@ -546,7 +599,13 @@ class SocialPostService
                 'size' => $a['size'],
                 'url' => Storage::disk('public')->url($a['path']),
             ])->all(),
-            'author' => $this->presentUser($post->user),
+            'author' => $post->is_anonymous ? null : $this->presentUser($post->user),
+            'is_anonymous' => $post->is_anonymous,
+            'anonymous_name' => $post->is_anonymous ? $post->anonymous_name : null,
+            'review_status' => $post->review_status,
+            'review_reject_reason' => $post->review_reject_reason,
+            'reviewed_by' => $post->reviewedBy?->name,
+            'reviewed_at' => $post->reviewed_at?->toIso8601String(),
             'post_scope' => $this->presentPostScope($post),
             'department' => $post->department?->name,
             'department_visibility_mode' => $post->department_visibility_mode ?? self::DEPT_VISIBILITY_ALL,
@@ -565,11 +624,12 @@ class SocialPostService
             'shared_from' => $post->sharedFrom ? [
                 'id' => $post->sharedFrom->id,
                 'content' => $post->sharedFrom->content,
-                'author' => [
+                'author' => $post->sharedFrom->is_anonymous ? null : [
                     'id' => $post->sharedFrom->user->id,
                     'name' => $post->sharedFrom->user->name,
                     'avatar_url' => $post->sharedFrom->user->avatar_url,
                 ],
+                'anonymous_name' => $post->sharedFrom->is_anonymous ? $post->sharedFrom->anonymous_name : null,
             ] : null,
             'reactions' => $this->posts->reactionSummary($post),
             'my_reaction' => $this->posts->myReaction($post, $viewer->id),
@@ -611,6 +671,13 @@ class SocialPostService
     private function sanitizeContent(string $content): string
     {
         return trim($this->sanitizer->sanitize($content));
+    }
+
+    private function sanitizeAnonymousName(?string $name): ?string
+    {
+        $name = trim(strip_tags((string) $name));
+
+        return $name === '' ? null : mb_substr($name, 0, 100);
     }
 
     /** @param UploadedFile[] $files */

@@ -53,5 +53,14 @@ class SocialServiceProvider extends ServiceProvider
                 ->prefix('api')
                 ->group($basePath.'/api.php');
         }
+
+        // Trang duyệt bài (/manager/social/moderation phía Vue) — JSON dưới
+        // /api/social/moderation/*, giống pattern WorkspaceConfig manager.php.
+        if (file_exists($basePath.'/manager.php')) {
+            Route::middleware('web')
+                ->prefix('api')
+                ->name('api.manager.')
+                ->group($basePath.'/manager.php');
+        }
     }
 }

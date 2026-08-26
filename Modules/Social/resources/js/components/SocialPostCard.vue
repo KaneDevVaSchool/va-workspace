@@ -324,8 +324,31 @@ async function saveEdit() {
       </span>
     </div>
 
+    <div
+      v-else-if="post.can_edit && post.review_status && post.review_status !== 'approved'"
+      class="post-card__pinned-badge"
+      :class="{ 'post-card__pinned-badge--rejected': post.review_status === 'rejected' }"
+    >
+      <span class="post-card__pinned-icon post-card__pinned-icon--review" aria-hidden="true">
+        <AppIcon :name="post.review_status === 'rejected' ? 'close' : 'clock'" :size="14" />
+      </span>
+      <span class="post-card__pinned-copy">
+        <span class="post-card__pinned-label">
+          {{ post.review_status === 'rejected' ? 'Bài viết bị từ chối' : 'Đang chờ duyệt' }}
+        </span>
+        <span class="post-card__pinned-by">
+          {{
+            post.review_status === 'rejected'
+              ? (post.review_reject_reason ? `Lý do: ${post.review_reject_reason}` : 'Chỉ bạn thấy được bài này.')
+              : 'Chỉ bạn thấy được bài này, sẽ công khai sau khi được duyệt.'
+          }}
+        </span>
+      </span>
+    </div>
+
     <div class="post-card__header">
         <button
+          v-if="post.author"
           type="button"
           class="post-card__avatar-btn"
           :aria-label="`Xem tường của ${post.author.name}`"
@@ -341,12 +364,16 @@ async function saveEdit() {
             {{ post.author.name?.charAt(0) ?? '?' }}
           </div>
         </button>
+        <div v-else class="post-card__avatar post-card__avatar--anonymous" aria-hidden="true">
+          <AppIcon name="userX" :size="18" />
+        </div>
 
       <div class="post-card__author-info">
         <div class="post-card__author-name">
-          <button type="button" class="post-card__author-link" @click="openWall(post.author.id)">
+          <button v-if="post.author" type="button" class="post-card__author-link" @click="openWall(post.author.id)">
             {{ post.author.name }}
           </button>
+          <span v-else class="post-card__author-anonymous">{{ post.anonymous_name || 'Người ẩn danh' }}</span>
           <template v-if="postedOnOtherWall">
             <span class="post-card__wall-sep">·</span>
             <button type="button" class="post-card__author-link post-card__author-link--muted" @click="openWall(post.wall_user.id)">
@@ -354,7 +381,7 @@ async function saveEdit() {
             </button>
           </template>
         </div>
-        <div v-if="post.author.department" class="post-card__meta">
+        <div v-if="post.author?.department" class="post-card__meta">
           {{ post.author.department }}
         </div>
         <div v-if="deptVisibilityText" class="post-card__meta post-card__meta--visibility">
@@ -458,12 +485,14 @@ async function saveEdit() {
 
     <div v-if="post.shared_from" class="post-card__shared">
       <button
+        v-if="post.shared_from.author"
         type="button"
         class="post-card__shared-author post-card__author-link"
         @click="openWall(post.shared_from.author.id)"
       >
         {{ post.shared_from.author.name }}
       </button>
+      <span v-else class="post-card__shared-author post-card__author-anonymous">{{ post.shared_from.anonymous_name || 'Người ẩn danh' }}</span>
       <div
         v-if="post.shared_from.content"
         class="post-card__shared-content"
@@ -662,6 +691,20 @@ async function saveEdit() {
   box-shadow: inset 0 0 0 1px var(--color-info-tint-border);
 }
 
+.post-card__pinned-badge--rejected {
+  background: var(--color-danger-tint-bg);
+  color: var(--color-danger-tint-fg);
+  box-shadow: inset 0 0 0 1px var(--color-danger-tint-border);
+}
+
+.post-card__pinned-icon--review {
+  background: var(--color-warning);
+}
+
+.post-card__pinned-badge--rejected .post-card__pinned-icon--review {
+  background: var(--color-danger);
+}
+
 .post-card__pinned-icon {
   display: flex;
   align-items: center;
@@ -736,6 +779,19 @@ async function saveEdit() {
   background: var(--color-primary-surface);
   color: var(--color-primary);
   font-weight: 600;
+}
+
+.post-card__avatar--anonymous {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.post-card__author-anonymous {
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 .post-card__author-info {

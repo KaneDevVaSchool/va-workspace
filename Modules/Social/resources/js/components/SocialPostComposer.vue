@@ -34,6 +34,8 @@ const pickerOpen = ref(false);
 const pickerPanel = ref('emoji');
 const pickerWrap = ref(null);
 const asSystemAnnouncement = ref(false);
+const isAnonymous = ref(false);
+const anonymousName = ref('');
 const postScope = ref(props.defaultScope);
 const pollDialogOpen = ref(false);
 const deptVisibilityOpen = ref(false);
@@ -44,6 +46,7 @@ const deptVisibilityLabel = computed(() => {
   if (deptVisibilityMode.value === 'exclude') return `Trừ ${deptVisibilityIds.value.length} phòng ban`;
   return 'Ai được thấy?';
 });
+const canBeAnonymous = computed(() => postScope.value === 'company' && !asSystemAnnouncement.value);
 const isDepartmentWall = props.defaultScope === 'department';
 const isPersonalWall = props.defaultScope === 'personal';
 const composerPlaceholder = computed(() => {
@@ -128,6 +131,8 @@ function closeComposer() {
   files.value = [];
   pickerOpen.value = false;
   asSystemAnnouncement.value = false;
+  isAnonymous.value = false;
+  anonymousName.value = '';
   postScope.value = props.defaultScope;
   resetDeptVisibility();
   expanded.value = false;
@@ -137,6 +142,8 @@ function toggleDepartmentScope() {
   postScope.value = postScope.value === 'department' ? 'company' : 'department';
   if (postScope.value === 'department') {
     asSystemAnnouncement.value = false;
+    isAnonymous.value = false;
+    anonymousName.value = '';
     resetDeptVisibility();
   }
 }
@@ -144,6 +151,16 @@ function toggleDepartmentScope() {
 function toggleDeptVisibilityPicker() {
   pickerOpen.value = false;
   deptVisibilityOpen.value = !deptVisibilityOpen.value;
+}
+
+function toggleSystemAnnouncement() {
+  asSystemAnnouncement.value = !asSystemAnnouncement.value;
+  if (asSystemAnnouncement.value) isAnonymous.value = false;
+}
+
+function toggleAnonymous() {
+  isAnonymous.value = !isAnonymous.value;
+  if (!isAnonymous.value) anonymousName.value = '';
 }
 
 function onFilesChosen(event) {
@@ -171,6 +188,10 @@ async function submit() {
     const form = new FormData();
     if (!editorEmpty.value) form.append('content', content.value);
     if (asSystemAnnouncement.value) form.append('as_system_announcement', '1');
+    if (canBeAnonymous.value && isAnonymous.value) {
+      form.append('is_anonymous', '1');
+      if (anonymousName.value.trim()) form.append('anonymous_name', anonymousName.value.trim());
+    }
     form.append('post_scope', postScope.value);
     if (postScope.value === 'personal' && props.wallUserId) {
       form.append('wall_user_id', String(props.wallUserId));
@@ -193,6 +214,8 @@ async function submit() {
     files.value = [];
     pickerOpen.value = false;
     asSystemAnnouncement.value = false;
+    isAnonymous.value = false;
+    anonymousName.value = '';
     postScope.value = props.defaultScope;
     resetDeptVisibility();
     expanded.value = false;
@@ -207,6 +230,9 @@ async function submit() {
         : `Đã đăng bài viết lên tường của ${data.post?.wall_user?.name ?? 'đồng nghiệp'}.`;
     } else if (data.post?.post_scope === 'group') {
       successMessage = `Đã đăng bài viết lên tường nhóm ${data.post?.group?.name ?? ''}.`.trim();
+    }
+    if (data.post?.review_status === 'pending') {
+      successMessage += ' Bài đang chờ duyệt, sẽ hiển thị công khai sau khi được duyệt.';
     }
     showClientToast('success', successMessage);
   } catch (error) {
@@ -268,6 +294,20 @@ defineExpose({ expand });
         :files="files"
         @remove="removeFile"
       />
+
+      <div v-if="canBeAnonymous && isAnonymous" class="composer__anon-name">
+        <label class="composer__anon-name-label" for="composer-anon-name">
+          Tên hiển thị khi ẩn danh (để trống sẽ hiện "Người ẩn danh")
+        </label>
+        <input
+          id="composer-anon-name"
+          v-model="anonymousName"
+          type="text"
+          class="composer__anon-name-input"
+          maxlength="100"
+          placeholder="Ví dụ: Người bí ẩn"
+        />
+      </div>
     </template>
 
     <div class="composer__actions">
@@ -372,13 +412,26 @@ defineExpose({ expand });
         </div>
 
         <button
+          v-if="expanded && canBeAnonymous"
+          type="button"
+          class="composer__scope-toggle"
+          :class="{ 'composer__scope-toggle--on': isAnonymous }"
+          :aria-pressed="isAnonymous"
+          aria-label="Đăng ẩn danh"
+          @click="toggleAnonymous"
+        >
+          <AppIcon name="userX" :size="16" />
+          <span>Ẩn danh</span>
+        </button>
+
+        <button
           v-if="expanded && auth.showSuperAdminNav && postScope === 'company' && !isPersonalWall"
           type="button"
           class="composer__system-toggle"
           :class="{ 'composer__system-toggle--on': asSystemAnnouncement }"
           :aria-pressed="asSystemAnnouncement"
           aria-label="Đăng thông báo quan trọng"
-          @click="asSystemAnnouncement = !asSystemAnnouncement"
+          @click="toggleSystemAnnouncement"
         >
           <AppIcon name="shield" :size="16" />
           <span>Thông báo</span>
@@ -467,6 +520,33 @@ defineExpose({ expand });
 .composer__author-name {
   font-weight: 600;
   color: var(--color-text);
+}
+
+.composer__anon-name {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.composer__anon-name-label {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.composer__anon-name-input {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-family: inherit;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.composer__anon-name-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
 }
 
 .composer__actions {
