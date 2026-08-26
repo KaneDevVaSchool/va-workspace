@@ -7,7 +7,10 @@
 > Đây là **tài liệu sống**: phần nền tảng đã có trong repo, phần nghiệp vụ (Project, Initiative, KPI…) vẫn là kế hoạch. Schema/route của các module chưa dựng là đề xuất theo `.claude/CLAUDE.md`.
 >
 > Cập nhật: 2026-08-26 — hoàn tất Evaluation Giai đoạn C (Mẫu đánh giá,
-> PR1–PR6), xem `plans/2026-08-26-mau-danh-gia.md` và §21.
+> PR1–PR6), xem `plans/2026-08-26-mau-danh-gia.md` và §21. Sửa cơ chế
+> "Ẩn/hiện menu toàn hệ thống" (`WorkspaceConfig`) để áp dụng cho **mọi**
+> tài khoản kể cả `super_admin` (bỏ ngoại lệ trước đây), và nâng cấp UI
+> trang quản lý (tìm kiếm, lọc, thao tác hàng loạt, panel chi tiết).
 
 ---
 
