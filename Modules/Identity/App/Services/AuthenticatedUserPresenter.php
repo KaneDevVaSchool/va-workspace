@@ -4,6 +4,7 @@ namespace Modules\Identity\App\Services;
 
 use App\Models\User;
 use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositoryInterface;
+use Modules\Identity\App\Repositories\Contracts\GlobalMenuVisibilityRepositoryInterface;
 
 /**
  * JSON payload GET /api/me — dùng chung cho view-as để client cập nhật store
@@ -16,6 +17,7 @@ class AuthenticatedUserPresenter
         private readonly SuperAdminBootstrap $superAdminBootstrap,
         private readonly PermissionService $permissions,
         private readonly DepartmentSidebarConfigRepositoryInterface $sidebarConfigs,
+        private readonly GlobalMenuVisibilityRepositoryInterface $globalMenus,
     ) {}
 
     public function forUser(User $user): array
@@ -58,6 +60,12 @@ class AuthenticatedUserPresenter
             'menu_section_labels' => $user->department
                 ? $this->sidebarConfigs->sectionLabelsForDepartment($user->department->id)
                 : (object) [],
+            // Menu bị ẩn TOÀN HỆ THỐNG (superadmin cấu hình) — LUÔN trả,
+            // không phụ thuộc department, kể cả với chính super_admin.
+            // super_admin không bị ảnh hưởng khi hiển thị sidebar
+            // (AppSidebar.vue bỏ qua khi showSuperAdminNav=true) — dữ liệu
+            // thật vẫn cần trả để trang quản lý switch tự hiển thị đúng.
+            'globally_hidden_menu_keys' => $this->globalMenus->hiddenKeys(),
         ];
     }
 }

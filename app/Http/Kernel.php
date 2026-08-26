@@ -71,5 +71,7 @@ class Kernel extends HttpKernel
         'role' => \App\Http\Middleware\EnsureHasRole::class,
         // RBAC — permission granular: permission:task.delegate | permission:project.create,department
         'permission' => \App\Http\Middleware\EnsureHasPermission::class,
+        // Menu bị superadmin ẩn TOÀN HỆ THỐNG: menu.not_hidden:manager.social.moderation
+        'menu.not_hidden' => \App\Http\Middleware\EnsureMenuNotGloballyHidden::class,
     ];
 }

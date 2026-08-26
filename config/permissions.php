@@ -296,6 +296,7 @@ return [
         'workspace.daily_report_scoring.*',
         'workspace.task_scoring.*',
         'workspace_config.view_all',
+        'workspace_config.manage_global_menu',
     ],
 
     /*
@@ -454,6 +455,7 @@ return [
         'workspace.daily_report_scoring.*' => ['label' => 'Cấu hình chấm điểm báo cáo ngày', 'module' => 'Hệ thống', 'description' => 'Cấu hình quy tắc chấm điểm báo cáo ngày toàn hệ thống (chỉ super_admin)'],
         'workspace.task_scoring.*' => ['label' => 'Cấu hình chấm điểm công việc', 'module' => 'Hệ thống', 'description' => 'Quản lý danh mục tiêu chí chấm điểm công việc dùng chung toàn hệ thống (chỉ super_admin)'],
         'workspace_config.view_all' => ['label' => 'Xem toàn bộ cấu hình workspace', 'module' => 'Hệ thống', 'description' => 'Xem tổng hợp cấu hình workspace mọi phòng ban (chỉ super_admin)', 'active' => true],
+        'workspace_config.manage_global_menu' => ['label' => 'Ẩn/hiện menu toàn hệ thống', 'module' => 'Hệ thống', 'description' => 'Ẩn/hiện bất kỳ mục menu sidebar nào cho toàn bộ tài khoản không phải super_admin (chỉ super_admin)', 'active' => true],
 
         // ---------- Cấu hình Workspace theo phòng ban (workspace_config) ----------
         'workspace_config.view_department' => ['label' => 'Xem cấu hình phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Xem trang cấu hình workspace của phòng ban mình (thành viên, menu)', 'active' => true],

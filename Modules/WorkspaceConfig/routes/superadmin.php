@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\WorkspaceConfig\App\Http\Controllers\WorkspaceConfigGlobalMenuController;
 use Modules\WorkspaceConfig\App\Http\Controllers\WorkspaceConfigOverviewController;
 
 /*
@@ -21,4 +22,17 @@ Route::middleware(['auth', 'permission:workspace_config.view_all'])
     ->group(function () {
         Route::get('/overview', [WorkspaceConfigOverviewController::class, 'index'])->name('overview');
         Route::get('/departments/{department}', [WorkspaceConfigOverviewController::class, 'showDepartment'])->name('department-detail');
+    });
+
+/*
+|--------------------------------------------------------------------------
+| Ẩn/hiện menu sidebar Ở MỨC TOÀN HỆ THỐNG (super_admin, key
+| workspace_config.manage_global_menu, reserved) — áp dụng cho mọi tài
+| khoản không phải super_admin, thắng tuyệt đối per-department override.
+*/
+Route::middleware(['auth', 'permission:workspace_config.manage_global_menu'])
+    ->prefix('workspace-config/global-menu')->name('workspace-config.global-menu.')
+    ->group(function () {
+        Route::get('/', [WorkspaceConfigGlobalMenuController::class, 'index'])->name('index');
+        Route::put('/', [WorkspaceConfigGlobalMenuController::class, 'update'])->name('update');
     });

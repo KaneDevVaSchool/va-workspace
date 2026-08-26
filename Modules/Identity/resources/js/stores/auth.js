@@ -96,6 +96,13 @@ export const useAuthStore = defineStore('auth', {
     /** Menu sidebar bị phòng ban của user tự tắt (xem AppSidebar.vue). */
     hiddenMenuKeys: (state) => state.user?.hidden_menu_keys ?? [],
 
+    /**
+     * Menu sidebar bị superadmin ẩn Ở MỨC TOÀN HỆ THỐNG — thắng tuyệt đối
+     * hiddenMenuKeys (per-department), super_admin miễn nhiễm khi không
+     * đang xem thử vai trò khác (xem showSuperAdminNav, AppSidebar.vue).
+     */
+    globallyHiddenMenuKeys: (state) => state.user?.globally_hidden_menu_keys ?? [],
+
     /** Tên hiển thị tuỳ chỉnh trên menu trái (menu_key => nhãn). */
     menuLabels: (state) => {
       const raw = state.user?.menu_labels;
@@ -220,6 +227,20 @@ export const useAuthStore = defineStore('auth', {
       if (layout?.itemSections && !Array.isArray(layout.itemSections)) {
         this.user.menu_item_sections = { ...layout.itemSections };
       }
+    },
+
+    /**
+     * Cập nhật globally_hidden_menu_keys ngay trên client sau khi superadmin
+     * bật/tắt 1 menu ở trang cấu hình toàn hệ thống.
+     */
+    setGlobalMenuKeyHidden(menuKey, isHidden) {
+      if (!this.user || !menuKey) return;
+      const hidden = new Set(
+        Array.isArray(this.user.globally_hidden_menu_keys) ? this.user.globally_hidden_menu_keys : [],
+      );
+      if (isHidden) hidden.add(menuKey);
+      else hidden.delete(menuKey);
+      this.user.globally_hidden_menu_keys = [...hidden];
     },
 
     /**

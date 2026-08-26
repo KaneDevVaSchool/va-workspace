@@ -95,9 +95,9 @@ const MENU_SECTIONS = [
       },
       {
         // Mẫu đánh giá (Evaluation Giai đoạn C) — mục sidebar RIÊNG, khác
-        // "Tiêu chí đánh giá" (Giai đoạn B, vẫn là tab trong Hub). Chỉ
-        // department_director/deputy trở lên — section_head/team_lead/member
-        // không có evaluation.manage_department nên không thấy mục này.
+        // "Tiêu chí đánh giá" (Giai đoạn B, vẫn là tab trong Hub).
+        // department_director/deputy trở lên (evaluation.manage_department)
+        // và superadmin (tạo mẫu dùng chung toàn hệ thống).
         // Xem plans/2026-08-26-mau-danh-gia.md §2.3.
         // configurableByDepartment: true — đồng bộ thủ công với
         // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
@@ -105,7 +105,6 @@ const MENU_SECTIONS = [
         label: 'Mẫu đánh giá',
         icon: 'clipboardCheck',
         requiresPermission: 'evaluation.manage_department',
-        hideWhenSuperAdmin: true,
         configurableByDepartment: true,
       },
       {
@@ -130,6 +129,16 @@ const MENU_SECTIONS = [
         icon: 'settings',
         requiresSuperAdmin: true,
       },
+      {
+        // Ẩn/hiện menu sidebar TOÀN HỆ THỐNG — áp dụng cho mọi tài khoản
+        // không phải super_admin, thắng tuyệt đối per-department override.
+        // KHÔNG configurableByDepartment/globallyHiddenMenuKeys tự ẩn:
+        // GlobalMenuVisibilityService::PROTECTED_MENU_KEYS chặn ở backend.
+        name: 'superadmin.workspace-config.global-menu',
+        label: 'Ẩn/hiện menu toàn hệ thống',
+        icon: 'eyeOff',
+        requiresSuperAdmin: true,
+      },
     ],
   },
 ];
@@ -143,7 +152,10 @@ function itemPasses(item) {
     (!item.hideWhenSuperAdmin || !auth.showSuperAdminNav) &&
     (!item.requiresAdmin || auth.canViewActivityLog) &&
     (!item.requiresPermission || auth.can(item.requiresPermission)) &&
-    !auth.hiddenMenuKeys.includes(item.name)
+    !auth.hiddenMenuKeys.includes(item.name) &&
+    // Ẩn toàn hệ thống (superadmin) thắng tuyệt đối per-department —
+    // super_admin hiệu lực (không đang xem thử vai trò khác) miễn nhiễm.
+    (auth.showSuperAdminNav || !auth.globallyHiddenMenuKeys.includes(item.name))
   );
 }
 

@@ -15,7 +15,7 @@ use Modules\Social\App\Http\Controllers\SocialPostModerationController;
 | Vue /manager/social/moderation không bị Laravel trả JSON/404.
 */
 
-Route::middleware(['auth', 'permission:social.review'])
+Route::middleware(['auth', 'permission:social.review', 'menu.not_hidden:manager.social.moderation'])
     ->prefix('social/moderation')->name('social.moderation.')
     ->group(function () {
         Route::get('/', [SocialPostModerationController::class, 'index'])->name('index');

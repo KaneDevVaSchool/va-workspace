@@ -5,6 +5,7 @@ namespace Modules\WorkspaceConfig\App\Services;
 use Illuminate\Support\Collection;
 use Modules\Identity\App\Models\DepartmentSidebarConfig;
 use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositoryInterface;
+use Modules\Identity\App\Repositories\Contracts\GlobalMenuVisibilityRepositoryInterface;
 
 /**
  * Bật/tắt, đổi tên, đổi thứ tự và đổi tên nhóm menu sidebar theo phòng ban.
@@ -12,6 +13,10 @@ use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositor
  * THỦ CÔNG với các item đánh dấu `configurableByDepartment: true` trong
  * AppSidebar.vue. Không bao giờ đưa menu superadmin/admin, hay tab con của
  * hub Cấu hình phòng ban (Menu / Thành viên / Tiêu chí), vào whitelist này.
+ *
+ * Menu đã bị superadmin ẩn TOÀN HỆ THỐNG (GlobalMenuVisibilityService) bị
+ * loại khỏi danh sách cấu hình được ở đây — director không còn thấy/toggle
+ * được nữa, vì bật cỡ nào cũng vô nghĩa (global luôn thắng tuyệt đối).
  */
 class DepartmentSidebarConfigService
 {
@@ -43,11 +48,12 @@ class DepartmentSidebarConfigService
 
     public function __construct(
         private readonly DepartmentSidebarConfigRepositoryInterface $configs,
+        private readonly GlobalMenuVisibilityRepositoryInterface $globalMenus,
     ) {}
 
     public function isConfigurable(string $menuKey): bool
     {
-        return array_key_exists($menuKey, self::CONFIGURABLE_MENUS);
+        return array_key_exists($menuKey, self::CONFIGURABLE_MENUS) && ! $this->isGloballyHidden($menuKey);
     }
 
     public function isConfigurableSection(string $sectionKey): bool
@@ -55,9 +61,18 @@ class DepartmentSidebarConfigService
         return array_key_exists($sectionKey, self::SECTIONS);
     }
 
+    /** Menu đã bị superadmin ẩn TOÀN HỆ THỐNG — director không cấu hình được nữa. */
+    public function isGloballyHidden(string $menuKey): bool
+    {
+        return $this->globalMenus->isHidden($menuKey);
+    }
+
+    /** Menu_key còn cấu hình được — đã loại bỏ những mục bị ẩn toàn hệ thống. */
     public function configurableMenuKeys(): array
     {
-        return array_keys(self::CONFIGURABLE_MENUS);
+        $globallyHidden = $this->globalMenus->hiddenKeys();
+
+        return array_values(array_diff(array_keys(self::CONFIGURABLE_MENUS), $globallyHidden));
     }
 
     /** Nhãn mặc định của 1 menu_key, trả về chính key nếu không nằm trong whitelist. */
@@ -118,32 +133,38 @@ class DepartmentSidebarConfigService
         return $custom ?? $this->menuLabel($menuKey);
     }
 
-    /** Toàn bộ menu có thể cấu hình + trạng thái hiện tại của 1 phòng ban. */
+    /**
+     * Toàn bộ menu có thể cấu hình + trạng thái hiện tại của 1 phòng ban —
+     * đã loại bỏ menu bị superadmin ẩn TOÀN HỆ THỐNG (xem configurableMenuKeys).
+     */
     public function forDepartment(int $departmentId): Collection
     {
         $overrides = $this->configs->allByDepartment($departmentId)->keyBy('menu_key');
+        $availableKeys = $this->configurableMenuKeys();
         $index = 0;
 
-        return collect(self::CONFIGURABLE_MENUS)->map(function (string $defaultLabel, string $menuKey) use ($overrides, &$index) {
-            $override = $overrides->get($menuKey);
-            $customLabel = $this->normalizeCustomLabel($override?->custom_label, $menuKey);
-            $defaultSection = $this->defaultSection($menuKey);
-            $section = $this->normalizeSection($override?->section_key) ?? $defaultSection;
-            $sortOrder = $override?->sort_order;
-            $row = [
-                'menu_key' => $menuKey,
-                'default_label' => $defaultLabel,
-                'custom_label' => $customLabel,
-                'label' => $customLabel ?? $defaultLabel,
-                'is_visible' => $override?->is_visible ?? true,
-                'section' => $section,
-                'default_section' => $defaultSection,
-                'sort_order' => $sortOrder === null ? $index : (int) $sortOrder,
-            ];
-            $index++;
+        return collect(self::CONFIGURABLE_MENUS)
+            ->only($availableKeys)
+            ->map(function (string $defaultLabel, string $menuKey) use ($overrides, &$index) {
+                $override = $overrides->get($menuKey);
+                $customLabel = $this->normalizeCustomLabel($override?->custom_label, $menuKey);
+                $defaultSection = $this->defaultSection($menuKey);
+                $section = $this->normalizeSection($override?->section_key) ?? $defaultSection;
+                $sortOrder = $override?->sort_order;
+                $row = [
+                    'menu_key' => $menuKey,
+                    'default_label' => $defaultLabel,
+                    'custom_label' => $customLabel,
+                    'label' => $customLabel ?? $defaultLabel,
+                    'is_visible' => $override?->is_visible ?? true,
+                    'section' => $section,
+                    'default_section' => $defaultSection,
+                    'sort_order' => $sortOrder === null ? $index : (int) $sortOrder,
+                ];
+                $index++;
 
-            return $row;
-        })->sortBy(function (array $item) {
+                return $row;
+            })->sortBy(function (array $item) {
             $sectionOrder = array_search($item['section'], array_keys(self::SECTIONS), true);
             if ($sectionOrder === false) {
                 $sectionOrder = 99;

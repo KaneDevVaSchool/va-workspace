@@ -59,7 +59,7 @@ Route::middleware(['auth', 'throttle:60,1'])->prefix('api')->group(function () {
     Route::patch('/shortcuts/{shortcut}/favorite', [ShortcutController::class, 'toggleFavorite'])->name('shortcuts.favorite');
     Route::delete('/shortcuts/{shortcut}', [ShortcutController::class, 'destroy'])->name('shortcuts.destroy');
 
-    Route::middleware(['role:super_admin,admin'])->prefix('activity-logs')->name('activity-logs.')->group(function () {
+    Route::middleware(['role:super_admin,admin', 'menu.not_hidden:superadmin.activity'])->prefix('activity-logs')->name('activity-logs.')->group(function () {
         Route::get('/recent', [ActivityLogController::class, 'recent'])->name('recent');
         Route::get('/options', [ActivityLogController::class, 'options'])->name('options');
         Route::get('/export', [ActivityLogController::class, 'export'])->name('export');

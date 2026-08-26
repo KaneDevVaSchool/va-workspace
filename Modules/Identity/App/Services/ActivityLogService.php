@@ -33,6 +33,7 @@ class ActivityLogService
         'role.assign' => 'Gán vai trò',
         'member.team.assign' => 'Gán nhóm cho thành viên',
         'workspace_config.sidebar.update' => 'Cập nhật menu phòng ban',
+        'workspace_config.global_menu.update' => 'Cập nhật menu ẩn toàn hệ thống',
         'shortcut.create' => 'Tạo lối tắt',
         'shortcut.update' => 'Cập nhật lối tắt',
         'shortcut.delete' => 'Xoá lối tắt',
@@ -55,6 +56,7 @@ class ActivityLogService
         'social_post' => 'Bài viết bảng tin',
         'role' => 'Vai trò',
         'department_sidebar_config' => 'Menu phòng ban',
+        'global_menu_visibility' => 'Menu ẩn toàn hệ thống',
         'evaluation_criteria' => 'Tiêu chí đánh giá',
         'evaluation_criterion_type' => 'Loại tiêu chí đánh giá',
     ];

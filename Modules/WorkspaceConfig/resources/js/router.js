@@ -57,6 +57,13 @@ export default [
     meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Cấu hình Workspace' },
   },
   {
+    // Ẩn/hiện menu sidebar TOÀN HỆ THỐNG — xem GlobalMenuVisibilityService.
+    path: '/superadmin/workspace-config/global-menu',
+    name: 'superadmin.workspace-config.global-menu',
+    component: () => import('./pages/WorkspaceConfigGlobalMenuVisibilitySuperadmin.vue'),
+    meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Ẩn/hiện menu toàn hệ thống' },
+  },
+  {
     path: '/superadmin/workspace-config/departments/:departmentId',
     name: 'superadmin.workspace-config.department-detail',
     component: () => import('./pages/WorkspaceConfigDepartmentDetailHub.vue'),

@@ -26,7 +26,7 @@ export const SIDEBAR_MENU_CATALOG = {
     icon: 'listChecks',
     section: 'manager',
     sectionLabel: 'Quản lý',
-    description: 'Tạo và sửa mẫu đánh giá. Chỉ hiện với người có quyền quản lý đánh giá.',
+    description: 'Tạo và sửa mẫu đánh giá. Superadmin tạo mẫu dùng chung toàn hệ thống.',
   },
 };
 

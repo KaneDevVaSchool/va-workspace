@@ -18,7 +18,7 @@ use Modules\WorkspaceConfig\App\Http\Controllers\WorkspaceConfigSidebarControlle
 | /manager/workspace-config/members không bị Laravel trả JSON.
 */
 
-Route::middleware('auth')
+Route::middleware(['auth', 'menu.not_hidden:manager.workspace-config.hub'])
     ->prefix('workspace-config/members')->name('workspace-config.members.')
     ->group(function () {
         Route::get('/', [WorkspaceConfigMemberController::class, 'index'])
@@ -38,7 +38,7 @@ Route::middleware('auth')
             ->name('roles.assign');
     });
 
-Route::middleware(['auth', 'permission:workspace_config.manage_sidebar_department'])
+Route::middleware(['auth', 'permission:workspace_config.manage_sidebar_department', 'menu.not_hidden:manager.workspace-config.hub'])
     ->prefix('workspace-config/sidebar')->name('workspace-config.sidebar.')
     ->group(function () {
         Route::get('/', [WorkspaceConfigSidebarController::class, 'index'])->name('index');

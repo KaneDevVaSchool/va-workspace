@@ -255,4 +255,45 @@ class WorkspaceConfigSidebarTest extends TestCase
             ])
             ->assertStatus(422);
     }
+
+    public function test_globally_hidden_menu_disappears_from_department_config_and_cannot_be_toggled(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $superAdmin = User::factory()->create(['status' => 'active']);
+        $superAdmin->roles()->sync(Role::query()->where('code', 'super_admin')->pluck('id'));
+
+        // Superadmin ẩn "Bảng tin nội bộ" Ở MỨC TOÀN HỆ THỐNG.
+        $this->actingAs($superAdmin)
+            ->putJson('/api/workspace-config/global-menu', [
+                'menu_key' => 'social.feed',
+                'is_hidden' => true,
+            ])
+            ->assertOk();
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+
+        // Danh sách cấu hình của phòng ban không còn hiện mục đã bị ẩn global.
+        $menuKeys = $this->actingAs($director)
+            ->getJson('/api/workspace-config/sidebar')
+            ->assertOk()
+            ->json('menus.*.menu_key');
+
+        $this->assertNotContains('social.feed', $menuKeys);
+        $this->assertContains('home', $menuKeys);
+
+        // Cố toggle trực tiếp qua API (client cũ chưa tải lại trang) vẫn bị chặn.
+        $this->actingAs($director)
+            ->putJson('/api/workspace-config/sidebar', [
+                'menu_key' => 'social.feed',
+                'is_visible' => true,
+            ])
+            ->assertStatus(422);
+
+        $this->assertDatabaseMissing('department_sidebar_configs', [
+            'department_id' => $dept->id,
+            'menu_key' => 'social.feed',
+        ]);
+    }
 }

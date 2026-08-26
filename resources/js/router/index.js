@@ -75,8 +75,19 @@ router.beforeEach(async (to) => {
 
     // Route yêu cầu 1 permission cụ thể (vd. mục sidebar riêng ngoài phạm vi
     // requiresSuperAdmin/requiresAdmin) — vd. manager.evaluation-templates.index
-    // chỉ department_director/deputy trở lên (evaluation.manage_department).
+    // department_director/deputy trở lên + superadmin (evaluation.manage_department).
     if (to.meta.requiresPermission && !auth.can(to.meta.requiresPermission)) {
+        return { name: 'home' };
+    }
+
+    // Menu bị superadmin ẩn Ở MỨC TOÀN HỆ THỐNG — thắng tuyệt đối
+    // per-department, super_admin hiệu lực (không view-as) miễn nhiễm.
+    // Chỉ chặn UX phía client; chặn thật ở backend qua middleware
+    // menu.not_hidden trên các route có API riêng biệt (xem Kernel.php).
+    if (
+        !auth.showSuperAdminNav &&
+        to.matched.some((record) => auth.globallyHiddenMenuKeys.includes(record.name))
+    ) {
         return { name: 'home' };
     }
 
