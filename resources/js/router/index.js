@@ -24,6 +24,12 @@ const routes = [
     ...workspaceConfigRoutes,
     ...socialRoutes,
     ...evaluationRoutes,
+    {
+        path: '/:pathMatch(.*)*',
+        name: 'not-found',
+        component: () => import('../pages/NotFound.vue'),
+        meta: { title: 'Không tìm thấy trang' },
+    },
 ];
 
 const router = createRouter({
