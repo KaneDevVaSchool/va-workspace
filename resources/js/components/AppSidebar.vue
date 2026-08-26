@@ -93,6 +93,18 @@ const MENU_SECTIONS = [
         // vào trang cấu hình của chính mình. Tab con của hub (Thành viên,
         // Menu, Tiêu chí) cũng không phải mục sidebar.
       },
+      {
+        // Mẫu đánh giá (Evaluation Giai đoạn C) — mục sidebar RIÊNG, khác
+        // "Tiêu chí đánh giá" (Giai đoạn B, vẫn là tab trong Hub). Chỉ
+        // department_director/deputy trở lên — section_head/team_lead/member
+        // không có evaluation.manage_department nên không thấy mục này.
+        // Xem plans/2026-08-26-mau-danh-gia.md §2.3.
+        name: 'manager.evaluation-templates.index',
+        label: 'Mẫu đánh giá',
+        icon: 'clipboardCheck',
+        requiresPermission: 'evaluation.manage_department',
+        hideWhenSuperAdmin: true,
+      },
     ],
   },
   {

@@ -25,7 +25,7 @@ class EvaluationCriteria extends Model
 {
     protected $table = 'evaluation_criteria';
 
-    public const WITH_PRESENT = ['criterionType', 'creator.department', 'updater.department'];
+    public const WITH_PRESENT = ['criterionType', 'department', 'creator.department', 'updater.department'];
 
     protected $fillable = [
         'department_id',

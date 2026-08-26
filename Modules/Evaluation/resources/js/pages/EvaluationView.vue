@@ -11,6 +11,7 @@
 //
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
+import PageHeader from '@/components/PageHeader.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
@@ -52,6 +53,8 @@ const allCriteria    = ref([]);
 const criterionTypes = ref([]);
 const loading        = ref(false);
 const selected       = ref(null);
+const exporting      = ref(false);
+const exportingPdf   = ref(false);
 
 const query      = ref('');
 const kindFilter = ref('');
@@ -384,6 +387,97 @@ function closePanel() {
   selected.value = null;
 }
 
+function currentExportParams() {
+  return {
+    q: query.value.trim(),
+    kind: kindFilter.value,
+    type: typeFilter.value,
+  };
+}
+
+async function downloadFile(url, params, busyRef, defaultFilename, okMsg, failMsg) {
+  busyRef.value = true;
+  try {
+    const response = await window.axios.get(url, {
+      params,
+      responseType: 'blob',
+    });
+    const blob = response.data;
+    if (blob.type && blob.type.includes('json')) {
+      const json = JSON.parse(await blob.text());
+      throw new Error(json.message || 'Không xuất được file.');
+    }
+
+    const disposition = response.headers['content-disposition'] || '';
+    const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const plainMatch = disposition.match(/filename="?([^"]+)"?/i);
+    const filename = decodeURIComponent(utfMatch?.[1] || plainMatch?.[1] || defaultFilename);
+
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+    showClientToast('success', okMsg);
+  } catch (err) {
+    let message = err?.message;
+    if (err?.response?.data instanceof Blob) {
+      try {
+        const json = JSON.parse(await err.response.data.text());
+        message = json.message || Object.values(json.errors || {})[0]?.[0];
+      } catch {
+        message = failMsg;
+      }
+    } else {
+      message = err?.response?.data?.message || message;
+    }
+    showClientToast('error', message || failMsg);
+  } finally {
+    busyRef.value = false;
+  }
+}
+
+async function exportExcel() {
+  await downloadFile(
+    '/api/evaluation/criteria/export',
+    currentExportParams(),
+    exporting,
+    'Tieu_chi_danh_gia.xlsx',
+    'Đã tải file Excel.',
+    'Không xuất được file Excel.',
+  );
+}
+
+async function exportPdf() {
+  await downloadFile(
+    '/api/evaluation/criteria/export-pdf',
+    currentExportParams(),
+    exportingPdf,
+    'Tieu_chi_danh_gia.pdf',
+    'Đã tải file PDF.',
+    'Không xuất được file PDF.',
+  );
+}
+
+const exportOptions = computed(() => [
+  {
+    key: 'excel',
+    label: 'Xuất Excel',
+    description: 'Theo bộ lọc hiện tại trên trang.',
+    onSelect: exportExcel,
+  },
+  {
+    key: 'pdf',
+    label: 'Xuất PDF',
+    description: 'Theo bộ lọc hiện tại trên trang.',
+    icon: 'fileText',
+    onSelect: exportPdf,
+  },
+]);
+
 function formatScore(score) {
   const n = Number(score);
   if (!Number.isFinite(n)) return '0';
@@ -410,12 +504,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="eval-view" :class="{ 'eval-view--with-panel': selected }">
-    <div class="eval-view__main">
-      <div class="eval-view__page-head">
-        <h1 class="eval-view__page-title">Tiêu chí đánh giá</h1>
-        <p class="eval-view__page-sub">Tiêu chí đánh giá đang áp dụng cho phòng ban của bạn.</p>
-      </div>
+    <PageHeader
+      title="Tiêu chí đánh giá"
+      icon="clipboardCheck"
+      description="Tiêu chí đánh giá đang áp dụng cho phòng ban của bạn."
+      export-label="Dữ liệu"
+      :export-options="hasDepartment ? exportOptions : []"
+      :export-busy-key="exporting ? 'excel' : exportingPdf ? 'pdf' : undefined"
+    />
 
+    <div class="eval-view__main">
       <div v-if="hasVisibleFilterFields" class="eval-view__toolbar">
         <div class="eval-view__filters">
           <div v-if="visibleFilters.q" class="eval-view__field">
@@ -701,24 +799,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.eval-view__page-head {
-  flex-shrink: 0;
-  margin: 0 0 var(--space-3);
-}
-
-.eval-view__page-title {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 1.25rem;
-  font-weight: 700;
-}
-
-.eval-view__page-sub {
-  margin: var(--space-1) 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
 }
 
 .eval-view__panel {
@@ -1099,7 +1179,4 @@ onBeforeUnmount(() => {
   .eval-view__panel { width: 100%; flex: 1 1 auto; }
 }
 
-@media (max-width: 480px) {
-  .eval-view__page-title { font-size: 1.0625rem; }
-}
 </style>

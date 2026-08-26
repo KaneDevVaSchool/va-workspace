@@ -6,8 +6,12 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriteriaRepositoryInterface;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriterionTypeRepositoryInterface;
+use Modules\Evaluation\App\Repositories\Contracts\EvaluationPositionRepositoryInterface;
+use Modules\Evaluation\App\Repositories\Contracts\EvaluationTemplateRepositoryInterface;
 use Modules\Evaluation\App\Repositories\EvaluationCriteriaRepository;
 use Modules\Evaluation\App\Repositories\EvaluationCriterionTypeRepository;
+use Modules\Evaluation\App\Repositories\EvaluationPositionRepository;
+use Modules\Evaluation\App\Repositories\EvaluationTemplateRepository;
 
 class EvaluationServiceProvider extends ServiceProvider
 {
@@ -21,11 +25,20 @@ class EvaluationServiceProvider extends ServiceProvider
             EvaluationCriterionTypeRepositoryInterface::class,
             EvaluationCriterionTypeRepository::class,
         );
+        $this->app->bind(
+            EvaluationTemplateRepositoryInterface::class,
+            EvaluationTemplateRepository::class,
+        );
+        $this->app->bind(
+            EvaluationPositionRepositoryInterface::class,
+            EvaluationPositionRepository::class,
+        );
     }
 
     public function boot(): void
     {
         $this->loadMigrationsFrom(module_path('Evaluation', 'Database/migrations'));
+        $this->loadViewsFrom(module_path('Evaluation', 'resources/views'), 'evaluation');
         $this->registerRoutes();
     }
 

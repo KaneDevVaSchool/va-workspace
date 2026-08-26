@@ -18,6 +18,17 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
             ->get();
     }
 
+    public function allActiveAcrossDepartments(): Collection
+    {
+        return EvaluationCriteria::query()
+            ->with(EvaluationCriteria::WITH_PRESENT)
+            ->where('is_active', true)
+            ->orderBy('department_id')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
     public function idsByDepartment(int $departmentId): array
     {
         return EvaluationCriteria::query()
@@ -25,6 +36,15 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->values()
+            ->all();
+    }
+
+    public function namesByDepartment(int $departmentId): array
+    {
+        return EvaluationCriteria::query()
+            ->where('department_id', $departmentId)
+            ->pluck('name')
+            ->map(fn ($name) => mb_strtolower(trim((string) $name)))
             ->all();
     }
 

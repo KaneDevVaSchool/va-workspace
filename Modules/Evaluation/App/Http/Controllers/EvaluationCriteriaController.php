@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Modules\Evaluation\App\Http\Requests\ConfirmImportEvaluationCriteriaRequest;
+use Modules\Evaluation\App\Http\Requests\ExportEvaluationCriteriaRequest;
+use Modules\Evaluation\App\Http\Requests\ImportEvaluationCriteriaRequest;
 use Modules\Evaluation\App\Http\Requests\StoreEvaluationCriteriaRequest;
 use Modules\Evaluation\App\Http\Requests\UpdateEvaluationCriteriaRequest;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
@@ -13,12 +16,17 @@ use Modules\Evaluation\App\Services\EvaluationCriteriaService;
 use Modules\Identity\App\Models\ActivityLog;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Manager JSON (middleware web + session, bọc qua EvaluationServiceProvider):
  *   GET    /api/evaluation/criteria                — list tiêu chí phòng ban user
  *   GET    /api/evaluation/criteria?department_id= — list cho superadmin (workspace_config.view_all)
  *   GET    /api/evaluation/criteria/history        — lịch sử tạo/sửa/xoá tiêu chí phòng ban
+ *   GET    /api/evaluation/criteria/export          — xuất Excel theo bộ lọc hiện tại
+ *   GET    /api/evaluation/criteria/export-pdf      — xuất PDF theo bộ lọc hiện tại
+ *   POST   /api/evaluation/criteria/import/preview  — đọc + xem trước file Excel, KHÔNG ghi DB (evaluation.manage_department)
+ *   POST   /api/evaluation/criteria/import/confirm  — xác nhận nhập, ghi DB từ dữ liệu đã preview (evaluation.manage_department)
  *   POST   /api/evaluation/criteria                — tạo tiêu chí mới
  *   PUT    /api/evaluation/criteria/{id}           — cập nhật tiêu chí
  *   DELETE /api/evaluation/criteria/{id}           — xoá tiêu chí
@@ -78,6 +86,81 @@ class EvaluationCriteriaController extends Controller
                 ->values()
                 ->all(),
         ]);
+    }
+
+    /**
+     * Xuất Excel theo bộ lọc hiện tại. Trưởng phòng ban (evaluation.manage_department)
+     * xuất được toàn bộ tiêu chí phòng ban mình; thành viên thường chỉ xuất được đúng
+     * dữ liệu họ đang xem ở trang /manager/evaluation (không cần quyền quản lý).
+     */
+    public function export(ExportEvaluationCriteriaRequest $request): BinaryFileResponse|JsonResponse
+    {
+        $departmentId = $this->departmentIdOrFail($request);
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
+        }
+
+        return $this->service->export($departmentId, $request->filters(), $request->user());
+    }
+
+    /** Xuất PDF theo bộ lọc hiện tại — cùng điều kiện quyền với export() (hành động đọc). */
+    public function exportPdf(ExportEvaluationCriteriaRequest $request)
+    {
+        $departmentId = $this->departmentIdOrFail($request);
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
+        }
+
+        return $this->service->exportPdf($departmentId, $request->filters(), $request->user());
+    }
+
+    /** Đọc + xem trước file Excel — KHÔNG ghi DB, chỉ trả bảng kết quả validate cho từng dòng. */
+    public function importPreview(ImportEvaluationCriteriaRequest $request): JsonResponse
+    {
+        $departmentId = $this->departmentIdOrFail($request);
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
+        }
+
+        if (! $this->permissions->allows($request->user(), 'evaluation.manage_department', 'department', $departmentId)) {
+            return response()->json(['message' => 'Bạn không có quyền nhập tiêu chí đánh giá.'], 403);
+        }
+
+        $result = $this->service->previewImport($departmentId, $request->file('file'));
+
+        return response()->json($result);
+    }
+
+    /** Xác nhận nhập — nhận JSON các dòng đã preview (không nhận file), ghi DB thật. */
+    public function importConfirm(ConfirmImportEvaluationCriteriaRequest $request): JsonResponse
+    {
+        $departmentId = $this->departmentIdOrFail($request);
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
+        }
+
+        if (! $this->permissions->allows($request->user(), 'evaluation.manage_department', 'department', $departmentId)) {
+            return response()->json(['message' => 'Bạn không có quyền nhập tiêu chí đánh giá.'], 403);
+        }
+
+        $result = $this->service->confirmImport(
+            $departmentId,
+            (int) $request->user()->id,
+            $request->validated()['rows'],
+        );
+
+        foreach ($result['created'] as $criterion) {
+            $this->activityLogs->record(
+                'evaluation_criteria.create',
+                'Tạo tiêu chí đánh giá "'.$criterion['name'].'" (nhập từ Excel)',
+                $request->user(),
+                'evaluation_criteria',
+                (int) $criterion['id'],
+                ['department_id' => $departmentId, 'name' => $criterion['name']],
+            );
+        }
+
+        return response()->json($result);
     }
 
     public function store(StoreEvaluationCriteriaRequest $request): JsonResponse

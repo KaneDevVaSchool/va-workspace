@@ -1,13 +1,19 @@
 # Module WorkspaceConfig
 
 Hub cấu hình scoped theo phòng ban (xem `docs/VA_WORKSPACE_OVERVIEW.md` §2, §7.1,
-§10, §21 — Phase 1b xong, Phase 1c = Evaluation). department_director /
+§10, §21 — Phase 1b + 1c xong). department_director /
 deputy_department_director vào 1 trang hub duy nhất để tự quản lý "workspace con"
 của phòng ban mình:
 
 - **Thành viên** — nhân sự phòng ban, CRUD nhóm, gán vai trò (đã có).
 - **Menu (sidebar)** — bật/tắt mục menu áp dụng riêng cho phòng ban (đã có).
-- **Tiêu chí đánh giá** (Giai đoạn B, module `Evaluation` — **chưa có**, làm tiếp).
+- **Tiêu chí đánh giá** (Giai đoạn B, module `Evaluation` — đã có).
+
+**Mẫu đánh giá (Giai đoạn C, module `Evaluation`, đã xong) KHÔNG nằm trong
+Hub này** — khác tiêu chí đánh giá, mẫu đánh giá có mục **sidebar riêng**
+(`/manager/evaluation-templates`, không phải tab ở đây), vì mẫu là entity
+độc lập, có thể đánh dấu dùng chung cho toàn hệ thống chứ không "thuộc về"
+đúng 1 phòng ban như tiêu chí. Xem `plans/2026-08-26-mau-danh-gia.md`.
 
 super_admin xem TỔNG HỢP workspace của mọi phòng ban (1 bảng liệt kê + bấm
 vào xem chi tiết từng phòng ban), nhưng không sửa thay department_director.
@@ -60,14 +66,11 @@ của Identity, giống cách nó không có Repository riêng cho phần thành
 **Controller → Service → Repository (interface) → Eloquent Model** — không
 có ngoại lệ, kể cả 2 controller mỏng trong module này.
 
-## Việc tiếp theo (Giai đoạn B — **làm ngay**, xem overview §21)
+## Việc tiếp theo
 
-- Module `Evaluation` riêng: tiêu chí đánh giá tự tạo (2 kiểu — thang điểm
-  nhiều mức và cộng/trừ theo hành vi), thêm 1 tab "Tiêu chí đánh giá" vào
-  `WorkspaceConfigHub.vue`. Không thêm mục sidebar riêng.
-- Super_admin: chỉ xem tiêu chí trên trang chi tiết phòng ban, không sửa thay
-  trưởng phòng.
+Giai đoạn B (tiêu chí đánh giá, tab trong Hub) và Giai đoạn C (Mẫu đánh giá,
+module `Evaluation`, mục sidebar riêng — xem ghi chú ở trên) **đều đã xong**.
+Chi tiết: `plans/2026-08-26-mau-danh-gia.md`.
 
-Giai đoạn C (sau, không phải đợt này): mẫu đánh giá + phiếu đánh giá đầy
-đủ (hội đồng nhiều vai trò, % trọng số, kỳ đánh giá) — xem
-`docs/VA_WORKSPACE_OVERVIEW.md` §7 và §21.
+Giai đoạn D (sau, không phải đợt này): phiếu đánh giá đầy đủ (hội đồng nhiều
+vai trò, kỳ đánh giá) — xem `docs/VA_WORKSPACE_OVERVIEW.md` §7 và §21.

@@ -5,6 +5,8 @@ namespace Database\Seeders;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Modules\Evaluation\Database\Seeders\EvaluationCriteriaSeeder;
+use Modules\Evaluation\Database\Seeders\EvaluationPositionSeeder;
+use Modules\Evaluation\Database\Seeders\EvaluationTemplateSeeder;
 use Modules\Identity\Database\Seeders\DemoUserSeeder;
 use Modules\Identity\Database\Seeders\DepartmentSeeder;
 use Modules\Identity\Database\Seeders\RoleSeeder;
@@ -34,6 +36,8 @@ class DatabaseSeeder extends Seeder
             SuperAdminSeeder::class,
             DemoUserSeeder::class,
             EvaluationCriteriaSeeder::class,
+            EvaluationPositionSeeder::class,
+            EvaluationTemplateSeeder::class,
         ]);
     }
 }

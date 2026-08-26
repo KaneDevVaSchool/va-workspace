@@ -15,10 +15,11 @@ quyết định thiết kế, nợ kỹ thuật.
 ## Doc theo module
 
 - [`modules/Social.md`](modules/Social.md) — bảng tin nội bộ (đã chạy, ngoài lộ trình gốc)
+- [`modules/Evaluation.md`](modules/Evaluation.md) — tiêu chí đánh giá (Giai đoạn B) + mẫu đánh giá (Giai đoạn C), đã chạy
 
 ## Cấu trúc gợi ý khi thêm doc
 
-- `docs/modules/{TenModule}.md` — tài liệu riêng từng module khi module được dựng (`Social.md` đã có, tiếp theo `EVALUATION.md`, rồi `INITIATIVE.md`, `PROJECT.md`…)
+- `docs/modules/{TenModule}.md` — tài liệu riêng từng module khi module được dựng (`Social.md`, `Evaluation.md` đã có, tiếp theo `INITIATIVE.md`, `PROJECT.md`…)
 - `docs/architecture.md` / `docs/routing.md` — tách ra khi overview §3 / §10 quá dài
 
 Không tạo module `Auth` / `Department` / `SystemConfig` / `Audit` riêng: đã nằm trong `Identity` (xem overview §2).

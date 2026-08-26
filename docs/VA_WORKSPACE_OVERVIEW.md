@@ -6,7 +6,8 @@
 >
 > Đây là **tài liệu sống**: phần nền tảng đã có trong repo, phần nghiệp vụ (Project, Initiative, KPI…) vẫn là kế hoạch. Schema/route của các module chưa dựng là đề xuất theo `.claude/CLAUDE.md`.
 >
-> Cập nhật: 2026-08-24 — khớp kiến trúc repo (Modular Monolith Laravel 10 + Vue 3 SPA, không Inertia) **và trạng thái code thật** (Identity + WorkspaceConfig đã chạy).
+> Cập nhật: 2026-08-26 — hoàn tất Evaluation Giai đoạn C (Mẫu đánh giá,
+> PR1–PR6), xem `plans/2026-08-26-mau-danh-gia.md` và §21.
 
 ---
 
@@ -33,7 +34,10 @@ Nền tảng **Phase 0 + Phase 1 đã xong**. Các module nghiệp vụ (Project
 
 ### Việc nên làm tiếp — đọc §21
 
-**Bước kế tiếp: module `Evaluation` (Giai đoạn B)** — tab «Tiêu chí đánh giá» trong `WorkspaceConfigHub`. Không nhảy sang Initiative/Project khi hub cấu hình phòng ban còn thiếu đúng tab đã hứa với trưởng phòng.
+**Bước kế tiếp: module `Evaluation` Giai đoạn C (Mẫu đánh giá)** — Giai đoạn B
+(tab «Tiêu chí đánh giá» trong `WorkspaceConfigHub`) đã xong. Kế hoạch chi
+tiết Giai đoạn C: `plans/2026-08-26-mau-danh-gia.md`. Không nhảy sang
+Initiative/Project khi Evaluation còn dở.
 
 ---
 
@@ -332,8 +336,14 @@ tasks
 | Hệ điểm | Bảng cấu hình | Module | Áp dụng cho | Kỳ |
 |---|---|---|---|---|
 | Daily Report | `daily_report_scoring_configs` | `WorkspaceConfig` | Báo cáo ngày — 5 tiêu chí | Ngày |
-| Evaluation | `evaluation_criteria` + `evaluation_templates` | `Evaluation` | Đánh giá nhân sự định kỳ | Quý/Tháng/Năm |
+| Evaluation | `evaluation_criteria` + `evaluation_templates` (Giai đoạn C, kế hoạch) | `Evaluation` | Đánh giá nhân sự định kỳ | Quý/Tháng/Năm |
 | Task Scoring | `task_scoring_configs` | `TaskScoringConfig` | Từng Task hoàn thành | Theo task |
+
+> `evaluation_templates` (Mẫu đánh giá — Giai đoạn C) gộp nhiều
+> `evaluation_criteria` thành 1 bộ có trọng số, gán được cho "Vị trí đánh
+> giá" và có thể đánh dấu dùng chung toàn hệ thống. Schema đề xuất chi tiết:
+> `plans/2026-08-26-mau-danh-gia.md` §4. Chưa có phiếu đánh giá thực tế
+> (Giai đoạn D).
 
 ### 7.2 Schema `task_scoring_configs`
 
@@ -633,12 +643,13 @@ project_documents          -- "Tài liệu dự án": có folder, người dùng
 | **0** | Nền tảng: Auth, RBAC engine, Department/User (stub HRM), 4 file route global | — | **Xong** — nằm trong `Identity` |
 | **1** | Bảng `teams`, 9 role, PermissionCatalog + UI ma trận, View-as, activity log | Phase 0 | **Xong** — Team trong Identity; CRUD nhóm trên hub WorkspaceConfig |
 | **1b** | Hub `WorkspaceConfig`: thành viên, gán role, sidebar theo phòng ban, overview super_admin | Phase 1 | **Xong** — thiếu tab Evaluation |
-| **1c** | Module `Evaluation` Giai đoạn B: tiêu chí đánh giá (2 kiểu), tab trong WorkspaceConfigHub | Phase 1b | **← LÀM TIẾP** |
+| **1c** | Module `Evaluation` Giai đoạn B: tiêu chí đánh giá (2 kiểu), tab trong WorkspaceConfigHub | Phase 1b | **Xong** |
+| **1e** | Module `Evaluation` Giai đoạn C: Mẫu đánh giá + Vị trí đánh giá + mẫu dùng chung toàn hệ thống + trường tùy biến + Export Excel, mục **sidebar riêng** (khác Giai đoạn B). Kế hoạch: `plans/2026-08-26-mau-danh-gia.md` | Phase 1c | **Xong** — Import bị bỏ khỏi phạm vi có chủ đích (cấu trúc lồng nhau, rủi ro cao hơn lợi ích) |
 | **1d** *(ngoài kế hoạch)* | Module `Social`: bảng tin, cảm xúc, bình luận, poll, nhóm — làm song song, không nằm trong lộ trình gốc | — | **Xong phần lõi** — lượt xem + giới hạn hiển thị theo phòng ban đang dở (working tree), xem `docs/modules/Social.md` §5 |
 | **2** | Module `Initiative`: schema, Service/Repository, UI Vue giao/nhận, roll-up trạng thái | Phase 1 | Chưa |
 | **3** | Cross-department Task Delegation: mở rộng module `Project` (`tasks` + Service), `NotificationService` | Phase 1, cần Project | Chưa |
 | **4** | Module `TaskScoringConfig` theo phòng ban + `ScoringRollupService` + module `Kpi` | Phase 1, độc lập Phase 2/3 | Chưa — tab thêm vào hub, sau Evaluation |
-| **5** | Module vận hành: `DailyReport`, `Blocker`, `TestCase`, `Feedback`, `Contract`, `Credential`, `KnowledgeBase`, `AiAccount`, `WeeklyReport`; Evaluation Giai đoạn C (mẫu + phiếu) | Phase 0 / 1c | Chưa |
+| **5** | Module vận hành: `DailyReport`, `Blocker`, `TestCase`, `Feedback`, `Contract`, `Credential`, `KnowledgeBase`, `AiAccount`, `WeeklyReport`; Evaluation Giai đoạn D (phiếu đánh giá thực tế, hội đồng, kỳ đánh giá) | Phase 0 / 1e | Chưa |
 | **6** | Module `Onboarding` cho 9 role, Import/Export cho `initiatives`/`task_scoring_configs`, polish | Phase 2–5 | Chưa |
 | **7** | Task WBS đa cấp (§16) + `progress_calculation_method` + UI Gantt trong `Project` | Phase 0, cần Project | Chưa |
 | **8** | Module `DocumentManager` tách lớp (§18) | Phase 0, cần Project | Chưa |
@@ -675,27 +686,51 @@ project_documents          -- "Tài liệu dự án": có folder, người dùng
 
 Nền tảng Identity + hub WorkspaceConfig **đủ để dừng mở rộng RBAC/thành viên**. Việc tiếp theo không phải Initiative hay Project.
 
-### Bước 1 — Module `Evaluation` Giai đoạn B (làm ngay)
+### Bước 1 — Module `Evaluation` Giai đoạn B (xong)
 
 Tab thứ 3 trên `WorkspaceConfigHub`: **Tiêu chí đánh giá**.
 
-- Module mới `Modules/Evaluation/` (skill `new-module`), pattern Controller → Service → Repository.
+- Module `Modules/Evaluation/` (skill `new-module`), pattern Controller → Service → Repository.
 - 2 kiểu tiêu chí (đã ghi trong `Modules/WorkspaceConfig/README.md`):
   1. Thang điểm nhiều mức
   2. Cộng/trừ theo hành vi
-- Quyền: `evaluation.manage_department` (đã có trên ma trận trưởng phòng / phó phòng). Catalog hệ thống (`workspace.evaluation.*`) reserved cho super_admin — chưa cần Giai đoạn B nếu trưởng phòng tự tạo tiêu chí của PB mình.
-- UI: thêm tab vào `WorkspaceConfigHub.vue` + `router.js`, **không** thêm mục sidebar riêng (cùng pattern Thành viên / Menu).
-- Super_admin: chỉ xem tiêu chí trên trang chi tiết phòng ban, không sửa thay trưởng phòng (cùng rule overview hiện tại).
+- Quyền: `evaluation.manage_department` (trưởng phòng / phó phòng). Catalog hệ thống (`workspace.evaluation.*`) reserved cho super_admin.
+- UI: tab trong `WorkspaceConfigHub.vue` + `router.js`, không có mục sidebar riêng (cùng pattern Thành viên / Menu).
+- Super_admin: chỉ xem tiêu chí trên trang chi tiết phòng ban, không sửa thay trưởng phòng.
 
-**Không làm trong Bước 1:** mẫu đánh giá, phiếu, hội đồng, % trọng số, kỳ đánh giá (Giai đoạn C — Phase 5).
+### Bước 2 — Module `Evaluation` Giai đoạn C: Mẫu đánh giá (Xong)
 
-### Bước 2 — sau khi tab tiêu chí chạy
+Kế hoạch chi tiết + lịch sử quyết định: **`plans/2026-08-26-mau-danh-gia.md`**
+(PR1–PR6 đều đã hoàn tất, verify qua smoke test backend + `vite build`).
+Tóm tắt:
 
-Chọn một, không song song cả hai cho đến khi Bước 1 ổn:
+- Mẫu đánh giá + Vị trí đánh giá + mẫu dùng chung toàn hệ thống + trường
+  tùy biến + Export Excel — chia thành 6 PR nhỏ (xem plan §7).
+- Mẫu thuộc về 1 phòng ban theo mặc định (giống tiêu chí), nhưng
+  `department_director` trở lên có thể đánh dấu `is_global` — dùng chung cho
+  **toàn bộ hệ thống** (mọi phòng ban thấy/dùng được), quyền riêng
+  `evaluation.manage_global_template`. Mẫu global được chọn tiêu chí từ bất
+  kỳ phòng ban nào (UI hiện tên phòng ban nguồn).
+- **Đổi nguyên tắc UI so với Giai đoạn B**: trang Mẫu đánh giá có **mục
+  sidebar riêng** (`/manager/evaluation-templates`), không phải tab trong
+  `WorkspaceConfigHub` — vì mẫu đánh giá là entity độc lập, có thể dùng
+  chung nhiều phòng ban, không còn "thuộc về" đúng 1 phòng ban như tiêu
+  chí. Tiêu chí đánh giá (Giai đoạn B) **không đổi vị trí**, vẫn là tab
+  trong Hub. Chỉ department_director/deputy trở lên thấy mục này.
+  `resources/js/router/index.js` có thêm guard tổng quát
+  `meta.requiresPermission` cho route dạng này.
+- Mã mẫu tự sinh `EVT-0001` (tiền tố + 4 chữ số).
+- **Import bị bỏ khỏi phạm vi có chủ đích** (PR6) — khác tiêu chí đánh giá
+  (phẳng, 1 dòng = 1 bản ghi), mẫu có cấu trúc lồng nhau (N-N tiêu chí kèm
+  trọng số riêng, N-N vị trí, trường tùy biến JSON) không phẳng an toàn
+  thành 1 dòng Excel để nhập lại; chỉ làm Export dùng
+  `phpoffice/phpspreadsheet` (đã có sẵn trong `composer.json`).
+
+### Bước 3 — sau khi Mẫu đánh giá chạy
 
 | Ưu tiên | Khi nào chọn |
 |---|---|
-| Evaluation Giai đoạn C (mẫu + phiếu) | Cần khép quy trình đánh giá nhân sự trước khi có Project |
+| Evaluation Giai đoạn D (phiếu đánh giá thực tế, hội đồng, kỳ đánh giá) | Cần khép quy trình đánh giá nhân sự trước khi có Project |
 | Skeleton `Project` rồi `Initiative` (Phase 2) | Cần giao hạng mục / công việc. Phải chốt §20.1, §20.3, §20.5 trước |
 
 ### Không làm lúc này
@@ -709,4 +744,4 @@ Khi triển khai từng phase, tạo `docs/modules/{TenModule}.md` theo `docs/RE
 
 ---
 
-*Tài liệu sống của toàn dự án. Phần đã có: `Identity`, `WorkspaceConfig`. Việc tiếp theo: §21 (`Evaluation` Giai đoạn B).*
+*Tài liệu sống của toàn dự án. Phần đã có: `Identity`, `WorkspaceConfig`, `Evaluation` Giai đoạn B + C. Việc tiếp theo: §21 Bước 3 (Evaluation Giai đoạn D, hoặc skeleton `Project`/`Initiative`).*

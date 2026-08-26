@@ -10,8 +10,19 @@ interface EvaluationCriteriaRepositoryInterface
     /** Tất cả tiêu chí của một phòng ban, sắp xếp theo sort_order, name. */
     public function allByDepartment(int $departmentId): Collection;
 
+    /**
+     * Tất cả tiêu chí ĐANG HOẠT ĐỘNG của MỌI phòng ban — chỉ dùng khi build
+     * mẫu đánh giá dùng chung toàn hệ thống (is_global = true), nơi
+     * department_director+ được chọn tiêu chí cross-department. Xem
+     * plans/2026-08-26-mau-danh-gia.md §4, PR4.
+     */
+    public function allActiveAcrossDepartments(): Collection;
+
     /** @return list<int> */
     public function idsByDepartment(int $departmentId): array;
+
+    /** Tên tiêu chí (đã lowercase, trim) hiện có trong phòng ban — dùng phát hiện trùng khi nhập Excel. */
+    public function namesByDepartment(int $departmentId): array;
 
     public function find(int $id): ?EvaluationCriteria;
 

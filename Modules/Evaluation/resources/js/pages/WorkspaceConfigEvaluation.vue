@@ -75,6 +75,16 @@ const loading     = ref(false);
 const selected    = ref(null); // criterion đang xem
 const dialogKind  = ref(null); // 'criterion' | null
 const typeDialogOpen = ref(false);
+const exporting = ref(false);
+const exportingPdf = ref(false);
+const importDialogOpen = ref(false);
+const importStep = ref('select'); // 'select' | 'preview' | 'result'
+const importFile = ref(null);
+const previewing = ref(false); // đang gọi API preview
+const confirming = ref(false); // đang gọi API confirm
+const importPreview = ref(null); // { rows: [...] } từ API preview
+const importSelectedRows = ref(new Set()); // số dòng Excel (row) được tick chọn để nhập
+const importResult = ref(null); // { created: [], errors: [] } sau khi xác nhận nhập
 const dialogTab   = ref('create');
 const listFilter  = ref('');
 const historyLogs = ref([]);
@@ -536,6 +546,169 @@ async function load() {
   }
 }
 
+function currentFilterParams() {
+  return {
+    q: query.value.trim(),
+    kind: kindFilter.value,
+    type: typeFilter.value,
+    status: statusFilter.value,
+  };
+}
+
+async function downloadFile(url, params, busyRef, fallbackFilename, successMsg, failMsg) {
+  busyRef.value = true;
+  try {
+    const response = await window.axios.get(url, { params, responseType: 'blob' });
+    const blob = response.data;
+    if (blob.type && blob.type.includes('json')) {
+      const json = JSON.parse(await blob.text());
+      throw new Error(json.message || failMsg);
+    }
+
+    const disposition = response.headers['content-disposition'] || '';
+    const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const plainMatch = disposition.match(/filename="?([^"]+)"?/i);
+    const filename = decodeURIComponent(utfMatch?.[1] || plainMatch?.[1] || fallbackFilename);
+
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+    showClientToast('success', successMsg);
+  } catch (err) {
+    let message = err?.message;
+    if (err?.response?.data instanceof Blob) {
+      try {
+        const json = JSON.parse(await err.response.data.text());
+        message = json.message || Object.values(json.errors || {})[0]?.[0];
+      } catch {
+        message = failMsg;
+      }
+    } else {
+      message = err?.response?.data?.message || message;
+    }
+    showClientToast('error', message || failMsg);
+  } finally {
+    busyRef.value = false;
+  }
+}
+
+async function exportExcel() {
+  await downloadFile(
+    '/api/evaluation/criteria/export',
+    currentFilterParams(),
+    exporting,
+    'Tieu_chi_danh_gia.xlsx',
+    'Đã tải file Excel.',
+    'Không xuất được file Excel.',
+  );
+}
+
+async function exportPdf() {
+  await downloadFile(
+    '/api/evaluation/criteria/export-pdf',
+    currentFilterParams(),
+    exportingPdf,
+    'Tieu_chi_danh_gia.pdf',
+    'Đã tải file PDF.',
+    'Không xuất được file PDF.',
+  );
+}
+
+function openImportDialog() {
+  importFile.value = null;
+  importPreview.value = null;
+  importResult.value = null;
+  importSelectedRows.value = new Set();
+  importStep.value = 'select';
+  importDialogOpen.value = true;
+}
+
+function closeImportDialog() {
+  if (previewing.value || confirming.value) return;
+  importDialogOpen.value = false;
+}
+
+function onImportFileChange(event) {
+  importFile.value = event.target.files?.[0] ?? null;
+}
+
+function backToSelect() {
+  importStep.value = 'select';
+  importPreview.value = null;
+}
+
+function toggleRowSelected(rowNum) {
+  const next = new Set(importSelectedRows.value);
+  if (next.has(rowNum)) next.delete(rowNum);
+  else next.add(rowNum);
+  importSelectedRows.value = next;
+}
+
+async function runPreview() {
+  if (!importFile.value) {
+    showClientToast('error', 'Vui lòng chọn file Excel cần nhập.');
+    return;
+  }
+  previewing.value = true;
+  try {
+    const formData = new FormData();
+    formData.append('file', importFile.value);
+    const { data } = await window.axios.post('/api/evaluation/criteria/import/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    importPreview.value = data;
+    importSelectedRows.value = new Set(
+      (data.rows ?? []).filter((r) => r.status === 'valid').map((r) => r.row),
+    );
+    importStep.value = 'preview';
+  } catch (err) {
+    if (err?.response?.status === 422) {
+      showClientToast('error', err.response.data?.message || 'File không hợp lệ.');
+    } else {
+      showClientToast('error', err?.response?.data?.message || 'Không đọc được file Excel.');
+    }
+  } finally {
+    previewing.value = false;
+  }
+}
+
+async function confirmImportRows() {
+  const rows = (importPreview.value?.rows ?? [])
+    .filter((r) => r.status === 'valid' && importSelectedRows.value.has(r.row))
+    .map((r) => ({ ...r.data, row: r.row }));
+  if (rows.length === 0) {
+    showClientToast('error', 'Chưa chọn dòng hợp lệ nào để nhập.');
+    return;
+  }
+  confirming.value = true;
+  try {
+    const { data } = await window.axios.post('/api/evaluation/criteria/import/confirm', { rows });
+    importResult.value = data;
+    importStep.value = 'result';
+    if (data.created?.length) {
+      allCriteria.value = [...data.created, ...allCriteria.value];
+      await nextTick();
+      computeDefaultWidths();
+    }
+    if (data.created?.length && !data.errors?.length) {
+      showClientToast('success', `Đã tạo thành công ${data.created.length} tiêu chí.`);
+    } else if (data.created?.length) {
+      showClientToast('warning', `Đã tạo ${data.created.length} tiêu chí, còn ${data.errors.length} dòng lỗi.`);
+    } else {
+      showClientToast('error', 'Không tạo được tiêu chí nào, xem chi tiết lỗi bên dưới.');
+    }
+  } catch (err) {
+    showClientToast('error', err?.response?.data?.message || 'Không nhập được dữ liệu.');
+  } finally {
+    confirming.value = false;
+  }
+}
+
 async function loadHistory() {
   historyLoading.value = true;
   try {
@@ -979,6 +1152,29 @@ function registerPrimaryAction() {
   });
 }
 
+// Nút "Dữ liệu" trên PageHeader của Hub: Xuất Excel/PDF luôn hiện khi có
+// phòng ban, Nhập Excel chỉ hiện khi có quyền quản lý.
+function registerExportOptions() {
+  if (!hasDepartment.value) {
+    hub?.clearExportOptions?.();
+    return;
+  }
+  const options = [
+    { key: 'excel', label: 'Xuất Excel', description: 'Theo bộ lọc hiện tại trên trang', onSelect: exportExcel },
+    { key: 'pdf', label: 'Xuất PDF', description: 'Theo bộ lọc hiện tại trên trang', icon: 'fileText', onSelect: exportPdf },
+  ];
+  if (canManage.value) {
+    options.push({
+      key: 'import',
+      label: 'Nhập Excel',
+      description: 'Tải file lên, xem trước rồi mới xác nhận nhập',
+      separatorBefore: true,
+      onSelect: openImportDialog,
+    });
+  }
+  hub?.setExportOptions?.(options);
+}
+
 function handleKeydown(e) {
   if (e.key !== 'Escape') return;
   if (confirmDelete.value) {
@@ -987,6 +1183,10 @@ function handleKeydown(e) {
   }
   if (typeDialogOpen.value) {
     closeTypeDialog();
+    return;
+  }
+  if (importDialogOpen.value) {
+    closeImportDialog();
     return;
   }
   if (dialogKind.value) {
@@ -1016,11 +1216,21 @@ watch([query, kindFilter, typeFilter, statusFilter], () => { page.value = 1; });
 watch(visibleColumns, (value) => saveVisibility(COL_KEY, value), { deep: true });
 watch(visibleFilters, (value) => saveVisibility(FILTER_KEY, value), { deep: true });
 
-watch([canManage, hasDepartment], () => registerPrimaryAction());
+watch([canManage, hasDepartment], () => {
+  registerPrimaryAction();
+  registerExportOptions();
+});
+
+watch([exporting, exportingPdf], () => {
+  hub?.setExportBusyKey?.(
+    exporting.value ? 'excel' : exportingPdf.value ? 'pdf' : undefined,
+  );
+});
 
 onMounted(async () => {
   hub?.registerReload?.(load);
   registerPrimaryAction();
+  registerExportOptions();
   document.addEventListener('keydown', handleKeydown);
 
   await load();
@@ -1032,6 +1242,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   hub?.unregisterReload?.();
   hub?.clearPrimaryAction?.();
+  hub?.clearExportOptions?.();
   document.removeEventListener('keydown', handleKeydown);
   wrapObserver?.disconnect();
 });
@@ -2075,6 +2286,186 @@ onBeforeUnmount(() => {
       </Transition>
     </Teleport>
 
+    <!-- ── Nhập tiêu chí từ Excel (3 bước: chọn file → xem trước → kết quả) ── -->
+    <Teleport to="body">
+      <Transition name="eval-dialog-fade">
+        <div
+          v-if="importDialogOpen"
+          class="eval-page__dialog eval-page__dialog--nested"
+          role="presentation"
+          @mousedown.self="closeImportDialog"
+        >
+          <div
+            class="eval-page__dialog-panel"
+            :class="importStep === 'preview' ? 'eval-page__dialog-panel--preview' : 'eval-page__dialog-panel--type'"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="eval-import-title"
+          >
+            <div class="eval-page__dialog-head">
+              <span class="eval-page__dialog-icon" aria-hidden="true">
+                <AppIcon name="fileUp" :size="22" :stroke-width="1.75" />
+              </span>
+              <div class="eval-page__dialog-head-copy">
+                <h2 id="eval-import-title" class="eval-page__dialog-title">Nhập tiêu chí từ Excel</h2>
+              </div>
+              <button
+                type="button"
+                class="eval-page__dialog-close"
+                aria-label="Đóng"
+                :disabled="previewing || confirming"
+                @click="closeImportDialog"
+              >
+                <AppIcon name="close" :size="16" />
+              </button>
+            </div>
+
+            <!-- Bước 1: chọn file -->
+            <template v-if="importStep === 'select'">
+              <div class="eval-page__dialog-body">
+                <p class="eval-page__import-hint">
+                  Chọn file Excel (.xlsx) đúng theo cấu trúc cột đã xuất. Loại tiêu chí trong file
+                  phải được tạo sẵn trong phòng ban trước khi nhập. Sau khi tải lên, hệ thống sẽ
+                  hiện bảng xem trước để bạn kiểm tra trước khi ghi dữ liệu thật.
+                  <button type="button" class="eval-page__import-template" :disabled="exporting" @click="exportExcel">
+                    Tải file mẫu (xuất danh sách hiện tại)
+                  </button>
+                </p>
+
+                <div class="eval-page__dialog-field">
+                  <label class="eval-page__dialog-label" for="eval-import-file">
+                    File Excel <span class="eval-page__dialog-req" aria-hidden="true">*</span>
+                  </label>
+                  <input
+                    id="eval-import-file"
+                    type="file"
+                    accept=".xlsx"
+                    class="eval-page__import-file"
+                    :disabled="previewing"
+                    @change="onImportFileChange"
+                  />
+                </div>
+              </div>
+
+              <div class="eval-page__dialog-actions">
+                <button type="button" class="eval-page__dialog-btn eval-page__dialog-btn--ghost" :disabled="previewing" @click="closeImportDialog">
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  class="eval-page__dialog-btn eval-page__dialog-btn--primary"
+                  :disabled="previewing || !importFile"
+                  @click="runPreview"
+                >
+                  {{ previewing ? 'Đang đọc file…' : 'Xem trước' }}
+                </button>
+              </div>
+            </template>
+
+            <!-- Bước 2: xem trước, chọn dòng cần nhập -->
+            <template v-else-if="importStep === 'preview'">
+              <div class="eval-page__dialog-body eval-page__dialog-body--preview">
+                <div class="eval-page__import-summary">
+                  <span class="eval-page__import-dot eval-page__import-dot--ok" />
+                  {{ importSelectedRows.size }}/{{ importPreview?.rows?.length ?? 0 }} dòng hợp lệ được chọn để nhập.
+                </div>
+
+                <div class="eval-page__preview-table-wrap hide-scrollbar">
+                  <table class="eval-page__preview-table">
+                    <thead>
+                      <tr>
+                        <th class="eval-page__preview-th eval-page__preview-th--check"></th>
+                        <th class="eval-page__preview-th">Dòng</th>
+                        <th class="eval-page__preview-th">Tên tiêu chí</th>
+                        <th class="eval-page__preview-th">Loại</th>
+                        <th class="eval-page__preview-th">Trạng thái</th>
+                        <th class="eval-page__preview-th">Ghi chú</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="row in importPreview?.rows ?? []"
+                        :key="row.row"
+                        class="eval-page__preview-row"
+                        :class="{ 'eval-page__preview-row--invalid': row.status !== 'valid' }"
+                      >
+                        <td class="eval-page__preview-td eval-page__preview-td--check">
+                          <input
+                            v-if="row.status === 'valid'"
+                            type="checkbox"
+                            :checked="importSelectedRows.has(row.row)"
+                            @change="toggleRowSelected(row.row)"
+                          />
+                        </td>
+                        <td class="eval-page__preview-td">{{ row.row }}</td>
+                        <td class="eval-page__preview-td">{{ row.data?.name || '—' }}</td>
+                        <td class="eval-page__preview-td">{{ row.data?.type_code || row.data?.criterion_type_id || '—' }}</td>
+                        <td class="eval-page__preview-td">
+                          <span class="eval-page__import-summary">
+                            <span
+                              class="eval-page__import-dot"
+                              :class="row.status === 'valid' ? 'eval-page__import-dot--ok' : 'eval-page__import-dot--error'"
+                            />
+                            {{ row.status === 'valid' ? 'Hợp lệ' : 'Không hợp lệ' }}
+                          </span>
+                        </td>
+                        <td class="eval-page__preview-td eval-page__preview-td--issues">
+                          <p v-for="(issue, idx) in row.issues" :key="idx" class="eval-page__preview-issue">
+                            {{ issue.message }}
+                          </p>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="eval-page__dialog-actions">
+                <button type="button" class="eval-page__dialog-btn eval-page__dialog-btn--ghost" :disabled="confirming" @click="backToSelect">
+                  Quay lại
+                </button>
+                <button
+                  type="button"
+                  class="eval-page__dialog-btn eval-page__dialog-btn--primary"
+                  :disabled="confirming || importSelectedRows.size === 0"
+                  @click="confirmImportRows"
+                >
+                  {{ confirming ? 'Đang nhập…' : `Xác nhận nhập (${importSelectedRows.size})` }}
+                </button>
+              </div>
+            </template>
+
+            <!-- Bước 3: kết quả -->
+            <template v-else>
+              <div class="eval-page__dialog-body">
+                <div v-if="importResult" class="eval-page__import-result">
+                  <div class="eval-page__import-summary">
+                    <span class="eval-page__import-dot eval-page__import-dot--ok" />
+                    Đã tạo thành công {{ importResult.created.length }} tiêu chí
+                    <template v-if="importResult.errors.length">
+                      , còn {{ importResult.errors.length }} dòng lỗi
+                    </template>.
+                  </div>
+                  <ul v-if="importResult.errors.length" class="eval-page__import-errors">
+                    <li v-for="err in importResult.errors" :key="err.row" class="eval-page__import-error">
+                      <span class="eval-page__import-dot eval-page__import-dot--error" />
+                      Dòng {{ err.row }}: {{ err.message }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="eval-page__dialog-actions">
+                <button type="button" class="eval-page__dialog-btn eval-page__dialog-btn--primary" @click="closeImportDialog">
+                  Đóng
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- ── Confirm xoá ────────────────────────────────────────────────────── -->
     <div v-if="confirmDelete" class="eval-page__confirm-overlay" @click.self="confirmDelete = null">
       <div class="eval-page__confirm" role="alertdialog" aria-modal="true">
@@ -2156,6 +2547,104 @@ onBeforeUnmount(() => {
   gap: var(--space-3);
   width: 100%;
 }
+
+/* ─── nút Xuất/Nhập Excel trong TablePagesBar slot #actions ──────────────── */
+.eval-page__toolbar-spin { animation: eval-page-toolbar-spin 0.8s linear infinite; }
+
+@keyframes eval-page-toolbar-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eval-page__toolbar-spin { animation: none; }
+}
+
+/* ─── import dialog ───────────────────────────────────────────────────────── */
+.eval-page__import-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.eval-page__import-template {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.eval-page__import-template:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.eval-page__import-file {
+  width: 100%;
+  padding: 0.4375rem 0.625rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+}
+
+.eval-page__import-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.eval-page__import-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.eval-page__import-errors {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.eval-page__import-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.eval-page__import-dot {
+  flex-shrink: 0;
+  margin-top: 0.375rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+}
+
+.eval-page__import-dot--ok { background: var(--color-success); }
+.eval-page__import-dot--error { background: var(--color-danger, #dc2626); }
 
 .eval-page__field {
   display: flex;
@@ -3137,6 +3626,71 @@ onBeforeUnmount(() => {
   max-height: calc(100vh - 2.5rem);
 }
 
+.eval-page__dialog-panel--preview {
+  width: min(64rem, calc(100vw - 2.5rem));
+  max-height: calc(100vh - 2.5rem);
+}
+
+.eval-page__dialog-body--preview {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.eval-page__preview-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.eval-page__preview-table {
+  width: 100%;
+  min-width: 40rem;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.eval-page__preview-th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-align: left;
+  white-space: nowrap;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.eval-page__preview-th--check { width: 2rem; }
+
+.eval-page__preview-td {
+  padding: var(--space-2) var(--space-3);
+  vertical-align: top;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.eval-page__preview-td--check { text-align: center; }
+
+.eval-page__preview-td--issues { min-width: 16rem; }
+
+.eval-page__preview-row--invalid { opacity: 0.7; }
+
+.eval-page__preview-issue {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.eval-page__preview-issue + .eval-page__preview-issue { margin-top: 0.125rem; }
+
 .eval-page__dialog-head,
 .eval-page__dialog-tabs,
 .eval-page__dialog-actions {
@@ -3804,7 +4358,8 @@ onBeforeUnmount(() => {
 
   .eval-page__dialog-panel,
   .eval-page__dialog-panel--fill,
-  .eval-page__dialog-panel--type {
+  .eval-page__dialog-panel--type,
+  .eval-page__dialog-panel--preview {
     max-width: 100%;
     max-height: min(92vh, calc(100vh - 2rem));
     padding: var(--space-4);
@@ -3845,6 +4400,8 @@ onBeforeUnmount(() => {
   .eval-page__filters { grid-template-columns: minmax(0, 1fr); }
   .eval-page__dl-row { flex-direction: column; gap: var(--space-1); }
   .eval-page__dl-row dt { flex: none; }
+  .eval-page__preview-table th:nth-child(4),
+  .eval-page__preview-table td:nth-child(4) { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -25,6 +25,14 @@ class EvaluationCriterionTypeRepository implements EvaluationCriterionTypeReposi
             ->first();
     }
 
+    public function findByCode(int $departmentId, string $code): ?EvaluationCriterionType
+    {
+        return EvaluationCriterionType::query()
+            ->where('department_id', $departmentId)
+            ->whereRaw('LOWER(code) = ?', [mb_strtolower($code)])
+            ->first();
+    }
+
     public function codeExists(int $departmentId, string $code, ?int $ignoreId = null): bool
     {
         return EvaluationCriterionType::query()

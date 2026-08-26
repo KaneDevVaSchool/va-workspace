@@ -11,6 +11,9 @@ interface EvaluationCriterionTypeRepositoryInterface
 
     public function findByDepartment(int $id, int $departmentId): ?EvaluationCriterionType;
 
+    /** Tìm loại tiêu chí theo mã (không phân biệt hoa thường) trong phòng ban — dùng khi nhập từ Excel. */
+    public function findByCode(int $departmentId, string $code): ?EvaluationCriterionType;
+
     public function codeExists(int $departmentId, string $code, ?int $ignoreId = null): bool;
 
     /** Mã loại đang dùng trong phòng ban, để cấp số tuần tự TCA0001. */

@@ -43,9 +43,13 @@ const visibleTabs = computed(() =>
 const reloadChild = ref(null);
 const reloading = ref(false);
 const primaryAction = ref(null);
+const exportOptions = ref([]);
+const exportBusyKey = ref(undefined);
 
 // Mọi tab con đều có thể đặt primary action của mình qua inject 'workspaceConfigHub'.
 const headerPrimaryAction = computed(() => primaryAction.value);
+const headerExportOptions = computed(() => exportOptions.value);
+const headerExportBusyKey = computed(() => exportBusyKey.value);
 
 provide('workspaceConfigHub', {
   registerReload(fn) {
@@ -59,6 +63,15 @@ provide('workspaceConfigHub', {
   },
   clearPrimaryAction() {
     primaryAction.value = null;
+  },
+  setExportOptions(options) {
+    exportOptions.value = options ?? [];
+  },
+  clearExportOptions() {
+    exportOptions.value = [];
+  },
+  setExportBusyKey(key) {
+    exportBusyKey.value = key;
   },
 });
 
@@ -96,6 +109,9 @@ watch(
         { label: 'Cấu hình phòng ban' },
       ]"
       :primary-action="headerPrimaryAction"
+      export-label="Dữ liệu"
+      :export-options="headerExportOptions"
+      :export-busy-key="headerExportBusyKey"
     >
       <template #actions>
         <button type="button" class="wc-hub__header-btn" :disabled="reloading" @click="reload">

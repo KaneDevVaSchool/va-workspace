@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import identityRoutes from '@modules/Identity/resources/js/router.js';
 import workspaceConfigRoutes from '@modules/WorkspaceConfig/resources/js/router.js';
 import socialRoutes from '@modules/Social/resources/js/router.js';
+import evaluationRoutes from '@modules/Evaluation/resources/js/router.js';
 
 /**
  * Route Vue (SPA phía client) — KHÔNG nhầm với route Laravel
@@ -22,6 +23,7 @@ const routes = [
     ...identityRoutes,
     ...workspaceConfigRoutes,
     ...socialRoutes,
+    ...evaluationRoutes,
 ];
 
 const router = createRouter({
@@ -62,6 +64,13 @@ router.beforeEach(async (to) => {
     }
 
     if (to.meta.requiresAdmin && !auth.canViewActivityLog) {
+        return { name: 'home' };
+    }
+
+    // Route yêu cầu 1 permission cụ thể (vd. mục sidebar riêng ngoài phạm vi
+    // requiresSuperAdmin/requiresAdmin) — vd. manager.evaluation-templates.index
+    // chỉ department_director/deputy trở lên (evaluation.manage_department).
+    if (to.meta.requiresPermission && !auth.can(to.meta.requiresPermission)) {
         return { name: 'home' };
     }
 

@@ -121,6 +121,7 @@ return [
             'contract.manage_department',
             'knowledge_base.manage_department',
             'evaluation.manage_department',
+            'evaluation.manage_global_template',
             'blocker.manage',
             'test_case.manage',
             'feedback.view',
@@ -171,6 +172,7 @@ return [
             'contract.manage_department',
             'knowledge_base.manage_department',
             'evaluation.manage_department',
+            'evaluation.manage_global_template',
             'blocker.manage',
             'test_case.manage',
             'feedback.view',
@@ -374,6 +376,7 @@ return [
         // ---------- Đánh giá (evaluation) ----------
         'evaluation.*' => ['label' => 'Toàn bộ đánh giá', 'module' => 'Đánh giá', 'description' => 'Toàn quyền quản lý đánh giá nhân sự'],
         'evaluation.manage_department' => ['label' => 'Quản lý đánh giá phòng ban', 'module' => 'Đánh giá', 'description' => 'Tự tạo và quản lý tiêu chí đánh giá nhân sự trong phòng ban mình', 'active' => true],
+        'evaluation.manage_global_template' => ['label' => 'Quản lý mẫu đánh giá dùng chung', 'module' => 'Đánh giá', 'description' => 'Đánh dấu mẫu đánh giá dùng chung cho toàn bộ phòng ban', 'active' => true],
 
         // ---------- Hợp đồng (contract) ----------
         'contract.*' => ['label' => 'Toàn bộ hợp đồng', 'module' => 'Hợp đồng', 'description' => 'Toàn quyền quản lý hợp đồng'],
