@@ -61,10 +61,10 @@ class AuthenticatedUserPresenter
                 ? $this->sidebarConfigs->sectionLabelsForDepartment($user->department->id)
                 : (object) [],
             // Menu bị ẩn TOÀN HỆ THỐNG (superadmin cấu hình) — LUÔN trả,
-            // không phụ thuộc department, kể cả với chính super_admin.
-            // super_admin không bị ảnh hưởng khi hiển thị sidebar
-            // (AppSidebar.vue bỏ qua khi showSuperAdminNav=true) — dữ liệu
-            // thật vẫn cần trả để trang quản lý switch tự hiển thị đúng.
+            // không phụ thuộc department. Áp dụng cho MỌI tài khoản kể cả
+            // super_admin, không có ngoại lệ (xem AppSidebar.vue::itemPasses) —
+            // trang cấu hình chính nó luôn được bảo vệ (PROTECTED_MENU_KEYS)
+            // nên super_admin luôn còn đường vào lại để bật menu đã ẩn.
             'globally_hidden_menu_keys' => $this->globalMenus->hiddenKeys(),
         ];
     }

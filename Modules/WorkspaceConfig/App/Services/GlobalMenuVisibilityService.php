@@ -17,22 +17,36 @@ use Modules\Identity\App\Repositories\Contracts\GlobalMenuVisibilityRepositoryIn
  */
 class GlobalMenuVisibilityService
 {
-    /** @var array<string, array{label: string, section: string}> */
+    /**
+     * @var array<string, array{label: string, section: string, audience?: string}>
+     * `audience` chỉ khai báo cho mục dễ hiểu nhầm là dành cho super_admin —
+     * hiển thị thêm 1 dòng chú thích ở trang quản lý để tránh nhầm lẫn.
+     */
     public const CATALOG = [
         // section: general (Điều hướng)
         'home' => ['label' => 'Tổng quan', 'section' => 'general'],
         'social.feed' => ['label' => 'Bảng tin nội bộ', 'section' => 'general'],
         'manager.evaluation.view' => ['label' => 'Tiêu chí đánh giá', 'section' => 'general'],
-        'settings' => ['label' => 'Cài đặt', 'section' => 'general'],
         // section: admin (Quản trị) — chỉ super_admin thấy, liệt kê để đồng bộ
-        'users' => ['label' => 'Người dùng', 'section' => 'admin'],
-        'departments' => ['label' => 'Phòng ban', 'section' => 'admin'],
         'superadmin.permissions' => ['label' => 'Phân quyền', 'section' => 'admin'],
         'superadmin.activity' => ['label' => 'Nhật ký hoạt động', 'section' => 'admin'],
-        // section: manager (Quản lý)
-        'manager.workspace-config.hub' => ['label' => 'Cấu hình phòng ban', 'section' => 'manager'],
-        'manager.evaluation-templates.index' => ['label' => 'Mẫu đánh giá', 'section' => 'manager'],
-        'manager.social.moderation' => ['label' => 'Duyệt bài viết', 'section' => 'manager'],
+        // section: manager (Quản lý) — các mục này KHÔNG dành cho super_admin,
+        // mà cho trưởng/phó phòng ban (hoặc người được cấp quyền tương ứng).
+        'manager.workspace-config.hub' => [
+            'label' => 'Cấu hình phòng ban',
+            'section' => 'manager',
+            'audience' => 'Menu này chỉ hiện với trưởng phòng và phó phòng, không phải Super Admin.',
+        ],
+        'manager.evaluation-templates.index' => [
+            'label' => 'Mẫu đánh giá',
+            'section' => 'manager',
+            'audience' => 'Menu này chỉ hiện với trưởng phòng và phó phòng. Super Admin tạo mẫu dùng chung ở một trang riêng khác.',
+        ],
+        'manager.social.moderation' => [
+            'label' => 'Duyệt bài viết',
+            'section' => 'manager',
+            'audience' => 'Menu này hiện với người được cấp quyền duyệt bài viết, không chỉ riêng Super Admin.',
+        ],
         // section: superadmin-workspace-config (Cấu hình Workspace)
         'superadmin.workspace-config.overview' => ['label' => 'Cấu hình Workspace theo phòng ban', 'section' => 'superadmin-workspace-config'],
         'superadmin.workspace-config.global-menu' => ['label' => 'Ẩn/hiện menu toàn hệ thống', 'section' => 'superadmin-workspace-config'],
@@ -89,6 +103,7 @@ class GlobalMenuVisibilityService
                 'label' => $meta['label'],
                 'section' => $meta['section'],
                 'section_label' => self::SECTIONS[$meta['section']] ?? $meta['section'],
+                'audience' => $meta['audience'] ?? null,
                 'is_hidden' => $row?->is_hidden ?? false,
                 'is_protected' => $this->isProtected($menuKey),
                 'updated_by_name' => $row?->updatedBy?->name,

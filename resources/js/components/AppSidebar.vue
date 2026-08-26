@@ -63,15 +63,12 @@ const MENU_SECTIONS = [
         icon: 'clipboardCheck',
         configurableByDepartment: true,
       },
-      { name: 'settings', label: 'Cài đặt', icon: 'settings' },
     ],
   },
   {
     id: 'admin',
     label: 'Quản trị',
     items: [
-      { name: 'users', label: 'Người dùng', icon: 'users', requiresSuperAdmin: true },
-      { name: 'departments', label: 'Phòng ban', icon: 'building', requiresSuperAdmin: true },
       { name: 'superadmin.permissions', label: 'Phân quyền', icon: 'settings', requiresSuperAdmin: true },
       { name: 'superadmin.activity', label: 'Nhật ký hoạt động', icon: 'clock', requiresAdmin: true },
     ],
@@ -130,10 +127,10 @@ const MENU_SECTIONS = [
         requiresSuperAdmin: true,
       },
       {
-        // Ẩn/hiện menu sidebar TOÀN HỆ THỐNG — áp dụng cho mọi tài khoản
-        // không phải super_admin, thắng tuyệt đối per-department override.
-        // KHÔNG configurableByDepartment/globallyHiddenMenuKeys tự ẩn:
-        // GlobalMenuVisibilityService::PROTECTED_MENU_KEYS chặn ở backend.
+        // Ẩn/hiện menu sidebar TOÀN HỆ THỐNG — áp dụng cho MỌI tài khoản kể
+        // cả super_admin, thắng tuyệt đối per-department override. Chính
+        // mục này KHÔNG tự ẩn được: GlobalMenuVisibilityService::PROTECTED_MENU_KEYS
+        // chặn ở backend, đảm bảo super_admin luôn vào lại được trang này.
         name: 'superadmin.workspace-config.global-menu',
         label: 'Ẩn/hiện menu toàn hệ thống',
         icon: 'eyeOff',
@@ -153,9 +150,11 @@ function itemPasses(item) {
     (!item.requiresAdmin || auth.canViewActivityLog) &&
     (!item.requiresPermission || auth.can(item.requiresPermission)) &&
     !auth.hiddenMenuKeys.includes(item.name) &&
-    // Ẩn toàn hệ thống (superadmin) thắng tuyệt đối per-department —
-    // super_admin hiệu lực (không đang xem thử vai trò khác) miễn nhiễm.
-    (auth.showSuperAdminNav || !auth.globallyHiddenMenuKeys.includes(item.name))
+    // Ẩn toàn hệ thống (superadmin) thắng tuyệt đối per-department, áp dụng
+    // cho MỌI tài khoản kể cả super_admin (không có ngoại lệ) — trang
+    // "Ẩn/hiện menu toàn hệ thống" tự bảo vệ (PROTECTED_MENU_KEYS) nên
+    // super_admin luôn còn đường vào lại để bật menu đã ẩn.
+    !auth.globallyHiddenMenuKeys.includes(item.name)
   );
 }
 

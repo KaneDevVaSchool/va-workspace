@@ -98,8 +98,8 @@ export const useAuthStore = defineStore('auth', {
 
     /**
      * Menu sidebar bị superadmin ẩn Ở MỨC TOÀN HỆ THỐNG — thắng tuyệt đối
-     * hiddenMenuKeys (per-department), super_admin miễn nhiễm khi không
-     * đang xem thử vai trò khác (xem showSuperAdminNav, AppSidebar.vue).
+     * hiddenMenuKeys (per-department), áp dụng cho MỌI tài khoản kể cả
+     * super_admin, không có ngoại lệ (xem AppSidebar.vue::itemPasses).
      */
     globallyHiddenMenuKeys: (state) => state.user?.globally_hidden_menu_keys ?? [],
 

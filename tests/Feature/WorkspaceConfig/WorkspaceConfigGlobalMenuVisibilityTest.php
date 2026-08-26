@@ -43,7 +43,7 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
             ->assertOk()
             ->assertJsonPath('menus.0.menu_key', 'home')
             ->assertJsonPath('menus.0.is_hidden', false)
-            ->assertJsonCount(13, 'menus');
+            ->assertJsonCount(10, 'menus');
 
         $this->actingAs($superAdmin)
             ->putJson('/api/workspace-config/global-menu', [
@@ -103,12 +103,13 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
             ->assertJsonPath('globally_hidden_menu_keys.0', 'manager.social.moderation');
     }
 
-    public function test_super_admin_me_still_reflects_true_data_even_though_ui_ignores_it(): void
+    public function test_super_admin_me_reflects_global_hidden_keys(): void
     {
-        // Dữ liệu ở /api/me KHÔNG bị lọc cho super_admin — việc "super_admin
-        // luôn thấy menu" được đảm bảo ở AppSidebar.vue::itemPasses() (phía
-        // client, không test được bằng Feature test PHP), không phải bằng
-        // cách giấu field này trong payload.
+        // Dữ liệu ở /api/me KHÔNG bị lọc cho super_admin. AppSidebar.vue::itemPasses()
+        // (phía client, không test được bằng Feature test PHP) áp dụng
+        // globally_hidden_menu_keys cho MỌI tài khoản kể cả super_admin —
+        // không có ngoại lệ ở tầng sidebar UI (khác với middleware
+        // menu.not_hidden ở tầng route, nơi super_admin thật vẫn bypass).
         $this->seed(RoleSeeder::class);
         $superAdmin = $this->makeSuperAdmin();
 
