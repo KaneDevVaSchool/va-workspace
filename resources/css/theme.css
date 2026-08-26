@@ -32,6 +32,25 @@
   --color-primary-surface-strong: var(--color-primary-100);
   --color-on-primary: #ffffff;
 
+  /* ---------- Màu phụ (Secondary) - "Nhân Ái" #009082, phối cùng Primary ---------- */
+  --color-secondary: #009082;
+  --color-secondary-50: #e6f5f3;
+  --color-secondary-100: #cceae7;
+  --color-secondary-200: #99d5cf;
+  --color-secondary-300: #66c0b7;
+  --color-secondary-400: #33ab9f;
+  --color-secondary-500: #009082;
+  --color-secondary-600: #00786c;
+  --color-secondary-700: #005f56;
+  --color-secondary-800: #004740;
+  --color-secondary-900: #002f2a;
+
+  --color-secondary-hover: var(--color-secondary-600);
+  --color-secondary-active: var(--color-secondary-700);
+  --color-secondary-surface: var(--color-secondary-50);
+  --color-secondary-surface-strong: var(--color-secondary-100);
+  --color-on-secondary: #ffffff;
+
   /* ---------- Sidebar (brand primary-900, hover/active dịu) ---------- */
   --color-sidebar: var(--color-primary-900);
   --color-sidebar-active: color-mix(in srgb, var(--color-on-primary) 14%, var(--color-primary-900));
