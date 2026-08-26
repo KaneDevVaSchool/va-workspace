@@ -32,6 +32,7 @@ const props = defineProps({
   loadingGlobalPool: { type: Boolean, default: false },
   allPositions: { type: Array, required: true },
   canManageGlobal: { type: Boolean, default: false },
+  forceGlobal: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:open', 'created', 'position-created', 'request-global-pool']);
@@ -69,7 +70,7 @@ function resetForm() {
   form.is_active = true;
   form.criteria = [];
   form.position_ids = [];
-  form.is_global = false;
+  form.is_global = Boolean(props.forceGlobal);
   form.custom_fields = [];
   formErrors.value = {};
 }
@@ -153,6 +154,7 @@ async function submitForm() {
       count_in_total: Boolean(row.count_in_total),
     })),
     position_ids: form.position_ids,
+    is_global: form.is_global,
     custom_fields: form.custom_fields.map((field) => ({
       label: field.label.trim(),
       field_type: field.field_type,
@@ -193,6 +195,7 @@ watch(
   (isOpen) => {
     if (!isOpen) return;
     resetForm();
+    if (form.is_global) emit('request-global-pool');
     nextTick(() => document.getElementById('evtpl-create-name')?.focus());
   },
 );
@@ -264,6 +267,25 @@ watch(
                     <span class="evtpl-form__switch-thumb" aria-hidden="true" />
                   </button>
                   <span class="evtpl-form__switch-text">{{ form.is_active ? 'Hoạt động' : 'Không hoạt động' }}</span>
+                </div>
+              </div>
+
+              <div v-if="canManageGlobal" class="evtpl-form__field evtpl-form__field--global">
+                <div class="evtpl-form__switch-row">
+                  <span id="evtpl-create-global-label" class="evtpl-form__label">Dùng chung toàn hệ thống</span>
+                  <button
+                    type="button"
+                    class="evtpl-form__switch"
+                    :class="{ 'evtpl-form__switch--on': form.is_global }"
+                    role="switch"
+                    aria-labelledby="evtpl-create-global-label"
+                    :aria-checked="form.is_global ? 'true' : 'false'"
+                    :disabled="formSaving || forceGlobal"
+                    @click="form.is_global = !form.is_global"
+                  >
+                    <span class="evtpl-form__switch-thumb" aria-hidden="true" />
+                  </button>
+                  <span class="evtpl-form__switch-text">{{ form.is_global ? 'Có' : 'Không' }}</span>
                 </div>
               </div>
 
@@ -527,6 +549,7 @@ watch(
   grid-template-columns: 1fr 1fr 1fr;
   grid-template-areas:
     'name name status'
+    'global global global'
     'desc desc desc'
     'criteria criteria criteria'
     'positions positions positions'
@@ -536,6 +559,7 @@ watch(
 
 .evtpl-form__field--name { grid-area: name; }
 .evtpl-form__field--status { grid-area: status; }
+.evtpl-form__field--global { grid-area: global; }
 .evtpl-form__field--desc { grid-area: desc; }
 .evtpl-form__field--criteria { grid-area: criteria; }
 .evtpl-form__field--positions { grid-area: positions; }
@@ -767,6 +791,7 @@ watch(
     grid-template-areas:
       'name'
       'status'
+      'global'
       'desc'
       'criteria'
       'positions'

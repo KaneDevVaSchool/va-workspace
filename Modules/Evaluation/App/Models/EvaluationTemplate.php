@@ -14,7 +14,7 @@ use Modules\Identity\App\Models\Department;
  * thành 1 bộ có trọng số. Xem plans/2026-08-26-mau-danh-gia.md.
  *
  * @property int         $id
- * @property int         $department_id     phòng ban tạo ra mẫu (giữ nguyên kể cả khi is_global)
+ * @property int|null    $department_id     phòng ban tạo ra mẫu; null = mẫu chung do superadmin tạo
  * @property string      $code              mã tự sinh, ví dụ EVT-0001
  * @property string      $name
  * @property string|null $description

@@ -19,6 +19,7 @@ class StoreEvaluationTemplateRequest extends FormRequest
             'name'        => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'is_active'   => ['boolean'],
+            'is_global'   => ['boolean'],
 
             'criteria'                        => ['required', 'array', 'min:1'],
             'criteria.*.evaluation_criteria_id' => ['required', 'integer'],

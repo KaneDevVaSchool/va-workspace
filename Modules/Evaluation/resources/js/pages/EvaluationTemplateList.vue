@@ -2,7 +2,8 @@
 //
 // manager/evaluation-templates — Mẫu đánh giá (Evaluation Giai đoạn C).
 // Mục sidebar RIÊNG (khác tiêu chí đánh giá — vẫn là tab trong
-// WorkspaceConfigHub), chỉ department_director/deputy trở lên xem được.
+// WorkspaceConfigHub). department_director/deputy trở lên quản lý mẫu
+// phòng ban; superadmin xem tất cả và tạo mẫu dùng chung toàn hệ thống.
 // Xem plans/2026-08-26-mau-danh-gia.md.
 //
 // PR2 — CRUD mẫu cơ bản: tên, mô tả, danh sách tiêu chí kèm trọng số.
@@ -120,9 +121,13 @@ const tableZoom = ref(loadZoom());
 // ─── computed ─────────────────────────────────────────────────────────────
 
 const hasDepartment = computed(() => Boolean(auth.user?.department?.id));
+const canViewAll = computed(() => auth.can('workspace_config.view_all'));
 const canManage = computed(() => auth.can('evaluation.manage_department'));
-/** Chỉ department_director trở lên — đánh dấu mẫu dùng chung toàn hệ thống. */
+/** Chỉ department_director trở lên + superadmin — đánh dấu mẫu dùng chung toàn hệ thống. */
 const canManageGlobal = computed(() => auth.can('evaluation.manage_global_template'));
+/** Superadmin không gắn phòng ban chỉ tạo được mẫu dùng chung. */
+const forceGlobalCreate = computed(() => canViewAll.value && !hasDepartment.value);
+const canCreate = computed(() => (hasDepartment.value && canManage.value) || forceGlobalCreate.value);
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase();
@@ -195,6 +200,10 @@ const shownColumns = computed(() => COLUMNS.filter((col) => visibleColumns[col.k
 function positionsText(template) {
   const names = (template.positions ?? []).map((p) => (p.kind === 'department' ? `${p.name} (phòng ban)` : p.name));
   return names.length ? names.join(', ') : '—';
+}
+
+function departmentText(template) {
+  return template.department?.name || (template.is_global ? 'Toàn hệ thống' : '—');
 }
 
 function filterHasValue(key) {
@@ -317,7 +326,7 @@ function computeDefaultWidths() {
         if (col.key === 'status') val = row.is_active ? 'Hoạt động' : 'Không hoạt động';
         if (col.key === 'positions') val = positionsText(row);
         if (col.key === 'is_global') val = row.is_global ? 'Có' : 'Không';
-        if (col.key === 'department') val = row.department?.name ?? '';
+        if (col.key === 'department') val = departmentText(row);
         if (col.key === 'created_at') val = formatDateTime(row.created_at) || '—';
         const w = measureText(val) + CELL_PAD_X;
         if (w > max) max = w;
@@ -377,7 +386,7 @@ function startResize(event, colKey) {
 // ─── API ────────────────────────────────────────────────────────────────────
 
 async function load() {
-  if (!hasDepartment.value) {
+  if (!hasDepartment.value && !canViewAll.value) {
     allTemplates.value = [];
     allCriteria.value = [];
     allPositions.value = [];
@@ -385,14 +394,23 @@ async function load() {
   }
   loading.value = true;
   try {
+    const templatesReq = canViewAll.value
+      ? window.axios.get('/api/evaluation/templates', { params: { department_id: 'all' } })
+      : window.axios.get('/api/evaluation/templates');
+    const criteriaReq = hasDepartment.value
+      ? window.axios.get('/api/evaluation/criteria')
+      : Promise.resolve({ data: { criteria: [] } });
     const [templatesRes, criteriaRes, positionsRes] = await Promise.all([
-      window.axios.get('/api/evaluation/templates'),
-      window.axios.get('/api/evaluation/criteria'),
+      templatesReq,
+      criteriaReq,
       window.axios.get('/api/evaluation/positions'),
     ]);
     allTemplates.value = templatesRes.data.templates ?? [];
     allCriteria.value = criteriaRes.data.criteria ?? [];
     allPositions.value = positionsRes.data.positions ?? [];
+    if (forceGlobalCreate.value) {
+      loadGlobalCriteriaPool();
+    }
     await nextTick();
     computeDefaultWidths();
   } catch (err) {
@@ -452,6 +470,15 @@ async function exportExcel() {
   }
 }
 
+const exportOptions = computed(() => [
+  {
+    key: 'excel',
+    label: 'Xuất Excel',
+    description: 'Theo bộ lọc hiện tại trên trang.',
+    onSelect: exportExcel,
+  },
+]);
+
 async function loadGlobalCriteriaPool() {
   if (globalCriteriaPool.value.length > 0) return; // đã tải, không gọi lại mỗi lần mở form
   loadingGlobalPool.value = true;
@@ -463,6 +490,17 @@ async function loadGlobalCriteriaPool() {
   } finally {
     loadingGlobalPool.value = false;
   }
+}
+
+function canMutateTemplate(template) {
+  if (!template) return false;
+  if (canViewAll.value) return Boolean(template.is_global);
+  const deptId = auth.user?.department?.id;
+  return Boolean(canManage.value && deptId && template.department?.id === deptId);
+}
+
+function canToggleGlobal(template) {
+  return Boolean(canManageGlobal.value && canMutateTemplate(template) && template.department?.id);
 }
 
 function openCreate() {
@@ -654,13 +692,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="evtpl-page__wrap">
-    <PageHeader
-      title="Mẫu đánh giá"
-      icon="clipboardCheck"
-      :primary-action="canManage ? { label: 'Tạo mẫu', onClick: openCreate } : null"
-    />
-
     <div class="evtpl-page" :class="{ 'evtpl-page--with-panel': selected }">
+      <PageHeader
+        title="Mẫu đánh giá"
+        icon="clipboardCheck"
+        :primary-action="canCreate ? { label: 'Tạo mẫu', onClick: openCreate } : null"
+        export-label="Dữ liệu"
+        :export-options="hasDepartment || canViewAll ? exportOptions : []"
+        :export-busy-key="exporting ? 'excel' : undefined"
+      />
+
       <div class="evtpl-page__main">
         <div v-if="hasVisibleFilterFields" class="evtpl-page__toolbar">
           <div class="evtpl-page__filters">
@@ -750,13 +791,6 @@ onBeforeUnmount(() => {
               <span>{{ col.label }}</span>
             </label>
           </template>
-          <template #actions>
-            <button type="button" class="table-pages__icon" :disabled="exporting" @click="exportExcel">
-              <AppIcon v-if="exporting" name="refresh" :size="15" :stroke-width="1.75" />
-              <AppIcon v-else name="fileDown" :size="15" :stroke-width="1.75" />
-              <span>{{ exporting ? 'Đang xuất…' : 'Xuất Excel' }}</span>
-            </button>
-          </template>
         </TablePagesBar>
 
         <p v-if="hiddenActiveFilterLabels.length" class="evtpl-page__note">
@@ -769,11 +803,11 @@ onBeforeUnmount(() => {
           :class="{ 'evtpl-page__table-wrap--resizing': resizing }"
           :style="{ '--table-zoom': tableZoom }"
         >
-          <p v-if="!hasDepartment" class="evtpl-page__empty">Tài khoản chưa gắn với phòng ban nào.</p>
+          <p v-if="!hasDepartment && !canViewAll" class="evtpl-page__empty">Tài khoản chưa gắn với phòng ban nào.</p>
           <p v-else-if="loading" class="evtpl-page__empty">Đang tải…</p>
           <p v-else-if="allTemplates.length === 0" class="evtpl-page__empty">
             Chưa có mẫu đánh giá nào.
-            <template v-if="canManage">Bấm <strong>Tạo mẫu</strong> để bắt đầu.</template>
+            <template v-if="canCreate">Bấm <strong>Tạo mẫu</strong> để bắt đầu.</template>
           </p>
           <p v-else-if="pagedTemplates.length === 0" class="evtpl-page__empty">Không tìm thấy mẫu phù hợp.</p>
 
@@ -839,7 +873,7 @@ onBeforeUnmount(() => {
                     {{ template.is_global ? 'Có' : 'Không' }}
                   </span>
                 </td>
-                <td v-if="visibleColumns.department" class="evtpl-page__td">{{ template.department?.name || '—' }}</td>
+                <td v-if="visibleColumns.department" class="evtpl-page__td">{{ departmentText(template) }}</td>
                 <td v-if="visibleColumns.created_at" class="evtpl-page__td">
                   {{ formatDateTime(template.created_at) || '—' }}
                 </td>
@@ -867,7 +901,13 @@ onBeforeUnmount(() => {
                         aria-label="Thao tác mẫu đánh giá"
                         :style="{ top: actionMenuPos.top + 'px', left: actionMenuPos.left + 'px' }"
                       >
-                        <button type="button" role="menuitem" class="evtpl-page__action-item" @click="runRowAction(openEdit, template)">
+                        <button
+                          v-if="canMutateTemplate(template)"
+                          type="button"
+                          role="menuitem"
+                          class="evtpl-page__action-item"
+                          @click="runRowAction(openEdit, template)"
+                        >
                           <AppIcon name="pencil" :size="15" />
                           <span>Sửa</span>
                         </button>
@@ -882,6 +922,7 @@ onBeforeUnmount(() => {
                           <span>Nhân bản</span>
                         </button>
                         <button
+                          v-if="canMutateTemplate(template)"
                           type="button"
                           role="menuitem"
                           class="evtpl-page__action-item"
@@ -892,6 +933,7 @@ onBeforeUnmount(() => {
                           <span>{{ template.is_active ? 'Ẩn' : 'Hiện' }}</span>
                         </button>
                         <button
+                          v-if="canMutateTemplate(template)"
                           type="button"
                           role="menuitem"
                           class="evtpl-page__action-item evtpl-page__action-item--danger"
@@ -925,16 +967,21 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- ── panel chi tiết đẩy ngang ─────────────────────────────────────── -->
-      <aside v-if="selected" class="evtpl-page__side" aria-label="Chi tiết mẫu đánh giá">
+      <aside
+        v-if="selected"
+        class="evtpl-page__side"
+        role="complementary"
+        aria-label="Chi tiết mẫu đánh giá"
+      >
         <div class="evtpl-page__side-head">
-          <h2 class="evtpl-page__side-title">Chi tiết</h2>
-          <div style="display:flex;gap:0.375rem;align-items:center">
-            <button v-if="canManage" type="button" class="evtpl-page__panel-btn" @click="openEdit(selected)">
+          <span class="evtpl-page__side-title">Chi tiết</span>
+          <div class="evtpl-page__side-actions">
+            <button v-if="canMutateTemplate(selected)" type="button" class="evtpl-page__edit-btn" @click="openEdit(selected)">
               <AppIcon name="pencil" :size="14" />
               Sửa
             </button>
-            <button type="button" class="evtpl-page__icon-btn" aria-label="Đóng" @click="closePanel">
-              <AppIcon name="close" :size="16" />
+            <button type="button" class="evtpl-page__panel-btn" aria-label="Đóng" @click="closePanel">
+              <AppIcon name="close" :size="14" />
             </button>
           </div>
         </div>
@@ -976,10 +1023,9 @@ onBeforeUnmount(() => {
                   {{ selected.is_global ? 'Có' : 'Không' }}
                 </span>
                 <button
-                  v-if="canManageGlobal"
+                  v-if="canToggleGlobal(selected)"
                   type="button"
-                  class="evtpl-page__panel-btn"
-                  style="margin-left: var(--space-2)"
+                  class="evtpl-page__edit-btn"
                   :disabled="togglingId === selected.id"
                   @click="toggleGlobalTemplate(selected)"
                 >
@@ -989,7 +1035,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="evtpl-page__row">
               <span class="evtpl-page__row-label">Phòng ban</span>
-              <span class="evtpl-page__row-value">{{ selected.department?.name || '—' }}</span>
+              <span class="evtpl-page__row-value">{{ departmentText(selected) }}</span>
             </div>
             <div class="evtpl-page__row">
               <span class="evtpl-page__row-label">Điểm tối đa</span>
@@ -1052,6 +1098,7 @@ onBeforeUnmount(() => {
       :loading-global-pool="loadingGlobalPool"
       :all-positions="allPositions"
       :can-manage-global="canManageGlobal"
+      :force-global="forceGlobalCreate"
       @created="onTemplateCreated"
       @position-created="onPositionCreated"
       @request-global-pool="loadGlobalCriteriaPool"
@@ -1086,110 +1133,116 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* ─── layout — khớp EvaluationView.vue ────────────────────────────────────── */
 .evtpl-page__wrap {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
-}
-
-.evtpl-page {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  gap: var(--space-4);
-  padding: var(--space-4);
   overflow: hidden;
 }
 
-.evtpl-page__main {
-  display: flex;
+.evtpl-page {
   flex: 1;
-  min-width: 0;
-  flex-direction: column;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  padding: var(--space-4);
   gap: var(--space-3);
 }
 
-/* ── toolbar / filters ─────────────────────────────────────────────── */
-
-.evtpl-page__toolbar {
+.evtpl-page__main {
+  flex: 1;
+  min-width: 0;
   display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.evtpl-page__side {
+  flex: 0 0 28rem;
+  width: 28rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+/* ─── filters ─────────────────────────────────────────────────────────────── */
+.evtpl-page__toolbar {
+  position: relative;
+  z-index: 6;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
 }
 
 .evtpl-page__filters {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
+  width: 100%;
 }
 
 .evtpl-page__field {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  min-width: 12rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .evtpl-page__label {
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
+  color: var(--color-text-muted);
 }
 
 .evtpl-page__input {
-  padding: 0.5rem 0.75rem;
+  width: 100%;
+  padding: 0.4375rem 0.625rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: 0.875rem;
   font-family: var(--font-family-base);
+  font-size: 0.875rem;
 }
 
 .evtpl-page__input:focus {
-  outline: 2px solid var(--color-primary-200);
-  outline-offset: 1px;
-}
-
-.evtpl-page__input--error {
-  box-shadow: 0 0 0 1px var(--color-danger);
-}
-
-.evtpl-page__textarea {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 0.875rem;
-  font-family: var(--font-family-base);
-  resize: vertical;
+  outline: 2px solid var(--color-primary);
+  outline-offset: -1px;
 }
 
 .evtpl-page__check {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  font-size: 0.8125rem;
+  gap: 0.5rem;
+  padding: 0.375rem 0;
   color: var(--color-text);
+  font-size: 0.8125rem;
   cursor: pointer;
 }
 
 .evtpl-page__note {
-  margin: 0;
+  flex-shrink: 0;
+  margin: 0 0 var(--space-2);
   color: var(--color-text-muted);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
 }
 
-/* ── table ──────────────────────────────────────────────────────────── */
-
+/* ─── table ───────────────────────────────────────────────────────────────── */
 .evtpl-page__table-wrap {
   flex: 1;
   min-height: 0;
   overflow: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  zoom: var(--table-zoom, 1);
 }
 
 .evtpl-page__table-wrap--resizing {
@@ -1202,20 +1255,23 @@ onBeforeUnmount(() => {
   min-width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
+  font-size: calc(0.875rem * var(--table-zoom, 1));
 }
 
 .evtpl-page__th {
-  position: relative;
-  padding: var(--space-2) var(--space-3);
-  text-align: left;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-3) var(--space-4);
   background: var(--color-surface-muted);
-  box-shadow: 0 1px 0 var(--color-border);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-align: left;
+  vertical-align: middle;
   white-space: nowrap;
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
 .evtpl-page__th--center {
@@ -1226,22 +1282,29 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 0;
   right: 0;
-  bottom: 0;
+  z-index: 2;
   width: 0.5rem;
+  height: 100%;
+  padding: 0;
   border: none;
   background: transparent;
   cursor: col-resize;
-  padding: 0;
 }
 
 .evtpl-page__resize::after {
   content: '';
   position: absolute;
-  top: 20%;
-  bottom: 20%;
-  right: 0;
+  top: 25%;
+  right: 2px;
   width: 1px;
+  height: 50%;
   background: var(--color-border);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.evtpl-page__th:hover .evtpl-page__resize::after {
+  opacity: 1;
 }
 
 .evtpl-page__tr {
@@ -1253,17 +1316,16 @@ onBeforeUnmount(() => {
 }
 
 .evtpl-page__tr--active td {
-  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
 .evtpl-page__td {
-  padding: var(--space-2) var(--space-3);
-  box-shadow: 0 1px 0 var(--color-border);
-  color: var(--color-text);
-  font-size: 0.875rem;
+  padding: var(--space-3) var(--space-4);
+  vertical-align: middle;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
 .evtpl-page__td--center {
@@ -1275,7 +1337,7 @@ onBeforeUnmount(() => {
 }
 
 .evtpl-page__empty {
-  padding: var(--space-6);
+  margin: 2rem auto;
   text-align: center;
   color: var(--color-text-muted);
   font-size: 0.875rem;
@@ -1355,39 +1417,11 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
 }
 
-.evtpl-page__icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border: none;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.evtpl-page__icon-btn:hover {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-}
-
-.evtpl-page__icon-btn--danger:hover {
-  color: var(--color-danger);
-}
-
-.evtpl-page__icon-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ── chấm trạng thái (thay badge — CLAUDE.md §14) ─────────────────── */
-
 .evtpl-page__status {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 0.375rem;
+  color: var(--color-text);
 }
 
 .evtpl-page__dot {
@@ -1402,64 +1436,81 @@ onBeforeUnmount(() => {
 }
 
 .evtpl-page__dot--inactive {
-  background: var(--color-border-strong);
+  background: var(--color-text-muted);
 }
 
-/* ── panel chi tiết đẩy ngang ──────────────────────────────────────── */
-
-.evtpl-page__side {
-  flex-shrink: 0;
-  width: 28rem;
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-}
-
+/* ─── panel ───────────────────────────────────────────────────────────────── */
 .evtpl-page__side-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: 0 1px 0 var(--color-border);
   flex-shrink: 0;
 }
 
 .evtpl-page__side-title {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 1.0625rem;
   font-weight: 700;
+  font-size: 0.9375rem;
+}
+
+.evtpl-page__side-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.evtpl-page__panel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.evtpl-page__panel-btn:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.evtpl-page__edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.3125rem 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.evtpl-page__edit-btn:hover:not(:disabled) {
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+.evtpl-page__edit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .evtpl-page__side-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  margin-top: var(--space-3);
+  padding: var(--space-4);
 }
 
-.evtpl-page__panel-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 0.3125rem 0.625rem;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.evtpl-page__panel-btn:hover {
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
-}
-
-/* Field ngay hàng — CLAUDE.md §14 */
 .evtpl-page__rows {
   display: flex;
   flex-direction: column;
@@ -1472,6 +1523,7 @@ onBeforeUnmount(() => {
   gap: var(--space-3);
   padding: var(--space-2) 0;
   box-shadow: 0 1px 0 var(--color-border);
+  font-size: 0.875rem;
 }
 
 .evtpl-page__row:last-child {
@@ -1488,6 +1540,9 @@ onBeforeUnmount(() => {
 }
 
 .evtpl-page__row-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   color: var(--color-text);
   font-style: italic;
   text-align: right;
@@ -1502,39 +1557,45 @@ onBeforeUnmount(() => {
 }
 
 .evtpl-page__criteria-list {
-  list-style: none;
   margin: 0;
   padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
 }
 
 .evtpl-page__criteria-item {
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.evtpl-page__criteria-item:last-child {
+  box-shadow: none;
 }
 
 .evtpl-page__criteria-copy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
+  min-width: 0;
 }
 
 .evtpl-page__criteria-name {
-  font-weight: 600;
   color: var(--color-text);
   font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .evtpl-page__criteria-meta {
   color: var(--color-text-muted);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
 }
 
-/* ── nút chung ──────────────────────────────────────────────────────── */
-
+/* ─── nút confirm ─────────────────────────────────────────────────────────── */
 .evtpl-page__btn {
   display: inline-flex;
   align-items: center;
@@ -1570,16 +1631,6 @@ onBeforeUnmount(() => {
 .evtpl-page__btn--danger {
   background: var(--color-danger);
 }
-
-/*
- * CSS dialog Tạo/Sửa mẫu (evtpl-dialog*, evtpl-form*, evtpl-criteria-picker*,
- * evtpl-position-picker*, evtpl-custom-field*) đã chuyển sang các component
- * con (Modules/Evaluation/resources/js/components/) — xem PR4/PR5 của
- * plans/2026-08-26-mau-danh-gia.md. Style scoped không kế thừa qua file nên
- * mỗi component con tự khai báo lại phần CSS nó cần.
- */
-
-/* ── confirm xoá (alertdialog nhỏ, tách riêng form-modal) ──────────── */
 
 .evtpl-confirm-overlay {
   position: fixed;
@@ -1620,8 +1671,7 @@ onBeforeUnmount(() => {
   gap: var(--space-2);
 }
 
-/* ── responsive ─────────────────────────────────────────────────────── */
-
+/* ─── responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 1279px) {
   .evtpl-page {
     flex-direction: column;
@@ -1629,13 +1679,18 @@ onBeforeUnmount(() => {
 
   .evtpl-page__side {
     width: 100%;
+    flex: 1 1 auto;
     max-height: 42%;
   }
 }
 
 @media (max-width: 768px) {
   .evtpl-page {
-    padding: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .evtpl-page__filters {
+    grid-template-columns: 1fr;
   }
 }
 </style>

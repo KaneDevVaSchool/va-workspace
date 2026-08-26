@@ -6,9 +6,9 @@
  * Modules/WorkspaceConfig/resources/js/router.js). Đây là quyết định đổi
  * có chủ đích so với Giai đoạn B — xem plans/2026-08-26-mau-danh-gia.md §2.3.
  *
- * Chỉ department_director/deputy_department_director trở lên xem được
- * (permission evaluation.manage_department, kiểm tra ở AppSidebar.vue qua
- * requiresPermission) — section_head/team_lead/member không có mục này.
+ * department_director/deputy trở lên (evaluation.manage_department) và
+ * superadmin (tạo mẫu dùng chung) xem được — kiểm tra ở AppSidebar.vue
+ * qua requiresPermission. section_head/team_lead/member không có mục này.
  */
 export default [
   {

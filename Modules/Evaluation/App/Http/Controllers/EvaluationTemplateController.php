@@ -18,9 +18,11 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 /**
  * Manager JSON (middleware web + session, bọc qua EvaluationServiceProvider):
  *   GET    /api/evaluation/templates                — mẫu của phòng ban user + mọi mẫu is_global
+ *                                                      (superadmin: toàn bộ mẫu)
  *   GET    /api/evaluation/templates?department_id= — toàn bộ mẫu, chỉ superadmin (workspace_config.view_all)
  *   GET    /api/evaluation/templates/{id}
- *   POST   /api/evaluation/templates                — tạo mẫu mới (evaluation.manage_department)
+ *   POST   /api/evaluation/templates                — tạo mẫu mới (evaluation.manage_department,
+ *                                                      hoặc evaluation.manage_global_template khi không có phòng ban)
  *   PUT    /api/evaluation/templates/{id}
  *   DELETE /api/evaluation/templates/{id}
  *   PATCH  /api/evaluation/templates/{id}/toggle          — bật/tắt is_active
@@ -30,8 +32,8 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  *                                                            (evaluation.manage_global_template)
  *   GET    /api/evaluation/templates/export               — xuất Excel theo bộ lọc hiện tại (PR6, CHỈ xuất — không nhập lại)
  *
- * department_id luôn lấy từ user (manager route), trừ khi có ?department_id
- * kèm quyền workspace_config.view_all (superadmin xem tổng hợp, không sửa).
+ * Superadmin (workspace_config.view_all) xem mọi mẫu, tạo/sửa mẫu dùng chung
+ * (is_global, có thể không gắn phòng ban). Trưởng phòng chỉ sửa mẫu của phòng mình.
  * Xem plans/2026-08-26-mau-danh-gia.md.
  */
 class EvaluationTemplateController extends Controller
@@ -44,10 +46,11 @@ class EvaluationTemplateController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
         $queryDeptId = $request->query('department_id');
 
-        if ($queryDeptId !== null) {
-            if (! $this->permissions->allows($request->user(), 'workspace_config.view_all')) {
+        if ($queryDeptId !== null || $this->canViewAll($user)) {
+            if (! $this->canViewAll($user)) {
                 return response()->json(['message' => 'Không có quyền xem mẫu đánh giá phòng ban khác.'], 403);
             }
 
@@ -64,12 +67,7 @@ class EvaluationTemplateController extends Controller
 
     public function show(Request $request, int $id): JsonResponse
     {
-        $departmentId = $this->departmentIdOrFail($request);
-        if ($departmentId instanceof JsonResponse) {
-            return $departmentId;
-        }
-
-        $template = $this->service->findVisibleOrFail($id, $departmentId);
+        $template = $this->findAccessibleOrFail($request, $id);
         if ($template instanceof JsonResponse) {
             return $template;
         }
@@ -79,43 +77,45 @@ class EvaluationTemplateController extends Controller
 
     public function store(StoreEvaluationTemplateRequest $request): JsonResponse
     {
-        $departmentId = $this->departmentIdOrFail($request);
-        if ($departmentId instanceof JsonResponse) {
-            return $departmentId;
-        }
+        $user = $request->user();
+        $departmentId = $this->departmentIdOf($user);
+        $wantGlobal = $request->boolean('is_global');
 
-        if (! $this->permissions->allows($request->user(), 'evaluation.manage_department', 'department', $departmentId)) {
+        if ($departmentId === null) {
+            if (! $this->permissions->allows($user, 'evaluation.manage_global_template')) {
+                return response()->json(['message' => 'Tài khoản chưa gắn với phòng ban nào.'], 422);
+            }
+            $wantGlobal = true;
+        } elseif ($wantGlobal) {
+            if (! $this->permissions->allows($user, 'evaluation.manage_global_template', 'department', $departmentId)) {
+                return response()->json(['message' => 'Bạn không có quyền tạo mẫu dùng chung toàn hệ thống.'], 403);
+            }
+        } elseif (! $this->permissions->allows($user, 'evaluation.manage_department', 'department', $departmentId)) {
             return response()->json(['message' => 'Bạn không có quyền tạo mẫu đánh giá.'], 403);
         }
 
-        $result = $this->service->create($departmentId, (int) $request->user()->id, $request->validated());
+        $data = $request->validated();
+        $data['is_global'] = $wantGlobal;
+
+        $result = $this->service->create($departmentId, (int) $user->id, $data);
         if (is_array($result) && isset($result['error'])) {
             return response()->json(['message' => $result['error']], 422);
         }
 
-        $this->recordActivity('evaluation_template.create', 'Tạo mẫu đánh giá "'.$result->name.'"', $request->user(), $result);
+        $this->recordActivity('evaluation_template.create', 'Tạo mẫu đánh giá "'.$result->name.'"', $user, $result);
 
         return response()->json(['template' => $this->service->present($result)], 201);
     }
 
     public function update(UpdateEvaluationTemplateRequest $request, int $id): JsonResponse
     {
-        $departmentId = $this->departmentIdOrFail($request);
-        if ($departmentId instanceof JsonResponse) {
-            return $departmentId;
-        }
-
-        if (! $this->permissions->allows($request->user(), 'evaluation.manage_department', 'department', $departmentId)) {
-            return response()->json(['message' => 'Bạn không có quyền cập nhật mẫu đánh giá.'], 403);
-        }
-
-        $template = $this->service->findVisibleOrFail($id, $departmentId);
+        $template = $this->findAccessibleOrFail($request, $id);
         if ($template instanceof JsonResponse) {
             return $template;
         }
 
-        if ((int) $template->department_id !== $departmentId) {
-            return response()->json(['message' => 'Chỉ phòng ban tạo ra mẫu mới được sửa mẫu này.'], 403);
+        if (! $this->canMutate($request->user(), $template)) {
+            return response()->json(['message' => 'Bạn không có quyền cập nhật mẫu đánh giá.'], 403);
         }
 
         $result = $this->service->update($template, $request->validated(), (int) $request->user()->id);
@@ -130,22 +130,13 @@ class EvaluationTemplateController extends Controller
 
     public function destroy(Request $request, int $id): JsonResponse
     {
-        $departmentId = $this->departmentIdOrFail($request);
-        if ($departmentId instanceof JsonResponse) {
-            return $departmentId;
-        }
-
-        if (! $this->permissions->allows($request->user(), 'evaluation.manage_department', 'department', $departmentId)) {
-            return response()->json(['message' => 'Bạn không có quyền xoá mẫu đánh giá.'], 403);
-        }
-
-        $template = $this->service->findVisibleOrFail($id, $departmentId);
+        $template = $this->findAccessibleOrFail($request, $id);
         if ($template instanceof JsonResponse) {
             return $template;
         }
 
-        if ((int) $template->department_id !== $departmentId) {
-            return response()->json(['message' => 'Chỉ phòng ban tạo ra mẫu mới được xoá mẫu này.'], 403);
+        if (! $this->canMutate($request->user(), $template)) {
+            return response()->json(['message' => 'Bạn không có quyền xoá mẫu đánh giá.'], 403);
         }
 
         $name = $template->name;
@@ -157,18 +148,13 @@ class EvaluationTemplateController extends Controller
 
     public function toggle(Request $request, int $id): JsonResponse
     {
-        $departmentId = $this->departmentIdOrFail($request);
-        if ($departmentId instanceof JsonResponse) {
-            return $departmentId;
-        }
-
-        if (! $this->permissions->allows($request->user(), 'evaluation.manage_department', 'department', $departmentId)) {
-            return response()->json(['message' => 'Bạn không có quyền cập nhật mẫu đánh giá.'], 403);
-        }
-
-        $template = $this->service->findVisibleOrFail($id, $departmentId);
+        $template = $this->findAccessibleOrFail($request, $id);
         if ($template instanceof JsonResponse) {
             return $template;
+        }
+
+        if (! $this->canMutate($request->user(), $template)) {
+            return response()->json(['message' => 'Bạn không có quyền cập nhật mẫu đánh giá.'], 403);
         }
 
         $updated = $this->service->toggleActive($template, (int) $request->user()->id);
@@ -183,33 +169,34 @@ class EvaluationTemplateController extends Controller
         return response()->json(['template' => $this->service->present($updated)]);
     }
 
-    /** Bật/tắt dùng chung toàn hệ thống — reserved cho department_director trở lên. */
+    /** Bật/tắt dùng chung toàn hệ thống — department_director trở lên + superadmin. */
     public function toggleGlobal(Request $request, int $id): JsonResponse
     {
-        $departmentId = $this->departmentIdOrFail($request);
-        if ($departmentId instanceof JsonResponse) {
-            return $departmentId;
-        }
-
-        if (! $this->permissions->allows($request->user(), 'evaluation.manage_global_template', 'department', $departmentId)) {
-            return response()->json(['message' => 'Bạn không có quyền đánh dấu mẫu dùng chung toàn hệ thống.'], 403);
-        }
-
-        $template = $this->service->findVisibleOrFail($id, $departmentId);
+        $user = $request->user();
+        $template = $this->findAccessibleOrFail($request, $id);
         if ($template instanceof JsonResponse) {
             return $template;
         }
 
-        if ((int) $template->department_id !== $departmentId) {
-            return response()->json(['message' => 'Chỉ phòng ban tạo ra mẫu mới được đổi trạng thái dùng chung.'], 403);
+        $departmentId = $this->departmentIdOf($user);
+        if (! $this->permissions->allows($user, 'evaluation.manage_global_template', 'department', $departmentId)) {
+            return response()->json(['message' => 'Bạn không có quyền đánh dấu mẫu dùng chung toàn hệ thống.'], 403);
         }
 
-        $updated = $this->service->toggleGlobal($template, (int) $request->user()->id);
+        if (! $this->canMutate($user, $template)) {
+            return response()->json(['message' => 'Chỉ người quản lý mẫu mới được đổi trạng thái dùng chung.'], 403);
+        }
+
+        if ($template->department_id === null && $template->is_global) {
+            return response()->json(['message' => 'Mẫu dùng chung do hệ thống tạo không thể bỏ dùng chung.'], 422);
+        }
+
+        $updated = $this->service->toggleGlobal($template, (int) $user->id);
 
         $this->recordActivity(
             'evaluation_template.update',
             ($updated->is_global ? 'Đánh dấu dùng chung toàn hệ thống' : 'Bỏ dùng chung toàn hệ thống').' cho mẫu đánh giá "'.$updated->name.'"',
-            $request->user(),
+            $user,
             $updated,
         );
 
@@ -218,23 +205,25 @@ class EvaluationTemplateController extends Controller
 
     public function duplicate(Request $request, int $id): JsonResponse
     {
-        $departmentId = $this->departmentIdOrFail($request);
-        if ($departmentId instanceof JsonResponse) {
-            return $departmentId;
-        }
-
-        if (! $this->permissions->allows($request->user(), 'evaluation.manage_department', 'department', $departmentId)) {
-            return response()->json(['message' => 'Bạn không có quyền nhân bản mẫu đánh giá.'], 403);
-        }
-
-        $template = $this->service->findVisibleOrFail($id, $departmentId);
+        $user = $request->user();
+        $template = $this->findAccessibleOrFail($request, $id);
         if ($template instanceof JsonResponse) {
             return $template;
         }
 
-        $copy = $this->service->duplicate($template, $departmentId, (int) $request->user()->id);
+        $departmentId = $this->departmentIdOf($user);
 
-        $this->recordActivity('evaluation_template.create', 'Nhân bản mẫu đánh giá "'.$copy->name.'"', $request->user(), $copy);
+        if ($departmentId === null) {
+            if (! $this->permissions->allows($user, 'evaluation.manage_global_template')) {
+                return response()->json(['message' => 'Bạn không có quyền nhân bản mẫu đánh giá.'], 403);
+            }
+        } elseif (! $this->permissions->allows($user, 'evaluation.manage_department', 'department', $departmentId)) {
+            return response()->json(['message' => 'Bạn không có quyền nhân bản mẫu đánh giá.'], 403);
+        }
+
+        $copy = $this->service->duplicate($template, $departmentId, (int) $user->id);
+
+        $this->recordActivity('evaluation_template.create', 'Nhân bản mẫu đánh giá "'.$copy->name.'"', $user, $copy);
 
         return response()->json(['template' => $this->service->present($copy)], 201);
     }
@@ -245,12 +234,10 @@ class EvaluationTemplateController extends Controller
      */
     public function globalCriteriaPool(Request $request): JsonResponse
     {
-        $departmentId = $this->departmentIdOrFail($request);
-        if ($departmentId instanceof JsonResponse) {
-            return $departmentId;
-        }
+        $user = $request->user();
+        $departmentId = $this->departmentIdOf($user);
 
-        if (! $this->permissions->allows($request->user(), 'evaluation.manage_global_template', 'department', $departmentId)) {
+        if (! $this->permissions->allows($user, 'evaluation.manage_global_template', 'department', $departmentId)) {
             return response()->json(['message' => 'Bạn không có quyền xem tiêu chí phòng ban khác.'], 403);
         }
 
@@ -264,21 +251,72 @@ class EvaluationTemplateController extends Controller
      */
     public function export(ExportEvaluationTemplateRequest $request): BinaryFileResponse|JsonResponse
     {
+        $user = $request->user();
+
+        if ($this->canViewAll($user)) {
+            return $this->service->export(null, $request->filters(), $user);
+        }
+
         $departmentId = $this->departmentIdOrFail($request);
         if ($departmentId instanceof JsonResponse) {
             return $departmentId;
         }
 
-        return $this->service->export($departmentId, $request->filters(), $request->user());
+        return $this->service->export($departmentId, $request->filters(), $user);
+    }
+
+    private function canViewAll(?User $user): bool
+    {
+        return $user !== null && $this->permissions->allows($user, 'workspace_config.view_all');
+    }
+
+    private function departmentIdOf(?User $user): ?int
+    {
+        return $user?->department_id ? (int) $user->department_id : null;
     }
 
     private function departmentIdOrFail(Request $request): int|JsonResponse
     {
-        $departmentId = $request->user()?->department_id;
+        $departmentId = $this->departmentIdOf($request->user());
 
         return $departmentId
-            ? (int) $departmentId
+            ? $departmentId
             : response()->json(['message' => 'Tài khoản chưa gắn với phòng ban nào.'], 422);
+    }
+
+    private function findAccessibleOrFail(Request $request, int $id): EvaluationTemplate|JsonResponse
+    {
+        if ($this->canViewAll($request->user())) {
+            return $this->service->findOrFail($id);
+        }
+
+        $departmentId = $this->departmentIdOrFail($request);
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
+        }
+
+        return $this->service->findVisibleOrFail($id, $departmentId);
+    }
+
+    /**
+     * Superadmin sửa được mẫu dùng chung. Trưởng phòng chỉ sửa mẫu của phòng mình.
+     */
+    private function canMutate(?User $user, EvaluationTemplate $template): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        if ($this->canViewAll($user)) {
+            return $template->is_global;
+        }
+
+        $departmentId = $this->departmentIdOf($user);
+        if ($departmentId === null || (int) $template->department_id !== $departmentId) {
+            return false;
+        }
+
+        return $this->permissions->allows($user, 'evaluation.manage_department', 'department', $departmentId);
     }
 
     private function recordActivity(string $action, string $description, ?User $actor, EvaluationTemplate $template): void
@@ -290,7 +328,7 @@ class EvaluationTemplateController extends Controller
             'evaluation_template',
             (int) $template->id,
             [
-                'department_id' => (int) $template->department_id,
+                'department_id' => $template->department_id !== null ? (int) $template->department_id : null,
                 'name'          => $template->name,
             ],
         );

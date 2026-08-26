@@ -55,16 +55,17 @@ class EvaluationTemplateService
     }
 
     /**
-     * Xuất mẫu (của phòng ban + mọi mẫu is_global) ra Excel theo đúng bộ lọc
-     * đang dùng ở trang danh sách. CHỈ xuất (đọc) — không có chiều nhập lại,
-     * xem ghi chú ở EvaluationTemplateExcelExporter.
+     * Xuất mẫu ra Excel theo đúng bộ lọc đang dùng ở trang danh sách.
+     * `$departmentId = null` → toàn bộ mẫu (superadmin). Ngược lại: mẫu của
+     * phòng ban + mọi mẫu is_global. CHỈ xuất (đọc) — không có chiều nhập lại.
      *
      * @param  array{q?: string, status?: string}  $filters
      */
-    public function export(int $departmentId, array $filters, ?User $exportedBy): BinaryFileResponse
+    public function export(?int $departmentId, array $filters, ?User $exportedBy): BinaryFileResponse
     {
-        $templates = $this->templates
-            ->visibleForDepartment($departmentId)
+        $templates = ($departmentId === null
+            ? $this->templates->all()
+            : $this->templates->visibleForDepartment($departmentId))
             ->filter(fn (EvaluationTemplate $t) => $this->matchesFilters($t, $filters));
 
         $rows = $templates->map(fn (EvaluationTemplate $t) => $this->presentForExport($t))->values()->all();
@@ -126,7 +127,7 @@ class EvaluationTemplateService
             'code'               => $template->code,
             'name'               => $template->name,
             'description'        => $template->description ?? '',
-            'department_name'    => $template->department?->name ?? '',
+            'department_name'    => $template->department?->name ?? ($template->is_global ? 'Toàn hệ thống' : ''),
             'is_global_label'    => $template->is_global ? 'Có' : 'Không',
             'status_label'       => $template->is_active ? 'Hoạt động' : 'Không hoạt động',
             'criteria_count'     => $template->templateCriteria->count(),
@@ -138,6 +139,20 @@ class EvaluationTemplateService
             'updater_name'       => $template->updater?->name ?? '',
             'created_at'         => $template->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * @return \Modules\Evaluation\App\Models\EvaluationTemplate|\Illuminate\Http\JsonResponse
+     */
+    public function findOrFail(int $id)
+    {
+        $template = $this->templates->find($id);
+
+        if ($template === null) {
+            return response()->json(['message' => 'Không tìm thấy mẫu đánh giá.'], 404);
+        }
+
+        return $template;
     }
 
     /**
@@ -158,9 +173,15 @@ class EvaluationTemplateService
      * @param  array<string, mixed>  $data
      * @return \Modules\Evaluation\App\Models\EvaluationTemplate|array{error: string}
      */
-    public function create(int $departmentId, int $createdBy, array $data): EvaluationTemplate|array
+    public function create(?int $departmentId, int $createdBy, array $data): EvaluationTemplate|array
     {
-        $rows = $this->buildCriteriaRows($data['criteria'] ?? [], $departmentId, isGlobal: false);
+        $isGlobal = (bool) ($data['is_global'] ?? false);
+
+        if (! $isGlobal && $departmentId === null) {
+            return ['error' => 'Mẫu đánh giá của phòng ban phải gắn với một phòng ban.'];
+        }
+
+        $rows = $this->buildCriteriaRows($data['criteria'] ?? [], $departmentId, $isGlobal);
         if (is_array($rows) && isset($rows['error'])) {
             return $rows;
         }
@@ -180,7 +201,7 @@ class EvaluationTemplateService
             'code'          => $this->generateCode(),
             'name'          => trim($data['name']),
             'description'   => isset($data['description']) ? trim($data['description']) : null,
-            'is_global'     => false,
+            'is_global'     => $isGlobal,
             'is_active'     => $data['is_active'] ?? true,
             'created_by'    => $createdBy,
             'updated_by'    => $createdBy,
@@ -213,7 +234,11 @@ class EvaluationTemplateService
         $updated = $this->templates->update($template, $payload);
 
         if (array_key_exists('criteria', $data)) {
-            $rows = $this->buildCriteriaRows($data['criteria'], (int) $updated->department_id, $updated->is_global);
+            $rows = $this->buildCriteriaRows(
+                $data['criteria'],
+                $updated->department_id !== null ? (int) $updated->department_id : null,
+                $updated->is_global,
+            );
             if (is_array($rows) && isset($rows['error'])) {
                 return $rows;
             }
@@ -285,18 +310,20 @@ class EvaluationTemplateService
     }
 
     /**
-     * Nhân bản mẫu — tạo mẫu mới cùng phòng ban người thao tác, copy toàn bộ
-     * tiêu chí + trọng số. Mẫu nhân bản luôn is_global = false (không tự
-     * động kế thừa trạng thái dùng chung, tránh phát sinh mẫu chung ngoài ý muốn).
+     * Nhân bản mẫu. Trưởng phòng: copy về phòng ban mình, luôn is_global = false
+     * (không tự kế thừa trạng thái dùng chung). Superadmin không có phòng ban:
+     * copy thành mẫu dùng chung (department_id null, is_global = true).
      */
-    public function duplicate(EvaluationTemplate $template, int $departmentId, int $createdBy): EvaluationTemplate
+    public function duplicate(EvaluationTemplate $template, ?int $departmentId, int $createdBy): EvaluationTemplate
     {
+        $isGlobal = $departmentId === null;
+
         $copy = $this->templates->create([
             'department_id' => $departmentId,
             'code'          => $this->generateCode(),
             'name'          => $template->name.' (bản sao)',
             'description'   => $template->description,
-            'is_global'     => false,
+            'is_global'     => $isGlobal,
             'is_active'     => true,
             'created_by'    => $createdBy,
             'updated_by'    => $createdBy,
@@ -335,7 +362,7 @@ class EvaluationTemplateService
      * @param  array<int, array<string, mixed>>  $rawRows
      * @return list<array{evaluation_criteria_id: int, weight_label: string, weight_value: int, required_score: int|null, count_in_total: bool}>|array{error: string}
      */
-    private function buildCriteriaRows(array $rawRows, int $templateDepartmentId, bool $isGlobal): array
+    private function buildCriteriaRows(array $rawRows, ?int $templateDepartmentId, bool $isGlobal): array
     {
         $rows = [];
 
@@ -347,7 +374,7 @@ class EvaluationTemplateService
                 return ['error' => 'Tiêu chí đánh giá không hợp lệ hoặc đã ngừng áp dụng.'];
             }
 
-            if (! $isGlobal && (int) $criterion->department_id !== $templateDepartmentId) {
+            if (! $isGlobal && ($templateDepartmentId === null || (int) $criterion->department_id !== $templateDepartmentId)) {
                 return ['error' => 'Chỉ được chọn tiêu chí thuộc phòng ban của mẫu này.'];
             }
 
