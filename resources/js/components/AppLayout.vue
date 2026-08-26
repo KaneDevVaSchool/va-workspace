@@ -115,6 +115,7 @@ onBeforeUnmount(() => {
 }
 
 .app-layout__main {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -142,16 +143,16 @@ onBeforeUnmount(() => {
 }
 
 .app-layout__header-reveal {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 30;
-  flex-shrink: 0;
-  align-self: center;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 2.75rem;
   height: 0.9375rem;
-  margin-top: -1px;
   border: none;
   border-radius: 0 0 var(--radius-md) var(--radius-md);
   background: var(--color-surface);
