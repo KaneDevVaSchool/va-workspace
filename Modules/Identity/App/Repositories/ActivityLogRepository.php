@@ -62,6 +62,47 @@ class ActivityLogRepository implements ActivityLogRepositoryInterface
             ->pluck('subject_type');
     }
 
+    public function recentForSubject(
+        string $subjectType,
+        array $subjectIds = [],
+        array $propertyMatches = [],
+        int $limit = 80,
+    ): Collection {
+        $ids = array_values(array_unique(array_filter(
+            array_map('intval', $subjectIds),
+            fn (int $id) => $id > 0,
+        )));
+
+        if ($ids === [] && $propertyMatches === []) {
+            return collect();
+        }
+
+        $query = ActivityLog::query()
+            ->with(['actor.department'])
+            ->where('subject_type', $subjectType)
+            ->where(function (Builder $inner) use ($ids, $propertyMatches) {
+                $started = false;
+                if ($ids !== []) {
+                    $inner->whereIn('subject_id', $ids);
+                    $started = true;
+                }
+                foreach ($propertyMatches as $key => $value) {
+                    $column = 'properties->'.$key;
+                    if ($started) {
+                        $inner->orWhere($column, $value);
+                    } else {
+                        $inner->where($column, $value);
+                        $started = true;
+                    }
+                }
+            })
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit($limit);
+
+        return $query->get();
+    }
+
     /** @param  array<string, mixed>  $filters */
     private function filteredQuery(array $filters): Builder
     {

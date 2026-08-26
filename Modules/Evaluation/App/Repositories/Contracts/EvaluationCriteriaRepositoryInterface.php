@@ -10,6 +10,9 @@ interface EvaluationCriteriaRepositoryInterface
     /** Tất cả tiêu chí của một phòng ban, sắp xếp theo sort_order, name. */
     public function allByDepartment(int $departmentId): Collection;
 
+    /** @return list<int> */
+    public function idsByDepartment(int $departmentId): array;
+
     public function find(int $id): ?EvaluationCriteria;
 
     /** Tìm theo id và đảm bảo thuộc phòng ban được phép. */
@@ -22,7 +25,10 @@ interface EvaluationCriteriaRepositoryInterface
     public function delete(EvaluationCriteria $criterion): bool;
 
     /** Đổi trạng thái is_active. */
-    public function toggleActive(EvaluationCriteria $criterion): EvaluationCriteria;
+    public function toggleActive(EvaluationCriteria $criterion, ?int $updatedBy = null): EvaluationCriteria;
+
+    /** Đổi trạng thái use_in_evaluation (hiện trên ĐGNL). */
+    public function toggleUseInEvaluation(EvaluationCriteria $criterion, ?int $updatedBy = null): EvaluationCriteria;
 
     /** Cập nhật sort_order theo mảng IDs (giữ nguyên phòng ban). */
     public function reorder(int $departmentId, array $orderedIds): void;

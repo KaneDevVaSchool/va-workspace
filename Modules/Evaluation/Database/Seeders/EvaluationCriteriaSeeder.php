@@ -61,6 +61,7 @@ class EvaluationCriteriaSeeder extends Seeder
                     'allow_half'        => $criterion['allow_half'],
                     'sort_order'        => $index,
                     'created_by'        => $createdBy,
+                    'updated_by'        => $createdBy,
                 ],
             );
         }

@@ -19,6 +19,7 @@ class DepartmentSidebarConfigService
     private const CONFIGURABLE_MENUS = [
         'home' => 'Tổng quan',
         'social.feed' => 'Bảng tin nội bộ',
+        'manager.evaluation.view' => 'Tiêu chí đánh giá',
     ];
 
     public function __construct(

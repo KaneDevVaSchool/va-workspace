@@ -57,6 +57,12 @@ const MENU_SECTIONS = [
       // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
       { name: 'home', label: 'Tổng quan', icon: 'dashboard', configurableByDepartment: true },
       { name: 'social.feed', label: 'Bảng tin nội bộ', icon: 'megaphone', configurableByDepartment: true },
+      {
+        name: 'manager.evaluation.view',
+        label: 'Tiêu chí đánh giá',
+        icon: 'clipboardCheck',
+        configurableByDepartment: true,
+      },
       { name: 'settings', label: 'Cài đặt', icon: 'settings' },
     ],
   },

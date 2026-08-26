@@ -40,11 +40,13 @@ Modules/WorkspaceConfig/
 │   ├── manager.php             # thành viên + sidebar, scope = phòng ban user hiện tại
 │   └── superadmin.php          # tổng hợp mọi phòng ban
 └── resources/js/pages/
-    ├── WorkspaceConfigHub.vue                       # entry point sidebar, tab điều hướng nội bộ
+    ├── WorkspaceConfigHub.vue                       # entry point sidebar, tab điều hướng nội bộ (manager)
     ├── WorkspaceConfigMembers.vue
     ├── WorkspaceConfigSidebar.vue
     ├── WorkspaceConfigOverviewSuperadmin.vue
-    └── WorkspaceConfigDepartmentDetailSuperadmin.vue
+    ├── WorkspaceConfigDepartmentDetailHub.vue        # entry point chi tiết phòng ban (superadmin), tab điều hướng nội bộ
+    ├── WorkspaceConfigDepartmentMembersSuperadmin.vue
+    └── WorkspaceConfigDepartmentSidebarSuperadmin.vue
 ```
 
 Model/Migration/Repository của bảng `department_sidebar_configs` đặt trong

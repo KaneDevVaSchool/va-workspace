@@ -11,22 +11,32 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
     public function allByDepartment(int $departmentId): Collection
     {
         return EvaluationCriteria::query()
-            ->with('criterionType')
+            ->with(EvaluationCriteria::WITH_PRESENT)
             ->where('department_id', $departmentId)
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
     }
 
+    public function idsByDepartment(int $departmentId): array
+    {
+        return EvaluationCriteria::query()
+            ->where('department_id', $departmentId)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
     public function find(int $id): ?EvaluationCriteria
     {
-        return EvaluationCriteria::query()->find($id);
+        return EvaluationCriteria::query()->with(EvaluationCriteria::WITH_PRESENT)->find($id);
     }
 
     public function findByDepartment(int $id, int $departmentId): ?EvaluationCriteria
     {
         return EvaluationCriteria::query()
-            ->with('criterionType')
+            ->with(EvaluationCriteria::WITH_PRESENT)
             ->where('id', $id)
             ->where('department_id', $departmentId)
             ->first();
@@ -35,7 +45,7 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
     public function create(array $data): EvaluationCriteria
     {
         $criterion = EvaluationCriteria::query()->create($data);
-        $criterion->load('criterionType');
+        $criterion->load(EvaluationCriteria::WITH_PRESENT);
 
         return $criterion;
     }
@@ -44,7 +54,7 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
     {
         $criterion->update($data);
 
-        return $criterion->fresh(['criterionType']);
+        return $criterion->fresh(EvaluationCriteria::WITH_PRESENT);
     }
 
     public function delete(EvaluationCriteria $criterion): bool
@@ -52,11 +62,26 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
         return (bool) $criterion->delete();
     }
 
-    public function toggleActive(EvaluationCriteria $criterion): EvaluationCriteria
+    public function toggleActive(EvaluationCriteria $criterion, ?int $updatedBy = null): EvaluationCriteria
     {
-        $criterion->update(['is_active' => ! $criterion->is_active]);
+        $payload = ['is_active' => ! $criterion->is_active];
+        if ($updatedBy !== null) {
+            $payload['updated_by'] = $updatedBy;
+        }
+        $criterion->update($payload);
 
-        return $criterion->fresh(['criterionType']);
+        return $criterion->fresh(EvaluationCriteria::WITH_PRESENT);
+    }
+
+    public function toggleUseInEvaluation(EvaluationCriteria $criterion, ?int $updatedBy = null): EvaluationCriteria
+    {
+        $payload = ['use_in_evaluation' => ! $criterion->use_in_evaluation];
+        if ($updatedBy !== null) {
+            $payload['updated_by'] = $updatedBy;
+        }
+        $criterion->update($payload);
+
+        return $criterion->fresh(EvaluationCriteria::WITH_PRESENT);
     }
 
     public function reorder(int $departmentId, array $orderedIds): void

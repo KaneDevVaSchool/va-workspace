@@ -1,14 +1,14 @@
 <script setup>
 //
-// superadmin/workspace-config/departments/:departmentId — workspace của
-// 1 phòng ban, mở từ WorkspaceConfigOverviewSuperadmin. Bảng theo mẫu
-// ActivityLog: filter, 2 thanh trang, kéo cột, panel chi tiết đẩy ngang.
-// Chỉ xem — super_admin không sửa thay department_director.
+// superadmin/workspace-config/departments/:departmentId/members — tab
+// "Thành viên" trong hub chi tiết phòng ban. Bảng theo mẫu ActivityLog:
+// filter, 2 thanh trang, kéo cột, panel chi tiết đẩy ngang. Dữ liệu lấy từ
+// WorkspaceConfigDepartmentDetailHub qua inject, không tự gọi API riêng.
+// Panel chi tiết chỉ hiện thông tin của thành viên đang chọn — menu hiển thị
+// và tiêu chí đánh giá là cấu hình của cả phòng ban nên nằm ở 2 tab riêng.
 //
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
-import PageHeader from '@/components/PageHeader.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -26,7 +26,6 @@ import {
   memberRoles,
   memberRolesText,
   memberStatusLabel,
-  menuVisibilityLabel,
   saveVisibility,
 } from '../constants/departmentDetail.js';
 
@@ -36,12 +35,10 @@ const AVATAR_EXTRA = 40;
 let measureCtx = null;
 let wrapObserver = null;
 
-const route = useRoute();
-const department = ref(null);
-const allMembers = ref([]);
-const sidebarMenus = ref([]);
-const evaluationCriteria = ref([]);
-const loading = ref(false);
+const hub = inject('workspaceConfigDeptDetailHub', null);
+const allMembers = computed(() => hub?.members?.value ?? []);
+const loading = computed(() => hub?.loading?.value ?? false);
+
 const selected = ref(null);
 const brokenAvatarIds = ref(new Set());
 
@@ -63,12 +60,6 @@ const tableZoom = ref(loadZoom());
 
 const shownColumns = computed(() => DETAIL_COLUMNS.filter((col) => visibleColumns[col.key]));
 const colSpan = computed(() => Math.max(shownColumns.value.length, 1));
-
-const directorSubtitle = computed(() => {
-  const director = department.value?.director;
-  if (!director?.name) return '';
-  return director.email ? `${director.name} · ${director.email}` : director.name;
-});
 
 const teamOptions = computed(() => {
   const seen = new Map();
@@ -167,33 +158,6 @@ function filterHasValue(key) {
   if (key === 'status') return Boolean(status.value);
   if (key === 'role') return Boolean(role.value);
   return false;
-}
-
-async function loadDetail() {
-  loading.value = true;
-  try {
-    const { data } = await window.axios.get(
-      `/api/workspace-config/departments/${route.params.departmentId}`,
-    );
-    department.value = data.department;
-    allMembers.value = data.members ?? [];
-    sidebarMenus.value = data.sidebar_menus ?? [];
-    evaluationCriteria.value = data.evaluation_criteria ?? [];
-    if (selected.value && !allMembers.value.some((member) => member.id === selected.value.id)) {
-      selected.value = null;
-    }
-    nextTick(fitColumnsToContent);
-  } catch (error) {
-    department.value = null;
-    allMembers.value = [];
-    sidebarMenus.value = [];
-    evaluationCriteria.value = [];
-    selected.value = null;
-    const message = error?.response?.data?.message;
-    showClientToast('error', message || 'Không tải được chi tiết phòng ban.');
-  } finally {
-    loading.value = false;
-  }
 }
 
 function goPage(nextPage) {
@@ -413,6 +377,13 @@ watch([query, teamId, status, role, perPage], () => {
   page.value = 1;
 });
 
+watch(allMembers, () => {
+  if (selected.value && !allMembers.value.some((member) => member.id === selected.value.id)) {
+    selected.value = null;
+  }
+  nextTick(fitColumnsToContent);
+});
+
 watch(filteredMembers, (rows) => {
   if (selected.value && !rows.some((member) => member.id === selected.value.id)) {
     selected.value = null;
@@ -422,18 +393,8 @@ watch(filteredMembers, (rows) => {
   }
 });
 
-watch(
-  () => route.params.departmentId,
-  () => {
-    selected.value = null;
-    page.value = 1;
-    loadDetail();
-  },
-);
-
 onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown);
-  loadDetail();
   nextTick(() => {
     fitColumnsToContent();
     if (tableWrap.value) {
@@ -457,25 +418,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="wc-detail">
-    <PageHeader
-      :title="department ? department.name : 'Chi tiết phòng ban'"
-      :subtitle="directorSubtitle"
-      icon="building"
-      :breadcrumbs="[
-        { label: 'Trang chủ', to: { name: 'home' } },
-        { label: 'Cấu hình Workspace', to: { name: 'superadmin.workspace-config.overview' } },
-        { label: department ? department.name : '' },
-      ]"
-    >
-      <template #actions>
-        <button type="button" class="wc-detail__header-btn" :disabled="loading" @click="loadDetail">
-          <AppIcon name="refresh" :size="16" :class="{ 'wc-detail__spin': loading }" />
-          Làm mới
-        </button>
-      </template>
-    </PageHeader>
-
+  <div class="wc-detail">
     <div class="wc-detail__body">
       <div class="wc-detail__main">
         <div v-if="hasVisibleFilterFields" class="wc-detail__toolbar">
@@ -725,53 +668,9 @@ onBeforeUnmount(() => {
             <span class="wc-detail__row-value">{{ selected.id }}</span>
           </div>
         </div>
-
-        <template v-if="sidebarMenus.length">
-          <h3 class="wc-detail__side-subtitle">Menu hiển thị</h3>
-          <div class="wc-detail__rows">
-            <div v-for="menu in sidebarMenus" :key="menu.menu_key" class="wc-detail__row">
-              <span class="wc-detail__row-label">{{ menu.label }}</span>
-              <span class="wc-detail__row-value">
-                <StatusBadge
-                  :on="menu.is_visible"
-                  :label="menuVisibilityLabel(menu.is_visible)"
-                />
-              </span>
-            </div>
-          </div>
-        </template>
-
-        <template v-if="evaluationCriteria.length">
-          <h3 class="wc-detail__side-subtitle">Tiêu chí đánh giá</h3>
-          <div class="wc-detail__rows">
-            <div
-              v-for="criterion in evaluationCriteria"
-              :key="criterion.id"
-              class="wc-detail__row wc-detail__row--eval"
-            >
-              <span class="wc-detail__row-label">
-                {{ criterion.name }}
-                <span class="wc-detail__eval-type">
-                  {{ criterion.criterion_type?.name ? `${criterion.criterion_type.name} · ` : '' }}{{ criterion.type === 'scale' ? 'Thang điểm' : 'Cộng/trừ' }}
-                  <template v-if="criterion.criterion_type?.code"> · {{ criterion.criterion_type.code }}</template>
-                </span>
-              </span>
-              <span class="wc-detail__row-value">
-                {{ criterion.level_count }} mức · max {{ criterion.max_score }}đ
-                <StatusBadge
-                  :on="criterion.is_active"
-                  :label="criterion.is_active ? 'Dùng' : 'Tắt'"
-                />
-              </span>
-            </div>
-          </div>
-        </template>
-        <p v-else-if="!loading" class="wc-detail__eval-empty">
-          Phòng ban chưa có tiêu chí đánh giá nào.
-        </p>
       </aside>
     </div>
-  </section>
+  </div>
 </template>
 
 <style scoped>
@@ -779,45 +678,7 @@ onBeforeUnmount(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: var(--space-5);
   overflow: hidden;
-}
-
-.wc-detail__header-btn {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: 2rem;
-  padding: 0 0.75rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-family-base);
-  font-size: 0.875rem;
-  font-weight: 500;
-  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
-  cursor: pointer;
-}
-
-.wc-detail__header-btn:hover:not(:disabled) {
-  background: var(--color-surface-muted);
-}
-
-.wc-detail__header-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.wc-detail__spin {
-  animation: wc-detail-spin 0.8s linear infinite;
-}
-
-@keyframes wc-detail-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .wc-detail__body {
@@ -843,7 +704,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  margin: var(--space-3) 0;
+  margin: 0 0 var(--space-3);
 }
 
 .wc-detail__filters {
@@ -1102,13 +963,6 @@ onBeforeUnmount(() => {
   line-height: 1.45;
 }
 
-.wc-detail__side-subtitle {
-  margin: var(--space-5) 0 var(--space-2);
-  color: var(--color-text);
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-
 .wc-detail__rows {
   display: flex;
   flex-direction: column;
@@ -1140,32 +994,6 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
 }
 
-.wc-detail__row--eval .wc-detail__row-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-}
-
-.wc-detail__eval-type {
-  font-size: 0.6875rem;
-  font-weight: 400;
-  color: var(--color-text-muted);
-}
-
-.wc-detail__row--eval .wc-detail__row-value {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.25rem;
-  font-size: 0.8125rem;
-}
-
-.wc-detail__eval-empty {
-  margin: var(--space-3) 0 0;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-}
-
 @media (max-width: 1024px) {
   .wc-detail__body {
     flex-direction: column;
@@ -1185,25 +1013,9 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 768px) {
-  .wc-detail {
-    padding: var(--space-4);
-  }
-}
-
 @media (max-width: 480px) {
-  .wc-detail {
-    padding: var(--space-3);
-  }
-
   .wc-detail__filters {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .wc-detail__spin {
-    animation: none;
   }
 }
 </style>

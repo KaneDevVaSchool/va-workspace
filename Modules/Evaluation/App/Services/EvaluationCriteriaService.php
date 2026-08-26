@@ -2,6 +2,7 @@
 
 namespace Modules\Evaluation\App\Services;
 
+use App\Models\User;
 use Illuminate\Support\Collection;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriteriaRepositoryInterface;
@@ -23,6 +24,12 @@ class EvaluationCriteriaService
             ->values();
     }
 
+    /** @return list<int> */
+    public function idsForDepartment(int $departmentId): array
+    {
+        return $this->criteria->idsByDepartment($departmentId);
+    }
+
     public function create(int $departmentId, int $createdBy, array $data): EvaluationCriteria
     {
         $allowHalf = (bool) ($data['allow_half'] ?? false);
@@ -35,16 +42,19 @@ class EvaluationCriteriaService
             'type'              => $data['type'],
             'description'       => isset($data['description']) ? trim($data['description']) : null,
             'levels'            => $normalized,
-            'is_active'         => $data['is_active'] ?? true,
-            'allow_half'        => $allowHalf,
-            'sort_order'        => $data['sort_order'] ?? 0,
-            'created_by'        => $createdBy,
+            'is_active'           => $data['is_active'] ?? true,
+            'allow_half'          => $allowHalf,
+            'use_in_evaluation'   => $data['use_in_evaluation'] ?? true,
+            'sort_order'          => $data['sort_order'] ?? 0,
+            'created_by'          => $createdBy,
+            'updated_by'          => $createdBy,
         ]);
     }
 
     public function update(
         EvaluationCriteria $criterion,
         array $data,
+        ?int $updatedBy = null,
     ): EvaluationCriteria {
         $type = $data['type'] ?? $criterion->type;
         $allowHalf = array_key_exists('allow_half', $data)
@@ -62,11 +72,18 @@ class EvaluationCriteriaService
             'description' => array_key_exists('description', $data)
                 ? (isset($data['description']) ? trim($data['description']) : null)
                 : $criterion->description,
-            'levels'      => $normalized,
-            'is_active'   => $data['is_active'] ?? $criterion->is_active,
-            'allow_half'  => $allowHalf,
-            'sort_order'  => $data['sort_order'] ?? $criterion->sort_order,
+            'levels'             => $normalized,
+            'is_active'          => $data['is_active'] ?? $criterion->is_active,
+            'allow_half'         => $allowHalf,
+            'use_in_evaluation'  => array_key_exists('use_in_evaluation', $data)
+                ? (bool) $data['use_in_evaluation']
+                : (bool) $criterion->use_in_evaluation,
+            'sort_order'         => $data['sort_order'] ?? $criterion->sort_order,
         ];
+
+        if ($updatedBy !== null) {
+            $payload['updated_by'] = $updatedBy;
+        }
 
         if (array_key_exists('criterion_type_id', $data)) {
             $payload['criterion_type_id'] = $this->resolveTypeId(
@@ -78,9 +95,14 @@ class EvaluationCriteriaService
         return $this->criteria->update($criterion, $payload);
     }
 
-    public function toggleActive(EvaluationCriteria $criterion): EvaluationCriteria
+    public function toggleActive(EvaluationCriteria $criterion, ?int $updatedBy = null): EvaluationCriteria
     {
-        return $this->criteria->toggleActive($criterion);
+        return $this->criteria->toggleActive($criterion, $updatedBy);
+    }
+
+    public function toggleUseInEvaluation(EvaluationCriteria $criterion, ?int $updatedBy = null): EvaluationCriteria
+    {
+        return $this->criteria->toggleUseInEvaluation($criterion, $updatedBy);
     }
 
     public function delete(EvaluationCriteria $criterion): bool
@@ -131,13 +153,38 @@ class EvaluationCriteriaService
             'description' => $criterion->description,
             'levels'      => $levels,
             'level_count' => count($levels),
-            'max_score'   => $criterion->max_score,
-            'is_active'   => $criterion->is_active,
-            'allow_half'  => (bool) $criterion->allow_half,
-            'sort_order'  => $criterion->sort_order,
-            'created_by'  => $criterion->created_by,
-            'created_at'  => $criterion->created_at?->toIso8601String(),
-            'updated_at'  => $criterion->updated_at?->toIso8601String(),
+            'max_score'          => $criterion->max_score,
+            'is_active'          => $criterion->is_active,
+            'allow_half'         => (bool) $criterion->allow_half,
+            'use_in_evaluation'  => (bool) $criterion->use_in_evaluation,
+            'sort_order'         => $criterion->sort_order,
+            'created_by'         => $criterion->created_by,
+            'updated_by'         => $criterion->updated_by,
+            'creator'            => $this->presentUser($criterion->creator),
+            'updater'            => $this->presentUser($criterion->updater),
+            'created_at'         => $criterion->created_at?->toIso8601String(),
+            'updated_at'         => $criterion->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /** @return array{id: int, name: string, email: string|null, avatar_url: string|null, department: array{id: int, name: string}|null}|null */
+    private function presentUser(?User $user): ?array
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        $department = $user->department;
+
+        return [
+            'id'         => $user->id,
+            'name'       => $user->name,
+            'email'      => $user->email,
+            'avatar_url' => $user->avatar_url,
+            'department' => $department ? [
+                'id'   => $department->id,
+                'name' => $department->name,
+            ] : null,
         ];
     }
 

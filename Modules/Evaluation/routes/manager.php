@@ -28,6 +28,9 @@ Route::prefix('evaluation')->name('evaluation.')->group(function () {
     Route::get('/criteria', [EvaluationCriteriaController::class, 'index'])
         ->name('criteria.index');
 
+    Route::get('/criteria/history', [EvaluationCriteriaController::class, 'history'])
+        ->name('criteria.history');
+
     // Tạo tiêu chí mới (permission: evaluation.manage_department)
     Route::post('/criteria', [EvaluationCriteriaController::class, 'store'])
         ->name('criteria.store');
@@ -43,6 +46,10 @@ Route::prefix('evaluation')->name('evaluation.')->group(function () {
     // Bật / tắt is_active
     Route::patch('/criteria/{id}/toggle', [EvaluationCriteriaController::class, 'toggle'])
         ->name('criteria.toggle');
+
+    // Bật / tắt hiện trên ĐGNL
+    Route::patch('/criteria/{id}/toggle-evaluation', [EvaluationCriteriaController::class, 'toggleUseInEvaluation'])
+        ->name('criteria.toggle-evaluation');
 
     // Xoá tiêu chí
     Route::delete('/criteria/{id}', [EvaluationCriteriaController::class, 'destroy'])

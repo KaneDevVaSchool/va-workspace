@@ -19,19 +19,23 @@ import {
 } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
+import UserAvatarTip from '@/components/UserAvatarTip.vue';
+import { formatDateTime } from '@/lib/formatTime';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
 const COLUMNS = [
-  { key: 'name',        label: 'Tên tiêu chí',     defaultOn: true  },
-  { key: 'kind',        label: 'Loại',              defaultOn: true  },
-  { key: 'type',        label: 'Cách chấm',         defaultOn: true,  align: 'center' },
-  { key: 'level_count', label: 'Số mức',            defaultOn: true,  align: 'center' },
-  { key: 'max_score',   label: 'Điểm tối đa',       defaultOn: true,  align: 'center' },
-  { key: 'status',      label: 'Trạng thái',        defaultOn: true,  align: 'center' },
-  { key: 'description', label: 'Mô tả',             defaultOn: false },
+  { key: 'name',               label: 'Tên tiêu chí',      defaultOn: true  },
+  { key: 'level_count',        label: 'Số mức',             defaultOn: true,  align: 'center' },
+  { key: 'max_score',          label: 'Điểm tối đa',        defaultOn: true,  align: 'center' },
+  { key: 'status',             label: 'Trạng thái',         defaultOn: true,  align: 'center' },
+  { key: 'use_in_evaluation',  label: 'Dùng trong ĐGNL',    defaultOn: true,  align: 'center' },
+  { key: 'created_at',         label: 'Ngày tạo',           defaultOn: false },
+  { key: 'creator',            label: 'Người tạo',          defaultOn: true,  align: 'center' },
+  { key: 'updater',            label: 'Người cập nhật',     defaultOn: true,  align: 'center' },
+  { key: 'description',        label: 'Mô tả',              defaultOn: false },
 ];
 
 const FILTERS = [
@@ -44,13 +48,17 @@ const FILTERS = [
 const TYPE_LABELS = { scale: 'Thang điểm', behavior: 'Cộng/trừ' };
 const TYPE_CODE_PREFIX = 'TCA';
 const TYPE_CODE_PAD    = 4;
-const COL_KEY     = 'va-eval-criteria-columns-v2';
+const COL_KEY     = 'va-eval-criteria-columns-v5';
 const FILTER_KEY  = 'va-eval-criteria-filters-v2';
 const WIDTH_KEY   = 'va-eval-criteria-widths';
 const ZOOM_KEY    = 'va-eval-criteria-zoom';
 
 const CELL_PAD_X = 32;
 const COL_EXTRA  = 24;
+/** Badge cột bảng (Cách chấm / Trạng thái) — khớp `.eval-page__badge--cell` */
+const BADGE_CELL_PX = 144;
+const SWITCH_CELL_PX = 52;
+const AVATAR_CELL_PX = 40;
 let measureCtx   = null;
 let wrapObserver = null;
 
@@ -69,6 +77,8 @@ const dialogKind  = ref(null); // 'criterion' | null
 const typeDialogOpen = ref(false);
 const dialogTab   = ref('create');
 const listFilter  = ref('');
+const historyLogs = ref([]);
+const historyLoading = ref(false);
 
 const query     = ref('');
 const typeFilter = ref('');
@@ -95,6 +105,7 @@ const form = reactive({
   type:              'scale',
   description:       '',
   is_active:         true,
+  use_in_evaluation: true,
   allow_half:        false,
   levels:            [],
 });
@@ -112,6 +123,10 @@ const typeForm = reactive({
   description: '',
   codeLocked:  true,
 });
+
+/** Thu gọn nhóm theo loại tiêu chí (bảng chính + danh sách Sửa trong modal). */
+const typeGroupCollapsed = reactive({});
+const dialogTypeGroupCollapsed = reactive({});
 
 // ─── computed ─────────────────────────────────────────────────────────────────
 
@@ -134,29 +149,26 @@ const filtered = computed(() => {
   });
 });
 
-const lastPage = computed(() =>
-  Math.max(1, Math.ceil(filtered.value.length / perPage.value)),
-);
-
-const paginated = computed(() => {
-  const start = (page.value - 1) * perPage.value;
-  return filtered.value.slice(start, start + perPage.value);
-});
+const lastPage = computed(() => 1);
 
 const pagerMeta = computed(() => {
   const total = filtered.value.length;
-  const start = Math.min((page.value - 1) * perPage.value + 1, total || 0);
-  const end   = Math.min(page.value * perPage.value, total);
-  return { from: total ? start : 0, to: total ? end : 0, total };
+  const visible = criteriaGroups.value.reduce(
+    (n, g) => n + (isTypeGroupCollapsed(typeGroupCollapsed, g.key) ? 0 : g.criteria.length),
+    0,
+  );
+  return { from: visible ? 1 : 0, to: visible, total };
 });
 
 const hasActiveFilters = computed(() =>
   Boolean(query.value.trim() || kindFilter.value || typeFilter.value || statusFilter.value),
 );
 
-const criterionDialogTitle = computed(() =>
-  dialogTab.value === 'edit' ? 'Sửa tiêu chí' : 'Thêm tiêu chí mới',
-);
+const criterionDialogTitle = computed(() => {
+  if (dialogTab.value === 'edit') return 'Sửa tiêu chí';
+  if (dialogTab.value === 'history') return 'Lịch sử thay đổi';
+  return 'Thêm tiêu chí mới';
+});
 
 const criterionSubmitLabel = computed(() => {
   if (formSaving.value) return 'Đang lưu…';
@@ -171,21 +183,119 @@ const selectedDialogCriterion = computed(() =>
   allCriteria.value.find((item) => String(item.id) === String(form.id)) ?? null,
 );
 
-const visibleCriterionItems = computed(() => {
+function criterionGroupKey(typeId) {
+  return typeId == null || typeId === '' ? '__none__' : String(typeId);
+}
+
+function typeOrderIndex(typeId) {
+  if (typeId == null || typeId === '') return Number.MAX_SAFE_INTEGER;
+  const idx = criterionTypes.value.findIndex((t) => String(t.id) === String(typeId));
+  return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER;
+}
+
+function compareCriteriaByType(a, b) {
+  const orderA = typeOrderIndex(a.criterion_type_id);
+  const orderB = typeOrderIndex(b.criterion_type_id);
+  if (orderA !== orderB) return orderA - orderB;
+  return String(a.name ?? '').localeCompare(String(b.name ?? ''), 'vi');
+}
+
+function buildCriteriaGroups(criteriaList) {
+  const groups = [];
+  const map = new Map();
+  for (const criterion of criteriaList) {
+    const key = criterionGroupKey(criterion.criterion_type_id);
+    if (!map.has(key)) {
+      const entry = {
+        key,
+        type: criterion.criterion_type ?? null,
+        criteria: [],
+      };
+      map.set(key, entry);
+      groups.push(entry);
+    }
+    map.get(key).criteria.push(criterion);
+  }
+  return groups;
+}
+
+function groupTitle(type) {
+  return type?.name ?? 'Chưa phân loại';
+}
+
+function groupScoringKinds(criteria) {
+  const order = { scale: 0, behavior: 1 };
+  return [...new Set(criteria.map((c) => c.type).filter(Boolean))].sort(
+    (a, b) => (order[a] ?? 9) - (order[b] ?? 9),
+  );
+}
+
+function groupScoringAccent(criteria) {
+  const kinds = groupScoringKinds(criteria);
+  if (kinds.length === 1) return kinds[0];
+  if (kinds.length > 1) return 'mixed';
+  return '';
+}
+
+function isTypeGroupCollapsed(store, key) {
+  return Boolean(store[key]);
+}
+
+function toggleTypeGroup(key) {
+  typeGroupCollapsed[key] = !typeGroupCollapsed[key];
+}
+
+function toggleDialogTypeGroup(key) {
+  dialogTypeGroupCollapsed[key] = !dialogTypeGroupCollapsed[key];
+}
+
+const criteriaGroups = computed(() => {
+  const sorted = [...filtered.value].sort(compareCriteriaByType);
+  return buildCriteriaGroups(sorted);
+});
+
+const tableBodyRows = computed(() => {
+  const rows = [];
+  for (const group of criteriaGroups.value) {
+    rows.push({
+      kind: 'group',
+      key: `group-${group.key}`,
+      groupKey: group.key,
+      title: groupTitle(group.type),
+      code: group.type?.code ?? '',
+      count: group.criteria.length,
+      collapsed: isTypeGroupCollapsed(typeGroupCollapsed, group.key),
+      scoringAccent: groupScoringAccent(group.criteria),
+      scoringKinds: groupScoringKinds(group.criteria),
+    });
+    if (!isTypeGroupCollapsed(typeGroupCollapsed, group.key)) {
+      for (const criterion of group.criteria) {
+        rows.push({ kind: 'criterion', key: criterion.id, criterion });
+      }
+    }
+  }
+  return rows;
+});
+
+const tableColspan = computed(
+  () => shownColumns.value.length + (canManage.value ? 1 : 0),
+);
+
+const dialogCriteriaGroups = computed(() => {
   const q = listFilter.value.trim().toLowerCase();
-  return allCriteria.value
+  const list = allCriteria.value
     .filter((item) => {
       if (!q) return true;
       const hay = `${item.name ?? ''} ${item.criterion_type?.name ?? ''} ${item.criterion_type?.code ?? ''}`.toLowerCase();
       return hay.includes(q);
     })
-    .map((item) => ({
-      id: item.id,
-      label: item.name,
-      sublabel: item.criterion_type?.name || 'Chưa chọn loại',
-      meta: TYPE_LABELS[item.type] ?? item.type,
-    }));
+    .sort(compareCriteriaByType);
+  return buildCriteriaGroups(list);
 });
+
+const dialogListHasItems = computed(() =>
+  dialogCriteriaGroups.value.some((g) => g.criteria.length > 0),
+);
 
 const criterionEmptyMessage = computed(() =>
   allCriteria.value.length === 0 ? 'Phòng ban chưa có tiêu chí nào. Tạo tiêu chí mới ở tab Thêm.' : '',
@@ -201,6 +311,7 @@ const criterionUnchanged = computed(() => {
   if (form.type !== current.type) return false;
   if ((form.description || '') !== (current.description || '')) return false;
   if (Boolean(form.is_active) !== Boolean(current.is_active)) return false;
+  if (Boolean(form.use_in_evaluation) !== Boolean(current.use_in_evaluation)) return false;
   if (Boolean(form.allow_half) !== Boolean(current.allow_half)) return false;
   const nextLevels = form.levels.map(levelSnapshot);
   const prevLevels = (current.levels ?? []).map(levelSnapshot);
@@ -324,19 +435,23 @@ function computeDefaultWidths() {
 
   for (const col of shownColumns.value) {
     let max = measureText(col.label) + COL_EXTRA;
-    for (const row of allCriteria.value) {
-      let val = '';
-      if (col.key === 'name')        val = row.name ?? '';
-      if (col.key === 'kind')        val = row.criterion_type
-        ? `${row.criterion_type.name} ${row.criterion_type.code ?? ''}`
-        : '';
-      if (col.key === 'type')        val = TYPE_LABELS[row.type] ?? '';
-      if (col.key === 'level_count') val = String(row.level_count ?? 0);
-      if (col.key === 'max_score')   val = formatScore(row.max_score);
-      if (col.key === 'status')      val = row.is_active ? 'Hoạt động' : 'Không hoạt động';
-      if (col.key === 'description') val = row.description ?? '';
-      const w = measureText(val) + CELL_PAD_X;
-      if (w > max) max = w;
+    if (col.key === 'status') {
+      max = Math.max(max, BADGE_CELL_PX + CELL_PAD_X);
+    } else if (col.key === 'use_in_evaluation') {
+      max = Math.max(max, SWITCH_CELL_PX + CELL_PAD_X);
+    } else if (col.key === 'creator' || col.key === 'updater') {
+      max = Math.max(max, AVATAR_CELL_PX + CELL_PAD_X);
+    } else {
+      for (const row of allCriteria.value) {
+        let val = '';
+        if (col.key === 'name')        val = row.name ?? '';
+        if (col.key === 'level_count') val = String(row.level_count ?? 0);
+        if (col.key === 'max_score')   val = formatScore(row.max_score);
+        if (col.key === 'created_at')  val = formatDateTime(row.created_at) || '—';
+        if (col.key === 'description') val = row.description ?? '';
+        const w = measureText(val) + CELL_PAD_X;
+        if (w > max) max = w;
+      }
     }
     rawWidths[col.key] = Math.max(Math.ceil(max), MIN_COL_PX);
   }
@@ -421,7 +536,59 @@ async function load() {
   }
 }
 
+async function loadHistory() {
+  historyLoading.value = true;
+  try {
+    const { data } = await window.axios.get('/api/evaluation/criteria/history');
+    historyLogs.value = data.logs ?? [];
+  } catch (err) {
+    historyLogs.value = [];
+    showClientToast('error', err?.response?.data?.message || 'Không tải được lịch sử thay đổi.');
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+function historyVerbIcon(action) {
+  if (String(action).includes('delete')) return 'trash';
+  if (String(action).includes('create')) return 'plus';
+  return 'pencil';
+}
+
+function historyVerbTone(action) {
+  if (String(action).includes('delete')) return 'danger';
+  if (String(action).includes('create')) return 'success';
+  return 'info';
+}
+
+function historyInitial(name) {
+  return String(name ?? '').trim().charAt(0).toUpperCase() || '?';
+}
+
+function formatHistoryTime(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mo = String(date.getMonth() + 1).padStart(2, '0');
+  return `${hh}:${mm} ng ${dd}/${mo}/${date.getFullYear()}`;
+}
+
+function openHistoryCriterion(log) {
+  if (!log?.can_open || !log.subject_id) return;
+  const criterion = allCriteria.value.find((item) => String(item.id) === String(log.subject_id));
+  if (!criterion) {
+    showClientToast('error', 'Tiêu chí không còn tồn tại.');
+    return;
+  }
+  fillCriterionForm(criterion);
+  dialogTab.value = 'edit';
+}
+
 async function saveCriterion() {
+  if (dialogTab.value === 'history') return;
   if (dialogTab.value === 'edit' && (form.id === '' || form.id == null)) {
     showClientToast('error', 'Vui lòng chọn tiêu chí cần sửa.');
     return;
@@ -440,6 +607,7 @@ async function saveCriterion() {
     type:               form.type,
     description:        form.description || null,
     is_active:          form.is_active,
+    use_in_evaluation:  Boolean(form.use_in_evaluation),
     allow_half:         Boolean(form.allow_half),
     levels: form.levels
       .filter((l) => (l.label ?? '').trim() !== '')
@@ -520,6 +688,22 @@ async function toggleActive(criterion) {
   }
 }
 
+async function toggleUseInEvaluation(criterion) {
+  togglingId.value = criterion.id;
+  try {
+    const { data } = await window.axios.patch(
+      `/api/evaluation/criteria/${criterion.id}/toggle-evaluation`,
+    );
+    const idx = allCriteria.value.findIndex((c) => c.id === criterion.id);
+    if (idx !== -1) allCriteria.value[idx] = data.criterion;
+    if (selected.value?.id === criterion.id) selected.value = data.criterion;
+  } catch (err) {
+    showClientToast('error', err?.response?.data?.message || 'Không cập nhật được dùng trong ĐGNL.');
+  } finally {
+    togglingId.value = null;
+  }
+}
+
 // ─── dialog / panel helpers ──────────────────────────────────────────────────
 
 function resetCriterionForm() {
@@ -529,6 +713,7 @@ function resetCriterionForm() {
   form.type = 'scale';
   form.description = '';
   form.is_active = true;
+  form.use_in_evaluation = true;
   form.allow_half = false;
   form.levels = defaultLevels('scale');
   formErrors.value = {};
@@ -543,6 +728,7 @@ function fillCriterionForm(criterion) {
   form.type = criterion.type;
   form.description = criterion.description ?? '';
   form.is_active = criterion.is_active;
+  form.use_in_evaluation = criterion.use_in_evaluation !== false;
   form.allow_half = Boolean(criterion.allow_half) || hasHalfScore(criterion.levels);
   form.levels = (criterion.levels ?? []).map((level) => mapLevel(level));
   formErrors.value = {};
@@ -595,9 +781,13 @@ function setDialogTab(tab) {
   if (formSaving.value || dialogTab.value === tab) return;
   dialogTab.value = tab;
   listFilter.value = '';
-  if (tab === 'edit' && selected.value) {
+  if (tab === 'history') {
+    loadHistory();
+    return;
+  }
+  if (tab === 'edit' && selected.value && !form.id) {
     fillCriterionForm(selected.value);
-  } else {
+  } else if (tab === 'create') {
     resetCriterionForm();
   }
   nextTick(focusDialog);
@@ -617,7 +807,7 @@ function focusDialog() {
     document.getElementById('eval-type-name')?.focus();
     return;
   }
-  if (dialogTab.value === 'edit') return;
+  if (dialogTab.value === 'edit' || dialogTab.value === 'history') return;
   document.getElementById('eval-criterion-name')?.focus();
 }
 
@@ -992,71 +1182,121 @@ onBeforeUnmount(() => {
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="criterion in paginated"
-              :key="criterion.id"
-              class="eval-page__tr"
-              :class="{ 'eval-page__tr--active': selected?.id === criterion.id }"
-              @click="openView(criterion)"
-            >
-              <td v-if="visibleColumns.name" class="eval-page__td">
-                <span class="eval-page__name">{{ criterion.name }}</span>
-              </td>
-              <td v-if="visibleColumns.kind" class="eval-page__td">
-                <span v-if="criterion.criterion_type" class="eval-page__kind">
-                  <span class="eval-page__kind-name">{{ criterion.criterion_type.name }}</span>
-                  <span class="eval-page__kind-code">{{ criterion.criterion_type.code }}</span>
-                </span>
-                <span v-else class="eval-page__muted">—</span>
-              </td>
-              <td v-if="visibleColumns.type" class="eval-page__td eval-page__td--center">
-                <span class="eval-page__badge" :class="'eval-page__badge--' + criterion.type">
-                  {{ TYPE_LABELS[criterion.type] ?? criterion.type }}
-                </span>
-              </td>
-              <td v-if="visibleColumns.level_count" class="eval-page__td eval-page__td--center">
-                {{ criterion.level_count }}
-              </td>
-              <td v-if="visibleColumns.max_score" class="eval-page__td eval-page__td--center">
-                {{ formatScore(criterion.max_score) }}
-              </td>
-              <td v-if="visibleColumns.status" class="eval-page__td eval-page__td--center">
-                <span
-                  class="eval-page__badge"
-                  :class="criterion.is_active ? 'eval-page__badge--active' : 'eval-page__badge--inactive'"
+            <template v-for="entry in tableBodyRows" :key="entry.key">
+              <tr
+                v-if="entry.kind === 'group'"
+                class="eval-page__tr eval-page__tr--group"
+                @click.stop="toggleTypeGroup(entry.groupKey)"
+              >
+                <td :colspan="tableColspan" class="eval-page__td eval-page__td--group">
+                  <div
+                    class="eval-page__group-inner"
+                    :class="entry.scoringAccent ? `eval-page__group-inner--${entry.scoringAccent}` : ''"
+                  >
+                    <span class="eval-page__group-toggle" aria-hidden="true">
+                      <AppIcon
+                        :name="entry.collapsed ? 'chevronRight' : 'chevronDown'"
+                        :size="16"
+                        :stroke-width="1.75"
+                      />
+                    </span>
+                    <span class="eval-page__group-copy">
+                      <span class="eval-page__group-title">{{ entry.title }}</span>
+                      <span v-if="entry.code" class="eval-page__group-code">{{ entry.code }}</span>
+                    </span>
+                    <span v-if="entry.scoringKinds.length" class="eval-page__group-badges">
+                      <span
+                        v-for="kind in entry.scoringKinds"
+                        :key="kind"
+                        class="eval-page__badge eval-page__badge--group"
+                        :class="'eval-page__badge--' + kind"
+                      >
+                        {{ TYPE_LABELS[kind] ?? kind }}
+                      </span>
+                    </span>
+                    <span class="eval-page__group-count">{{ entry.count }} tiêu chí</span>
+                  </div>
+                </td>
+              </tr>
+              <tr
+                v-else
+                class="eval-page__tr"
+                :class="{ 'eval-page__tr--active': selected?.id === entry.criterion.id }"
+                @click="openView(entry.criterion)"
+              >
+                <td v-if="visibleColumns.name" class="eval-page__td">
+                  <span class="eval-page__name">{{ entry.criterion.name }}</span>
+                </td>
+                <td v-if="visibleColumns.level_count" class="eval-page__td eval-page__td--center">
+                  {{ entry.criterion.level_count }}
+                </td>
+                <td v-if="visibleColumns.max_score" class="eval-page__td eval-page__td--center">
+                  {{ formatScore(entry.criterion.max_score) }}
+                </td>
+                <td v-if="visibleColumns.status" class="eval-page__td eval-page__td--center">
+                  <span
+                    class="eval-page__badge eval-page__badge--cell"
+                    :class="entry.criterion.is_active ? 'eval-page__badge--active' : 'eval-page__badge--inactive'"
+                  >
+                    {{ entry.criterion.is_active ? 'Hoạt động' : 'Không hoạt động' }}
+                  </span>
+                </td>
+                <td
+                  v-if="visibleColumns.use_in_evaluation"
+                  class="eval-page__td eval-page__td--center"
                 >
-                  {{ criterion.is_active ? 'Hoạt động' : 'Không hoạt động' }}
-                </span>
-              </td>
-              <td v-if="visibleColumns.description" class="eval-page__td eval-page__td--desc">
-                {{ criterion.description || '—' }}
-              </td>
-              <td v-if="canManage" class="eval-page__td eval-page__td--center eval-page__td--action" @click.stop>
-                <span class="eval-page__actions">
                   <button
                     type="button"
-                    class="eval-page__icon-btn eval-page__icon-btn--ghost"
-                    :aria-label="criterion.is_active ? 'Ẩn tiêu chí' : 'Hiện tiêu chí'"
-                    :disabled="togglingId === criterion.id"
-                    @click="toggleActive(criterion)"
+                    class="eval-page__switch"
+                    :class="{ 'eval-page__switch--on': entry.criterion.use_in_evaluation }"
+                    role="switch"
+                    :aria-checked="entry.criterion.use_in_evaluation ? 'true' : 'false'"
+                    aria-label="Dùng trong ĐGNL"
+                    :disabled="!canManage || togglingId === entry.criterion.id"
+                    @click.stop="toggleUseInEvaluation(entry.criterion)"
                   >
-                    <AppIcon
-                      :name="criterion.is_active ? 'eyeOff' : 'eye'"
-                      :size="15"
-                    />
+                    <span class="eval-page__switch-thumb" aria-hidden="true" />
                   </button>
-                  <button
-                    type="button"
-                    class="eval-page__icon-btn eval-page__icon-btn--danger"
-                    aria-label="Xoá tiêu chí"
-                    :disabled="deletingId === criterion.id"
-                    @click="confirmDelete = criterion"
-                  >
-                    <AppIcon name="trash2" :size="15" />
-                  </button>
-                </span>
-              </td>
-            </tr>
+                </td>
+                <td v-if="visibleColumns.created_at" class="eval-page__td">
+                  {{ formatDateTime(entry.criterion.created_at) || '—' }}
+                </td>
+                <td v-if="visibleColumns.creator" class="eval-page__td eval-page__td--center">
+                  <UserAvatarTip :user="entry.criterion.creator" label="Người tạo" />
+                </td>
+                <td v-if="visibleColumns.updater" class="eval-page__td eval-page__td--center">
+                  <UserAvatarTip :user="entry.criterion.updater" label="Người cập nhật" />
+                </td>
+                <td v-if="visibleColumns.description" class="eval-page__td eval-page__td--desc">
+                  {{ entry.criterion.description || '—' }}
+                </td>
+                <td v-if="canManage" class="eval-page__td eval-page__td--center eval-page__td--action" @click.stop>
+                  <span class="eval-page__actions">
+                    <button
+                      type="button"
+                      class="eval-page__icon-btn eval-page__icon-btn--ghost"
+                      :aria-label="entry.criterion.is_active ? 'Ẩn tiêu chí' : 'Hiện tiêu chí'"
+                      :disabled="togglingId === entry.criterion.id"
+                      @click="toggleActive(entry.criterion)"
+                    >
+                      <AppIcon
+                        :name="entry.criterion.is_active ? 'eyeOff' : 'eye'"
+                        :size="15"
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      class="eval-page__icon-btn eval-page__icon-btn--danger"
+                      aria-label="Xoá tiêu chí"
+                      :disabled="deletingId === entry.criterion.id"
+                      @click="confirmDelete = entry.criterion"
+                    >
+                      <AppIcon name="trash2" :size="15" />
+                    </button>
+                  </span>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -1147,12 +1387,32 @@ onBeforeUnmount(() => {
             </dd>
           </div>
           <div class="eval-page__dl-row">
+            <dt>Dùng trong ĐGNL</dt>
+            <dd>{{ selected.use_in_evaluation ? 'Có' : 'Không' }}</dd>
+          </div>
+          <div class="eval-page__dl-row">
             <dt>Chấm 0.5</dt>
             <dd>{{ selected.allow_half ? 'Có' : 'Không' }}</dd>
           </div>
           <div class="eval-page__dl-row">
             <dt>Điểm tối đa</dt>
             <dd>{{ formatScore(selected.max_score) }}</dd>
+          </div>
+          <div class="eval-page__dl-row">
+            <dt>Ngày tạo</dt>
+            <dd>{{ formatDateTime(selected.created_at) || '—' }}</dd>
+          </div>
+          <div class="eval-page__dl-row">
+            <dt>Người tạo</dt>
+            <dd>
+              <UserAvatarTip :user="selected.creator" label="Người tạo" />
+            </dd>
+          </div>
+          <div class="eval-page__dl-row">
+            <dt>Người cập nhật</dt>
+            <dd>
+              <UserAvatarTip :user="selected.updater" label="Người cập nhật" />
+            </dd>
           </div>
         </dl>
 
@@ -1197,7 +1457,11 @@ onBeforeUnmount(() => {
           >
             <div class="eval-page__dialog-head">
                 <span class="eval-page__dialog-icon" aria-hidden="true">
-                  <AppIcon :name="dialogTab === 'edit' ? 'pencil' : 'clipboardCheck'" :size="22" :stroke-width="1.75" />
+                  <AppIcon
+                    :name="dialogTab === 'edit' ? 'pencil' : dialogTab === 'history' ? 'clock' : 'clipboardCheck'"
+                    :size="22"
+                    :stroke-width="1.75"
+                  />
                 </span>
                 <div class="eval-page__dialog-head-copy">
                   <h2 id="eval-criterion-form-title" class="eval-page__dialog-title">{{ criterionDialogTitle }}</h2>
@@ -1213,7 +1477,7 @@ onBeforeUnmount(() => {
                 </button>
               </div>
 
-              <div class="eval-page__dialog-tabs" role="tablist" aria-label="Thêm hoặc sửa tiêu chí">
+              <div class="eval-page__dialog-tabs" role="tablist" aria-label="Thêm, sửa hoặc lịch sử tiêu chí">
                 <button
                   type="button"
                   class="eval-page__dialog-tab"
@@ -1236,12 +1500,86 @@ onBeforeUnmount(() => {
                 >
                   Sửa
                 </button>
+                <button
+                  type="button"
+                  class="eval-page__dialog-tab"
+                  :class="{ 'eval-page__dialog-tab--active': dialogTab === 'history' }"
+                  role="tab"
+                  :aria-selected="dialogTab === 'history' ? 'true' : 'false'"
+                  :disabled="formSaving"
+                  @click="setDialogTab('history')"
+                >
+                  Lịch sử
+                </button>
               </div>
 
               <div
                 class="eval-page__dialog-body hide-scrollbar"
-                :class="{ 'eval-page__dialog-body--edit': dialogTab === 'edit' }"
+                :class="{
+                  'eval-page__dialog-body--edit': dialogTab === 'edit',
+                  'eval-page__dialog-body--history': dialogTab === 'history',
+                }"
               >
+                <ol
+                  v-if="dialogTab === 'history'"
+                  class="eval-page__history hide-scrollbar"
+                  :class="{ 'eval-page__history--line': !historyLoading && historyLogs.length > 0 }"
+                  aria-label="Lịch sử thay đổi tiêu chí"
+                >
+                  <li v-if="historyLoading" class="eval-page__history-empty">Đang tải…</li>
+                  <li v-else-if="historyLogs.length === 0" class="eval-page__history-empty">
+                    Chưa có lịch sử thay đổi tiêu chí.
+                  </li>
+                  <template v-else>
+                    <li
+                      v-for="log in historyLogs"
+                      :key="log.id"
+                      class="eval-page__history-item"
+                    >
+                    <span
+                      class="eval-page__history-dot"
+                      :class="'eval-page__history-dot--' + historyVerbTone(log.action)"
+                      aria-hidden="true"
+                    >
+                      <AppIcon :name="historyVerbIcon(log.action)" :size="13" :stroke-width="1.75" />
+                    </span>
+                    <div class="eval-page__history-card">
+                      <div class="eval-page__history-head">
+                        <div class="eval-page__history-who">
+                          <span class="eval-page__history-name">{{ log.actor_name }}</span>
+                          <span class="eval-page__history-verb">{{ log.verb }}</span>
+                          <button
+                            v-if="log.can_open"
+                            type="button"
+                            class="eval-page__history-open"
+                            aria-label="Mở tiêu chí để sửa"
+                            @click="openHistoryCriterion(log)"
+                          >
+                            <AppIcon name="externalLink" :size="13" :stroke-width="1.75" />
+                          </button>
+                        </div>
+                        <span class="eval-page__history-avatar" aria-hidden="true">
+                          <img
+                            v-if="log.actor?.avatar_url"
+                            :src="log.actor.avatar_url"
+                            alt=""
+                            class="eval-page__history-avatar-img"
+                            referrerpolicy="no-referrer"
+                          />
+                          <template v-else>{{ historyInitial(log.actor_name) }}</template>
+                        </span>
+                      </div>
+                      <p class="eval-page__history-time">
+                        <AppIcon name="clock" :size="13" :stroke-width="1.75" />
+                        {{ formatHistoryTime(log.created_at) }}
+                      </p>
+                      <p class="eval-page__history-detail">{{ log.detail }}</p>
+                    </div>
+                  </li>
+                  </template>
+                </ol>
+
+                <template v-else>
                 <div v-if="dialogTab === 'edit'" class="eval-page__dialog-list-panel">
                   <label class="eval-page__dialog-label" for="eval-criterion-list-q">Tiêu chí</label>
                   <input
@@ -1257,24 +1595,65 @@ onBeforeUnmount(() => {
                     <li v-if="allCriteria.length === 0" class="eval-page__dialog-list-empty">
                       {{ criterionEmptyMessage }}
                     </li>
-                    <li v-else-if="visibleCriterionItems.length === 0" class="eval-page__dialog-list-empty">
+                    <li v-else-if="!dialogListHasItems" class="eval-page__dialog-list-empty">
                       Không tìm thấy tiêu chí khớp.
                     </li>
-                    <li
-                      v-for="item in visibleCriterionItems"
-                      :key="item.id"
-                      class="eval-page__dialog-list-item"
-                      :class="{ 'eval-page__dialog-list-item--active': String(form.id) === String(item.id) }"
-                      role="option"
-                      :aria-selected="String(form.id) === String(item.id) ? 'true' : 'false'"
-                      @click="form.id = item.id"
-                    >
-                      <span class="eval-page__dialog-list-copy">
-                        <span class="eval-page__dialog-list-name">{{ item.label }}</span>
-                        <span v-if="item.sublabel" class="eval-page__dialog-list-sub">{{ item.sublabel }}</span>
-                      </span>
-                      <span v-if="item.meta" class="eval-page__dialog-list-meta">{{ item.meta }}</span>
-                    </li>
+                    <template v-else>
+                      <template v-for="group in dialogCriteriaGroups" :key="group.key">
+                        <li class="eval-page__dialog-list-group">
+                          <button
+                            type="button"
+                            class="eval-page__dialog-list-group-head"
+                            :class="groupScoringAccent(group.criteria) ? `eval-page__dialog-list-group-head--${groupScoringAccent(group.criteria)}` : ''"
+                            :aria-expanded="!isTypeGroupCollapsed(dialogTypeGroupCollapsed, group.key) ? 'true' : 'false'"
+                            @click="toggleDialogTypeGroup(group.key)"
+                          >
+                            <span class="eval-page__dialog-list-group-toggle" aria-hidden="true">
+                              <AppIcon
+                                :name="isTypeGroupCollapsed(dialogTypeGroupCollapsed, group.key) ? 'chevronRight' : 'chevronDown'"
+                                :size="15"
+                                :stroke-width="1.75"
+                              />
+                            </span>
+                            <span class="eval-page__dialog-list-group-copy">
+                              <span class="eval-page__dialog-list-group-title">{{ groupTitle(group.type) }}</span>
+                              <span v-if="group.type?.code" class="eval-page__dialog-list-group-code">{{ group.type.code }}</span>
+                            </span>
+                            <span v-if="groupScoringKinds(group.criteria).length" class="eval-page__dialog-list-group-badges">
+                              <span
+                                v-for="kind in groupScoringKinds(group.criteria)"
+                                :key="kind"
+                                class="eval-page__badge eval-page__badge--group"
+                                :class="'eval-page__badge--' + kind"
+                              >
+                                {{ TYPE_LABELS[kind] ?? kind }}
+                              </span>
+                            </span>
+                            <span class="eval-page__dialog-list-group-count">{{ group.criteria.length }}</span>
+                          </button>
+                        </li>
+                        <li
+                          v-for="criterion in group.criteria"
+                          v-show="!isTypeGroupCollapsed(dialogTypeGroupCollapsed, group.key)"
+                          :key="criterion.id"
+                          class="eval-page__dialog-list-item"
+                          :class="{ 'eval-page__dialog-list-item--active': String(form.id) === String(criterion.id) }"
+                          role="option"
+                          :aria-selected="String(form.id) === String(criterion.id) ? 'true' : 'false'"
+                          @click="form.id = criterion.id"
+                        >
+                          <span class="eval-page__dialog-list-copy">
+                            <span class="eval-page__dialog-list-name">{{ criterion.name }}</span>
+                          </span>
+                          <span
+                            class="eval-page__badge eval-page__badge--dialog-meta"
+                            :class="'eval-page__badge--' + criterion.type"
+                          >
+                            {{ TYPE_LABELS[criterion.type] ?? criterion.type }}
+                          </span>
+                        </li>
+                      </template>
+                    </template>
                   </ul>
                 </div>
 
@@ -1415,6 +1794,21 @@ onBeforeUnmount(() => {
                           Không hoạt động
                         </label>
                       </div>
+                      <div class="eval-page__half-toggle">
+                        <span id="eval-use-dgnl-label" class="eval-page__half-toggle-label">Dùng trong ĐGNL</span>
+                        <button
+                          type="button"
+                          class="eval-page__switch"
+                          :class="{ 'eval-page__switch--on': form.use_in_evaluation }"
+                          role="switch"
+                          aria-labelledby="eval-use-dgnl-label"
+                          :aria-checked="form.use_in_evaluation ? 'true' : 'false'"
+                          :disabled="formSaving || (dialogTab === 'edit' && !form.id)"
+                          @click="form.use_in_evaluation = !form.use_in_evaluation"
+                        >
+                          <span class="eval-page__switch-thumb" aria-hidden="true" />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -1529,13 +1923,15 @@ onBeforeUnmount(() => {
                     </div>
                   </section>
                 </div>
+                </template>
               </div>
 
               <div class="eval-page__dialog-actions">
                 <button type="button" class="eval-page__dialog-btn eval-page__dialog-btn--ghost" :disabled="formSaving" @click="closeDialog">
-                  Huỷ
+                  {{ dialogTab === 'history' ? 'Đóng' : 'Huỷ' }}
                 </button>
                 <button
+                  v-if="dialogTab !== 'history'"
                   type="button"
                   class="eval-page__dialog-btn eval-page__dialog-btn--primary"
                   :disabled="
@@ -1825,6 +2221,7 @@ onBeforeUnmount(() => {
 }
 
 .eval-page__table {
+  width: 100%;
   min-width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
@@ -1880,6 +2277,107 @@ onBeforeUnmount(() => {
 
 .eval-page__tr--active td {
   background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.eval-page__tr--group {
+  cursor: pointer;
+}
+
+.eval-page__tr--group:hover .eval-page__group-inner {
+  background: var(--color-surface-muted);
+}
+
+.eval-page__td--group {
+  padding: 0;
+  overflow: visible;
+  white-space: normal;
+  vertical-align: middle;
+}
+
+.eval-page__group-inner {
+  position: relative;
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem var(--space-4);
+  padding-left: calc(var(--space-4) + var(--space-2) + 3px);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface));
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.eval-page__group-inner::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-4);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.eval-page__group-inner--scale::before {
+  background: var(--color-primary);
+}
+
+.eval-page__group-inner--behavior::before {
+  background: var(--color-warning, #d97706);
+}
+
+.eval-page__group-inner--mixed::before {
+  background: linear-gradient(
+    to bottom,
+    var(--color-primary) 0%,
+    var(--color-primary) 50%,
+    var(--color-warning, #d97706) 50%,
+    var(--color-warning, #d97706) 100%
+  );
+}
+
+.eval-page__group-badges {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.eval-page__group-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.eval-page__group-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.eval-page__group-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eval-page__group-code {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.eval-page__group-count {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .eval-page__td {
@@ -1953,10 +2451,29 @@ onBeforeUnmount(() => {
   justify-content: center;
   vertical-align: middle;
   padding: 0.125rem 0.5rem;
-  border-radius: 100px;
+  border-radius: 0;
   font-size: 0.75rem;
   font-weight: 600;
+  line-height: 1.4;
   white-space: nowrap;
+}
+
+.eval-page__badge--cell {
+  box-sizing: border-box;
+  width: 9rem;
+  max-width: 100%;
+}
+
+.eval-page__badge--group {
+  padding: 0.0625rem 0.4375rem;
+  font-size: 0.6875rem;
+}
+
+.eval-page__badge--dialog-meta {
+  flex-shrink: 0;
+  min-width: 4.75rem;
+  justify-content: center;
+  font-size: 0.6875rem;
 }
 
 .eval-page__badge--scale   { background: color-mix(in srgb, var(--color-primary) 12%, transparent); color: var(--color-primary); }
@@ -2322,6 +2839,10 @@ onBeforeUnmount(() => {
   gap: var(--space-2);
 }
 
+.eval-page__form-field--status .eval-page__half-toggle {
+  justify-content: space-between;
+}
+
 .eval-page__half-toggle-label {
   color: var(--color-text-muted);
   font-size: 0.8125rem;
@@ -2582,7 +3103,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-5);
+  padding: 0.625rem;
   background: var(--color-sidebar-overlay);
 }
 
@@ -2604,9 +3125,10 @@ onBeforeUnmount(() => {
 }
 
 .eval-page__dialog-panel--fill {
-  width: min(90rem, calc(100vw - 2.5rem));
-  height: calc(100vh - 2.5rem);
-  max-height: calc(100vh - 2.5rem);
+  width: calc(100vw - 1.25rem);
+  max-width: calc(100vw - 1.25rem);
+  height: calc(100vh - 1.25rem);
+  max-height: calc(100vh - 1.25rem);
   overflow: hidden;
 }
 
@@ -2720,11 +3242,13 @@ onBeforeUnmount(() => {
 
 .eval-page__dialog-panel--fill .eval-page__form--cols {
   overflow: auto;
+  padding: 2px;
+  box-sizing: border-box;
 }
 
 .eval-page__dialog-body--edit {
   display: grid;
-  grid-template-columns: minmax(16rem, 18.5rem) minmax(0, 1fr);
+  grid-template-columns: minmax(26rem, 36rem) minmax(0, 1fr);
   gap: var(--space-5);
   align-items: start;
 }
@@ -2749,11 +3273,171 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
+.eval-page__dialog-panel--fill .eval-page__dialog-body--history {
+  overflow: auto;
+}
+
+.eval-page__history {
+  position: relative;
+  max-width: 42rem;
+  margin: 0;
+  padding: 0.25rem 0 0.5rem;
+  list-style: none;
+}
+
+.eval-page__history--line::before {
+  content: '';
+  position: absolute;
+  top: 1.15rem;
+  bottom: 1.15rem;
+  left: 0.6875rem;
+  width: 1px;
+  background: var(--color-border);
+}
+
+.eval-page__history-empty {
+  padding: 1.25rem 0.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.eval-page__history-item {
+  position: relative;
+  display: flex;
+  gap: 0.875rem;
+  padding-bottom: 0.875rem;
+}
+
+.eval-page__history-item:last-child {
+  padding-bottom: 0;
+}
+
+.eval-page__history-dot {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.35rem;
+  border-radius: var(--radius-full);
+  background: var(--color-info);
+  color: var(--color-on-primary);
+  box-shadow: 0 0 0 3px var(--color-surface);
+}
+
+.eval-page__history-dot--success {
+  background: var(--color-success, #16a34a);
+}
+
+.eval-page__history-dot--danger {
+  background: var(--color-danger, #dc2626);
+}
+
+.eval-page__history-dot--info {
+  background: var(--color-info);
+}
+
+.eval-page__history-card {
+  flex: 1;
+  min-width: 0;
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.eval-page__history-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.eval-page__history-who {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.eval-page__history-name {
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.eval-page__history-verb {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.eval-page__history-open {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-info);
+  cursor: pointer;
+}
+
+.eval-page__history-open:hover {
+  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+}
+
+.eval-page__history-avatar {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.eval-page__history-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.eval-page__history-time {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0.375rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.eval-page__history-detail {
+  margin: 0.5rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
 .eval-page__dialog-list-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
+  padding-inline: 2px;
+  box-sizing: border-box;
 }
 
 .eval-page__dialog-list {
@@ -2776,6 +3460,105 @@ onBeforeUnmount(() => {
   line-height: 1.5;
 }
 
+.eval-page__dialog-list-group {
+  list-style: none;
+}
+
+.eval-page__dialog-list-group-head {
+  position: relative;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.125rem 0;
+  padding: 0.4375rem 0.5rem;
+  padding-left: calc(0.5rem + var(--space-2) + 3px);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface));
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.eval-page__dialog-list-group-head::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: 0.5rem;
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.eval-page__dialog-list-group-head--scale::before {
+  background: var(--color-primary);
+}
+
+.eval-page__dialog-list-group-head--behavior::before {
+  background: var(--color-warning, #d97706);
+}
+
+.eval-page__dialog-list-group-head--mixed::before {
+  background: linear-gradient(
+    to bottom,
+    var(--color-primary) 0%,
+    var(--color-primary) 50%,
+    var(--color-warning, #d97706) 50%,
+    var(--color-warning, #d97706) 100%
+  );
+}
+
+.eval-page__dialog-list-group-head:hover {
+  background: var(--color-surface-muted);
+}
+
+.eval-page__dialog-list-group-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.eval-page__dialog-list-group-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.eval-page__dialog-list-group-title,
+.eval-page__dialog-list-group-code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eval-page__dialog-list-group-code {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+.eval-page__dialog-list-group-badges {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.eval-page__dialog-list-group-count {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
 .eval-page__dialog-list-item {
   display: flex;
   align-items: center;
@@ -2790,8 +3573,8 @@ onBeforeUnmount(() => {
 }
 
 .eval-page__dialog-list-item--active {
-  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
-  box-shadow: inset 3px 0 0 var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, transparent);
 }
 
 .eval-page__dialog-list-copy {
@@ -2816,18 +3599,10 @@ onBeforeUnmount(() => {
   line-height: 1.35;
 }
 
-.eval-page__dialog-list-sub,
-.eval-page__dialog-list-meta {
+.eval-page__dialog-list-sub {
   color: var(--color-text-muted);
   font-size: 0.75rem;
   line-height: 1.35;
-}
-
-.eval-page__dialog-list-meta {
-  flex-shrink: 0;
-  max-width: 6.5rem;
-  font-weight: 600;
-  text-align: right;
 }
 
 .eval-page__dialog-stack {
@@ -3037,7 +3812,8 @@ onBeforeUnmount(() => {
 
   .eval-page__dialog-panel--fill {
     width: 100%;
-    height: min(92vh, calc(100vh - 2rem));
+    height: min(94vh, calc(100vh - 1.25rem));
+    max-height: min(94vh, calc(100vh - 1.25rem));
   }
 
   .eval-page__form-info,

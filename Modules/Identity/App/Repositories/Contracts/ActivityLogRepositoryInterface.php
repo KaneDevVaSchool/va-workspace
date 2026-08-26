@@ -32,4 +32,18 @@ interface ActivityLogRepositoryInterface
 
     /** @return Collection<int, string> */
     public function distinctSubjectTypes(): Collection;
+
+    /**
+     * Nhật ký mới nhất của một loại đối tượng, lọc theo id và/hoặc JSON properties.
+     *
+     * @param  list<int>  $subjectIds
+     * @param  array<string, mixed>  $propertyMatches
+     * @return Collection<int, ActivityLog>
+     */
+    public function recentForSubject(
+        string $subjectType,
+        array $subjectIds = [],
+        array $propertyMatches = [],
+        int $limit = 80,
+    ): Collection;
 }

@@ -2,6 +2,7 @@
 
 namespace Modules\Evaluation\App\Models;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Identity\App\Models\Department;
@@ -14,13 +15,17 @@ use Modules\Identity\App\Models\Department;
  * @property string|null $description
  * @property array       $levels         [{code, label, description, score}]
  * @property bool        $is_active
- * @property bool        $allow_half     cho phép trọng số bước 0.5
+ * @property bool        $allow_half          cho phép trọng số bước 0.5
+ * @property bool        $use_in_evaluation   hiện trên trang ĐGNL của thành viên
  * @property int         $sort_order
  * @property int|null    $created_by
+ * @property int|null    $updated_by
  */
 class EvaluationCriteria extends Model
 {
     protected $table = 'evaluation_criteria';
+
+    public const WITH_PRESENT = ['criterionType', 'creator.department', 'updater.department'];
 
     protected $fillable = [
         'department_id',
@@ -31,14 +36,17 @@ class EvaluationCriteria extends Model
         'levels',
         'is_active',
         'allow_half',
+        'use_in_evaluation',
         'sort_order',
         'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
-        'levels'     => 'array',
-        'is_active'  => 'boolean',
-        'allow_half' => 'boolean',
+        'levels'             => 'array',
+        'is_active'          => 'boolean',
+        'allow_half'         => 'boolean',
+        'use_in_evaluation'  => 'boolean',
     ];
 
     public function department(): BelongsTo
@@ -49,6 +57,16 @@ class EvaluationCriteria extends Model
     public function criterionType(): BelongsTo
     {
         return $this->belongsTo(EvaluationCriterionType::class, 'criterion_type_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     /**

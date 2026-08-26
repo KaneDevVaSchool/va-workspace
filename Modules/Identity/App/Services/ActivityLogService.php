@@ -118,6 +118,20 @@ class ActivityLogService
     }
 
     /**
+     * @param  list<int>  $subjectIds
+     * @param  array<string, mixed>  $propertyMatches
+     * @return Collection<int, ActivityLog>
+     */
+    public function recentForSubject(
+        string $subjectType,
+        array $subjectIds = [],
+        array $propertyMatches = [],
+        int $limit = 80,
+    ): Collection {
+        return $this->logs->recentForSubject($subjectType, $subjectIds, $propertyMatches, $limit);
+    }
+
+    /**
      * @param  array<string, mixed>  $filters
      */
     public function paginate(array $filters, int $perPage = 20): LengthAwarePaginator
