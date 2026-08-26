@@ -43,4 +43,6 @@ Route::middleware(['auth', 'permission:workspace_config.manage_sidebar_departmen
     ->group(function () {
         Route::get('/', [WorkspaceConfigSidebarController::class, 'index'])->name('index');
         Route::put('/', [WorkspaceConfigSidebarController::class, 'update'])->name('update');
+        Route::put('/layout', [WorkspaceConfigSidebarController::class, 'reorder'])->name('layout');
+        Route::put('/section', [WorkspaceConfigSidebarController::class, 'updateSection'])->name('section');
     });

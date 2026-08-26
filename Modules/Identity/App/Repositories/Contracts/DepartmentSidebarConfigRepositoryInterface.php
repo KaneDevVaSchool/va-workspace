@@ -15,11 +15,33 @@ interface DepartmentSidebarConfigRepositoryInterface
     public function hiddenKeysForDepartment(int $departmentId): array;
 
     /**
-     * Nhãn tuỳ chỉnh đang lưu (menu_key => custom_label), bỏ qua mục dùng tên mặc định.
+     * Nhãn tuỳ chỉnh đang lưu (menu_key => custom_label), bỏ qua mục dùng tên mặc định
+     * và bỏ qua row tên nhóm (`section:*`).
      *
      * @return array<string, string>
      */
     public function customLabelsForDepartment(int $departmentId): array;
+
+    /**
+     * Thứ tự tuỳ chỉnh (menu_key => sort_order), chỉ mục đã lưu sort_order.
+     *
+     * @return array<string, int>
+     */
+    public function sortOrdersForDepartment(int $departmentId): array;
+
+    /**
+     * Nhóm tuỳ chỉnh (menu_key => section_key), chỉ mục đã gán khác mặc định / đã lưu.
+     *
+     * @return array<string, string>
+     */
+    public function itemSectionsForDepartment(int $departmentId): array;
+
+    /**
+     * Nhãn nhóm tuỳ chỉnh (section_key => custom_label).
+     *
+     * @return array<string, string>
+     */
+    public function sectionLabelsForDepartment(int $departmentId): array;
 
     /** Toàn bộ override hiện có của 1 phòng ban (kể cả is_visible=true nếu có row). */
     public function allByDepartment(int $departmentId): Collection;
@@ -41,5 +63,8 @@ interface DepartmentSidebarConfigRepositoryInterface
         ?int $updatedBy,
         bool $updateLabel = false,
         ?string $customLabel = null,
+        bool $updateLayout = false,
+        ?int $sortOrder = null,
+        ?string $sectionKey = null,
     ): DepartmentSidebarConfig;
 }

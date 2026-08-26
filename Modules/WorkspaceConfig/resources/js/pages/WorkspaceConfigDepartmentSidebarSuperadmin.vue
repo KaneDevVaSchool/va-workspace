@@ -10,14 +10,14 @@ import SidebarMenuConfigPanel from '../components/SidebarMenuConfigPanel.vue';
 
 const hub = inject('workspaceConfigDeptDetailHub', null);
 const menus = computed(() => hub?.sidebarMenus?.value ?? []);
+const sections = computed(() => hub?.sidebarSections?.value ?? []);
 const loading = computed(() => hub?.loading?.value ?? false);
 </script>
 
 <template>
   <SidebarMenuConfigPanel
     :menus="menus"
+    :sections="sections"
     :loading="loading"
-    intro-eyebrow="Chỉ xem"
-    intro-text="Super admin không bật/tắt hay đổi tên thay trưởng phòng. Tên và trạng thái dưới đây là menu trái hiện tại của phòng ban."
   />
 </template>

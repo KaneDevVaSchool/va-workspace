@@ -108,6 +108,16 @@ const MENU_SECTIONS = [
         hideWhenSuperAdmin: true,
         configurableByDepartment: true,
       },
+      {
+        // Duyệt bài viết (toàn trường) — khác "social.moderate" (xoá bài
+        // vi phạm theo phòng ban). Hiện với bất kỳ ai có social.review:
+        // mặc định admin/super_admin (social.* / *), hoặc được cấp thêm
+        // qua ma trận phân quyền. KHÔNG configurableByDepartment.
+        name: 'manager.social.moderation',
+        label: 'Duyệt bài viết',
+        icon: 'listChecks',
+        requiresPermission: 'social.review',
+      },
     ],
   },
   {
@@ -126,20 +136,64 @@ const MENU_SECTIONS = [
 
 const registeredRouteNames = computed(() => new Set(router.getRoutes().map((r) => r.name)));
 
-const visibleSections = computed(() =>
-  MENU_SECTIONS.map((section) => ({
-    ...section,
-    items: section.items.filter(
-      (item) =>
-        registeredRouteNames.value.has(item.name) &&
-        (!item.requiresSuperAdmin || auth.showSuperAdminNav) &&
-        (!item.hideWhenSuperAdmin || !auth.showSuperAdminNav) &&
-        (!item.requiresAdmin || auth.canViewActivityLog) &&
-        (!item.requiresPermission || auth.can(item.requiresPermission)) &&
-        !auth.hiddenMenuKeys.includes(item.name),
-    ),
-  })).filter((section) => section.items.length > 0),
-);
+function itemPasses(item) {
+  return (
+    registeredRouteNames.value.has(item.name) &&
+    (!item.requiresSuperAdmin || auth.showSuperAdminNav) &&
+    (!item.hideWhenSuperAdmin || !auth.showSuperAdminNav) &&
+    (!item.requiresAdmin || auth.canViewActivityLog) &&
+    (!item.requiresPermission || auth.can(item.requiresPermission)) &&
+    !auth.hiddenMenuKeys.includes(item.name)
+  );
+}
+
+const visibleSections = computed(() => {
+  const itemSections = auth.menuItemSections;
+  const menuOrder = auth.menuOrder;
+  const sectionLabels = auth.menuSectionLabels;
+
+  const sectionMap = new Map(
+    MENU_SECTIONS.map((section) => [
+      section.id,
+      {
+        ...section,
+        label: typeof sectionLabels[section.id] === 'string' && sectionLabels[section.id].trim()
+          ? sectionLabels[section.id].trim()
+          : section.label,
+        items: [],
+      },
+    ]),
+  );
+
+  MENU_SECTIONS.forEach((section, sectionIndex) => {
+    section.items.forEach((item, itemIndex) => {
+      const originalIndex = sectionIndex * 100 + itemIndex;
+      const assigned = item.configurableByDepartment ? itemSections[item.name] : null;
+      const targetId = assigned && sectionMap.has(assigned) ? assigned : section.id;
+      sectionMap.get(targetId).items.push({ ...item, originalIndex });
+    });
+  });
+
+  return [...sectionMap.values()]
+    .map((section) => ({
+      ...section,
+      items: section.items
+        .slice()
+        .sort((a, b) => {
+          const orderA =
+            a.configurableByDepartment && Number.isFinite(Number(menuOrder[a.name]))
+              ? Number(menuOrder[a.name])
+              : 1000 + a.originalIndex;
+          const orderB =
+            b.configurableByDepartment && Number.isFinite(Number(menuOrder[b.name]))
+              ? Number(menuOrder[b.name])
+              : 1000 + b.originalIndex;
+          return orderA - orderB || a.originalIndex - b.originalIndex;
+        })
+        .filter(itemPasses),
+    }))
+    .filter((section) => section.items.length > 0);
+});
 
 function isActive(routeName) {
   return route.name === routeName || route.matched.some((r) => r.name === routeName);
@@ -282,8 +336,8 @@ function closeDrawer() {
 
 .sidebar__brand-mark {
   flex-shrink: 0;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.5rem;
+  height: 2.5rem;
   object-fit: contain;
   filter: brightness(1.04);
 }
@@ -292,7 +346,7 @@ function closeDrawer() {
   display: block;
   width: auto;
   max-width: 100%;
-  height: 2.125rem;
+  height: 2.5rem;
   object-fit: contain;
   filter: brightness(1.04);
 }

@@ -15,6 +15,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $menu_key
  * @property bool $is_visible
  * @property string|null $custom_label
+ * @property int|null $sort_order
+ * @property string|null $section_key
  * @property int|null $updated_by
  */
 class DepartmentSidebarConfig extends Model
@@ -24,11 +26,14 @@ class DepartmentSidebarConfig extends Model
         'menu_key',
         'is_visible',
         'custom_label',
+        'sort_order',
+        'section_key',
         'updated_by',
     ];
 
     protected $casts = [
         'is_visible' => 'boolean',
+        'sort_order' => 'integer',
     ];
 
     public function department(): BelongsTo

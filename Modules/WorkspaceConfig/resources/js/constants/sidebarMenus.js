@@ -30,6 +30,11 @@ export const SIDEBAR_MENU_CATALOG = {
   },
 };
 
+export const SIDEBAR_SECTIONS = {
+  general: { id: 'general', defaultLabel: 'Điều hướng' },
+  manager: { id: 'manager', defaultLabel: 'Quản lý' },
+};
+
 const SECTION_ORDER = ['general', 'manager', 'other'];
 
 export const LABEL_MAX_LENGTH = 40;
@@ -51,26 +56,110 @@ export function enrichMenu(menu) {
     ...meta,
     ...menu,
     icon: meta.icon,
-    section: meta.section,
-    sectionLabel: meta.sectionLabel,
+    section: menu.section || meta.section,
+    default_section: menu.default_section || meta.section,
     description: meta.description,
   };
 }
 
-export function groupMenus(menus) {
+function sectionDefaultLabel(sectionId) {
+  return SIDEBAR_SECTIONS[sectionId]?.defaultLabel || 'Khác';
+}
+
+export function sectionLabelMap(sectionConfigs = []) {
+  const map = {};
+  for (const section of sectionConfigs) {
+    if (section?.id) map[section.id] = section.label || sectionDefaultLabel(section.id);
+  }
+  return map;
+}
+
+export function groupMenus(menus, sectionConfigs = [], { includeEmpty = false } = {}) {
+  const labels = sectionLabelMap(sectionConfigs);
   const groups = new Map();
+
+  for (const id of SECTION_ORDER) {
+    if (id === 'other') continue;
+    groups.set(id, {
+      id,
+      label: labels[id] || sectionDefaultLabel(id),
+      defaultLabel: sectionDefaultLabel(id),
+      items: [],
+    });
+  }
 
   for (const menu of menus) {
     const item = enrichMenu(menu);
-    if (!groups.has(item.section)) {
-      groups.set(item.section, {
-        id: item.section,
-        label: item.sectionLabel,
+    const sectionId = item.section || 'other';
+    if (!groups.has(sectionId)) {
+      groups.set(sectionId, {
+        id: sectionId,
+        label: labels[sectionId] || item.sectionLabel || sectionDefaultLabel(sectionId),
+        defaultLabel: item.sectionLabel || sectionDefaultLabel(sectionId),
         items: [],
       });
     }
-    groups.get(item.section).items.push(item);
+    groups.get(sectionId).items.push(item);
   }
 
-  return SECTION_ORDER.filter((id) => groups.has(id)).map((id) => groups.get(id));
+  for (const group of groups.values()) {
+    group.items.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.menu_key.localeCompare(b.menu_key));
+  }
+
+  return SECTION_ORDER.filter((id) => groups.has(id))
+    .map((id) => groups.get(id))
+    .filter((group) => includeEmpty || group.items.length > 0)
+    .concat([...groups.values()].filter((group) => !SECTION_ORDER.includes(group.id) && group.items.length > 0));
+}
+
+export function layoutPayload(menus) {
+  return menus.map((menu, index) => ({
+    menu_key: menu.menu_key,
+    section: menu.section,
+    sort_order: index,
+  }));
+}
+
+/**
+ * Chuyển một mục sang nhóm `toSectionId` tại vị trí `toIndex` (0 = đầu nhóm).
+ * Trả về mảng mới đã gán lại section + sort_order theo thứ tự nhóm.
+ */
+export function moveMenuItem(menus, fromKey, toSectionId, toIndex) {
+  const next = menus.map((menu) => ({ ...menu }));
+  const fromIdx = next.findIndex((menu) => menu.menu_key === fromKey);
+  if (fromIdx === -1) return menus;
+
+  const [item] = next.splice(fromIdx, 1);
+  item.section = toSectionId;
+
+  const grouped = new Map();
+  for (const id of SECTION_ORDER) grouped.set(id, []);
+  for (const menu of next) {
+    const id = menu.section || 'other';
+    if (!grouped.has(id)) grouped.set(id, []);
+    grouped.get(id).push(menu);
+  }
+
+  const target = grouped.get(toSectionId) ?? [];
+  const clamped = Math.max(0, Math.min(toIndex, target.length));
+  target.splice(clamped, 0, item);
+  grouped.set(toSectionId, target);
+
+  let order = 0;
+  const flat = [];
+  for (const id of SECTION_ORDER) {
+    for (const menu of grouped.get(id) ?? []) {
+      flat.push({ ...menu, section: id === 'other' ? menu.section : id, sort_order: order });
+      order += 1;
+    }
+  }
+  for (const [id, list] of grouped) {
+    if (SECTION_ORDER.includes(id)) continue;
+    for (const menu of list) {
+      flat.push({ ...menu, sort_order: order });
+      order += 1;
+    }
+  }
+
+  return flat;
 }

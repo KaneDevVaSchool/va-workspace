@@ -1,30 +1,46 @@
 <script setup>
 //
-// Panel cấu hình menu trái dùng chung cho tab manager (bật/tắt + đổi tên)
-// và superadmin chi tiết phòng ban (chỉ xem). Nhóm theo section sidebar,
-// thống kê hiện/ẩn, lọc, xem trước menu trái.
+// Panel cấu hình menu trái dùng chung cho tab manager (bật/tắt + đổi tên
+// + kéo thả + đổi tên nhóm) và superadmin chi tiết phòng ban (chỉ xem).
+// Nhóm theo section sidebar, thống kê hiện/ẩn, lọc, xem trước menu trái.
 //
-import { computed, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import StatusBadge from './StatusBadge.vue';
-import { groupMenus, LABEL_MAX_LENGTH } from '../constants/sidebarMenus.js';
+import {
+  groupMenus,
+  LABEL_MAX_LENGTH,
+  moveMenuItem,
+} from '../constants/sidebarMenus.js';
 import { menuVisibilityLabel } from '../constants/departmentDetail.js';
 
 const props = defineProps({
   menus: { type: Array, default: () => [] },
+  sections: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   emptyText: { type: String, default: 'Chưa có mục menu nào có thể cấu hình.' },
   editable: { type: Boolean, default: false },
   savingKey: { type: String, default: null },
   busy: { type: Boolean, default: false },
-  introEyebrow: { type: String, default: 'Menu trái' },
-  introText: { type: String, required: true },
 });
 
-const emit = defineEmits(['toggle', 'show-all', 'hide-all', 'rename']);
+const emit = defineEmits(['toggle', 'show-all', 'hide-all', 'rename', 'rename-section', 'reorder']);
 
 const filter = ref('all');
 const drafts = reactive({});
+const sectionDrafts = reactive({});
+const draggingKey = ref(null);
+const dropTarget = ref(null);
+const dragSnapshot = ref(null);
+const ghost = ref(null);
+
+let grabX = 0;
+let grabY = 0;
+let pendingX = 0;
+let pendingY = 0;
+let rafId = 0;
+
+const canDrag = computed(() => props.editable && !props.busy && filter.value === 'all');
 
 const visibleCount = computed(() => props.menus.filter((item) => item.is_visible).length);
 const hiddenCount = computed(() => props.menus.length - visibleCount.value);
@@ -35,8 +51,17 @@ const filteredMenus = computed(() => {
   return props.menus;
 });
 
-const sections = computed(() => groupMenus(filteredMenus.value));
-const previewSections = computed(() => groupMenus(props.menus));
+const displayMenus = computed(() => {
+  if (!draggingKey.value || !dragSnapshot.value || !dropTarget.value) return props.menus;
+  return moveMenuItem(dragSnapshot.value, draggingKey.value, dropTarget.value.sectionId, dropTarget.value.index);
+});
+
+const groupedSections = computed(() =>
+  groupMenus(draggingKey.value ? displayMenus.value : filteredMenus.value, props.sections, {
+    includeEmpty: props.editable && filter.value === 'all',
+  }),
+);
+const previewSections = computed(() => groupMenus(draggingKey.value ? displayMenus.value : props.menus, props.sections));
 
 const filterEmptyText = computed(() => {
   if (filter.value === 'visible') return 'Không có mục nào đang hiện.';
@@ -90,15 +115,195 @@ function onTitleKeydown(event, menu) {
     event.target.blur();
   }
 }
+
+function sectionTitleValue(section) {
+  return Object.hasOwn(sectionDrafts, section.id) ? sectionDrafts[section.id] : section.label;
+}
+
+function isSectionCustomized(section) {
+  return sectionTitleValue(section).trim() !== section.defaultLabel;
+}
+
+function onSectionTitleInput(section, event) {
+  sectionDrafts[section.id] = event.target.value;
+}
+
+function commitSectionTitle(section) {
+  const next = sectionTitleValue(section).trim();
+  delete sectionDrafts[section.id];
+  if (next === section.label) return;
+  emit('rename-section', section.id, next);
+}
+
+function revertSectionTitle(section) {
+  delete sectionDrafts[section.id];
+}
+
+function resetSectionTitle(section) {
+  delete sectionDrafts[section.id];
+  if (section.label === section.defaultLabel && !isSectionCustomized(section)) return;
+  emit('rename-section', section.id, '');
+}
+
+function onSectionTitleKeydown(event, section) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    event.target.blur();
+  }
+  if (event.key === 'Escape') {
+    revertSectionTitle(section);
+    event.target.blur();
+  }
+}
+
+function readDropTarget(clientX, clientY) {
+  const lists = document.querySelectorAll('.wc-menu__list-wrap [data-section-id]');
+  let nearest = dropTarget.value;
+  let nearestDist = Infinity;
+
+  for (const list of lists) {
+    const rect = list.getBoundingClientRect();
+    if (clientX < rect.left - 20 || clientX > rect.right + 20) continue;
+
+    const items = [...list.querySelectorAll('[data-menu-key]')].filter(
+      (el) => el.dataset.menuKey !== draggingKey.value,
+    );
+    let index = items.length;
+    for (let i = 0; i < items.length; i += 1) {
+      const itemRect = items[i].getBoundingClientRect();
+      if (clientY < itemRect.top + itemRect.height / 2) {
+        index = i;
+        break;
+      }
+    }
+
+    const next = { sectionId: list.dataset.sectionId, index };
+    if (clientY >= rect.top - 12 && clientY <= rect.bottom + 12) {
+      return next;
+    }
+
+    const dist = clientY < rect.top ? rect.top - clientY : clientY - rect.bottom;
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearest = next;
+    }
+  }
+
+  return nearest;
+}
+
+function flushPointer() {
+  rafId = 0;
+  if (!draggingKey.value || !ghost.value) return;
+  ghost.value.x = pendingX - grabX;
+  ghost.value.y = pendingY - grabY;
+  const next = readDropTarget(pendingX, pendingY);
+  if (
+    next &&
+    (!dropTarget.value || next.sectionId !== dropTarget.value.sectionId || next.index !== dropTarget.value.index)
+  ) {
+    dropTarget.value = next;
+  }
+}
+
+function stopPointerDrag() {
+  if (rafId) {
+    cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+  window.removeEventListener('pointermove', onPointerMove);
+  window.removeEventListener('pointerup', onPointerUp);
+  window.removeEventListener('pointercancel', onPointerCancel);
+  document.body.style.userSelect = '';
+  document.body.style.cursor = '';
+}
+
+function clearDragState() {
+  draggingKey.value = null;
+  dropTarget.value = null;
+  dragSnapshot.value = null;
+  ghost.value = null;
+  stopPointerDrag();
+}
+
+function commitReorder(key, sectionId, index) {
+  const current = dragSnapshot.value || props.menus;
+  const next = moveMenuItem(current, key, sectionId, index);
+  if (
+    next.length === current.length &&
+    next.every((item, i) => item.menu_key === current[i].menu_key && item.section === current[i].section)
+  ) {
+    return;
+  }
+  emit('reorder', next);
+}
+
+function onPointerMove(event) {
+  if (!draggingKey.value) return;
+  pendingX = event.clientX;
+  pendingY = event.clientY;
+  if (!rafId) rafId = requestAnimationFrame(flushPointer);
+}
+
+function onPointerUp() {
+  const key = draggingKey.value;
+  const target = dropTarget.value;
+  if (key && target) commitReorder(key, target.sectionId, target.index);
+  clearDragState();
+}
+
+function onPointerCancel() {
+  clearDragState();
+}
+
+function onHandlePointerDown(event, menu) {
+  if (!canDrag.value || event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+
+  const itemEl = event.currentTarget.closest('[data-menu-key]');
+  const rect = itemEl?.getBoundingClientRect();
+  grabX = rect ? event.clientX - rect.left : 0;
+  grabY = rect ? event.clientY - rect.top : 0;
+  pendingX = event.clientX;
+  pendingY = event.clientY;
+
+  dragSnapshot.value = props.menus.map((item) => ({ ...item }));
+  draggingKey.value = menu.menu_key;
+  ghost.value = {
+    label: titleValue(menu),
+    icon: menu.icon,
+    on: menu.is_visible,
+    width: rect?.width ?? 0,
+    x: rect?.left ?? event.clientX,
+    y: rect?.top ?? event.clientY,
+  };
+
+  const fromSection = groupedSections.value.find((section) =>
+    section.items.some((item) => item.menu_key === menu.menu_key),
+  );
+  const fromIndex = fromSection?.items.findIndex((item) => item.menu_key === menu.menu_key) ?? 0;
+  dropTarget.value = { sectionId: fromSection?.id || menu.section, index: fromIndex };
+
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'grabbing';
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerCancel);
+}
+
+function onRowPointerDown(event, menu) {
+  if (event.target.closest('input, button, [role="switch"]')) return;
+  onHandlePointerDown(event, menu);
+}
+
+onBeforeUnmount(() => {
+  clearDragState();
+});
 </script>
 
 <template>
-  <div class="wc-menu">
-    <div class="wc-menu__intro" :class="editable ? 'wc-menu__intro--info' : 'wc-menu__intro--warning'">
-      <p class="wc-menu__intro-kicker">{{ introEyebrow }}</p>
-      <p class="wc-menu__intro-text">{{ introText }}</p>
-    </div>
-
+  <div class="wc-menu" :class="{ 'wc-menu--dragging': draggingKey }">
     <div class="wc-menu__toolbar">
       <div class="wc-menu__stats" aria-live="polite">
         <span class="wc-menu__stat">
@@ -163,26 +368,83 @@ function onTitleKeydown(event, menu) {
       <div class="wc-menu__list-wrap hide-scrollbar">
         <p v-if="loading" class="wc-menu__empty">Đang tải…</p>
         <p v-else-if="menus.length === 0" class="wc-menu__empty">{{ emptyText }}</p>
-        <p v-else-if="sections.length === 0" class="wc-menu__empty">{{ filterEmptyText }}</p>
+        <p v-else-if="groupedSections.length === 0" class="wc-menu__empty">{{ filterEmptyText }}</p>
 
         <div v-else class="wc-menu__sections">
-          <section v-for="section in sections" :key="section.id" class="wc-menu__section">
+          <section
+            v-for="section in groupedSections"
+            :key="section.id"
+            class="wc-menu__section"
+            :class="{ 'wc-menu__section--drop': dropTarget?.sectionId === section.id }"
+          >
             <header class="wc-menu__section-head">
-              <h2 class="wc-menu__section-label">{{ section.label }}</h2>
+              <div class="wc-menu__section-title">
+                <input
+                  v-if="editable"
+                  class="wc-menu__section-input"
+                  type="text"
+                  :value="sectionTitleValue(section)"
+                  :maxlength="LABEL_MAX_LENGTH"
+                  :disabled="busy"
+                  :placeholder="section.defaultLabel"
+                  :aria-label="`Tên nhóm ${section.defaultLabel}`"
+                  @input="onSectionTitleInput(section, $event)"
+                  @blur="commitSectionTitle(section)"
+                  @keydown="onSectionTitleKeydown($event, section)"
+                />
+                <h2 v-else class="wc-menu__section-label">{{ section.label }}</h2>
+                <button
+                  v-if="editable && isSectionCustomized(section)"
+                  type="button"
+                  class="wc-menu__reset"
+                  :disabled="busy"
+                  @mousedown.prevent="resetSectionTitle(section)"
+                >
+                  Đặt lại
+                </button>
+              </div>
               <span class="wc-menu__section-count">{{ section.items.length }} mục</span>
             </header>
 
-            <ul class="wc-menu__list" role="list">
+            <TransitionGroup
+              name="wc-menu-sort"
+              tag="ul"
+              class="wc-menu__list"
+              role="list"
+              :data-section-id="section.id"
+              :data-item-count="section.items.length"
+            >
               <li
-                v-for="menu in section.items"
+                v-if="section.items.length === 0"
+                key="empty"
+                class="wc-menu__drop-empty"
+                :class="{ 'wc-menu__drop-empty--active': dropTarget?.sectionId === section.id }"
+              />
+              <li
+                v-for="(menu, index) in section.items"
                 :key="menu.menu_key"
                 class="wc-menu__item"
                 :class="{
                   'wc-menu__item--on': menu.is_visible,
                   'wc-menu__item--off': !menu.is_visible,
                   'wc-menu__item--saving': savingKey === menu.menu_key,
+                  'wc-menu__item--sortable': canDrag,
+                  'wc-menu__item--dragging': draggingKey === menu.menu_key,
                 }"
+                :data-menu-key="menu.menu_key"
+                :data-index="index"
+                @pointerdown="onRowPointerDown($event, menu)"
               >
+                <span
+                  v-if="canDrag"
+                  class="wc-menu__drag"
+                  data-drag-handle
+                  role="button"
+                  :aria-label="`Đổi vị trí ${menu.label}`"
+                  @pointerdown="onHandlePointerDown($event, menu)"
+                >
+                  <AppIcon name="gripVertical" :size="16" :stroke-width="2.25" />
+                </span>
                 <span class="wc-menu__item-icon" aria-hidden="true">
                   <AppIcon :name="menu.icon" :size="18" :stroke-width="1.75" />
                 </span>
@@ -202,8 +464,6 @@ function onTitleKeydown(event, menu) {
                     @keydown="onTitleKeydown($event, menu)"
                   />
                   <p v-else class="wc-menu__item-label">{{ menu.label }}</p>
-
-                  <p class="wc-menu__item-desc">{{ menu.description }}</p>
 
                   <div v-if="isCustomized(menu)" class="wc-menu__item-meta">
                     <span>Mặc định: {{ defaultLabel(menu) }}</span>
@@ -236,7 +496,7 @@ function onTitleKeydown(event, menu) {
                   </button>
                 </div>
               </li>
-            </ul>
+            </TransitionGroup>
           </section>
         </div>
       </div>
@@ -259,7 +519,7 @@ function onTitleKeydown(event, menu) {
 
           <nav v-else class="wc-menu__preview-nav" aria-hidden="true">
             <section v-for="section in previewSections" :key="section.id" class="wc-menu__preview-section">
-              <p class="wc-menu__preview-section-label">{{ section.label }}</p>
+              <p class="wc-menu__preview-section-label">{{ sectionTitleValue(section) || section.label }}</p>
               <div
                 v-for="menu in section.items"
                 :key="menu.menu_key"
@@ -275,12 +535,26 @@ function onTitleKeydown(event, menu) {
             </section>
           </nav>
         </div>
-
-        <p v-if="!loading && menus.length > 0" class="wc-menu__preview-hint">
-          Mục mờ không hiện trên menu trái. Đổi tên ở ô bên trái sẽ hiện ngay tại đây.
-        </p>
       </aside>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="ghost"
+        class="wc-menu__ghost"
+        :class="{ 'wc-menu__ghost--on': ghost.on }"
+        :style="{
+          width: `${ghost.width}px`,
+          '--ghost-x': `${ghost.x}px`,
+          '--ghost-y': `${ghost.y}px`,
+        }"
+      >
+        <span class="wc-menu__item-icon" aria-hidden="true">
+          <AppIcon :name="ghost.icon" :size="18" :stroke-width="1.75" />
+        </span>
+        <span class="wc-menu__ghost-label">{{ ghost.label }}</span>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -291,50 +565,6 @@ function onTitleKeydown(event, menu) {
   flex-direction: column;
   gap: var(--space-3);
   overflow: hidden;
-}
-
-.wc-menu__intro {
-  position: relative;
-  flex-shrink: 0;
-  padding: var(--space-3) var(--space-4) var(--space-3) calc(var(--space-2) + 3px + var(--space-4));
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.wc-menu__intro::before {
-  content: '';
-  position: absolute;
-  top: var(--space-2);
-  bottom: var(--space-2);
-  left: var(--space-2);
-  width: 3px;
-  border-radius: 0;
-  background: var(--color-border);
-}
-
-.wc-menu__intro--info::before {
-  background: var(--color-info);
-}
-
-.wc-menu__intro--warning::before {
-  background: var(--color-warning);
-}
-
-.wc-menu__intro-kicker {
-  margin: 0 0 var(--space-1);
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.wc-menu__intro-text {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 0.875rem;
-  line-height: 1.5;
 }
 
 .wc-menu__toolbar {
@@ -428,6 +658,7 @@ function onTitleKeydown(event, menu) {
 .wc-menu__bulk-btn:focus-visible,
 .wc-menu__switch:focus-visible,
 .wc-menu__title-input:focus-visible,
+.wc-menu__section-input:focus-visible,
 .wc-menu__reset:focus-visible {
   outline: 2px solid var(--color-info);
   outline-offset: 2px;
@@ -506,11 +737,39 @@ function onTitleKeydown(event, menu) {
 
 .wc-menu__section-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   padding-bottom: var(--space-2);
   box-shadow: 0 1px 0 var(--color-border);
+}
+
+.wc-menu__section-title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.wc-menu__section-input {
+  min-width: 0;
+  flex: 1;
+  height: 2rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.wc-menu__section-input:disabled {
+  opacity: 0.7;
 }
 
 .wc-menu__section-label {
@@ -529,12 +788,36 @@ function onTitleKeydown(event, menu) {
 }
 
 .wc-menu__list {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.wc-menu-sort-move {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.wc-menu-sort-enter-active,
+.wc-menu-sort-leave-active {
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.wc-menu-sort-enter-from,
+.wc-menu-sort-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+.wc-menu-sort-leave-active {
+  position: absolute;
+  left: 0;
+  right: 0;
 }
 
 .wc-menu__item {
@@ -547,8 +830,110 @@ function onTitleKeydown(event, menu) {
   background: var(--color-surface-muted);
 }
 
+.wc-menu__item--sortable {
+  grid-template-columns: 1.75rem 2.5rem minmax(0, 1fr) auto;
+  cursor: grab;
+}
+
+.wc-menu__item--sortable .wc-menu__title-input {
+  cursor: text;
+}
+
+.wc-menu__item--sortable .wc-menu__switch {
+  cursor: pointer;
+}
+
 .wc-menu__item--saving {
   opacity: 0.7;
+}
+
+.wc-menu__item--dragging {
+  opacity: 0.38;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px var(--color-info);
+}
+
+.wc-menu__drag {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  align-self: stretch;
+  width: 1.75rem;
+  min-height: 2.5rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.wc-menu__drag .app-icon {
+  pointer-events: none;
+}
+
+.wc-menu__title-input,
+.wc-menu__section-input,
+.wc-menu__switch {
+  -webkit-user-drag: none;
+}
+
+.wc-menu--dragging,
+.wc-menu--dragging * {
+  cursor: grabbing;
+}
+
+.wc-menu__drop-empty {
+  margin: 0;
+  min-height: 2.75rem;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px dashed var(--color-border);
+  transition:
+    background 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.wc-menu__drop-empty--active {
+  background: color-mix(in srgb, var(--color-info) 10%, var(--color-surface-muted));
+  box-shadow: inset 0 0 0 1px var(--color-info);
+}
+
+.wc-menu__ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+  will-change: transform;
+  transform: translate3d(var(--ghost-x), var(--ghost-y), 0) scale(1.03);
+}
+
+.wc-menu__ghost-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wc-menu__ghost--on .wc-menu__item-icon {
+  background: var(--color-success-tint-bg);
+  color: var(--color-success-tint-fg);
+  box-shadow: inset 0 0 0 1px var(--color-success-tint-border);
 }
 
 .wc-menu__item-icon {
@@ -599,17 +984,6 @@ function onTitleKeydown(event, menu) {
   color: var(--color-text);
   font-size: 0.9375rem;
   font-weight: 600;
-}
-
-.wc-menu__item--off .wc-menu__item-desc {
-  color: var(--color-text-muted);
-}
-
-.wc-menu__item-desc {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-  line-height: 1.45;
 }
 
 .wc-menu__item-meta {
@@ -821,14 +1195,6 @@ function onTitleKeydown(event, menu) {
   text-transform: uppercase;
 }
 
-.wc-menu__preview-hint {
-  flex-shrink: 0;
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  line-height: 1.4;
-}
-
 @media (max-width: 960px) {
   .wc-menu__main {
     grid-template-columns: 1fr;
@@ -863,6 +1229,10 @@ function onTitleKeydown(event, menu) {
     grid-template-columns: 2.5rem minmax(0, 1fr);
   }
 
+  .wc-menu__item--sortable {
+    grid-template-columns: 1.75rem 2.5rem minmax(0, 1fr);
+  }
+
   .wc-menu__item-controls {
     grid-column: 1 / -1;
     flex-direction: row;
@@ -877,8 +1247,15 @@ function onTitleKeydown(event, menu) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wc-menu__switch-thumb {
+  .wc-menu__switch-thumb,
+  .wc-menu-sort-move,
+  .wc-menu-sort-enter-active,
+  .wc-menu-sort-leave-active {
     transition: none;
+  }
+
+  .wc-menu__ghost {
+    transform: translate3d(var(--ghost-x), var(--ghost-y), 0);
   }
 }
 </style>

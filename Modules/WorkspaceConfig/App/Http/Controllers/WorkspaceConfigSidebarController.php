@@ -7,14 +7,15 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Identity\App\Models\DepartmentSidebarConfig;
 use Modules\Identity\App\Services\ActivityLogService;
+use Modules\WorkspaceConfig\App\Http\Requests\ReorderSidebarLayoutRequest;
+use Modules\WorkspaceConfig\App\Http\Requests\UpdateSidebarSectionRequest;
 use Modules\WorkspaceConfig\App\Http\Requests\UpdateSidebarVisibilityRequest;
 use Modules\WorkspaceConfig\App\Services\DepartmentSidebarConfigService;
 
 /**
- * manager/workspace-config/sidebar — bật/tắt và đổi tên menu sidebar của
- * CHÍNH phòng ban user đang đăng nhập. department_id luôn lấy từ
- * $request->user()->department_id (xem WorkspaceConfigMemberController
- * cho lý do không nhận từ query/body).
+ * manager/workspace-config/sidebar — bật/tắt, đổi tên, kéo thả thứ tự và
+ * đổi tên nhóm menu sidebar của CHÍNH phòng ban user đang đăng nhập.
+ * department_id luôn lấy từ $request->user()->department_id.
  */
 class WorkspaceConfigSidebarController extends Controller
 {
@@ -37,9 +38,7 @@ class WorkspaceConfigSidebarController extends Controller
             return $departmentId;
         }
 
-        return response()->json([
-            'menus' => $this->service->forDepartment($departmentId),
-        ]);
+        return response()->json($this->payload($departmentId));
     }
 
     public function update(UpdateSidebarVisibilityRequest $request): JsonResponse
@@ -84,8 +83,87 @@ class WorkspaceConfigSidebarController extends Controller
                 'default_label' => $defaultLabel,
                 'custom_label' => $config->custom_label,
                 'label' => $label,
+                'section' => $this->service->normalizeSection($config->section_key) ?? $this->service->defaultSection($config->menu_key),
+                'default_section' => $this->service->defaultSection($config->menu_key),
+                'sort_order' => $config->sort_order,
             ],
         ]);
+    }
+
+    public function reorder(ReorderSidebarLayoutRequest $request): JsonResponse
+    {
+        $departmentId = $this->departmentIdOrFail($request);
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
+        }
+
+        try {
+            $this->service->reorderMenus(
+                $departmentId,
+                $request->validated('items'),
+                $request->user()?->id,
+            );
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $this->activityLogs->record(
+            'workspace_config.sidebar.reorder',
+            'Sắp xếp lại thứ tự menu trái cho phòng ban',
+            $request->user(),
+            'department_sidebar_config',
+            $departmentId,
+        );
+
+        return response()->json($this->payload($departmentId));
+    }
+
+    public function updateSection(UpdateSidebarSectionRequest $request): JsonResponse
+    {
+        $departmentId = $this->departmentIdOrFail($request);
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
+        }
+
+        $data = $request->validated();
+
+        try {
+            $sections = $this->service->updateSection(
+                $departmentId,
+                $data['section_key'],
+                $data['custom_label'] ?? null,
+                $request->user()?->id,
+            );
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $updated = collect($sections)->firstWhere('id', $data['section_key']);
+        $this->activityLogs->record(
+            'workspace_config.sidebar.section_update',
+            $updated && $updated['custom_label']
+                ? 'Đổi tên nhóm "'.$this->service->sectionLabel($data['section_key']).'" thành "'.$updated['custom_label'].'" cho phòng ban'
+                : 'Khôi phục tên nhóm "'.$this->service->sectionLabel($data['section_key']).'" cho phòng ban',
+            $request->user(),
+            'department_sidebar_config',
+            $departmentId,
+        );
+
+        return response()->json([
+            'sections' => $sections,
+            'section' => $updated,
+        ]);
+    }
+
+    /**
+     * @return array{menus: \Illuminate\Support\Collection, sections: array}
+     */
+    private function payload(int $departmentId): array
+    {
+        return [
+            'menus' => $this->service->forDepartment($departmentId),
+            'sections' => $this->service->sectionsForDepartment($departmentId),
+        ];
     }
 
     /**

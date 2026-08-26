@@ -39,16 +39,25 @@ class AuthenticatedUserPresenter
             'active_role' => $this->viewAs->displayActiveRole($user),
             'is_impersonating' => $this->viewAs->isImpersonating(),
             'can_view_as' => $user->isSuperAdmin(),
-            // Permission keys hiệu lực (có tính view-as) — frontend cache trong Pinia store.
-            // ['*'] nếu là super_admin thực sự; danh sách keys cụ thể nếu đang view-as.
+            // Permission keys hiệu lực (config + DB grant, có tính view-as).
+            // ['*'] nếu là super_admin thực sự; catalog keys đang được cấp nếu không.
             'granted_permissions' => $this->permissions->resolveGrantedKeys($user),
-            // Menu sidebar bị phòng ban của user tự tắt / đổi tên (xem AppSidebar.vue).
+            // Menu sidebar bị phòng ban của user tự tắt / đổi tên / sắp xếp (xem AppSidebar.vue).
             'hidden_menu_keys' => $user->department
                 ? $this->sidebarConfigs->hiddenKeysForDepartment($user->department->id)
                 : [],
             'menu_labels' => $user->department
                 ? $this->sidebarConfigs->customLabelsForDepartment($user->department->id)
-                : new \stdClass,
+                : (object) [],
+            'menu_order' => $user->department
+                ? $this->sidebarConfigs->sortOrdersForDepartment($user->department->id)
+                : (object) [],
+            'menu_item_sections' => $user->department
+                ? $this->sidebarConfigs->itemSectionsForDepartment($user->department->id)
+                : (object) [],
+            'menu_section_labels' => $user->department
+                ? $this->sidebarConfigs->sectionLabelsForDepartment($user->department->id)
+                : (object) [],
         ];
     }
 }

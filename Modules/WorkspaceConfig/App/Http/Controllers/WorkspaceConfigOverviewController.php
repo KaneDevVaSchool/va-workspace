@@ -48,6 +48,7 @@ class WorkspaceConfigOverviewController extends Controller
             ],
             'members' => $this->members->forDepartment($model->id),
             'sidebar_menus' => $this->sidebarConfigs->forDepartment($model->id),
+            'sidebar_sections' => $this->sidebarConfigs->sectionsForDepartment($model->id),
             'evaluation_criteria' => $this->evaluationCriteria->listForDepartment($model->id),
         ]);
     }

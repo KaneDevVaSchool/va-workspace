@@ -25,6 +25,7 @@ const router = useRouter();
 const department = ref(null);
 const members = ref([]);
 const sidebarMenus = ref([]);
+const sidebarSections = ref([]);
 const evaluationCriteria = ref([]);
 const loading = ref(false);
 
@@ -40,6 +41,7 @@ provide('workspaceConfigDeptDetailHub', {
   department,
   members,
   sidebarMenus,
+  sidebarSections,
   evaluationCriteria,
   loading,
 });
@@ -53,11 +55,13 @@ async function loadDetail() {
     department.value = data.department;
     members.value = data.members ?? [];
     sidebarMenus.value = data.sidebar_menus ?? [];
+    sidebarSections.value = data.sidebar_sections ?? [];
     evaluationCriteria.value = data.evaluation_criteria ?? [];
   } catch (error) {
     department.value = null;
     members.value = [];
     sidebarMenus.value = [];
+    sidebarSections.value = [];
     evaluationCriteria.value = [];
     const message = error?.response?.data?.message;
     showClientToast('error', message || 'Không tải được chi tiết phòng ban.');

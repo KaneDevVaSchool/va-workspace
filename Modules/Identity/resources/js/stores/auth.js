@@ -102,6 +102,27 @@ export const useAuthStore = defineStore('auth', {
       if (!raw || Array.isArray(raw)) return {};
       return raw;
     },
+
+    /** Thứ tự tuỳ chỉnh (menu_key => sort_order). */
+    menuOrder: (state) => {
+      const raw = state.user?.menu_order;
+      if (!raw || Array.isArray(raw)) return {};
+      return raw;
+    },
+
+    /** Nhóm tuỳ chỉnh của từng mục (menu_key => section id). */
+    menuItemSections: (state) => {
+      const raw = state.user?.menu_item_sections;
+      if (!raw || Array.isArray(raw)) return {};
+      return raw;
+    },
+
+    /** Tên nhóm menu trái tuỳ chỉnh (section id => nhãn). */
+    menuSectionLabels: (state) => {
+      const raw = state.user?.menu_section_labels;
+      if (!raw || Array.isArray(raw)) return {};
+      return raw;
+    },
   },
 
   actions: {
@@ -185,6 +206,33 @@ export const useAuthStore = defineStore('auth', {
       if (next) labels[menuKey] = next;
       else delete labels[menuKey];
       this.user.menu_labels = labels;
+    },
+
+    /**
+     * Áp layout (thứ tự + nhóm) sau kéo thả — sidebar trái đổi tức thì.
+     * @param {{ order?: Record<string, number>, itemSections?: Record<string, string> }} layout
+     */
+    setMenuLayout(layout) {
+      if (!this.user) return;
+      if (layout?.order && !Array.isArray(layout.order)) {
+        this.user.menu_order = { ...layout.order };
+      }
+      if (layout?.itemSections && !Array.isArray(layout.itemSections)) {
+        this.user.menu_item_sections = { ...layout.itemSections };
+      }
+    },
+
+    /**
+     * Đổi tên nhóm menu trái ngay trên client.
+     */
+    setSectionLabel(sectionId, label) {
+      if (!this.user || !sectionId) return;
+      const raw = this.user.menu_section_labels;
+      const labels = raw && !Array.isArray(raw) ? { ...raw } : {};
+      const next = typeof label === 'string' ? label.trim() : '';
+      if (next) labels[sectionId] = next;
+      else delete labels[sectionId];
+      this.user.menu_section_labels = labels;
     },
   },
 });

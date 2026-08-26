@@ -40,7 +40,12 @@ class WorkspaceConfigSidebarTest extends TestCase
             ->assertJsonPath('menus.0.default_label', 'Tổng quan')
             ->assertJsonPath('menus.0.custom_label', null)
             ->assertJsonPath('menus.0.label', 'Tổng quan')
-            ->assertJsonPath('menus.0.is_visible', true);
+            ->assertJsonPath('menus.0.is_visible', true)
+            ->assertJsonPath('menus.0.section', 'general')
+            ->assertJsonPath('sections.0.id', 'general')
+            ->assertJsonPath('sections.0.label', 'Điều hướng')
+            ->assertJsonPath('sections.1.id', 'manager')
+            ->assertJsonPath('sections.1.label', 'Quản lý');
 
         $this->actingAs($director)
             ->putJson('/api/workspace-config/sidebar', [
@@ -148,5 +153,106 @@ class WorkspaceConfigSidebarTest extends TestCase
         $this->actingAs($member)
             ->getJson('/api/workspace-config/sidebar')
             ->assertStatus(403);
+    }
+
+    public function test_director_can_reorder_sidebar_and_move_item_to_top(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+
+        $this->actingAs($director)
+            ->putJson('/api/workspace-config/sidebar/layout', [
+                'items' => [
+                    ['menu_key' => 'manager.evaluation-templates.index', 'section' => 'general'],
+                    ['menu_key' => 'home', 'section' => 'general'],
+                    ['menu_key' => 'social.feed', 'section' => 'general'],
+                    ['menu_key' => 'manager.evaluation.view', 'section' => 'general'],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('menus.0.menu_key', 'manager.evaluation-templates.index')
+            ->assertJsonPath('menus.0.section', 'general')
+            ->assertJsonPath('menus.0.sort_order', 0)
+            ->assertJsonPath('menus.1.menu_key', 'home');
+
+        $this->assertDatabaseHas('department_sidebar_configs', [
+            'department_id' => $dept->id,
+            'menu_key' => 'manager.evaluation-templates.index',
+            'section_key' => 'general',
+            'sort_order' => 0,
+        ]);
+
+        $me = $this->actingAs($director)
+            ->getJson('/api/me')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(0, $me['menu_order']['manager.evaluation-templates.index']);
+        $this->assertSame('general', $me['menu_item_sections']['manager.evaluation-templates.index']);
+    }
+
+    public function test_director_can_rename_sidebar_section(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+
+        $this->actingAs($director)
+            ->putJson('/api/workspace-config/sidebar/section', [
+                'section_key' => 'general',
+                'custom_label' => 'Menu chính',
+            ])
+            ->assertOk()
+            ->assertJsonPath('section.id', 'general')
+            ->assertJsonPath('section.custom_label', 'Menu chính')
+            ->assertJsonPath('section.label', 'Menu chính')
+            ->assertJsonPath('sections.0.label', 'Menu chính');
+
+        $this->assertDatabaseHas('department_sidebar_configs', [
+            'department_id' => $dept->id,
+            'menu_key' => 'section:general',
+            'custom_label' => 'Menu chính',
+        ]);
+
+        $this->actingAs($director)
+            ->getJson('/api/me')
+            ->assertOk()
+            ->assertJsonPath('menu_section_labels.general', 'Menu chính')
+            ->assertJsonMissingPath('menu_labels.section:general');
+
+        $this->actingAs($director)
+            ->putJson('/api/workspace-config/sidebar/section', [
+                'section_key' => 'general',
+                'custom_label' => '',
+            ])
+            ->assertOk()
+            ->assertJsonPath('section.custom_label', null)
+            ->assertJsonPath('section.label', 'Điều hướng');
+    }
+
+    public function test_cannot_reorder_with_unknown_or_partial_menu_keys(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+
+        $this->actingAs($director)
+            ->putJson('/api/workspace-config/sidebar/layout', [
+                'items' => [
+                    ['menu_key' => 'home', 'section' => 'general'],
+                ],
+            ])
+            ->assertStatus(422);
+
+        $this->actingAs($director)
+            ->putJson('/api/workspace-config/sidebar/section', [
+                'section_key' => 'admin',
+                'custom_label' => 'Không được',
+            ])
+            ->assertStatus(422);
     }
 }
