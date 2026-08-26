@@ -19,6 +19,7 @@ class ActivityLogRepository implements ActivityLogRepositoryInterface
     public function recent(int $limit = 20): Collection
     {
         return ActivityLog::query()
+            ->with(['actor.department'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->limit($limit)
@@ -27,7 +28,9 @@ class ActivityLogRepository implements ActivityLogRepositoryInterface
 
     public function paginate(array $filters, int $perPage = 20): LengthAwarePaginator
     {
-        return $this->filteredQuery($filters)->paginate($perPage);
+        return $this->filteredQuery($filters)
+            ->with(['actor.department'])
+            ->paginate($perPage);
     }
 
     public function forExport(array $filters, int $limit): Collection

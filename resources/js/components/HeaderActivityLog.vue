@@ -30,6 +30,11 @@ function openAll() {
   router.push({ name: 'superadmin.activity' });
 }
 
+function actorInitial(log) {
+  const name = log?.actor?.name || log?.actor_name || 'Hệ thống';
+  return name.trim().charAt(0).toUpperCase() || '?';
+}
+
 function handleDocumentClick(event) {
   if (!isOpen.value || !rootRef.value) {
     return;
@@ -87,11 +92,23 @@ onBeforeUnmount(() => {
         <p v-if="loading" class="activity-list__empty">Đang tải…</p>
         <p v-else-if="logs.length === 0" class="activity-list__empty">Chưa có hoạt động nào.</p>
         <div v-for="log in logs" v-else :key="log.id" class="activity-item">
-          <p class="activity-item__desc">{{ log.description }}</p>
-          <p class="activity-item__meta">
-            <span>{{ log.actor_name || 'Hệ thống' }}</span>
-            <span>{{ formatRelativeTime(log.created_at) }}</span>
-          </p>
+          <span class="activity-item__avatar" aria-hidden="true">
+            <img
+              v-if="log.actor?.avatar_url"
+              :src="log.actor.avatar_url"
+              alt=""
+              class="activity-item__avatar-img"
+              referrerpolicy="no-referrer"
+            />
+            <template v-else>{{ actorInitial(log) }}</template>
+          </span>
+          <div class="activity-item__body">
+            <p class="activity-item__desc">{{ log.description }}</p>
+            <p class="activity-item__meta">
+              <span>{{ log.actor_name || log.actor?.name || 'Hệ thống' }}</span>
+              <span>{{ formatRelativeTime(log.created_at) }}</span>
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -186,10 +203,39 @@ onBeforeUnmount(() => {
 
 .activity-item {
   display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
+  align-items: flex-start;
+  gap: 0.75rem;
   padding: 0.75rem var(--space-3);
   box-shadow: 0 1px 0 var(--color-border);
+}
+
+.activity-item__avatar {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.activity-item__avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.activity-item__body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
 }
 
 .activity-item__desc {

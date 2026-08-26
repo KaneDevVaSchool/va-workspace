@@ -164,6 +164,7 @@ class ActivityLogService
             'actor_id' => $log->actor_id,
             'actor_name' => $log->actor_name,
             'actor_email' => $log->actor_email,
+            'actor' => $this->presentActor($log),
             'subject_type' => $log->subject_type,
             'subject_type_label' => self::subjectTypeLabel($log->subject_type),
             'subject_id' => $log->subject_id,
@@ -255,6 +256,24 @@ class ActivityLogService
         }
 
         return self::SUBJECT_TYPE_LABELS[$type] ?? $type;
+    }
+
+    /** @return array{id: int|null, name: string, email: string|null, avatar_url: string|null, department: array{id: int, name: string}|null} */
+    private function presentActor(ActivityLog $log): array
+    {
+        $actor = $log->relationLoaded('actor') ? $log->actor : null;
+        $department = $actor?->department;
+
+        return [
+            'id' => $actor?->id ?? $log->actor_id,
+            'name' => $actor?->name ?: ($log->actor_name ?: 'Hệ thống'),
+            'email' => $actor?->email ?? $log->actor_email,
+            'avatar_url' => $actor?->avatar_url,
+            'department' => $department ? [
+                'id' => $department->id,
+                'name' => $department->name,
+            ] : null,
+        ];
     }
 
     private function subjectLabel(ActivityLog $log): string

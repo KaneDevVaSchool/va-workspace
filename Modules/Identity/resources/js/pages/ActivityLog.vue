@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
+import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import { formatDate, formatDateTime, formatTime } from '@/lib/formatTime';
 import { showClientToast } from '@/lib/clientToast';
 import {
@@ -19,6 +20,7 @@ import {
 
 const CELL_PAD_X = 32;
 const COL_EXTRA = 24;
+const ACTOR_AVATAR_EXTRA = 42;
 let measureCtx = null;
 let wrapObserver = null;
 
@@ -187,9 +189,30 @@ function actionTone(action) {
   return 'info';
 }
 
+function actorUser(log) {
+  if (!log) return null;
+  if (log.actor) {
+    return {
+      id: log.actor.id,
+      name: log.actor.name || log.actor_name || 'Hệ thống',
+      email: log.actor.email || log.actor_email || null,
+      avatar_url: log.actor.avatar_url || null,
+      department: log.actor.department || null,
+    };
+  }
+
+  return {
+    id: log.actor_id,
+    name: log.actor_name || 'Hệ thống',
+    email: log.actor_email || null,
+    avatar_url: null,
+    department: null,
+  };
+}
+
 function cellText(log, key) {
   if (key === 'created_at') return formatDateTime(log.created_at) || '—';
-  if (key === 'actor') return log.actor_name || 'Hệ thống';
+  if (key === 'actor') return log.actor_name || log.actor?.name || 'Hệ thống';
   if (key === 'action') return log.action_label || log.action || '—';
   if (key === 'description') return log.description || '—';
   if (key === 'subject') return log.subject_label || '—';
@@ -267,7 +290,8 @@ function columnContentWidth(key, fonts) {
       maxW = Math.max(maxW, measureText(cellText(log, key), fonts.cell));
     }
   }
-  return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA));
+  const extra = key === 'actor' ? ACTOR_AVATAR_EXTRA : 0;
+  return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
 }
 
 function distributeExtraWidth(widths, keys, available) {
@@ -658,10 +682,17 @@ onBeforeUnmount(() => {
               >
                 <td v-for="col in shownColumns" :key="col.key">
                   <template v-if="col.key === 'actor'">
-                    <span>{{ cellText(log, 'actor') }}</span>
-                    <span v-if="log.actor_email" class="activity-page__muted">{{ log.actor_email }}</span>
+                    <span class="activity-page__person">
+                      <UserAvatarTip :user="actorUser(log)" label="Người thực hiện" />
+                      <span class="activity-page__person-text">
+                        <span>{{ cellText(log, 'actor') }}</span>
+                        <span v-if="log.actor_email || log.actor?.email" class="activity-page__muted">
+                          {{ log.actor_email || log.actor?.email }}
+                        </span>
+                      </span>
+                    </span>
                   </template>
-                  <span v-else>{{ cellText(log, col.key) }}</span>
+                  <span v-else class="activity-page__cell">{{ cellText(log, col.key) }}</span>
                 </td>
               </tr>
             </tbody>
@@ -717,11 +748,14 @@ onBeforeUnmount(() => {
           </div>
           <div class="activity-page__row">
             <span class="activity-page__row-label">Người thực hiện</span>
-            <span class="activity-page__row-value">{{ selected.actor_name || 'Hệ thống' }}</span>
+            <span class="activity-page__row-value activity-page__row-actor">
+              <UserAvatarTip :user="actorUser(selected)" label="Người thực hiện" />
+              <span>{{ selected.actor_name || selected.actor?.name || 'Hệ thống' }}</span>
+            </span>
           </div>
-          <div v-if="selected.actor_email" class="activity-page__row">
+          <div v-if="selected.actor_email || selected.actor?.email" class="activity-page__row">
             <span class="activity-page__row-label">Email</span>
-            <span class="activity-page__row-value">{{ selected.actor_email }}</span>
+            <span class="activity-page__row-value">{{ selected.actor_email || selected.actor?.email }}</span>
           </div>
           <div class="activity-page__row">
             <span class="activity-page__row-label">Đối tượng</span>
@@ -1060,7 +1094,7 @@ onBeforeUnmount(() => {
 .activity-page__table tbody td {
   padding: var(--space-3) var(--space-4);
   color: var(--color-text);
-  vertical-align: top;
+  vertical-align: middle;
   white-space: nowrap;
   box-shadow: 0 1px 0 var(--color-border);
 }
@@ -1077,7 +1111,25 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
 }
 
-.activity-page__table tbody td span {
+.activity-page__cell {
+  display: block;
+  white-space: nowrap;
+}
+
+.activity-page__person {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.activity-page__person-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.activity-page__person-text span {
   display: block;
   white-space: nowrap;
 }
@@ -1241,6 +1293,13 @@ onBeforeUnmount(() => {
   font-weight: 600;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.activity-page__row-actor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .activity-export {
