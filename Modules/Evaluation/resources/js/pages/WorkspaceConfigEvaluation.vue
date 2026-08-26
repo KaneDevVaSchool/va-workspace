@@ -27,10 +27,10 @@ import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 const COLUMNS = [
   { key: 'name',        label: 'Tên tiêu chí',     defaultOn: true  },
   { key: 'kind',        label: 'Loại',              defaultOn: true  },
-  { key: 'type',        label: 'Cách chấm',         defaultOn: true  },
-  { key: 'level_count', label: 'Số mức',            defaultOn: true  },
-  { key: 'max_score',   label: 'Điểm tối đa',       defaultOn: true  },
-  { key: 'status',      label: 'Trạng thái',        defaultOn: true  },
+  { key: 'type',        label: 'Cách chấm',         defaultOn: true,  align: 'center' },
+  { key: 'level_count', label: 'Số mức',            defaultOn: true,  align: 'center' },
+  { key: 'max_score',   label: 'Điểm tối đa',       defaultOn: true,  align: 'center' },
+  { key: 'status',      label: 'Trạng thái',        defaultOn: true,  align: 'center' },
   { key: 'description', label: 'Mô tả',             defaultOn: false },
 ];
 
@@ -978,6 +978,7 @@ onBeforeUnmount(() => {
                 v-for="col in shownColumns"
                 :key="col.key"
                 class="eval-page__th"
+                :class="{ 'eval-page__th--center': col.align === 'center' }"
               >
                 {{ col.label }}
                 <button
@@ -987,7 +988,7 @@ onBeforeUnmount(() => {
                   @mousedown.stop="startResize($event, col.key)"
                 />
               </th>
-              <th v-if="canManage" class="eval-page__th eval-page__th--action">Thao tác</th>
+              <th v-if="canManage" class="eval-page__th eval-page__th--center">Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -1008,18 +1009,18 @@ onBeforeUnmount(() => {
                 </span>
                 <span v-else class="eval-page__muted">—</span>
               </td>
-              <td v-if="visibleColumns.type" class="eval-page__td">
+              <td v-if="visibleColumns.type" class="eval-page__td eval-page__td--center">
                 <span class="eval-page__badge" :class="'eval-page__badge--' + criterion.type">
                   {{ TYPE_LABELS[criterion.type] ?? criterion.type }}
                 </span>
               </td>
-              <td v-if="visibleColumns.level_count" class="eval-page__td eval-page__td--num">
+              <td v-if="visibleColumns.level_count" class="eval-page__td eval-page__td--center">
                 {{ criterion.level_count }}
               </td>
-              <td v-if="visibleColumns.max_score" class="eval-page__td eval-page__td--num">
+              <td v-if="visibleColumns.max_score" class="eval-page__td eval-page__td--center">
                 {{ formatScore(criterion.max_score) }}
               </td>
-              <td v-if="visibleColumns.status" class="eval-page__td">
+              <td v-if="visibleColumns.status" class="eval-page__td eval-page__td--center">
                 <span
                   class="eval-page__badge"
                   :class="criterion.is_active ? 'eval-page__badge--active' : 'eval-page__badge--inactive'"
@@ -1030,28 +1031,30 @@ onBeforeUnmount(() => {
               <td v-if="visibleColumns.description" class="eval-page__td eval-page__td--desc">
                 {{ criterion.description || '—' }}
               </td>
-              <td v-if="canManage" class="eval-page__td eval-page__td--action" @click.stop>
-                <button
-                  type="button"
-                  class="eval-page__icon-btn eval-page__icon-btn--ghost"
-                  title=""
-                  :disabled="togglingId === criterion.id"
-                  @click="toggleActive(criterion)"
-                >
-                  <AppIcon
-                    :name="criterion.is_active ? 'eyeOff' : 'eye'"
-                    :size="15"
-                  />
-                </button>
-                <button
-                  type="button"
-                  class="eval-page__icon-btn eval-page__icon-btn--danger"
-                  title=""
-                  :disabled="deletingId === criterion.id"
-                  @click="confirmDelete = criterion"
-                >
-                  <AppIcon name="trash2" :size="15" />
-                </button>
+              <td v-if="canManage" class="eval-page__td eval-page__td--center eval-page__td--action" @click.stop>
+                <span class="eval-page__actions">
+                  <button
+                    type="button"
+                    class="eval-page__icon-btn eval-page__icon-btn--ghost"
+                    :aria-label="criterion.is_active ? 'Ẩn tiêu chí' : 'Hiện tiêu chí'"
+                    :disabled="togglingId === criterion.id"
+                    @click="toggleActive(criterion)"
+                  >
+                    <AppIcon
+                      :name="criterion.is_active ? 'eyeOff' : 'eye'"
+                      :size="15"
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    class="eval-page__icon-btn eval-page__icon-btn--danger"
+                    aria-label="Xoá tiêu chí"
+                    :disabled="deletingId === criterion.id"
+                    @click="confirmDelete = criterion"
+                  >
+                    <AppIcon name="trash2" :size="15" />
+                  </button>
+                </span>
               </td>
             </tr>
           </tbody>
@@ -1839,11 +1842,12 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   letter-spacing: 0.02em;
   text-align: left;
+  vertical-align: middle;
   white-space: nowrap;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.eval-page__th--action { text-align: center; }
+.eval-page__th--center { text-align: center; }
 
 .eval-page__resize {
   position: absolute;
@@ -1880,13 +1884,14 @@ onBeforeUnmount(() => {
 
 .eval-page__td {
   padding: var(--space-3) var(--space-4);
+  vertical-align: middle;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.eval-page__td--num { text-align: right; }
+.eval-page__td--center { text-align: center; }
 
 .eval-page__td--desc {
   max-width: 20ch;
@@ -1896,8 +1901,16 @@ onBeforeUnmount(() => {
 }
 
 .eval-page__td--action {
-  text-align: center;
-  white-space: nowrap;
+  overflow: visible;
+}
+
+.eval-page__actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  width: 100%;
+  vertical-align: middle;
 }
 
 .eval-page__name { font-weight: 600; }
@@ -1937,6 +1950,8 @@ onBeforeUnmount(() => {
 .eval-page__badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  vertical-align: middle;
   padding: 0.125rem 0.5rem;
   border-radius: 100px;
   font-size: 0.75rem;
