@@ -18,7 +18,17 @@ class UpdateGlobalMenuVisibilityRequest extends FormRequest
     {
         return [
             'menu_key' => ['required', 'string', Rule::in(array_keys(GlobalMenuVisibilityService::CATALOG))],
-            'is_hidden' => ['required', 'boolean'],
+            'is_hidden' => ['sometimes', 'boolean'],
+            'custom_label' => ['sometimes', 'nullable', 'string', 'max:120'],
         ];
+    }
+
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $validator->after(function ($v) {
+            if (! $this->has('is_hidden') && ! $this->has('custom_label')) {
+                $v->errors()->add('is_hidden', 'Phải gửi ít nhất is_hidden hoặc custom_label.');
+            }
+        });
     }
 }

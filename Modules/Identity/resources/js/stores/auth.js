@@ -130,6 +130,34 @@ export const useAuthStore = defineStore('auth', {
       if (!raw || Array.isArray(raw)) return {};
       return raw;
     },
+
+    /** Tên tuỳ chỉnh TOÀN HỆ THỐNG cho từng item (menu_key => nhãn). */
+    globalMenuLabels: (state) => {
+      const raw = state.user?.global_menu_labels;
+      if (!raw || Array.isArray(raw)) return {};
+      return raw;
+    },
+
+    /** Thứ tự tuỳ chỉnh TOÀN HỆ THỐNG (menu_key => sort_order). */
+    globalMenuOrder: (state) => {
+      const raw = state.user?.global_menu_order;
+      if (!raw || Array.isArray(raw)) return {};
+      return raw;
+    },
+
+    /** Nhóm tuỳ chỉnh TOÀN HỆ THỐNG của từng item (menu_key => section id). */
+    globalMenuItemSections: (state) => {
+      const raw = state.user?.global_menu_item_sections;
+      if (!raw || Array.isArray(raw)) return {};
+      return raw;
+    },
+
+    /** Tên nhóm menu tuỳ chỉnh TOÀN HỆ THỐNG (section id => nhãn). */
+    globalMenuSectionLabels: (state) => {
+      const raw = state.user?.global_menu_section_labels;
+      if (!raw || Array.isArray(raw)) return {};
+      return raw;
+    },
   },
 
   actions: {
@@ -227,6 +255,46 @@ export const useAuthStore = defineStore('auth', {
       if (layout?.itemSections && !Array.isArray(layout.itemSections)) {
         this.user.menu_item_sections = { ...layout.itemSections };
       }
+    },
+
+    /**
+     * Đổi tên item menu toàn hệ thống ngay trên client.
+     */
+    setGlobalMenuLabel(menuKey, label) {
+      if (!this.user || !menuKey) return;
+      const raw = this.user.global_menu_labels;
+      const labels = raw && !Array.isArray(raw) ? { ...raw } : {};
+      const next = typeof label === 'string' ? label.trim() : '';
+      if (next) labels[menuKey] = next;
+      else delete labels[menuKey];
+      this.user.global_menu_labels = labels;
+    },
+
+    /**
+     * Áp layout toàn hệ thống (thứ tự + nhóm) sau kéo thả.
+     * @param {{ order?: Record<string, number>, itemSections?: Record<string, string> }} layout
+     */
+    setGlobalMenuLayout(layout) {
+      if (!this.user) return;
+      if (layout?.order && !Array.isArray(layout.order)) {
+        this.user.global_menu_order = { ...layout.order };
+      }
+      if (layout?.itemSections && !Array.isArray(layout.itemSections)) {
+        this.user.global_menu_item_sections = { ...layout.itemSections };
+      }
+    },
+
+    /**
+     * Đổi tên nhóm menu toàn hệ thống ngay trên client.
+     */
+    setGlobalMenuSectionLabel(sectionId, label) {
+      if (!this.user || !sectionId) return;
+      const raw = this.user.global_menu_section_labels;
+      const labels = raw && !Array.isArray(raw) ? { ...raw } : {};
+      const next = typeof label === 'string' ? label.trim() : '';
+      if (next) labels[sectionId] = next;
+      else delete labels[sectionId];
+      this.user.global_menu_section_labels = labels;
     },
 
     /**

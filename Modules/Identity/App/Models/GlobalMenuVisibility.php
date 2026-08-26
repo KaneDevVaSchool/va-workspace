@@ -21,11 +21,15 @@ class GlobalMenuVisibility extends Model
     protected $fillable = [
         'menu_key',
         'is_hidden',
+        'custom_label',
+        'sort_order',
+        'section_key',
         'updated_by',
     ];
 
     protected $casts = [
         'is_hidden' => 'boolean',
+        'sort_order' => 'integer',
     ];
 
     public function updatedBy(): BelongsTo

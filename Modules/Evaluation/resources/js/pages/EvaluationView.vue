@@ -9,7 +9,7 @@
 //   scale    — thang điểm nhiều mức (Xuất sắc 5 / Tốt 4 / Khá 3…)
 //   behavior — cộng/trừ theo hành vi (Đi muộn −1 / Hoàn thành sớm +2…)
 //
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
@@ -36,13 +36,14 @@ const FILTERS = [
 const TYPE_LABELS = { scale: 'Thang điểm', behavior: 'Cộng/trừ' };
 const COL_KEY    = 'va-eval-view-columns-v1';
 const FILTER_KEY = 'va-eval-view-filters-v1';
-const WIDTH_KEY  = 'va-eval-view-widths';
+const WIDTH_KEY  = 'va-eval-view-widths-v2';
 const ZOOM_KEY   = 'va-eval-view-zoom';
 
 const CELL_PAD_X = 32;
 const COL_EXTRA  = 24;
+const STATUS_DOT_EXTRA = 14;
+const DESC_MAX_CHARS = 20;
 let measureCtx   = null;
-let wrapObserver = null;
 
 // ─── stores ──────────────────────────────────────────────────────────────────
 
@@ -120,7 +121,13 @@ const hiddenActiveFilterLabels = computed(() =>
 
 const shownColumns = computed(() => COLUMNS.filter((col) => visibleColumns[col.key]));
 
-const tableColspan = computed(() => shownColumns.value.length);
+const tableColspan = computed(() => shownColumns.value.length + 1);
+
+const tableWidthPx = computed(() => {
+  const keys = shownColumns.value.map((col) => col.key);
+  const sum = keys.reduce((total, key) => total + (Number(colWidths[key]) || 0), 0);
+  return sum > 0 ? `${sum}px` : '100%';
+});
 
 function criterionGroupKey(typeId) {
   return typeId == null || typeId === '' ? '__none__' : String(typeId);
@@ -274,42 +281,61 @@ function saveZoom(v) {
 
 // ─── column widths ────────────────────────────────────────────────────────────
 
-function measureText(text) {
+function measureText(text, font) {
   if (!measureCtx) {
-    const canvas = document.createElement('canvas');
-    measureCtx = canvas.getContext('2d');
-    measureCtx.font = `600 0.75rem var(--font-family-base, sans-serif)`;
+    measureCtx = document.createElement('canvas').getContext('2d');
   }
+  measureCtx.font = font;
   return measureCtx.measureText(String(text ?? '')).width;
 }
 
-function computeDefaultWidths() {
-  const wrapWidth = tableWrap.value?.clientWidth ?? 800;
-  const rawWidths = {};
+function fontOf(el, fallback) {
+  if (!el) return fallback;
+  const style = getComputedStyle(el);
+  return `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+}
 
-  for (const col of shownColumns.value) {
-    let max = measureText(col.label) + COL_EXTRA;
-    for (const row of allCriteria.value) {
-      let val = '';
-      if (col.key === 'name')        val = row.name ?? '';
-      if (col.key === 'level_count') val = String(row.level_count ?? 0);
-      if (col.key === 'max_score')   val = formatScore(row.max_score);
-      if (col.key === 'status')      val = row.is_active ? 'Đang áp dụng' : 'Ngừng áp dụng';
-      if (col.key === 'description') val = row.description ?? '';
-      const w = measureText(val) + CELL_PAD_X;
-      if (w > max) max = w;
-    }
-    rawWidths[col.key] = Math.max(Math.ceil(max), MIN_COL_PX);
+function readTableFonts() {
+  const table = tableWrap.value?.querySelector('.eval-view__table');
+  return {
+    header: fontOf(table?.querySelector('thead th'), '600 12px "Be Vietnam Pro", sans-serif'),
+    cell: fontOf(table?.querySelector('tbody td:not(.eval-view__td--group)'), '400 14px "Be Vietnam Pro", sans-serif'),
+    name: fontOf(table?.querySelector('.eval-view__name'), '600 14px "Be Vietnam Pro", sans-serif'),
+  };
+}
+
+function cellText(row, key) {
+  if (key === 'name') return row.name ?? '';
+  if (key === 'level_count') return String(row.level_count ?? 0);
+  if (key === 'max_score') return formatScore(row.max_score);
+  if (key === 'status') return row.is_active ? 'Đang áp dụng' : 'Ngừng áp dụng';
+  if (key === 'description') return row.description || '—';
+  return '';
+}
+
+function columnContentWidth(key, fonts) {
+  const label = COLUMNS.find((col) => col.key === key)?.label ?? '';
+  let maxW = measureText(label, fonts.header);
+  for (const row of allCriteria.value) {
+    const text = cellText(row, key);
+    const sample = key === 'description' && text.length > DESC_MAX_CHARS
+      ? text.slice(0, DESC_MAX_CHARS)
+      : text;
+    const font = key === 'name' ? fonts.name : fonts.cell;
+    maxW = Math.max(maxW, measureText(sample, font));
   }
+  const extra = key === 'status' ? STATUS_DOT_EXTRA : 0;
+  return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
+}
 
-  const totalRaw = Object.values(rawWidths).reduce((a, b) => a + b, 0);
-  if (totalRaw < wrapWidth && shownColumns.value.length > 0) {
-    const factor = wrapWidth / totalRaw;
-    for (const k in rawWidths) rawWidths[k] = Math.floor(rawWidths[k] * factor);
-  }
+function fitColumnsToContent() {
+  const keys = shownColumns.value.map((col) => col.key);
+  if (resizing.value || keys.length === 0) return;
+  if (!tableWrap.value?.querySelector('.eval-view__table')) return;
 
-  for (const col of shownColumns.value) {
-    if (!colWidths[col.key]) colWidths[col.key] = rawWidths[col.key];
+  const fonts = readTableFonts();
+  for (const key of keys) {
+    colWidths[key] = columnContentWidth(key, fonts);
   }
 }
 
@@ -372,14 +398,14 @@ async function load() {
     ]);
     allCriteria.value = criteriaRes.data.criteria ?? [];
     criterionTypes.value = typesRes.data.types ?? [];
-    await nextTick();
-    computeDefaultWidths();
   } catch (err) {
     const msg = err?.response?.data?.message;
     showClientToast('error', msg || 'Không tải được danh sách tiêu chí.');
   } finally {
     loading.value = false;
   }
+  await nextTick();
+  fitColumnsToContent();
 }
 
 function openView(criterion) {
@@ -491,17 +517,17 @@ function handleKeydown(e) {
   if (e.key === 'Escape' && selected.value) closePanel();
 }
 
+watch(shownColumns, () => nextTick(fitColumnsToContent));
+watch(tableZoom, () => nextTick(fitColumnsToContent));
+
 onMounted(async () => {
   document.addEventListener('keydown', handleKeydown);
   await load();
-
-  wrapObserver = new ResizeObserver(() => computeDefaultWidths());
-  if (tableWrap.value) wrapObserver.observe(tableWrap.value);
+  document.fonts?.ready?.then(() => nextTick(fitColumnsToContent));
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown);
-  wrapObserver?.disconnect();
 });
 </script>
 
@@ -614,13 +640,14 @@ onBeforeUnmount(() => {
           {{ hasActiveFilters ? 'Không tìm thấy tiêu chí phù hợp.' : 'Không có tiêu chí nào đang dùng trong ĐGNL.' }}
         </p>
 
-        <table v-else class="eval-view__table">
+        <table v-else class="eval-view__table" :style="{ minWidth: tableWidthPx }">
           <colgroup>
             <col
               v-for="col in shownColumns"
               :key="col.key"
               :style="{ width: (colWidths[col.key] ?? MIN_COL_PX) + 'px' }"
             />
+            <col />
           </colgroup>
           <thead>
             <tr>
@@ -638,6 +665,7 @@ onBeforeUnmount(() => {
                   @mousedown.stop="startResize($event, col.key)"
                 />
               </th>
+              <th class="eval-view__th eval-view__th--fill" aria-hidden="true" />
             </tr>
           </thead>
           <tbody>
@@ -691,6 +719,7 @@ onBeforeUnmount(() => {
                 <td v-if="visibleColumns.description" class="eval-view__td eval-view__td--desc">
                   {{ entry.criterion.description || '—' }}
                 </td>
+                <td class="eval-view__td eval-view__td--fill" aria-hidden="true" />
               </tr>
             </template>
           </tbody>
@@ -880,7 +909,6 @@ onBeforeUnmount(() => {
 
 .eval-view__table {
   width: 100%;
-  min-width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: calc(0.875rem * var(--table-zoom, 1));
@@ -903,6 +931,13 @@ onBeforeUnmount(() => {
 }
 
 .eval-view__th--center { text-align: center; }
+
+.eval-view__th--fill,
+.eval-view__td--fill {
+  padding: 0;
+  border: none;
+  box-shadow: 0 1px 0 var(--color-border);
+}
 
 .eval-view__resize {
   position: absolute;

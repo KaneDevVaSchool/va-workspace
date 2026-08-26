@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use Modules\WorkspaceConfig\App\Http\Controllers\WorkspaceConfigGlobalMenuController;
 use Modules\WorkspaceConfig\App\Http\Controllers\WorkspaceConfigOverviewController;
+use Modules\WorkspaceConfig\App\Http\Requests\ReorderGlobalMenuLayoutRequest;
+use Modules\WorkspaceConfig\App\Http\Requests\UpdateGlobalMenuSectionRequest;
 
 /*
 |--------------------------------------------------------------------------
@@ -35,4 +37,6 @@ Route::middleware(['auth', 'permission:workspace_config.manage_global_menu'])
     ->group(function () {
         Route::get('/', [WorkspaceConfigGlobalMenuController::class, 'index'])->name('index');
         Route::put('/', [WorkspaceConfigGlobalMenuController::class, 'update'])->name('update');
+        Route::put('/section', [WorkspaceConfigGlobalMenuController::class, 'updateSection'])->name('update-section');
+        Route::put('/layout', [WorkspaceConfigGlobalMenuController::class, 'reorderLayout'])->name('reorder-layout');
     });

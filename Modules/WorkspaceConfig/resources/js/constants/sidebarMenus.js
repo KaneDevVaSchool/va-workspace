@@ -55,10 +55,10 @@ export function enrichMenu(menu) {
   return {
     ...meta,
     ...menu,
-    icon: meta.icon,
+    icon: menu.icon || meta.icon,
     section: menu.section || meta.section,
     default_section: menu.default_section || meta.section,
-    description: meta.description,
+    description: menu.description !== undefined ? menu.description : meta.description,
   };
 }
 
@@ -74,11 +74,12 @@ export function sectionLabelMap(sectionConfigs = []) {
   return map;
 }
 
-export function groupMenus(menus, sectionConfigs = [], { includeEmpty = false } = {}) {
+export function groupMenus(menus, sectionConfigs = [], { includeEmpty = false, sectionOrder: customSectionOrder = null } = {}) {
+  const effectiveSectionOrder = customSectionOrder ?? SECTION_ORDER;
   const labels = sectionLabelMap(sectionConfigs);
   const groups = new Map();
 
-  for (const id of SECTION_ORDER) {
+  for (const id of effectiveSectionOrder) {
     if (id === 'other') continue;
     groups.set(id, {
       id,
@@ -106,10 +107,10 @@ export function groupMenus(menus, sectionConfigs = [], { includeEmpty = false } 
     group.items.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.menu_key.localeCompare(b.menu_key));
   }
 
-  return SECTION_ORDER.filter((id) => groups.has(id))
+  return effectiveSectionOrder.filter((id) => groups.has(id))
     .map((id) => groups.get(id))
     .filter((group) => includeEmpty || group.items.length > 0)
-    .concat([...groups.values()].filter((group) => !SECTION_ORDER.includes(group.id) && group.items.length > 0));
+    .concat([...groups.values()].filter((group) => !effectiveSectionOrder.includes(group.id) && group.items.length > 0));
 }
 
 export function layoutPayload(menus) {
@@ -123,8 +124,11 @@ export function layoutPayload(menus) {
 /**
  * Chuyển một mục sang nhóm `toSectionId` tại vị trí `toIndex` (0 = đầu nhóm).
  * Trả về mảng mới đã gán lại section + sort_order theo thứ tự nhóm.
+ *
+ * @param {string[]|null} sectionOrder - thứ tự nhóm tuỳ chỉnh (null = dùng SECTION_ORDER mặc định)
  */
-export function moveMenuItem(menus, fromKey, toSectionId, toIndex) {
+export function moveMenuItem(menus, fromKey, toSectionId, toIndex, sectionOrder = null) {
+  const effectiveSectionOrder = sectionOrder ?? SECTION_ORDER;
   const next = menus.map((menu) => ({ ...menu }));
   const fromIdx = next.findIndex((menu) => menu.menu_key === fromKey);
   if (fromIdx === -1) return menus;
@@ -133,7 +137,7 @@ export function moveMenuItem(menus, fromKey, toSectionId, toIndex) {
   item.section = toSectionId;
 
   const grouped = new Map();
-  for (const id of SECTION_ORDER) grouped.set(id, []);
+  for (const id of effectiveSectionOrder) grouped.set(id, []);
   for (const menu of next) {
     const id = menu.section || 'other';
     if (!grouped.has(id)) grouped.set(id, []);
@@ -147,14 +151,14 @@ export function moveMenuItem(menus, fromKey, toSectionId, toIndex) {
 
   let order = 0;
   const flat = [];
-  for (const id of SECTION_ORDER) {
+  for (const id of effectiveSectionOrder) {
     for (const menu of grouped.get(id) ?? []) {
       flat.push({ ...menu, section: id === 'other' ? menu.section : id, sort_order: order });
       order += 1;
     }
   }
   for (const [id, list] of grouped) {
-    if (SECTION_ORDER.includes(id)) continue;
+    if (effectiveSectionOrder.includes(id)) continue;
     for (const menu of list) {
       flat.push({ ...menu, sort_order: order });
       order += 1;

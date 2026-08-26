@@ -4,6 +4,7 @@ namespace Modules\Identity\App\Services;
 
 use App\Models\User;
 use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositoryInterface;
+use Modules\Identity\App\Repositories\Contracts\GlobalMenuSectionConfigRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\GlobalMenuVisibilityRepositoryInterface;
 
 /**
@@ -18,6 +19,7 @@ class AuthenticatedUserPresenter
         private readonly PermissionService $permissions,
         private readonly DepartmentSidebarConfigRepositoryInterface $sidebarConfigs,
         private readonly GlobalMenuVisibilityRepositoryInterface $globalMenus,
+        private readonly GlobalMenuSectionConfigRepositoryInterface $globalMenuSections,
     ) {}
 
     public function forUser(User $user): array
@@ -66,6 +68,12 @@ class AuthenticatedUserPresenter
             // trang cấu hình chính nó luôn được bảo vệ (PROTECTED_MENU_KEYS)
             // nên super_admin luôn còn đường vào lại để bật menu đã ẩn.
             'globally_hidden_menu_keys' => $this->globalMenus->hiddenKeys(),
+            // Tên, thứ tự và nhóm tuỳ chỉnh toàn hệ thống (superadmin cấu hình).
+            // Áp dụng cho MỌI tài khoản; department override thắng nếu có.
+            'global_menu_labels' => (object) $this->globalMenus->customLabels(),
+            'global_menu_order' => (object) $this->globalMenus->sortOrders(),
+            'global_menu_item_sections' => (object) $this->globalMenus->itemSections(),
+            'global_menu_section_labels' => (object) $this->globalMenuSections->sectionLabels(),
         ];
     }
 }

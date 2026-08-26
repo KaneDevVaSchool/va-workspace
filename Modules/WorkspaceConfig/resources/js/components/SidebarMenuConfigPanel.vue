@@ -22,6 +22,8 @@ const props = defineProps({
   editable: { type: Boolean, default: false },
   savingKey: { type: String, default: null },
   busy: { type: Boolean, default: false },
+  /** Tuỳ chỉnh thứ tự section (null = dùng mặc định ['general', 'manager', 'other']). */
+  sectionOrder: { type: Array, default: null },
 });
 
 const emit = defineEmits(['toggle', 'show-all', 'hide-all', 'rename', 'rename-section', 'reorder']);
@@ -53,15 +55,20 @@ const filteredMenus = computed(() => {
 
 const displayMenus = computed(() => {
   if (!draggingKey.value || !dragSnapshot.value || !dropTarget.value) return props.menus;
-  return moveMenuItem(dragSnapshot.value, draggingKey.value, dropTarget.value.sectionId, dropTarget.value.index);
+  return moveMenuItem(dragSnapshot.value, draggingKey.value, dropTarget.value.sectionId, dropTarget.value.index, props.sectionOrder);
 });
 
 const groupedSections = computed(() =>
   groupMenus(draggingKey.value ? displayMenus.value : filteredMenus.value, props.sections, {
     includeEmpty: props.editable && filter.value === 'all',
+    sectionOrder: props.sectionOrder,
   }),
 );
-const previewSections = computed(() => groupMenus(draggingKey.value ? displayMenus.value : props.menus, props.sections));
+const previewSections = computed(() =>
+  groupMenus(draggingKey.value ? displayMenus.value : props.menus, props.sections, {
+    sectionOrder: props.sectionOrder,
+  }),
+);
 
 const filterEmptyText = computed(() => {
   if (filter.value === 'visible') return 'Không có mục nào đang hiện.';
@@ -228,7 +235,7 @@ function clearDragState() {
 
 function commitReorder(key, sectionId, index) {
   const current = dragSnapshot.value || props.menus;
-  const next = moveMenuItem(current, key, sectionId, index);
+  const next = moveMenuItem(current, key, sectionId, index, props.sectionOrder);
   if (
     next.length === current.length &&
     next.every((item, i) => item.menu_key === current[i].menu_key && item.section === current[i].section)
@@ -450,20 +457,34 @@ onBeforeUnmount(() => {
                 </span>
 
                 <div class="wc-menu__item-body">
-                  <input
-                    v-if="editable"
-                    class="wc-menu__title-input"
-                    type="text"
-                    :value="titleValue(menu)"
-                    :maxlength="LABEL_MAX_LENGTH"
-                    :disabled="busy"
-                    :placeholder="defaultLabel(menu)"
-                    :aria-label="`Tên hiển thị của ${defaultLabel(menu)}`"
-                    @input="onTitleInput(menu, $event)"
-                    @blur="commitTitle(menu)"
-                    @keydown="onTitleKeydown($event, menu)"
-                  />
-                  <p v-else class="wc-menu__item-label">{{ menu.label }}</p>
+                  <div class="wc-menu__title-row">
+                    <input
+                      v-if="editable"
+                      class="wc-menu__title-input"
+                      type="text"
+                      :value="titleValue(menu)"
+                      :maxlength="LABEL_MAX_LENGTH"
+                      :disabled="busy"
+                      :placeholder="defaultLabel(menu)"
+                      :aria-label="`Tên hiển thị của ${defaultLabel(menu)}`"
+                      @input="onTitleInput(menu, $event)"
+                      @blur="commitTitle(menu)"
+                      @keydown="onTitleKeydown($event, menu)"
+                    />
+                    <p v-else class="wc-menu__item-label">
+                      {{ menu.label }}
+                      <AppIcon
+                        v-if="menu.is_protected"
+                        name="lock"
+                        :size="13"
+                        :stroke-width="2"
+                        class="wc-menu__lock"
+                        aria-hidden="true"
+                      />
+                    </p>
+                  </div>
+
+                  <p v-if="menu.audience" class="wc-menu__item-audience">{{ menu.audience }}</p>
 
                   <div v-if="isCustomized(menu)" class="wc-menu__item-meta">
                     <span>Mặc định: {{ defaultLabel(menu) }}</span>
@@ -488,8 +509,14 @@ onBeforeUnmount(() => {
                     :class="{ 'wc-menu__switch--on': menu.is_visible }"
                     role="switch"
                     :aria-checked="menu.is_visible"
-                    :disabled="busy"
-                    :aria-label="menu.is_visible ? `Ẩn mục ${menu.label}` : `Hiện mục ${menu.label}`"
+                    :disabled="menu.is_protected || busy"
+                    :aria-label="
+                      menu.is_protected
+                        ? `${menu.label} được bảo vệ, không thể ẩn`
+                        : menu.is_visible
+                          ? `Ẩn mục ${menu.label}`
+                          : `Hiện mục ${menu.label}`
+                    "
                     @click="emit('toggle', menu)"
                   >
                     <span class="wc-menu__switch-thumb" />
@@ -984,6 +1011,29 @@ onBeforeUnmount(() => {
   color: var(--color-text);
   font-size: 0.9375rem;
   font-weight: 600;
+}
+
+.wc-menu__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.wc-menu__title-row .wc-menu__title-input {
+  flex: 1;
+}
+
+.wc-menu__lock {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.wc-menu__item-audience {
+  margin: 0.125rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
 }
 
 .wc-menu__item-meta {

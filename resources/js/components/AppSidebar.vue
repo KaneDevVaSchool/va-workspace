@@ -159,28 +159,48 @@ function itemPasses(item) {
 }
 
 const visibleSections = computed(() => {
-  const itemSections = auth.menuItemSections;
-  const menuOrder = auth.menuOrder;
-  const sectionLabels = auth.menuSectionLabels;
+  const itemSections = auth.menuItemSections;           // per-department
+  const menuOrder = auth.menuOrder;                      // per-department
+  const sectionLabels = auth.menuSectionLabels;          // per-department
+  const globalItemSections = auth.globalMenuItemSections; // global
+  const globalMenuOrder = auth.globalMenuOrder;           // global
+  const globalSectionLabels = auth.globalMenuSectionLabels; // global
 
+  // Nhãn section: department > global > mặc định
   const sectionMap = new Map(
-    MENU_SECTIONS.map((section) => [
-      section.id,
-      {
-        ...section,
-        label: typeof sectionLabels[section.id] === 'string' && sectionLabels[section.id].trim()
-          ? sectionLabels[section.id].trim()
-          : section.label,
-        items: [],
-      },
-    ]),
+    MENU_SECTIONS.map((section) => {
+      const deptLabel = typeof sectionLabels[section.id] === 'string' ? sectionLabels[section.id].trim() : '';
+      const globalLabel = typeof globalSectionLabels[section.id] === 'string' ? globalSectionLabels[section.id].trim() : '';
+      return [
+        section.id,
+        {
+          ...section,
+          label: deptLabel || globalLabel || section.label,
+          items: [],
+        },
+      ];
+    }),
   );
 
   MENU_SECTIONS.forEach((section, sectionIndex) => {
     section.items.forEach((item, itemIndex) => {
       const originalIndex = sectionIndex * 100 + itemIndex;
-      const assigned = item.configurableByDepartment ? itemSections[item.name] : null;
-      const targetId = assigned && sectionMap.has(assigned) ? assigned : section.id;
+
+      // Nhóm section: department (chỉ configurable) > global > mặc định
+      let targetId = section.id;
+      if (item.configurableByDepartment) {
+        const deptSection = itemSections[item.name];
+        if (deptSection && sectionMap.has(deptSection)) {
+          targetId = deptSection;
+        } else {
+          const globalSection = globalItemSections[item.name];
+          if (globalSection && sectionMap.has(globalSection)) targetId = globalSection;
+        }
+      } else {
+        const globalSection = globalItemSections[item.name];
+        if (globalSection && sectionMap.has(globalSection)) targetId = globalSection;
+      }
+
       sectionMap.get(targetId).items.push({ ...item, originalIndex });
     });
   });
@@ -191,15 +211,17 @@ const visibleSections = computed(() => {
       items: section.items
         .slice()
         .sort((a, b) => {
-          const orderA =
-            a.configurableByDepartment && Number.isFinite(Number(menuOrder[a.name]))
-              ? Number(menuOrder[a.name])
-              : 1000 + a.originalIndex;
-          const orderB =
-            b.configurableByDepartment && Number.isFinite(Number(menuOrder[b.name]))
-              ? Number(menuOrder[b.name])
-              : 1000 + b.originalIndex;
-          return orderA - orderB || a.originalIndex - b.originalIndex;
+          // Thứ tự: department (chỉ configurable) > global > mặc định
+          const getOrder = (item) => {
+            if (item.configurableByDepartment && Number.isFinite(Number(menuOrder[item.name]))) {
+              return Number(menuOrder[item.name]);
+            }
+            if (Number.isFinite(Number(globalMenuOrder[item.name]))) {
+              return Number(globalMenuOrder[item.name]);
+            }
+            return 1000 + item.originalIndex;
+          };
+          return getOrder(a) - getOrder(b) || a.originalIndex - b.originalIndex;
         })
         .filter(itemPasses),
     }))
@@ -211,8 +233,12 @@ function isActive(routeName) {
 }
 
 function itemLabel(item) {
-  const custom = auth.menuLabels[item.name];
-  return typeof custom === 'string' && custom.trim() ? custom.trim() : item.label;
+  // Nhãn: department > global > mặc định
+  const deptCustom = auth.menuLabels[item.name];
+  if (typeof deptCustom === 'string' && deptCustom.trim()) return deptCustom.trim();
+  const globalCustom = auth.globalMenuLabels[item.name];
+  if (typeof globalCustom === 'string' && globalCustom.trim()) return globalCustom.trim();
+  return item.label;
 }
 
 function closeDrawer() {

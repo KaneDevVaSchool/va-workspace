@@ -10,6 +10,7 @@ use Modules\Identity\App\Repositories\Contracts\PushSubscriptionRepositoryInterf
 use Modules\Identity\App\Repositories\Contracts\UserNotificationRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositoryInterface;
+use Modules\Identity\App\Repositories\Contracts\GlobalMenuSectionConfigRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\GlobalMenuVisibilityRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\PermissionGrantRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\RoleRepositoryInterface;
@@ -18,6 +19,7 @@ use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\UserShortcutRepositoryInterface;
 use Modules\Identity\App\Repositories\DepartmentRepository;
 use Modules\Identity\App\Repositories\DepartmentSidebarConfigRepository;
+use Modules\Identity\App\Repositories\GlobalMenuSectionConfigRepository;
 use Modules\Identity\App\Repositories\GlobalMenuVisibilityRepository;
 use Modules\Identity\App\Repositories\PermissionGrantRepository;
 use Modules\Identity\App\Repositories\PushSubscriptionRepository;
@@ -45,6 +47,7 @@ class IdentityServiceProvider extends ServiceProvider
         $this->app->bind(ActivityLogRepositoryInterface::class, ActivityLogRepository::class);
         $this->app->bind(DepartmentSidebarConfigRepositoryInterface::class, DepartmentSidebarConfigRepository::class);
         $this->app->bind(GlobalMenuVisibilityRepositoryInterface::class, GlobalMenuVisibilityRepository::class);
+        $this->app->bind(GlobalMenuSectionConfigRepositoryInterface::class, GlobalMenuSectionConfigRepository::class);
         $this->app->bind(UserNotificationRepositoryInterface::class, UserNotificationRepository::class);
         $this->app->bind(PushSubscriptionRepositoryInterface::class, PushSubscriptionRepository::class);
     }

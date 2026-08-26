@@ -47,4 +47,53 @@ class GlobalMenuVisibilityRepository implements GlobalMenuVisibilityRepositoryIn
             ['is_hidden' => $isHidden, 'updated_by' => $updatedBy],
         );
     }
+
+    public function customLabels(): array
+    {
+        return GlobalMenuVisibility::query()
+            ->whereNotNull('custom_label')
+            ->where('custom_label', '!=', '')
+            ->pluck('custom_label', 'menu_key')
+            ->all();
+    }
+
+    public function sortOrders(): array
+    {
+        return GlobalMenuVisibility::query()
+            ->whereNotNull('sort_order')
+            ->pluck('sort_order', 'menu_key')
+            ->map(fn ($v) => (int) $v)
+            ->all();
+    }
+
+    public function itemSections(): array
+    {
+        return GlobalMenuVisibility::query()
+            ->whereNotNull('section_key')
+            ->where('section_key', '!=', '')
+            ->pluck('section_key', 'menu_key')
+            ->all();
+    }
+
+    public function setCustomLabel(string $menuKey, ?string $label, ?int $updatedBy): GlobalMenuVisibility
+    {
+        return GlobalMenuVisibility::query()->updateOrCreate(
+            ['menu_key' => $menuKey],
+            ['custom_label' => ($label !== null && $label !== '') ? $label : null, 'updated_by' => $updatedBy],
+        );
+    }
+
+    public function bulkUpdateLayout(array $items, ?int $updatedBy): void
+    {
+        foreach ($items as $item) {
+            GlobalMenuVisibility::query()->updateOrCreate(
+                ['menu_key' => $item['menu_key']],
+                [
+                    'sort_order' => (int) $item['sort_order'],
+                    'section_key' => $item['section'] !== '' ? $item['section'] : null,
+                    'updated_by' => $updatedBy,
+                ],
+            );
+        }
+    }
 }
