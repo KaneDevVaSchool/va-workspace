@@ -5,6 +5,7 @@ namespace Modules\Social\App\Models;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -119,5 +120,10 @@ class SocialPost extends Model
     public function poll(): HasOne
     {
         return $this->hasOne(SocialPoll::class, 'post_id');
+    }
+
+    public function hashtags(): BelongsToMany
+    {
+        return $this->belongsToMany(SocialHashtag::class, 'social_hashtag_post', 'post_id', 'hashtag_id');
     }
 }

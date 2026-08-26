@@ -9,6 +9,7 @@ import { useAuthStore } from "@modules/Identity/resources/js/stores/auth.js";
 import SocialGroupFormModal from "../components/SocialGroupFormModal.vue";
 import SocialGroupMembersPanel from "../components/SocialGroupMembersPanel.vue";
 import SocialGroupRequestsPanel from "../components/SocialGroupRequestsPanel.vue";
+import SocialHashtagPanel from "../components/SocialHashtagPanel.vue";
 import SocialPostCard from "../components/SocialPostCard.vue";
 import SocialPostComposer from "../components/SocialPostComposer.vue";
 
@@ -27,11 +28,14 @@ const lastPage = ref(1);
 const formOpen = ref(false);
 const membersPanel = ref(null);
 const requestsPanel = ref(null);
+const hashtagPanel = ref(null);
 const manageOpen = ref(false);
 const manageRoot = ref(null);
 const confirmDeleteOpen = ref(false);
 const deleting = ref(false);
 const manageMenuId = useId();
+const activeHashtag = ref("");
+const hashtagTotal = ref(0);
 
 const canView = computed(
     () => group.value?.is_member || group.value?.visibility === "public",
@@ -70,11 +74,13 @@ async function loadPosts(targetPage = 1) {
                 per_page: 10,
                 post_scope: "group",
                 group_id: groupId.value,
+                ...(activeHashtag.value ? { hashtag: activeHashtag.value } : {}),
             },
         });
         posts.value = isFirst ? data.posts : [...posts.value, ...data.posts];
         page.value = data.current_page;
         lastPage.value = data.last_page;
+        hashtagTotal.value = data.total ?? 0;
     } catch {
         showClientToast("error", "Không thể tải bài viết của nhóm.");
     } finally {
@@ -212,24 +218,51 @@ function onGroupSaved(updatedGroup) {
 }
 
 function onPosted(post) {
-    posts.value = [post, ...posts.value];
+    const matchesHashtag =
+        !activeHashtag.value ||
+        (post.hashtags ?? []).some((tag) => tag.name === activeHashtag.value);
+    if (matchesHashtag) {
+        posts.value = [post, ...posts.value];
+    }
+    hashtagPanel.value?.load();
 }
 
 function onUpdated(updatedPost) {
     posts.value = posts.value.map((p) =>
         p.id === updatedPost.id ? updatedPost : p,
     );
+    hashtagPanel.value?.load();
 }
 
 function onDeleted(postId) {
     posts.value = posts.value.filter((p) => p.id !== postId);
+    hashtagPanel.value?.load();
 }
 
 function onShared(post) {
     if (post.post_scope === "group" && post.group?.id === groupId.value) {
-        posts.value = [post, ...posts.value];
+        const matchesHashtag =
+            !activeHashtag.value ||
+            (post.hashtags ?? []).some((tag) => tag.name === activeHashtag.value);
+        if (matchesHashtag) posts.value = [post, ...posts.value];
     }
+    hashtagPanel.value?.load();
 }
+
+function setActiveHashtag(name) {
+    const next = String(name || "")
+        .replace(/^#/, "")
+        .trim()
+        .toLowerCase();
+    activeHashtag.value = next && next !== activeHashtag.value ? next : "";
+}
+
+const activeHashtagLabel = computed(() => {
+    const fromPost = posts.value
+        .flatMap((post) => post.hashtags ?? [])
+        .find((tag) => tag.name === activeHashtag.value);
+    return fromPost?.label || activeHashtag.value;
+});
 
 function goToGroups() {
     router.push({ name: "social.groups.index" });
@@ -246,7 +279,11 @@ function onRequestApproved() {
 
 watch(groupId, () => {
     manageOpen.value = false;
+    activeHashtag.value = "";
     loadGroup().then(() => loadPosts(1));
+});
+watch(activeHashtag, () => {
+    if (canView.value) loadPosts(1);
 });
 
 onMounted(async () => {
@@ -488,6 +525,29 @@ onBeforeUnmount(() => {
                     @posted="onPosted"
                 />
 
+                <div
+                    v-if="activeHashtag"
+                    class="group-wall__hashtag-filter"
+                >
+                    <span class="group-wall__hashtag-filter-icon" aria-hidden="true">
+                        <AppIcon name="hash" :size="16" />
+                    </span>
+                    <p class="group-wall__hashtag-filter-text">
+                        Đang xem
+                        <strong>#{{ activeHashtagLabel }}</strong>
+                        <span v-if="!loadingPosts && hashtagTotal > 0">
+                            · {{ hashtagTotal }} bài
+                        </span>
+                    </p>
+                    <button
+                        type="button"
+                        class="group-wall__hashtag-filter-clear"
+                        @click="setActiveHashtag('')"
+                    >
+                        Bỏ lọc
+                    </button>
+                </div>
+
                 <div v-if="loadingPosts" class="group-wall__loading">
                     Đang tải bài viết...
                 </div>
@@ -501,10 +561,15 @@ onBeforeUnmount(() => {
                         @deleted="onDeleted"
                         @updated="onUpdated"
                         @shared="onShared"
+                        @open-hashtag="setActiveHashtag"
                     />
 
                     <div v-if="posts.length === 0" class="group-wall__empty">
-                        Chưa có bài viết nào trong nhóm.
+                        {{
+                            activeHashtag
+                                ? `Chưa có bài viết nào gắn #${activeHashtagLabel} trong nhóm.`
+                                : "Chưa có bài viết nào trong nhóm."
+                        }}
                     </div>
 
                     <button
@@ -520,6 +585,14 @@ onBeforeUnmount(() => {
             </div>
 
             <aside class="group-wall__rail hide-scrollbar">
+                <SocialHashtagPanel
+                    v-if="canView"
+                    ref="hashtagPanel"
+                    post-scope="group"
+                    :group-id="groupId"
+                    :active-hashtag="activeHashtag"
+                    @select="setActiveHashtag"
+                />
                 <SocialGroupRequestsPanel
                     v-if="group.can_manage"
                     ref="requestsPanel"
@@ -951,6 +1024,60 @@ onBeforeUnmount(() => {
     flex-direction: column;
     gap: var(--space-3);
     overflow-y: auto;
+}
+
+.group-wall__hashtag-filter {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-shrink: 0;
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+}
+
+.group-wall__hashtag-filter::before {
+    content: "";
+    position: absolute;
+    top: var(--space-2);
+    bottom: var(--space-2);
+    left: var(--space-2);
+    width: 3px;
+    border-radius: 0;
+    background: var(--color-primary);
+}
+
+.group-wall__hashtag-filter-icon {
+    display: flex;
+    color: var(--color-primary);
+    margin-left: var(--space-2);
+}
+
+.group-wall__hashtag-filter-text {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--color-text);
+}
+
+.group-wall__hashtag-filter-text strong {
+    color: var(--color-primary);
+}
+
+.group-wall__hashtag-filter-clear {
+    flex-shrink: 0;
+    border: none;
+    background: var(--color-surface-muted);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.3rem 0.7rem;
+    border-radius: var(--radius-full);
+    cursor: pointer;
 }
 
 @media (min-width: 769px) {

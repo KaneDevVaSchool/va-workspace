@@ -140,16 +140,17 @@ export function mountStickerAnimation(el, id, { hoverPlay = false } = {}) {
   }
 
   if (hoverPlay) {
-    el.addEventListener('pointerenter', onEnter);
-    el.addEventListener('pointerleave', onLeave);
-    el.addEventListener('focus', onEnter);
-    el.addEventListener('blur', onLeave);
+    const hoverTarget = el.closest('button, [role="button"]') || el;
+    hoverTarget.addEventListener('pointerenter', onEnter);
+    hoverTarget.addEventListener('pointerleave', onLeave);
+    hoverTarget.addEventListener('focus', onEnter);
+    hoverTarget.addEventListener('blur', onLeave);
     return () => {
       destroyed = true;
-      el.removeEventListener('pointerenter', onEnter);
-      el.removeEventListener('pointerleave', onLeave);
-      el.removeEventListener('focus', onEnter);
-      el.removeEventListener('blur', onLeave);
+      hoverTarget.removeEventListener('pointerenter', onEnter);
+      hoverTarget.removeEventListener('pointerleave', onLeave);
+      hoverTarget.removeEventListener('focus', onEnter);
+      hoverTarget.removeEventListener('blur', onLeave);
       stopAnim();
     };
   }

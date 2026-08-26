@@ -8,7 +8,7 @@ const props = defineProps({
   canModerate: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['count-changed', 'close', 'open-wall']);
+const emit = defineEmits(['count-changed', 'close', 'open-wall', 'open-hashtag']);
 
 const comments = ref([]);
 const loading = ref(false);
@@ -53,6 +53,7 @@ onMounted(load);
         @deleted="onItemDeleted"
         @count-changed="onCountChanged"
         @open-wall="emit('open-wall', $event)"
+        @open-hashtag="emit('open-hashtag', $event)"
       />
     </div>
 

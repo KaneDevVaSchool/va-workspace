@@ -311,8 +311,11 @@ onBeforeUnmount(() => {
   gap: var(--space-1);
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  align-content: start;
+  padding: 0.15rem;
 }
 
 .emoji-picker__cell,
@@ -330,16 +333,37 @@ onBeforeUnmount(() => {
 }
 
 .emoji-picker__sticker {
+  position: relative;
+  z-index: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-1);
-  min-height: 3.5rem;
+  padding: var(--space-2);
+  min-height: 3.75rem;
+  transition: background 0.15s ease;
 }
 
-.emoji-picker__cell:hover,
-.emoji-picker__sticker:hover {
+.emoji-picker__sticker :deep(.social-sticker) {
+  transform: scale(1);
+  transform-origin: center center;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.emoji-picker__cell:hover {
   background: var(--color-surface-muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .emoji-picker__sticker:hover,
+  .emoji-picker__sticker:focus-visible {
+    z-index: 3;
+    background: var(--color-surface-muted);
+  }
+
+  .emoji-picker__sticker:hover :deep(.social-sticker),
+  .emoji-picker__sticker:focus-visible :deep(.social-sticker) {
+    transform: scale(1.7);
+  }
 }
 
 @media (max-width: 767px) {
@@ -363,6 +387,17 @@ onBeforeUnmount(() => {
 
   .emoji-picker__stickers {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emoji-picker__sticker :deep(.social-sticker) {
+    transition: none;
+  }
+
+  .emoji-picker__sticker:hover :deep(.social-sticker),
+  .emoji-picker__sticker:focus-visible :deep(.social-sticker) {
+    transform: none;
   }
 }
 </style>

@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Social\App\Http\Controllers\SocialCommentController;
 use Modules\Social\App\Http\Controllers\SocialGroupController;
+use Modules\Social\App\Http\Controllers\SocialHashtagController;
 use Modules\Social\App\Http\Controllers\SocialPollController;
 use Modules\Social\App\Http\Controllers\SocialPostController;
 
@@ -47,6 +48,7 @@ Route::middleware('auth')->prefix('social')->name('social.')->group(function () 
     Route::get('/posts/{postId}/poll/votes', [SocialPollController::class, 'voters']);
     Route::post('/posts/{postId}/poll/close', [SocialPollController::class, 'close']);
 
+    Route::get('/hashtags', [SocialHashtagController::class, 'index']);
     Route::get('/mentions', [SocialCommentController::class, 'mentions']);
     Route::get('/posts/{postId}/comments', [SocialCommentController::class, 'index']);
     Route::post('/posts/{postId}/comments', [SocialCommentController::class, 'store']);

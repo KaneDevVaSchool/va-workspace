@@ -11,6 +11,7 @@ use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Identity\App\Services\ViewAsService;
 use Modules\Social\App\Models\SocialGroupMember;
+use Modules\Social\App\Models\SocialHashtag;
 use Modules\Social\App\Models\SocialPost;
 use Modules\Social\App\Models\SocialPostDepartmentVisibility;
 use Modules\Social\App\Models\SocialPostLike;
@@ -52,12 +53,13 @@ class SocialPostService
         private readonly SocialPollService $polls,
         private readonly SocialMentionService $mentions,
         private readonly SocialGroupRepositoryInterface $groups,
+        private readonly SocialHashtagService $hashtags,
     ) {}
 
-    public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null): array
+    public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?string $hashtag = null): array
     {
         $scope = $this->normalizeFeedScope($scope);
-        $paginator = $this->posts->paginate($perPage, $page, $scope, $viewer->id, $departmentId, $wallUserId, $groupId, $viewer->department_id);
+        $paginator = $this->posts->paginate($perPage, $page, $scope, $viewer->id, $departmentId, $wallUserId, $groupId, $viewer->department_id, $hashtag);
 
         return [
             'posts' => collect($paginator->items())
@@ -207,6 +209,7 @@ class SocialPostService
         });
 
         $this->mentions->notifyPost($author, $post);
+        $this->hashtags->syncForPost($post);
 
         return $post;
     }
@@ -244,6 +247,7 @@ class SocialPostService
         ]);
 
         $this->mentions->notifyPost($editor, $post, $oldContent);
+        $this->hashtags->syncForPost($post);
 
         return $post;
     }
@@ -282,6 +286,7 @@ class SocialPostService
         }
 
         $this->polls->deleteImage($post->poll);
+        $this->hashtags->detachForPost($post);
         $this->posts->delete($post);
     }
 
@@ -299,6 +304,7 @@ class SocialPostService
         ]);
 
         $this->mentions->notifyPost($sharer, $post);
+        $this->hashtags->syncForPost($post);
 
         return $post;
     }
@@ -527,6 +533,13 @@ class SocialPostService
         return [
             'id' => $post->id,
             'content' => $post->content,
+            'hashtags' => $post->hashtags
+                ->map(fn (SocialHashtag $hashtag) => [
+                    'name' => $hashtag->name,
+                    'label' => $hashtag->label,
+                ])
+                ->values()
+                ->all(),
             'attachments' => collect($post->attachments ?? [])->map(fn (array $a) => [
                 'type' => $a['type'],
                 'name' => $a['name'],

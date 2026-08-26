@@ -52,6 +52,12 @@ const composerPlaceholder = computed(() => {
   }
   return 'Bạn đang nghĩ gì?';
 });
+const hashtagParams = computed(() => {
+  const params = { post_scope: postScope.value };
+  if (postScope.value === 'personal' && props.wallUserId) params.wall_user_id = props.wallUserId;
+  if (postScope.value === 'group' && props.groupId) params.group_id = props.groupId;
+  return params;
+});
 
 const avatarInitial = () => props.authorName?.trim().charAt(0).toUpperCase() || '?';
 
@@ -251,6 +257,8 @@ defineExpose({ expand });
         v-model="content"
         :placeholder="composerPlaceholder"
         enable-mentions
+        enable-hashtags
+        :hashtag-params="hashtagParams"
         @is-empty="editorEmpty = $event"
         @close="closeComposer"
       />

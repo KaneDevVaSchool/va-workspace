@@ -10,6 +10,7 @@ import { applyOptimistic, cloneReactions, useReactionAction } from '../lib/useRe
 import { sanitizeSocialHtml } from '../lib/sanitizeSocialHtml.js';
 import { vSocialStickers } from '../lib/socialStickers.js';
 import { mentionUserIdFromEvent } from '../lib/mentionClick.js';
+import { hashtagFromEvent } from '../lib/hashtagClick.js';
 import SocialCommentComposer from './SocialCommentComposer.vue';
 import SocialImageGrid from './SocialImageGrid.vue';
 import SocialReactionBursts from './SocialReactionBursts.vue';
@@ -27,7 +28,7 @@ const props = defineProps({
   depth: { type: Number, default: 0 },
 });
 
-const emit = defineEmits(['count-changed', 'deleted', 'replied', 'open-wall']);
+const emit = defineEmits(['count-changed', 'deleted', 'replied', 'open-wall', 'open-hashtag']);
 
 const auth = useAuthStore();
 const replyOpen = ref(false);
@@ -99,7 +100,12 @@ function toggleReply() {
   replyOpen.value = !replyOpen.value;
 }
 
-function onMentionClick(event) {
+function onContentClick(event) {
+  const tag = hashtagFromEvent(event);
+  if (tag) {
+    emit('open-hashtag', tag);
+    return;
+  }
   const userId = mentionUserIdFromEvent(event);
   if (userId) emit('open-wall', userId);
 }
@@ -169,7 +175,7 @@ async function confirmRemove() {
             class="comment__content"
             v-html="sanitizedContent"
             v-social-stickers
-            @click="onMentionClick"
+            @click="onContentClick"
           ></div>
 
           <div v-if="imageAttachments.length > 0" class="comment__images">
@@ -251,6 +257,7 @@ async function confirmRemove() {
         @deleted="onReplyDeleted"
         @count-changed="emit('count-changed', $event)"
         @open-wall="emit('open-wall', $event)"
+        @open-hashtag="emit('open-hashtag', $event)"
       />
     </div>
 
@@ -394,7 +401,8 @@ async function confirmRemove() {
   color: var(--color-info);
 }
 
-.comment__content :deep(.mention) {
+.comment__content :deep(.mention),
+.comment__content :deep(.hashtag) {
   color: var(--color-primary);
   font-weight: 600;
   cursor: pointer;

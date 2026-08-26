@@ -12,6 +12,7 @@ import { FontSize } from '../lib/tiptapFontSize.js';
 import { MentionNode } from '../lib/tiptapMention.js';
 import { StickerNode } from '../lib/tiptapSticker.js';
 import SocialMentionPicker from './SocialMentionPicker.vue';
+import SocialHashtagPicker from './SocialHashtagPicker.vue';
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -19,6 +20,8 @@ const props = defineProps({
   compact: { type: Boolean, default: false },
   showClose: { type: Boolean, default: true },
   enableMentions: { type: Boolean, default: false },
+  enableHashtags: { type: Boolean, default: true },
+  hashtagParams: { type: Object, default: null },
 });
 
 const emit = defineEmits(['update:modelValue', 'isEmpty', 'close']);
@@ -29,6 +32,11 @@ const mentionQuery = ref('');
 const mentionUsers = ref([]);
 const mentionIndex = ref(0);
 let mentionTimer = null;
+const hashtagOpen = ref(false);
+const hashtagQuery = ref('');
+const hashtagTags = ref([]);
+const hashtagIndex = ref(0);
+let hashtagTimer = null;
 let editor = null;
 
 function closeMention() {
@@ -92,6 +100,101 @@ function insertMention(user, { replaceQuery = true, suffix = ' ' } = {}) {
   closeMention();
 }
 
+function closeHashtag() {
+  hashtagOpen.value = false;
+  hashtagQuery.value = '';
+  hashtagTags.value = [];
+  hashtagIndex.value = 0;
+}
+
+function fetchHashtags(query) {
+  clearTimeout(hashtagTimer);
+  hashtagTimer = setTimeout(async () => {
+    try {
+      const params = { ...(props.hashtagParams ?? {}), q: query, limit: 8 };
+      const { data } = await window.axios.get('/api/social/hashtags', { params });
+      const list = data.hashtags ?? [];
+      const needle = String(query || '').trim();
+      const normalized = needle.toLowerCase();
+      const hasExact = list.some((tag) => tag.name === normalized);
+      hashtagTags.value = needle && !hasExact
+        ? [{ name: normalized, label: needle, usage_count: 0, isNew: true }, ...list]
+        : list;
+      hashtagIndex.value = 0;
+    } catch {
+      hashtagTags.value = [];
+    }
+  }, 160);
+}
+
+function detectHashtag() {
+  if (!props.enableHashtags || !editor) {
+    closeHashtag();
+    return;
+  }
+  if (editor.isActive('mention')) {
+    closeHashtag();
+    return;
+  }
+  const { from } = editor.state.selection;
+  const text = editor.state.doc.textBetween(Math.max(0, from - 40), from, '\0');
+  const match = text.match(/#([\p{L}\p{N}_]{0,64})$/u);
+  if (!match) {
+    closeHashtag();
+    return;
+  }
+  const at = text.length - match[0].length;
+  if (at > 0 && /[\p{L}\p{N}_/]/u.test(text[at - 1])) {
+    closeHashtag();
+    return;
+  }
+  hashtagQuery.value = match[1];
+  hashtagOpen.value = true;
+  fetchHashtags(match[1]);
+}
+
+function insertHashtag(tag) {
+  if (!editor || !tag) return;
+  const label = tag.label || tag.name;
+  const { from } = editor.state.selection;
+  const text = editor.state.doc.textBetween(Math.max(0, from - 40), from, '\0');
+  const match = text.match(/#([\p{L}\p{N}_]{0,64})$/u);
+  const chain = editor.chain().focus();
+  if (match) {
+    chain.deleteRange({ from: from - match[0].length, to: from });
+  }
+  chain.insertContent(`#${label} `).run();
+  closeHashtag();
+}
+
+function handleHashtagKeydown(event) {
+  if (!hashtagOpen.value) return false;
+  if (event.key === 'ArrowDown') {
+    hashtagIndex.value = Math.min(hashtagIndex.value + 1, Math.max(hashtagTags.value.length - 1, 0));
+    return true;
+  }
+  if (event.key === 'ArrowUp') {
+    hashtagIndex.value = Math.max(hashtagIndex.value - 1, 0);
+    return true;
+  }
+  if (event.key === 'Enter' || event.key === 'Tab') {
+    const tag = hashtagTags.value[hashtagIndex.value];
+    if (tag) {
+      insertHashtag(tag);
+      return true;
+    }
+    if (hashtagQuery.value) {
+      insertHashtag({ name: hashtagQuery.value.toLowerCase(), label: hashtagQuery.value });
+      return true;
+    }
+  }
+  if (event.key === 'Escape') {
+    closeHashtag();
+    return true;
+  }
+  return false;
+}
+
 function handleMentionKeydown(event) {
   if (!mentionOpen.value) return false;
   if (event.key === 'ArrowDown') {
@@ -112,6 +215,20 @@ function handleMentionKeydown(event) {
     return true;
   }
   return false;
+}
+
+function detectInline() {
+  detectMention();
+  if (mentionOpen.value) {
+    closeHashtag();
+    return;
+  }
+  detectHashtag();
+}
+
+function handleInlineKeydown(event) {
+  if (handleMentionKeydown(event)) return true;
+  return handleHashtagKeydown(event);
 }
 
 const TEXT_COLORS = [
@@ -172,15 +289,15 @@ editor = new Editor({
   ],
   editorProps: {
     attributes: { class: 'post-editor__content' },
-    handleKeyDown: (_view, event) => handleMentionKeydown(event),
+    handleKeyDown: (_view, event) => handleInlineKeydown(event),
   },
   onUpdate: ({ editor: e }) => {
     emit('update:modelValue', e.getHTML());
     emit('isEmpty', e.isEmpty);
-    detectMention();
+    detectInline();
   },
   onSelectionUpdate: () => {
-    detectMention();
+    detectInline();
   },
 });
 
@@ -286,6 +403,7 @@ function onDocumentClick(event) {
     sizePickerOpen.value = false;
     linkPickerOpen.value = false;
     closeMention();
+    closeHashtag();
   }
 }
 
@@ -294,6 +412,7 @@ document.addEventListener('click', onDocumentClick, true);
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick, true);
   clearTimeout(mentionTimer);
+  clearTimeout(hashtagTimer);
   editor.destroy();
 });
 </script>
@@ -515,6 +634,13 @@ onBeforeUnmount(() => {
         :active-index="mentionIndex"
         :query="mentionQuery"
         @pick="insertMention($event, { replaceQuery: true })"
+      />
+      <SocialHashtagPicker
+        v-if="hashtagOpen && enableHashtags"
+        :tags="hashtagTags"
+        :active-index="hashtagIndex"
+        :query="hashtagQuery"
+        @pick="insertHashtag"
       />
     </div>
   </div>
@@ -807,7 +933,8 @@ onBeforeUnmount(() => {
   padding: var(--space-2) var(--space-3);
 }
 
-.post-editor__body :deep(.mention) {
+.post-editor__body :deep(.mention),
+.post-editor__body :deep(.hashtag) {
   color: var(--color-primary);
   font-weight: 600;
 }

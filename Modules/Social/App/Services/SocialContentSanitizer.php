@@ -12,7 +12,7 @@ class SocialContentSanitizer
     public function __construct()
     {
         $config = HTMLPurifier_Config::createDefault();
-        $config->set('HTML.Allowed', 'p,br,strong,b,em,i,u,h1,h2,h3,ul,ol,li,a[href],span[style|class|data-mention-id|data-sticker]');
+        $config->set('HTML.Allowed', 'p,br,strong,b,em,i,u,h1,h2,h3,ul,ol,li,a[href],span[style|class|data-mention-id|data-sticker|data-hashtag]');
         $config->set('CSS.AllowedProperties', 'color,font-size');
         $config->set('URI.AllowedSchemes', ['http' => true, 'https' => true, 'mailto' => true]);
         $config->set('HTML.TargetBlank', true);
@@ -25,11 +25,12 @@ class SocialContentSanitizer
 
         $config->set('Cache.SerializerPath', $cachePath);
         $config->set('HTML.DefinitionID', 'social-content-stickers');
-        $config->set('HTML.DefinitionRev', 1);
+        $config->set('HTML.DefinitionRev', 2);
 
         if ($def = $config->maybeGetRawHTMLDefinition()) {
             $def->addAttribute('span', 'data-mention-id', 'Number');
             $def->addAttribute('span', 'data-sticker', 'Text');
+            $def->addAttribute('span', 'data-hashtag', 'Text');
         }
 
         $this->purifier = new HTMLPurifier($config);

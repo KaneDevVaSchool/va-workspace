@@ -1,11 +1,12 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import AppIcon from "@/components/AppIcon.vue";
 import PageHeader from "@/components/PageHeader.vue";
 import { showClientToast } from "@/lib/clientToast";
 import { useAuthStore } from "@modules/Identity/resources/js/stores/auth.js";
 import SocialBirthdayPanel from "../components/SocialBirthdayPanel.vue";
+import SocialHashtagPanel from "../components/SocialHashtagPanel.vue";
 import SocialPinnedPanel from "../components/SocialPinnedPanel.vue";
 import SocialPostCard from "../components/SocialPostCard.vue";
 import SocialPostComposer from "../components/SocialPostComposer.vue";
@@ -13,6 +14,7 @@ import SocialProfilePanel from "../components/SocialProfilePanel.vue";
 
 const auth = useAuthStore();
 const route = useRoute();
+const router = useRouter();
 
 const posts = ref([]);
 const loading = ref(false);
@@ -21,6 +23,7 @@ const page = ref(1);
 const lastPage = ref(1);
 const pinnedPanel = ref(null);
 const systemPanel = ref(null);
+const hashtagPanel = ref(null);
 const composer = ref(null);
 const profilePanel = ref(null);
 const searchQuery = ref("");
@@ -31,6 +34,20 @@ const wallProfile = ref(null);
 const focusedPostId = ref(null);
 const openCommentsPostId = ref(null);
 const suppressFeedReload = ref(false);
+const hashtagTotal = ref(0);
+
+const activeHashtag = computed(() => {
+    const raw = route.query.hashtag;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (typeof value !== "string") return "";
+    return value.trim().replace(/^#/, "").toLowerCase();
+});
+const activeHashtagLabel = computed(() => {
+    const fromPost = posts.value
+        .flatMap((post) => post.hashtags ?? [])
+        .find((tag) => tag.name === activeHashtag.value);
+    return fromPost?.label || activeHashtag.value;
+});
 
 const departmentName = computed(() => auth.user?.department?.name ?? "");
 const currentWallUserId = computed(
@@ -92,6 +109,11 @@ function belongsToCurrentScope(post) {
     if (feedScope.value === "reacted") {
         return Boolean(post.my_reaction);
     }
+    if (activeHashtag.value) {
+        return (post.hashtags ?? []).some(
+            (tag) => tag.name === activeHashtag.value,
+        );
+    }
     return true;
 }
 
@@ -109,6 +131,7 @@ async function loadFeed(targetPage = 1) {
         if (postScope.value === "personal" && currentWallUserId.value) {
             params.wall_user_id = currentWallUserId.value;
         }
+        if (activeHashtag.value) params.hashtag = activeHashtag.value;
         const { data } = await window.axios.get("/api/social/posts", {
             params,
         });
@@ -118,6 +141,7 @@ async function loadFeed(targetPage = 1) {
             : [...posts.value, ...data.posts];
         page.value = data.current_page;
         lastPage.value = data.last_page;
+        hashtagTotal.value = data.total ?? 0;
     } catch (error) {
         showClientToast("error", "Không thể tải bảng tin.");
     } finally {
@@ -180,6 +204,7 @@ function loadMore() {
 function refreshAnnouncementPanels() {
     pinnedPanel.value?.load();
     systemPanel.value?.load();
+    hashtagPanel.value?.load();
 }
 
 function refreshProfileStats() {
@@ -318,7 +343,31 @@ async function applyFocusedPost() {
     }
 }
 
+function setActiveHashtag(name) {
+    const next = String(name || "")
+        .replace(/^#/, "")
+        .trim()
+        .toLowerCase();
+    const query = { ...route.query };
+    if (next && next !== activeHashtag.value) {
+        query.hashtag = next;
+    } else {
+        delete query.hashtag;
+    }
+    delete query.post;
+    delete query.comment;
+    router.replace({ query });
+    document
+        .querySelector(".social-page__main")
+        ?.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function onOpenHashtag(name) {
+    setActiveHashtag(name);
+}
+
 watch(feedScope, () => loadFeed(1));
+watch(activeHashtag, () => loadFeed(1));
 watch([postScope, wallUserId], () => {
     if (suppressFeedReload.value) {
         suppressFeedReload.value = false;
@@ -493,6 +542,29 @@ onMounted(async () => {
                     @posted="onPosted"
                 />
 
+                <div
+                    v-if="activeHashtag"
+                    class="social-page__hashtag-filter"
+                >
+                    <span class="social-page__hashtag-filter-icon" aria-hidden="true">
+                        <AppIcon name="hash" :size="16" />
+                    </span>
+                    <p class="social-page__hashtag-filter-text">
+                        Đang xem
+                        <strong>#{{ activeHashtagLabel }}</strong>
+                        <span v-if="!loading && hashtagTotal > 0">
+                            · {{ hashtagTotal }} bài
+                        </span>
+                    </p>
+                    <button
+                        type="button"
+                        class="social-page__hashtag-filter-clear"
+                        @click="setActiveHashtag('')"
+                    >
+                        Bỏ lọc
+                    </button>
+                </div>
+
                 <div v-if="loading" class="social-page__loading">
                     Đang tải bảng tin...
                 </div>
@@ -525,6 +597,7 @@ onMounted(async () => {
                                 @shared="onShared"
                                 @updated="onUpdated"
                                 @open-wall="openPersonalWall"
+                                @open-hashtag="onOpenHashtag"
                             />
                         </div>
                     </template>
@@ -538,6 +611,10 @@ onMounted(async () => {
                             Không tìm thấy bài viết khớp với “{{
                                 searchQuery.trim()
                             }}”.
+                        </p>
+                        <p v-else-if="activeHashtag">
+                            Chưa có bài viết nào gắn #{{ activeHashtagLabel }}
+                            trên tường này.
                         </p>
                         <p v-else-if="feedScope === 'mine'">
                             Bạn chưa đăng bài viết nào.
@@ -584,6 +661,13 @@ onMounted(async () => {
             <aside
                 class="social-page__rail social-page__rail--right hide-scrollbar"
             >
+                <SocialHashtagPanel
+                    ref="hashtagPanel"
+                    :post-scope="postScope"
+                    :wall-user-id="currentWallUserId"
+                    :active-hashtag="activeHashtag"
+                    @select="onOpenHashtag"
+                />
                 <SocialPinnedPanel
                     v-if="postScope !== 'personal'"
                     ref="pinnedPanel"
@@ -853,6 +937,60 @@ onMounted(async () => {
     flex-direction: column;
     gap: var(--space-3);
     overflow-y: auto;
+}
+
+.social-page__hashtag-filter {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-shrink: 0;
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+}
+
+.social-page__hashtag-filter::before {
+    content: "";
+    position: absolute;
+    top: var(--space-2);
+    bottom: var(--space-2);
+    left: var(--space-2);
+    width: 3px;
+    border-radius: 0;
+    background: var(--color-primary);
+}
+
+.social-page__hashtag-filter-icon {
+    display: flex;
+    color: var(--color-primary);
+    margin-left: var(--space-2);
+}
+
+.social-page__hashtag-filter-text {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--color-text);
+}
+
+.social-page__hashtag-filter-text strong {
+    color: var(--color-primary);
+}
+
+.social-page__hashtag-filter-clear {
+    flex-shrink: 0;
+    border: none;
+    background: var(--color-surface-muted);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.3rem 0.7rem;
+    border-radius: var(--radius-full);
+    cursor: pointer;
 }
 
 .social-page__scope-bar {

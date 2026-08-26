@@ -15,6 +15,7 @@ use Modules\Social\App\Models\SocialPostLike;
 use Modules\Social\App\Repositories\Contracts\SocialGroupRepositoryInterface;
 use Modules\Social\App\Repositories\Contracts\SocialPostRepositoryInterface;
 use Modules\Social\App\Services\SocialGroupService;
+use Modules\Social\App\Services\SocialHashtagService;
 use Modules\Social\App\Services\SocialPostService;
 
 class SocialPostController extends Controller
@@ -45,6 +46,11 @@ class SocialPostController extends Controller
             return response()->json(['message' => 'Bạn chưa thuộc phòng ban nào.'], 422);
         }
 
+        $hashtag = $request->query('hashtag');
+        $hashtagNormalized = is_string($hashtag) && trim($hashtag) !== ''
+            ? SocialHashtagService::normalize(ltrim(trim($hashtag), '#'))
+            : null;
+
         return response()->json(
             $this->service->listFeed(
                 $request->user(),
@@ -54,6 +60,7 @@ class SocialPostController extends Controller
                 $wall['department_id'],
                 $wall['wall_user_id'],
                 $wall['group_id'],
+                $hashtagNormalized,
             )
         );
     }

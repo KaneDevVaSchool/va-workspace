@@ -8,6 +8,7 @@ import { applyOptimistic, cloneReactions, useReactionAction } from '../lib/useRe
 import { sanitizeSocialHtml } from '../lib/sanitizeSocialHtml.js';
 import { vSocialStickers } from '../lib/socialStickers.js';
 import { mentionUserIdFromEvent } from '../lib/mentionClick.js';
+import { hashtagFromEvent } from '../lib/hashtagClick.js';
 import SocialCommentList from './SocialCommentList.vue';
 import SocialImageGrid from './SocialImageGrid.vue';
 import SocialPollBlock from './SocialPollBlock.vue';
@@ -28,7 +29,7 @@ const props = defineProps({
 const sanitizedContent = computed(() => sanitizeSocialHtml(props.post.content));
 const sanitizedSharedContent = computed(() => sanitizeSocialHtml(props.post.shared_from?.content));
 
-const emit = defineEmits(['deleted', 'pinned', 'unpinned', 'shared', 'updated', 'open-wall']);
+const emit = defineEmits(['deleted', 'pinned', 'unpinned', 'shared', 'updated', 'open-wall', 'open-hashtag']);
 
 const showComments = ref(props.openComments);
 const shareOpen = ref(false);
@@ -189,7 +190,12 @@ watch(() => props.openComments, (open) => {
   if (open) showComments.value = true;
 });
 
-function onMentionClick(event) {
+function onContentClick(event) {
+  const tag = hashtagFromEvent(event);
+  if (tag) {
+    emit('open-hashtag', tag);
+    return;
+  }
   const userId = mentionUserIdFromEvent(event);
   if (userId) openWall(userId);
 }
@@ -430,8 +436,16 @@ async function saveEdit() {
       class="post-card__content"
       v-html="sanitizedContent"
       v-social-stickers
-      @click="onMentionClick"
+      @click="onContentClick"
     ></div>
+
+    <ul v-if="post.hashtags?.length && !editing" class="post-card__hashtags" aria-label="Hashtag của bài viết">
+      <li v-for="tag in post.hashtags" :key="tag.name">
+        <button type="button" class="post-card__hashtag-chip" @click="emit('open-hashtag', tag.name)">
+          #{{ tag.label || tag.name }}
+        </button>
+      </li>
+    </ul>
 
     <section
       v-if="showHistory && !editing"
@@ -456,6 +470,7 @@ async function saveEdit() {
             class="post-card__history-content"
             v-html="sanitizeSocialHtml(version.content)"
             v-social-stickers
+            @click="onContentClick"
           ></div>
           <p v-else class="post-card__history-empty">Không có nội dung.</p>
         </li>
@@ -475,7 +490,7 @@ async function saveEdit() {
         class="post-card__shared-content"
         v-html="sanitizedSharedContent"
         v-social-stickers
-        @click="onMentionClick"
+        @click="onContentClick"
       ></div>
     </div>
 
@@ -575,6 +590,7 @@ async function saveEdit() {
       @count-changed="onCommentsCountChanged"
       @close="showComments = false"
       @open-wall="openWall"
+      @open-hashtag="emit('open-hashtag', $event)"
     />
 
     <SocialReactionBursts :bursts="bursts" />
@@ -1034,10 +1050,38 @@ async function saveEdit() {
 }
 
 .post-card__content :deep(.mention),
-.post-card__shared-content :deep(.mention) {
+.post-card__shared-content :deep(.mention),
+.post-card__content :deep(.hashtag),
+.post-card__shared-content :deep(.hashtag),
+.post-card__history-content :deep(.hashtag) {
   color: var(--color-primary);
   font-weight: 600;
   cursor: pointer;
+}
+
+.post-card__hashtags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.post-card__hashtag-chip {
+  border: none;
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.post-card__hashtag-chip:hover {
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-surface));
 }
 
 .post-card--focused {

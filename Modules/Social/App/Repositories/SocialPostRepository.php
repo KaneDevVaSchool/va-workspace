@@ -21,6 +21,7 @@ class SocialPostRepository implements SocialPostRepositoryInterface
                 'wallUser.department',
                 'group',
                 'departmentVisibilities.department',
+                'hashtags',
                 'poll.options' => fn ($query) => $query
                     ->withCount('votes')
                     ->orderBy('position')
@@ -37,11 +38,10 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         return $query;
     }
 
-    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?int $viewerDepartmentId = null): LengthAwarePaginator
+    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?int $viewerDepartmentId = null, ?string $hashtag = null): LengthAwarePaginator
     {
         $query = $this->baseQuery($userId);
-        $this->applyWall($query, $departmentId, $wallUserId, $groupId);
-        $this->applyDepartmentVisibility($query, $departmentId, $wallUserId, $groupId, $viewerDepartmentId);
+        $this->constrainVisibleFeed($query, $departmentId, $wallUserId, $groupId, $viewerDepartmentId);
 
         if ($userId !== null && $scope === 'mine') {
             $query->where('user_id', $userId);
@@ -51,10 +51,20 @@ class SocialPostRepository implements SocialPostRepositoryInterface
             $query->whereHas('likes', fn ($likes) => $likes->where('user_id', $userId));
         }
 
+        if ($hashtag !== null && $hashtag !== '') {
+            $query->whereHas('hashtags', fn ($tags) => $tags->where('name', $hashtag));
+        }
+
         return $query
             ->orderByDesc('is_pinned')
             ->orderByDesc('created_at')
             ->paginate($perPage, ['*'], 'page', $page);
+    }
+
+    public function constrainVisibleFeed($query, ?int $departmentId, ?int $wallUserId, ?int $groupId, ?int $viewerDepartmentId): void
+    {
+        $this->applyWall($query, $departmentId, $wallUserId, $groupId);
+        $this->applyDepartmentVisibility($query, $departmentId, $wallUserId, $groupId, $viewerDepartmentId);
     }
 
     public function profileStats(int $userId): array
