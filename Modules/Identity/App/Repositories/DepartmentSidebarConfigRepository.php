@@ -21,6 +21,16 @@ class DepartmentSidebarConfigRepository implements DepartmentSidebarConfigReposi
             ->all();
     }
 
+    public function customLabelsForDepartment(int $departmentId): array
+    {
+        return DepartmentSidebarConfig::query()
+            ->where('department_id', $departmentId)
+            ->whereNotNull('custom_label')
+            ->where('custom_label', '!=', '')
+            ->pluck('custom_label', 'menu_key')
+            ->all();
+    }
+
     public function allByDepartment(int $departmentId): Collection
     {
         return DepartmentSidebarConfig::query()
@@ -51,11 +61,26 @@ class DepartmentSidebarConfigRepository implements DepartmentSidebarConfigReposi
             ->first();
     }
 
-    public function setVisibility(int $departmentId, string $menuKey, bool $isVisible, ?int $updatedBy): DepartmentSidebarConfig
-    {
+    public function upsert(
+        int $departmentId,
+        string $menuKey,
+        bool $isVisible,
+        ?int $updatedBy,
+        bool $updateLabel = false,
+        ?string $customLabel = null,
+    ): DepartmentSidebarConfig {
+        $values = [
+            'is_visible' => $isVisible,
+            'updated_by' => $updatedBy,
+        ];
+
+        if ($updateLabel) {
+            $values['custom_label'] = $customLabel;
+        }
+
         return DepartmentSidebarConfig::query()->updateOrCreate(
             ['department_id' => $departmentId, 'menu_key' => $menuKey],
-            ['is_visible' => $isVisible, 'updated_by' => $updatedBy],
+            $values,
         );
     }
 }

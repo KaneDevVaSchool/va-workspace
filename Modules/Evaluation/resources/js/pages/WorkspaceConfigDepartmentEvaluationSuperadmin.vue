@@ -15,6 +15,7 @@ import { computed, inject, reactive, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import { formatDateTime } from '@/lib/formatTime';
+import { useDragScroll } from '@/composables/useDragScroll';
 
 const TYPE_LABELS = { scale: 'Thang điểm', behavior: 'Cộng/trừ' };
 const TABLE_COLSPAN = 8;
@@ -25,6 +26,9 @@ const loading = computed(() => hub?.loading?.value ?? false);
 
 const selected = ref(null);
 const typeGroupCollapsed = reactive({});
+const tableWrap = ref(null);
+
+useDragScroll(tableWrap);
 
 function openView(criterion) {
   selected.value = selected.value?.id === criterion.id ? null : criterion;
@@ -148,7 +152,7 @@ const tableBodyRows = computed(() => {
         Phòng ban chưa có tiêu chí đánh giá nào.
       </p>
 
-      <div v-else class="dept-eval__table-wrap hide-scrollbar">
+      <div v-else ref="tableWrap" class="dept-eval__table-wrap hide-scrollbar">
         <table class="dept-eval__table">
           <thead>
             <tr>
@@ -614,7 +618,7 @@ const tableBodyRows = computed(() => {
 
 .dept-eval__panel {
   flex-shrink: 0;
-  width: 20rem;
+  width: 22rem;
   overflow-y: auto;
   padding: var(--space-4);
   border: 1px solid var(--color-border);
@@ -678,9 +682,13 @@ const tableBodyRows = computed(() => {
   color: var(--color-text-muted);
 }
 
+.dept-eval__row-label::after {
+  content: ':';
+}
+
 .dept-eval__row-value {
   color: var(--color-text);
-  font-weight: 600;
+  font-style: italic;
   text-align: right;
   overflow-wrap: anywhere;
 }

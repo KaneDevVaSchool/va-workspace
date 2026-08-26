@@ -6,6 +6,7 @@ import TablePagesBar from '@/components/TablePagesBar.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import { formatDate, formatDateTime, formatTime } from '@/lib/formatTime';
 import { showClientToast } from '@/lib/clientToast';
+import { useDragScroll } from '@/composables/useDragScroll';
 import {
   ACTIVITY_ACTIONS,
   ACTIVITY_COLUMNS,
@@ -46,6 +47,8 @@ const visibleFilters = reactive(loadVisibility(FILTER_STORAGE_KEY, ACTIVITY_FILT
 const tableWrap = ref(null);
 const resizing = ref(false);
 const MIN_COL_PX = 72;
+
+useDragScroll(tableWrap, { isBlocked: () => resizing.value });
 
 const columnWidths = reactive(loadColumnWidths());
 
@@ -1149,7 +1152,7 @@ onBeforeUnmount(() => {
 
 .activity-page__side {
   flex-shrink: 0;
-  width: 20rem;
+  width: 22rem;
   overflow-y: auto;
   padding: var(--space-4);
   border: 1px solid var(--color-border);
@@ -1288,9 +1291,13 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
+.activity-page__row-label::after {
+  content: ':';
+}
+
 .activity-page__row-value {
   color: var(--color-text);
-  font-weight: 600;
+  font-style: italic;
   text-align: right;
   overflow-wrap: anywhere;
 }

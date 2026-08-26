@@ -99,11 +99,14 @@ const MENU_SECTIONS = [
         // department_director/deputy trở lên — section_head/team_lead/member
         // không có evaluation.manage_department nên không thấy mục này.
         // Xem plans/2026-08-26-mau-danh-gia.md §2.3.
+        // configurableByDepartment: true — đồng bộ thủ công với
+        // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
         name: 'manager.evaluation-templates.index',
         label: 'Mẫu đánh giá',
         icon: 'clipboardCheck',
         requiresPermission: 'evaluation.manage_department',
         hideWhenSuperAdmin: true,
+        configurableByDepartment: true,
       },
     ],
   },
@@ -140,6 +143,11 @@ const visibleSections = computed(() =>
 
 function isActive(routeName) {
   return route.name === routeName || route.matched.some((r) => r.name === routeName);
+}
+
+function itemLabel(item) {
+  const custom = auth.menuLabels[item.name];
+  return typeof custom === 'string' && custom.trim() ? custom.trim() : item.label;
 }
 
 function closeDrawer() {
@@ -199,15 +207,15 @@ function closeDrawer() {
             :to="{ name: item.name }"
             class="sidebar__link sidebar-nav-item"
             :class="{ 'sidebar__link--active sidebar-nav-item--active': isActive(item.name) }"
-            :aria-label="collapsed ? item.label : null"
+            :aria-label="collapsed ? itemLabel(item) : null"
             :aria-current="isActive(item.name) ? 'page' : null"
             @click="closeDrawer"
           >
             <span class="sidebar__link-icon">
               <AppIcon :name="item.icon" :size="18" />
             </span>
-            <span v-if="!collapsed" class="sidebar__link-text">{{ item.label }}</span>
-            <span v-else class="sidebar__flyout">{{ item.label }}</span>
+            <span v-if="!collapsed" class="sidebar__link-text">{{ itemLabel(item) }}</span>
+            <span v-else class="sidebar__flyout">{{ itemLabel(item) }}</span>
           </router-link>
         </section>
       </nav>

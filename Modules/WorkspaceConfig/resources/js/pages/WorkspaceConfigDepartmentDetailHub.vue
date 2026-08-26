@@ -2,9 +2,10 @@
 //
 // superadmin/workspace-config/departments/:departmentId — hub workspace của
 // 1 phòng ban, mở từ WorkspaceConfigOverviewSuperadmin. Load 1 lần dữ liệu
-// phòng ban (thành viên + menu hiển thị + tiêu chí đánh giá) rồi cấp cho 3
+// phòng ban (menu hiển thị + thành viên + tiêu chí đánh giá) rồi cấp cho 3
 // tab con qua provide/inject — tránh mỗi tab tự gọi lại API. Chỉ xem — super_admin
 // không sửa thay department_director (không có thao tác ghi ở tab nào).
+// Tab "Menu hiển thị" luôn đứng đầu.
 //
 import { computed, provide, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -13,9 +14,9 @@ import PageHeader from '@/components/PageHeader.vue';
 import { showClientToast } from '@/lib/clientToast';
 
 const TABS = [
-  { name: 'superadmin.workspace-config.department-detail.members', label: 'Thành viên' },
-  { name: 'superadmin.workspace-config.department-detail.sidebar', label: 'Menu hiển thị' },
-  { name: 'superadmin.workspace-config.department-detail.evaluation', label: 'Tiêu chí đánh giá' },
+  { name: 'superadmin.workspace-config.department-detail.sidebar', label: 'Menu hiển thị', icon: 'layoutList' },
+  { name: 'superadmin.workspace-config.department-detail.members', label: 'Thành viên', icon: 'users' },
+  { name: 'superadmin.workspace-config.department-detail.evaluation', label: 'Tiêu chí đánh giá', icon: 'clipboardCheck' },
 ];
 
 const route = useRoute();
@@ -76,7 +77,7 @@ watch(
   () => {
     if (TABS.some((tab) => tab.name === activeTab.value)) return;
     router.replace({
-      name: 'superadmin.workspace-config.department-detail.members',
+      name: 'superadmin.workspace-config.department-detail.sidebar',
       params: route.params,
     });
   },
@@ -113,6 +114,7 @@ watch(
         :class="{ 'wc-dept-hub__tab--active': activeTab === tab.name }"
         :aria-current="activeTab === tab.name ? 'page' : undefined"
       >
+        <AppIcon :name="tab.icon" :size="15" :stroke-width="1.75" />
         {{ tab.label }}
       </router-link>
     </nav>
@@ -174,15 +176,19 @@ watch(
   z-index: 8;
   flex-shrink: 0;
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 2.25rem;
+  align-items: stretch;
+  gap: var(--space-1);
+  min-height: 2.5rem;
   margin-bottom: var(--space-3);
-  padding: 0.25rem 0;
+  padding: 0;
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-border) 75%, transparent);
 }
 
 .wc-dept-hub__tab {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
   border: none;
   background: transparent;
@@ -191,6 +197,7 @@ watch(
   font-size: 0.875rem;
   font-weight: 600;
   text-decoration: none;
+  white-space: nowrap;
   box-shadow: 0 2px 0 transparent;
 }
 

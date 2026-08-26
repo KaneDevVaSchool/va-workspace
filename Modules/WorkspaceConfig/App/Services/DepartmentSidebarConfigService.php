@@ -7,19 +7,22 @@ use Modules\Identity\App\Models\DepartmentSidebarConfig;
 use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositoryInterface;
 
 /**
- * Bật/tắt menu sidebar theo phòng ban. CHỈ các menu_key trong whitelist
- * dưới đây được phép cấu hình — đồng bộ THỦ CÔNG với các item đánh dấu
- * `configurableByDepartment: true` trong resources/js/components/AppSidebar.vue.
+ * Bật/tắt và đổi tên menu sidebar theo phòng ban. CHỈ các menu_key trong
+ * whitelist dưới đây được phép cấu hình — đồng bộ THỦ CÔNG với các item
+ * đánh dấu `configurableByDepartment: true` trong AppSidebar.vue.
  * Không bao giờ đưa menu superadmin/admin, hay tab con của hub
- * Cấu hình phòng ban (Thành viên / Menu / Tiêu chí), vào whitelist này.
+ * Cấu hình phòng ban (Menu / Thành viên / Tiêu chí), vào whitelist này.
  */
 class DepartmentSidebarConfigService
 {
-    /** @var array<string, string> menu_key => nhãn tiếng Việt hiển thị trên UI cấu hình */
+    public const LABEL_MAX_LENGTH = 40;
+
+    /** @var array<string, string> menu_key => nhãn tiếng Việt mặc định */
     private const CONFIGURABLE_MENUS = [
         'home' => 'Tổng quan',
         'social.feed' => 'Bảng tin nội bộ',
         'manager.evaluation.view' => 'Tiêu chí đánh giá',
+        'manager.evaluation-templates.index' => 'Mẫu đánh giá',
     ];
 
     public function __construct(
@@ -31,23 +34,43 @@ class DepartmentSidebarConfigService
         return array_key_exists($menuKey, self::CONFIGURABLE_MENUS);
     }
 
-    /** Nhãn tiếng Việt của 1 menu_key, trả về chính key nếu không nằm trong whitelist. */
+    /** Nhãn mặc định của 1 menu_key, trả về chính key nếu không nằm trong whitelist. */
     public function menuLabel(string $menuKey): string
     {
         return self::CONFIGURABLE_MENUS[$menuKey] ?? $menuKey;
     }
 
-    /** Toàn bộ menu có thể cấu hình + trạng thái is_visible hiện tại của 1 phòng ban. */
+    public function normalizeCustomLabel(?string $label, string $menuKey): ?string
+    {
+        $trimmed = trim((string) $label);
+        if ($trimmed === '' || $trimmed === $this->menuLabel($menuKey)) {
+            return null;
+        }
+
+        return mb_substr($trimmed, 0, self::LABEL_MAX_LENGTH);
+    }
+
+    public function effectiveLabel(?DepartmentSidebarConfig $override, string $menuKey): string
+    {
+        $custom = $this->normalizeCustomLabel($override?->custom_label, $menuKey);
+
+        return $custom ?? $this->menuLabel($menuKey);
+    }
+
+    /** Toàn bộ menu có thể cấu hình + trạng thái hiện tại của 1 phòng ban. */
     public function forDepartment(int $departmentId): Collection
     {
         $overrides = $this->configs->allByDepartment($departmentId)->keyBy('menu_key');
 
-        return collect(self::CONFIGURABLE_MENUS)->map(function (string $label, string $menuKey) use ($overrides) {
+        return collect(self::CONFIGURABLE_MENUS)->map(function (string $defaultLabel, string $menuKey) use ($overrides) {
             $override = $overrides->get($menuKey);
+            $customLabel = $this->normalizeCustomLabel($override?->custom_label, $menuKey);
 
             return [
                 'menu_key' => $menuKey,
-                'label' => $label,
+                'default_label' => $defaultLabel,
+                'custom_label' => $customLabel,
+                'label' => $customLabel ?? $defaultLabel,
                 'is_visible' => $override?->is_visible ?? true,
             ];
         })->values();
@@ -56,12 +79,27 @@ class DepartmentSidebarConfigService
     /**
      * @throws \InvalidArgumentException nếu menu_key không nằm trong whitelist
      */
-    public function setVisibility(int $departmentId, string $menuKey, bool $isVisible, ?int $updatedBy): DepartmentSidebarConfig
-    {
+    public function updateMenu(
+        int $departmentId,
+        string $menuKey,
+        ?bool $isVisible,
+        bool $updateLabel,
+        ?string $customLabel,
+        ?int $updatedBy,
+    ): DepartmentSidebarConfig {
         if (! $this->isConfigurable($menuKey)) {
             throw new \InvalidArgumentException('Mục menu này không được phép cấu hình.');
         }
 
-        return $this->configs->setVisibility($departmentId, $menuKey, $isVisible, $updatedBy);
+        $existing = $this->configs->findByDepartmentAndKey($departmentId, $menuKey);
+
+        return $this->configs->upsert(
+            $departmentId,
+            $menuKey,
+            $isVisible ?? $existing?->is_visible ?? true,
+            $updatedBy,
+            $updateLabel,
+            $updateLabel ? $this->normalizeCustomLabel($customLabel, $menuKey) : null,
+        );
     }
 }

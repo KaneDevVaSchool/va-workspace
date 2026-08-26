@@ -10,6 +10,7 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, 
 import AppIcon from '@/components/AppIcon.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
+import { useDragScroll } from '@/composables/useDragScroll';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import WorkspaceConfigPicker from '../components/WorkspaceConfigPicker.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -66,6 +67,8 @@ const visibleFilters = reactive(loadVisibility(FILTER_STORAGE_KEY, MEMBER_FILTER
 
 const tableWrap = ref(null);
 const resizing = ref(false);
+
+useDragScroll(tableWrap, { isBlocked: () => resizing.value });
 const MIN_COL_PX = 72;
 const columnWidths = reactive(loadColumnWidths());
 const tableZoom = ref(loadZoom());
@@ -1020,6 +1023,7 @@ onBeforeUnmount(() => {
         />
       </div>
 
+      <Transition name="wc-members-side">
       <aside v-if="selected" class="wc-members__side" aria-label="Chi tiết thành viên">
         <div class="wc-members__side-head">
           <h2 class="wc-members__side-title">Chi tiết thành viên</h2>
@@ -1054,34 +1058,33 @@ onBeforeUnmount(() => {
             <span class="wc-members__row-label">Email</span>
             <span class="wc-members__row-value">{{ selected.email || '—' }}</span>
           </div>
-          <div class="wc-members__row">
+          <div v-if="!auth.can('team.manage')" class="wc-members__row">
             <span class="wc-members__row-label">Nhóm</span>
-            <template v-if="auth.can('team.manage')">
-              <div class="wc-members__row-team">
-                <select
-                  id="wc-member-team-assign"
-                  v-model="teamAssignId"
-                  class="wc-members__input wc-members__input--side"
-                  :disabled="teamAssignSaving"
-                >
-                  <option value="">Chưa thuộc nhóm nào</option>
-                  <option v-for="item in teamOptions" :key="item.value" :value="item.value">
-                    {{ item.label }}
-                  </option>
-                </select>
-                <button
-                  type="button"
-                  class="wc-members__side-btn"
-                  :disabled="teamAssignSaving || memberTeamAssignUnchanged"
-                  @click="saveMemberTeam"
-                >
-                  {{ teamAssignSaving ? 'Đang lưu…' : 'Lưu nhóm' }}
-                </button>
-              </div>
-            </template>
-            <span v-else class="wc-members__row-value">{{
-              selected.team?.name || 'Chưa thuộc nhóm nào'
-            }}</span>
+            <span class="wc-members__row-value">{{ selected.team?.name || 'Chưa thuộc nhóm nào' }}</span>
+          </div>
+          <div v-else class="wc-members__row wc-members__row--team">
+            <span class="wc-members__row-label wc-members__row-label--team">Nhóm</span>
+            <div class="wc-members__row-team">
+              <select
+                id="wc-member-team-assign"
+                v-model="teamAssignId"
+                class="wc-members__input wc-members__input--side"
+                :disabled="teamAssignSaving"
+              >
+                <option value="">Chưa thuộc nhóm nào</option>
+                <option v-for="item in teamOptions" :key="item.value" :value="item.value">
+                  {{ item.label }}
+                </option>
+              </select>
+              <button
+                type="button"
+                class="wc-members__side-btn"
+                :disabled="teamAssignSaving || memberTeamAssignUnchanged"
+                @click="saveMemberTeam"
+              >
+                {{ teamAssignSaving ? 'Đang lưu…' : 'Lưu nhóm' }}
+              </button>
+            </div>
           </div>
           <div class="wc-members__row">
             <span class="wc-members__row-label">Vai trò</span>
@@ -1102,6 +1105,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </aside>
+      </Transition>
     </div>
 
     <Teleport to="body">
@@ -1674,7 +1678,7 @@ onBeforeUnmount(() => {
 
 .wc-members__side {
   flex-shrink: 0;
-  width: 20rem;
+  width: 25rem;
   overflow-y: auto;
   padding: var(--space-4);
   border: 1px solid var(--color-border);
@@ -1752,28 +1756,43 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
+.wc-members__row-label::after {
+  content: ':';
+}
+
 .wc-members__row-value {
   color: var(--color-text);
-  font-weight: 600;
+  font-style: italic;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.wc-members__row--team {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.wc-members__row-label--team {
+  flex-shrink: initial;
 }
 
 .wc-members__row-team {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  align-items: center;
   gap: var(--space-2);
 }
 
 .wc-members__input--side {
+  flex: 1;
+  min-width: 0;
   font-size: 0.8125rem;
 }
 
 .wc-members__side-btn {
-  align-self: flex-end;
+  flex-shrink: 0;
   padding: 0.375rem 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -1785,9 +1804,32 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.wc-members__side-btn:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
 .wc-members__side-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* Bật/tắt panel chi tiết — trượt ngang + mờ dần, không giật cục (đẩy bảng sang) */
+.wc-members-side-enter-active,
+.wc-members-side-leave-active {
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.wc-members-side-enter-from,
+.wc-members-side-leave-to {
+  transform: translateX(0.75rem);
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-members-side-enter-active,
+  .wc-members-side-leave-active {
+    transition: none;
+  }
 }
 
 @media (max-width: 1024px) {

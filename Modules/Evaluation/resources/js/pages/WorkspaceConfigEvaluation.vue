@@ -22,6 +22,7 @@ import TablePagesBar from '@/components/TablePagesBar.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import { formatDateTime } from '@/lib/formatTime';
 import { showClientToast } from '@/lib/clientToast';
+import { useDragScroll } from '@/composables/useDragScroll';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -105,6 +106,8 @@ const resizing   = ref(false);
 const MIN_COL_PX = 80;
 const colWidths  = reactive(loadWidths());
 const tableZoom  = ref(loadZoom());
+
+useDragScroll(tableWrap, { isBlocked: () => resizing.value });
 
 // ─── form state ──────────────────────────────────────────────────────────────
 

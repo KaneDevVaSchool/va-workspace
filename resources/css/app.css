@@ -77,6 +77,17 @@ svg {
   height: 0;
 }
 
+/* Kéo bằng nắm chuột (giữ + kéo) khi bảng tràn ngang — máy bàn không vuốt
+   được, xem `useDragScroll` + .cursor/rules/data-table.mdc */
+.hide-scrollbar {
+  cursor: grab;
+}
+
+.hide-scrollbar.drag-scrolling {
+  cursor: grabbing;
+  user-select: none;
+}
+
 /* Container chính: luôn responsive, tự scroll nội bộ khi tràn thay vì
    để cả trang cuộn (quy tắc 6 + 7). */
 .app-shell {

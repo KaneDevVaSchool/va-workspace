@@ -7,6 +7,7 @@
 //
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { showClientToast } from '@/lib/clientToast';
+import { useDragScroll } from '@/composables/useDragScroll';
 import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -53,6 +54,9 @@ const perPage = ref(20);
 
 const tableWrap = ref(null);
 const resizing = ref(false);
+
+useDragScroll(tableWrap, { isBlocked: () => resizing.value });
+
 const visibleColumns = reactive(loadVisibility(COLUMN_STORAGE_KEY, PERMISSION_META_COLUMNS));
 const visibleFilters = reactive(loadVisibility(FILTER_STORAGE_KEY, PERMISSION_FILTERS));
 const columnWidths = reactive(loadColumnWidths());
@@ -1081,7 +1085,7 @@ onBeforeUnmount(() => {
 
 .perm-page__side {
   flex-shrink: 0;
-  width: 20rem;
+  width: 22rem;
   overflow-y: auto;
   padding: var(--space-4);
   border: 1px solid var(--color-border);
@@ -1158,12 +1162,16 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
+.perm-page__row-label::after {
+  content: ':';
+}
+
 .perm-page__row-value {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
   color: var(--color-text);
-  font-weight: 600;
+  font-style: italic;
   text-align: right;
 }
 

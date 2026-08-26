@@ -21,6 +21,7 @@ Chi tiết CSS / props / đo cột: [reference.md](reference.md)
 | Cột / bộ lọc / localStorage | `Modules/Identity/resources/js/constants/activity.js` |
 | Header xuất dữ liệu | `resources/js/components/PageHeader.vue` |
 | Ẩn scrollbar | `resources/css/app.css` (`.hide-scrollbar`) |
+| Kéo ngang bằng chuột | `resources/js/composables/useDragScroll.js` |
 
 **Luôn tái dùng cấu trúc trên.** Port sang trang khác: đổi API, key cột, nhãn; giữ layout, `TablePagesBar`, kéo cột, panel đẩy ngang.
 
@@ -36,7 +37,7 @@ div.__body (flex row, overflow hidden)
 │   ├── TablePagesBar placement="top"  ← đủ nút, gạch chân nhẹ
 │   ├── table-wrap.hide-scrollbar (flex 1)
 │   └── TablePagesBar placement="bottom" paging-only
-└── aside.__side (v-if selected) — Chi tiết, width ~20rem, đẩy bảng
+└── aside.__side (v-if selected) — Chi tiết, width 22–24rem, đẩy bảng
 ```
 
 Thứ tự **không** đảo: filter → thanh đầy đủ → bảng → thanh phân trang.
@@ -72,13 +73,55 @@ Người + email: **một cột**, tên một dòng, email dòng dưới `color:
 - Đo canvas theo chữ dài nhất (header + ô, gồm email), cộng padding; nếu tổng < khung thì giãn tỉ lệ cho kín. Persist localStorage.
 - Ô: `white-space: nowrap` (không ellipsis khi đã fit). Wrap bảng: `hide-scrollbar`.
 
+### Kéo ngang toàn bảng bằng chuột
+
+Khi tổng độ rộng cột (đã fit nội dung) vượt khung nhìn — bảng nhiều cột hơn
+màn hình xem hết — **không chỉ dựa vào cuộn bánh xe/trackpad**: máy bàn dùng
+chuột thường không vuốt ngang được. Bảng phải kéo được bằng cách **nắm chuột
+giữ (mousedown) rồi kéo** ngay trên vùng bảng, giống pan trên canvas.
+
+```js
+import { useDragScroll } from '@/composables/useDragScroll';
+
+const tableWrap = ref(null);
+const resizing = ref(false); // đã có sẵn cho kéo cột
+
+useDragScroll(tableWrap, { isBlocked: () => resizing.value });
+```
+
+`useDragScroll` tự bỏ qua khi bắt đầu từ nắm kéo cột / button / input / a /
+select (không phá thao tác click chọn dòng — chỉ kích hoạt kéo khi di
+chuyển ≥ 4px). Vẫn **tuyệt đối không hiện thanh scroll**; chỉ đổi con trỏ
+`grab` → `grabbing` (định nghĩa sẵn trong `.hide-scrollbar` ở `app.css`,
+không cần thêm CSS ở trang).
+
 ---
 
 ## 4. Chi tiết thao tác — đẩy ngang
 
 Click dòng → `selected = log` → `<aside>` bên phải, bảng co lại. Không modal giữa màn, không overlay. Đóng: nút X hoặc Escape. Màn hẹp: panel dưới bảng, `max-height: 42%`.
 
-Panel: nhãn trái chữ mờ, giá trị phải, cách dòng `box-shadow: 0 1px 0 var(--color-border)`.
+Panel rộng `22–24rem` (không dùng `20rem`). Mỗi dòng: nhãn trái chữ mờ có
+dấu `:` cuối (`::after { content: ':' }` trong CSS, không gõ `:` vào text),
+giá trị bên phải **chữ thường nghiêng** (`font-style: italic`, không
+`font-weight: 600` — quét toàn bộ, không in đậm), cách dòng `box-shadow: 0
+1px 0 var(--color-border)`.
+
+```css
+.page__row-label {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+.page__row-label::after {
+  content: ':';
+}
+.page__row-value {
+  color: var(--color-text);
+  font-style: italic;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+```
 
 ---
 
@@ -95,6 +138,8 @@ Panel: nhãn trái chữ mờ, giá trị phải, cách dòng `box-shadow: 0 1px
 - Hiện hết cột trên bảng vì “đủ thông tin”.
 - Scrollbar hiện trên khung bảng; `title="..."`.
 - `border-bottom` / `border-right` cho gạch — dùng `box-shadow`.
+- Bảng tràn ngang mà không kéo được bằng chuột (chỉ trông chờ wheel/trackpad).
+- Giá trị trong panel chi tiết in đậm (`font-weight: 600`) hoặc nhãn thiếu dấu `:`.
 
 ## Checklist
 
@@ -103,4 +148,6 @@ Panel: nhãn trái chữ mờ, giá trị phải, cách dòng `box-shadow: 0 1px
 - [ ] Cột mặc định ít; người + email một cột
 - [ ] Mọi cột kéo được; width persist; fit theo nội dung dài nhất
 - [ ] `hide-scrollbar`; không `title`
-- [ ] Chi tiết = aside đẩy ngang, không modal
+- [ ] Bảng tràn ngang kéo được bằng nắm chuột (`useDragScroll`), không hiện thanh scroll
+- [ ] Chi tiết = aside đẩy ngang (rộng 22–24rem), không modal
+- [ ] Panel chi tiết: nhãn có `:` (CSS `::after`), giá trị chữ nghiêng không đậm

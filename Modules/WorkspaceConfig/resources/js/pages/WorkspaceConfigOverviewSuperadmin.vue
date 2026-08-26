@@ -12,6 +12,7 @@ import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
+import { useDragScroll } from '@/composables/useDragScroll';
 import StatusBadge from '../components/StatusBadge.vue';
 import {
   COLUMN_STORAGE_KEY,
@@ -52,6 +53,8 @@ const visibleFilters = reactive(loadVisibility(FILTER_STORAGE_KEY, OVERVIEW_FILT
 
 const tableWrap = ref(null);
 const resizing = ref(false);
+
+useDragScroll(tableWrap, { isBlocked: () => resizing.value });
 const MIN_COL_PX = 72;
 const columnWidths = reactive(loadColumnWidths());
 const tableZoom = ref(loadZoom());
@@ -883,7 +886,7 @@ onBeforeUnmount(() => {
 
 .wc-overview__side {
   flex-shrink: 0;
-  width: 20rem;
+  width: 22rem;
   overflow-y: auto;
   padding: var(--space-4);
   border: 1px solid var(--color-border);
@@ -954,9 +957,13 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
+.wc-overview__row-label::after {
+  content: ':';
+}
+
 .wc-overview__row-value {
   color: var(--color-text);
-  font-weight: 600;
+  font-style: italic;
   text-align: right;
   overflow-wrap: anywhere;
 }

@@ -14,6 +14,13 @@ interface DepartmentSidebarConfigRepositoryInterface
     /** Danh sách menu_key đang bị ẩn (is_visible=false) của 1 phòng ban. */
     public function hiddenKeysForDepartment(int $departmentId): array;
 
+    /**
+     * Nhãn tuỳ chỉnh đang lưu (menu_key => custom_label), bỏ qua mục dùng tên mặc định.
+     *
+     * @return array<string, string>
+     */
+    public function customLabelsForDepartment(int $departmentId): array;
+
     /** Toàn bộ override hiện có của 1 phòng ban (kể cả is_visible=true nếu có row). */
     public function allByDepartment(int $departmentId): Collection;
 
@@ -27,5 +34,12 @@ interface DepartmentSidebarConfigRepositoryInterface
 
     public function findByDepartmentAndKey(int $departmentId, string $menuKey): ?DepartmentSidebarConfig;
 
-    public function setVisibility(int $departmentId, string $menuKey, bool $isVisible, ?int $updatedBy): DepartmentSidebarConfig;
+    public function upsert(
+        int $departmentId,
+        string $menuKey,
+        bool $isVisible,
+        ?int $updatedBy,
+        bool $updateLabel = false,
+        ?string $customLabel = null,
+    ): DepartmentSidebarConfig;
 }

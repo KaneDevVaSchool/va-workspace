@@ -111,6 +111,24 @@ th, td { white-space: nowrap; box-shadow: 0 1px 0 var(--color-border); }
 
 `fitColumnsToContent`: `canvas.measureText` header + mọi ô (+ email nếu cột người); `+ padding (~32) + extra (~24)`; nếu tổng < `wrap.clientWidth` thì phân bổ phần dư theo tỉ lệ. Gọi sau load data, đổi cột, zoom, mở/đóng panel, ResizeObserver width.
 
+## Kéo ngang bằng chuột (`useDragScroll`)
+
+`resources/js/composables/useDragScroll.js` — mousedown trên `tableWrap` rồi
+mousemove ≥ ngưỡng 4px thì coi là kéo, set `scrollLeft`/`scrollTop` theo delta;
+mouseup thì dừng, chặn `click` phát sinh ngay sau đó (tránh chọn nhầm dòng vì
+mouseup rơi trên `<tr>`). Tự bỏ qua khi mousedown bắt đầu từ
+`button, a, input, select, textarea` hoặc khi `isBlocked()` trả `true` (đang
+kéo nắm cột).
+
+```js
+import { useDragScroll } from '@/composables/useDragScroll';
+
+useDragScroll(tableWrap, { isBlocked: () => resizing.value });
+```
+
+Không cần thêm CSS ở trang — `grab`/`grabbing` cursor đã định nghĩa sẵn trên
+`.hide-scrollbar` / `.hide-scrollbar.drag-scrolling` trong `resources/css/app.css`.
+
 ## Panel chi tiết
 
 Không `Teleport` overlay. Sibling của `__main` trong `__body` (`display: flex; gap: var(--space-4)`).
@@ -121,19 +139,48 @@ Không `Teleport` overlay. Sibling của `__main` trong `__body` (`display: flex
     <h2>Chi tiết thao tác</h2>
     <button type="button" aria-label="Đóng" @click="selected = null">…</button>
   </div>
-  <!-- hàng: nhãn muted trái / giá trị phải -->
+  <div class="…row">
+    <span class="…row-label">Thời gian</span>
+    <span class="…row-value">{{ ... }}</span>
+  </div>
+  <!-- lặp lại mỗi field một …row -->
 </aside>
 ```
+
+Nhãn **không** gõ dấu `:` vào text — thêm bằng CSS `::after` để đồng nhất.
+Giá trị chữ thường **nghiêng**, không in đậm.
 
 ```css
 .side {
   flex-shrink: 0;
-  width: 20rem;
+  width: 22rem; /* 22–24rem tuỳ độ dài nội dung, không còn 20rem */
   overflow-y: auto;
   padding: var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
+}
+.row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+.row:last-child { box-shadow: none; }
+.row-label {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+.row-label::after {
+  content: ':';
+}
+.row-value {
+  color: var(--color-text);
+  font-style: italic;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 1024px) {
   .body { flex-direction: column; }

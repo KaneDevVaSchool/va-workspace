@@ -14,6 +14,7 @@ import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
+import { useDragScroll } from '@/composables/useDragScroll';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -67,6 +68,8 @@ const visibleFilters = reactive(loadVisibility(FILTER_KEY, FILTERS));
 
 const tableWrap  = ref(null);
 const resizing   = ref(false);
+
+useDragScroll(tableWrap, { isBlocked: () => resizing.value });
 const MIN_COL_PX = 80;
 const colWidths  = reactive(loadWidths());
 const tableZoom  = ref(loadZoom());
@@ -803,7 +806,7 @@ onBeforeUnmount(() => {
 
 .eval-view__panel {
   flex: 0 0 22rem;
-  width: 22rem;
+  width: 24rem;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1105,12 +1108,16 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
+.eval-view__row-label::after {
+  content: ':';
+}
+
 .eval-view__row-value {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
   color: var(--color-text);
-  font-weight: 600;
+  font-style: italic;
   text-align: right;
 }
 

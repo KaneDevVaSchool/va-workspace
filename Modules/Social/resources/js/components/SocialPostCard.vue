@@ -10,6 +10,7 @@ import { vSocialStickers } from '../lib/socialStickers.js';
 import { mentionUserIdFromEvent } from '../lib/mentionClick.js';
 import { hashtagFromEvent } from '../lib/hashtagClick.js';
 import SocialCommentList from './SocialCommentList.vue';
+import SocialHistoryDialog from './SocialHistoryDialog.vue';
 import SocialImageGrid from './SocialImageGrid.vue';
 import SocialPollBlock from './SocialPollBlock.vue';
 import SocialPostEditor from './SocialPostEditor.vue';
@@ -447,35 +448,13 @@ async function saveEdit() {
       </li>
     </ul>
 
-    <section
-      v-if="showHistory && !editing"
-      class="post-card__history"
-      aria-label="Lịch sử chỉnh sửa"
-    >
-      <h3 class="post-card__history-title">
-        <AppIcon name="clock" :size="16" />
-        Lịch sử chỉnh sửa
-      </h3>
-      <p v-if="historyLoading" class="post-card__history-empty">Đang tải lịch sử...</p>
-      <ol v-else class="post-card__history-list">
-        <li v-for="version in historyVersions" :key="version.id ?? 'current'" class="post-card__history-item">
-          <div class="post-card__history-meta">
-            <span class="post-card__history-label">
-              {{ version.is_current ? 'Hiện tại' : 'Phiên bản trước' }}
-            </span>
-            <time :datetime="version.published_at">{{ formatSocialTime(version.published_at) }}</time>
-          </div>
-          <div
-            v-if="version.content"
-            class="post-card__history-content"
-            v-html="sanitizeSocialHtml(version.content)"
-            v-social-stickers
-            @click="onContentClick"
-          ></div>
-          <p v-else class="post-card__history-empty">Không có nội dung.</p>
-        </li>
-      </ol>
-    </section>
+    <SocialHistoryDialog
+      :open="showHistory && !editing"
+      :loading="historyLoading"
+      :versions="historyVersions"
+      @close="showHistory = false"
+      @content-click="onContentClick"
+    />
 
     <div v-if="post.shared_from" class="post-card__shared">
       <button
@@ -954,73 +933,8 @@ async function saveEdit() {
   word-break: break-word;
 }
 
-.post-card__history {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-}
-
-.post-card__history-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.post-card__history-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.post-card__history-item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.post-card__history-meta {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
-.post-card__history-label {
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.post-card__history-content {
-  color: var(--color-text);
-  font-size: 0.875rem;
-  word-break: break-word;
-}
-
-.post-card__history-empty {
-  margin: 0;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-}
-
 .post-card__content :deep(p),
-.post-card__shared-content :deep(p),
-.post-card__history-content :deep(p) {
+.post-card__shared-content :deep(p) {
   margin: 0 0 var(--space-2) 0;
 }
 
@@ -1052,8 +966,7 @@ async function saveEdit() {
 .post-card__content :deep(.mention),
 .post-card__shared-content :deep(.mention),
 .post-card__content :deep(.hashtag),
-.post-card__shared-content :deep(.hashtag),
-.post-card__history-content :deep(.hashtag) {
+.post-card__shared-content :deep(.hashtag) {
   color: var(--color-primary);
   font-weight: 600;
   cursor: pointer;

@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $department_id
  * @property string $menu_key
  * @property bool $is_visible
+ * @property string|null $custom_label
  * @property int|null $updated_by
  */
 class DepartmentSidebarConfig extends Model
@@ -22,6 +23,7 @@ class DepartmentSidebarConfig extends Model
         'department_id',
         'menu_key',
         'is_visible',
+        'custom_label',
         'updated_by',
     ];
 

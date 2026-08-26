@@ -42,10 +42,13 @@ class AuthenticatedUserPresenter
             // Permission keys hiệu lực (có tính view-as) — frontend cache trong Pinia store.
             // ['*'] nếu là super_admin thực sự; danh sách keys cụ thể nếu đang view-as.
             'granted_permissions' => $this->permissions->resolveGrantedKeys($user),
-            // Menu sidebar bị phòng ban của user tự tắt (xem AppSidebar.vue).
+            // Menu sidebar bị phòng ban của user tự tắt / đổi tên (xem AppSidebar.vue).
             'hidden_menu_keys' => $user->department
                 ? $this->sidebarConfigs->hiddenKeysForDepartment($user->department->id)
                 : [],
+            'menu_labels' => $user->department
+                ? $this->sidebarConfigs->customLabelsForDepartment($user->department->id)
+                : new \stdClass,
         ];
     }
 }

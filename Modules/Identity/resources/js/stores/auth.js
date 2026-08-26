@@ -95,6 +95,13 @@ export const useAuthStore = defineStore('auth', {
 
     /** Menu sidebar bị phòng ban của user tự tắt (xem AppSidebar.vue). */
     hiddenMenuKeys: (state) => state.user?.hidden_menu_keys ?? [],
+
+    /** Tên hiển thị tuỳ chỉnh trên menu trái (menu_key => nhãn). */
+    menuLabels: (state) => {
+      const raw = state.user?.menu_labels;
+      if (!raw || Array.isArray(raw)) return {};
+      return raw;
+    },
   },
 
   actions: {
@@ -164,6 +171,20 @@ export const useAuthStore = defineStore('auth', {
       if (isVisible) hidden.delete(menuKey);
       else hidden.add(menuKey);
       this.user.hidden_menu_keys = [...hidden];
+    },
+
+    /**
+     * Cập nhật tên hiển thị menu trái ngay trên client sau khi phòng ban
+     * đổi tên — sidebar phản ánh tức thì.
+     */
+    setMenuLabel(menuKey, label) {
+      if (!this.user || !menuKey) return;
+      const raw = this.user.menu_labels;
+      const labels = raw && !Array.isArray(raw) ? { ...raw } : {};
+      const next = typeof label === 'string' ? label.trim() : '';
+      if (next) labels[menuKey] = next;
+      else delete labels[menuKey];
+      this.user.menu_labels = labels;
     },
   },
 });

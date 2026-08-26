@@ -18,6 +18,7 @@ import TablePagesBar from '@/components/TablePagesBar.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import { formatDateTime } from '@/lib/formatTime';
 import { showClientToast } from '@/lib/clientToast';
+import { useDragScroll } from '@/composables/useDragScroll';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import EvaluationTemplateCreateDialog from '../components/EvaluationTemplateCreateDialog.vue';
 import EvaluationTemplateEditDialog from '../components/EvaluationTemplateEditDialog.vue';
@@ -109,6 +110,8 @@ const visibleFilters = reactive(loadVisibility(FILTER_KEY, FILTERS));
 
 const tableWrap = ref(null);
 const resizing = ref(false);
+
+useDragScroll(tableWrap, { isBlocked: () => resizing.value });
 const colWidths = reactive(loadWidths());
 const tableZoom = ref(loadZoom());
 
@@ -1268,7 +1271,7 @@ onBeforeUnmount(() => {
 
 .evtpl-page__side {
   flex-shrink: 0;
-  width: 22rem;
+  width: 24rem;
   display: flex;
   flex-direction: column;
   padding: var(--space-4);
@@ -1342,9 +1345,13 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
+.evtpl-page__row-label::after {
+  content: ':';
+}
+
 .evtpl-page__row-value {
   color: var(--color-text);
-  font-weight: 600;
+  font-style: italic;
   text-align: right;
   overflow-wrap: anywhere;
 }

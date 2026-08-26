@@ -28,5 +28,15 @@ panel chi tiết bên phải khi chọn dòng — đẩy bảng sang, không mod
 - Cột mặc định **ít**; phần còn lại chỉ trong panel chi tiết.
 - Mỗi `<th>` có tay nắm kéo; cột kề co/giãn bù; độ rộng ≥ nội dung dài nhất rồi giãn kín bảng.
 - `hide-scrollbar`; không hiện thanh scroll. Không `title`.
+- **Bảng tràn ngang (nhiều cột hơn khung nhìn) phải kéo được bằng cách nắm
+  chuột giữ + kéo** (drag-to-scroll) ngay trên vùng bảng — máy bàn dùng
+  chuột thường, không có trackpad/vuốt để cuộn ngang. Áp `useDragScroll`
+  (`resources/js/composables/useDragScroll.js`) vào ref `tableWrap`, chặn
+  khi đang kéo nắm cột (`isBlocked: () => resizing.value`). Vẫn **tuyệt đối
+  không hiện thanh scroll** — chỉ đổi con trỏ `grab`/`grabbing` (đã có sẵn
+  trong `.hide-scrollbar` ở `app.css`).
 - Người + email **một cột** (tên trên, email dưới chữ mờ).
 - Thanh trên: gạch chân nhẹ (`box-shadow: 0 1px 0 …`). Không nút chia màn hình.
+- **Panel chi tiết**: nhãn trái có dấu `:` cuối (CSS `::after { content: ':' }`,
+  không gõ `:` vào text), giá trị phải **chữ thường nghiêng** (`font-style:
+  italic`, không `font-weight: 600`). Panel rộng `22–24rem` (không còn `20rem`).

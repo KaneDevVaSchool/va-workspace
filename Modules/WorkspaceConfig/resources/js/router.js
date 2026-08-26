@@ -7,9 +7,9 @@
  *
  * Trang chi tiết phòng ban của superadmin (department-detail) theo đúng
  * pattern hub-tab tương tự: WorkspaceConfigDepartmentDetailHub.vue load 1 lần
- * dữ liệu phòng ban rồi cấp cho 3 tab con (Thành viên/Menu hiển thị/Tiêu chí
- * đánh giá), tất cả ở chế độ chỉ xem — super_admin không sửa thay
- * department_director.
+ * dữ liệu phòng ban rồi cấp cho 3 tab con (Menu hiển thị / Thành viên /
+ * Tiêu chí đánh giá), tất cả ở chế độ chỉ xem — super_admin không sửa thay
+ * department_director. Tab Menu luôn đứng đầu và là redirect mặc định.
  */
 export default [
   {
@@ -28,7 +28,7 @@ export default [
     name: 'manager.workspace-config.hub',
     component: () => import('./pages/WorkspaceConfigHub.vue'),
     meta: { requiresAuth: true, title: 'Cấu hình phòng ban' },
-    redirect: { name: 'manager.workspace-config.members' },
+    redirect: { name: 'manager.workspace-config.sidebar' },
     children: [
       {
         path: 'members',
@@ -62,7 +62,7 @@ export default [
     component: () => import('./pages/WorkspaceConfigDepartmentDetailHub.vue'),
     meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Chi tiết phòng ban' },
     redirect: (to) => ({
-      name: 'superadmin.workspace-config.department-detail.members',
+      name: 'superadmin.workspace-config.department-detail.sidebar',
       params: to.params,
     }),
     children: [

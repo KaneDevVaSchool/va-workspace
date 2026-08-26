@@ -37,6 +37,8 @@ class WorkspaceConfigSidebarTest extends TestCase
             ->getJson('/api/workspace-config/sidebar')
             ->assertOk()
             ->assertJsonPath('menus.0.menu_key', 'home')
+            ->assertJsonPath('menus.0.default_label', 'Tổng quan')
+            ->assertJsonPath('menus.0.custom_label', null)
             ->assertJsonPath('menus.0.label', 'Tổng quan')
             ->assertJsonPath('menus.0.is_visible', true);
 
@@ -59,6 +61,57 @@ class WorkspaceConfigSidebarTest extends TestCase
             ->getJson('/api/me')
             ->assertOk()
             ->assertJsonPath('hidden_menu_keys.0', 'home');
+    }
+
+    public function test_director_can_rename_sidebar_menu(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+
+        $this->actingAs($director)
+            ->putJson('/api/workspace-config/sidebar', [
+                'menu_key' => 'home',
+                'custom_label' => 'Trang chủ phòng',
+            ])
+            ->assertOk()
+            ->assertJsonPath('menu.menu_key', 'home')
+            ->assertJsonPath('menu.custom_label', 'Trang chủ phòng')
+            ->assertJsonPath('menu.label', 'Trang chủ phòng')
+            ->assertJsonPath('menu.default_label', 'Tổng quan')
+            ->assertJsonPath('menu.is_visible', true);
+
+        $this->assertDatabaseHas('department_sidebar_configs', [
+            'department_id' => $dept->id,
+            'menu_key' => 'home',
+            'custom_label' => 'Trang chủ phòng',
+            'is_visible' => true,
+        ]);
+
+        $this->actingAs($director)
+            ->getJson('/api/me')
+            ->assertOk()
+            ->assertJsonPath('menu_labels.home', 'Trang chủ phòng');
+
+        $this->actingAs($director)
+            ->putJson('/api/workspace-config/sidebar', [
+                'menu_key' => 'home',
+                'is_visible' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('menu.is_visible', false)
+            ->assertJsonPath('menu.custom_label', 'Trang chủ phòng')
+            ->assertJsonPath('menu.label', 'Trang chủ phòng');
+
+        $this->actingAs($director)
+            ->putJson('/api/workspace-config/sidebar', [
+                'menu_key' => 'home',
+                'custom_label' => '',
+            ])
+            ->assertOk()
+            ->assertJsonPath('menu.custom_label', null)
+            ->assertJsonPath('menu.label', 'Tổng quan');
     }
 
     public function test_cannot_toggle_unknown_menu_key(): void

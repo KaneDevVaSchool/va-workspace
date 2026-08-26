@@ -15,7 +15,7 @@ defineProps({
   collapsed: { type: Boolean, default: false },
 });
 
-defineEmits(['toggle-sidebar']);
+defineEmits(['toggle-sidebar', 'toggle-header']);
 
 const pageHeaderTarget = usePageHeaderTarget();
 const auth = useAuthStore();
@@ -47,6 +47,16 @@ function setPageHeaderEl(el) {
       <HeaderNotifications />
       <HeaderActivityLog v-if="auth.canViewActivityLog" />
       <HeaderAccountMenu />
+
+      <button
+        type="button"
+        class="app-header__icon-btn"
+        aria-label="Ẩn thanh menu trên cùng"
+        data-tour="header-collapse-toggle"
+        @click="$emit('toggle-header')"
+      >
+        <AppIcon name="chevronsUp" :size="18" />
+      </button>
     </div>
   </header>
 </template>

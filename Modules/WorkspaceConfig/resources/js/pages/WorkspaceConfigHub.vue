@@ -1,9 +1,9 @@
 <script setup>
 //
 // manager/workspace-config — hub cấu hình workspace của phòng ban mình.
-// Entry point duy nhất trong sidebar; các mục con (thành viên, menu, và
-// sau này tiêu chí đánh giá) điều hướng qua tab nội bộ trang này, không
-// phải mục sidebar riêng.
+// Entry point duy nhất trong sidebar; các mục con (menu, thành viên, tiêu chí
+// đánh giá) điều hướng qua tab nội bộ trang này, không phải mục sidebar riêng.
+// Tab "Menu hiển thị" luôn đứng đầu.
 //
 import { computed, provide, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -17,18 +17,21 @@ const auth = useAuthStore();
 
 const TABS = [
   {
-    name: 'manager.workspace-config.members',
-    label: 'Thành viên',
-    permission: 'workspace_config.view_department',
-  },
-  {
     name: 'manager.workspace-config.sidebar',
     label: 'Menu hiển thị',
+    icon: 'layoutList',
     permission: 'workspace_config.manage_sidebar_department',
+  },
+  {
+    name: 'manager.workspace-config.members',
+    label: 'Thành viên',
+    icon: 'users',
+    permission: 'workspace_config.view_department',
   },
   {
     name: 'manager.workspace-config.evaluation',
     label: 'Tiêu chí đánh giá',
+    icon: 'clipboardCheck',
     permission: 'evaluation.manage_department',
   },
 ];
@@ -130,6 +133,7 @@ watch(
         :class="{ 'wc-hub__tab--active': activeTab === tab.name }"
         :aria-current="activeTab === tab.name ? 'page' : undefined"
       >
+        <AppIcon :name="tab.icon" :size="15" :stroke-width="1.75" />
         {{ tab.label }}
       </router-link>
     </nav>
@@ -191,15 +195,19 @@ watch(
   z-index: 8;
   flex-shrink: 0;
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 2.25rem;
+  align-items: stretch;
+  gap: var(--space-1);
+  min-height: 2.5rem;
   margin-bottom: var(--space-3);
-  padding: 0.25rem 0;
+  padding: 0;
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-border) 75%, transparent);
 }
 
 .wc-hub__tab {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
   border: none;
   background: transparent;
@@ -208,6 +216,7 @@ watch(
   font-size: 0.875rem;
   font-weight: 600;
   text-decoration: none;
+  white-space: nowrap;
   box-shadow: 0 2px 0 transparent;
 }
 

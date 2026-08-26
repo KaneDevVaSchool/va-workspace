@@ -19,4 +19,9 @@ Mẫu: `Modules/Identity/resources/js/pages/ActivityLog.vue` + `resources/js/com
 1. Filter → **TablePagesBar trên** (Tìm, Bộ lọc, Cỡ chữ, Cột, Hiển thị, Trang, Trước/Sau, gạch chân nhẹ) → bảng → **TablePagesBar dưới** `paging-only`.
 2. Cột mặc định **ít**; chi tiết trong aside **đẩy ngang** (không modal, không chia màn hình).
 3. Nắm mép `<th>` kéo cột; fit theo nội dung dài nhất; `hide-scrollbar`; người + email một cột.
-4. Không `title`. Gạch 1 cạnh = `box-shadow`, không `border-bottom` / `border-right`.
+4. Bảng tràn ngang → kéo bằng **nắm chuột giữ + kéo** (`useDragScroll` từ
+   `resources/js/composables/useDragScroll.js`, áp vào ref `tableWrap`) —
+   không hiện thanh scroll.
+5. Không `title`. Gạch 1 cạnh = `box-shadow`, không `border-bottom` / `border-right`.
+6. Panel chi tiết: nhãn có `::after { content: ':' }`, giá trị `font-style:
+   italic` (không đậm), panel rộng `22–24rem`.
