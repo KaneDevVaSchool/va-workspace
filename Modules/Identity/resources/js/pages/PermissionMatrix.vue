@@ -32,6 +32,9 @@ const COL_EXTRA = 24;
 const MIN_COL_PX = 72;
 let measureCtx = null;
 let wrapObserver = null;
+// Cột người dùng đã tự kéo giãn tay — không tự động đo lại độ rộng nữa,
+// tránh fitColumnsToContent() ghi đè lúc user vừa đổi (vd. cột "Tên quyền").
+const userResizedKeys = new Set();
 
 const scope = ref({ type: 'global', id: null });
 const scopeLabel = ref('Toàn hệ thống');
@@ -572,14 +575,23 @@ function fitColumnsToContent() {
   const keys = shownColumns.value.map((col) => col.key);
   if (!wrap || keys.length === 0 || resizing.value) return;
 
+  const autoKeys = keys.filter((key) => !userResizedKeys.has(key));
+  if (autoKeys.length === 0) return;
+
   const fonts = readTableFonts();
   const measured = {};
-  for (const key of keys) {
+  for (const key of autoKeys) {
     measured[key] = columnContentWidth(key, fonts);
   }
 
-  const next = distributeExtraWidth(measured, keys, wrap.clientWidth);
-  for (const key of keys) {
+  const reserved = keys.reduce(
+    (total, key) => total + (userResizedKeys.has(key) ? Number(columnWidths[key]) || 0 : 0),
+    0,
+  );
+  const available = Math.max(wrap.clientWidth - reserved, 0);
+
+  const next = distributeExtraWidth(measured, autoKeys, available);
+  for (const key of autoKeys) {
     columnWidths[key] = next[key];
   }
 }
@@ -598,6 +610,8 @@ function startResize(event, key) {
   const startB = Number(columnWidths[neighbor]) || MIN_COL_PX;
   const pair = startA + startB;
 
+  userResizedKeys.add(key);
+  userResizedKeys.add(neighbor);
   resizing.value = true;
 
   function onMove(moveEvent) {

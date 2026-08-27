@@ -18,13 +18,18 @@ use Modules\Identity\App\Models\Department;
  * @property string      $type
  * @property string      $name
  * @property int|null    $lead_user_id
+ * @property int|null    $lead_department_id       phòng ban phụ trách
  * @property int|null    $owner_department_id      phòng ban sở hữu — set 1 lần lúc tạo, không sửa được
- * @property int|null    $executing_department_id  phòng ban được giao thực hiện (nullable)
+ * @property int|null    $executing_department_id  phòng ban thực hiện chính (đồng bộ từ pivot, tương thích cũ)
  * @property string|null $start_date
  * @property string|null $end_date
  * @property string      $progress_method
  * @property string      $status
  * @property string      $importance
+ * @property bool        $shift_task_dates_with_project
+ * @property bool        $hide_cross_tasks_from_assignees
+ * @property bool        $hide_child_tasks_from_followers
+ * @property bool        $constrain_task_dates_to_project
  * @property string|null $description
  * @property string|null $avatar_path
  * @property float|null  $evaluation_score   để trống — tổng hợp từ Task tương lai
@@ -37,15 +42,17 @@ class Project extends Model
 
     public const WITH_PRESENT = [
         'scopes.department',
-        'members',
-        'followers',
+        'members.department',
+        'followers.department',
         'attachments.uploader',
         'labels',
         'ownerDepartment',
         'executingDepartment',
-        'lead',
-        'creator',
-        'updater',
+        'executingDepartments',
+        'lead.department',
+        'leadDepartment',
+        'creator.department',
+        'updater.department',
     ];
 
     protected $fillable = [
@@ -53,6 +60,7 @@ class Project extends Model
         'type',
         'name',
         'lead_user_id',
+        'lead_department_id',
         'owner_department_id',
         'executing_department_id',
         'start_date',
@@ -61,6 +69,10 @@ class Project extends Model
         'status',
         'importance',
         'description',
+        'shift_task_dates_with_project',
+        'hide_cross_tasks_from_assignees',
+        'hide_child_tasks_from_followers',
+        'constrain_task_dates_to_project',
         'avatar_path',
         'evaluation_score',
         'created_by',
@@ -71,6 +83,10 @@ class Project extends Model
         'start_date' => 'date',
         'end_date' => 'date',
         'evaluation_score' => 'decimal:2',
+        'shift_task_dates_with_project' => 'boolean',
+        'hide_cross_tasks_from_assignees' => 'boolean',
+        'hide_child_tasks_from_followers' => 'boolean',
+        'constrain_task_dates_to_project' => 'boolean',
     ];
 
     public function scopes(): HasMany
@@ -109,6 +125,11 @@ class Project extends Model
         return $this->belongsTo(User::class, 'lead_user_id');
     }
 
+    public function leadDepartment(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'lead_department_id');
+    }
+
     public function ownerDepartment(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'owner_department_id');
@@ -117,6 +138,13 @@ class Project extends Model
     public function executingDepartment(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'executing_department_id');
+    }
+
+    /** N-N phòng ban được giao thực hiện (được chọn nhiều). */
+    public function executingDepartments(): BelongsToMany
+    {
+        return $this->belongsToMany(Department::class, 'project_executing_departments', 'project_id', 'department_id')
+            ->withTimestamps();
     }
 
     public function creator(): BelongsTo

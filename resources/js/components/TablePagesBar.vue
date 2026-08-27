@@ -25,12 +25,16 @@ const props = defineProps({
   showSearch: { type: Boolean, default: false },
   showClearFilters: { type: Boolean, default: false },
   filtersActive: { type: Boolean, default: false },
+  extraMenuLabel: { type: String, default: '' },
+  extraMenuTitle: { type: String, default: '' },
+  extraMenuIcon: { type: String, default: '' },
+  extraMenuActive: { type: Boolean, default: false },
   pagingOnly: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:page', 'update:perPage', 'update:zoom', 'search', 'clear-filters']);
 
-const open = ref(null); // 'filters' | 'zoom' | 'settings' | 'page'
+const open = ref(null); // 'filters' | 'zoom' | 'settings' | 'extra' | 'page'
 const root = ref(null);
 
 const last = computed(() => Math.max(props.lastPage || 1, 1));
@@ -190,6 +194,24 @@ onBeforeUnmount(() => {
         <div v-if="open === 'settings'" class="table-pages__menu" role="menu">
           <p class="table-pages__menu-title">Cài đặt danh sách</p>
           <slot name="settings" />
+        </div>
+      </div>
+
+      <div v-if="$slots.extra" class="table-pages__pop">
+        <button
+          type="button"
+          class="table-pages__icon"
+          :class="{ 'table-pages__icon--on': open === 'extra' || extraMenuActive }"
+          aria-haspopup="menu"
+          :aria-expanded="open === 'extra'"
+          @click="toggle('extra')"
+        >
+          <AppIcon v-if="extraMenuIcon" :name="extraMenuIcon" :size="15" :stroke-width="1.75" />
+          <span>{{ extraMenuLabel }}</span>
+        </button>
+        <div v-if="open === 'extra'" class="table-pages__menu" role="menu">
+          <p class="table-pages__menu-title">{{ extraMenuTitle || extraMenuLabel }}</p>
+          <slot name="extra" />
         </div>
       </div>
       </template>

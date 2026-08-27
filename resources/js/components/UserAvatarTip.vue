@@ -21,6 +21,8 @@ const departmentName = computed(() => props.user?.department?.name || '');
 const triggerLabel = computed(
   () => props.label || `Thông tin ${displayName.value}`,
 );
+const isActive = computed(() => (props.user?.status ?? 'active') === 'active');
+const statusLabel = computed(() => (isActive.value ? 'Đang làm việc' : 'Ngừng làm việc'));
 
 function onPhotoError() {
   photoBroken.value = true;
@@ -156,9 +158,32 @@ onBeforeUnmount(() => {
         :style="cardStyle"
         @click.stop
       >
+        <span class="user-avatar-tip__card-avatar" aria-hidden="true">
+          <img
+            v-if="hasPhoto"
+            :src="user.avatar_url"
+            alt=""
+            class="user-avatar-tip__img"
+            referrerpolicy="no-referrer"
+            @error="onPhotoError"
+          />
+          <template v-else>{{ initial }}</template>
+        </span>
         <span class="user-avatar-tip__name">{{ displayName }}</span>
-        <span v-if="user.email" class="user-avatar-tip__meta">{{ user.email }}</span>
-        <span v-if="departmentName" class="user-avatar-tip__meta">{{ departmentName }}</span>
+        <span class="user-avatar-tip__status">
+          <span class="user-avatar-tip__status-dot" :class="{ 'user-avatar-tip__status-dot--off': !isActive }" />
+          {{ statusLabel }}
+        </span>
+        <span class="user-avatar-tip__rows">
+          <span v-if="departmentName" class="user-avatar-tip__row">
+            <span class="user-avatar-tip__row-label">Phòng ban</span>
+            <span class="user-avatar-tip__row-value">{{ departmentName }}</span>
+          </span>
+          <span v-if="user.email" class="user-avatar-tip__row">
+            <span class="user-avatar-tip__row-label">Email</span>
+            <span class="user-avatar-tip__row-value">{{ user.email }}</span>
+          </span>
+        </span>
       </div>
     </Teleport>
   </span>
@@ -219,29 +244,95 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: 80;
   display: flex;
-  min-width: 12.5rem;
+  min-width: 15rem;
   max-width: 18rem;
   flex-direction: column;
-  gap: 0.125rem;
-  padding: var(--space-3);
+  align-items: center;
+  gap: 0.25rem;
+  padding: var(--space-4) var(--space-4) var(--space-3);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow:
     inset 0 0 0 1px var(--color-border),
     var(--shadow-lg);
+  text-align: center;
+}
+
+.user-avatar-tip__card-avatar {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-bottom: 0.25rem;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .user-avatar-tip__name {
   color: var(--color-text);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 700;
   overflow-wrap: anywhere;
 }
 
-.user-avatar-tip__meta {
+.user-avatar-tip__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   color: var(--color-text-muted);
   font-size: 0.75rem;
-  font-weight: 400;
+  font-weight: 500;
+}
+
+.user-avatar-tip__status-dot {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-success);
+}
+
+.user-avatar-tip__status-dot--off {
+  background: var(--color-text-muted);
+}
+
+.user-avatar-tip__rows {
+  width: 100%;
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.user-avatar-tip__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0.375rem 0;
+  box-shadow: 0 1px 0 var(--color-border);
+  text-align: left;
+}
+
+.user-avatar-tip__row:last-child {
+  box-shadow: none;
+}
+
+.user-avatar-tip__row-label {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.user-avatar-tip__row-value {
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 500;
   overflow-wrap: anywhere;
+  text-align: right;
 }
 </style>

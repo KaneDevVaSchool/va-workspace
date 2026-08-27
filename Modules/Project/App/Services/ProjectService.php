@@ -6,16 +6,20 @@ use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Services\PermissionService;
+use Modules\Project\App\Enums\ProjectEnums;
 use Modules\Project\App\Exceptions\ProjectOwnerDepartmentMissing;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\ProjectAttachment;
 use Modules\Project\App\Models\ProjectLabel;
 use Modules\Project\App\Models\ProjectScope;
 use Modules\Project\App\Models\ProjectSetting;
+use Modules\Project\App\Models\ProjectType;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Business logic của module Project.
@@ -30,6 +34,8 @@ class ProjectService
     public function __construct(
         private readonly ProjectRepositoryInterface $projects,
         private readonly PermissionService $permissions,
+        private readonly ProjectExcelExporter $exporter,
+        private readonly ProjectExcelImporter $importer,
     ) {}
 
     /** @param  array<string, mixed>  $filters */
@@ -59,6 +65,132 @@ class ProjectService
         return $this->projects->isInCreatorAllowlist($user->id);
     }
 
+    /**
+     * true nếu user được chọn thẳng "phòng ban giao" (owner_department_id)
+     * lúc tạo dự án thay vì bị khoá theo phòng ban của chính mình — chỉ
+     * super_admin và giám đốc điều hành (mục C).
+     */
+    public function userCanChooseOwnerDepartment(User $user): bool
+    {
+        return $user->isSuperAdmin() || $user->hasRole('director_officer');
+    }
+
+    /**
+     * Xuất danh sách dự án ra Excel theo đúng bộ lọc đang dùng trên trang danh sách.
+     *
+     * @param  array<string, mixed>  $filters
+     * @param  list<string>|null  $columnKeys  null = xuất đủ mọi cột (dùng làm file mẫu nhập lại)
+     */
+    public function export(array $filters, ?array $columnKeys, User $exportedBy): BinaryFileResponse
+    {
+        $projects = $this->projects->forExport($filters, $exportedBy);
+        $rows = $projects->map(fn (Project $p) => $this->presentForExport($p))->values()->all();
+        $filename = 'Du_an_'.now()->format('Ymd_His').'.xlsx';
+
+        return $this->exporter->download($rows, $exportedBy, $filename, $columnKeys);
+    }
+
+    /**
+     * Đọc + xem trước file Excel: chuẩn hoá dữ liệu, phát hiện đầy đủ vấn đề của
+     * từng dòng — KHÔNG ghi DB. Dòng có Mã dự án khớp dự án đang tồn tại được
+     * đánh dấu action=update (sửa dự án đó); còn lại action=create.
+     *
+     * @return array{rows: list<array<string, mixed>>}
+     */
+    public function previewImport(UploadedFile $file, User $viewer): array
+    {
+        return $this->importer->preview($file, $viewer);
+    }
+
+    /**
+     * Re-resolve 1 dòng đơn sau khi người dùng sửa lỗi tại chỗ trong bảng xem
+     * trước — không đọc lại file, chỉ chuẩn hoá + validate lại các giá trị mới.
+     *
+     * @param  array<string, mixed>  $cells
+     * @return array<string, mixed>
+     */
+    public function resolveImportRow(array $cells, User $viewer): array
+    {
+        return $this->importer->resolveSingle($cells, $viewer);
+    }
+
+    /**
+     * Ghi DB các dòng đã được xác nhận từ bước preview — KHÔNG đọc lại file.
+     * Dòng action=update sửa đúng dự án đã đối chiếu qua Mã dự án ở bước
+     * preview (chỉ ghi đè field nào Excel có giá trị — provided_fields); dòng
+     * action=create tạo mới như trước. Tạo/sửa được dòng nào lưu dòng đó — 1
+     * dòng lỗi không làm rollback các dòng khác.
+     *
+     * @param  list<array<string, mixed>>  $validatedRows
+     * @return array{created: list<array<string, mixed>>, updated: list<array<string, mixed>>, errors: list<array{row: int, message: string}>}
+     */
+    public function confirmImport(array $validatedRows, User $importedBy): array
+    {
+        $created = [];
+        $updated = [];
+        $errors = [];
+
+        foreach ($validatedRows as $row) {
+            $isUpdate = ($row['action'] ?? 'create') === 'update';
+
+            try {
+                $project = DB::transaction(function () use ($row, $importedBy, $isUpdate) {
+                    if ($isUpdate) {
+                        $projectId = (int) ($row['project_id'] ?? 0);
+                        $existing = $this->projects->find($projectId);
+                        if ($existing === null) {
+                            throw new \RuntimeException('Dự án cần cập nhật không còn tồn tại.');
+                        }
+                        if (! $this->userCanManageDepartment($importedBy, $existing)) {
+                            throw new \RuntimeException('Bạn không có quyền sửa dự án này.');
+                        }
+
+                        $payload = $this->onlyProvidedFields($row);
+                        $result = $this->update($existing, $payload, $importedBy);
+                    } else {
+                        $result = $this->create($row, $importedBy);
+                    }
+
+                    if (is_array($result)) {
+                        throw new \RuntimeException($result['error']);
+                    }
+
+                    return $result;
+                });
+
+                if ($isUpdate) {
+                    $updated[] = $this->present($project, $importedBy);
+                } else {
+                    $created[] = $this->present($project, $importedBy);
+                }
+            } catch (ProjectOwnerDepartmentMissing $e) {
+                $errors[] = ['row' => $row['row'] ?? 0, 'message' => $e->getMessage()];
+            } catch (\Throwable $e) {
+                $verb = $isUpdate ? 'Không cập nhật được: ' : 'Không tạo được: ';
+                $errors[] = ['row' => $row['row'] ?? 0, 'message' => $verb.$e->getMessage()];
+            }
+        }
+
+        usort($errors, fn ($a, $b) => $a['row'] <=> $b['row']);
+
+        return ['created' => $created, 'updated' => $updated, 'errors' => $errors];
+    }
+
+    /**
+     * Lọc payload 1 dòng import xuống chỉ field nào Excel thực sự có giá trị
+     * (row['provided_fields'], sinh bởi ProjectExcelImporter::resolveRow()) —
+     * để update() giữ nguyên field còn lại thay vì ghi đè bằng giá trị rỗng.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function onlyProvidedFields(array $row): array
+    {
+        $provided = $row['provided_fields'] ?? [];
+
+        return array_intersect_key($row, array_flip($provided));
+    }
+
     /** true nếu user được phép sửa executing_department_id của dự án này. */
     public function userCanManageDepartment(User $user, Project $project): bool
     {
@@ -83,30 +215,52 @@ class ProjectService
             return ['error' => $error];
         }
 
-        if ($creator->department_id === null) {
+        // Super admin / giám đốc điều hành có thể không thuộc phòng ban nào,
+        // hoặc muốn tạo dự án thay mặt phòng ban khác — cho phép chọn thẳng
+        // owner_department_id trong request (mục C). Role khác vẫn bị khoá
+        // theo phòng ban của chính mình, bỏ qua field này nếu có gửi lên.
+        $ownerDepartmentId = $creator->department_id;
+        if (($data['owner_department_id'] ?? null) && $this->userCanChooseOwnerDepartment($creator)) {
+            $ownerDepartmentId = (int) $data['owner_department_id'];
+        }
+
+        if ($ownerDepartmentId === null) {
             throw new ProjectOwnerDepartmentMissing;
         }
 
         $code = $this->projects->nextCode();
 
+        $settings = $this->projects->getSettings();
+        $executingIds = $this->normalizeDepartmentIds(
+            $data['executing_department_ids'] ?? (isset($data['executing_department_id']) ? [$data['executing_department_id']] : []),
+        );
+
+        $this->ensureType($data['type'], $creator->id);
+
         $project = $this->projects->create([
             'code' => $code,
-            'type' => $data['type'],
+            'type' => trim($data['type']),
             'name' => trim($data['name']),
             'lead_user_id' => $data['lead_user_id'] ?? null,
-            'owner_department_id' => $creator->department_id,
-            'executing_department_id' => $data['executing_department_id'] ?? null,
+            'lead_department_id' => $data['lead_department_id'] ?? null,
+            'owner_department_id' => $ownerDepartmentId,
+            'executing_department_id' => $executingIds[0] ?? null,
             'start_date' => $data['start_date'] ?? null,
             'end_date' => $data['end_date'] ?? null,
-            'progress_method' => $data['progress_method'] ?? 'average',
+            'progress_method' => $data['progress_method'] ?? $settings->default_progress_method ?? 'average',
             'status' => $data['status'] ?? 'planning',
-            'importance' => $data['importance'] ?? 'medium',
+            'importance' => $data['importance'] ?? 'important',
             'description' => $data['description'] ?? null,
+            'shift_task_dates_with_project' => (bool) ($data['shift_task_dates_with_project'] ?? $settings->shift_task_dates_with_project),
+            'hide_cross_tasks_from_assignees' => (bool) ($data['hide_cross_tasks_from_assignees'] ?? $settings->hide_cross_tasks_from_assignees),
+            'hide_child_tasks_from_followers' => (bool) ($data['hide_child_tasks_from_followers'] ?? $settings->hide_child_tasks_from_followers),
+            'constrain_task_dates_to_project' => (bool) ($data['constrain_task_dates_to_project'] ?? $settings->constrain_task_dates_to_project),
             'created_by' => $creator->id,
             'updated_by' => $creator->id,
         ]);
 
-        $project = $this->projects->replaceScopes($project, $data['scopes'] ?? []);
+        $project = $this->projects->replaceExecutingDepartments($project, $executingIds);
+        $project = $this->projects->replaceScopes($project, $this->normalizeScopes($data['scopes'] ?? []));
         $project = $this->projects->replaceMembers($project, $this->normalizeUserIds($data['member_ids'] ?? []));
         $project = $this->projects->replaceLabels($project, $this->normalizeUserIds($data['label_ids'] ?? []));
 
@@ -132,24 +286,43 @@ class ProjectService
         $payload = ['updated_by' => $updater->id];
 
         foreach ([
-            'type', 'name', 'lead_user_id', 'start_date', 'end_date',
+            'type', 'name', 'lead_user_id', 'lead_department_id', 'start_date', 'end_date',
             'progress_method', 'status', 'importance', 'description',
+            'shift_task_dates_with_project', 'hide_cross_tasks_from_assignees',
+            'hide_child_tasks_from_followers', 'constrain_task_dates_to_project',
         ] as $field) {
             if (array_key_exists($field, $data)) {
-                $payload[$field] = $field === 'name' ? trim($data[$field]) : $data[$field];
+                $payload[$field] = in_array($field, ['name', 'type'], true) ? trim($data[$field]) : $data[$field];
             }
         }
 
+        if (array_key_exists('type', $data)) {
+            $this->ensureType($data['type'], $updater->id);
+        }
+
         // owner_department_id KHÔNG BAO GIỜ sửa được qua update() — chỉ set 1 lần lúc create().
-        // executing_department_id chỉ áp dụng nếu người sửa đủ quyền quản lý phòng ban.
-        if (array_key_exists('executing_department_id', $data) && $this->userCanManageDepartment($updater, $project)) {
-            $payload['executing_department_id'] = $data['executing_department_id'];
+        // Phòng ban thực hiện chỉ áp dụng nếu người sửa đủ quyền quản lý phòng ban.
+        $canManageDept = $this->userCanManageDepartment($updater, $project);
+        if ($canManageDept && (array_key_exists('executing_department_ids', $data) || array_key_exists('executing_department_id', $data))) {
+            $executingIds = $this->normalizeDepartmentIds(
+                $data['executing_department_ids'] ?? (isset($data['executing_department_id']) ? [$data['executing_department_id']] : []),
+            );
+            $payload['executing_department_id'] = $executingIds[0] ?? null;
         }
 
         $updated = $this->projects->update($project, $payload);
 
+        if ($canManageDept && (array_key_exists('executing_department_ids', $data) || array_key_exists('executing_department_id', $data))) {
+            $updated = $this->projects->replaceExecutingDepartments(
+                $updated,
+                $this->normalizeDepartmentIds(
+                    $data['executing_department_ids'] ?? (isset($data['executing_department_id']) ? [$data['executing_department_id']] : []),
+                ),
+            );
+        }
+
         if (array_key_exists('scopes', $data)) {
-            $updated = $this->projects->replaceScopes($updated, $data['scopes'] ?? []);
+            $updated = $this->projects->replaceScopes($updated, $this->normalizeScopes($data['scopes'] ?? []));
         }
 
         if (array_key_exists('member_ids', $data)) {
@@ -245,6 +418,22 @@ class ProjectService
         ]);
     }
 
+    /**
+     * Gỡ ảnh đại diện dự án (ví dụ upload nhầm) — xoá file vật lý và
+     * dọn avatar_path về null.
+     */
+    public function deleteAvatar(Project $project, int $updatedBy): Project
+    {
+        if ($project->avatar_path) {
+            Storage::disk('public')->delete($project->avatar_path);
+        }
+
+        return $this->projects->update($project, [
+            'avatar_path' => null,
+            'updated_by' => $updatedBy,
+        ]);
+    }
+
     public function assignableUsers(User $currentUser): Collection
     {
         if ($currentUser->isSuperAdmin()) {
@@ -304,6 +493,7 @@ class ProjectService
             'code_pattern' => $settings->code_pattern,
             'code_counter' => $settings->code_counter,
             'next_code_preview' => $this->projects->previewNextCode(),
+            'default_progress_method' => $settings->default_progress_method ?: 'average',
             'auto_start_on_begin_date' => (bool) $settings->auto_start_on_begin_date,
             'shift_task_dates_with_project' => (bool) $settings->shift_task_dates_with_project,
             'hide_cross_tasks_from_assignees' => (bool) $settings->hide_cross_tasks_from_assignees,
@@ -360,6 +550,53 @@ class ProjectService
         ]);
     }
 
+    // ---------- Loại dự án (mục A) ----------
+
+    /** @return list<array{value:string,label:string}> */
+    public function allTypes(): array
+    {
+        return array_map(
+            fn (array $t) => ['value' => $t['name'], 'label' => $t['name']],
+            $this->projects->allTypes(),
+        );
+    }
+
+    /**
+     * @return ProjectType|array{error: string}
+     */
+    public function createType(string $name, int $createdBy): ProjectType|array
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return ['error' => 'Tên loại dự án không được để trống.'];
+        }
+
+        if ($this->projects->findTypeByName($name) !== null) {
+            return ['error' => 'Loại dự án này đã tồn tại.'];
+        }
+
+        return $this->projects->createType([
+            'name' => $name,
+            'created_by' => $createdBy,
+        ]);
+    }
+
+    /**
+     * Đảm bảo loại dự án đã có trong danh mục project_types — tự tạo nếu là
+     * tên hoàn toàn mới (áp dụng cho mọi đường ghi dữ liệu: form UI, nhập
+     * Excel) để "type" luôn tái dùng được cho các dự án sau, không tạo trùng
+     * lặp khác hoa/thường.
+     */
+    private function ensureType(string $name, int $createdBy): void
+    {
+        $name = trim($name);
+        if ($name === '' || $this->projects->findTypeByName($name) !== null) {
+            return;
+        }
+
+        $this->projects->createType(['name' => $name, 'created_by' => $createdBy]);
+    }
+
     // ---------- Present ----------
 
     /** @return array<string, mixed> */
@@ -372,8 +609,14 @@ class ProjectService
             'name' => $project->name,
             'lead_user_id' => $project->lead_user_id,
             'lead' => $this->presentUser($project->lead),
+            'lead_department' => $this->presentDepartment($project->leadDepartment),
             'owner_department' => $this->presentDepartment($project->ownerDepartment),
             'executing_department' => $this->presentDepartment($project->executingDepartment),
+            'executing_departments' => $project->executingDepartments
+                ->map(fn (Department $d) => $this->presentDepartment($d))
+                ->filter()
+                ->values()
+                ->all(),
             'start_date' => $project->start_date?->toDateString(),
             'end_date' => $project->end_date?->toDateString(),
             'duration_days' => $this->durationDays($project),
@@ -381,6 +624,10 @@ class ProjectService
             'status' => $project->status,
             'importance' => $project->importance,
             'description' => $project->description,
+            'shift_task_dates_with_project' => (bool) $project->shift_task_dates_with_project,
+            'hide_cross_tasks_from_assignees' => (bool) $project->hide_cross_tasks_from_assignees,
+            'hide_child_tasks_from_followers' => (bool) $project->hide_child_tasks_from_followers,
+            'constrain_task_dates_to_project' => (bool) $project->constrain_task_dates_to_project,
             'avatar_path' => $project->avatar_path,
             'avatar_url' => $project->avatar_path ? Storage::disk('public')->url($project->avatar_path) : null,
             'evaluation_score' => $project->evaluation_score !== null ? (float) $project->evaluation_score : null,
@@ -406,6 +653,33 @@ class ProjectService
             'updater' => $this->presentUser($project->updater),
             'created_at' => $project->created_at?->toIso8601String(),
             'updated_at' => $project->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function presentForExport(Project $project): array
+    {
+        return [
+            'code' => $project->code,
+            'name' => $project->name,
+            'type_label' => $project->type,
+            'owner_department_name' => $project->ownerDepartment?->name ?? '',
+            'executing_department_name' => $project->executingDepartments->pluck('name')->filter()->implode('; ')
+                ?: ($project->executingDepartment?->name ?? ''),
+            'lead_email' => $project->lead?->email ?? '',
+            'member_emails' => $project->members->pluck('email')->filter()->implode('; '),
+            'follower_emails' => $project->followers->pluck('email')->filter()->implode('; '),
+            'label_names' => $project->labels->pluck('name')->implode('; '),
+            'status_label' => ProjectEnums::STATUS_LABELS[$project->status] ?? $project->status,
+            'importance_label' => ProjectEnums::IMPORTANCE_LABELS[$project->importance] ?? $project->importance,
+            'start_date' => $project->start_date?->format('d/m/Y') ?? '',
+            'end_date' => $project->end_date?->format('d/m/Y') ?? '',
+            'progress_method_label' => ProjectEnums::PROGRESS_METHOD_LABELS[$project->progress_method] ?? $project->progress_method,
+            'progress' => '',
+            'evaluation_score' => $project->evaluation_score !== null ? (string) $project->evaluation_score : '',
+            'description' => $project->description ?? '',
+            'creator_name' => $project->creator?->name ?? '',
+            'created_at' => $project->created_at?->format('d/m/Y H:i') ?? '',
         ];
     }
 
@@ -452,7 +726,38 @@ class ProjectService
     /** @return list<int> */
     private function normalizeUserIds(array $rawIds): array
     {
-        return array_values(array_unique(array_map('intval', $rawIds)));
+        return array_values(array_unique(array_filter(array_map('intval', $rawIds))));
+    }
+
+    /** @return list<int> */
+    private function normalizeDepartmentIds(array $rawIds): array
+    {
+        return array_values(array_unique(array_filter(array_map('intval', $rawIds))));
+    }
+
+    /**
+     * Mỗi dự án chỉ 1 phạm vi — lấy dòng đầu, mặc định tỷ trọng 100%.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeScopes(array $rows): array
+    {
+        if ($rows === []) {
+            return [];
+        }
+
+        $row = $rows[0];
+        $scopeType = $row['scope_type'] ?? null;
+        if (! is_string($scopeType) || $scopeType === '') {
+            return [];
+        }
+
+        return [[
+            'scope_type' => $scopeType,
+            'department_id' => ($scopeType === 'department') ? ($row['department_id'] ?? null) : null,
+            'weight_percent' => $row['weight_percent'] ?? 100,
+        ]];
     }
 
     private function deletePhysicalFile(ProjectAttachment $attachment): void
@@ -462,7 +767,7 @@ class ProjectService
         }
     }
 
-    /** @return array{id: int, name: string, email: string|null, avatar_url: string|null}|null */
+    /** @return array{id: int, name: string, email: string|null, avatar_url: string|null, status: string, department: array{id: int, name: string}|null}|null */
     private function presentUser(?User $user): ?array
     {
         if ($user === null) {
@@ -474,6 +779,8 @@ class ProjectService
             'name' => $user->name,
             'email' => $user->email,
             'avatar_url' => $user->avatar_url,
+            'status' => $user->status,
+            'department' => $this->presentDepartment($user->department),
         ];
     }
 

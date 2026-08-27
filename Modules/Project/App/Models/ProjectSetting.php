@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int    $id
  * @property string $code_pattern
  * @property int    $code_counter
+ * @property string $default_progress_method
  * @property bool   $auto_start_on_begin_date
  * @property bool   $shift_task_dates_with_project
  * @property bool   $hide_cross_tasks_from_assignees
@@ -28,6 +29,7 @@ class ProjectSetting extends Model
     protected $fillable = [
         'code_pattern',
         'code_counter',
+        'default_progress_method',
         'auto_start_on_begin_date',
         'shift_task_dates_with_project',
         'hide_cross_tasks_from_assignees',
@@ -50,6 +52,7 @@ class ProjectSetting extends Model
         return [
             'code_pattern' => self::DEFAULT_CODE_PATTERN,
             'code_counter' => self::DEFAULT_CODE_COUNTER,
+            'default_progress_method' => 'average',
             'auto_start_on_begin_date' => false,
             'shift_task_dates_with_project' => false,
             'hide_cross_tasks_from_assignees' => false,

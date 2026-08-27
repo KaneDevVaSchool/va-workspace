@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted } from 'vue';
+import { onBeforeUnmount, watch } from 'vue';
 
 /**
  * Kéo bằng cách nắm chuột (giữ + kéo) để cuộn ngang/dọc trên vùng bảng
@@ -9,9 +9,10 @@ import { onBeforeUnmount, onMounted } from 'vue';
  * @param {object} [options]
  * @param {() => boolean} [options.isBlocked]  trả true để bỏ qua (đang kéo nắm cột…)
  * @param {number} [options.dragThreshold]  số px di chuyển tối thiểu trước khi coi là kéo (mặc định 4)
+ * @param {'both'|'x'|'y'} [options.axis]  trục được phép cuộn khi kéo (mặc định 'both')
  */
 export function useDragScroll(wrapRef, options = {}) {
-  const { isBlocked, dragThreshold = 4 } = options;
+  const { isBlocked, dragThreshold = 4, axis = 'both' } = options;
 
   let dragging = false;
   let moved = false;
@@ -55,8 +56,8 @@ export function useDragScroll(wrapRef, options = {}) {
       wrap.classList.add('drag-scrolling');
     }
 
-    wrap.scrollLeft = startScrollLeft - dx;
-    wrap.scrollTop = startScrollTop - dy;
+    if (axis !== 'y') wrap.scrollLeft = startScrollLeft - dx;
+    if (axis !== 'x') wrap.scrollTop = startScrollTop - dy;
   }
 
   function onMouseUp(event) {
@@ -76,9 +77,14 @@ export function useDragScroll(wrapRef, options = {}) {
     event.preventDefault();
   }
 
-  onMounted(() => {
-    wrapRef.value?.addEventListener('mousedown', onMouseDown);
-  });
+  watch(
+    wrapRef,
+    (el, prev) => {
+      prev?.removeEventListener('mousedown', onMouseDown);
+      el?.addEventListener('mousedown', onMouseDown);
+    },
+    { immediate: true, flush: 'post' },
+  );
 
   onBeforeUnmount(() => {
     wrapRef.value?.removeEventListener('mousedown', onMouseDown);

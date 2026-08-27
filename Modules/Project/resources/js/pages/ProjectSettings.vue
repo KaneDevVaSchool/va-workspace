@@ -56,6 +56,7 @@ const general = reactive({
   code_pattern: DEFAULT_PATTERN,
   code_counter: DEFAULT_COUNTER,
   auto_start_on_begin_date: false,
+  default_progress_method: 'average',
   shift_task_dates_with_project: false,
   hide_cross_tasks_from_assignees: false,
   hide_child_tasks_from_followers: false,
@@ -64,6 +65,7 @@ const general = reactive({
 
 const allUsers = ref([]);
 const allowlistUserIds = ref([]);
+const progressMethodOptions = ref([]);
 
 function clientPreview(pattern, counter) {
   if (!pattern) return '—';
@@ -97,6 +99,7 @@ function applyGeneral(data) {
   general.code_pattern = data.code_pattern ?? DEFAULT_PATTERN;
   general.code_counter = data.code_counter ?? DEFAULT_COUNTER;
   general.auto_start_on_begin_date = Boolean(data.auto_start_on_begin_date);
+  general.default_progress_method = data.default_progress_method || 'average';
   general.shift_task_dates_with_project = Boolean(data.shift_task_dates_with_project);
   general.hide_cross_tasks_from_assignees = Boolean(data.hide_cross_tasks_from_assignees);
   general.hide_child_tasks_from_followers = Boolean(data.hide_child_tasks_from_followers);
@@ -145,6 +148,7 @@ async function saveAll() {
       window.axios.put('/api/project/settings/general', {
         code_pattern: general.code_pattern,
         code_counter: Number(general.code_counter) || 0,
+        default_progress_method: general.default_progress_method,
         auto_start_on_begin_date: Boolean(general.auto_start_on_begin_date),
         shift_task_dates_with_project: Boolean(general.shift_task_dates_with_project),
         hide_cross_tasks_from_assignees: Boolean(general.hide_cross_tasks_from_assignees),
@@ -174,6 +178,12 @@ function goBack() {
 
 onMounted(async () => {
   loading.value = true;
+  try {
+    const optionsRes = await window.axios.get('/api/project/options');
+    progressMethodOptions.value = optionsRes.data.progress_method ?? [];
+  } catch {
+    progressMethodOptions.value = [];
+  }
   await Promise.all([loadGeneral(), loadAllowlist()]);
   loading.value = false;
 });
@@ -228,6 +238,29 @@ onMounted(async () => {
                 <span class="proj-settings__label">Mã tiếp theo</span>
                 <span class="proj-settings__preview">{{ nextCodePreview }}</span>
               </div>
+            </div>
+          </article>
+
+          <article class="proj-settings__item proj-settings__item--block">
+            <div class="proj-settings__item-copy">
+              <h2 class="proj-settings__item-title">Phương pháp tính tiến độ</h2>
+              <p class="proj-settings__item-example">
+                Áp dụng mặc định cho dự án mới. Sau khi tạo dự án, có thể đổi riêng tại trang sửa dự án.
+              </p>
+            </div>
+            <div class="proj-settings__field">
+              <label class="proj-settings__label" for="proj-settings-progress">Cách tính</label>
+              <select
+                id="proj-settings-progress"
+                v-model="general.default_progress_method"
+                class="proj-settings__input"
+                :disabled="saving"
+              >
+                <option v-for="opt in progressMethodOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              </select>
+              <p v-if="progressMethodOptions.find((o) => o.value === general.default_progress_method)?.description" class="proj-settings__item-example">
+                {{ progressMethodOptions.find((o) => o.value === general.default_progress_method)?.description }}
+              </p>
             </div>
           </article>
 

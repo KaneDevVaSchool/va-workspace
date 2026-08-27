@@ -27,6 +27,10 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     Route::get('/labels', [ProjectController::class, 'labelsIndex'])->name('labels.index');
     Route::post('/labels', [ProjectController::class, 'labelsStore'])->name('labels.store');
 
+    // Loại dự án (mục A) — chọn từ danh sách hoặc tự tạo mới ngay trong form (nút +).
+    Route::get('/types', [ProjectController::class, 'typesIndex'])->name('types.index');
+    Route::post('/types', [ProjectController::class, 'typesStore'])->name('types.store');
+
     // Cài đặt dự án (mục D + C) — chỉ admin/super_admin (project.manage_settings
     // chỉ có trong wildcard project.* của admin / '*' của super_admin, không
     // gán cho role phòng ban nào khác trong config/permissions.php).
@@ -38,6 +42,10 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     });
 
     Route::middleware('permission:project.view')->get('/', [ProjectController::class, 'index'])->name('index');
+    Route::middleware('permission:project.view')->get('/export', [ProjectController::class, 'export'])->name('export');
+    Route::post('/import/preview', [ProjectController::class, 'importPreview'])->name('import-preview');
+    Route::post('/import/resolve-row', [ProjectController::class, 'importResolveRow'])->name('import-resolve-row');
+    Route::post('/import/confirm', [ProjectController::class, 'importConfirm'])->name('import-confirm');
     Route::middleware('permission:project.view')->get('/{project}', [ProjectController::class, 'show'])->name('show');
 
     // store: middleware permission cứng đã bỏ — quyền tạo (role sẵn có HOẶC
@@ -59,6 +67,7 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
         Route::put('/{project}', [ProjectController::class, 'update'])->name('update');
         Route::delete('/{project}', [ProjectController::class, 'destroy'])->name('destroy');
         Route::post('/{project}/avatar', [ProjectController::class, 'uploadAvatar'])->name('avatar');
+        Route::delete('/{project}/avatar', [ProjectController::class, 'destroyAvatar'])->name('avatar.destroy');
         Route::post('/{project}/attachments', [ProjectController::class, 'uploadAttachment'])->name('attachments.store');
         Route::delete('/{project}/attachments/{attachment}', [ProjectController::class, 'destroyAttachment'])->name('attachments.destroy');
     });

@@ -89,6 +89,25 @@
   --color-gold-surface-strong: var(--color-gold-100);
   --color-on-gold: #ffffff;
 
+  /* ---------- Màu nâu đất (Umber) - #725139, dùng cho trạng thái đã huỷ ---------- */
+  --color-umber: #725139;
+  --color-umber-50: #f6f1ed;
+  --color-umber-100: #ebe3db;
+  --color-umber-200: #d6c6b5;
+  --color-umber-300: #bba085;
+  --color-umber-400: #96785a;
+  --color-umber-500: #725139;
+  --color-umber-600: #5f4330;
+  --color-umber-700: #4c3626;
+  --color-umber-800: #39291d;
+  --color-umber-900: #261b13;
+
+  --color-umber-hover: var(--color-umber-600);
+  --color-umber-active: var(--color-umber-700);
+  --color-umber-surface: var(--color-umber-50);
+  --color-umber-surface-strong: var(--color-umber-100);
+  --color-on-umber: #ffffff;
+
   /* ---------- Sidebar (brand primary-900, hover/active dịu) ---------- */
   --color-sidebar: var(--color-primary-900);
   --color-sidebar-active: color-mix(in srgb, var(--color-on-primary) 14%, var(--color-primary-900));
@@ -143,6 +162,9 @@
   --color-info-tint-bg: #e8f0fe;
   --color-info-tint-fg: #1d4ed8;
   --color-info-tint-border: #c3d7fb;
+  --color-umber-tint-bg: var(--color-umber-50);
+  --color-umber-tint-fg: var(--color-umber-700);
+  --color-umber-tint-border: var(--color-umber-200);
 
   /* ---------- Typography ---------- */
   --font-family-base: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;

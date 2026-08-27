@@ -6,10 +6,12 @@ use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Modules\Identity\App\Models\Department;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\ProjectAttachment;
 use Modules\Project\App\Models\ProjectLabel;
 use Modules\Project\App\Models\ProjectSetting;
+use Modules\Project\App\Models\ProjectType;
 
 /**
  * Contract cho tầng Repository — Service chỉ phụ thuộc interface này,
@@ -20,7 +22,17 @@ interface ProjectRepositoryInterface
     /** @param  array<string, mixed>  $filters */
     public function paginate(array $filters, int $perPage, int $page, User $viewer): LengthAwarePaginator;
 
+    /** @param  array<string, mixed>  $filters */
+    public function forExport(array $filters, User $viewer): Collection;
+
+    public function findUserByEmail(string $email): ?User;
+
+    public function findDepartmentByName(string $name): ?Department;
+
     public function find(int $id): ?Project;
+
+    /** Tra dự án theo Mã dự án (không phân biệt hoa/thường) — dùng cho nhập Excel cập nhật. */
+    public function findByCode(string $code): ?Project;
 
     /** @param  array<string, mixed>  $data */
     public function create(array $data): Project;
@@ -41,6 +53,9 @@ interface ProjectRepositoryInterface
 
     /** @param  list<int>  $labelIds */
     public function replaceLabels(Project $project, array $labelIds): Project;
+
+    /** @param  list<int>  $departmentIds */
+    public function replaceExecutingDepartments(Project $project, array $departmentIds): Project;
 
     public function addAttachment(int $projectId, array $data): ProjectAttachment;
 
@@ -98,4 +113,13 @@ interface ProjectRepositoryInterface
 
     /** @param  array<string, mixed>  $data */
     public function createLabel(array $data): ProjectLabel;
+
+    // ---------- Loại dự án (mục A) ----------
+    /** @return list<array{id:int,name:string}> */
+    public function allTypes(): array;
+
+    public function findTypeByName(string $name): ?ProjectType;
+
+    /** @param  array<string, mixed>  $data */
+    public function createType(array $data): ProjectType;
 }

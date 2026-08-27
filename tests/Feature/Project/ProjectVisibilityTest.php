@@ -41,7 +41,7 @@ class ProjectVisibilityTest extends TestCase
             'name' => 'Dự án thử nghiệm',
             'progress_method' => 'average',
             'status' => 'planning',
-            'importance' => 'medium',
+            'importance' => 'important',
         ], $attributes));
     }
 
@@ -82,6 +82,7 @@ class ProjectVisibilityTest extends TestCase
             'executing_department_id' => $deptA->id,
             'created_by' => $creatorB->id,
         ]);
+        $delegated->executingDepartments()->sync([$deptA->id]);
 
         $response = $this->actingAs($userA)->getJson('/api/project');
         $response->assertOk();

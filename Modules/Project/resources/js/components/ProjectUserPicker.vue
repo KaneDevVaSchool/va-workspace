@@ -1,64 +1,60 @@
 <script setup>
 //
-// Picker "Người thực hiện" cho form Dự án — phỏng theo cấu trúc
-// EvaluationPositionPicker.vue (Modules/Evaluation) nhưng đơn giản hơn:
-// chỉ 1 nhóm người dùng (không chia "Chức danh"/"Phòng ban" như Position).
-// Gõ để tìm trong danh sách nội bộ đã load sẵn (props.users), chọn xong
-// hiện thành chip có nút xoá bên dưới ô input.
+// Autocomplete chọn 1 người — dùng cho Phụ trách chính. Hiển thị
+// "Tên — Phòng ban" trong danh sách gợi ý và chip đã chọn.
 //
 import { computed, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 
 const props = defineProps({
-  modelValue: { type: Array, required: true }, // user ids
+  modelValue: { type: [String, Number], default: '' },
   users: { type: Array, required: true },
   disabled: { type: Boolean, default: false },
-  placeholder: { type: String, default: 'Gõ tên hoặc email để tìm người dùng…' },
-  emptyText: { type: String, default: 'Chưa chọn người thực hiện nào.' },
+  placeholder: { type: String, default: 'Gõ tên hoặc email để tìm người phụ trách…' },
 });
 
 const emit = defineEmits(['update:modelValue']);
 
-const selectedIds = computed(() => new Set(props.modelValue.map((id) => String(id))));
 const query = ref('');
 const queryFocused = ref(false);
+
+const selectedUser = computed(() => {
+  if (props.modelValue === '' || props.modelValue == null) return null;
+  return props.users.find((u) => String(u.id) === String(props.modelValue)) || null;
+});
 
 const matches = computed(() => {
   const q = query.value.trim().toLowerCase();
   if (!q) return [];
-  return props.users.filter(
-    (u) =>
-      !selectedIds.value.has(String(u.id)) &&
-      (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)),
-  );
+  return props.users.filter((u) => {
+    if (String(u.id) === String(props.modelValue)) return false;
+    const dept = (u.department?.name || '').toLowerCase();
+    return (
+      u.name.toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q) ||
+      dept.includes(q)
+    );
+  });
 });
 
-const selectedUsers = computed(() => props.users.filter((u) => selectedIds.value.has(String(u.id))));
-
-function select(userId) {
-  const id = String(userId);
-  if (!selectedIds.value.has(id)) {
-    emit('update:modelValue', [...props.modelValue, userId]);
-  }
+function userLine(user) {
+  const dept = user.department?.name;
+  return dept ? `${user.name} — ${dept}` : user.name;
 }
 
-function remove(userId) {
-  const id = String(userId);
-  emit(
-    'update:modelValue',
-    props.modelValue.filter((uid) => String(uid) !== id),
-  );
-}
-
-function pick(item) {
-  select(item.id);
+function pick(user) {
+  emit('update:modelValue', user.id);
   query.value = '';
+}
+
+function clear() {
+  emit('update:modelValue', '');
 }
 </script>
 
 <template>
-  <div class="proj-member-picker">
-    <div class="proj-member-picker__autocomplete">
+  <div class="proj-user-picker">
+    <div class="proj-user-picker__autocomplete">
       <input
         v-model="query"
         type="search"
@@ -68,54 +64,53 @@ function pick(item) {
         @focus="queryFocused = true"
         @blur="queryFocused = false"
       />
-      <ul v-if="queryFocused && query.trim()" class="proj-member-picker__list hide-scrollbar" role="listbox">
+      <ul v-if="queryFocused && query.trim()" class="proj-user-picker__list hide-scrollbar" role="listbox">
         <li
           v-for="item in matches"
           :key="item.id"
-          class="proj-member-picker__option"
+          class="proj-user-picker__option"
           @mousedown.prevent="pick(item)"
         >
           <span>{{ item.name }}</span>
-          <span v-if="item.department?.name || item.email" class="proj-member-picker__option-email">
-            {{ item.department?.name ? `${item.department.name}${item.email ? ' · ' + item.email : ''}` : item.email }}
+          <span class="proj-user-picker__option-meta">
+            {{ item.department?.name || item.email || '' }}
           </span>
         </li>
-        <li v-if="matches.length === 0" class="proj-member-picker__empty">
+        <li v-if="matches.length === 0" class="proj-user-picker__empty">
           Không tìm thấy người dùng khớp «{{ query }}».
         </li>
       </ul>
     </div>
 
-    <div class="proj-member-picker__chips">
-      <span v-for="item in selectedUsers" :key="item.id" class="proj-member-picker__chip">
-        <span>{{ item.name }}</span>
+    <div v-if="selectedUser" class="proj-user-picker__chips">
+      <span class="proj-user-picker__chip">
+        <span>{{ userLine(selectedUser) }}</span>
         <button
           type="button"
-          class="proj-member-picker__chip-remove"
-          aria-label="Bỏ người thực hiện này"
+          class="proj-user-picker__chip-remove"
+          aria-label="Bỏ phụ trách chính"
           :disabled="disabled"
-          @click="remove(item.id)"
+          @click="clear"
         >
           <AppIcon name="close" :size="11" />
         </button>
       </span>
-      <p v-if="selectedUsers.length === 0 && emptyText" class="proj-member-picker__empty-state">{{ emptyText }}</p>
     </div>
   </div>
 </template>
 
 <style scoped>
-.proj-member-picker {
+.proj-user-picker {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
 
-.proj-member-picker__autocomplete {
+.proj-user-picker__autocomplete {
   position: relative;
 }
 
-.proj-member-picker__list {
+.proj-user-picker__list {
   position: absolute;
   z-index: 10;
   top: calc(100% + 0.25rem);
@@ -132,7 +127,7 @@ function pick(item) {
   box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
 }
 
-.proj-member-picker__option {
+.proj-user-picker__option {
   display: flex;
   flex-direction: column;
   padding: 0.4375rem 0.625rem;
@@ -142,30 +137,30 @@ function pick(item) {
   cursor: pointer;
 }
 
-.proj-member-picker__option:hover {
+.proj-user-picker__option:hover {
   background: var(--color-primary-surface);
   color: var(--color-primary);
 }
 
-.proj-member-picker__option-email {
+.proj-user-picker__option-meta {
   color: var(--color-text-muted);
   font-size: 0.75rem;
 }
 
-.proj-member-picker__empty {
+.proj-user-picker__empty {
   padding: 0.4375rem 0.625rem;
   font-size: 0.8125rem;
   color: var(--color-text-muted);
 }
 
-.proj-member-picker__chips {
+.proj-user-picker__chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
 }
 
-.proj-member-picker__chip {
+.proj-user-picker__chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -178,7 +173,7 @@ function pick(item) {
   font-weight: 600;
 }
 
-.proj-member-picker__chip-remove {
+.proj-user-picker__chip-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -191,19 +186,13 @@ function pick(item) {
   cursor: pointer;
 }
 
-.proj-member-picker__chip-remove:hover {
+.proj-user-picker__chip-remove:hover {
   background: color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
-.proj-member-picker__chip-remove:disabled {
+.proj-user-picker__chip-remove:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.proj-member-picker__empty-state {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
 }
 
 .proj-page__input {

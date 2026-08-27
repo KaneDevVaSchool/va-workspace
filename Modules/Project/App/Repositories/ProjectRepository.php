@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\ProjectAttachment;
@@ -16,6 +17,7 @@ use Modules\Project\App\Models\ProjectFollower;
 use Modules\Project\App\Models\ProjectLabel;
 use Modules\Project\App\Models\ProjectScope;
 use Modules\Project\App\Models\ProjectSetting;
+use Modules\Project\App\Models\ProjectType;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
 
 /**
@@ -32,6 +34,42 @@ class ProjectRepository implements ProjectRepositoryInterface
         $this->forViewer($query, $viewer);
 
         return $query->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
+    }
+
+    public function forExport(array $filters, User $viewer): Collection
+    {
+        $query = Project::query()->with(Project::WITH_PRESENT);
+
+        $this->applyCommonFilters($query, $filters);
+        $this->applyTabFilter($query, $filters['tab'] ?? null, $viewer);
+        $this->forViewer($query, $viewer);
+
+        return $query->orderByDesc('created_at')->get();
+    }
+
+    public function findUserByEmail(string $email): ?User
+    {
+        $email = mb_strtolower(trim($email));
+        if ($email === '') {
+            return null;
+        }
+
+        return User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+    }
+
+    public function findDepartmentByName(string $name): ?Department
+    {
+        $name = mb_strtolower(trim($name));
+        if ($name === '') {
+            return null;
+        }
+
+        return Department::query()
+            ->where(function (Builder $query) use ($name) {
+                $query->whereRaw('LOWER(name) = ?', [$name])
+                    ->orWhereRaw('LOWER(code) = ?', [$name]);
+            })
+            ->first();
     }
 
     /** @param  array<string, mixed>  $filters */
@@ -61,13 +99,15 @@ class ProjectRepository implements ProjectRepositoryInterface
             $query->where('lead_user_id', $filters['lead_user_id']);
         }
 
-        if (! empty($filters['label_ids']) && is_array($filters['label_ids'])) {
-            $labelIds = array_values(array_filter(array_map('intval', $filters['label_ids'])));
-            if ($labelIds !== []) {
-                $query->whereHas('labels', function ($sub) use ($labelIds) {
-                    $sub->whereIn('project_labels.id', $labelIds);
-                });
-            }
+        $rawLabelIds = $filters['label_ids'] ?? [];
+        if (! is_array($rawLabelIds)) {
+            $rawLabelIds = $rawLabelIds === null || $rawLabelIds === '' ? [] : [$rawLabelIds];
+        }
+        $labelIds = array_values(array_filter(array_map('intval', $rawLabelIds)));
+        if ($labelIds !== []) {
+            $query->whereHas('labels', function ($sub) use ($labelIds) {
+                $sub->whereIn('project_labels.id', $labelIds);
+            });
         }
     }
 
@@ -92,7 +132,8 @@ class ProjectRepository implements ProjectRepositoryInterface
             }),
             'my_department' => $query->where(function ($sub) use ($viewer) {
                 $sub->where('owner_department_id', $viewer->department_id)
-                    ->orWhere('executing_department_id', $viewer->department_id);
+                    ->orWhere('executing_department_id', $viewer->department_id)
+                    ->orWhereHas('executingDepartments', fn ($d) => $d->where('departments.id', $viewer->department_id));
             }),
             default => null,
         };
@@ -101,6 +142,19 @@ class ProjectRepository implements ProjectRepositoryInterface
     public function find(int $id): ?Project
     {
         return Project::query()->with(Project::WITH_PRESENT)->find($id);
+    }
+
+    public function findByCode(string $code): ?Project
+    {
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+
+        return Project::query()
+            ->with(Project::WITH_PRESENT)
+            ->whereRaw('LOWER(code) = ?', [mb_strtolower($code)])
+            ->first();
     }
 
     public function create(array $data): Project
@@ -157,6 +211,18 @@ class ProjectRepository implements ProjectRepositoryInterface
     public function replaceFollowers(Project $project, array $userIds): Project
     {
         $project->followers()->sync($userIds);
+
+        return $project->fresh(Project::WITH_PRESENT);
+    }
+
+    public function replaceExecutingDepartments(Project $project, array $departmentIds): Project
+    {
+        $ids = array_values(array_unique(array_map('intval', $departmentIds)));
+        $project->executingDepartments()->sync($ids);
+
+        $project->update([
+            'executing_department_id' => $ids[0] ?? null,
+        ]);
 
         return $project->fresh(Project::WITH_PRESENT);
     }
@@ -235,7 +301,9 @@ class ProjectRepository implements ProjectRepositoryInterface
 
     public function assignableUsersInDepartment(?int $departmentId): Collection
     {
-        $query = User::query()->select(['id', 'name', 'email', 'avatar_url', 'department_id']);
+        $query = User::query()
+            ->select(['id', 'name', 'email', 'avatar_url', 'department_id', 'status'])
+            ->with('department:id,name');
 
         if ($departmentId !== null) {
             $query->where('department_id', $departmentId);
@@ -247,7 +315,8 @@ class ProjectRepository implements ProjectRepositoryInterface
     public function allUsers(): Collection
     {
         return User::query()
-            ->select(['id', 'name', 'email', 'avatar_url', 'department_id'])
+            ->select(['id', 'name', 'email', 'avatar_url', 'department_id', 'status'])
+            ->with('department:id,name')
             ->orderBy('name')
             ->get();
     }
@@ -261,6 +330,9 @@ class ProjectRepository implements ProjectRepositoryInterface
         return $query->where(function (Builder $sub) use ($viewer) {
             $sub->where('owner_department_id', $viewer->department_id)
                 ->orWhere('executing_department_id', $viewer->department_id)
+                ->orWhereHas('executingDepartments', function (Builder $d) use ($viewer) {
+                    $d->where('departments.id', $viewer->department_id);
+                })
                 ->orWhere('lead_user_id', $viewer->id)
                 ->orWhere('created_by', $viewer->id)
                 ->orWhereHas('members', function (Builder $m) use ($viewer) {
@@ -392,5 +464,26 @@ class ProjectRepository implements ProjectRepositoryInterface
     public function createLabel(array $data): ProjectLabel
     {
         return ProjectLabel::query()->create($data);
+    }
+
+    // ---------- Loại dự án (mục A) ----------
+
+    public function allTypes(): array
+    {
+        return ProjectType::query()
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (ProjectType $t) => ['id' => $t->id, 'name' => $t->name])
+            ->all();
+    }
+
+    public function findTypeByName(string $name): ?ProjectType
+    {
+        return ProjectType::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+    }
+
+    public function createType(array $data): ProjectType
+    {
+        return ProjectType::query()->create($data);
     }
 }

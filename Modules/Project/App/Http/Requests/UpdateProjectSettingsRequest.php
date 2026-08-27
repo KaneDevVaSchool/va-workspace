@@ -3,6 +3,7 @@
 namespace Modules\Project\App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Modules\Project\App\Enums\ProjectEnums;
 
 class UpdateProjectSettingsRequest extends FormRequest
 {
@@ -25,6 +26,7 @@ class UpdateProjectSettingsRequest extends FormRequest
                 },
             ],
             'code_counter' => ['required', 'integer', 'min:0'],
+            'default_progress_method' => ['required', 'string', 'in:'.implode(',', ProjectEnums::PROGRESS_METHODS)],
             'auto_start_on_begin_date' => ['required', 'boolean'],
             'shift_task_dates_with_project' => ['required', 'boolean'],
             'hide_cross_tasks_from_assignees' => ['required', 'boolean'],
@@ -41,6 +43,8 @@ class UpdateProjectSettingsRequest extends FormRequest
             'code_counter.required' => 'Bộ đếm không được để trống.',
             'code_counter.integer' => 'Bộ đếm phải là số nguyên.',
             'code_counter.min' => 'Bộ đếm không được âm.',
+            'default_progress_method.required' => 'Phương pháp tính tiến độ không được để trống.',
+            'default_progress_method.in' => 'Phương pháp tính tiến độ không hợp lệ.',
         ];
     }
 }

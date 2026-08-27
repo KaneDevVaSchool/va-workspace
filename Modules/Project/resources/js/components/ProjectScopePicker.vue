@@ -1,111 +1,81 @@
 <script setup>
 //
-// Danh sách động "Phạm vi triển khai" cho form Dự án. Mỗi dòng: chọn phạm
-// vi (Hội Sở/HT/KV/Phòng Ban), nếu chọn "Phòng Ban" hiện thêm select chọn
-// phòng ban cụ thể, input % tỷ trọng KPI, nút xoá dòng. Tổng % KHÔNG bắt
-// buộc phải bằng 100 (theo ProjectService — chỉ validate 0..100 từng dòng).
+// Phạm vi triển khai — mỗi dự án chỉ chọn 1 option. Khi chọn
+// "Phòng Ban/Bộ Phận" hiện thêm autocomplete chọn đúng 1 phòng ban.
 //
-import AppIcon from '@/components/AppIcon.vue';
+import { computed } from 'vue';
+import ProjectDepartmentPicker from './ProjectDepartmentPicker.vue';
 
 const props = defineProps({
-  modelValue: { type: Array, required: true }, // [{ scope_type, department_id, weight_percent }]
-  scopeTypeOptions: { type: Array, required: true }, // [{ value, label }]
-  departments: { type: Array, required: true }, // [{ id, name }]
+  modelValue: { type: Array, required: true },
+  scopeTypeOptions: { type: Array, required: true },
+  departments: { type: Array, required: true },
   disabled: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:modelValue']);
 
-function addRow() {
+const current = computed(() => props.modelValue[0] || null);
+const currentType = computed(() => current.value?.scope_type || '');
+const currentDepartmentIds = computed(() =>
+  current.value?.department_id ? [current.value.department_id] : [],
+);
+
+function emitScope(scopeType, departmentId = null) {
+  if (!scopeType) {
+    emit('update:modelValue', []);
+    return;
+  }
   emit('update:modelValue', [
-    ...props.modelValue,
-    { scope_type: props.scopeTypeOptions[0]?.value || '', department_id: null, weight_percent: 0 },
+    {
+      scope_type: scopeType,
+      department_id: scopeType === 'department' ? departmentId : null,
+      weight_percent: 100,
+    },
   ]);
 }
 
-function removeRow(index) {
-  emit(
-    'update:modelValue',
-    props.modelValue.filter((_, i) => i !== index),
-  );
+function selectType(value) {
+  if (currentType.value === value) return;
+  emitScope(value, value === 'department' ? current.value?.department_id ?? null : null);
 }
 
-function updateRow(index, patch) {
-  const next = props.modelValue.map((row, i) => (i === index ? { ...row, ...patch } : row));
-  emit('update:modelValue', next);
-}
-
-function onScopeTypeChange(index, value) {
-  const patch = { scope_type: value };
-  if (value !== 'department') {
-    patch.department_id = null;
-  }
-  updateRow(index, patch);
+function onDepartmentIds(ids) {
+  emitScope('department', ids[0] ?? null);
 }
 </script>
 
 <template>
   <div class="proj-scope-picker">
-    <div v-for="(row, index) in modelValue" :key="index" class="proj-scope-picker__row">
-      <div class="proj-scope-picker__field proj-scope-picker__field--type">
-        <label class="proj-scope-picker__label" :for="`proj-scope-type-${index}`">Phạm vi</label>
-        <select
-          :id="`proj-scope-type-${index}`"
-          class="proj-page__input"
-          :value="row.scope_type"
-          :disabled="disabled"
-          @change="onScopeTypeChange(index, $event.target.value)"
-        >
-          <option v-for="opt in scopeTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
-      </div>
-
-      <div v-if="row.scope_type === 'department'" class="proj-scope-picker__field proj-scope-picker__field--dept">
-        <label class="proj-scope-picker__label" :for="`proj-scope-dept-${index}`">Phòng ban</label>
-        <select
-          :id="`proj-scope-dept-${index}`"
-          class="proj-page__input"
-          :value="row.department_id ?? ''"
-          :disabled="disabled"
-          @change="updateRow(index, { department_id: $event.target.value ? Number($event.target.value) : null })"
-        >
-          <option value="">Chọn phòng ban…</option>
-          <option v-for="dept in departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
-        </select>
-      </div>
-
-      <div class="proj-scope-picker__field proj-scope-picker__field--weight">
-        <label class="proj-scope-picker__label" :for="`proj-scope-weight-${index}`">Tỷ trọng % KPI</label>
-        <input
-          :id="`proj-scope-weight-${index}`"
-          type="number"
-          min="0"
-          max="100"
-          step="0.5"
-          class="proj-page__input"
-          :value="row.weight_percent"
-          :disabled="disabled"
-          @input="updateRow(index, { weight_percent: $event.target.value === '' ? 0 : Number($event.target.value) })"
-        />
-      </div>
-
+    <div class="proj-scope-picker__cards" role="radiogroup" aria-label="Phạm vi triển khai">
       <button
+        v-for="opt in scopeTypeOptions"
+        :key="opt.value"
         type="button"
-        class="proj-scope-picker__remove"
-        aria-label="Xoá phạm vi này"
+        class="proj-scope-picker__card"
+        :class="{ 'proj-scope-picker__card--on': currentType === opt.value }"
+        role="radio"
+        :aria-checked="currentType === opt.value ? 'true' : 'false'"
         :disabled="disabled"
-        @click="removeRow(index)"
+        @click="selectType(opt.value)"
       >
-        <AppIcon name="trash" :size="16" />
+        <span class="proj-scope-picker__radio" aria-hidden="true" />
+        <span class="proj-scope-picker__card-label">{{ opt.label }}</span>
       </button>
     </div>
 
-    <p v-if="modelValue.length === 0" class="proj-scope-picker__hint">Chưa có phạm vi triển khai nào.</p>
-
-    <button type="button" class="proj-scope-picker__add" :disabled="disabled" @click="addRow">
-      <AppIcon name="plus" :size="14" />
-      Thêm phạm vi
-    </button>
+    <div v-if="currentType === 'department'" class="proj-scope-picker__dept">
+      <span class="proj-scope-picker__dept-label">Phòng ban / bộ phận</span>
+      <ProjectDepartmentPicker
+        :model-value="currentDepartmentIds"
+        :departments="departments"
+        :disabled="disabled"
+        :multiple="false"
+        placeholder="Gõ tên phòng ban hoặc bộ phận…"
+        empty-text="Chưa chọn phòng ban/bộ phận."
+        @update:model-value="onDepartmentIds"
+      />
+    </div>
   </div>
 </template>
 
@@ -113,105 +83,92 @@ function onScopeTypeChange(index, value) {
 .proj-scope-picker {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
-.proj-scope-picker__row {
+.proj-scope-picker__cards {
   display: grid;
-  grid-template-columns: 1fr 1fr 10rem auto;
-  align-items: end;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
 }
 
-.proj-scope-picker__field {
+.proj-scope-picker__card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  padding-left: calc(var(--space-2) + 3px + var(--space-3));
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.proj-scope-picker__card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.proj-scope-picker__card--on {
+  background: var(--color-primary-surface);
+  box-shadow: inset 0 0 0 1px var(--color-primary-200);
+}
+
+.proj-scope-picker__card--on::before {
+  background: var(--color-primary);
+}
+
+.proj-scope-picker__card:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.proj-scope-picker__radio {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.125rem;
+  border-radius: var(--radius-full);
+  box-shadow: inset 0 0 0 1.5px var(--color-border);
+  background: var(--color-surface);
+}
+
+.proj-scope-picker__card--on .proj-scope-picker__radio {
+  box-shadow: inset 0 0 0 4px var(--color-primary);
+}
+
+.proj-scope-picker__card-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.proj-scope-picker__dept {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  min-width: 0;
 }
 
-.proj-scope-picker__label {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.proj-scope-picker__remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  flex-shrink: 0;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-  color: var(--color-danger);
-  cursor: pointer;
-}
-
-.proj-scope-picker__remove:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-danger) 12%, var(--color-surface-muted));
-}
-
-.proj-scope-picker__remove:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.proj-scope-picker__hint {
-  margin: 0;
+.proj-scope-picker__dept-label {
   color: var(--color-text-muted);
   font-size: 0.8125rem;
-}
-
-.proj-scope-picker__add {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 0.4375rem 0.75rem;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-  color: var(--color-primary);
-  font-size: 0.8125rem;
   font-weight: 600;
-  cursor: pointer;
-}
-
-.proj-scope-picker__add:hover:not(:disabled) {
-  background: var(--color-primary-surface);
-}
-
-.proj-scope-picker__add:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.proj-page__input {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 0.875rem;
-  font-family: var(--font-family-base);
-  width: 100%;
-}
-
-.proj-page__input:focus {
-  outline: 2px solid var(--color-primary-200);
-  outline-offset: 1px;
 }
 
 @media (max-width: 768px) {
-  .proj-scope-picker__row {
+  .proj-scope-picker__cards {
     grid-template-columns: 1fr;
-  }
-
-  .proj-scope-picker__remove {
-    justify-self: flex-end;
   }
 }
 </style>

@@ -111,12 +111,15 @@ function roleCodeOf(col) {
         <td
           v-for="col in shownColumns"
           :key="col.key"
-          :class="{ 'perm-table__td--role': Boolean(col.roleCode) }"
+          :class="{
+            'perm-table__td--role': Boolean(col.roleCode),
+            'perm-table__td--wrap': col.key === 'permission',
+          }"
           @click="col.roleCode ? $event.stopPropagation() : undefined"
         >
           <template v-if="col.key === 'permission'">
-            <span>{{ perm.label }}</span>
-            <span v-if="perm.description || perm.key" class="perm-table__muted">
+            <span class="perm-table__wrap-text">{{ perm.label }}</span>
+            <span v-if="perm.description || perm.key" class="perm-table__muted perm-table__wrap-text">
               {{ perm.description || perm.key }}
             </span>
           </template>
@@ -211,9 +214,20 @@ function roleCodeOf(col) {
   background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
 }
 
-.perm-table tbody td span {
+.perm-table tbody td span:not(.perm-table__wrap-text) {
   display: block;
   white-space: nowrap;
+}
+
+.perm-table__td--wrap {
+  white-space: normal;
+}
+
+.perm-table__wrap-text {
+  display: block;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .perm-table__td--role {

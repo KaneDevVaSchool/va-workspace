@@ -33,6 +33,7 @@ class ProjectSettingsTest extends TestCase
         return array_merge([
             'code_pattern' => 'DA_{date,"m/Y"}_{count}',
             'code_counter' => 344,
+            'default_progress_method' => 'average',
             'auto_start_on_begin_date' => false,
             'shift_task_dates_with_project' => false,
             'hide_cross_tasks_from_assignees' => false,
@@ -54,6 +55,7 @@ class ProjectSettingsTest extends TestCase
             ->assertJsonPath('code_pattern', 'DA_{date,"m/Y"}_{count}')
             ->assertJsonPath('code_counter', 344)
             ->assertJsonPath('next_code_preview', 'DA_08/2026_344')
+            ->assertJsonPath('default_progress_method', 'average')
             ->assertJsonPath('auto_start_on_begin_date', false)
             ->assertJsonPath('shift_task_dates_with_project', false)
             ->assertJsonPath('hide_cross_tasks_from_assignees', false)

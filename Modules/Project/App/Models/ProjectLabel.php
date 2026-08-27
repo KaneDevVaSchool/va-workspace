@@ -12,14 +12,24 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  *
  * @property int         $id
  * @property string      $name
- * @property string      $color        primary | success | info | warning | danger
+ * @property string      $color        primary | secondary | tertiary | gold | success | info | warning | danger | violet
  * @property int|null    $created_by
  */
 class ProjectLabel extends Model
 {
     protected $table = 'project_labels';
 
-    public const COLORS = ['primary', 'success', 'info', 'warning', 'danger'];
+    public const COLORS = [
+        'primary',
+        'secondary',
+        'tertiary',
+        'gold',
+        'success',
+        'info',
+        'warning',
+        'danger',
+        'violet',
+    ];
 
     protected $fillable = [
         'name',

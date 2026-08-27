@@ -11,13 +11,6 @@ import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import ProjectFormFields from '../components/ProjectFormFields.vue';
 
-const RULES = [
-  { key: 'shift_task_dates_with_project', title: 'Khi thời gian thực hiện dự án thay đổi thì thời gian công việc thay đổi theo' },
-  { key: 'hide_cross_tasks_from_assignees', title: 'Không cho phép người thực hiện xem được công việc chéo thuộc cùng một dự án' },
-  { key: 'hide_child_tasks_from_followers', title: 'Không cho phép người theo dõi xem được các công việc con thuộc dự án' },
-  { key: 'constrain_task_dates_to_project', title: 'Thời gian dự kiến thực hiện công việc phải nằm trong khoảng thời gian của dự án' },
-];
-
 const route = useRoute();
 const router = useRouter();
 
@@ -38,7 +31,7 @@ const options = reactive({
 const departments = ref([]);
 const assignableUsers = ref([]);
 const allLabels = ref([]);
-const sharedRules = ref([]);
+const ownerDepartment = ref(null);
 
 // Ảnh đại diện: dự án đã tồn tại nên upload ngay khi chọn ảnh (không đợi
 // bấm "Lưu thay đổi") — patch trực tiếp avatar_url từ response API.
@@ -50,17 +43,22 @@ const form = reactive({
   type: '',
   name: '',
   lead_user_id: '',
-  executing_department_id: '',
+  lead_department_id: '',
+  executing_department_ids: [],
   start_date: '',
   end_date: '',
   progress_method: 'average',
   status: 'planning',
-  importance: 'medium',
+  importance: 'important',
   description: '',
   member_ids: [],
   follower_ids: [],
   scopes: [],
   label_ids: [],
+  shift_task_dates_with_project: false,
+  hide_cross_tasks_from_assignees: false,
+  hide_child_tasks_from_followers: false,
+  constrain_task_dates_to_project: false,
 });
 
 function updateField(field, value) {
@@ -70,6 +68,12 @@ function updateField(field, value) {
 function onLabelCreated(label) {
   if (!allLabels.value.some((l) => l.id === label.id)) {
     allLabels.value.push(label);
+  }
+}
+
+function onTypeCreated(type) {
+  if (!options.type.some((t) => t.value === type.value)) {
+    options.type.push(type);
   }
 }
 
@@ -88,8 +92,17 @@ async function onAvatarSelected(file) {
   }
 }
 
-function openSettings() {
-  router.push({ name: 'manager.project.settings' });
+async function onAvatarRemoved() {
+  uploadingAvatar.value = true;
+  try {
+    const { data } = await window.axios.delete(`/api/project/${projectId.value}/avatar`);
+    avatarPreviewUrl.value = data.project.avatar_url || '';
+    showClientToast('success', 'Đã gỡ ảnh đại diện.');
+  } catch (err) {
+    showClientToast('error', err?.response?.data?.message || 'Không gỡ được ảnh đại diện.');
+  } finally {
+    uploadingAvatar.value = false;
+  }
 }
 
 const durationDays = computed(() => {
@@ -108,12 +121,20 @@ const progressMethodDescription = computed(
 const canSubmit = computed(() => Boolean(form.type) && form.name.trim() !== '' && !saving.value);
 
 function applyProject(project) {
+  const executingIds = (project.executing_departments || [])
+    .map((d) => d?.id)
+    .filter(Boolean);
+  if (executingIds.length === 0 && project.executing_department?.id) {
+    executingIds.push(project.executing_department.id);
+  }
+
   Object.assign(form, {
     code: project.code,
     type: project.type,
     name: project.name,
     lead_user_id: project.lead_user_id || '',
-    executing_department_id: project.executing_department?.id || '',
+    lead_department_id: project.lead_department?.id || '',
+    executing_department_ids: executingIds,
     start_date: project.start_date || '',
     end_date: project.end_date || '',
     progress_method: project.progress_method,
@@ -122,25 +143,19 @@ function applyProject(project) {
     description: project.description || '',
     member_ids: (project.members || []).map((m) => m.id),
     follower_ids: (project.followers || []).map((f) => f.id),
-    scopes: (project.scopes || []).map((s) => ({
+    scopes: (project.scopes || []).slice(0, 1).map((s) => ({
       scope_type: s.scope_type,
       department_id: s.department?.id ?? null,
-      weight_percent: s.weight_percent,
+      weight_percent: s.weight_percent ?? 100,
     })),
     label_ids: (project.labels || []).map((l) => l.id),
+    shift_task_dates_with_project: Boolean(project.shift_task_dates_with_project),
+    hide_cross_tasks_from_assignees: Boolean(project.hide_cross_tasks_from_assignees),
+    hide_child_tasks_from_followers: Boolean(project.hide_child_tasks_from_followers),
+    constrain_task_dates_to_project: Boolean(project.constrain_task_dates_to_project),
   });
+  ownerDepartment.value = project.owner_department || null;
   avatarPreviewUrl.value = project.avatar_url || '';
-}
-
-async function loadSharedRules() {
-  // project.manage_settings không phải ai sửa dự án cũng có — 403 thì bỏ
-  // qua lặng lẽ, không hiện khối "Cài đặt quyền" trong form.
-  try {
-    const { data } = await window.axios.get('/api/project/settings/general');
-    sharedRules.value = RULES.map((r) => ({ ...r, enabled: Boolean(data[r.key]) }));
-  } catch {
-    sharedRules.value = [];
-  }
 }
 
 async function loadMeta() {
@@ -153,7 +168,6 @@ async function loadMeta() {
       window.axios.get('/api/project/assignable-users'),
       window.axios.get('/api/project/labels'),
       window.axios.get(`/api/project/${projectId.value}`),
-      loadSharedRules(),
     ]);
     options.type = optionsRes.data.type ?? [];
     options.status = optionsRes.data.status ?? [];
@@ -192,7 +206,8 @@ async function submitForm() {
     type: form.type,
     name: form.name,
     lead_user_id: form.lead_user_id || null,
-    executing_department_id: form.executing_department_id || null,
+    lead_department_id: form.lead_department_id || null,
+    executing_department_ids: form.executing_department_ids,
     start_date: form.start_date || null,
     end_date: form.end_date || null,
     progress_method: form.progress_method,
@@ -203,6 +218,10 @@ async function submitForm() {
     follower_ids: form.follower_ids,
     scopes: form.scopes,
     label_ids: form.label_ids,
+    shift_task_dates_with_project: Boolean(form.shift_task_dates_with_project),
+    hide_cross_tasks_from_assignees: Boolean(form.hide_cross_tasks_from_assignees),
+    hide_child_tasks_from_followers: Boolean(form.hide_child_tasks_from_followers),
+    constrain_task_dates_to_project: Boolean(form.constrain_task_dates_to_project),
   };
 
   try {
@@ -252,11 +271,12 @@ onMounted(loadMeta);
           :duration-days="durationDays"
           :progress-method-description="progressMethodDescription"
           :avatar-preview-url="avatarPreviewUrl"
-          :shared-rules="sharedRules"
+          :owner-department="ownerDepartment"
           @update:field="updateField"
           @label-created="onLabelCreated"
+          @type-created="onTypeCreated"
           @avatar-selected="onAvatarSelected"
-          @open-settings="openSettings"
+          @avatar-removed="onAvatarRemoved"
         />
       </div>
 
