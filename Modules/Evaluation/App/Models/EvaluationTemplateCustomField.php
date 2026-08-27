@@ -12,8 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int         $id
  * @property int         $evaluation_template_id
  * @property string      $label
- * @property string      $field_type   'text'|'number'|'select'|'date'
- * @property array|null  $options      danh sách lựa chọn, chỉ dùng khi field_type = select
+ * @property string      $field_type   'text'|'bonus'
+ * @property array|null  $options      không dùng với 2 loại hiện tại; giữ cột cho dữ liệu cũ
  * @property bool        $is_required
  * @property int         $sort_order
  */
@@ -21,7 +21,12 @@ class EvaluationTemplateCustomField extends Model
 {
     protected $table = 'evaluation_template_custom_fields';
 
-    public const FIELD_TYPES = ['text', 'number', 'select', 'date'];
+    public const FIELD_TYPES = ['text', 'bonus'];
+
+    public const TYPE_LABELS = [
+        'text'  => 'Chữ',
+        'bonus' => 'Điểm phụ thêm',
+    ];
 
     protected $fillable = [
         'evaluation_template_id',

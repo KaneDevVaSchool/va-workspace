@@ -52,7 +52,7 @@ class EvaluationTemplateSuperAdminTest extends TestCase
             'criteria' => [
                 [
                     'evaluation_criteria_id' => $criterionId,
-                    'weight_label' => 'quan_trong',
+                    'weight_percent' => 100,
                     'required_score' => null,
                     'count_in_total' => true,
                 ],

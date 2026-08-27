@@ -95,7 +95,7 @@ class EvaluationCriteriaController extends Controller
      */
     public function export(ExportEvaluationCriteriaRequest $request): BinaryFileResponse|JsonResponse
     {
-        $departmentId = $this->departmentIdOrFail($request);
+        $departmentId = $this->resolveDepartmentId($request);
         if ($departmentId instanceof JsonResponse) {
             return $departmentId;
         }
@@ -106,7 +106,7 @@ class EvaluationCriteriaController extends Controller
     /** Xuất PDF theo bộ lọc hiện tại — cùng điều kiện quyền với export() (hành động đọc). */
     public function exportPdf(ExportEvaluationCriteriaRequest $request)
     {
-        $departmentId = $this->departmentIdOrFail($request);
+        $departmentId = $this->resolveDepartmentId($request);
         if ($departmentId instanceof JsonResponse) {
             return $departmentId;
         }

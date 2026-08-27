@@ -8,7 +8,8 @@ use Modules\Evaluation\App\Repositories\Contracts\EvaluationPositionRepositoryIn
 
 /**
  * "Vị trí đánh giá" — danh mục chức danh dùng chung toàn hệ thống, gán N-N
- * vào EvaluationTemplate. Xem plans/2026-08-26-mau-danh-gia.md (PR3).
+ * vào EvaluationTemplate. CHỈ ĐỌC — không còn tạo/sửa/xoá tay, danh mục sẽ
+ * nối API VA-HRM sau này. Xem plans/2026-08-26-mau-danh-gia.md (PR3).
  */
 class EvaluationPositionService
 {
@@ -19,48 +20,6 @@ class EvaluationPositionService
     public function list(): Collection
     {
         return $this->positions->all()->map(fn (EvaluationPosition $p) => $this->present($p))->values();
-    }
-
-    public function create(int $createdBy, array $data): EvaluationPosition
-    {
-        return $this->positions->create([
-            'name'        => trim($data['name']),
-            'kind'        => $data['kind'] ?? EvaluationPosition::KIND_POSITION,
-            'description' => isset($data['description']) ? trim($data['description']) : null,
-            'created_by'  => $createdBy,
-        ]);
-    }
-
-    public function update(EvaluationPosition $position, array $data): EvaluationPosition
-    {
-        $payload = [
-            'name' => trim($data['name'] ?? $position->name),
-            'kind' => $data['kind'] ?? $position->kind,
-            'description' => array_key_exists('description', $data)
-                ? (isset($data['description']) ? trim($data['description']) : null)
-                : $position->description,
-        ];
-
-        return $this->positions->update($position, $payload);
-    }
-
-    /**
-     * @return \Modules\Evaluation\App\Models\EvaluationPosition|\Illuminate\Http\JsonResponse
-     */
-    public function findOrFail(int $id)
-    {
-        $position = $this->positions->find($id);
-
-        if ($position === null) {
-            return response()->json(['message' => 'Không tìm thấy vị trí đánh giá.'], 404);
-        }
-
-        return $position;
-    }
-
-    public function delete(EvaluationPosition $position): bool
-    {
-        return $this->positions->delete($position);
     }
 
     /** @return array<string, mixed> */

@@ -4,6 +4,7 @@ namespace Modules\Evaluation\App\Services;
 
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Modules\Evaluation\App\Models\EvaluationCriteria;
 use Modules\Evaluation\App\Models\EvaluationPosition;
 use Modules\Evaluation\App\Models\EvaluationTemplate;
 use Modules\Evaluation\App\Models\EvaluationTemplateCriterion;
@@ -100,24 +101,14 @@ class EvaluationTemplateService
     private function presentForExport(EvaluationTemplate $template): array
     {
         $criteriaText = $template->templateCriteria
-            ->map(function (EvaluationTemplateCriterion $tc) {
-                $label = EvaluationTemplateCriterion::WEIGHT_LABELS[$tc->weight_label] ?? $tc->weight_label;
-
-                return ($tc->criterion?->name ?? '?').': '.$label;
-            })
+            ->map(fn (EvaluationTemplateCriterion $tc) => ($tc->criterion?->name ?? '?').': '.$tc->weight_percent.'%')
             ->implode('; ');
 
         $positionsText = $template->positions->pluck('name')->implode(', ');
 
         $customFieldsText = $template->customFields
             ->map(function (EvaluationTemplateCustomField $f) {
-                $typeLabel = match ($f->field_type) {
-                    'text' => 'Chữ',
-                    'number' => 'Số',
-                    'select' => 'Lựa chọn',
-                    'date' => 'Ngày',
-                    default => $f->field_type,
-                };
+                $typeLabel = EvaluationTemplateCustomField::TYPE_LABELS[$f->field_type] ?? $f->field_type;
 
                 return $f->label.': '.$typeLabel;
             })
@@ -332,8 +323,7 @@ class EvaluationTemplateService
         $rows = $template->templateCriteria
             ->map(fn (EvaluationTemplateCriterion $tc) => [
                 'evaluation_criteria_id' => $tc->evaluation_criteria_id,
-                'weight_label'           => $tc->weight_label,
-                'weight_value'           => $tc->weight_value,
+                'weight_percent'         => $tc->weight_percent,
                 'required_score'         => $tc->required_score,
                 'count_in_total'         => $tc->count_in_total,
             ])
@@ -360,7 +350,7 @@ class EvaluationTemplateService
      * Chuẩn hoá + validate danh sách tiêu chí gửi lên.
      *
      * @param  array<int, array<string, mixed>>  $rawRows
-     * @return list<array{evaluation_criteria_id: int, weight_label: string, weight_value: int, required_score: int|null, count_in_total: bool}>|array{error: string}
+     * @return list<array{evaluation_criteria_id: int, weight_percent: int, required_score: int|null, count_in_total: bool}>|array{error: string}
      */
     private function buildCriteriaRows(array $rawRows, ?int $templateDepartmentId, bool $isGlobal): array
     {
@@ -378,20 +368,45 @@ class EvaluationTemplateService
                 return ['error' => 'Chỉ được chọn tiêu chí thuộc phòng ban của mẫu này.'];
             }
 
-            $weightLabel = (string) ($raw['weight_label'] ?? 'quan_trong');
-            $weightValue = EvaluationTemplateCriterion::WEIGHT_MAP[$weightLabel]
-                ?? EvaluationTemplateCriterion::WEIGHT_MAP['quan_trong'];
+            $countInTotal = array_key_exists('count_in_total', $raw)
+                ? filter_var($raw['count_in_total'], FILTER_VALIDATE_BOOLEAN)
+                : true;
+
+            $weightPercent = $countInTotal ? (int) ($raw['weight_percent'] ?? 10) : 0;
+
+            $requiredScore = isset($raw['required_score']) && $raw['required_score'] !== ''
+                ? (int) $raw['required_score']
+                : null;
+
+            if ($requiredScore !== null && ! $this->isValidRequiredScore($criterion, $requiredScore)) {
+                return ['error' => 'Điểm yêu cầu không khớp thang điểm của tiêu chí "'.$criterion->name.'".'];
+            }
 
             $rows[] = [
                 'evaluation_criteria_id' => $criterionId,
-                'weight_label'           => $weightLabel,
-                'weight_value'           => $weightValue,
-                'required_score'         => isset($raw['required_score']) ? (int) $raw['required_score'] : null,
-                'count_in_total'         => (bool) ($raw['count_in_total'] ?? true),
+                'weight_percent'         => $weightPercent,
+                'required_score'         => $requiredScore,
+                'count_in_total'         => $countInTotal,
             ];
         }
 
         return $rows;
+    }
+
+    /**
+     * Điểm yêu cầu phải nằm trong tập điểm hợp lệ của tiêu chí:
+     *   scale    → số nguyên 0..max_score.
+     *   behavior → phải khớp đúng 1 mức điểm trong levels[].score.
+     */
+    private function isValidRequiredScore(EvaluationCriteria $criterion, int $score): bool
+    {
+        if ($criterion->type === 'scale') {
+            return $score >= 0 && $score <= (int) $criterion->max_score;
+        }
+
+        $levelScores = collect($criterion->levels ?? [])->pluck('score')->map(fn ($s) => (int) $s)->all();
+
+        return in_array($score, $levelScores, true);
     }
 
     /**
@@ -439,23 +454,10 @@ class EvaluationTemplateService
                 return ['error' => 'Loại trường tùy biến không hợp lệ.'];
             }
 
-            $options = null;
-            if ($fieldType === 'select') {
-                $options = collect($raw['options'] ?? [])
-                    ->map(fn ($opt) => trim((string) $opt))
-                    ->filter(fn ($opt) => $opt !== '')
-                    ->values()
-                    ->all();
-
-                if (empty($options)) {
-                    return ['error' => 'Trường tùy biến kiểu lựa chọn phải có ít nhất 1 tùy chọn.'];
-                }
-            }
-
             $rows[] = [
                 'label'       => $label,
                 'field_type'  => $fieldType,
-                'options'     => $options,
+                'options'     => null,
                 'is_required' => (bool) ($raw['is_required'] ?? false),
             ];
         }
@@ -534,8 +536,7 @@ class EvaluationTemplateService
                 'id'   => $criterion->department->id,
                 'name' => $criterion->department->name,
             ] : null,
-            'weight_label'   => $tc->weight_label,
-            'weight_text'    => EvaluationTemplateCriterion::WEIGHT_LABELS[$tc->weight_label] ?? $tc->weight_label,
+            'weight_percent' => $tc->weight_percent,
             'required_score' => $tc->required_score,
             'count_in_total' => (bool) $tc->count_in_total,
             'max_score'      => $criterion?->max_score,

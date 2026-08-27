@@ -101,8 +101,7 @@ class EvaluationTemplateRepository implements EvaluationTemplateRepositoryInterf
                 EvaluationTemplateCriterion::query()->create([
                     'evaluation_template_id' => $template->id,
                     'evaluation_criteria_id' => $row['evaluation_criteria_id'],
-                    'weight_label'           => $row['weight_label'],
-                    'weight_value'           => $row['weight_value'],
+                    'weight_percent'         => $row['weight_percent'],
                     'required_score'         => $row['required_score'] ?? null,
                     'count_in_total'         => $row['count_in_total'] ?? true,
                     'sort_order'             => $index,

@@ -31,7 +31,7 @@ interface EvaluationTemplateRepositoryInterface
     /**
      * Ghi đè toàn bộ danh sách tiêu chí của mẫu (xoá cũ, tạo lại theo thứ tự truyền vào).
      *
-     * @param  list<array{evaluation_criteria_id: int, weight_label: string, weight_value: int, required_score: int|null, count_in_total: bool}>  $rows
+     * @param  list<array{evaluation_criteria_id: int, weight_percent: int, required_score: int|null, count_in_total: bool}>  $rows
      */
     public function syncCriteria(EvaluationTemplate $template, array $rows): EvaluationTemplate;
 

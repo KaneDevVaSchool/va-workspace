@@ -13,11 +13,6 @@ class EvaluationPositionRepository implements EvaluationPositionRepositoryInterf
         return EvaluationPosition::query()->orderBy('name')->get();
     }
 
-    public function find(int $id): ?EvaluationPosition
-    {
-        return EvaluationPosition::query()->find($id);
-    }
-
     public function findMany(array $ids): Collection
     {
         if (empty($ids)) {
@@ -25,22 +20,5 @@ class EvaluationPositionRepository implements EvaluationPositionRepositoryInterf
         }
 
         return EvaluationPosition::query()->whereIn('id', $ids)->get();
-    }
-
-    public function create(array $data): EvaluationPosition
-    {
-        return EvaluationPosition::query()->create($data);
-    }
-
-    public function update(EvaluationPosition $position, array $data): EvaluationPosition
-    {
-        $position->update($data);
-
-        return $position->fresh();
-    }
-
-    public function delete(EvaluationPosition $position): bool
-    {
-        return (bool) $position->delete();
     }
 }

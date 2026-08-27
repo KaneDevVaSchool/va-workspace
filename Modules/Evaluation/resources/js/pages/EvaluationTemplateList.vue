@@ -46,25 +46,16 @@ const FILTERS = [
   { key: 'creator_id', label: 'Người tạo', defaultOn: false },
 ];
 
-const WEIGHT_OPTIONS = [
-  { value: 'khong_quan_trong', label: 'Không quan trọng' },
-  { value: 'quan_trong', label: 'Quan trọng' },
-  { value: 'kha_quan_trong', label: 'Khá quan trọng' },
-  { value: 'rat_quan_trong', label: 'Rất quan trọng' },
-];
-
 // Chỉ dùng để hiện tên loại field trong panel chi tiết (form nhập nằm ở
 // EvaluationCustomFieldsEditor.vue, dùng chung cho 2 dialog Tạo/Sửa).
 const CUSTOM_FIELD_TYPES = [
   { value: 'text', label: 'Chữ' },
-  { value: 'number', label: 'Số' },
-  { value: 'select', label: 'Lựa chọn' },
-  { value: 'date', label: 'Ngày' },
+  { value: 'bonus', label: 'Điểm phụ thêm' },
 ];
 
 const COL_KEY = 'va-eval-templates-columns-v3';
 const FILTER_KEY = 'va-eval-templates-filters-v2';
-const WIDTH_KEY = 'va-eval-templates-widths';
+const WIDTH_KEY = 'va-eval-templates-widths-v2';
 const ZOOM_KEY = 'va-eval-templates-zoom';
 
 const CELL_PAD_X = 32;
@@ -99,6 +90,7 @@ const togglingId = ref(null);
 const duplicatingId = ref(null);
 const openActionMenuId = ref(null); // id mẫu đang mở dropdown Thao tác trên dòng
 const actionMenuPos = reactive({ top: 0, left: 0 });
+const deptGroupCollapsed = reactive({}); // key nhóm phòng ban đang thu gọn
 
 const query = ref('');
 const statusFilter = ref('');
@@ -164,19 +156,18 @@ const creatorOptions = computed(() => {
   return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 });
 
-const lastPage = computed(() => Math.max(1, Math.ceil(filtered.value.length / perPage.value)));
-
-const pagedTemplates = computed(() => {
-  const start = (page.value - 1) * perPage.value;
-  return filtered.value.slice(start, start + perPage.value);
-});
+const lastPage = computed(() => 1);
 
 const pagerMeta = computed(() => {
   const total = filtered.value.length;
-  const from = total ? (page.value - 1) * perPage.value + 1 : 0;
-  const to = Math.min(page.value * perPage.value, total);
-  return { from, to, total };
+  const visible = templateGroups.value.reduce(
+    (n, g) => n + (isDeptGroupCollapsed(g.key) ? 0 : g.templates.length),
+    0,
+  );
+  return { from: visible ? 1 : 0, to: visible, total };
 });
+
+const tableColspan = computed(() => shownColumns.value.length + (canManage.value ? 1 : 0));
 
 const hasActiveFilters = computed(() =>
   Boolean(
@@ -197,14 +188,75 @@ const hiddenActiveFilterLabels = computed(() =>
 const shownColumns = computed(() => COLUMNS.filter((col) => visibleColumns[col.key]));
 
 /** Tên vị trí đánh giá, kèm hậu tố phân biệt khi là cả 1 phòng ban (không phải chức danh). */
-function positionsText(template) {
-  const names = (template.positions ?? []).map((p) => (p.kind === 'department' ? `${p.name} (phòng ban)` : p.name));
-  return names.length ? names.join(', ') : '—';
+function positionNames(template) {
+  return (template.positions ?? []).map((p) => (p.kind === 'department' ? `${p.name} (phòng ban)` : p.name));
 }
 
 function departmentText(template) {
   return template.department?.name || (template.is_global ? 'Toàn hệ thống' : '—');
 }
+
+function departmentGroupKey(template) {
+  if (template.department?.id != null) return `dept-${template.department.id}`;
+  if (template.is_global) return 'global';
+  return 'none';
+}
+
+function departmentGroupTitle(template) {
+  return template.department?.name || (template.is_global ? 'Toàn hệ thống' : 'Chưa gắn phòng ban');
+}
+
+function buildDepartmentGroups(list) {
+  const groups = [];
+  const map = new Map();
+  for (const template of list) {
+    const key = departmentGroupKey(template);
+    if (!map.has(key)) {
+      map.set(key, { key, title: departmentGroupTitle(template), templates: [] });
+      groups.push(map.get(key));
+    }
+    map.get(key).templates.push(template);
+  }
+  groups.sort((a, b) => {
+    const tail = { global: 1, none: 2 };
+    const rankA = tail[a.key] ?? 0;
+    const rankB = tail[b.key] ?? 0;
+    if (rankA !== rankB) return rankA - rankB;
+    return a.title.localeCompare(b.title, 'vi');
+  });
+  return groups;
+}
+
+function isDeptGroupCollapsed(key) {
+  return Boolean(deptGroupCollapsed[key]);
+}
+
+function toggleDeptGroup(key) {
+  closeActionMenu();
+  deptGroupCollapsed[key] = !deptGroupCollapsed[key];
+}
+
+const templateGroups = computed(() => buildDepartmentGroups(filtered.value));
+
+const tableBodyRows = computed(() => {
+  const rows = [];
+  for (const group of templateGroups.value) {
+    rows.push({
+      kind: 'group',
+      key: `group-${group.key}`,
+      groupKey: group.key,
+      title: group.title,
+      count: group.templates.length,
+      collapsed: isDeptGroupCollapsed(group.key),
+    });
+    if (!isDeptGroupCollapsed(group.key)) {
+      for (const template of group.templates) {
+        rows.push({ kind: 'template', key: template.id, template });
+      }
+    }
+  }
+  return rows;
+});
 
 function filterHasValue(key) {
   if (key === 'q') return Boolean(query.value.trim());
@@ -237,10 +289,6 @@ function onColumnToggle(key, checked) {
 
 function onFilterToggle(key, checked) {
   visibleFilters[key] = checked;
-}
-
-function weightLabelText(value) {
-  return WEIGHT_OPTIONS.find((opt) => opt.value === value)?.label ?? value;
 }
 
 // ─── persistence helpers ────────────────────────────────────────────────────
@@ -324,7 +372,10 @@ function computeDefaultWidths() {
         if (col.key === 'code') val = row.code ?? '';
         if (col.key === 'criteria_count') val = String(row.criteria_count ?? 0);
         if (col.key === 'status') val = row.is_active ? 'Hoạt động' : 'Không hoạt động';
-        if (col.key === 'positions') val = positionsText(row);
+        if (col.key === 'positions') {
+          const names = positionNames(row);
+          val = names.length ? names.reduce((longest, name) => (name.length > longest.length ? name : longest), '') : '—';
+        }
         if (col.key === 'is_global') val = row.is_global ? 'Có' : 'Không';
         if (col.key === 'department') val = departmentText(row);
         if (col.key === 'created_at') val = formatDateTime(row.created_at) || '—';
@@ -530,10 +581,6 @@ function onTemplateCreated(template) {
 
 function onTemplateUpdated(template) {
   applyTemplateUpdate(template);
-}
-
-function onPositionCreated(position) {
-  allPositions.value = [...allPositions.value, position].sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 }
 
 function applyTemplateUpdate(template) {
@@ -809,7 +856,7 @@ onBeforeUnmount(() => {
             Chưa có mẫu đánh giá nào.
             <template v-if="canCreate">Bấm <strong>Tạo mẫu</strong> để bắt đầu.</template>
           </p>
-          <p v-else-if="pagedTemplates.length === 0" class="evtpl-page__empty">Không tìm thấy mẫu phù hợp.</p>
+          <p v-else-if="filtered.length === 0" class="evtpl-page__empty">Không tìm thấy mẫu phù hợp.</p>
 
           <table v-else class="evtpl-page__table">
             <colgroup>
@@ -840,114 +887,142 @@ onBeforeUnmount(() => {
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="template in pagedTemplates"
-                :key="template.id"
-                class="evtpl-page__tr"
-                :class="{ 'evtpl-page__tr--active': selected?.id === template.id }"
-                @click="openView(template)"
-              >
-                <td v-if="visibleColumns.name" class="evtpl-page__td">
-                  <span class="evtpl-page__name">{{ template.name }}</span>
-                </td>
-                <td v-if="visibleColumns.code" class="evtpl-page__td">{{ template.code }}</td>
-                <td v-if="visibleColumns.criteria_count" class="evtpl-page__td evtpl-page__td--center">
-                  {{ template.criteria_count }}
-                </td>
-                <td v-if="visibleColumns.positions" class="evtpl-page__td">{{ positionsText(template) }}</td>
-                <td v-if="visibleColumns.status" class="evtpl-page__td">
-                  <span class="evtpl-page__status">
-                    <span
-                      class="evtpl-page__dot"
-                      :class="template.is_active ? 'evtpl-page__dot--active' : 'evtpl-page__dot--inactive'"
-                    />
-                    {{ template.is_active ? 'Hoạt động' : 'Không hoạt động' }}
-                  </span>
-                </td>
-                <td v-if="visibleColumns.is_global" class="evtpl-page__td">
-                  <span class="evtpl-page__status">
-                    <span
-                      class="evtpl-page__dot"
-                      :class="template.is_global ? 'evtpl-page__dot--active' : 'evtpl-page__dot--inactive'"
-                    />
-                    {{ template.is_global ? 'Có' : 'Không' }}
-                  </span>
-                </td>
-                <td v-if="visibleColumns.department" class="evtpl-page__td">{{ departmentText(template) }}</td>
-                <td v-if="visibleColumns.created_at" class="evtpl-page__td">
-                  {{ formatDateTime(template.created_at) || '—' }}
-                </td>
-                <td v-if="visibleColumns.creator" class="evtpl-page__td evtpl-page__td--center">
-                  <UserAvatarTip :user="template.creator" label="Người tạo" />
-                </td>
-                <td v-if="canManage" class="evtpl-page__td evtpl-page__td--center evtpl-page__td--action" @click.stop>
-                  <span class="evtpl-page__actions">
-                    <button
-                      type="button"
-                      class="evtpl-page__action-trigger"
-                      :class="{ 'evtpl-page__action-trigger--open': openActionMenuId === template.id }"
-                      aria-haspopup="menu"
-                      :aria-expanded="openActionMenuId === template.id"
-                      aria-label="Thao tác"
-                      @click="toggleActionMenu(template.id, $event)"
-                    >
-                      <AppIcon name="moreVertical" :size="16" />
-                    </button>
-                    <Teleport to="body">
-                      <div
-                        v-if="openActionMenuId === template.id"
-                        class="evtpl-page__action-menu"
-                        role="menu"
-                        aria-label="Thao tác mẫu đánh giá"
-                        :style="{ top: actionMenuPos.top + 'px', left: actionMenuPos.left + 'px' }"
+              <template v-for="entry in tableBodyRows" :key="entry.key">
+                <tr
+                  v-if="entry.kind === 'group'"
+                  class="evtpl-page__tr evtpl-page__tr--group"
+                  :aria-expanded="entry.collapsed ? 'false' : 'true'"
+                  @click.stop="toggleDeptGroup(entry.groupKey)"
+                >
+                  <td :colspan="tableColspan" class="evtpl-page__td evtpl-page__td--group">
+                    <div class="evtpl-page__group-inner">
+                      <span class="evtpl-page__group-toggle" aria-hidden="true">
+                        <AppIcon
+                          :name="entry.collapsed ? 'chevronRight' : 'chevronDown'"
+                          :size="16"
+                          :stroke-width="1.75"
+                        />
+                      </span>
+                      <span class="evtpl-page__group-copy">
+                        <span class="evtpl-page__group-title">{{ entry.title }}</span>
+                      </span>
+                      <span class="evtpl-page__group-count">{{ entry.count }} mẫu</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr
+                  v-else
+                  class="evtpl-page__tr"
+                  :class="{ 'evtpl-page__tr--active': selected?.id === entry.template.id }"
+                  @click="openView(entry.template)"
+                >
+                  <td v-if="visibleColumns.name" class="evtpl-page__td">
+                    <span class="evtpl-page__name">{{ entry.template.name }}</span>
+                  </td>
+                  <td v-if="visibleColumns.code" class="evtpl-page__td">{{ entry.template.code }}</td>
+                  <td v-if="visibleColumns.criteria_count" class="evtpl-page__td evtpl-page__td--center">
+                    {{ entry.template.criteria_count }}
+                  </td>
+                  <td v-if="visibleColumns.positions" class="evtpl-page__td evtpl-page__td--positions">
+                    <span v-if="positionNames(entry.template).length" class="evtpl-page__positions">
+                      <span v-for="(name, idx) in positionNames(entry.template)" :key="idx">{{ name }}</span>
+                    </span>
+                    <template v-else>—</template>
+                  </td>
+                  <td v-if="visibleColumns.status" class="evtpl-page__td">
+                    <span class="evtpl-page__status">
+                      <span
+                        class="evtpl-page__dot"
+                        :class="entry.template.is_active ? 'evtpl-page__dot--active' : 'evtpl-page__dot--inactive'"
+                      />
+                      {{ entry.template.is_active ? 'Hoạt động' : 'Không hoạt động' }}
+                    </span>
+                  </td>
+                  <td v-if="visibleColumns.is_global" class="evtpl-page__td">
+                    <span class="evtpl-page__status">
+                      <span
+                        class="evtpl-page__dot"
+                        :class="entry.template.is_global ? 'evtpl-page__dot--active' : 'evtpl-page__dot--inactive'"
+                      />
+                      {{ entry.template.is_global ? 'Có' : 'Không' }}
+                    </span>
+                  </td>
+                  <td v-if="visibleColumns.department" class="evtpl-page__td">{{ departmentText(entry.template) }}</td>
+                  <td v-if="visibleColumns.created_at" class="evtpl-page__td">
+                    {{ formatDateTime(entry.template.created_at) || '—' }}
+                  </td>
+                  <td v-if="visibleColumns.creator" class="evtpl-page__td evtpl-page__td--center">
+                    <UserAvatarTip :user="entry.template.creator" label="Người tạo" />
+                  </td>
+                  <td v-if="canManage" class="evtpl-page__td evtpl-page__td--center evtpl-page__td--action" @click.stop>
+                    <span class="evtpl-page__actions">
+                      <button
+                        type="button"
+                        class="evtpl-page__action-trigger"
+                        :class="{ 'evtpl-page__action-trigger--open': openActionMenuId === entry.template.id }"
+                        aria-haspopup="menu"
+                        :aria-expanded="openActionMenuId === entry.template.id"
+                        aria-label="Thao tác"
+                        @click="toggleActionMenu(entry.template.id, $event)"
                       >
-                        <button
-                          v-if="canMutateTemplate(template)"
-                          type="button"
-                          role="menuitem"
-                          class="evtpl-page__action-item"
-                          @click="runRowAction(openEdit, template)"
+                        <AppIcon name="moreVertical" :size="16" />
+                      </button>
+                      <Teleport to="body">
+                        <div
+                          v-if="openActionMenuId === entry.template.id"
+                          class="evtpl-page__action-menu"
+                          role="menu"
+                          aria-label="Thao tác mẫu đánh giá"
+                          :style="{ top: actionMenuPos.top + 'px', left: actionMenuPos.left + 'px' }"
                         >
-                          <AppIcon name="pencil" :size="15" />
-                          <span>Sửa</span>
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          class="evtpl-page__action-item"
-                          :disabled="duplicatingId === template.id"
-                          @click="runRowAction(duplicateTemplate, template)"
-                        >
-                          <AppIcon name="layers" :size="15" />
-                          <span>Nhân bản</span>
-                        </button>
-                        <button
-                          v-if="canMutateTemplate(template)"
-                          type="button"
-                          role="menuitem"
-                          class="evtpl-page__action-item"
-                          :disabled="togglingId === template.id"
-                          @click="runRowAction(toggleActive, template)"
-                        >
-                          <AppIcon :name="template.is_active ? 'eyeOff' : 'eye'" :size="15" />
-                          <span>{{ template.is_active ? 'Ẩn' : 'Hiện' }}</span>
-                        </button>
-                        <button
-                          v-if="canMutateTemplate(template)"
-                          type="button"
-                          role="menuitem"
-                          class="evtpl-page__action-item evtpl-page__action-item--danger"
-                          :disabled="deletingId === template.id"
-                          @click="closeActionMenu(); confirmDelete = template"
-                        >
-                          <AppIcon name="trash2" :size="15" />
-                          <span>Xoá</span>
-                        </button>
-                      </div>
-                    </Teleport>
-                  </span>
-                </td>
-              </tr>
+                          <button
+                            v-if="canMutateTemplate(entry.template)"
+                            type="button"
+                            role="menuitem"
+                            class="evtpl-page__action-item"
+                            @click="runRowAction(openEdit, entry.template)"
+                          >
+                            <AppIcon name="pencil" :size="15" />
+                            <span>Sửa</span>
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            class="evtpl-page__action-item"
+                            :disabled="duplicatingId === entry.template.id"
+                            @click="runRowAction(duplicateTemplate, entry.template)"
+                          >
+                            <AppIcon name="layers" :size="15" />
+                            <span>Nhân bản</span>
+                          </button>
+                          <button
+                            v-if="canMutateTemplate(entry.template)"
+                            type="button"
+                            role="menuitem"
+                            class="evtpl-page__action-item"
+                            :disabled="togglingId === entry.template.id"
+                            @click="runRowAction(toggleActive, entry.template)"
+                          >
+                            <AppIcon :name="entry.template.is_active ? 'eyeOff' : 'eye'" :size="15" />
+                            <span>{{ entry.template.is_active ? 'Ẩn' : 'Hiện' }}</span>
+                          </button>
+                          <button
+                            v-if="canMutateTemplate(entry.template)"
+                            type="button"
+                            role="menuitem"
+                            class="evtpl-page__action-item evtpl-page__action-item--danger"
+                            :disabled="deletingId === entry.template.id"
+                            @click="closeActionMenu(); confirmDelete = entry.template"
+                          >
+                            <AppIcon name="trash2" :size="15" />
+                            <span>Xoá</span>
+                          </button>
+                        </div>
+                      </Teleport>
+                    </span>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -1043,7 +1118,12 @@ onBeforeUnmount(() => {
             </div>
             <div class="evtpl-page__row">
               <span class="evtpl-page__row-label">Vị trí đánh giá</span>
-              <span class="evtpl-page__row-value">{{ positionsText(selected) }}</span>
+              <span class="evtpl-page__row-value evtpl-page__row-value--stack">
+                <template v-if="positionNames(selected).length">
+                  <span v-for="(name, idx) in positionNames(selected)" :key="idx">{{ name }}</span>
+                </template>
+                <template v-else>—</template>
+              </span>
             </div>
             <div class="evtpl-page__row">
               <span class="evtpl-page__row-label">Ngày tạo</span>
@@ -1063,9 +1143,11 @@ onBeforeUnmount(() => {
               <span class="evtpl-page__criteria-copy">
                 <span class="evtpl-page__criteria-name">{{ c.name }}</span>
                 <span class="evtpl-page__criteria-meta">
-                  Trọng số: {{ weightLabelText(c.weight_label) }}
+                  <template v-if="c.count_in_total">
+                    Trọng số: {{ c.weight_percent }}% · Tính vào tổng điểm: Có
+                  </template>
+                  <template v-else>Tính vào tổng điểm: Không</template>
                   <template v-if="c.required_score != null"> · Điểm yêu cầu: {{ c.required_score }}</template>
-                  <template v-if="!c.count_in_total"> · Không tính vào tổng điểm</template>
                 </span>
               </span>
             </li>
@@ -1080,7 +1162,6 @@ onBeforeUnmount(() => {
                   <span class="evtpl-page__criteria-meta">
                     Loại: {{ CUSTOM_FIELD_TYPES.find((t) => t.value === f.field_type)?.label || f.field_type }}
                     <template v-if="f.is_required"> · Bắt buộc nhập</template>
-                    <template v-if="f.options?.length"> · Lựa chọn: {{ f.options.join(', ') }}</template>
                   </span>
                 </span>
               </li>
@@ -1100,7 +1181,6 @@ onBeforeUnmount(() => {
       :can-manage-global="canManageGlobal"
       :force-global="forceGlobalCreate"
       @created="onTemplateCreated"
-      @position-created="onPositionCreated"
       @request-global-pool="loadGlobalCriteriaPool"
     />
     <EvaluationTemplateEditDialog
@@ -1112,7 +1192,6 @@ onBeforeUnmount(() => {
       :all-positions="allPositions"
       :can-manage-global="canManageGlobal"
       @updated="onTemplateUpdated"
-      @position-created="onPositionCreated"
       @request-global-pool="loadGlobalCriteriaPool"
     />
 
@@ -1319,6 +1398,64 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
+.evtpl-page__tr--group {
+  cursor: pointer;
+}
+
+.evtpl-page__tr--group:hover td {
+  background: transparent;
+}
+
+.evtpl-page__tr--group:hover .evtpl-page__group-inner {
+  background: var(--color-surface-muted);
+}
+
+.evtpl-page__td--group {
+  padding: 0;
+  overflow: visible;
+  white-space: normal;
+  vertical-align: middle;
+}
+
+.evtpl-page__group-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem var(--space-4);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface));
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.evtpl-page__group-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.evtpl-page__group-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.evtpl-page__group-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evtpl-page__group-count {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
 .evtpl-page__td {
   padding: var(--space-3) var(--space-4);
   vertical-align: middle;
@@ -1330,6 +1467,21 @@ onBeforeUnmount(() => {
 
 .evtpl-page__td--center {
   text-align: center;
+}
+
+.evtpl-page__td--positions {
+  white-space: normal;
+  overflow: visible;
+}
+
+.evtpl-page__positions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.evtpl-page__positions > span {
+  white-space: nowrap;
 }
 
 .evtpl-page__name {
@@ -1547,6 +1699,12 @@ onBeforeUnmount(() => {
   font-style: italic;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.evtpl-page__row-value--stack {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.125rem;
 }
 
 .evtpl-page__side-subtitle {

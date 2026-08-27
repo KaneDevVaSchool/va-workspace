@@ -4,20 +4,27 @@
 // EvaluationTemplateList.vue để dùng chung cho dialog Tạo mới và Sửa
 // (2 dialog riêng biệt, không share state form, nhưng share block UI này).
 //
-// Luôn hiện tên phòng ban nguồn cạnh mỗi tiêu chí (kể cả mẫu không dùng
-// chung) và gợi ý thang điểm/mức điểm ngắn gọn — trước đây chỉ hiện tên nên
-// nhiều tiêu chí trùng tên giữa các phòng ban (do seed demo) trông như bị
-// trùng lặp và không rõ điểm cần có.
+// Mẫu dùng chung (isGlobal): hiện tên phòng ban nguồn cạnh mỗi tiêu chí để
+// phân biệt tiêu chí trùng tên giữa các phòng. Mẫu của 1 phòng ban thì
+// không hiện — mọi tiêu chí đã thuộc phòng đang tạo. Gợi ý thang điểm/mức
+// điểm ngắn gọn luôn hiện.
+//
+// Trọng số (weight_percent): % từ 10-100, bước 10 — CHỈ các dòng
+// count_in_total = true cộng vào tổng điểm, và tổng nhóm đó phải = 100%.
+// Dòng tắt "Tính vào tổng điểm" vẫn nằm trên mẫu (ghi nhận) nhưng weight = 0.
+// "Điểm yêu cầu" là select liệt kê đúng các mức điểm hợp lệ của từng tiêu chí
+// (0..max_score cho type=scale, hoặc levels[].score cho type=behavior).
 //
 import { computed, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 
+const WEIGHT_PERCENT_OPTIONS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
 const props = defineProps({
-  modelValue: { type: Array, required: true }, // [{ evaluation_criteria_id, weight_label, required_score, count_in_total }]
+  modelValue: { type: Array, required: true }, // [{ evaluation_criteria_id, weight_percent, required_score, count_in_total }]
   pool: { type: Array, required: true },
   isGlobal: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
-  weightOptions: { type: Array, required: true },
   loading: { type: Boolean, default: false },
 });
 
@@ -36,8 +43,25 @@ const availableCriteria = computed(() => {
 
 const selectedIds = computed(() => new Set(props.modelValue.map((row) => String(row.evaluation_criteria_id))));
 
+const countedRows = computed(() => props.modelValue.filter((row) => row.count_in_total));
+const skippedCount = computed(() => props.modelValue.length - countedRows.value.length);
+const totalWeightPercent = computed(() =>
+  countedRows.value.reduce((sum, row) => sum + (Number(row.weight_percent) || 0), 0),
+);
+const weightIsBalanced = computed(() => {
+  if (props.modelValue.length === 0) return true;
+  if (countedRows.value.length === 0) return false;
+  return totalWeightPercent.value === 100;
+});
+
 function criterionById(id) {
   return props.pool.find((c) => String(c.id) === String(id)) ?? null;
+}
+
+/** Tên phòng ban nguồn — chỉ hiện khi mẫu dùng chung (pool nhiều phòng). */
+function criterionDeptLabel(criterion) {
+  if (!props.isGlobal || !criterion?.department?.name) return '';
+  return `— ${criterion.department.name}`;
 }
 
 /** Gợi ý ngắn gọn thang điểm/mức điểm — dùng chung cho ô picker và danh sách đã chọn. */
@@ -56,6 +80,20 @@ function criterionScoreHint(criterion) {
   return levels.length > 2 ? `${shown.join(', ')}, …` : shown.join(', ');
 }
 
+/** Danh sách option hợp lệ cho "Điểm yêu cầu" của 1 tiêu chí — value luôn là số hoặc null. */
+function requiredScoreOptions(criterion) {
+  if (!criterion) return [];
+  if (criterion.type === 'scale') {
+    const max = Math.max(0, Math.round(Number(criterion.max_score ?? 0)));
+    return Array.from({ length: max + 1 }, (_, score) => ({ value: score, label: String(score) }));
+  }
+  return (criterion.levels ?? []).map((l) => {
+    const score = Number(l.score ?? 0);
+    const sign = score > 0 ? '+' : '';
+    return { value: score, label: `${l.label} (${sign}${score})` };
+  });
+}
+
 function toggleCriterion(criterionId) {
   const id = String(criterionId);
   const idx = props.modelValue.findIndex((row) => String(row.evaluation_criteria_id) === id);
@@ -65,7 +103,7 @@ function toggleCriterion(criterionId) {
   }
   emit('update:modelValue', [
     ...props.modelValue,
-    { evaluation_criteria_id: criterionId, weight_label: 'quan_trong', required_score: null, count_in_total: true },
+    { evaluation_criteria_id: criterionId, weight_percent: 10, required_score: null, count_in_total: true },
   ]);
 }
 
@@ -81,11 +119,40 @@ function updateRow(criterionId, patch) {
     props.modelValue.map((row) => (String(row.evaluation_criteria_id) === id ? { ...row, ...patch } : row)),
   );
 }
+
+function setCountInTotal(criterionId, countInTotal) {
+  if (countInTotal) {
+    updateRow(criterionId, { count_in_total: true, weight_percent: 10 });
+    return;
+  }
+  updateRow(criterionId, { count_in_total: false, weight_percent: 0 });
+}
+
+/** Chia đều 100% cho các tiêu chí TÍNH VÀO TỔNG ĐIỂM, bước 10 — dòng cuối nhận phần dư. */
+function distributeEvenly() {
+  const countedIds = new Set(countedRows.value.map((row) => String(row.evaluation_criteria_id)));
+  const count = countedIds.size;
+  if (count === 0) return;
+
+  const base = Math.max(10, Math.floor(100 / count / 10) * 10);
+  let countedIndex = 0;
+  const rows = props.modelValue.map((row) => {
+    if (!countedIds.has(String(row.evaluation_criteria_id))) {
+      return { ...row, weight_percent: 0, count_in_total: false };
+    }
+    const isLast = countedIndex === count - 1;
+    const weight_percent = isLast ? 100 - base * (count - 1) : base;
+    countedIndex += 1;
+    return { ...row, weight_percent };
+  });
+  emit('update:modelValue', rows);
+}
 </script>
 
 <template>
   <div class="evtpl-criteria-picker">
     <div class="evtpl-criteria-picker__list hide-scrollbar">
+      <span class="evtpl-criteria-picker__pane-title">Kho tiêu chí</span>
       <input
         v-model="query"
         type="search"
@@ -109,7 +176,9 @@ function updateRow(criterionId, patch) {
             <span class="evtpl-criteria-picker__copy">
               <span>
                 {{ criterion.name }}
-                <span class="evtpl-criteria-picker__dept">— {{ criterion.department?.name || '—' }}</span>
+                <span v-if="criterionDeptLabel(criterion)" class="evtpl-criteria-picker__dept">
+                  {{ criterionDeptLabel(criterion) }}
+                </span>
               </span>
               <span v-if="criterionScoreHint(criterion)" class="evtpl-criteria-picker__hint">
                 {{ criterionScoreHint(criterion) }}
@@ -121,15 +190,44 @@ function updateRow(criterionId, patch) {
     </div>
 
     <div class="evtpl-criteria-picker__selected hide-scrollbar">
+      <span class="evtpl-criteria-picker__pane-title">Tiêu chí trên mẫu</span>
+      <div v-if="modelValue.length > 0" class="evtpl-criteria-picker__summary">
+        <div class="evtpl-criteria-picker__summary-copy">
+          <span :class="['evtpl-criteria-picker__total', { 'evtpl-criteria-picker__total--warn': !weightIsBalanced }]">
+            Tổng trọng số: {{ totalWeightPercent }}% / 100%
+          </span>
+          <span class="evtpl-criteria-picker__count-meta">
+            {{ countedRows.length }} tính vào tổng điểm
+            <template v-if="skippedCount > 0"> · {{ skippedCount }} không cộng điểm</template>
+          </span>
+        </div>
+        <button
+          type="button"
+          class="evtpl-page__btn evtpl-page__btn--ghost evtpl-page__btn--sm"
+          :disabled="disabled || countedRows.length === 0"
+          @click="distributeEvenly"
+        >
+          Chia đều 100%
+        </button>
+      </div>
+
       <p v-if="modelValue.length === 0" class="evtpl-criteria-picker__empty">
         Chưa chọn tiêu chí nào. Chọn ở danh sách bên trái.
       </p>
-      <div v-for="row in modelValue" :key="row.evaluation_criteria_id" class="evtpl-criteria-row">
+      <div
+        v-for="row in modelValue"
+        :key="row.evaluation_criteria_id"
+        class="evtpl-criteria-row"
+        :class="{ 'evtpl-criteria-row--skipped': !row.count_in_total }"
+      >
         <div class="evtpl-criteria-row__head">
           <span class="evtpl-criteria-row__name">
             {{ criterionById(row.evaluation_criteria_id)?.name ?? '—' }}
-            <span class="evtpl-criteria-picker__dept">
-              — {{ criterionById(row.evaluation_criteria_id)?.department?.name || '—' }}
+            <span
+              v-if="criterionDeptLabel(criterionById(row.evaluation_criteria_id))"
+              class="evtpl-criteria-picker__dept"
+            >
+              {{ criterionDeptLabel(criterionById(row.evaluation_criteria_id)) }}
             </span>
             <span
               v-if="criterionScoreHint(criterionById(row.evaluation_criteria_id))"
@@ -149,38 +247,56 @@ function updateRow(criterionId, patch) {
           </button>
         </div>
         <div class="evtpl-criteria-row__fields">
-          <label class="evtpl-criteria-row__field">
+          <label v-if="row.count_in_total" class="evtpl-criteria-row__field">
             <span>Trọng số</span>
             <select
-              :value="row.weight_label"
+              :value="row.weight_percent"
               class="evtpl-page__input"
               :disabled="disabled"
-              @change="updateRow(row.evaluation_criteria_id, { weight_label: $event.target.value })"
+              @change="updateRow(row.evaluation_criteria_id, { weight_percent: Number($event.target.value) })"
             >
-              <option v-for="opt in weightOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              <option v-for="opt in WEIGHT_PERCENT_OPTIONS" :key="opt" :value="opt">{{ opt }}%</option>
             </select>
           </label>
+          <span v-else class="evtpl-criteria-row__skipped-weight">Không cộng điểm</span>
           <label class="evtpl-criteria-row__field">
             <span>Điểm yêu cầu</span>
-            <input
-              type="number"
-              min="0"
+            <select
+              :value="row.required_score === null || row.required_score === undefined ? '' : row.required_score"
               class="evtpl-page__input"
-              placeholder="Không bắt buộc"
-              :value="row.required_score"
               :disabled="disabled"
-              @input="updateRow(row.evaluation_criteria_id, { required_score: $event.target.value === '' ? null : Number($event.target.value) })"
-            />
+              @change="updateRow(row.evaluation_criteria_id, { required_score: $event.target.value === '' ? null : Number($event.target.value) })"
+            >
+              <option value="">Không bắt buộc</option>
+              <option
+                v-for="opt in requiredScoreOptions(criterionById(row.evaluation_criteria_id))"
+                :key="opt.value"
+                :value="opt.value"
+              >
+                {{ opt.label }}
+              </option>
+            </select>
           </label>
-          <label class="evtpl-criteria-row__checkbox">
-            <input
-              type="checkbox"
-              :checked="row.count_in_total"
-              :disabled="disabled"
-              @change="updateRow(row.evaluation_criteria_id, { count_in_total: $event.target.checked })"
-            />
-            <span>Tính vào tổng điểm</span>
-          </label>
+          <div class="evtpl-criteria-row__count">
+            <span :id="`evtpl-count-${row.evaluation_criteria_id}`" class="evtpl-criteria-row__count-label">
+              Tính vào tổng điểm
+            </span>
+            <div class="evtpl-criteria-row__count-control">
+              <button
+                type="button"
+                class="evtpl-form__switch"
+                :class="{ 'evtpl-form__switch--on': row.count_in_total }"
+                role="switch"
+                :aria-labelledby="`evtpl-count-${row.evaluation_criteria_id}`"
+                :aria-checked="row.count_in_total ? 'true' : 'false'"
+                :disabled="disabled"
+                @click="setCountInTotal(row.evaluation_criteria_id, !row.count_in_total)"
+              >
+                <span class="evtpl-form__switch-thumb" aria-hidden="true" />
+              </button>
+              <span class="evtpl-form__switch-text">{{ row.count_in_total ? 'Có' : 'Không' }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -192,7 +308,9 @@ function updateRow(criterionId, patch) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-4);
+  flex: 1;
   min-height: 16rem;
+  height: 100%;
 }
 
 .evtpl-criteria-picker__list,
@@ -201,11 +319,21 @@ function updateRow(criterionId, patch) {
   flex-direction: column;
   gap: var(--space-2);
   min-height: 0;
-  max-height: 24rem;
-  overflow-y: auto;
+  max-height: none;
+  height: 100%;
+  overflow: hidden;
   padding: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+}
+
+.evtpl-criteria-picker__pane-title {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
 }
 
 .evtpl-criteria-picker__options {
@@ -215,7 +343,45 @@ function updateRow(criterionId, patch) {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+}
+
+.evtpl-criteria-picker__selected {
+  overflow-y: auto;
+}
+
+.evtpl-criteria-picker__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  padding-bottom: var(--space-2);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.evtpl-criteria-picker__summary-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.evtpl-criteria-picker__total {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.evtpl-criteria-picker__total--warn {
+  color: var(--color-danger);
+}
+
+.evtpl-criteria-picker__count-meta {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
 }
 
 .evtpl-criteria-picker__option {
@@ -241,7 +407,7 @@ function updateRow(criterionId, patch) {
   gap: 1px;
 }
 
-/* Tên phòng ban nguồn — luôn hiện để phân biệt tiêu chí cùng tên giữa các phòng ban */
+/* Tên phòng ban nguồn — chỉ hiện khi mẫu dùng chung (pool nhiều phòng) */
 .evtpl-criteria-picker__dept {
   color: var(--color-text-muted);
   font-weight: 400;
@@ -263,12 +429,29 @@ function updateRow(criterionId, patch) {
 }
 
 .evtpl-criteria-row {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-2) + 3px + var(--space-3));
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.evtpl-criteria-row::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-success);
+}
+
+.evtpl-criteria-row--skipped::before {
+  background: var(--color-warning);
 }
 
 .evtpl-criteria-row__head {
@@ -303,13 +486,88 @@ function updateRow(criterionId, patch) {
   min-width: 8rem;
 }
 
-.evtpl-criteria-row__checkbox {
+.evtpl-criteria-row__count {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.evtpl-criteria-row__count-label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.evtpl-criteria-row__count-control {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
+  min-height: 2.375rem;
+}
+
+.evtpl-criteria-row__skipped-weight {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.375rem;
+  color: var(--color-warning-tint-fg, var(--color-warning));
   font-size: 0.8125rem;
-  color: var(--color-text);
+  font-weight: 600;
+  font-style: italic;
+}
+
+.evtpl-form__switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-text-muted) 35%, var(--color-surface-muted));
   cursor: pointer;
+}
+
+.evtpl-form__switch--on {
+  background: var(--color-success);
+}
+
+.evtpl-form__switch:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+.evtpl-form__switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.evtpl-form__switch-thumb {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease;
+}
+
+.evtpl-form__switch--on .evtpl-form__switch-thumb {
+  transform: translateX(1rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .evtpl-form__switch-thumb {
+    transition: none;
+  }
+}
+
+.evtpl-form__switch-text {
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* Tái dùng input chung của trang cha (khai báo lại vì scoped style không kế thừa) */
@@ -326,6 +584,40 @@ function updateRow(criterionId, patch) {
 .evtpl-page__input:focus {
   outline: 2px solid var(--color-primary-200);
   outline-offset: 1px;
+}
+
+.evtpl-page__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--color-on-primary, #fff);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.evtpl-page__btn--ghost {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.evtpl-page__btn--ghost:hover {
+  background: var(--color-border);
+}
+
+.evtpl-page__btn--sm {
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.evtpl-page__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .evtpl-page__icon-btn {
@@ -358,6 +650,7 @@ function updateRow(criterionId, patch) {
 @media (max-width: 1279px) {
   .evtpl-criteria-picker {
     grid-template-columns: 1fr;
+    min-height: 20rem;
   }
 }
 </style>

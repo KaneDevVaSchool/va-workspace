@@ -11,20 +11,6 @@ import EvaluationCriteriaPicker from './EvaluationCriteriaPicker.vue';
 import EvaluationCustomFieldsEditor from './EvaluationCustomFieldsEditor.vue';
 import EvaluationPositionPicker from './EvaluationPositionPicker.vue';
 
-const WEIGHT_OPTIONS = [
-  { value: 'khong_quan_trong', label: 'Không quan trọng' },
-  { value: 'quan_trong', label: 'Quan trọng' },
-  { value: 'kha_quan_trong', label: 'Khá quan trọng' },
-  { value: 'rat_quan_trong', label: 'Rất quan trọng' },
-];
-
-const CUSTOM_FIELD_TYPES = [
-  { value: 'text', label: 'Chữ' },
-  { value: 'number', label: 'Số' },
-  { value: 'select', label: 'Lựa chọn' },
-  { value: 'date', label: 'Ngày' },
-];
-
 const props = defineProps({
   open: { type: Boolean, default: false },
   template: { type: Object, default: null },
@@ -35,7 +21,7 @@ const props = defineProps({
   canManageGlobal: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['update:open', 'updated', 'position-created', 'request-global-pool']);
+const emit = defineEmits(['update:open', 'updated', 'request-global-pool']);
 
 const form = reactive({
   id: '',
@@ -54,17 +40,6 @@ const criteriaPool = computed(() => (form.is_global ? props.globalCriteriaPool :
 
 const submitLabel = computed(() => (formSaving.value ? 'Đang lưu…' : 'Lưu mẫu'));
 
-// ─── dialog quick-add vị trí đánh giá (state cục bộ) ───────────────────────
-
-const positionDialogOpen = ref(false);
-const positionFormSaving = ref(false);
-const positionFormErrors = ref({});
-const positionForm = reactive({ name: '', kind: 'position', description: '' });
-
-const positionNamePlaceholder = computed(() =>
-  positionForm.kind === 'department' ? 'VD: Phòng Kế toán' : 'VD: Trưởng phòng Marketing',
-);
-
 function fillForm(template) {
   if (!template) return;
   form.id = template.id;
@@ -73,18 +48,23 @@ function fillForm(template) {
   form.is_active = template.is_active;
   form.criteria = (template.criteria ?? []).map((c) => ({
     evaluation_criteria_id: c.evaluation_criteria_id,
-    weight_label: c.weight_label,
+    weight_percent: c.weight_percent,
     required_score: c.required_score,
-    count_in_total: c.count_in_total,
+    count_in_total: c.count_in_total !== false,
   }));
   form.position_ids = (template.positions ?? []).map((p) => p.id);
   form.is_global = Boolean(template.is_global);
-  form.custom_fields = (template.custom_fields ?? []).map((f) => ({
-    label: f.label,
-    field_type: f.field_type,
-    options: Array.isArray(f.options) ? [...f.options] : [],
-    is_required: Boolean(f.is_required),
-  }));
+  form.custom_fields = (template.custom_fields ?? []).map((f) => {
+    let fieldType = f.field_type;
+    if (fieldType === 'number') fieldType = 'bonus';
+    if (fieldType === 'select' || fieldType === 'date') fieldType = 'text';
+    return {
+      label: f.label,
+      field_type: fieldType,
+      options: [],
+      is_required: Boolean(f.is_required),
+    };
+  });
   formErrors.value = {};
   if (form.is_global) emit('request-global-pool');
 }
@@ -94,62 +74,24 @@ function closeDialog() {
   emit('update:open', false);
 }
 
-function openPositionDialog() {
-  positionForm.name = '';
-  positionForm.kind = 'position';
-  positionForm.description = '';
-  positionFormErrors.value = {};
-  positionDialogOpen.value = true;
-  nextTick(() => document.getElementById('evtpl-edit-position-name')?.focus());
-}
-
-function closePositionDialog() {
-  if (positionFormSaving.value) return;
-  positionDialogOpen.value = false;
-}
-
-async function submitPosition() {
-  if (!positionForm.name.trim()) {
-    positionFormErrors.value = { name: 'Tên vị trí đánh giá là bắt buộc.' };
-    return;
-  }
-  positionFormErrors.value = {};
-  positionFormSaving.value = true;
-  try {
-    const { data } = await window.axios.post('/api/evaluation/positions', {
-      name: positionForm.name.trim(),
-      kind: positionForm.kind,
-      description: positionForm.description.trim() || null,
-    });
-    emit('position-created', data.position);
-    form.position_ids = [...form.position_ids, data.position.id];
-    showClientToast('success', `Đã tạo vị trí «${data.position.name}».`);
-    positionDialogOpen.value = false;
-  } catch (err) {
-    if (err?.response?.status === 422) {
-      positionFormErrors.value = err.response.data?.errors ?? {};
-      const msg = err.response.data?.message;
-      if (msg) showClientToast('error', msg);
-    } else {
-      showClientToast('error', err?.response?.data?.message || 'Không tạo được vị trí đánh giá.');
-    }
-  } finally {
-    positionFormSaving.value = false;
-  }
-}
-
 async function submitForm() {
   if (form.criteria.length === 0) {
     showClientToast('error', 'Mẫu đánh giá phải có ít nhất 1 tiêu chí.');
     return;
   }
+  const counted = form.criteria.filter((row) => row.count_in_total);
+  if (counted.length === 0) {
+    showClientToast('error', 'Phải có ít nhất 1 tiêu chí tính vào tổng điểm.');
+    return;
+  }
+  const totalWeight = counted.reduce((sum, row) => sum + (Number(row.weight_percent) || 0), 0);
+  if (totalWeight !== 100) {
+    showClientToast('error', `Tổng trọng số các tiêu chí tính vào tổng điểm phải bằng 100% (hiện đang là ${totalWeight}%).`);
+    return;
+  }
   for (const field of form.custom_fields) {
     if (!field.label.trim()) {
       showClientToast('error', 'Trường tùy biến phải có nhãn hiển thị.');
-      return;
-    }
-    if (field.field_type === 'select' && field.options.filter((o) => o.trim()).length === 0) {
-      showClientToast('error', `Trường "${field.label}" kiểu lựa chọn phải có ít nhất 1 tùy chọn.`);
       return;
     }
   }
@@ -163,7 +105,7 @@ async function submitForm() {
     is_active: form.is_active,
     criteria: form.criteria.map((row) => ({
       evaluation_criteria_id: row.evaluation_criteria_id,
-      weight_label: row.weight_label,
+      weight_percent: row.count_in_total ? row.weight_percent : 0,
       required_score: row.required_score === '' ? null : row.required_score,
       count_in_total: Boolean(row.count_in_total),
     })),
@@ -171,7 +113,7 @@ async function submitForm() {
     custom_fields: form.custom_fields.map((field) => ({
       label: field.label.trim(),
       field_type: field.field_type,
-      options: field.field_type === 'select' ? field.options.map((o) => o.trim()).filter(Boolean) : null,
+      options: null,
       is_required: Boolean(field.is_required),
     })),
   };
@@ -196,10 +138,6 @@ async function submitForm() {
 
 function handleKeydown(e) {
   if (e.key !== 'Escape') return;
-  if (positionDialogOpen.value) {
-    closePositionDialog();
-    return;
-  }
   closeDialog();
 }
 
@@ -224,7 +162,7 @@ watch(
         @mousedown.self="closeDialog"
         @keydown="handleKeydown"
       >
-        <div class="evtpl-dialog__panel" role="dialog" aria-modal="true" aria-labelledby="evtpl-edit-title">
+        <div class="evtpl-dialog__panel evtpl-dialog__panel--fill" role="dialog" aria-modal="true" aria-labelledby="evtpl-edit-title">
           <div class="evtpl-dialog__head">
             <span class="evtpl-dialog__icon" aria-hidden="true">
               <AppIcon name="clipboardCheck" :size="22" :stroke-width="1.75" />
@@ -235,62 +173,67 @@ watch(
             </button>
           </div>
 
-          <div class="evtpl-dialog__body hide-scrollbar">
-            <div class="evtpl-form">
-              <div class="evtpl-form__field evtpl-form__field--name">
-                <label class="evtpl-form__label" for="evtpl-edit-name">
-                  Tên mẫu đánh giá <span class="evtpl-form__required">*</span>
-                </label>
-                <input
-                  id="evtpl-edit-name"
-                  v-model="form.name"
-                  type="text"
-                  class="evtpl-page__input"
-                  :class="{ 'evtpl-page__input--error': formErrors.name }"
-                  placeholder="VD: Đánh giá năng lực trưởng phòng Marketing…"
-                  maxlength="255"
-                  :disabled="formSaving"
-                />
-                <span v-if="formErrors.name" class="evtpl-form__error">
-                  {{ Array.isArray(formErrors.name) ? formErrors.name[0] : formErrors.name }}
-                </span>
-              </div>
+          <div class="evtpl-dialog__body">
+            <div class="evtpl-form hide-scrollbar">
+              <div class="evtpl-form__section evtpl-form__section--general">
+                <span class="evtpl-form__section-title">Thông tin chung</span>
+                <div class="evtpl-form__section-grid">
+                  <div class="evtpl-form__field evtpl-form__field--name">
+                    <label class="evtpl-form__label" for="evtpl-edit-name">
+                      Tên mẫu đánh giá <span class="evtpl-form__required">*</span>
+                    </label>
+                    <input
+                      id="evtpl-edit-name"
+                      v-model="form.name"
+                      type="text"
+                      class="evtpl-page__input"
+                      :class="{ 'evtpl-page__input--error': formErrors.name }"
+                      placeholder="VD: Đánh giá năng lực trưởng phòng Marketing…"
+                      maxlength="255"
+                      :disabled="formSaving"
+                    />
+                    <span v-if="formErrors.name" class="evtpl-form__error">
+                      {{ Array.isArray(formErrors.name) ? formErrors.name[0] : formErrors.name }}
+                    </span>
+                  </div>
 
-              <div class="evtpl-form__field evtpl-form__field--status">
-                <div class="evtpl-form__switch-row">
-                  <span id="evtpl-edit-status-label" class="evtpl-form__label">Trạng thái</span>
-                  <button
-                    type="button"
-                    class="evtpl-form__switch"
-                    :class="{ 'evtpl-form__switch--on': form.is_active }"
-                    role="switch"
-                    aria-labelledby="evtpl-edit-status-label"
-                    :aria-checked="form.is_active ? 'true' : 'false'"
-                    :disabled="formSaving"
-                    @click="form.is_active = !form.is_active"
-                  >
-                    <span class="evtpl-form__switch-thumb" aria-hidden="true" />
-                  </button>
-                  <span class="evtpl-form__switch-text">{{ form.is_active ? 'Hoạt động' : 'Không hoạt động' }}</span>
+                  <div class="evtpl-form__field evtpl-form__field--status">
+                    <span id="evtpl-edit-status-label" class="evtpl-form__label">Trạng thái</span>
+                    <div class="evtpl-form__switch-row">
+                      <button
+                        type="button"
+                        class="evtpl-form__switch"
+                        :class="{ 'evtpl-form__switch--on': form.is_active }"
+                        role="switch"
+                        aria-labelledby="evtpl-edit-status-label"
+                        :aria-checked="form.is_active ? 'true' : 'false'"
+                        :disabled="formSaving"
+                        @click="form.is_active = !form.is_active"
+                      >
+                        <span class="evtpl-form__switch-thumb" aria-hidden="true" />
+                      </button>
+                      <span class="evtpl-form__switch-text">{{ form.is_active ? 'Hoạt động' : 'Không hoạt động' }}</span>
+                    </div>
+                  </div>
+
+                  <div class="evtpl-form__field evtpl-form__field--desc">
+                    <label class="evtpl-form__label" for="evtpl-edit-desc">Mô tả</label>
+                    <textarea
+                      id="evtpl-edit-desc"
+                      v-model="form.description"
+                      class="evtpl-page__textarea"
+                      rows="2"
+                      placeholder="Ghi chú cách áp dụng mẫu đánh giá…"
+                      maxlength="1000"
+                      :disabled="formSaving"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div class="evtpl-form__field evtpl-form__field--desc">
-                <label class="evtpl-form__label" for="evtpl-edit-desc">Mô tả</label>
-                <textarea
-                  id="evtpl-edit-desc"
-                  v-model="form.description"
-                  class="evtpl-page__textarea"
-                  rows="2"
-                  placeholder="Ghi chú cách áp dụng mẫu đánh giá…"
-                  maxlength="1000"
-                  :disabled="formSaving"
-                />
-              </div>
-
               <div class="evtpl-form__field evtpl-form__field--criteria">
-                <span class="evtpl-form__label">
-                  Danh sách tiêu chí đánh giá <span class="evtpl-form__required">*</span>
+                <span class="evtpl-form__section-title">
+                  Tiêu chí đánh giá &amp; trọng số <span class="evtpl-form__required">*</span>
                 </span>
                 <p v-if="form.is_global" class="evtpl-page__note">
                   Mẫu này dùng chung toàn hệ thống — được chọn tiêu chí của mọi phòng ban.
@@ -301,29 +244,23 @@ watch(
                   :is-global="form.is_global"
                   :disabled="formSaving"
                   :loading="form.is_global && loadingGlobalPool"
-                  :weight-options="WEIGHT_OPTIONS"
                 />
               </div>
 
               <div class="evtpl-form__field evtpl-form__field--positions">
-                <span class="evtpl-form__label">Vị trí đánh giá</span>
+                <span class="evtpl-form__section-title">Vị trí đánh giá</span>
                 <EvaluationPositionPicker
                   v-model="form.position_ids"
                   :positions="allPositions"
                   :disabled="formSaving"
-                  @request-create="openPositionDialog"
                 />
               </div>
 
               <div class="evtpl-form__field evtpl-form__field--custom-fields">
-                <span class="evtpl-form__label">Trường tùy biến</span>
-                <p class="evtpl-page__note">
-                  Thêm field ngoài bộ tiêu chí chuẩn (ví dụ "Nhận xét thêm của quản lý"). Sẽ dùng khi có phiếu đánh giá.
-                </p>
+                <span class="evtpl-form__section-title">Trường tùy biến</span>
                 <EvaluationCustomFieldsEditor
                   v-model="form.custom_fields"
                   :disabled="formSaving"
-                  :field-types="CUSTOM_FIELD_TYPES"
                 />
               </div>
             </div>
@@ -340,93 +277,6 @@ watch(
         </div>
       </div>
     </Transition>
-  </Teleport>
-
-  <!-- ── dialog nhỏ: thêm vị trí đánh giá nhanh ──────────────────────────── -->
-  <Teleport to="body">
-    <div
-      v-if="positionDialogOpen"
-      class="evtpl-confirm-overlay"
-      role="presentation"
-      @mousedown.self="closePositionDialog"
-    >
-      <div class="evtpl-confirm" role="dialog" aria-modal="true" aria-labelledby="evtpl-edit-position-title">
-        <h3 id="evtpl-edit-position-title" class="evtpl-confirm__title">Thêm vị trí đánh giá</h3>
-
-        <div class="evtpl-form__field" style="margin-bottom: var(--space-3)">
-          <span class="evtpl-form__label" id="evtpl-edit-position-kind-label">Loại vị trí</span>
-          <div class="evtpl-form__seg" role="radiogroup" aria-labelledby="evtpl-edit-position-kind-label">
-            <label class="evtpl-form__seg-opt" :class="{ 'evtpl-form__seg-opt--on': positionForm.kind === 'position' }">
-              <input
-                class="evtpl-form__seg-input"
-                type="radio"
-                :checked="positionForm.kind === 'position'"
-                :disabled="positionFormSaving"
-                @change="positionForm.kind = 'position'"
-              />
-              Chức danh
-            </label>
-            <label class="evtpl-form__seg-opt" :class="{ 'evtpl-form__seg-opt--on': positionForm.kind === 'department' }">
-              <input
-                class="evtpl-form__seg-input"
-                type="radio"
-                :checked="positionForm.kind === 'department'"
-                :disabled="positionFormSaving"
-                @change="positionForm.kind = 'department'"
-              />
-              Phòng ban
-            </label>
-          </div>
-        </div>
-
-        <div class="evtpl-form__field" style="margin-bottom: var(--space-3)">
-          <label class="evtpl-form__label" for="evtpl-edit-position-name">
-            Tên vị trí <span class="evtpl-form__required">*</span>
-          </label>
-          <!--
-            Ô nhập tên hiện là tự do (free text). Tương lai sẽ nối API VA-HRM
-            để autocomplete theo đúng loại (chức danh hoặc phòng ban) — khi
-            có, định danh HRM sẽ lưu vào cột hrm_position_uuid đã có sẵn ở
-            bảng evaluation_positions, không cần thêm cột mới.
-          -->
-          <input
-            id="evtpl-edit-position-name"
-            v-model="positionForm.name"
-            type="text"
-            class="evtpl-page__input"
-            :class="{ 'evtpl-page__input--error': positionFormErrors.name }"
-            :placeholder="positionNamePlaceholder"
-            maxlength="255"
-            :disabled="positionFormSaving"
-            @keydown.enter="submitPosition"
-          />
-          <span v-if="positionFormErrors.name" class="evtpl-form__error">
-            {{ Array.isArray(positionFormErrors.name) ? positionFormErrors.name[0] : positionFormErrors.name }}
-          </span>
-        </div>
-
-        <div class="evtpl-form__field">
-          <label class="evtpl-form__label" for="evtpl-edit-position-desc">Mô tả</label>
-          <textarea
-            id="evtpl-edit-position-desc"
-            v-model="positionForm.description"
-            class="evtpl-page__textarea"
-            rows="2"
-            maxlength="1000"
-            :disabled="positionFormSaving"
-          />
-        </div>
-
-        <div class="evtpl-confirm__actions">
-          <button type="button" class="evtpl-page__btn" :disabled="positionFormSaving" @click="submitPosition">
-            {{ positionFormSaving ? 'Đang tạo…' : 'Tạo vị trí' }}
-          </button>
-          <button type="button" class="evtpl-page__btn evtpl-page__btn--ghost" :disabled="positionFormSaving" @click="closePositionDialog">
-            Huỷ
-          </button>
-        </div>
-      </div>
-    </div>
   </Teleport>
 </template>
 
@@ -454,10 +304,12 @@ watch(
   opacity: 0;
 }
 
-.evtpl-dialog__panel {
+.evtpl-dialog__panel,
+.evtpl-dialog__panel--fill {
   display: flex;
   flex-direction: column;
   width: min(90rem, calc(100vw - 2.5rem));
+  max-width: calc(100vw - 2.5rem);
   height: calc(100vh - 2.5rem);
   max-height: calc(100vh - 2.5rem);
   overflow: hidden;
@@ -515,8 +367,11 @@ watch(
 
 .evtpl-dialog__body {
   flex: 1;
+  min-width: 0;
   min-height: 0;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: var(--space-5);
 }
 
@@ -531,23 +386,74 @@ watch(
 
 /* Form ngang 2-3 cột (form-modal skill) */
 .evtpl-form {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto minmax(20rem, 1fr) auto;
+  grid-template-areas:
+    'general general'
+    'criteria criteria'
+    'positions custom-fields';
+  gap: var(--space-5);
+  align-content: stretch;
+}
+
+/* Khối "Thông tin chung" — gom name/status/desc, tách khỏi các khối dưới
+   bằng tiêu đề nhỏ + đường kẻ mỏng (CLAUDE.md §2, không border 1 cạnh). */
+.evtpl-form__section--general {
+  grid-area: general;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.evtpl-form__section-title {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.evtpl-form__section-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   grid-template-areas:
     'name name status'
-    'desc desc desc'
-    'criteria criteria criteria'
-    'positions positions positions'
-    'custom-fields custom-fields custom-fields';
+    'desc desc desc';
   gap: var(--space-4);
 }
 
 .evtpl-form__field--name { grid-area: name; }
 .evtpl-form__field--status { grid-area: status; }
 .evtpl-form__field--desc { grid-area: desc; }
-.evtpl-form__field--criteria { grid-area: criteria; }
-.evtpl-form__field--positions { grid-area: positions; }
-.evtpl-form__field--custom-fields { grid-area: custom-fields; }
+.evtpl-form__field--criteria {
+  grid-area: criteria;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+.evtpl-form__field--criteria :deep(.evtpl-criteria-picker) {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+.evtpl-form__field--positions {
+  grid-area: positions;
+  min-height: 0;
+}
+.evtpl-form__field--custom-fields {
+  grid-area: custom-fields;
+  min-height: 0;
+}
 
 .evtpl-form__field {
   display: flex;
@@ -577,7 +483,6 @@ watch(
   align-items: center;
   gap: var(--space-2);
   height: 100%;
-  padding-top: 1.375rem;
 }
 
 .evtpl-form__switch {
@@ -631,37 +536,6 @@ watch(
   color: var(--color-text);
   font-size: 0.8125rem;
   font-weight: 600;
-}
-
-.evtpl-form__seg {
-  display: inline-flex;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  width: fit-content;
-}
-
-.evtpl-form__seg-opt {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 0.5rem 0.875rem;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.evtpl-form__seg-opt--on {
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
-  font-weight: 600;
-}
-
-.evtpl-form__seg-input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
 }
 
 .evtpl-page__note {
@@ -732,53 +606,25 @@ watch(
   background: var(--color-border);
 }
 
-/* ── confirm nhỏ (dialog quick-add vị trí) ───────────────────────────── */
-
-.evtpl-confirm-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-4);
-  background: var(--color-sidebar-overlay, rgba(0, 0, 0, 0.4));
-}
-
-.evtpl-confirm {
-  width: min(24rem, 100%);
-  padding: var(--space-5);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
-}
-
-.evtpl-confirm__title {
-  margin: 0 0 var(--space-2);
-  color: var(--color-text);
-  font-size: 1.0625rem;
-  font-weight: 700;
-}
-
-.evtpl-confirm__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-}
-
 /* ── responsive ─────────────────────────────────────────────────────── */
 
 @media (max-width: 1279px) {
   .evtpl-form {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(16rem, 1fr) auto auto;
     grid-template-areas:
-      'name'
-      'status'
-      'desc'
+      'general'
       'criteria'
       'positions'
       'custom-fields';
+  }
+
+  .evtpl-form__section-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'name'
+      'status'
+      'desc';
   }
 }
 
@@ -787,10 +633,12 @@ watch(
     padding: var(--space-2);
   }
 
-  .evtpl-dialog__panel {
+  .evtpl-dialog__panel,
+  .evtpl-dialog__panel--fill {
     width: 100%;
-    height: calc(100vh - 1rem);
-    max-height: calc(100vh - 1rem);
+    max-width: 100%;
+    height: min(94vh, calc(100vh - 1.25rem));
+    max-height: min(94vh, calc(100vh - 1.25rem));
   }
 }
 </style>

@@ -120,16 +120,8 @@ Route::prefix('evaluation')->name('evaluation.')->group(function () {
             ->name('templates.destroy');
     });
 
-    // ── Vị trí đánh giá (PR3) — danh mục dùng chung toàn hệ thống ──────
+    // ── Vị trí đánh giá — danh mục dùng chung toàn hệ thống, CHỈ ĐỌC.
+    // Không còn tạo/sửa/xoá tay ở đây — sẽ nối API VA-HRM sau này.
     Route::get('/positions', [EvaluationPositionController::class, 'index'])
         ->name('positions.index');
-
-    Route::post('/positions', [EvaluationPositionController::class, 'store'])
-        ->name('positions.store');
-
-    Route::put('/positions/{id}', [EvaluationPositionController::class, 'update'])
-        ->name('positions.update');
-
-    Route::delete('/positions/{id}', [EvaluationPositionController::class, 'destroy'])
-        ->name('positions.destroy');
 });

@@ -106,19 +106,34 @@ class EvaluationTemplateSeeder extends Seeder
         $template->positions()->sync($positionIds);
     }
 
-    /** @param  \Illuminate\Support\Collection<int, EvaluationCriteria>  $criteria */
+    /**
+     * Chia đều 100% trọng số cho các tiêu chí demo — dòng cuối nhận phần dư
+     * (bội số 10) để tổng luôn đúng 100, giống nút "Chia đều" ở UI.
+     *
+     * @param  \Illuminate\Support\Collection<int, EvaluationCriteria>  $criteria
+     */
     private function syncCriteria(EvaluationTemplate $template, $criteria): void
     {
         EvaluationTemplateCriterion::query()
             ->where('evaluation_template_id', $template->id)
             ->delete();
 
+        $count = $criteria->count();
+        if ($count === 0) {
+            return;
+        }
+
+        $base = (int) floor(100 / $count / 10) * 10;
+        $base = max($base, 10);
+
         foreach ($criteria->values() as $index => $criterion) {
+            $isLast = $index === $count - 1;
+            $weightPercent = $isLast ? 100 - ($base * ($count - 1)) : $base;
+
             EvaluationTemplateCriterion::query()->create([
                 'evaluation_template_id' => $template->id,
                 'evaluation_criteria_id' => $criterion->id,
-                'weight_label'           => 'quan_trong',
-                'weight_value'           => EvaluationTemplateCriterion::WEIGHT_MAP['quan_trong'],
+                'weight_percent'         => $weightPercent,
                 'required_score'         => null,
                 'count_in_total'         => true,
                 'sort_order'             => $index,

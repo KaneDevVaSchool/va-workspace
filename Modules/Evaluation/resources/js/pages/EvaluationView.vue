@@ -28,14 +28,15 @@ const COLUMNS = [
 ];
 
 const FILTERS = [
-  { key: 'q',    label: 'Tìm kiếm',  defaultOn: true },
-  { key: 'kind', label: 'Loại',      defaultOn: true },
-  { key: 'type', label: 'Cách chấm', defaultOn: true },
+  { key: 'q',          label: 'Tìm kiếm',  defaultOn: true },
+  { key: 'department', label: 'Phòng ban', defaultOn: true, viewAllOnly: true },
+  { key: 'kind',       label: 'Loại',      defaultOn: true },
+  { key: 'type',       label: 'Cách chấm', defaultOn: true },
 ];
 
 const TYPE_LABELS = { scale: 'Thang điểm', behavior: 'Cộng/trừ' };
 const COL_KEY    = 'va-eval-view-columns-v1';
-const FILTER_KEY = 'va-eval-view-filters-v1';
+const FILTER_KEY = 'va-eval-view-filters-v2';
 const WIDTH_KEY  = 'va-eval-view-widths-v2';
 const ZOOM_KEY   = 'va-eval-view-zoom';
 
@@ -58,9 +59,11 @@ const selected       = ref(null);
 const exporting      = ref(false);
 const exportingPdf   = ref(false);
 
-const query      = ref('');
-const kindFilter = ref('');
-const typeFilter = ref('');
+const departments = ref([]);
+const query           = ref('');
+const departmentFilter = ref('');
+const kindFilter      = ref('');
+const typeFilter      = ref('');
 const page       = ref(1);
 const perPage    = ref(20);
 
@@ -81,6 +84,31 @@ const typeGroupCollapsed = reactive({});
 // ─── computed ─────────────────────────────────────────────────────────────────
 
 const hasDepartment = computed(() => Boolean(auth.user?.department?.id));
+const canViewAll = computed(() => auth.can('workspace_config.view_all'));
+
+const filterDefinitions = computed(() =>
+  FILTERS.filter((item) => !item.viewAllOnly || canViewAll.value),
+);
+
+/** Phòng ban đang xem — manager: PB của user; superadmin: chọn từ dropdown. */
+const activeDepartmentId = computed(() => {
+  if (canViewAll.value) {
+    return departmentFilter.value ? Number(departmentFilter.value) : null;
+  }
+  const id = auth.user?.department?.id;
+  return id ? Number(id) : null;
+});
+
+const canLoadCriteria = computed(() => Boolean(activeDepartmentId.value));
+
+const selectedDepartmentName = computed(() => {
+  const id = activeDepartmentId.value;
+  if (!id) return '';
+  const fromList = departments.value.find((d) => Number(d.id) === id);
+  if (fromList?.name) return fromList.name;
+  if (Number(auth.user?.department?.id) === id) return auth.user?.department?.name ?? '';
+  return '';
+});
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase();
@@ -110,13 +138,13 @@ const hasActiveFilters = computed(() =>
 );
 
 const hasVisibleFilterFields = computed(() =>
-  FILTERS.some((item) => visibleFilters[item.key]),
+  filterDefinitions.value.some((item) => visibleFilters[item.key]),
 );
 
 const hiddenActiveFilterLabels = computed(() =>
-  FILTERS.filter((item) => !visibleFilters[item.key] && filterHasValue(item.key)).map(
-    (item) => item.label,
-  ),
+  filterDefinitions.value
+    .filter((item) => !visibleFilters[item.key] && filterHasValue(item.key))
+    .map((item) => item.label),
 );
 
 const shownColumns = computed(() => COLUMNS.filter((col) => visibleColumns[col.key]));
@@ -211,6 +239,7 @@ function filterHasValue(key) {
   if (key === 'q') return Boolean(query.value.trim());
   if (key === 'kind') return Boolean(kindFilter.value);
   if (key === 'type') return Boolean(typeFilter.value);
+  if (key === 'department') return Boolean(canViewAll.value && departmentFilter.value);
   return false;
 }
 
@@ -384,17 +413,34 @@ function startResize(event, colKey) {
 
 // ─── API ────────────────────────────────────────────────────────────────────
 
+function apiDepartmentParams() {
+  if (!canViewAll.value || !departmentFilter.value) return {};
+  return { department_id: departmentFilter.value };
+}
+
+async function loadDepartments() {
+  if (!canViewAll.value) return;
+  try {
+    const { data } = await window.axios.get('/manager/departments');
+    departments.value = data.departments ?? [];
+  } catch (err) {
+    const msg = err?.response?.data?.message;
+    showClientToast('error', msg || 'Không tải được danh sách phòng ban.');
+  }
+}
+
 async function load() {
-  if (!hasDepartment.value) {
+  if (!canLoadCriteria.value) {
     allCriteria.value = [];
     criterionTypes.value = [];
     return;
   }
   loading.value = true;
+  const deptParams = apiDepartmentParams();
   try {
     const [criteriaRes, typesRes] = await Promise.all([
-      window.axios.get('/api/evaluation/criteria'),
-      window.axios.get('/api/evaluation/criterion-types'),
+      window.axios.get('/api/evaluation/criteria', { params: deptParams }),
+      window.axios.get('/api/evaluation/criterion-types', { params: deptParams }),
     ]);
     allCriteria.value = criteriaRes.data.criteria ?? [];
     criterionTypes.value = typesRes.data.types ?? [];
@@ -418,6 +464,7 @@ function closePanel() {
 
 function currentExportParams() {
   return {
+    ...apiDepartmentParams(),
     q: query.value.trim(),
     kind: kindFilter.value,
     type: typeFilter.value,
@@ -519,9 +566,19 @@ function handleKeydown(e) {
 
 watch(shownColumns, () => nextTick(fitColumnsToContent));
 watch(tableZoom, () => nextTick(fitColumnsToContent));
+watch(departmentFilter, () => {
+  page.value = 1;
+  kindFilter.value = '';
+  selected.value = null;
+  load();
+});
 
 onMounted(async () => {
   document.addEventListener('keydown', handleKeydown);
+  if (auth.user?.department?.id) {
+    departmentFilter.value = String(auth.user.department.id);
+  }
+  await loadDepartments();
   await load();
   document.fonts?.ready?.then(() => nextTick(fitColumnsToContent));
 });
@@ -536,9 +593,15 @@ onBeforeUnmount(() => {
     <PageHeader
       title="Tiêu chí đánh giá"
       icon="clipboardCheck"
-      description="Tiêu chí đánh giá đang áp dụng cho phòng ban của bạn."
+      :description="
+        canViewAll
+          ? (selectedDepartmentName
+            ? `Tiêu chí đánh giá đang áp dụng — ${selectedDepartmentName}.`
+            : 'Chọn phòng ban để xem tiêu chí đánh giá.')
+          : 'Tiêu chí đánh giá đang áp dụng cho phòng ban của bạn.'
+      "
       export-label="Dữ liệu"
-      :export-options="hasDepartment ? exportOptions : []"
+      :export-options="canLoadCriteria ? exportOptions : []"
       :export-busy-key="exporting ? 'excel' : exportingPdf ? 'pdf' : undefined"
     />
 
@@ -555,6 +618,15 @@ onBeforeUnmount(() => {
               placeholder="Tên tiêu chí, loại…"
               @keydown.enter="page = 1"
             />
+          </div>
+          <div v-if="canViewAll && visibleFilters.department" class="eval-view__field">
+            <label class="eval-view__label" for="eval-view-department">Phòng ban</label>
+            <select id="eval-view-department" v-model="departmentFilter" class="eval-view__input">
+              <option value="">— Chọn phòng ban —</option>
+              <option v-for="dept in departments" :key="dept.id" :value="String(dept.id)">
+                {{ dept.name }}
+              </option>
+            </select>
           </div>
           <div v-if="visibleFilters.kind" class="eval-view__field">
             <label class="eval-view__label" for="eval-view-kind">Loại</label>
@@ -595,7 +667,7 @@ onBeforeUnmount(() => {
         @update:zoom="tableZoom = $event; saveZoom($event)"
       >
         <template #filters>
-          <label v-for="item in FILTERS" :key="item.key" class="eval-view__check">
+          <label v-for="item in filterDefinitions" :key="item.key" class="eval-view__check">
             <input
               type="checkbox"
               :checked="visibleFilters[item.key]"
@@ -626,7 +698,11 @@ onBeforeUnmount(() => {
         :class="{ 'eval-view__table-wrap--resizing': resizing }"
         :style="{ '--table-zoom': tableZoom }"
       >
-        <p v-if="!hasDepartment" class="eval-view__empty">
+        <p v-if="canViewAll && !departmentFilter" class="eval-view__empty">
+          Chọn phòng ban ở bộ lọc phía trên để xem tiêu chí.
+        </p>
+
+        <p v-else-if="!canViewAll && !hasDepartment" class="eval-view__empty">
           Tài khoản chưa gắn với phòng ban nào.
         </p>
 
@@ -858,7 +934,7 @@ onBeforeUnmount(() => {
 
 .eval-view__filters {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-3);
   width: 100%;
 }
@@ -879,6 +955,7 @@ onBeforeUnmount(() => {
 
 .eval-view__input {
   width: 100%;
+  min-width: 0;
   padding: 0.4375rem 0.625rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -1215,10 +1292,20 @@ onBeforeUnmount(() => {
 .eval-view__level-score--neg { color: var(--color-danger); }
 
 /* ─── responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .eval-view__filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 768px) {
   .eval-view { flex-direction: column; padding: var(--space-3); }
-  .eval-view__filters { grid-template-columns: 1fr; }
+  .eval-view__filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .eval-view__panel { width: 100%; flex: 1 1 auto; }
+}
+
+@media (max-width: 480px) {
+  .eval-view__filters { grid-template-columns: minmax(0, 1fr); }
 }
 
 </style>
