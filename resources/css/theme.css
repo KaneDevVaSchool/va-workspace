@@ -51,6 +51,44 @@
   --color-secondary-surface-strong: var(--color-secondary-100);
   --color-on-secondary: #ffffff;
 
+  /* ---------- Màu phụ 2 (Tertiary) - xanh dương #1750b5, phối cùng Primary/Secondary ---------- */
+  --color-tertiary: #1750b5;
+  --color-tertiary-50: #eaf1fb;
+  --color-tertiary-100: #d5e3f7;
+  --color-tertiary-200: #abc7ef;
+  --color-tertiary-300: #81abe7;
+  --color-tertiary-400: #578fdf;
+  --color-tertiary-500: #2d73d7;
+  --color-tertiary-600: #1750b5;
+  --color-tertiary-700: #124291;
+  --color-tertiary-800: #0e336f;
+  --color-tertiary-900: #09244e;
+
+  --color-tertiary-hover: var(--color-tertiary-700);
+  --color-tertiary-active: var(--color-tertiary-800);
+  --color-tertiary-surface: var(--color-tertiary-50);
+  --color-tertiary-surface-strong: var(--color-tertiary-100);
+  --color-on-tertiary: #ffffff;
+
+  /* ---------- Màu nhấn (Gold) - vàng đồng #c49c57, dùng cho mức độ quan trọng/nổi bật ---------- */
+  --color-gold: #c49c57;
+  --color-gold-50: #faf5ec;
+  --color-gold-100: #f3e7d1;
+  --color-gold-200: #e7cea3;
+  --color-gold-300: #dbb675;
+  --color-gold-400: #d0a565;
+  --color-gold-500: #c49c57;
+  --color-gold-600: #a67f42;
+  --color-gold-700: #816332;
+  --color-gold-800: #5c4724;
+  --color-gold-900: #382b15;
+
+  --color-gold-hover: var(--color-gold-600);
+  --color-gold-active: var(--color-gold-700);
+  --color-gold-surface: var(--color-gold-50);
+  --color-gold-surface-strong: var(--color-gold-100);
+  --color-on-gold: #ffffff;
+
   /* ---------- Sidebar (brand primary-900, hover/active dịu) ---------- */
   --color-sidebar: var(--color-primary-900);
   --color-sidebar-active: color-mix(in srgb, var(--color-on-primary) 14%, var(--color-primary-900));
