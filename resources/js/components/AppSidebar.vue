@@ -105,6 +105,19 @@ const MENU_SECTIONS = [
         configurableByDepartment: true,
       },
       {
+        // Dự án (Project module — giai đoạn 1: CRUD) — mục sidebar riêng,
+        // cùng nhóm "Quản lý" với "Mẫu đánh giá". Ai xem được danh sách dự
+        // án (project.view) đều thấy mục này — department_director trở lên
+        // có thêm quyền tạo/sửa/xoá (project.create/update_department).
+        // configurableByDepartment: true — đồng bộ thủ công với
+        // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
+        name: 'manager.project.index',
+        label: 'Dự án',
+        icon: 'layers',
+        requiresPermission: 'project.view',
+        configurableByDepartment: true,
+      },
+      {
         // Duyệt bài viết (toàn trường) — khác "social.moderate" (xoá bài
         // vi phạm theo phòng ban). Hiện với bất kỳ ai có social.review:
         // mặc định admin/super_admin (social.* / *), hoặc được cấp thêm

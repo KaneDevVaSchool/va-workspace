@@ -36,6 +36,7 @@ class DepartmentSidebarConfigService
         'social.feed' => 'Bảng tin nội bộ',
         'manager.evaluation.view' => 'Tiêu chí đánh giá',
         'manager.evaluation-templates.index' => 'Mẫu đánh giá',
+        'manager.project.index' => 'Dự án',
     ];
 
     /** @var array<string, string> menu_key => section_key mặc định */
@@ -44,6 +45,7 @@ class DepartmentSidebarConfigService
         'social.feed' => 'general',
         'manager.evaluation.view' => 'general',
         'manager.evaluation-templates.index' => 'manager',
+        'manager.project.index' => 'manager',
     ];
 
     public function __construct(

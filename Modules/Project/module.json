@@ -1,0 +1,11 @@
+{
+    "name": "Project",
+    "alias": "project",
+    "description": "Quản lý dự án — CRUD dự án, phạm vi triển khai, người thực hiện, đính kèm. Nền tảng cho Task/công việc con và tính điểm tiến độ tự động sau này.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Project\\App\\Providers\\ProjectServiceProvider"
+    ],
+    "files": []
+}

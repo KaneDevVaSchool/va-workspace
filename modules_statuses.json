@@ -3,5 +3,6 @@
     "Identity": true,
     "WorkspaceConfig": true,
     "Evaluation": true,
-    "Social": true
+    "Social": true,
+    "Project": true
 }

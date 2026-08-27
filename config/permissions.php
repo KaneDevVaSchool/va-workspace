@@ -338,6 +338,7 @@ return [
         'project.create' => ['label' => 'Tạo dự án', 'module' => 'Dự án', 'description' => 'Tạo mới dự án'],
         'project.manage_department' => ['label' => 'Quản lý dự án phòng ban', 'module' => 'Dự án', 'description' => 'Quản lý toàn bộ dự án trong phòng ban'],
         'project.update_department' => ['label' => 'Sửa dự án phòng ban', 'module' => 'Dự án', 'description' => 'Cập nhật thông tin dự án thuộc phòng ban'],
+        'project.manage_settings' => ['label' => 'Cấu hình dự án toàn hệ thống', 'module' => 'Dự án', 'description' => 'Cấu hình mã dự án, quy tắc hoạt động và danh sách nhân sự được phép tạo dự án (chỉ admin/super_admin — đã bao trùm qua project.*)', 'active' => true],
 
         // ---------- Công việc (task) ----------
         'task.*' => ['label' => 'Toàn bộ công việc', 'module' => 'Công việc', 'description' => 'Toàn quyền quản lý công việc/task'],

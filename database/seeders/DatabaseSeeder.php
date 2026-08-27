@@ -11,6 +11,7 @@ use Modules\Identity\Database\Seeders\DemoUserSeeder;
 use Modules\Identity\Database\Seeders\DepartmentSeeder;
 use Modules\Identity\Database\Seeders\RoleSeeder;
 use Modules\Identity\Database\Seeders\SuperAdminSeeder;
+use Modules\Project\Database\Seeders\ProjectSeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -38,6 +39,7 @@ class DatabaseSeeder extends Seeder
             EvaluationCriteriaSeeder::class,
             EvaluationPositionSeeder::class,
             EvaluationTemplateSeeder::class,
+            ProjectSeeder::class,
         ]);
     }
 }
