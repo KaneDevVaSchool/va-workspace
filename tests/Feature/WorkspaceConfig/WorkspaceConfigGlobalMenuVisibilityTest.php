@@ -59,6 +59,33 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
         ]);
     }
 
+    public function test_superadmin_can_hide_and_show_home_menu(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $superAdmin = $this->makeSuperAdmin();
+
+        $this->actingAs($superAdmin)
+            ->putJson('/api/workspace-config/global-menu', [
+                'menu_key' => 'home',
+                'is_hidden' => true,
+            ])
+            ->assertOk()
+            ->assertJsonFragment(['menu_key' => 'home', 'is_hidden' => true]);
+
+        $this->assertDatabaseHas('global_menu_visibilities', [
+            'menu_key' => 'home',
+            'is_hidden' => true,
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->putJson('/api/workspace-config/global-menu', [
+                'menu_key' => 'home',
+                'is_hidden' => false,
+            ])
+            ->assertOk()
+            ->assertJsonFragment(['menu_key' => 'home', 'is_hidden' => false]);
+    }
+
     public function test_non_superadmin_forbidden(): void
     {
         $this->seed(RoleSeeder::class);

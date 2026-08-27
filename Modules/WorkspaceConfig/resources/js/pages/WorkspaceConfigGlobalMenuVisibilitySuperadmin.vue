@@ -78,7 +78,8 @@ async function loadMenus() {
 
 async function toggle(menu) {
   if (busy.value || menu.is_protected) return;
-  const nextHidden = !menu.is_visible;
+  // is_hidden ngược với is_visible — không dùng !is_visible (mẫu department sidebar).
+  const nextHidden = Boolean(menu.is_visible);
   const previous = { is_hidden: menu.is_hidden, is_visible: menu.is_visible };
   savingKey.value = menu.menu_key;
   busy.value = true;
