@@ -225,6 +225,35 @@ async function loadQuick(kind) {
   return data;
 }
 
+/**
+ * Task thật (Project Giai đoạn 2) thay cho project_quick_items cho
+ * kind ∈ {task, category, phase}. baseline/signature KHÔNG đổi — vẫn dùng
+ * loadQuick()/postQuick() ở trên (bản chất khác: snapshot immutable log,
+ * không phải Task).
+ *
+ * API cây WBS (/api/project/{project}/tasks) trả cây lồng nhau
+ * (children: [...]) — dẹt phẳng ra để lấy danh sách theo type, dùng cho
+ * dropdown "Danh mục"/"Phase" và list hiển thị trong modal.
+ */
+async function loadTaskTree() {
+  if (!props.project) return [];
+  const { data } = await window.axios.get(`/api/project/${props.project.id}/tasks`);
+  const flat = [];
+  const walk = (nodes) => {
+    for (const node of nodes || []) {
+      flat.push(node);
+      walk(node.children);
+    }
+  };
+  walk(data.tasks);
+  return flat;
+}
+
+async function postTask(payload) {
+  const { data } = await window.axios.post(`/api/project/${props.project.id}/tasks`, payload);
+  return data.task;
+}
+
 function resetForms(p) {
   membersForm.member_ids = (p.members || []).map((m) => m.id);
   membersForm.follower_ids = (p.followers || []).map((f) => f.id);
@@ -291,15 +320,14 @@ watch(
 
     listsLoading.value = true;
     try {
-      if (kind === 'category' || (kind === 'task' && taskVariant.value === 'by_category')) {
-        const data = await loadQuick('task_category');
-        categories.value = data.items ?? [];
-        itemCounts.value = { ...itemCounts.value, ...(data.counts || {}) };
-      }
-      if (kind === 'phase' || (kind === 'task' && taskVariant.value === 'by_phase')) {
-        const data = await loadQuick('phase');
-        phases.value = data.items ?? [];
-        itemCounts.value = { ...itemCounts.value, ...(data.counts || {}) };
+      if (
+        kind === 'category' ||
+        kind === 'phase' ||
+        (kind === 'task' && (taskVariant.value === 'by_category' || taskVariant.value === 'by_phase'))
+      ) {
+        const flat = await loadTaskTree();
+        categories.value = flat.filter((t) => t.type === 'category');
+        phases.value = flat.filter((t) => t.type === 'phase');
       }
       if (kind === 'baseline') {
         const data = await loadQuick();
@@ -328,14 +356,12 @@ async function patchProject(payload, message) {
   emit('close');
 }
 
+// Chỉ còn dùng cho kind='baseline' — kind='task'/'category'/'phase' đã
+// chuyển sang postTask() (bảng tasks thật) ở trên.
 async function postQuick(payload, message) {
   const { data } = await window.axios.post(`/api/project/${props.project.id}/quick-items`, payload);
-  if (payload.kind === 'task_category') categories.value = data.items ?? categories.value;
-  if (payload.kind === 'phase') phases.value = data.items ?? phases.value;
-  if (payload.kind === 'baseline') {
-    baselines.value = (data.items ?? []).filter((i) => i.kind === 'baseline');
-    itemCounts.value = data.counts ?? itemCounts.value;
-  }
+  baselines.value = (data.items ?? []).filter((i) => i.kind === 'baseline');
+  itemCounts.value = data.counts ?? itemCounts.value;
   showClientToast('success', message);
   emit('close');
 }
@@ -384,7 +410,10 @@ async function submit() {
         showClientToast('error', 'Nhập tên danh mục công việc.');
         return;
       }
-      await postQuick({ kind: 'task_category', title }, 'Đã thêm danh mục công việc.');
+      const created = await postTask({ type: 'category', title });
+      categories.value = [...categories.value, created];
+      showClientToast('success', 'Đã thêm danh mục công việc.');
+      emit('close');
       return;
     }
     if (props.kind === 'phase') {
@@ -398,14 +427,15 @@ async function submit() {
         showClientToast('error', err);
         return;
       }
-      await postQuick(
-        {
-          kind: 'phase',
-          title,
-          payload: { start_date: phaseForm.start_date || null, end_date: phaseForm.end_date || null },
-        },
-        'Đã thêm phase.',
-      );
+      const created = await postTask({
+        type: 'phase',
+        title,
+        start_date: phaseForm.start_date || null,
+        end_date: phaseForm.end_date || null,
+      });
+      phases.value = [...phases.value, created];
+      showClientToast('success', 'Đã thêm phase.');
+      emit('close');
       return;
     }
     if (props.kind === 'task') {
@@ -420,10 +450,14 @@ async function submit() {
           showClientToast('error', 'Nhập ít nhất một công việc, mỗi dòng một tên.');
           return;
         }
-        await postQuick(
-          { kind: 'task', titles: bulkTitles.value, payload: { variant } },
-          `Đã thêm ${bulkTitles.value.length} công việc.`,
-        );
+        await postTask({
+          type: 'task',
+          titles: bulkTitles.value,
+          start_date: taskForm.start_date || null,
+          end_date: taskForm.end_date || null,
+        });
+        showClientToast('success', `Đã thêm ${bulkTitles.value.length} công việc.`);
+        emit('close');
         return;
       }
       const title = taskForm.title.trim();
@@ -439,21 +473,24 @@ async function submit() {
         showClientToast('error', 'Chọn phase.');
         return;
       }
-      await postQuick(
-        {
-          kind: 'task',
-          title,
-          payload: {
-            variant,
-            start_date: taskForm.start_date || null,
-            end_date: taskForm.end_date || null,
-            assignee_id: taskForm.assignee_id || null,
-            category_id: taskForm.category_id || null,
-            phase_id: taskForm.phase_id || null,
-          },
-        },
-        variant === 'process' ? 'Đã thêm công việc quy trình.' : 'Đã thêm công việc.',
-      );
+      // by_category/by_phase: category_id/phase_id chọn trong form chính là
+      // id của Task cha (type=category/phase) — map sang parent_id thật
+      // (WBS parent_id, khác payload.category_id/phase_id cũ của
+      // project_quick_items).
+      const parentId =
+        variant === 'by_category' ? taskForm.category_id
+        : variant === 'by_phase' ? taskForm.phase_id
+        : null;
+      await postTask({
+        type: 'task',
+        title,
+        parent_id: parentId || null,
+        start_date: taskForm.start_date || null,
+        end_date: taskForm.end_date || null,
+        assignee_id: taskForm.assignee_id || null,
+      });
+      showClientToast('success', variant === 'process' ? 'Đã thêm công việc quy trình.' : 'Đã thêm công việc.');
+      emit('close');
       return;
     }
     if (props.kind === 'baseline') {

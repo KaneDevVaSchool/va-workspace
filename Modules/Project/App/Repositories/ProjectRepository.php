@@ -512,6 +512,14 @@ class ProjectRepository implements ProjectRepositoryInterface
         ]);
     }
 
+    /**
+     * Đếm project_quick_items theo kind — CHỈ còn ý nghĩa cho baseline/
+     * signature (Project Giai đoạn 2 trở đi). Không còn tính work_items ở
+     * đây — xem ProjectService::countWorkItems(), đọc từ bảng tasks thật
+     * qua TaskRepositoryInterface::countByProject() (QD8, tránh
+     * ProjectRepository phụ thuộc TaskRepositoryInterface — không cùng
+     * Repository gọi chéo Repository khác).
+     */
     public function countQuickItemsByKind(int $projectId): array
     {
         $rows = ProjectQuickItem::query()
@@ -524,10 +532,6 @@ class ProjectRepository implements ProjectRepositoryInterface
         $counts = [];
         foreach (ProjectQuickItem::KINDS as $kind) {
             $counts[$kind] = (int) ($rows[$kind] ?? 0);
-        }
-        $counts['work_items'] = 0;
-        foreach (ProjectQuickItem::WORK_KINDS as $kind) {
-            $counts['work_items'] += $counts[$kind];
         }
 
         return $counts;

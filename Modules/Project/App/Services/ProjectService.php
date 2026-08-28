@@ -20,6 +20,7 @@ use Modules\Project\App\Models\ProjectScope;
 use Modules\Project\App\Models\ProjectSetting;
 use Modules\Project\App\Models\ProjectType;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
+use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
@@ -37,6 +38,7 @@ class ProjectService
         private readonly PermissionService $permissions,
         private readonly ProjectExcelExporter $exporter,
         private readonly ProjectExcelImporter $importer,
+        private readonly TaskRepositoryInterface $tasks,
     ) {}
 
     /** @param  array<string, mixed>  $filters */
@@ -658,8 +660,24 @@ class ProjectService
 
         return [
             'items' => $items->map(fn (ProjectQuickItem $item) => $this->presentQuickItem($item))->values()->all(),
-            'counts' => $this->projects->countQuickItemsByKind($project->id),
+            'counts' => $this->quickItemCounts($project->id),
         ];
+    }
+
+    /**
+     * counts theo kind của project_quick_items (giờ chỉ baseline/signature
+     * còn được ghi mới) + work_items = tổng số Task thật (bảng tasks) —
+     * QD8, tránh baseline đếm ra 0 sau khi luồng tạo mới đã chuyển hẳn
+     * sang Task (Project Giai đoạn 2).
+     *
+     * @return array<string, int>
+     */
+    private function quickItemCounts(int $projectId): array
+    {
+        $counts = $this->projects->countQuickItemsByKind($projectId);
+        $counts['work_items'] = $this->tasks->countByProject($projectId);
+
+        return $counts;
     }
 
     /**
@@ -692,7 +710,7 @@ class ProjectService
         }
 
         if ($kind === ProjectQuickItem::KIND_BASELINE) {
-            $counts = $this->projects->countQuickItemsByKind($project->id);
+            $counts = $this->quickItemCounts($project->id);
             $payload['item_count'] = $counts['work_items'] ?? 0;
         }
 
