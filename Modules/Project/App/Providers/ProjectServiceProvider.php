@@ -9,10 +9,12 @@ use Modules\Project\App\Console\Commands\AutoStartProjectsCommand;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\TaskAttachmentRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
+use Modules\Project\App\Repositories\Contracts\TaskScoreRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\TaskWorklogRepositoryInterface;
 use Modules\Project\App\Repositories\ProjectRepository;
 use Modules\Project\App\Repositories\TaskAttachmentRepository;
 use Modules\Project\App\Repositories\TaskRepository;
+use Modules\Project\App\Repositories\TaskScoreRepository;
 use Modules\Project\App\Repositories\TaskWorklogRepository;
 
 class ProjectServiceProvider extends ServiceProvider
@@ -37,6 +39,11 @@ class ProjectServiceProvider extends ServiceProvider
         $this->app->bind(
             TaskWorklogRepositoryInterface::class,
             TaskWorklogRepository::class,
+        );
+
+        $this->app->bind(
+            TaskScoreRepositoryInterface::class,
+            TaskScoreRepository::class,
         );
     }
 

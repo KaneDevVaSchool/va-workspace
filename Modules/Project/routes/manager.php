@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Project\App\Http\Controllers\ProjectController;
 use Modules\Project\App\Http\Controllers\TaskAttachmentController;
 use Modules\Project\App\Http\Controllers\TaskController;
+use Modules\Project\App\Http\Controllers\TaskScoreController;
 use Modules\Project\App\Http\Controllers\TaskWorklogController;
 
 /*
@@ -57,6 +58,17 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
         Route::put('/tasks/worklogs/{worklog}', [TaskWorklogController::class, 'update'])->name('tasks.worklogs.update');
         Route::delete('/tasks/worklogs/{worklog}', [TaskWorklogController::class, 'destroy'])->name('tasks.worklogs.destroy');
     });
+
+    // ---------- Đánh giá tối thiểu (Nhóm G) ----------
+    // /tasks/{task}/score cùng cấu trúc /tasks/{task}/xxx như attachments/
+    // worklogs ở trên — không xung đột route wildcard /tasks/{task} (khác
+    // số lượng path segment), không cần lưu ý thứ tự đặc biệt.
+    Route::middleware('permission:task.view')
+        ->get('/tasks/{task}/score', [TaskScoreController::class, 'show'])
+        ->name('tasks.score.show');
+    Route::middleware('permission:task.approve')
+        ->put('/tasks/{task}/score', [TaskScoreController::class, 'upsert'])
+        ->name('tasks.score.upsert');
 
     Route::middleware('permission:task.create')->group(function () {
         // update dùng implicit model binding (Task $task, khác int $task ở

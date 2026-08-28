@@ -27,6 +27,7 @@ import {
   TASK_PRIORITY_LABELS,
   TASK_PRIORITY_TONES,
   TASK_PROGRESS_TYPE_LABELS,
+  TASK_SCORE_RESULT_SUGGESTIONS,
   TASK_STATUS_LABELS,
   TASK_STATUS_TAB_KEYS,
   TASK_STATUS_TONES,
@@ -94,6 +95,9 @@ const worklogFormOpen = ref(false);
 const worklogSaving = ref(false);
 const worklogForm = reactive({ work_date: '', hours: '', note: '' });
 const confirmingDeleteWorklog = ref(null);
+
+const scoreSaving = ref(false);
+const scoreForm = reactive({ rating_score: '', rating_result: '', rating_desc: '' });
 
 const query = ref('');
 const projectId = ref('');
@@ -176,6 +180,7 @@ const shownColumns = computed(() => TASK_COLUMNS.filter((col) => col.always || v
 const colSpan = computed(() => Math.max(shownColumns.value.length, 1));
 const isKanban = computed(() => viewMode.value === 'kanban');
 const canEdit = computed(() => auth.can('task.create'));
+const canApprove = computed(() => auth.can('task.approve'));
 
 const KANBAN_GROUP_LABELS = {
   status: 'Theo trạng thái',
@@ -592,6 +597,13 @@ function inspect(task) {
   loadAttachments(task.id);
   loadWorklogs(task.id);
   worklogFormOpen.value = false;
+  hydrateScoreForm(task);
+}
+
+function hydrateScoreForm(task) {
+  scoreForm.rating_score = task.task_score?.rating_score ?? '';
+  scoreForm.rating_result = task.task_score?.rating_result || '';
+  scoreForm.rating_desc = task.task_score?.rating_desc || '';
 }
 
 function closePanel() {
@@ -743,6 +755,28 @@ function bumpWorklogHours(delta) {
   selected.value = { ...selected.value, worklog_hours: nextHours };
   const index = tasks.value.findIndex((t) => t.id === selected.value.id);
   if (index !== -1) tasks.value[index] = { ...tasks.value[index], worklog_hours: nextHours };
+}
+
+async function saveScore() {
+  if (!selected.value) return;
+  scoreSaving.value = true;
+  try {
+    const payload = {
+      rating_score: scoreForm.rating_score === '' ? null : Number(scoreForm.rating_score),
+      rating_result: scoreForm.rating_result || null,
+      rating_desc: scoreForm.rating_desc || null,
+    };
+    const { data } = await window.axios.put(`/api/project/tasks/${selected.value.id}/score`, payload);
+    selected.value = { ...selected.value, task_score: data.task_score };
+    const index = tasks.value.findIndex((t) => t.id === selected.value.id);
+    if (index !== -1) tasks.value[index] = { ...tasks.value[index], task_score: data.task_score };
+    showClientToast('success', 'Đã lưu đánh giá.');
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không lưu được đánh giá.');
+  } finally {
+    scoreSaving.value = false;
+  }
 }
 
 function startEdit() {
@@ -2313,6 +2347,38 @@ onBeforeUnmount(() => {
           >
             + Thêm giờ làm
           </button>
+        </section>
+
+        <section v-if="!editing && canApprove" class="task-page__subsection">
+          <h3 class="task-page__subsection-title">Đánh giá công việc</h3>
+          <form class="task-page__form" @submit.prevent="saveScore">
+            <label class="task-page__field">
+              <span class="task-page__label">Điểm số</span>
+              <input v-model="scoreForm.rating_score" type="number" min="0" step="0.1" class="task-page__input" />
+            </label>
+            <label class="task-page__field">
+              <span class="task-page__label">Kết quả</span>
+              <input
+                v-model="scoreForm.rating_result"
+                type="text"
+                maxlength="100"
+                list="task-score-suggestions"
+                class="task-page__input"
+              />
+              <datalist id="task-score-suggestions">
+                <option v-for="s in TASK_SCORE_RESULT_SUGGESTIONS" :key="s" :value="s" />
+              </datalist>
+            </label>
+            <label class="task-page__field task-page__field--full">
+              <span class="task-page__label">Ý kiến đánh giá</span>
+              <textarea v-model="scoreForm.rating_desc" class="task-page__input task-page__textarea" rows="3" />
+            </label>
+            <div class="task-page__form-actions">
+              <button type="submit" class="task-page__btn" :disabled="scoreSaving">
+                {{ scoreSaving ? 'Đang lưu…' : 'Lưu đánh giá' }}
+              </button>
+            </div>
+          </form>
         </section>
       </aside>
     </div>
