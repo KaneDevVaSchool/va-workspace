@@ -26,17 +26,18 @@ const RULES = [
     key: 'shift_task_dates_with_project',
     title: 'Khi thời gian thực hiện dự án thay đổi thì thời gian công việc thay đổi theo',
     example:
-      'Khi bật cài đặt này thì, ví dụ: Thời gian thực hiện dự án là 10/03/2020 - 20/03/2020, công việc X thuộc dự án A có thời gian thực hiện là 11/03/2020 - 15/03/2020. Khi dự án A được tịnh tiến 3 ngày, tức thời gian thực hiện là 13/03/2020 – 20/03/2020, thì thời gian công việc X cũng tịnh tiến thêm 3 ngày, tức là 14/03/2020 - 15/03/2020',
+      'Khi bật cài đặt này thì, ví dụ: Thời gian thực hiện dự án là 10/03/2020 - 20/03/2020, công việc X thuộc dự án A có thời gian thực hiện là 11/03/2020 - 15/03/2020. Khi dự án A được tịnh tiến 3 ngày, tức thời gian thực hiện là 13/03/2020 – 20/03/2020, thì thời gian công việc X cũng tịnh tiến thêm 3 ngày, tức là 14/03/2020 - 15/03/2020.',
+    note: 'Chỉ áp dụng với công việc đang thực hiện, chờ thực hiện',
   },
   {
     key: 'hide_cross_tasks_from_assignees',
-    title: 'Không cho phép người thực hiện xem được công việc chéo thuộc cùng một dự án',
+    title: 'Không cho phép người thực hiện công việc xem chéo các công việc khác',
     example:
       'Khi bật cài đặt này thì, ví dụ: Dự án A gồm 2 công việc B và C, người thực hiện công việc B sẽ không được xem công việc C nếu người đó không phải là người thực hiện công việc C',
   },
   {
     key: 'hide_child_tasks_from_followers',
-    title: 'Không cho phép người theo dõi xem được các công việc con thuộc dự án',
+    title: 'Không cho phép người theo dõi xem được các công việc con',
     example:
       'Khi bật cài đặt này thì, ví dụ: Dự án A gồm 2 công việc B và C, người theo dõi dự án A sẽ không được xem công việc B và C nếu người đó không phải là người theo dõi công việc B và C',
   },
@@ -267,6 +268,7 @@ onMounted(async () => {
           <article v-for="rule in RULES" :key="rule.key" class="proj-settings__item">
             <div class="proj-settings__item-copy">
               <h2 :id="`proj-settings-rule-${rule.key}`" class="proj-settings__item-title">{{ rule.title }}</h2>
+              <p v-if="rule.note" class="proj-settings__item-example">{{ rule.note }}</p>
               <p class="proj-settings__item-example">{{ rule.example }}</p>
             </div>
             <button

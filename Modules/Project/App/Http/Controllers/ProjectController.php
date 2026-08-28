@@ -12,6 +12,7 @@ use Modules\Project\App\Http\Requests\ExportProjectRequest;
 use Modules\Project\App\Http\Requests\ImportProjectRequest;
 use Modules\Project\App\Http\Requests\ResolveImportProjectRowRequest;
 use Modules\Project\App\Http\Requests\StoreProjectLabelRequest;
+use Modules\Project\App\Http\Requests\StoreProjectQuickItemRequest;
 use Modules\Project\App\Http\Requests\StoreProjectRequest;
 use Modules\Project\App\Http\Requests\StoreProjectTypeRequest;
 use Modules\Project\App\Http\Requests\UpdateProjectRequest;
@@ -149,6 +150,55 @@ class ProjectController extends Controller
         $this->service->delete($model);
 
         return response()->json(['message' => 'Đã xoá dự án.']);
+    }
+
+    public function duplicate(Request $request, int $project)
+    {
+        $model = $this->service->find($project);
+        if ($model === null) {
+            return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+        }
+
+        if (! $this->service->userCanCreate($request->user())) {
+            return response()->json(['message' => 'Bạn không có quyền tạo dự án.'], 403);
+        }
+
+        try {
+            $result = $this->service->duplicate($model, $request->user());
+        } catch (ProjectOwnerDepartmentMissing $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        if (is_array($result)) {
+            return response()->json(['message' => $result['error']], 422);
+        }
+
+        return response()->json(['project' => $this->service->present($result, $request->user())], 201);
+    }
+
+    public function quickItemsIndex(Request $request, int $project)
+    {
+        $model = $this->service->find($project);
+        if ($model === null) {
+            return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+        }
+
+        $kind = $request->query('kind');
+        $kind = is_string($kind) && $kind !== '' ? $kind : null;
+
+        return response()->json($this->service->listQuickItems($model, $kind));
+    }
+
+    public function quickItemsStore(StoreProjectQuickItemRequest $request, int $project)
+    {
+        $model = $this->service->find($project);
+        if ($model === null) {
+            return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+        }
+
+        $result = $this->service->createQuickItems($model, $request->validated(), $request->user());
+
+        return response()->json($result, 201);
     }
 
     public function uploadAttachment(UploadProjectAttachmentRequest $request, int $project)

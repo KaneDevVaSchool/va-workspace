@@ -23,6 +23,8 @@ use Modules\Identity\App\Models\Department;
  * @property int|null    $executing_department_id  phòng ban thực hiện chính (đồng bộ từ pivot, tương thích cũ)
  * @property string|null $start_date
  * @property string|null $end_date
+ * @property string|null $actual_start_date
+ * @property string|null $actual_end_date
  * @property string      $progress_method
  * @property string      $status
  * @property string      $importance
@@ -65,6 +67,8 @@ class Project extends Model
         'executing_department_id',
         'start_date',
         'end_date',
+        'actual_start_date',
+        'actual_end_date',
         'progress_method',
         'status',
         'importance',
@@ -82,6 +86,8 @@ class Project extends Model
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'actual_start_date' => 'date',
+        'actual_end_date' => 'date',
         'evaluation_score' => 'decimal:2',
         'shift_task_dates_with_project' => 'boolean',
         'hide_cross_tasks_from_assignees' => 'boolean',
@@ -118,6 +124,11 @@ class Project extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(ProjectAttachment::class);
+    }
+
+    public function quickItems(): HasMany
+    {
+        return $this->hasMany(ProjectQuickItem::class);
     }
 
     public function lead(): BelongsTo

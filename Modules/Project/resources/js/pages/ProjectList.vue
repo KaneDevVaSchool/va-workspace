@@ -19,7 +19,7 @@
 // Tạo/sửa dự án là 2 TRANG RIÊNG (ProjectCreate.vue / ProjectEdit.vue).
 //
 // Chế độ xem: "Danh sách" (bảng ở trên) hoặc "Kanban" (bảng theo cột, kéo-thả
-// đổi trạng thái). Kanban có 2 cách nhóm cột:
+// đổi trạng thái). Kanban có 5 cách nhóm cột:
 // - "Theo trạng thái" (mặc định, giống mẫu 1Office) — mỗi cột là 1 trạng thái
 //   dự án, kéo thẻ sang cột khác để đổi trạng thái (PUT /api/project/:id).
 //   Tab Tất cả: đủ cột trạng thái. Tab một trạng thái (Đang thực hiện…): chỉ
@@ -30,6 +30,14 @@
 //   chọn là 1 cột; 1 dự án có thể xuất hiện ở nhiều cột nếu nhiều người được
 //   chọn cùng tham gia dự án đó. Không kéo-thả ở chế độ này (1 dự án nhiều
 //   người tham gia — không có "cột đúng duy nhất" để thả vào).
+// - "Theo tiến trình" — 3 cột cố định theo loại dự án: Nghiên cứu phát triển,
+//   Vận hành cải tiến, Triển khai nghiệm thu. Kéo thẻ sang cột khác để đổi
+//   loại dự án (PUT /api/project/:id { type }).
+// - "Theo loại tiêu chí" — mọi loại dự án còn lại (trừ 3 loại tiến trình ở trên).
+//   Kéo thẻ sang cột khác để đổi loại dự án, giống theo tiến trình.
+// - "Theo phòng ban" — mỗi cột là 1 phòng ban thực hiện (fallback phòng ban
+//   sở hữu). 1 dự án có thể lặp ở nhiều cột nếu nhiều phòng ban cùng làm.
+//   Không kéo-thả.
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
@@ -40,6 +48,8 @@ import { showClientToast } from '@/lib/clientToast';
 import { useDragScroll } from '@/composables/useDragScroll';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import ProjectLabelPicker from '../components/ProjectLabelPicker.vue';
+import ProjectRowContextMenu from '../components/ProjectRowContextMenu.vue';
+import ProjectQuickActionModals from '../components/ProjectQuickActionModals.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -113,7 +123,22 @@ const LABEL_ADD_EXTRA = 22;
 const COL_WIDTH_KEY = 'project-list-col-widths-v2';
 const ZOOM_KEY = 'project-list-zoom';
 const UNGROUPED_KEY = '__ungrouped__';
-const DEPT_TONES = ['primary', 'secondary', 'tertiary', 'gold', 'info', 'warning', 'success', 'violet'];
+const THEME_TONES = [
+  'primary',
+  'secondary',
+  'tertiary',
+  'gold',
+  'umber',
+  'success',
+  'warning',
+  'info',
+  'violet',
+  'teal',
+  'rose',
+  'moss',
+  'dusk',
+  'pine',
+];
 let measureCtx = null;
 let wrapObserver = null;
 
@@ -144,6 +169,9 @@ const VIEW_MODE_KEY = 'project-list-view-mode';
 const KANBAN_GROUP_KEY = 'project-list-kanban-group';
 const KANBAN_MEMBERS_KEY = 'project-list-kanban-members';
 const KANBAN_PER_PAGE = 500;
+const KANBAN_GROUP_MODES = ['status', 'members', 'progress', 'other_types', 'department'];
+const PROGRESS_TYPE_NAMES = ['Nghiên cứu phát triển', 'Vận hành cải tiến', 'Triển khai nghiệm thu'];
+const PROGRESS_TYPE_TONES = ['info', 'gold', 'success'];
 
 function loadViewMode() {
   try {
@@ -158,7 +186,7 @@ function loadViewMode() {
 function loadKanbanGroup() {
   try {
     const raw = localStorage.getItem(KANBAN_GROUP_KEY);
-    if (raw === 'status' || raw === 'members') return raw;
+    if (KANBAN_GROUP_MODES.includes(raw)) return raw;
   } catch {
     // Bỏ qua.
   }
@@ -186,8 +214,8 @@ const kanbanDrag = reactive({
   active: false,
   settling: false,
   projectId: null,
-  fromStatus: null,
-  overStatus: null,
+  fromKey: null,
+  overKey: null,
   project: null,
   width: 0,
   height: 0,
@@ -204,6 +232,29 @@ let kanbanScrollRaf = 0;
 let kanbanJustMovedTimer = 0;
 
 const isKanban = computed(() => viewMode.value === 'kanban');
+
+const KANBAN_GROUP_LABELS = {
+  status: 'Theo trạng thái',
+  members: 'Theo người tham gia',
+  progress: 'Theo tiến trình',
+  other_types: 'Theo loại tiêu chí',
+  department: 'Theo phòng ban',
+};
+
+const viewModeTriggerLabel = computed(() => {
+  if (!isKanban.value) return 'Danh sách';
+  return KANBAN_GROUP_LABELS[kanbanGroupBy.value] || 'Kanban';
+});
+
+function isProgressProjectType(type) {
+  const key = String(type || '').trim().toLocaleLowerCase('vi');
+  if (!key) return false;
+  return PROGRESS_TYPE_NAMES.some((name) => name.toLocaleLowerCase('vi') === key);
+}
+
+function sameProjectType(a, b) {
+  return String(a || '').trim().toLocaleLowerCase('vi') === String(b || '').trim().toLocaleLowerCase('vi');
+}
 
 // Danh sách người dùng để chọn cột "Theo người tham gia" — gộp từ members +
 // lead của các dự án đang có trong trang (đủ dùng, không cần API riêng).
@@ -298,9 +349,12 @@ const kanbanStatusFill = computed(
   () => isKanban.value && kanbanGroupBy.value === 'status' && STATUS_TAB_KEYS.includes(activeTab.value),
 );
 
+const kanbanSpread = computed(() => isKanban.value && kanbanGroupBy.value === 'progress');
+
 const kanbanStatusColumns = computed(() => {
   const cols = options.status.map((s) => ({
     key: s.value,
+    dropKey: s.value,
     label: s.label,
     tone: statusTone(s.value),
     projects: projects.value.filter((p) => p.status === s.value),
@@ -309,22 +363,113 @@ const kanbanStatusColumns = computed(() => {
   return cols.filter((col) => col.projects.length > 0);
 });
 
-const kanbanCardsMovable = computed(
-  () => kanbanGroupBy.value === 'status' && !(kanbanStatusFill.value && kanbanStatusColumns.value.length < 2),
+const isKanbanDragGroup = computed(
+  () => kanbanGroupBy.value === 'status' || kanbanGroupBy.value === 'progress' || kanbanGroupBy.value === 'other_types',
 );
+
+const kanbanCardsMovable = computed(() => {
+  if (!isKanbanDragGroup.value) return false;
+  if (kanbanStatusFill.value && kanbanStatusColumns.value.length < 2) return false;
+  if (kanbanGroupBy.value === 'other_types' && kanbanOtherTypeColumns.value.length < 2) return false;
+  return true;
+});
 
 // Cột kanban theo người tham gia — 1 dự án có thể lặp lại ở nhiều cột.
 const kanbanMemberColumns = computed(() =>
   kanbanSelectedUsers.value.map((user, index) => ({
     key: `user-${user.id}`,
     label: user.name,
-    tone: DEPT_TONES[index % DEPT_TONES.length],
+    tone: THEME_TONES[index % THEME_TONES.length],
     user,
     projects: projects.value.filter(
       (p) => p.lead?.id === user.id || (p.members || []).some((m) => m.id === user.id),
     ),
   })),
 );
+
+// Cột kanban theo tiến trình — 3 loại dự án cố định, luôn hiện kể cả cột trống.
+const kanbanProgressColumns = computed(() =>
+  PROGRESS_TYPE_NAMES.map((name, index) => ({
+    key: `type-${name}`,
+    dropKey: name,
+    label: name,
+    tone: PROGRESS_TYPE_TONES[index],
+    projects: projects.value.filter((p) => sameProjectType(p.type, name)),
+  })),
+);
+
+// Cột kanban theo loại khác — mọi loại trong danh mục + loại đang có dữ liệu,
+// trừ 3 loại tiến trình ở trên.
+const kanbanOtherTypeColumns = computed(() => {
+  const seen = new Set();
+  const cols = [];
+  const add = (name) => {
+    const trimmed = String(name || '').trim();
+    if (!trimmed || isProgressProjectType(trimmed)) return;
+    const key = trimmed.toLocaleLowerCase('vi');
+    if (seen.has(key)) return;
+    seen.add(key);
+    cols.push({
+      key: `type-${trimmed}`,
+      dropKey: trimmed,
+      label: trimmed,
+      projects: projects.value.filter((p) => sameProjectType(p.type, trimmed)),
+    });
+  };
+  for (const opt of options.type) add(opt.label || opt.value);
+  for (const project of projects.value) add(project.type);
+  return cols
+    .sort((a, b) => a.label.localeCompare(b.label, 'vi'))
+    .map((col, index) => ({
+      ...col,
+      tone: THEME_TONES[index % THEME_TONES.length],
+    }));
+});
+
+// Cột kanban theo phòng ban thực hiện. 1 dự án có thể lặp ở nhiều cột khi
+// nhiều phòng ban cùng làm; không có phòng ban thực hiện thì dùng phòng ban
+// sở hữu, rồi mới tới nhóm chưa xác định.
+const kanbanDepartmentColumns = computed(() => {
+  const groups = new Map();
+  for (const project of projects.value) {
+    const depts = executingDepartments(project);
+    const targets = depts.length
+      ? depts
+      : project.owner_department
+        ? [project.owner_department]
+        : [{ id: null, name: 'Chưa xác định phòng ban' }];
+    for (const dept of targets) {
+      const key = dept.id ? `dept-${dept.id}` : UNGROUPED_KEY;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          label: dept.name || 'Chưa xác định phòng ban',
+          tone: departmentTone(key),
+          projects: [],
+        });
+      }
+      groups.get(key).projects.push(project);
+    }
+  }
+  return Array.from(groups.values())
+    .sort((a, b) => {
+      if (a.key === UNGROUPED_KEY) return 1;
+      if (b.key === UNGROUPED_KEY) return -1;
+      return a.label.localeCompare(b.label, 'vi');
+    })
+    .map((col, index) => ({
+      ...col,
+      tone: col.key === UNGROUPED_KEY ? 'neutral' : THEME_TONES[index % THEME_TONES.length],
+    }));
+});
+
+const kanbanColumns = computed(() => {
+  if (kanbanGroupBy.value === 'members') return kanbanMemberColumns.value;
+  if (kanbanGroupBy.value === 'progress') return kanbanProgressColumns.value;
+  if (kanbanGroupBy.value === 'other_types') return kanbanOtherTypeColumns.value;
+  if (kanbanGroupBy.value === 'department') return kanbanDepartmentColumns.value;
+  return kanbanStatusColumns.value;
+});
 
 function formatDateParts(value) {
   if (!value) return null;
@@ -367,12 +512,18 @@ function kanbanCardDeptName(project) {
   return project.owner_department?.name || '';
 }
 
+function kanbanProjectDropKey(project) {
+  if (kanbanGroupBy.value === 'status') return project.status;
+  return project.type;
+}
+
 function kanbanDropSlot(col) {
   return (
-    kanbanGroupBy.value === 'status' &&
+    isKanbanDragGroup.value &&
     kanbanDrag.active &&
-    kanbanDrag.overStatus === col.key &&
-    kanbanDrag.fromStatus !== col.key
+    col.dropKey &&
+    kanbanDrag.overKey === col.dropKey &&
+    kanbanDrag.fromKey !== col.dropKey
   );
 }
 
@@ -394,8 +545,8 @@ function resetKanbanDragFields() {
   kanbanDrag.active = false;
   kanbanDrag.settling = false;
   kanbanDrag.projectId = null;
-  kanbanDrag.fromStatus = null;
-  kanbanDrag.overStatus = null;
+  kanbanDrag.fromKey = null;
+  kanbanDrag.overKey = null;
   kanbanDrag.project = null;
   kanbanDrag.width = 0;
   kanbanDrag.height = 0;
@@ -420,10 +571,10 @@ function clearKanbanDrag() {
   resetKanbanDragFields();
 }
 
-function readKanbanDropStatus(clientX, clientY) {
+function readKanbanDropKey(clientX, clientY) {
   const el = document.elementFromPoint(clientX, clientY);
   const col = el?.closest?.('.proj-kanban__col');
-  return col?.dataset?.status || null;
+  return col?.dataset?.dropKey || null;
 }
 
 function autoScrollKanban(clientX, clientY) {
@@ -453,8 +604,8 @@ function flushKanbanGhost() {
   if (!kanbanDrag.active || kanbanDrag.settling) return;
   kanbanDrag.x = kanbanPendingX - (kanbanPointer?.grabX || 0);
   kanbanDrag.y = kanbanPendingY - (kanbanPointer?.grabY || 0);
-  const over = readKanbanDropStatus(kanbanPendingX, kanbanPendingY);
-  if (over) kanbanDrag.overStatus = over;
+  const over = readKanbanDropKey(kanbanPendingX, kanbanPendingY);
+  if (over) kanbanDrag.overKey = over;
 }
 
 function startKanbanDrag(event) {
@@ -466,8 +617,8 @@ function startKanbanDrag(event) {
   kanbanDrag.active = true;
   kanbanDrag.settling = false;
   kanbanDrag.projectId = pointer.project.id;
-  kanbanDrag.fromStatus = pointer.project.status;
-  kanbanDrag.overStatus = pointer.project.status;
+  kanbanDrag.fromKey = kanbanProjectDropKey(pointer.project);
+  kanbanDrag.overKey = kanbanDrag.fromKey;
   kanbanDrag.project = pointer.project;
   kanbanDrag.width = rect.width;
   kanbanDrag.height = rect.height;
@@ -481,7 +632,7 @@ function startKanbanDrag(event) {
 }
 
 function onKanbanCardPointerDown(event, project) {
-  if (kanbanGroupBy.value !== 'status') return;
+  if (!isKanbanDragGroup.value) return;
   if (event.button !== 0) return;
   if (kanbanStatusUpdating.value.has(project.id)) return;
   if (event.target.closest('button, a, input, select, textarea, [role="menu"]')) return;
@@ -535,9 +686,9 @@ async function onKanbanPointerUp() {
   }
 
   const projectId = kanbanDrag.projectId;
-  const fromStatus = kanbanDrag.fromStatus;
-  const target = kanbanDrag.overStatus;
-  const sameColumn = !target || target === fromStatus;
+  const fromKey = kanbanDrag.fromKey;
+  const target = kanbanDrag.overKey;
+  const sameColumn = !target || target === fromKey;
 
   if (sameColumn) {
     const origin = pointer?.cardEl?.getBoundingClientRect();
@@ -551,7 +702,7 @@ async function onKanbanPointerUp() {
   await settleKanbanGhost(slot?.getBoundingClientRect());
   if (!kanbanDrag.active) return;
   clearKanbanDrag();
-  await moveProjectToStatus(projectId, target);
+  await commitKanbanDrop(projectId, target);
 }
 
 function onKanbanPointerCancel() {
@@ -595,6 +746,45 @@ async function moveProjectToStatus(projectId, statusKey) {
   }
 }
 
+async function moveProjectToType(projectId, typeName) {
+  if (!projectId || !typeName) return;
+
+  const project = projects.value.find((p) => p.id === projectId);
+  if (!project || sameProjectType(project.type, typeName)) return;
+
+  const previousType = project.type;
+  project.type = typeName;
+  markKanbanJustMoved(projectId);
+  const busy = new Set(kanbanStatusUpdating.value);
+  busy.add(projectId);
+  kanbanStatusUpdating.value = busy;
+
+  try {
+    const { data } = await window.axios.put(`/api/project/${projectId}`, { type: typeName });
+    const index = projects.value.findIndex((p) => p.id === projectId);
+    if (index !== -1) projects.value.splice(index, 1, data.project);
+    if (selected.value?.id === projectId) selected.value = data.project;
+    showClientToast('success', `Đã chuyển "${project.name}" sang ${typeName}.`);
+  } catch (err) {
+    project.type = previousType;
+    showClientToast('error', err?.response?.data?.message || 'Không đổi được loại dự án.');
+  } finally {
+    const next = new Set(kanbanStatusUpdating.value);
+    next.delete(projectId);
+    kanbanStatusUpdating.value = next;
+  }
+}
+
+async function commitKanbanDrop(projectId, targetKey) {
+  if (kanbanGroupBy.value === 'status') {
+    await moveProjectToStatus(projectId, targetKey);
+    return;
+  }
+  if (kanbanGroupBy.value === 'progress' || kanbanGroupBy.value === 'other_types') {
+    await moveProjectToType(projectId, targetKey);
+  }
+}
+
 const kanbanGhostStyle = computed(() => {
   const rotate = kanbanDrag.settling ? 0 : 3.5;
   const scale = kanbanDrag.settling ? 1 : 1.04;
@@ -603,6 +793,12 @@ const kanbanGhostStyle = computed(() => {
     height: `${kanbanDrag.height}px`,
     transform: `translate3d(${Math.round(kanbanDrag.x)}px, ${Math.round(kanbanDrag.y)}px, 0) rotate(${rotate}deg) scale(${scale})`,
   };
+});
+
+const kanbanGhostTone = computed(() => {
+  if (kanbanGroupBy.value === 'status') return statusTone(kanbanDrag.fromKey);
+  const col = kanbanColumns.value.find((c) => c.dropKey === kanbanDrag.fromKey);
+  return col?.tone || typeTone(kanbanDrag.fromKey) || 'primary';
 });
 
 const tableWrap = ref(null);
@@ -645,6 +841,68 @@ function openMemberList(project) {
 
 function closeMemberList() {
   memberPickerProjectId.value = null;
+}
+
+// ---------- Menu chuột phải trên dòng (chế độ danh sách) ----------
+const ctxMenu = reactive({ open: false, x: 0, y: 0, project: null });
+const actionDialog = reactive({ kind: null, project: null, extra: {} });
+
+function openRowContextMenu(event, project) {
+  if (actionDialog.kind) return;
+  event.preventDefault();
+  event.stopPropagation();
+  ctxMenu.open = true;
+  ctxMenu.x = event.clientX;
+  ctxMenu.y = event.clientY;
+  ctxMenu.project = project;
+}
+
+function closeRowContextMenu() {
+  ctxMenu.open = false;
+}
+
+function applyProject(updated) {
+  if (!updated?.id) return;
+  const index = projects.value.findIndex((p) => p.id === updated.id);
+  if (index !== -1) projects.value.splice(index, 1, updated);
+  if (selected.value?.id === updated.id) selected.value = updated;
+  if (ctxMenu.project?.id === updated.id) ctxMenu.project = updated;
+  if (actionDialog.project?.id === updated.id) actionDialog.project = updated;
+}
+
+function onRowContextAction({ type, project, status, variant, focus }) {
+  closeRowContextMenu();
+  if (!project || type === 'signature') return;
+  if (type === 'status') {
+    moveProjectToStatus(project.id, status);
+    return;
+  }
+  if (type === 'edit') {
+    openEditPage(project);
+    return;
+  }
+  if (type === 'details') {
+    inspect(project);
+    return;
+  }
+  if (type === 'labels') {
+    openLabelPicker(project);
+    return;
+  }
+  actionDialog.kind = type;
+  actionDialog.project = project;
+  actionDialog.extra = { variant, focus };
+}
+
+function closeActionDialog() {
+  actionDialog.kind = null;
+  actionDialog.project = null;
+  actionDialog.extra = {};
+}
+
+async function onProjectDuplicated() {
+  closeActionDialog();
+  await loadProjects(1);
 }
 
 // ---------- Group theo phòng ban thực hiện ----------
@@ -1386,7 +1644,7 @@ function departmentTone(key) {
   for (let i = 0; i < text.length; i += 1) {
     hash = (hash * 31 + text.charCodeAt(i)) | 0;
   }
-  return DEPT_TONES[Math.abs(hash) % DEPT_TONES.length];
+  return THEME_TONES[Math.abs(hash) % THEME_TONES.length];
 }
 
 function deptToneFromId(id) {
@@ -1416,12 +1674,16 @@ function executingDepartments(project) {
 }
 
 function typeTone(value) {
-  if (value === 'internal') return 'tertiary';
-  if (value === 'customer') return 'secondary';
-  if (value === 'infrastructure') return 'gold';
-  if (value === 'research') return 'info';
-  if (value === 'other') return 'violet';
-  return 'neutral';
+  const key = String(value || '').trim().toLocaleLowerCase('vi');
+  if (key === 'internal' || key === 'nội bộ') return 'tertiary';
+  if (key === 'customer' || key === 'khách hàng') return 'secondary';
+  if (key === 'infrastructure' || key === 'hạ tầng') return 'gold';
+  if (key === 'research' || key === 'nghiên cứu') return 'info';
+  if (key === 'other' || key === 'khác') return 'violet';
+  if (key === 'nghiên cứu phát triển') return 'info';
+  if (key === 'vận hành cải tiến') return 'gold';
+  if (key === 'triển khai nghiệm thu') return 'success';
+  return key ? departmentTone(`type-${key}`) : 'neutral';
 }
 
 function statusTone(value) {
@@ -1680,6 +1942,11 @@ const fileAttachments = computed(() => (selected.value?.attachments || []).filte
 
 function handleDocumentKeydown(event) {
   if (event.key !== 'Escape') return;
+  if (actionDialog.kind) return;
+  if (ctxMenu.open) {
+    closeRowContextMenu();
+    return;
+  }
   if (kanbanDrag.active) {
     clearKanbanDrag();
     return;
@@ -1800,7 +2067,7 @@ onBeforeUnmount(() => {
               @click.stop="toggleViewModeMenu"
             >
               <AppIcon :name="isKanban ? 'layoutGrid' : 'layoutList'" :size="15" />
-              <span>{{ isKanban ? 'Kanban' : 'Danh sách' }}</span>
+              <span>{{ viewModeTriggerLabel }}</span>
               <AppIcon name="chevronDown" :size="14" />
             </button>
             <div v-if="viewModeOpen" class="proj-view-mode__menu" role="menu" @click.stop>
@@ -1837,6 +2104,39 @@ onBeforeUnmount(() => {
                 <AppIcon name="users" :size="15" />
                 <span>Theo người tham gia</span>
                 <AppIcon v-if="isKanban && kanbanGroupBy === 'members'" name="check" :size="14" />
+              </button>
+              <button
+                type="button"
+                class="proj-view-mode__item"
+                :class="{ 'proj-view-mode__item--on': isKanban && kanbanGroupBy === 'progress' }"
+                role="menuitem"
+                @click="chooseKanbanGroup('progress')"
+              >
+                <AppIcon name="gitBranch" :size="15" />
+                <span>Theo tiến trình</span>
+                <AppIcon v-if="isKanban && kanbanGroupBy === 'progress'" name="check" :size="14" />
+              </button>
+              <button
+                type="button"
+                class="proj-view-mode__item"
+                :class="{ 'proj-view-mode__item--on': isKanban && kanbanGroupBy === 'other_types' }"
+                role="menuitem"
+                @click="chooseKanbanGroup('other_types')"
+              >
+                <AppIcon name="layers" :size="15" />
+                <span>Theo loại tiêu chí</span>
+                <AppIcon v-if="isKanban && kanbanGroupBy === 'other_types'" name="check" :size="14" />
+              </button>
+              <button
+                type="button"
+                class="proj-view-mode__item"
+                :class="{ 'proj-view-mode__item--on': isKanban && kanbanGroupBy === 'department' }"
+                role="menuitem"
+                @click="chooseKanbanGroup('department')"
+              >
+                <AppIcon name="building" :size="15" />
+                <span>Theo phòng ban</span>
+                <AppIcon v-if="isKanban && kanbanGroupBy === 'department'" name="check" :size="14" />
               </button>
             </div>
           </div>
@@ -2013,9 +2313,13 @@ onBeforeUnmount(() => {
                   class="proj-page__data-row"
                   :class="[
                     canViewAcrossDepartments ? `proj-page__data-row--${group.tone}` : null,
-                    { 'proj-page__row--active': selected?.id === project.id },
+                    {
+                      'proj-page__row--active': selected?.id === project.id,
+                      'proj-page__row--ctx': ctxMenu.open && ctxMenu.project?.id === project.id,
+                    },
                   ]"
                   @dblclick="inspect(project)"
+                  @contextmenu="openRowContextMenu($event, project)"
                 >
                   <td
                     v-for="col in visibleColumns"
@@ -2183,6 +2487,7 @@ onBeforeUnmount(() => {
           :class="{
             'proj-kanban--dragging': kanbanDrag.active,
             'proj-kanban--fill': kanbanStatusFill,
+            'proj-kanban--spread': kanbanSpread,
           }"
         >
           <p v-if="kanbanGroupBy === 'members' && !kanbanSelectedUsers.length" class="proj-kanban__hint">
@@ -2191,15 +2496,21 @@ onBeforeUnmount(() => {
           <p v-else-if="kanbanStatusFill && !kanbanStatusColumns.length" class="proj-kanban__hint">
             Không có dự án nào.
           </p>
+          <p v-else-if="kanbanGroupBy === 'other_types' && !kanbanColumns.length" class="proj-kanban__hint">
+            Không có loại tiêu chí nào ngoài nhóm tiến trình.
+          </p>
+          <p v-else-if="!kanbanColumns.length" class="proj-kanban__hint">
+            Không có dự án nào.
+          </p>
           <div
-            v-for="col in kanbanGroupBy === 'status' ? kanbanStatusColumns : kanbanMemberColumns"
+            v-for="col in kanbanColumns"
             :key="col.key"
             class="proj-kanban__col"
             :class="[
               `proj-kanban__col--${col.tone || 'primary'}`,
-              { 'proj-kanban__col--drop': kanbanGroupBy === 'status' && kanbanDrag.active && kanbanDrag.overStatus === col.key },
+              { 'proj-kanban__col--drop': isKanbanDragGroup && kanbanDrag.active && kanbanDrag.overKey === col.dropKey },
             ]"
-            :data-status="kanbanGroupBy === 'status' ? col.key : undefined"
+            :data-drop-key="isKanbanDragGroup ? col.dropKey : undefined"
           >
             <header class="proj-kanban__col-head">
               <div class="proj-kanban__col-head-main">
@@ -2227,7 +2538,7 @@ onBeforeUnmount(() => {
                 }"
                 data-no-drag-scroll
                 @pointerdown="onKanbanCardPointerDown($event, project)"
-                @click="kanbanGroupBy === 'members' && inspect(project)"
+                @click="!isKanbanDragGroup && inspect(project)"
               >
                 <header class="proj-kanban__card-head">
                   <span v-if="project.code" class="proj-kanban__card-code">{{ project.code }}</span>
@@ -2571,7 +2882,7 @@ onBeforeUnmount(() => {
         :class="{
           'proj-kanban__ghost--live': !kanbanDrag.settling,
           'proj-kanban__ghost--settle': kanbanDrag.settling,
-          [`proj-kanban__ghost--${statusTone(kanbanDrag.fromStatus)}`]: true,
+          [`proj-kanban__ghost--${kanbanGhostTone}`]: true,
         }"
         :style="kanbanGhostStyle"
       >
@@ -2659,7 +2970,7 @@ onBeforeUnmount(() => {
           >
             <div class="proj-page__dialog-head">
               <span class="proj-page__dialog-icon" aria-hidden="true">
-                <AppIcon name="bookmark" :size="22" :stroke-width="1.75" />
+                <AppIcon name="bookmark" :size="18" :stroke-width="1.75" />
               </span>
               <div class="proj-page__dialog-head-copy">
                 <h2 id="proj-label-form-title" class="proj-page__dialog-title">Gắn nhãn</h2>
@@ -2670,20 +2981,20 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
-            <div class="proj-page__dialog-body hide-scrollbar">
+            <div class="proj-page__dialog-body">
               <ProjectLabelPicker
                 class="proj-page__dialog-picker"
                 :model-value="(labelPickerProject.labels || []).map((l) => l.id)"
                 :labels="allLabels"
+                placeholder="Tìm hoặc tạo nhãn…"
+                autofocus
+                always-open
                 @update:model-value="setProjectLabels(labelPickerProject, $event)"
                 @created="onLabelCreated"
               />
             </div>
 
             <div class="proj-page__dialog-actions">
-              <button type="button" class="proj-page__dialog-btn proj-page__dialog-btn--ghost" @click="closeLabelPicker">
-                Đóng
-              </button>
               <button type="button" class="proj-page__dialog-btn proj-page__dialog-btn--primary" @click="closeLabelPicker">
                 Xong
               </button>
@@ -3115,6 +3426,26 @@ onBeforeUnmount(() => {
         </div>
       </Transition>
     </Teleport>
+
+    <ProjectRowContextMenu
+      :open="ctxMenu.open"
+      :x="ctxMenu.x"
+      :y="ctxMenu.y"
+      :project="ctxMenu.project"
+      :can-duplicate="canCreate"
+      :statuses="options.status"
+      @close="closeRowContextMenu"
+      @action="onRowContextAction"
+    />
+
+    <ProjectQuickActionModals
+      :kind="actionDialog.kind"
+      :project="actionDialog.project"
+      :extra="actionDialog.extra"
+      @close="closeActionDialog"
+      @updated="applyProject"
+      @duplicated="onProjectDuplicated"
+    />
   </section>
 </template>
 
@@ -3252,7 +3583,7 @@ onBeforeUnmount(() => {
   left: 0;
   display: flex;
   flex-direction: column;
-  min-width: 13.5rem;
+  min-width: 17.5rem;
   padding: var(--space-1);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -3632,6 +3963,18 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+/* Theo tiến trình: 3 cột giãn đều kín khung, thẻ vẫn xếp dọc trong từng cột. */
+.proj-kanban--spread {
+  overflow-x: hidden;
+}
+
+.proj-kanban--spread .proj-kanban__col {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+}
+
 .proj-kanban__col {
   --col-accent: var(--color-primary);
   --col-head: var(--color-primary);
@@ -3723,6 +4066,41 @@ onBeforeUnmount(() => {
   --col-head: color-mix(in srgb, var(--color-tertiary) 58%, var(--color-primary));
   --col-on: #ffffff;
   --col-well: color-mix(in srgb, var(--color-tertiary-surface) 65%, var(--color-primary-surface));
+}
+
+.proj-kanban__col--teal {
+  --col-accent: color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary));
+  --col-head: color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary));
+  --col-on: #ffffff;
+  --col-well: color-mix(in srgb, var(--color-secondary-surface) 62%, var(--color-tertiary-surface));
+}
+
+.proj-kanban__col--rose {
+  --col-accent: color-mix(in srgb, var(--color-primary) 55%, var(--color-gold));
+  --col-head: color-mix(in srgb, var(--color-primary) 55%, var(--color-gold));
+  --col-on: #ffffff;
+  --col-well: color-mix(in srgb, var(--color-primary-surface) 62%, var(--color-gold-surface));
+}
+
+.proj-kanban__col--moss {
+  --col-accent: color-mix(in srgb, var(--color-secondary) 58%, var(--color-gold-700));
+  --col-head: color-mix(in srgb, var(--color-secondary) 58%, var(--color-gold-700));
+  --col-on: #ffffff;
+  --col-well: color-mix(in srgb, var(--color-secondary-surface) 62%, var(--color-gold-surface));
+}
+
+.proj-kanban__col--dusk {
+  --col-accent: color-mix(in srgb, var(--color-tertiary) 68%, var(--color-umber));
+  --col-head: color-mix(in srgb, var(--color-tertiary) 68%, var(--color-umber));
+  --col-on: #ffffff;
+  --col-well: color-mix(in srgb, var(--color-tertiary-surface) 62%, var(--color-umber-surface));
+}
+
+.proj-kanban__col--pine {
+  --col-accent: color-mix(in srgb, var(--color-success) 68%, var(--color-secondary-800));
+  --col-head: color-mix(in srgb, var(--color-success) 68%, var(--color-secondary-800));
+  --col-on: #ffffff;
+  --col-well: color-mix(in srgb, var(--color-success-tint-bg) 70%, var(--color-secondary-surface));
 }
 
 .proj-kanban__col--umber {
@@ -4222,6 +4600,21 @@ onBeforeUnmount(() => {
 .proj-kanban__ghost--violet {
   --col-accent: color-mix(in srgb, var(--color-tertiary) 58%, var(--color-primary));
 }
+.proj-kanban__ghost--teal {
+  --col-accent: color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary));
+}
+.proj-kanban__ghost--rose {
+  --col-accent: color-mix(in srgb, var(--color-primary) 55%, var(--color-gold));
+}
+.proj-kanban__ghost--moss {
+  --col-accent: color-mix(in srgb, var(--color-secondary) 58%, var(--color-gold-700));
+}
+.proj-kanban__ghost--dusk {
+  --col-accent: color-mix(in srgb, var(--color-tertiary) 68%, var(--color-umber));
+}
+.proj-kanban__ghost--pine {
+  --col-accent: color-mix(in srgb, var(--color-success) 68%, var(--color-secondary-800));
+}
 .proj-kanban__ghost--umber {
   --col-accent: var(--color-umber);
 }
@@ -4327,10 +4720,34 @@ onBeforeUnmount(() => {
 }
 
 .proj-page__dialog-panel--labels {
-  width: min(54rem, calc((100vw - 2.5rem) * 0.6));
-  height: min(46rem, calc(100vh - 2.5rem));
+  width: min(22.5rem, calc(100vw - 2.5rem));
+  height: auto;
   max-width: calc(100vw - 2.5rem);
   max-height: calc(100vh - 2.5rem);
+  gap: var(--space-2);
+  padding: 0.75rem 0.875rem 0.875rem;
+}
+
+.proj-page__dialog-panel--labels .proj-page__dialog-head {
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+.proj-page__dialog-panel--labels .proj-page__dialog-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.proj-page__dialog-panel--labels .proj-page__dialog-title {
+  font-size: 0.9375rem;
+}
+
+.proj-page__dialog-panel--labels .proj-page__dialog-sub {
+  font-size: 0.75rem;
+}
+
+.proj-page__dialog-panel--labels .proj-page__dialog-actions {
+  padding-top: var(--space-1);
 }
 
 .proj-page__dialog-panel--sm {
@@ -4421,10 +4838,9 @@ onBeforeUnmount(() => {
 }
 
 .proj-page__dialog-picker {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   min-height: 0;
-  height: 100%;
 }
 
 .proj-page__dialog-members {
@@ -4871,8 +5287,28 @@ onBeforeUnmount(() => {
   --group-accent: var(--color-success);
 }
 .proj-page__group-row--violet {
-  --group-fg: #7c3aed;
-  --group-accent: #7c3aed;
+  --group-fg: color-mix(in srgb, var(--color-tertiary) 58%, var(--color-primary));
+  --group-accent: color-mix(in srgb, var(--color-tertiary) 58%, var(--color-primary));
+}
+.proj-page__group-row--teal {
+  --group-fg: color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary));
+  --group-accent: color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary));
+}
+.proj-page__group-row--rose {
+  --group-fg: color-mix(in srgb, var(--color-primary) 55%, var(--color-gold));
+  --group-accent: color-mix(in srgb, var(--color-primary) 55%, var(--color-gold));
+}
+.proj-page__group-row--moss {
+  --group-fg: color-mix(in srgb, var(--color-secondary) 58%, var(--color-gold-700));
+  --group-accent: color-mix(in srgb, var(--color-secondary) 58%, var(--color-gold-700));
+}
+.proj-page__group-row--dusk {
+  --group-fg: color-mix(in srgb, var(--color-tertiary) 68%, var(--color-umber));
+  --group-accent: color-mix(in srgb, var(--color-tertiary) 68%, var(--color-umber));
+}
+.proj-page__group-row--pine {
+  --group-fg: color-mix(in srgb, var(--color-success) 68%, var(--color-secondary-800));
+  --group-accent: color-mix(in srgb, var(--color-success) 68%, var(--color-secondary-800));
 }
 .proj-page__group-row--umber {
   --group-fg: var(--color-umber);
@@ -4956,7 +5392,22 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--color-success) 4%, var(--color-surface));
 }
 .proj-page__data-row--violet td {
-  background: color-mix(in srgb, #7c3aed 4%, var(--color-surface));
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-tertiary) 58%, var(--color-primary)) 4%, var(--color-surface));
+}
+.proj-page__data-row--teal td {
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary)) 4%, var(--color-surface));
+}
+.proj-page__data-row--rose td {
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, var(--color-gold)) 5%, var(--color-surface));
+}
+.proj-page__data-row--moss td {
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-secondary) 58%, var(--color-gold-700)) 5%, var(--color-surface));
+}
+.proj-page__data-row--dusk td {
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-tertiary) 68%, var(--color-umber)) 4%, var(--color-surface));
+}
+.proj-page__data-row--pine td {
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-success) 68%, var(--color-secondary-800)) 4%, var(--color-surface));
 }
 .proj-page__data-row--umber td {
   background: color-mix(in srgb, var(--color-umber) 5%, var(--color-surface));
@@ -5275,6 +5726,10 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)) !important;
 }
 
+.proj-page__row--ctx td {
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)) !important;
+}
+
 .proj-page__pill {
   display: inline-flex;
   align-items: center;
@@ -5322,8 +5777,28 @@ onBeforeUnmount(() => {
   --pill-fg: var(--color-danger-tint-fg);
 }
 .proj-page__pill--violet {
-  --pill-bg: #f3e8ff;
-  --pill-fg: #5b21b6;
+  --pill-bg: color-mix(in srgb, var(--color-tertiary-surface) 65%, var(--color-primary-surface));
+  --pill-fg: color-mix(in srgb, var(--color-tertiary) 58%, var(--color-primary));
+}
+.proj-page__pill--teal {
+  --pill-bg: color-mix(in srgb, var(--color-secondary-surface) 62%, var(--color-tertiary-surface));
+  --pill-fg: color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary-800));
+}
+.proj-page__pill--rose {
+  --pill-bg: color-mix(in srgb, var(--color-primary-surface) 62%, var(--color-gold-surface));
+  --pill-fg: color-mix(in srgb, var(--color-primary) 55%, var(--color-gold-800));
+}
+.proj-page__pill--moss {
+  --pill-bg: color-mix(in srgb, var(--color-secondary-surface) 62%, var(--color-gold-surface));
+  --pill-fg: color-mix(in srgb, var(--color-secondary-800) 55%, var(--color-gold-800));
+}
+.proj-page__pill--dusk {
+  --pill-bg: color-mix(in srgb, var(--color-tertiary-surface) 62%, var(--color-umber-surface));
+  --pill-fg: color-mix(in srgb, var(--color-tertiary-800) 68%, var(--color-umber));
+}
+.proj-page__pill--pine {
+  --pill-bg: color-mix(in srgb, var(--color-success-tint-bg) 70%, var(--color-secondary-surface));
+  --pill-fg: color-mix(in srgb, var(--color-success-tint-fg) 68%, var(--color-secondary-800));
 }
 .proj-page__pill--umber {
   --pill-bg: var(--color-umber-surface);
@@ -5823,7 +6298,7 @@ onBeforeUnmount(() => {
 
   .proj-page__dialog-panel--labels {
     width: calc(100vw - 2rem);
-    height: calc((100vh - 2rem) * 0.85);
+    height: auto;
     max-width: calc(100vw - 2rem);
     max-height: calc(100vh - 2rem);
   }

@@ -11,6 +11,7 @@ use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\ProjectAttachment;
 use Modules\Project\App\Models\ProjectLabel;
 use Modules\Project\App\Models\ProjectSetting;
+use Modules\Project\App\Models\ProjectQuickItem;
 use Modules\Project\App\Models\ProjectType;
 
 /**
@@ -122,4 +123,13 @@ interface ProjectRepositoryInterface
 
     /** @param  array<string, mixed>  $data */
     public function createType(array $data): ProjectType;
+
+    // ---------- Mục nhanh từ menu chuột phải ----------
+    /** @return Collection<int, ProjectQuickItem> */
+    public function listQuickItems(int $projectId, ?string $kind = null): Collection;
+
+    /** @param  array<string, mixed>  $data */
+    public function createQuickItem(int $projectId, array $data): ProjectQuickItem;
+
+    public function countQuickItemsByKind(int $projectId): array;
 }

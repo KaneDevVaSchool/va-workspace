@@ -42,6 +42,8 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     });
 
     Route::middleware('permission:project.view')->get('/', [ProjectController::class, 'index'])->name('index');
+    Route::post('/{project}/duplicate', [ProjectController::class, 'duplicate'])->name('duplicate');
+    Route::middleware('permission:project.view')->get('/{project}/quick-items', [ProjectController::class, 'quickItemsIndex'])->name('quick-items.index');
     Route::middleware('permission:project.view')->get('/export', [ProjectController::class, 'export'])->name('export');
     Route::post('/import/preview', [ProjectController::class, 'importPreview'])->name('import-preview');
     Route::post('/import/resolve-row', [ProjectController::class, 'importResolveRow'])->name('import-resolve-row');
@@ -70,5 +72,6 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
         Route::delete('/{project}/avatar', [ProjectController::class, 'destroyAvatar'])->name('avatar.destroy');
         Route::post('/{project}/attachments', [ProjectController::class, 'uploadAttachment'])->name('attachments.store');
         Route::delete('/{project}/attachments/{attachment}', [ProjectController::class, 'destroyAttachment'])->name('attachments.destroy');
+        Route::post('/{project}/quick-items', [ProjectController::class, 'quickItemsStore'])->name('quick-items.store');
     });
 });

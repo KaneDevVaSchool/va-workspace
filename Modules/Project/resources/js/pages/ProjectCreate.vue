@@ -1,8 +1,8 @@
 <script setup>
 //
-// manager/project/create — Wizard 4 bước: thông tin → tổ chức → phạm vi
-// & thành viên → cài đặt quyền. Phương pháp tính tiến độ không nằm ở đây
-// (thiết lập sau tại Cài đặt dự án).
+// manager/project/create — Wizard 4 bước: thông tin → tổ chức (kèm phạm
+// vi) → thành viên → cài đặt quyền. Phương pháp tính tiến độ không nằm ở
+// đây (thiết lập sau tại Cài đặt dự án).
 //
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -15,7 +15,7 @@ import ProjectFormFields from '../components/ProjectFormFields.vue';
 const STEPS = [
   { id: 1, title: 'Thông tin dự án', icon: 'fileText', color: 'primary' },
   { id: 2, title: 'Tổ chức', icon: 'building', color: 'gold' },
-  { id: 3, title: 'Phạm vi & thành viên', icon: 'users', color: 'secondary' },
+  { id: 3, title: 'Thành viên', icon: 'users', color: 'secondary' },
   { id: 4, title: 'Cài đặt quyền', icon: 'shield', color: 'tertiary' },
 ];
 
@@ -298,18 +298,6 @@ onMounted(loadMeta);
             </div>
           </div>
 
-          <Transition name="proj-wizard-ready">
-            <div v-if="showStep1ReadyNote" class="proj-edit__rail-ready" role="status">
-              <span class="proj-edit__rail-ready-icon" aria-hidden="true">
-                <AppIcon name="check" :size="16" :stroke-width="2.5" />
-              </span>
-              <div class="proj-edit__rail-ready-text">
-                <strong>Đủ thông tin bước 1</strong>
-                <span>Bạn có thể sang bước 2 — {{ STEPS[1].title }}.</span>
-              </div>
-            </div>
-          </Transition>
-
           <ol class="proj-edit__rail-list">
             <li
               v-for="item in STEPS"
@@ -365,28 +353,6 @@ onMounted(loadMeta);
                   @avatar-removed="onAvatarRemoved"
                 />
 
-                <Transition name="proj-wizard-ready">
-                  <div v-if="showStep1ReadyNote" class="proj-edit__step-ready" role="status">
-                    <span class="proj-edit__step-ready-icon" aria-hidden="true">
-                      <AppIcon name="check" :size="20" :stroke-width="2.5" />
-                    </span>
-                    <div class="proj-edit__step-ready-copy">
-                      <p class="proj-edit__step-ready-title">Đã đủ thông tin bắt buộc ở bước 1</p>
-                      <p class="proj-edit__step-ready-desc">
-                        Loại dự án và Tên dự án đã được nhập. Bấm
-                        <strong>Tiếp tục</strong>
-                        bên dưới hoặc chọn
-                        <strong>{{ STEPS[1].title }}</strong>
-                        ở cột trái để sang bước 2.
-                      </p>
-                      <button type="button" class="proj-edit__step-ready-btn" @click="goToStep(2)">
-                        Sang bước 2: {{ STEPS[1].title }}
-                        <AppIcon name="chevronRight" :size="16" :stroke-width="2" />
-                      </button>
-                    </div>
-                  </div>
-                </Transition>
-
                 <p
                   v-if="step === 1 && !showStep1ReadyNote && step1MissingFields.length === 1"
                   class="proj-edit__step-hint"
@@ -399,7 +365,32 @@ onMounted(loadMeta);
         </div>
       </div>
 
-      <div class="proj-edit__actions">
+      <Transition name="proj-wizard-ready">
+        <div v-if="showStep1ReadyNote" class="proj-edit__flow-banner" role="status">
+          <span class="proj-edit__flow-banner-icon" aria-hidden="true">
+            <AppIcon name="check" :size="20" :stroke-width="2.5" />
+          </span>
+          <div class="proj-edit__flow-banner-copy">
+            <p class="proj-edit__flow-banner-title">Đã đủ thông tin bắt buộc ở bước 1</p>
+            <p class="proj-edit__flow-banner-desc">
+              Loại dự án và Tên dự án đã được nhập. Chọn
+              <strong>{{ STEPS[1].title }}</strong>
+              ở cột trái hoặc bấm nút bên phải để sang bước 2.
+            </p>
+          </div>
+          <div class="proj-edit__flow-banner-actions">
+            <button type="button" class="proj-page__btn proj-page__btn--ghost" :disabled="saving" @click="goBack">
+              Huỷ
+            </button>
+            <button type="button" class="proj-edit__flow-banner-btn" :disabled="saving" @click="goToStep(2)">
+              Sang bước 2: {{ STEPS[1].title }}
+              <AppIcon name="chevronRight" :size="16" :stroke-width="2" />
+            </button>
+          </div>
+        </div>
+      </Transition>
+
+      <div v-if="!showStep1ReadyNote" class="proj-edit__actions">
         <button type="button" class="proj-page__btn proj-page__btn--ghost" :disabled="saving" @click="goBack">
           Huỷ
         </button>
@@ -416,11 +407,11 @@ onMounted(loadMeta);
           v-if="step < STEPS.length"
           type="button"
           class="proj-page__btn"
-          :class="{ 'proj-page__btn--flow-hint': showStep1ReadyNote || (step !== 1 && canAdvanceFromCurrentStep && !saving) }"
+          :class="{ 'proj-page__btn--flow-hint': step !== 1 && canAdvanceFromCurrentStep && !saving }"
           :disabled="saving"
           @click="goToStep(step + 1)"
         >
-          {{ showStep1ReadyNote ? `Tiếp tục — ${STEPS[step].title}` : 'Tiếp tục' }}
+          Tiếp tục
         </button>
         <button v-else type="button" class="proj-page__btn" :disabled="!canSubmit" @click="submitForm">
           {{ saving ? 'Đang lưu…' : 'Tạo dự án' }}
@@ -568,45 +559,6 @@ onMounted(loadMeta);
   background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-700) 100%);
   transition: width var(--proj-wizard-duration) var(--proj-wizard-ease);
   will-change: width;
-}
-
-.proj-edit__rail-ready {
-  display: flex;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--color-primary-surface);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, var(--color-border));
-}
-
-.proj-edit__rail-ready-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--radius-full);
-  background: var(--color-primary);
-  color: var(--color-on-primary, #fff);
-}
-
-.proj-edit__rail-ready-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  font-size: 0.8125rem;
-  line-height: 1.35;
-  color: var(--color-text);
-}
-
-.proj-edit__rail-ready-text strong {
-  font-weight: 700;
-  color: var(--color-primary);
-}
-
-.proj-edit__rail-ready-text span {
-  color: var(--color-text-muted);
 }
 
 .proj-edit__step--next-hint .proj-edit__step-dot {
@@ -795,18 +747,23 @@ onMounted(loadMeta);
 
 .proj-edit__body-stage {
   position: relative;
-  min-height: 12rem;
+  min-height: 0;
 }
 
 .proj-edit__step-panel {
   width: 100%;
+  padding-bottom: var(--space-2);
 }
 
-.proj-edit__step-ready {
+.proj-edit__flow-banner {
   position: relative;
+  z-index: 1;
+  flex-shrink: 0;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-3);
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
   padding: var(--space-3) var(--space-4);
   padding-left: calc(var(--space-4) + 3px + var(--space-3));
   border-radius: var(--radius-md);
@@ -814,7 +771,7 @@ onMounted(loadMeta);
   box-shadow: var(--shadow-sm);
 }
 
-.proj-edit__step-ready::before {
+.proj-edit__flow-banner::before {
   content: '';
   position: absolute;
   top: var(--space-2);
@@ -825,7 +782,7 @@ onMounted(loadMeta);
   background: var(--color-success);
 }
 
-.proj-edit__step-ready-icon {
+.proj-edit__flow-banner-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -837,31 +794,46 @@ onMounted(loadMeta);
   color: var(--color-success);
 }
 
-.proj-edit__step-ready-title {
+.proj-edit__flow-banner-copy {
+  flex: 1;
+  min-width: min(100%, 16rem);
+}
+
+.proj-edit__flow-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.proj-edit__flow-banner-title {
   margin: 0 0 var(--space-1);
   font-size: 0.9375rem;
   font-weight: 700;
   color: var(--color-text);
 }
 
-.proj-edit__step-ready-desc {
+.proj-edit__flow-banner-desc {
   margin: 0;
   font-size: 0.875rem;
   line-height: 1.45;
   color: var(--color-text-muted);
 }
 
-.proj-edit__step-ready-desc strong {
+.proj-edit__flow-banner-desc strong {
   font-weight: 600;
   color: var(--color-text);
 }
 
-.proj-edit__step-ready-btn {
+.proj-edit__flow-banner-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  margin-top: var(--space-3);
-  padding: 0.375rem 0.75rem;
+  flex-shrink: 0;
+  padding: 0.5rem 0.875rem;
   border: none;
   border-radius: var(--radius-sm);
   background: var(--color-primary);
@@ -872,7 +844,7 @@ onMounted(loadMeta);
   cursor: pointer;
 }
 
-.proj-edit__step-ready-btn:hover {
+.proj-edit__flow-banner-btn:hover {
   background: var(--color-primary-hover);
 }
 
@@ -892,8 +864,9 @@ onMounted(loadMeta);
   flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: var(--space-2);
-  margin-top: var(--space-3);
+  margin-top: var(--space-2);
   padding-top: var(--space-3);
   box-shadow: 0 -1px 0 var(--color-border);
 }
@@ -996,6 +969,23 @@ onMounted(loadMeta);
   .proj-edit__step-title {
     padding: 0;
     font-size: 0.6875rem;
+  }
+
+  .proj-edit__flow-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .proj-edit__flow-banner-actions {
+    margin-left: 0;
+    width: 100%;
+    flex-direction: column-reverse;
+  }
+
+  .proj-edit__flow-banner-actions .proj-page__btn,
+  .proj-edit__flow-banner-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 

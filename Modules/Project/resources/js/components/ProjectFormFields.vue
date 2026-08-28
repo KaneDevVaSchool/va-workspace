@@ -5,7 +5,7 @@
 // nhóm field của bước wizard. Component "câm": nhận form + errors qua
 // props, phát 'update:field' khi người dùng sửa.
 //
-import { computed, ref } from 'vue';
+import { computed, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import AppDatePicker from '@/components/AppDatePicker.vue';
 import ProjectMemberPicker from './ProjectMemberPicker.vue';
@@ -18,33 +18,47 @@ import ProjectTypeSelect from './ProjectTypeSelect.vue';
 const RULE_DEFS = [
   {
     key: 'shift_task_dates_with_project',
+    icon: 'calendar',
+    tone: 'gold',
+    label: 'Tịnh tiến thời gian',
     title: 'Khi thời gian thực hiện dự án thay đổi thì thời gian công việc thay đổi theo',
     example:
-      'Thời gian dự án 10/03 – 20/03, công việc X là 11/03 – 15/03. Khi dự án tịnh tiến 3 ngày thì công việc X cũng tịnh tiến thêm 3 ngày.',
+      'Khi bật cài đặt này thì, ví dụ: Thời gian thực hiện dự án là 10/03/2020 - 20/03/2020, công việc X thuộc dự án A có thời gian thực hiện là 11/03/2020 - 15/03/2020. Khi dự án A được tịnh tiến 3 ngày, tức thời gian thực hiện là 13/03/2020 – 20/03/2020, thì thời gian công việc X cũng tịnh tiến thêm 3 ngày, tức là 14/03/2020 - 15/03/2020.',
+    note: 'Chỉ áp dụng với công việc đang thực hiện, chờ thực hiện',
   },
   {
     key: 'hide_cross_tasks_from_assignees',
+    icon: 'eyeOff',
+    tone: 'secondary',
+    label: 'Ẩn xem chéo',
     title: 'Không cho phép người thực hiện công việc xem chéo các công việc khác',
     example:
-      'Dự án có công việc B và C. Người thực hiện B không xem được C nếu không phải người thực hiện C.',
+      'Khi bật cài đặt này thì, ví dụ: Dự án A gồm 2 công việc B và C, người thực hiện công việc B sẽ không được xem công việc C nếu người đó không phải là người thực hiện công việc C',
   },
   {
     key: 'hide_child_tasks_from_followers',
+    icon: 'eye',
+    tone: 'tertiary',
+    label: 'Ẩn việc con',
     title: 'Không cho phép người theo dõi xem được các công việc con',
     example:
-      'Người theo dõi dự án không xem được công việc con nếu không phải người theo dõi từng công việc đó.',
+      'Khi bật cài đặt này thì, ví dụ: Dự án A gồm 2 công việc B và C, người theo dõi dự án A sẽ không được xem công việc B và C nếu người đó không phải là người theo dõi công việc B và C',
   },
   {
     key: 'constrain_task_dates_to_project',
+    icon: 'clock',
+    tone: 'primary',
+    label: 'Ràng buộc thời gian',
     title: 'Thời gian dự kiến thực hiện công việc phải nằm trong khoảng thời gian của dự án',
-    example: 'Ngày bắt đầu/kết thúc của công việc không được nằm ngoài khoảng ngày của dự án.',
+    example:
+      'Khi bật cài đặt này, thời gian dự kiến thực hiện công việc sẽ phải nằm trong khoảng thời gian của dự án.',
   },
 ];
 
 const STEP_SECTIONS = {
   1: ['general', 'schedule'],
   2: ['org'],
-  3: ['people', 'labels'],
+  3: ['people'],
   4: ['rules'],
 };
 
@@ -84,11 +98,13 @@ const props = defineProps({
 
 const emit = defineEmits(['update:field', 'label-created', 'type-created', 'avatar-selected', 'avatar-removed']);
 
-const rulesOpen = ref(true);
-
 function set(field, value) {
   emit('update:field', field, value);
 }
+
+const enabledRulesCount = computed(
+  () => RULE_DEFS.filter((rule) => Boolean(props.form[rule.key])).length,
+);
 
 function fieldError(field) {
   const e = props.errors?.[field];
@@ -147,6 +163,129 @@ function onLeadDepartmentIds(ids) {
 
 function onExecutingIds(ids) {
   set('executing_department_ids', ids);
+}
+
+const resolvedOwnerDepartmentId = computed(() => {
+  if (props.canChooseOwnerDepartment) {
+    return props.form.owner_department_id || '';
+  }
+  return props.ownerDepartment?.id || '';
+});
+
+watch(
+  resolvedOwnerDepartmentId,
+  (nextOwner, prevOwner) => {
+    if (!props.isCreate || !nextOwner) return;
+    const current = (props.form.executing_department_ids || []).map((id) => String(id));
+    const onlyPreviousOwner =
+      prevOwner && current.length === 1 && current[0] === String(prevOwner);
+    if (current.length === 0 || onlyPreviousOwner) {
+      set('executing_department_ids', [nextOwner]);
+    }
+  },
+  { immediate: true },
+);
+
+function departmentNameById(id) {
+  if (!id) return '';
+  return props.departments.find((d) => String(d.id) === String(id))?.name || '';
+}
+
+const ownerStoryName = computed(() => {
+  if (props.canChooseOwnerDepartment) {
+    return departmentNameById(props.form.owner_department_id);
+  }
+  return props.ownerDepartment?.name || '';
+});
+
+const executingStoryName = computed(() => {
+  const ids = new Set(executingDepartmentIds.value.map((id) => String(id)));
+  return props.departments
+    .filter((d) => ids.has(String(d.id)))
+    .map((d) => d.name)
+    .filter(Boolean)
+    .join(', ');
+});
+
+const scopeStoryName = computed(() => {
+  const row = Array.isArray(props.form.scopes) ? props.form.scopes[0] : null;
+  if (!row?.scope_type) return '';
+  if (row.scope_type === 'department') {
+    return (
+      departmentNameById(row.department_id)
+      || props.options.scope_type?.find((o) => o.value === 'department')?.label
+      || ''
+    );
+  }
+  return props.options.scope_type?.find((o) => o.value === row.scope_type)?.label || '';
+});
+
+const leadStoryName = computed(() => {
+  if (!props.form.lead_user_id) return '';
+  return props.assignableUsers.find((u) => String(u.id) === String(props.form.lead_user_id))?.name || '';
+});
+
+function formatNamedList(items, extraSuffix) {
+  const names = items.map((item) => item.name).filter(Boolean);
+  if (!names.length) return '';
+  if (names.length <= 2) return names.join(', ');
+  return `${names[0]}, ${names[1]} và ${names.length - 2} ${extraSuffix}`;
+}
+
+const memberStoryName = computed(() => {
+  const ids = new Set((props.form.member_ids || []).map((id) => String(id)));
+  return formatNamedList(
+    props.assignableUsers.filter((u) => ids.has(String(u.id))),
+    'người nữa',
+  );
+});
+
+const followerStoryName = computed(() => {
+  const ids = new Set((props.form.follower_ids || []).map((id) => String(id)));
+  return formatNamedList(
+    props.assignableUsers.filter((u) => ids.has(String(u.id))),
+    'người nữa',
+  );
+});
+
+const labelStoryName = computed(() => {
+  const ids = new Set((props.form.label_ids || []).map((id) => String(id)));
+  return formatNamedList(
+    props.allLabels.filter((l) => ids.has(String(l.id))),
+    'nhãn nữa',
+  );
+});
+
+const executingMemberCandidates = computed(() => {
+  const deptIds = new Set(executingDepartmentIds.value.map((id) => String(id)));
+  if (!deptIds.size) return [];
+  const selected = new Set((props.form.member_ids || []).map((id) => String(id)));
+  return props.assignableUsers.filter(
+    (u) => u.department?.id && deptIds.has(String(u.department.id)) && !selected.has(String(u.id)),
+  );
+});
+
+function onMemberIds(ids) {
+  set('member_ids', ids);
+  const memberSet = new Set(ids.map((id) => String(id)));
+  const followers = (props.form.follower_ids || []).filter((id) => !memberSet.has(String(id)));
+  if (followers.length !== (props.form.follower_ids || []).length) {
+    set('follower_ids', followers);
+  }
+}
+
+function onFollowerIds(ids) {
+  set('follower_ids', ids);
+  const followerSet = new Set(ids.map((id) => String(id)));
+  const members = (props.form.member_ids || []).filter((id) => !followerSet.has(String(id)));
+  if (members.length !== (props.form.member_ids || []).length) {
+    set('member_ids', members);
+  }
+}
+
+function addExecutingMembers() {
+  if (props.disabled || !executingMemberCandidates.value.length) return;
+  onMemberIds([...props.form.member_ids, ...executingMemberCandidates.value.map((u) => u.id)]);
 }
 
 function toggleRule(key) {
@@ -353,87 +492,158 @@ function toggleRule(key) {
         <span class="proj-form__section-icon proj-form__section-icon--gold">
           <AppIcon name="building" :size="16" :stroke-width="1.75" />
         </span>
-        <h2 class="proj-form__section-title">Tổ chức &amp; phụ trách</h2>
+        <h2 class="proj-form__section-title">Tổ chức</h2>
       </header>
 
-      <p class="proj-form__section-desc">
-        Xác định phòng ban sở hữu dự án sẽ giao cho phòng ban nào thực hiện, và ai là người phụ trách chính theo dõi tiến độ.
+      <p class="proj-org__story">
+        <span :class="ownerStoryName ? 'proj-org__story-val' : 'proj-org__story-gap'">
+          {{ ownerStoryName || 'Phòng ban giao' }}
+        </span>
+        giao cho
+        <span :class="executingStoryName ? 'proj-org__story-val' : 'proj-org__story-gap'">
+          {{ executingStoryName || 'phòng ban thực hiện' }}
+        </span>
+        làm, áp dụng
+        <span :class="scopeStoryName ? 'proj-org__story-val' : 'proj-org__story-gap'">
+          {{ scopeStoryName || 'phạm vi' }}
+        </span>, do
+        <span :class="leadStoryName ? 'proj-org__story-val' : 'proj-org__story-gap'">
+          {{ leadStoryName || 'người phụ trách' }}
+        </span>
+        theo dõi.
       </p>
 
-      <!-- Sơ đồ luồng giao việc: 3 mốc nối tiếp, đọc từ trái sang phải
-           (từ trên xuống ở mobile). Mỗi mốc là 1 thẻ độc lập không giới
-           hạn số dòng chữ, tránh rớt/tràn tên phòng ban hoặc tên người dài. -->
-      <ol class="proj-form__flow" aria-label="Luồng giao việc của dự án">
-        <li class="proj-form__flow-step">
-          <span class="proj-form__flow-badge">1</span>
-          <div class="proj-form__flow-card">
-            <span class="proj-form__flow-label">Phòng ban giao</span>
+      <ol class="proj-org" aria-label="Luồng tổ chức dự án">
+        <li class="proj-org__item proj-org__item--gold">
+          <div class="proj-org__track" aria-hidden="true">
+            <span class="proj-org__num">1</span>
+            <span class="proj-org__line" />
+          </div>
+          <div class="proj-org__card">
+            <div class="proj-org__head">
+              <span class="proj-org__icon">
+                <AppIcon name="building" :size="16" :stroke-width="1.75" />
+              </span>
+              <div class="proj-org__head-text">
+                <h3 class="proj-org__title">Phòng ban giao</h3>
+                <p class="proj-org__hint">Ai giao dự án này.</p>
+              </div>
+            </div>
             <ProjectDepartmentPicker
               v-if="canChooseOwnerDepartment"
               :model-value="ownerDepartmentIds"
               :departments="departments"
               :disabled="disabled"
               :multiple="false"
-              placeholder="Gõ tên phòng ban giao…"
-              empty-text="Chưa chọn — mặc định là phòng ban của bạn."
+              search-label="Tìm phòng ban giao"
+              placeholder="Tìm phòng ban giao"
               @update:model-value="onOwnerDepartmentIds"
             />
-            <span v-else class="proj-form__flow-value">{{ ownerDepartment?.name || 'Phòng ban của người tạo' }}</span>
+            <div v-else-if="ownerDepartment" class="proj-org__locked">
+              <span class="proj-org__locked-dot" aria-hidden="true" />
+              <span class="proj-org__locked-name">{{ ownerDepartment.name || '—' }}</span>
+              <span v-if="ownerDepartment.code" class="proj-org__locked-meta">{{ ownerDepartment.code }}</span>
+              <AppIcon name="lock" :size="14" class="proj-org__locked-icon" />
+            </div>
           </div>
         </li>
 
-        <li class="proj-form__flow-arrow" aria-hidden="true">
-          <AppIcon name="arrowRight" :size="18" :stroke-width="2" />
-        </li>
-
-        <li class="proj-form__flow-step">
-          <span class="proj-form__flow-badge proj-form__flow-badge--secondary">2</span>
-          <div class="proj-form__flow-card">
-            <span class="proj-form__flow-label">Phòng ban thực hiện</span>
+        <li class="proj-org__item proj-org__item--secondary">
+          <div class="proj-org__track" aria-hidden="true">
+            <span class="proj-org__num">2</span>
+            <span class="proj-org__line" />
+          </div>
+          <div class="proj-org__card">
+            <div class="proj-org__head">
+              <span class="proj-org__icon">
+                <AppIcon name="layers" :size="16" :stroke-width="1.75" />
+              </span>
+              <div class="proj-org__head-text">
+                <h3 class="proj-org__title">Phòng ban thực hiện</h3>
+                <p class="proj-org__hint">Ai được giao làm — có thể chọn nhiều phòng.</p>
+              </div>
+            </div>
             <ProjectDepartmentPicker
               :model-value="executingDepartmentIds"
               :departments="departments"
               :disabled="disabled"
-              placeholder="Gõ tên phòng ban được giao thực hiện…"
-              empty-text="Không giao — phòng ban sở hữu tự thực hiện."
+              search-label="Tìm phòng ban thực hiện"
+              placeholder="Tìm phòng ban thực hiện"
               @update:model-value="onExecutingIds"
             />
           </div>
         </li>
 
-        <li class="proj-form__flow-arrow" aria-hidden="true">
-          <AppIcon name="arrowRight" :size="18" :stroke-width="2" />
+        <li class="proj-org__item proj-org__item--tertiary">
+          <div class="proj-org__track" aria-hidden="true">
+            <span class="proj-org__num">3</span>
+            <span class="proj-org__line" />
+          </div>
+          <div class="proj-org__card">
+            <div class="proj-org__head">
+              <span class="proj-org__icon">
+                <AppIcon name="globe" :size="16" :stroke-width="1.75" />
+              </span>
+              <div class="proj-org__head-text">
+                <h3 class="proj-org__title">Phạm vi</h3>
+                <p class="proj-org__hint">Dự án áp dụng ở đâu.</p>
+              </div>
+            </div>
+            <ProjectScopePicker
+              :model-value="form.scopes"
+              :scope-type-options="options.scope_type"
+              :departments="departments"
+              :disabled="disabled"
+              @update:model-value="set('scopes', $event)"
+            />
+            <span v-if="fieldError('scopes')" class="proj-form__error">{{ fieldError('scopes') }}</span>
+            <span v-if="fieldError('scopes.0.department_id')" class="proj-form__error">{{ fieldError('scopes.0.department_id') }}</span>
+          </div>
         </li>
 
-        <li class="proj-form__flow-step">
-          <span class="proj-form__flow-badge proj-form__flow-badge--primary">3</span>
-          <div class="proj-form__flow-card">
-            <span class="proj-form__flow-label">Phụ trách chính</span>
-            <ProjectUserPicker
-              :model-value="form.lead_user_id"
-              :users="assignableUsers"
-              :disabled="disabled"
-              @update:model-value="onLeadChange"
-            />
+        <li class="proj-org__item proj-org__item--primary">
+          <div class="proj-org__track" aria-hidden="true">
+            <span class="proj-org__num">4</span>
+          </div>
+          <div class="proj-org__card">
+            <div class="proj-org__head">
+              <span class="proj-org__icon">
+                <AppIcon name="user" :size="16" :stroke-width="1.75" />
+              </span>
+              <div class="proj-org__head-text">
+                <h3 class="proj-org__title">Phụ trách</h3>
+                <p class="proj-org__hint">Ai theo dõi tiến độ.</p>
+              </div>
+            </div>
+            <div class="proj-org__fields">
+              <div class="proj-form__field">
+                <span class="proj-form__label">Người phụ trách</span>
+                <ProjectUserPicker
+                  :model-value="form.lead_user_id"
+                  :users="assignableUsers"
+                  :disabled="disabled"
+                  search-label="Tìm người phụ trách"
+                  placeholder="Tìm tên hoặc email"
+                  :preferred-department-ids="executingDepartmentIds"
+                  @update:model-value="onLeadChange"
+                />
+              </div>
+              <div class="proj-form__field">
+                <span class="proj-form__label">Phòng ban phụ trách</span>
+                <ProjectDepartmentPicker
+                  :model-value="leadDepartmentIds"
+                  :departments="departments"
+                  :disabled="disabled"
+                  :multiple="false"
+                  search-label="Tìm phòng ban phụ trách"
+                  placeholder="Tìm phòng ban phụ trách"
+                  @update:model-value="onLeadDepartmentIds"
+                />
+              </div>
+            </div>
           </div>
         </li>
       </ol>
-
-      <div class="proj-form__grid">
-        <div class="proj-form__field proj-form__field--wide">
-          <span class="proj-form__label">Phòng ban phụ trách</span>
-          <span class="proj-form__caption">Phòng ban theo dõi chính, thường trùng với phòng ban của người phụ trách ở trên.</span>
-          <ProjectDepartmentPicker
-            :model-value="leadDepartmentIds"
-            :departments="departments"
-            :disabled="disabled"
-            :multiple="false"
-            placeholder="Gõ tên phòng ban phụ trách…"
-            empty-text="Chưa chọn phòng ban phụ trách."
-            @update:model-value="onLeadDepartmentIds"
-          />
-        </div>
-      </div>
     </section>
 
     <section v-if="showSection('people')" class="proj-form__section">
@@ -441,103 +651,172 @@ function toggleRule(key) {
         <span class="proj-form__section-icon proj-form__section-icon--secondary">
           <AppIcon name="users" :size="16" :stroke-width="1.75" />
         </span>
-        <h2 class="proj-form__section-title">Phạm vi &amp; thành viên</h2>
+        <h2 class="proj-form__section-title">Thành viên</h2>
       </header>
 
-      <div class="proj-form__grid proj-form__grid--stack">
-        <div class="proj-form__field proj-form__field--wide">
-          <span class="proj-form__label">Phạm vi triển khai</span>
-          <ProjectScopePicker
-            :model-value="form.scopes"
-            :scope-type-options="options.scope_type"
-            :departments="departments"
-            :disabled="disabled"
-            @update:model-value="set('scopes', $event)"
-          />
-          <span v-if="fieldError('scopes')" class="proj-form__error">{{ fieldError('scopes') }}</span>
-          <span v-if="fieldError('scopes.0.department_id')" class="proj-form__error">{{ fieldError('scopes.0.department_id') }}</span>
-        </div>
+      <p class="proj-people__story">
+        <span :class="memberStoryName ? 'proj-people__story-val' : 'proj-people__story-gap'">
+          {{ memberStoryName || 'Người thực hiện' }}
+        </span>
+        làm dự án,
+        <span :class="followerStoryName ? 'proj-people__story-val' : 'proj-people__story-gap'">
+          {{ followerStoryName || 'người theo dõi' }}
+        </span>
+        theo dõi, gắn
+        <span :class="labelStoryName ? 'proj-people__story-val' : 'proj-people__story-gap'">
+          {{ labelStoryName || 'nhãn' }}
+        </span>.
+      </p>
 
-        <div class="proj-form__field proj-form__field--wide">
-          <span class="proj-form__label">Người thực hiện</span>
+      <div class="proj-people">
+        <article class="proj-people__card proj-people__card--secondary">
+          <div class="proj-people__head">
+            <span class="proj-people__icon">
+              <AppIcon name="userPlus" :size="16" :stroke-width="1.75" />
+            </span>
+            <div class="proj-people__head-text">
+              <h3 class="proj-people__title">Người thực hiện</h3>
+              <p class="proj-people__hint">Ai được giao làm công việc trong dự án.</p>
+            </div>
+            <span class="proj-people__count">{{ form.member_ids.length }}</span>
+          </div>
+          <button
+            v-if="executingMemberCandidates.length"
+            type="button"
+            class="proj-people__quick"
+            :disabled="disabled"
+            @click="addExecutingMembers"
+          >
+            <AppIcon name="plus" :size="14" :stroke-width="2" />
+            Thêm {{ executingMemberCandidates.length }} người từ phòng thực hiện
+          </button>
           <ProjectMemberPicker
             :model-value="form.member_ids"
             :users="assignableUsers"
             :disabled="disabled"
-            @update:model-value="set('member_ids', $event)"
+            tone="secondary"
+            search-label="Tìm người thực hiện"
+            placeholder="Tìm tên, email hoặc phòng ban"
+            remove-aria-label="Bỏ người thực hiện này"
+            :preferred-department-ids="executingDepartmentIds"
+            @update:model-value="onMemberIds"
           />
-        </div>
+        </article>
 
-        <div class="proj-form__field proj-form__field--wide">
-          <span class="proj-form__label">Người theo dõi</span>
+        <article class="proj-people__card proj-people__card--tertiary">
+          <div class="proj-people__head">
+            <span class="proj-people__icon">
+              <AppIcon name="eye" :size="16" :stroke-width="1.75" />
+            </span>
+            <div class="proj-people__head-text">
+              <h3 class="proj-people__title">Người theo dõi</h3>
+              <p class="proj-people__hint">Ai được xem tiến độ, không phải người làm.</p>
+            </div>
+            <span class="proj-people__count">{{ form.follower_ids.length }}</span>
+          </div>
           <ProjectMemberPicker
             :model-value="form.follower_ids"
             :users="assignableUsers"
             :disabled="disabled"
-            placeholder="Gõ tên hoặc email để thêm người theo dõi…"
-            empty-text="Chưa chọn người theo dõi nào."
-            @update:model-value="set('follower_ids', $event)"
+            tone="tertiary"
+            search-label="Tìm người theo dõi"
+            placeholder="Tìm tên, email hoặc phòng ban"
+            remove-aria-label="Bỏ người theo dõi này"
+            :preferred-department-ids="executingDepartmentIds"
+            @update:model-value="onFollowerIds"
           />
-        </div>
+        </article>
+
+        <article class="proj-people__card proj-people__card--gold proj-people__card--labels">
+          <div class="proj-people__head">
+            <span class="proj-people__icon">
+              <AppIcon name="bookmark" :size="16" :stroke-width="1.75" />
+            </span>
+            <div class="proj-people__head-text">
+              <h3 class="proj-people__title">Nhãn dự án</h3>
+              <p class="proj-people__hint">Không bắt buộc.</p>
+            </div>
+            <span class="proj-people__count">{{ form.label_ids.length }}</span>
+          </div>
+          <ProjectLabelPicker
+            :model-value="form.label_ids"
+            :labels="allLabels"
+            :disabled="disabled"
+            placeholder="Tìm hoặc tạo nhãn…"
+            @update:model-value="set('label_ids', $event)"
+            @created="emit('label-created', $event)"
+          />
+        </article>
       </div>
     </section>
 
     <section v-if="showSection('rules')" class="proj-form__section">
       <header class="proj-form__section-head">
-        <button
-          type="button"
-          class="proj-form__rules-toggle"
-          :aria-expanded="rulesOpen ? 'true' : 'false'"
-          @click="rulesOpen = !rulesOpen"
-        >
-          <AppIcon name="chevronDown" :size="16" :stroke-width="2" class="proj-form__chevron" :class="{ 'proj-form__chevron--closed': !rulesOpen }" />
-          <span class="proj-form__section-icon proj-form__section-icon--tertiary">
-            <AppIcon name="shield" :size="16" :stroke-width="1.75" />
-          </span>
-          <h2 class="proj-form__section-title">Cài đặt quyền</h2>
-        </button>
-      </header>
-
-      <ul v-show="rulesOpen" class="proj-form__rules">
-        <li v-for="rule in RULE_DEFS" :key="rule.key" class="proj-form__rules-item">
-          <label class="proj-form__check">
-            <input
-              type="checkbox"
-              class="proj-form__check-input"
-              :checked="Boolean(form[rule.key])"
-              :disabled="disabled"
-              @change="toggleRule(rule.key)"
-            />
-            <span class="proj-form__check-box" aria-hidden="true">
-              <AppIcon v-if="form[rule.key]" name="check" :size="12" :stroke-width="2.5" />
-            </span>
-            <span class="proj-form__check-copy">
-              <span class="proj-form__check-text">{{ rule.title }}</span>
-              <span class="proj-form__caption">{{ rule.example }}</span>
-            </span>
-          </label>
-        </li>
-      </ul>
-    </section>
-
-    <section v-if="showSection('labels')" class="proj-form__section">
-      <header class="proj-form__section-head">
-        <span class="proj-form__section-icon proj-form__section-icon--secondary">
-          <AppIcon name="bookmark" :size="16" :stroke-width="1.75" />
+        <span class="proj-form__section-icon proj-form__section-icon--tertiary">
+          <AppIcon name="shield" :size="16" :stroke-width="1.75" />
         </span>
-        <h2 class="proj-form__section-title">Nhãn dự án</h2>
+        <h2 class="proj-form__section-title">Cài đặt quyền bổ sung</h2>
+        <span class="proj-form__section-note">{{ enabledRulesCount }}/{{ RULE_DEFS.length }} đang bật</span>
       </header>
 
-      <div class="proj-form__grid">
-        <div class="proj-form__field proj-form__field--wide">
-          <ProjectLabelPicker
-            :model-value="form.label_ids"
-            :labels="allLabels"
-            :disabled="disabled"
-            @update:model-value="set('label_ids', $event)"
-            @created="emit('label-created', $event)"
-          />
-        </div>
+      <p class="proj-rules__story">
+        Công việc
+        <span :class="form.shift_task_dates_with_project ? 'proj-rules__story-val' : 'proj-rules__story-gap'">
+          {{ form.shift_task_dates_with_project ? 'sẽ tịnh tiến theo' : 'không tịnh tiến theo' }}
+        </span>
+        thời gian dự án, người thực hiện
+        <span :class="form.hide_cross_tasks_from_assignees ? 'proj-rules__story-val' : 'proj-rules__story-gap'">
+          {{ form.hide_cross_tasks_from_assignees ? 'không xem chéo' : 'được xem chéo' }}
+        </span>
+        công việc khác, người theo dõi
+        <span :class="form.hide_child_tasks_from_followers ? 'proj-rules__story-val' : 'proj-rules__story-gap'">
+          {{ form.hide_child_tasks_from_followers ? 'không xem' : 'được xem' }}
+        </span>
+        công việc con, thời gian công việc
+        <span :class="form.constrain_task_dates_to_project ? 'proj-rules__story-val' : 'proj-rules__story-gap'">
+          {{ form.constrain_task_dates_to_project ? 'phải nằm trong' : 'không bị ràng buộc bởi' }}
+        </span>
+        khoảng thời gian dự án.
+      </p>
+
+      <div class="proj-rules">
+        <article
+          v-for="rule in RULE_DEFS"
+          :key="rule.key"
+          class="proj-rules__card"
+          :class="[
+            `proj-rules__card--${rule.tone}`,
+            {
+              'proj-rules__card--on': Boolean(form[rule.key]),
+              'proj-rules__card--disabled': disabled,
+            },
+          ]"
+          @click="toggleRule(rule.key)"
+        >
+          <div class="proj-rules__head">
+            <span class="proj-rules__icon">
+              <AppIcon :name="rule.icon" :size="16" :stroke-width="1.75" />
+            </span>
+            <div class="proj-rules__head-text">
+              <h3 class="proj-rules__label">{{ rule.label }}</h3>
+              <p :id="`proj-form-rule-${rule.key}`" class="proj-rules__title">{{ rule.title }}</p>
+            </div>
+            <button
+              type="button"
+              class="proj-rules__switch"
+              :class="{ 'proj-rules__switch--on': Boolean(form[rule.key]) }"
+              role="switch"
+              :aria-checked="form[rule.key] ? 'true' : 'false'"
+              :aria-labelledby="`proj-form-rule-${rule.key}`"
+              :disabled="disabled"
+              @click.stop="toggleRule(rule.key)"
+            >
+              <span class="proj-rules__switch-thumb" aria-hidden="true" />
+            </button>
+          </div>
+          <p v-if="rule.note" class="proj-rules__note">{{ rule.note }}</p>
+          <p class="proj-rules__example">{{ rule.example }}</p>
+        </article>
       </div>
     </section>
   </div>
@@ -702,13 +981,6 @@ function toggleRule(key) {
   font-weight: 700;
 }
 
-.proj-form__section-desc {
-  margin: calc(var(--space-3) * -1) 0 var(--space-3);
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-
 .proj-form__grid {
   display: grid;
   flex: 1;
@@ -789,92 +1061,399 @@ function toggleRule(key) {
   font-weight: 600;
 }
 
-/*
- * Sơ đồ luồng giao việc (bước "Tổ chức"): 3 thẻ nối tiếp bằng mũi tên,
- * đọc trái→phải trên desktop, xếp dọc trên mobile. Mỗi thẻ min-width: 0
- * + overflow-wrap để tên phòng ban/người dài tự xuống dòng, không rớt
- * chữ ra ngoài card hay đẩy vỡ layout ngang.
- */
-.proj-form__flow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: var(--space-2);
-  align-items: stretch;
-  margin: 0 0 var(--space-4);
-  padding: 0;
-  list-style: none;
-}
-
-.proj-form__flow-step {
+.proj-org__story {
   position: relative;
-  min-width: 0;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  padding-left: calc(var(--space-2) + 3px + var(--space-3));
+  border-radius: var(--radius-md);
+  background: var(--color-gold-surface);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
-.proj-form__flow-card {
+.proj-org__story::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-gold-600);
+}
+
+.proj-org__story-val {
+  color: var(--color-gold-700);
+  font-weight: 700;
+}
+
+.proj-org__story-gap {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-weight: 500;
+}
+
+.proj-org {
   display: flex;
   flex-direction: column;
-  gap: 0.3125rem;
-  min-width: 0;
-  height: 100%;
-  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-3) + 0.75rem);
+  margin: 0;
+  padding: var(--space-3);
+  list-style: none;
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
-  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
-.proj-form__flow-badge {
-  position: absolute;
-  top: -0.5rem;
-  left: -0.5rem;
-  z-index: 1;
+.proj-org__item {
+  --step-color: var(--color-gold-600);
+  --step-surface: var(--color-gold-surface);
+
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+.proj-org__item--secondary {
+  --step-color: var(--color-secondary);
+  --step-surface: var(--color-secondary-surface);
+}
+
+.proj-org__item--tertiary {
+  --step-color: var(--color-tertiary);
+  --step-surface: var(--color-tertiary-surface);
+}
+
+.proj-org__item--primary {
+  --step-color: var(--color-primary);
+  --step-surface: var(--color-primary-surface);
+}
+
+.proj-org__track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.proj-org__num {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
   border-radius: var(--radius-full);
-  background: var(--color-gold-600);
-  color: var(--color-on-primary, #fff);
-  font-size: 0.75rem;
+  background: var(--step-color);
+  color: var(--color-on-primary);
+  font-size: 0.875rem;
   font-weight: 700;
-  box-shadow: 0 0 0 2px var(--color-surface);
 }
 
-.proj-form__flow-badge--secondary {
-  background: var(--color-secondary);
+.proj-org__line {
+  flex: 1;
+  width: 2px;
+  min-height: var(--space-4);
+  margin: 4px 0;
+  border-radius: var(--radius-full);
+  background: var(--step-color);
+  opacity: 0.28;
 }
 
-.proj-form__flow-badge--primary {
-  background: var(--color-primary);
+.proj-org__card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-bottom: var(--space-3);
+  padding: var(--space-4);
+  padding-left: calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
-.proj-form__flow-label {
-  color: var(--color-text-muted);
-  font-size: 0.6875rem;
+.proj-org__item:last-child .proj-org__card {
+  margin-bottom: 0;
+}
+
+.proj-org__card:focus-within {
+  z-index: 3;
+}
+
+.proj-org__card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--step-color);
+}
+
+.proj-org__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.proj-org__head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.proj-org__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  background: var(--step-surface);
+  color: var(--step-color);
+}
+
+.proj-org__title {
+  margin: 0;
+  color: var(--step-color);
+  font-size: 0.8125rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
-.proj-form__flow-value {
+.proj-org__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.proj-org__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.proj-org__locked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.proj-org__locked-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-gold-600);
+}
+
+.proj-org__locked-name {
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--color-text);
   font-size: 0.875rem;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
-.proj-form__flow-card :deep(.proj-page__input) {
-  font-size: 0.8125rem;
+.proj-org__locked-meta {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
 }
 
-.proj-form__flow-arrow {
+.proj-org__locked-icon {
+  flex-shrink: 0;
+  color: var(--color-gold-600);
+}
+
+.proj-people__story {
+  position: relative;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  padding-left: calc(var(--space-2) + 3px + var(--space-3));
+  border-radius: var(--radius-md);
+  background: var(--color-secondary-surface);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.proj-people__story::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-secondary);
+}
+
+.proj-people__story-val {
+  color: var(--color-secondary-700);
+  font-weight: 700;
+}
+
+.proj-people__story-gap {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-weight: 500;
+}
+
+.proj-people {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.proj-people__card {
+  --step-color: var(--color-secondary);
+  --step-surface: var(--color-secondary-surface);
+
+  position: relative;
+  z-index: 1;
   display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  padding-left: calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.proj-people__card:focus-within {
+  z-index: 3;
+}
+
+.proj-people__card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--step-color);
+}
+
+.proj-people__card--tertiary {
+  --step-color: var(--color-tertiary);
+  --step-surface: var(--color-tertiary-surface);
+}
+
+.proj-people__card--gold {
+  --step-color: var(--color-gold-600);
+  --step-surface: var(--color-gold-surface);
+}
+
+.proj-people__card--labels {
+  grid-column: 1 / -1;
+}
+
+.proj-people__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.proj-people__head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.proj-people__icon {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: var(--color-gold-600);
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  background: var(--step-surface);
+  color: var(--step-color);
+}
+
+.proj-people__title {
+  margin: 0;
+  color: var(--step-color);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.proj-people__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.proj-people__count {
+  flex-shrink: 0;
+  min-width: 1.5rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--step-surface);
+  color: var(--step-color);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.proj-people__quick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+  padding: 0.375rem 0.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--step-surface);
+  color: var(--step-color);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.proj-people__quick:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--step-color) 18%, var(--color-surface));
+}
+
+.proj-people__quick:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /*
@@ -985,99 +1564,217 @@ function toggleRule(key) {
   font-weight: 600;
 }
 
-.proj-form__rules-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--color-primary);
-  cursor: pointer;
-  text-align: left;
+.proj-rules__story {
+  position: relative;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  padding-left: calc(var(--space-2) + 3px + var(--space-3));
+  border-radius: var(--radius-md);
+  background: var(--color-tertiary-surface);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
-.proj-form__rules-toggle .proj-form__section-title {
-  color: var(--color-tertiary);
+.proj-rules__story::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-tertiary);
 }
 
-.proj-form__rules-toggle :deep(.proj-form__chevron) {
-  color: var(--color-tertiary);
-  transition: transform 0.15s ease;
+.proj-rules__story-val {
+  color: var(--color-tertiary-700);
+  font-weight: 700;
 }
 
-.proj-form__rules-toggle :deep(.proj-form__chevron--closed) {
-  transform: rotate(-90deg);
+.proj-rules__story-gap {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-weight: 500;
 }
 
-.proj-form__rules {
+.proj-rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.proj-rules__card {
+  --step-color: var(--color-gold-600);
+  --step-surface: var(--color-gold-surface);
+
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  padding-left: calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
 }
 
-.proj-form__rules-item {
-  padding: var(--space-3) 0;
-  box-shadow: 0 1px 0 var(--color-border);
+.proj-rules__card:focus-within {
+  z-index: 3;
 }
 
-.proj-form__rules-item:last-child {
-  box-shadow: none;
+.proj-rules__card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--step-color);
 }
 
-.proj-form__check {
+.proj-rules__card--secondary {
+  --step-color: var(--color-secondary);
+  --step-surface: var(--color-secondary-surface);
+}
+
+.proj-rules__card--tertiary {
+  --step-color: var(--color-tertiary);
+  --step-surface: var(--color-tertiary-surface);
+}
+
+.proj-rules__card--primary {
+  --step-color: var(--color-primary);
+  --step-surface: var(--color-primary-surface);
+}
+
+.proj-rules__card--on {
+  background: color-mix(in srgb, var(--step-surface) 55%, var(--color-surface));
+}
+
+.proj-rules__card:hover:not(.proj-rules__card--disabled):not(.proj-rules__card--on) {
+  background: color-mix(in srgb, var(--step-surface) 22%, var(--color-surface));
+}
+
+.proj-rules__card--disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.proj-rules__head {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
+}
+
+.proj-rules__head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   min-width: 0;
-  cursor: pointer;
+  flex: 1;
 }
 
-.proj-form__check-input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.proj-form__check-box {
+.proj-rules__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 1.125rem;
-  height: 1.125rem;
-  margin-top: 0.125rem;
-  border-radius: 0.25rem;
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1.5px var(--color-border);
-  color: #fff;
-  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  background: var(--step-surface);
+  color: var(--step-color);
 }
 
-.proj-form__check:hover .proj-form__check-box {
-  box-shadow: inset 0 0 0 1.5px var(--color-tertiary);
-}
-
-.proj-form__check-input:checked + .proj-form__check-box {
-  background: var(--color-tertiary);
-  box-shadow: none;
-}
-
-.proj-form__check-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  min-width: 0;
-}
-
-.proj-form__check-text {
-  color: var(--color-text);
+.proj-rules__label {
+  margin: 0;
+  color: var(--step-color);
   font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.proj-rules__title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.4;
+}
+
+.proj-rules__note {
+  margin: 0;
+  color: var(--step-color);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.proj-rules__example {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-style: italic;
+  line-height: 1.55;
+}
+
+.proj-rules__switch {
+  position: relative;
+  flex-shrink: 0;
+  align-self: start;
+  margin-top: 0.125rem;
+  width: 2.75rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-text-muted) 35%, var(--color-surface-muted));
+  cursor: pointer;
+}
+
+.proj-rules__switch--on {
+  background: var(--step-color);
+}
+
+.proj-rules__switch:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+.proj-rules__switch:focus-visible {
+  outline: 2px solid var(--color-primary-200);
+  outline-offset: 2px;
+}
+
+.proj-rules__switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.proj-rules__switch-thumb {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease;
+}
+
+.proj-rules__switch--on .proj-rules__switch-thumb {
+  transform: translateX(1.25rem);
 }
 
 .proj-page__input {
@@ -1138,20 +1835,20 @@ function toggleRule(key) {
   .proj-form__grid {
     grid-template-columns: repeat(2, 1fr);
   }
-
-  .proj-form__flow {
-    grid-template-columns: 1fr;
-  }
-
-  .proj-form__flow-arrow {
-    transform: rotate(90deg);
-    padding: 0.125rem 0;
-  }
 }
 
 @media (max-width: 768px) {
   .proj-form__section {
     padding: var(--space-3);
+  }
+
+  .proj-org__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .proj-people,
+  .proj-rules {
+    grid-template-columns: 1fr;
   }
 
   .proj-form__grid {

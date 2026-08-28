@@ -15,6 +15,7 @@ use Modules\Project\App\Exceptions\ProjectOwnerDepartmentMissing;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\ProjectAttachment;
 use Modules\Project\App\Models\ProjectLabel;
+use Modules\Project\App\Models\ProjectQuickItem;
 use Modules\Project\App\Models\ProjectScope;
 use Modules\Project\App\Models\ProjectSetting;
 use Modules\Project\App\Models\ProjectType;
@@ -247,6 +248,8 @@ class ProjectService
             'executing_department_id' => $executingIds[0] ?? null,
             'start_date' => $data['start_date'] ?? null,
             'end_date' => $data['end_date'] ?? null,
+            'actual_start_date' => $data['actual_start_date'] ?? null,
+            'actual_end_date' => $data['actual_end_date'] ?? null,
             'progress_method' => $data['progress_method'] ?? $settings->default_progress_method ?? 'average',
             'status' => $data['status'] ?? 'planning',
             'importance' => $data['importance'] ?? 'important',
@@ -276,6 +279,8 @@ class ProjectService
         $merged = array_merge([
             'start_date' => $project->start_date?->toDateString(),
             'end_date' => $project->end_date?->toDateString(),
+            'actual_start_date' => $project->actual_start_date?->toDateString(),
+            'actual_end_date' => $project->actual_end_date?->toDateString(),
         ], $data);
 
         $error = $this->validateDateRange($merged);
@@ -287,6 +292,7 @@ class ProjectService
 
         foreach ([
             'type', 'name', 'lead_user_id', 'lead_department_id', 'start_date', 'end_date',
+            'actual_start_date', 'actual_end_date',
             'progress_method', 'status', 'importance', 'description',
             'shift_task_dates_with_project', 'hide_cross_tasks_from_assignees',
             'hide_child_tasks_from_followers', 'constrain_task_dates_to_project',
@@ -597,6 +603,123 @@ class ProjectService
         $this->projects->createType(['name' => $name, 'created_by' => $createdBy]);
     }
 
+    /**
+     * Nhân bản dự án: mã mới, tên thêm hậu tố, giữ thành viên / nhãn / phạm vi.
+     *
+     * @return Project|array{error: string}
+     */
+    public function duplicate(Project $source, User $creator): Project|array
+    {
+        $executingIds = $source->executingDepartments->pluck('id')->all();
+        if ($executingIds === [] && $source->executing_department_id) {
+            $executingIds = [$source->executing_department_id];
+        }
+
+        $name = trim($source->name);
+        $suffix = ' (bản sao)';
+        if (mb_strlen($name.$suffix) > 255) {
+            $name = mb_substr($name, 0, 255 - mb_strlen($suffix));
+        }
+
+        return $this->create([
+            'type' => $source->type,
+            'name' => $name.$suffix,
+            'lead_user_id' => $source->lead_user_id,
+            'lead_department_id' => $source->lead_department_id,
+            'owner_department_id' => $source->owner_department_id,
+            'executing_department_ids' => $executingIds,
+            'start_date' => $source->start_date?->toDateString(),
+            'end_date' => $source->end_date?->toDateString(),
+            'actual_start_date' => $source->actual_start_date?->toDateString(),
+            'actual_end_date' => $source->actual_end_date?->toDateString(),
+            'progress_method' => $source->progress_method,
+            'status' => $source->status,
+            'importance' => $source->importance,
+            'description' => $source->description,
+            'shift_task_dates_with_project' => (bool) $source->shift_task_dates_with_project,
+            'hide_cross_tasks_from_assignees' => (bool) $source->hide_cross_tasks_from_assignees,
+            'hide_child_tasks_from_followers' => (bool) $source->hide_child_tasks_from_followers,
+            'constrain_task_dates_to_project' => (bool) $source->constrain_task_dates_to_project,
+            'member_ids' => $source->members->pluck('id')->all(),
+            'follower_ids' => $source->followers->pluck('id')->all(),
+            'label_ids' => $source->labels->pluck('id')->all(),
+            'scopes' => $source->scopes->map(fn (ProjectScope $s) => [
+                'scope_type' => $s->scope_type,
+                'department_id' => $s->department_id,
+                'weight_percent' => $s->weight_percent,
+            ])->values()->all(),
+        ], $creator);
+    }
+
+    /** @return array{items: list<array<string, mixed>>, counts: array<string, int>} */
+    public function listQuickItems(Project $project, ?string $kind = null): array
+    {
+        $items = $this->projects->listQuickItems($project->id, $kind);
+
+        return [
+            'items' => $items->map(fn (ProjectQuickItem $item) => $this->presentQuickItem($item))->values()->all(),
+            'counts' => $this->projects->countQuickItemsByKind($project->id),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{items: list<array<string, mixed>>, counts: array<string, int>}
+     */
+    public function createQuickItems(Project $project, array $data, User $creator): array
+    {
+        $kind = (string) $data['kind'];
+        $payload = is_array($data['payload'] ?? null) ? $data['payload'] : [];
+        $titles = [];
+
+        if ($kind === ProjectQuickItem::KIND_TASK && is_array($data['titles'] ?? null)) {
+            foreach ($data['titles'] as $raw) {
+                $title = trim((string) $raw);
+                if ($title !== '') {
+                    $titles[] = $title;
+                }
+            }
+        }
+
+        if ($titles === []) {
+            $title = trim((string) ($data['title'] ?? ''));
+            if ($title === '' && $kind === ProjectQuickItem::KIND_BASELINE) {
+                $title = 'Baseline '.now()->format('d/m/Y H:i');
+            }
+            if ($title !== '') {
+                $titles[] = $title;
+            }
+        }
+
+        if ($kind === ProjectQuickItem::KIND_BASELINE) {
+            $counts = $this->projects->countQuickItemsByKind($project->id);
+            $payload['item_count'] = $counts['work_items'] ?? 0;
+        }
+
+        foreach ($titles as $title) {
+            $this->projects->createQuickItem($project->id, [
+                'kind' => $kind,
+                'title' => $title,
+                'payload' => $payload === [] ? null : $payload,
+                'created_by' => $creator->id,
+            ]);
+        }
+
+        return $this->listQuickItems($project, $kind);
+    }
+
+    /** @return array<string, mixed> */
+    private function presentQuickItem(ProjectQuickItem $item): array
+    {
+        return [
+            'id' => $item->id,
+            'kind' => $item->kind,
+            'title' => $item->title,
+            'payload' => $item->payload ?? [],
+            'created_at' => $item->created_at?->toIso8601String(),
+        ];
+    }
+
     // ---------- Present ----------
 
     /** @return array<string, mixed> */
@@ -619,7 +742,10 @@ class ProjectService
                 ->all(),
             'start_date' => $project->start_date?->toDateString(),
             'end_date' => $project->end_date?->toDateString(),
-            'duration_days' => $this->durationDays($project),
+            'duration_days' => $this->durationBetween($project->start_date, $project->end_date),
+            'actual_start_date' => $project->actual_start_date?->toDateString(),
+            'actual_end_date' => $project->actual_end_date?->toDateString(),
+            'actual_duration_days' => $this->durationBetween($project->actual_start_date, $project->actual_end_date),
             'progress_method' => $project->progress_method,
             'status' => $project->status,
             'importance' => $project->importance,
@@ -701,13 +827,13 @@ class ProjectService
         ];
     }
 
-    private function durationDays(Project $project): ?int
+    private function durationBetween($start, $end): ?int
     {
-        if (! $project->start_date || ! $project->end_date) {
+        if (! $start || ! $end) {
             return null;
         }
 
-        return $project->start_date->diffInDays($project->end_date) + 1;
+        return $start->diffInDays($end) + 1;
     }
 
     /** @param  array<string, mixed>  $data */
@@ -718,6 +844,13 @@ class ProjectService
 
         if ($start && $end && $end < $start) {
             return 'Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.';
+        }
+
+        $actualStart = $data['actual_start_date'] ?? null;
+        $actualEnd = $data['actual_end_date'] ?? null;
+
+        if ($actualStart && $actualEnd && $actualEnd < $actualStart) {
+            return 'Ngày kết thúc thực tế phải sau hoặc bằng ngày bắt đầu thực tế.';
         }
 
         return null;

@@ -93,6 +93,11 @@ const PATHS = {
   trash2: 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6',
   helpCircle: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01',
   arrowRight: 'M5 12h14M13 6l6 6-6 6',
+  pauseCircle: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM10 9v6M14 9v6',
+  flag: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7',
+  copy: 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 2h6a1 1 0 0 1 1 1v3H8V3a1 1 0 0 1 1-1z',
+  stamp: 'M5 10H3v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10h-2M8 10V5a4 4 0 1 1 8 0v5',
+  tag: 'M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2zM7 7h.01',
 };
 
 const STROKE_ICONS = [
@@ -173,6 +178,11 @@ const STROKE_ICONS = [
   'trash2',
   'helpCircle',
   'arrowRight',
+  'pauseCircle',
+  'flag',
+  'copy',
+  'stamp',
+  'tag',
 ];
 
 defineProps({

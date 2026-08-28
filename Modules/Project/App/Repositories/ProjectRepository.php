@@ -17,6 +17,7 @@ use Modules\Project\App\Models\ProjectFollower;
 use Modules\Project\App\Models\ProjectLabel;
 use Modules\Project\App\Models\ProjectScope;
 use Modules\Project\App\Models\ProjectSetting;
+use Modules\Project\App\Models\ProjectQuickItem;
 use Modules\Project\App\Models\ProjectType;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
 
@@ -485,5 +486,50 @@ class ProjectRepository implements ProjectRepositoryInterface
     public function createType(array $data): ProjectType
     {
         return ProjectType::query()->create($data);
+    }
+
+    public function listQuickItems(int $projectId, ?string $kind = null): Collection
+    {
+        $query = ProjectQuickItem::query()
+            ->where('project_id', $projectId)
+            ->orderByDesc('id');
+
+        if ($kind !== null && $kind !== '') {
+            $query->where('kind', $kind);
+        }
+
+        return $query->get();
+    }
+
+    public function createQuickItem(int $projectId, array $data): ProjectQuickItem
+    {
+        return ProjectQuickItem::query()->create([
+            'project_id' => $projectId,
+            'kind' => $data['kind'],
+            'title' => $data['title'],
+            'payload' => $data['payload'] ?? null,
+            'created_by' => $data['created_by'] ?? null,
+        ]);
+    }
+
+    public function countQuickItemsByKind(int $projectId): array
+    {
+        $rows = ProjectQuickItem::query()
+            ->where('project_id', $projectId)
+            ->selectRaw('kind, COUNT(*) as total')
+            ->groupBy('kind')
+            ->pluck('total', 'kind')
+            ->all();
+
+        $counts = [];
+        foreach (ProjectQuickItem::KINDS as $kind) {
+            $counts[$kind] = (int) ($rows[$kind] ?? 0);
+        }
+        $counts['work_items'] = 0;
+        foreach (ProjectQuickItem::WORK_KINDS as $kind) {
+            $counts['work_items'] += $counts[$kind];
+        }
+
+        return $counts;
     }
 }

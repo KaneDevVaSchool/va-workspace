@@ -66,13 +66,14 @@ function onDepartmentIds(ids) {
 
     <div v-if="currentType === 'department'" class="proj-scope-picker__dept">
       <span class="proj-scope-picker__dept-label">Phòng ban / bộ phận</span>
+      <p class="proj-scope-picker__dept-hint">Chọn 1 phòng ban áp dụng.</p>
       <ProjectDepartmentPicker
         :model-value="currentDepartmentIds"
         :departments="departments"
         :disabled="disabled"
         :multiple="false"
-        placeholder="Gõ tên phòng ban hoặc bộ phận…"
-        empty-text="Chưa chọn phòng ban/bộ phận."
+        search-label="Tìm phòng ban / bộ phận"
+        placeholder="Tìm phòng ban / bộ phận"
         @update:model-value="onDepartmentIds"
       />
     </div>
@@ -164,6 +165,13 @@ function onDepartmentIds(ids) {
   color: var(--color-text-muted);
   font-size: 0.8125rem;
   font-weight: 600;
+}
+
+.proj-scope-picker__dept-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 @media (max-width: 768px) {
