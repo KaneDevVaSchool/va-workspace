@@ -13,7 +13,7 @@ use Modules\WorkspaceConfig\App\Services\GlobalMenuVisibilityService;
 
 /**
  * superadmin/workspace-config/global-menu — ẩn/hiện, đổi tên và sắp xếp
- * menu sidebar Ở MỨC TOÀN HỆ THỐNG, áp dụng cho mọi tài khoản không phải
+ * menu sidebar Ở MỨC TOÀN HỆ THỐNG, áp dụng cho mọi tài khoản kể cả
  * super_admin. Chỉ super_admin (permission workspace_config.manage_global_menu)
  * truy cập.
  */

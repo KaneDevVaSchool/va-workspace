@@ -31,7 +31,9 @@ interface GlobalMenuVisibilityRepositoryInterface
     public function customLabels(): array;
 
     /**
-     * Map menu_key => sort_order cho mọi item đã có sort_order.
+     * Map menu_key => sort_order cho item đã kéo-thả (có section_key).
+     * Không gồm row chỉ mới ẩn/đổi tên — sort_order mặc định 0 sẽ làm
+     * sidebar nhảy thứ tự.
      *
      * @return array<string, int>
      */

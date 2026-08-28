@@ -12,8 +12,9 @@ use Modules\Identity\App\Repositories\Contracts\GlobalMenuVisibilityRepositoryIn
  * super_admin cấu hình được (permission workspace_config.manage_global_menu).
  *
  * CATALOG liệt kê TOÀN BỘ mục sidebar hiện có trong AppSidebar.vue
- * (MENU_SECTIONS) — đồng bộ THỦ CÔNG. Khi 1 menu bị ẩn ở đây, áp dụng
- * cho MỌI tài khoản không phải super_admin, thắng tuyệt đối per-department.
+ * (MENU_SECTIONS) — đồng bộ THỦ CÔNG. Ẩn ở đây áp dụng cho MỌI tài khoản
+ * kể cả super_admin (thắng per-department). Thứ tự/tên/nhóm là mặc định
+ * toàn hệ thống; phòng ban vẫn được đè nếu đã cấu hình riêng.
  */
 class GlobalMenuVisibilityService
 {
@@ -26,7 +27,7 @@ class GlobalMenuVisibilityService
         'social.feed' => ['label' => 'Bảng tin nội bộ', 'section' => 'general', 'icon' => 'megaphone'],
         'manager.evaluation.view' => ['label' => 'Tiêu chí đánh giá', 'section' => 'general', 'icon' => 'clipboardCheck'],
         // section: admin (Quản trị)
-        'superadmin.permissions' => ['label' => 'Phân quyền', 'section' => 'admin', 'icon' => 'shield'],
+        'superadmin.permissions' => ['label' => 'Phân quyền', 'section' => 'admin', 'icon' => 'settings'],
         'superadmin.activity' => ['label' => 'Nhật ký hoạt động', 'section' => 'admin', 'icon' => 'clock'],
         // section: manager (Quản lý)
         'manager.workspace-config.hub' => [
@@ -142,8 +143,9 @@ class GlobalMenuVisibilityService
     public function forListing(): Collection
     {
         $rows = $this->repository->all()->keyBy('menu_key');
+        $catalogOrder = array_flip(array_keys(self::CATALOG));
 
-        return collect(self::CATALOG)->map(function (array $meta, string $menuKey) use ($rows) {
+        return collect(self::CATALOG)->map(function (array $meta, string $menuKey) use ($rows, $catalogOrder) {
             /** @var GlobalMenuVisibility|null $row */
             $row = $rows->get($menuKey);
 
@@ -152,7 +154,9 @@ class GlobalMenuVisibilityService
             $effectiveLabel = ($customLabel !== null && $customLabel !== '') ? $customLabel : $defaultLabel;
 
             $defaultSection = $meta['section'];
-            $effectiveSection = ($row?->section_key !== null && $row->section_key !== '') ? $row->section_key : $defaultSection;
+            $hasLayout = $row !== null && $row->section_key !== null && $row->section_key !== '';
+            $effectiveSection = $hasLayout ? $row->section_key : $defaultSection;
+            $defaultOrder = $catalogOrder[$menuKey] ?? 0;
 
             return [
                 'menu_key' => $menuKey,
@@ -166,7 +170,7 @@ class GlobalMenuVisibilityService
                 'is_hidden' => $row?->is_hidden ?? false,
                 'is_visible' => ! ($row?->is_hidden ?? false),
                 'is_protected' => $this->isProtected($menuKey),
-                'sort_order' => $row?->sort_order ?? 0,
+                'sort_order' => $hasLayout ? (int) $row->sort_order : $defaultOrder,
                 'updated_by_name' => $row?->updatedBy?->name,
                 'updated_at' => $row?->updated_at?->toIso8601String(),
             ];
