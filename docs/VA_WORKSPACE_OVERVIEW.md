@@ -6,7 +6,15 @@
 >
 > Đây là **tài liệu sống**: phần nền tảng đã có trong repo, phần nghiệp vụ (Project, Initiative, KPI…) vẫn là kế hoạch. Schema/route của các module chưa dựng là đề xuất theo `.claude/CLAUDE.md`.
 >
-> Cập nhật: 2026-08-26 — hoàn tất Evaluation Giai đoạn C (Mẫu đánh giá,
+> Cập nhật: 2026-08-28 — module `Project` (Giai đoạn 1, CRUD + loại dự án +
+> import/export Excel, xem commit `8e29655`/`d032e51`) có thêm: menu chuột
+> phải trên từng dòng ở `ProjectList` để tạo nhanh danh mục công việc/công
+> việc/phase/baseline/hồ sơ ký số (lưu tạm qua bảng `project_quick_items`,
+> chờ module `Task` đầy đủ), chức năng **nhân bản dự án**, và 2 cột
+> `actual_start_date`/`actual_end_date` (ngày bắt đầu/kết thúc thực tế) trên
+> `projects`. Xem §2 (Project), §10 (route `quick-items`, `duplicate`).
+>
+> Cập nhật trước — 2026-08-26 — hoàn tất Evaluation Giai đoạn C (Mẫu đánh giá,
 > PR1–PR6), xem `plans/2026-08-26-mau-danh-gia.md` và §21. Sửa cơ chế
 > "Ẩn/hiện menu toàn hệ thống" (`WorkspaceConfig`) để áp dụng cho **mọi**
 > tài khoản kể cả `super_admin` (bỏ ngoại lệ trước đây), và nâng cấp UI
@@ -25,6 +33,7 @@ Nền tảng **Phase 0 + Phase 1 đã xong**. Các module nghiệp vụ (Project
 | `Identity` | Google SSO (Sanctum **session/cookie**, không Bearer stateless), User/Department (stub chờ HRM), **9 role**, RBAC engine + UI ma trận `/superadmin/permissions`, View-as, Team, nhật ký hoạt động, shortcut | Gộp Auth + Department + Team + một phần Audit/SystemConfig — **không** tách module riêng |
 | `WorkspaceConfig` | Hub trưởng phòng: thành viên, CRUD nhóm, gán vai trò, bật/tắt menu; super_admin: overview + chi tiết phòng ban (chỉ xem) | Tab **Tiêu chí đánh giá** chưa có — đây là việc tiếp theo |
 | `Social` | Bảng tin nội bộ: đăng bài (4 loại tường), cảm xúc, bình luận đa cấp, poll, nhóm, sticker, `@mention`, ghim, lượt xem, giới hạn hiển thị theo phòng ban | **Không nằm trong kế hoạch gốc** — dựng ngoài lộ trình §19, chưa có ở bản đồ §2 trước bản cập nhật này. Chi tiết: `docs/modules/Social.md` |
+| `Project` | CRUD dự án (loại dự án, phạm vi/scope, nhãn, thành viên/theo dõi, đính kèm), import/export Excel, **nhân bản dự án**, ngày bắt đầu/kết thúc kế hoạch + **thực tế**, menu chuột phải trên bảng danh sách để tạo nhanh danh mục công việc/công việc/phase/baseline/hồ sơ ký số (`project_quick_items` — lưu tạm, chờ module `Task` đầy đủ) | Giai đoạn 1 (CRUD) đã xong; **chưa có** Sprint/Task/Worklog/Gantt thật — các "mục nhanh" chỉ là placeholder UI, không phải entity nghiệp vụ đầy đủ. Xem §2, §10 |
 | `Example` | Module mẫu | Copy khi tạo module mới (`new-module`) |
 
 **Quyết định đã chốt khi làm Identity/WorkspaceConfig (khác bản plan gốc):**
@@ -118,13 +127,16 @@ VA Workspace
 │                          + overview super_admin (chỉ xem)
 ├── Social                 Bảng tin nội bộ — bài đăng/cảm xúc/bình luận/poll/
 │                          nhóm/sticker/mention (ngoài lộ trình gốc, xem docs/modules/Social.md)
+├── Project                Dự án — CRUD, loại dự án, phạm vi/nhãn/thành viên, đính kèm,
+│                          import/export Excel, nhân bản, ngày thực tế, menu chuột phải
+│                          tạo nhanh mục (Giai đoạn 1 xong; CHƯA có Sprint/Task/Worklog/Gantt thật)
 ├── Example                Module mẫu — copy khi tạo module mới
 │
 │  ── KẾ HOẠCH (chưa dựng) ──────────────────────────────────────────
 ├── Evaluation             ★ việc tiếp theo — tiêu chí đánh giá (Giai đoạn B)
 │                          rồi mẫu/phiếu (Giai đoạn C); tab trong WorkspaceConfigHub
 ├── Notification           Thông báo in-app — bắn được xuyên phòng ban
-├── Project                Dự án · Sprint · Epic · Task (WBS đa cấp) · Worklog · Gantt
+├── Project (tiếp theo)    Sprint · Epic · Task (WBS đa cấp) · Worklog · Gantt
 ├── ProjectFinance         Tổng giá trị, đã chi, dòng tiền, ngân sách theo phase
 ├── DocumentManager        Tài liệu dự án (thư mục) tách biệt Đính kèm công việc
 ├── ProcessEngine          Quy trình BPM đa bước, action tự sinh entity
@@ -450,14 +462,15 @@ Theo đúng quy tắc 4 file route cố định (§2 CLAUDE.md). **Thực tế h
 | `Identity` (dropdown) | `routes/manager.php` global | `GET /manager/departments`, `GET /manager/teams` | teams = list cho scope filter |
 | `WorkspaceConfig` (manager) | `Modules/WorkspaceConfig/routes/manager.php` → `/api/workspace-config/*` | members, teams CRUD, gán role, sidebar | `department_id` lấy từ user đang đăng nhập, không nhận query |
 | `WorkspaceConfig` (superadmin) | `Modules/WorkspaceConfig/routes/superadmin.php` → `/api/workspace-config/*` | `/overview`, `/departments/{id}` | reserved `workspace_config.view_all` |
-| Vue SPA | `Modules/*/resources/js/router.js` + fallback `routes/web.php` | `/manager/workspace-config/*`, `/superadmin/permissions`, `/superadmin/activity`, `/superadmin/workspace-config` | F5 luôn trả `app.blade.php` |
+| `Project` | `Modules/Project/routes/manager.php` → `manager/projects` | CRUD, `export`, `import/*`, `{project}/avatar`, `{project}/attachments`, `{project}/duplicate`, `{project}/quick-items` (GET/POST) | `duplicate` tạo dự án mới (cần `project.create`); `quick-items` lưu tạm vào `project_quick_items`, chờ module `Task` thật |
+| Vue SPA | `Modules/*/resources/js/router.js` + fallback `routes/web.php` | `/manager/workspace-config/*`, `/superadmin/permissions`, `/superadmin/activity`, `/superadmin/workspace-config`, `/manager/projects/*` | F5 luôn trả `app.blade.php` |
 
 **Kế hoạch (module chưa dựng) — mặc định đăng ký cấp global trước:**
 
 | Module | File route (global mặc định) | Nhóm route chính | Ghi chú scope |
 |---|---|---|---|
 | `Initiative` | `routes/manager.php` (tạo/giao) + JSON session `/api/...` | `manager/initiatives`, assign, roll-up progress | Tạo/giao chỉ `director_officer`+ |
-| `Project` | `routes/manager.php` + JSON | `manager/projects`, tham số `initiative_id` khi tạo từ hạng mục | — |
+| `Project` (Sprint/Task/Gantt) | `Modules/Project/routes/manager.php` | `manager/projects/{id}/tasks`, `initiative_id` khi tạo từ hạng mục | Thay thế dần `project_quick_items` bằng entity `Task` thật khi dựng |
 | `WorkspaceConfig` (tab sau) | JSON module | tab `.../evaluation`, sau này `.../task-scoring` | `evaluation.manage_department` / `workspace.task_scoring.*` |
 | `Kpi` | JSON + trang dashboard | `manager/kpi` | scope theo role (§4.3) |
 | `ProcessEngine` | `routes/manager.php` | `manager/process-templates`, `manager/processes` | tạo template — xem rủi ro §20.7 |
@@ -649,7 +662,8 @@ project_documents          -- "Tài liệu dự án": có folder, người dùng
 | **1c** | Module `Evaluation` Giai đoạn B: tiêu chí đánh giá (2 kiểu), tab trong WorkspaceConfigHub | Phase 1b | **Xong** |
 | **1e** | Module `Evaluation` Giai đoạn C: Mẫu đánh giá + Vị trí đánh giá + mẫu dùng chung toàn hệ thống + trường tùy biến + Export Excel, mục **sidebar riêng** (khác Giai đoạn B). Kế hoạch: `plans/2026-08-26-mau-danh-gia.md` | Phase 1c | **Xong** — Import bị bỏ khỏi phạm vi có chủ đích (cấu trúc lồng nhau, rủi ro cao hơn lợi ích) |
 | **1d** *(ngoài kế hoạch)* | Module `Social`: bảng tin, cảm xúc, bình luận, poll, nhóm — làm song song, không nằm trong lộ trình gốc | — | **Xong phần lõi** — lượt xem + giới hạn hiển thị theo phòng ban đang dở (working tree), xem `docs/modules/Social.md` §5 |
-| **2** | Module `Initiative`: schema, Service/Repository, UI Vue giao/nhận, roll-up trạng thái | Phase 1 | Chưa |
+| **1f** *(ngoài thứ tự gốc)* | Module `Project` Giai đoạn 1: CRUD, loại dự án, phạm vi/nhãn/thành viên, đính kèm, import/export Excel, nhân bản dự án, ngày thực tế, menu chuột phải tạo nhanh mục (`project_quick_items`) | — | **Xong Giai đoạn 1** — làm trước Initiative dù roadmap gốc đặt Project ở Phase 2; **chưa có** Sprint/Task/Worklog/Gantt thật, `project_quick_items` chỉ là placeholder chờ module `Task` |
+| **2** | Module `Initiative`: schema, Service/Repository, UI Vue giao/nhận, roll-up trạng thái | Phase 1, có thể tận dụng `Project` đã có | Chưa |
 | **3** | Cross-department Task Delegation: mở rộng module `Project` (`tasks` + Service), `NotificationService` | Phase 1, cần Project | Chưa |
 | **4** | Module `TaskScoringConfig` theo phòng ban + `ScoringRollupService` + module `Kpi` | Phase 1, độc lập Phase 2/3 | Chưa — tab thêm vào hub, sau Evaluation |
 | **5** | Module vận hành: `DailyReport`, `Blocker`, `TestCase`, `Feedback`, `Contract`, `Credential`, `KnowledgeBase`, `AiAccount`, `WeeklyReport`; Evaluation Giai đoạn D (phiếu đánh giá thực tế, hội đồng, kỳ đánh giá) | Phase 0 / 1e | Chưa |
@@ -747,4 +761,4 @@ Khi triển khai từng phase, tạo `docs/modules/{TenModule}.md` theo `docs/RE
 
 ---
 
-*Tài liệu sống của toàn dự án. Phần đã có: `Identity`, `WorkspaceConfig`, `Evaluation` Giai đoạn B + C. Việc tiếp theo: §21 Bước 3 (Evaluation Giai đoạn D, hoặc skeleton `Project`/`Initiative`).*
+*Tài liệu sống của toàn dự án. Phần đã có: `Identity`, `WorkspaceConfig`, `Evaluation` Giai đoạn B + C, `Social` (phần lõi), `Project` Giai đoạn 1 (CRUD + nhân bản + menu chuột phải tạo nhanh mục). Việc tiếp theo: §21 Bước 3 (Evaluation Giai đoạn D, hoặc Project Giai đoạn 2: Sprint/Task/Worklog/Gantt thật, rồi `Initiative`).*
