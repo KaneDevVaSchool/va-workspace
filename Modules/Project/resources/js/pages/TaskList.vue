@@ -26,6 +26,7 @@ import {
   TASK_FILTERS,
   TASK_PRIORITY_LABELS,
   TASK_PRIORITY_TONES,
+  TASK_PROGRESS_TYPE_LABELS,
   TASK_STATUS_LABELS,
   TASK_STATUS_TAB_KEYS,
   TASK_STATUS_TONES,
@@ -114,12 +115,31 @@ const editForm = reactive({
   status: 'not_started',
   priority: '',
   start_date: '',
+  start_time: '',
   end_date: '',
+  due_time: '',
   actual_start_date: '',
   actual_end_date: '',
   assignee_id: '',
   progress_percent: '',
   description: '',
+  parent_id: '',
+  manager_id: '',
+  estimated_hours: '',
+  progress_type: 'percent',
+  progress_number: '',
+  progress_total: '',
+  unit: '',
+  weight: '',
+});
+
+/** Ước tính progress_percent phía client khi progress_type=quantity — chỉ
+ *  hiển thị tham khảo trước khi lưu, server luôn là nguồn thật (present()). */
+const editFormEstimatedPercent = computed(() => {
+  const number = Number(editForm.progress_number);
+  const total = Number(editForm.progress_total);
+  if (!editForm.progress_number || !total || total <= 0) return null;
+  return Math.round((number / total) * 100);
 });
 
 const viewMode = ref(loadViewMode());
@@ -188,8 +208,37 @@ const groupedTasks = computed(() => {
     }
     groups.get(key).tasks.push(task);
   }
-  return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+  const list = Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+  for (const group of list) {
+    group.tasks = buildTaskTree(group.tasks);
+  }
+  return list;
 });
+
+/**
+ * Cây WBS thu gọn/mở rộng theo parent_id trong phạm vi 1 group (dự án) —
+ * thứ tự cha-trước-con, kèm depth để thụt lề + hasChildren để hiện mũi tên.
+ * Chỉ áp dụng List view (Kanban giữ nguyên phẳng theo status/assignee/...).
+ */
+function buildTaskTree(tasksInGroup) {
+  const byParent = new Map();
+  for (const task of tasksInGroup) {
+    const key = task.parent_id ?? 0;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key).push(task);
+  }
+
+  const result = [];
+  function walk(parentKey, depth) {
+    for (const task of byParent.get(parentKey) || []) {
+      const hasChildren = byParent.has(task.id);
+      result.push({ ...task, depth, hasChildren });
+      if (hasChildren && !isTaskCollapsed(task.id)) walk(task.id, depth + 1);
+    }
+  }
+  walk(0, 0);
+  return result;
+}
 
 const allAssignableUsers = computed(() => {
   const map = new Map();
@@ -543,12 +592,22 @@ function startEdit() {
   editForm.status = selected.value.status || 'not_started';
   editForm.priority = selected.value.priority || '';
   editForm.start_date = selected.value.start_date || '';
+  editForm.start_time = selected.value.start_time || '';
   editForm.end_date = selected.value.end_date || '';
+  editForm.due_time = selected.value.due_time || '';
   editForm.actual_start_date = selected.value.actual_start_date || '';
   editForm.actual_end_date = selected.value.actual_end_date || '';
   editForm.assignee_id = selected.value.assignee_id || '';
   editForm.progress_percent = selected.value.progress_percent ?? '';
   editForm.description = selected.value.description || '';
+  editForm.parent_id = selected.value.parent_id || '';
+  editForm.manager_id = selected.value.manager_id || '';
+  editForm.estimated_hours = selected.value.estimated_hours ?? '';
+  editForm.progress_type = selected.value.progress_type || 'percent';
+  editForm.progress_number = selected.value.progress_number ?? '';
+  editForm.progress_total = selected.value.progress_total ?? '';
+  editForm.unit = selected.value.unit || '';
+  editForm.weight = selected.value.weight ?? '';
   editing.value = true;
 }
 
@@ -566,17 +625,36 @@ async function saveEdit() {
   if (!selected.value) return;
   saving.value = true;
   try {
+    const isQuantity = editForm.progress_type === 'quantity';
     const payload = {
       title: editForm.title.trim(),
       status: editForm.status,
       priority: editForm.priority || null,
       start_date: editForm.start_date || null,
+      start_time: editForm.start_time || null,
       end_date: editForm.end_date || null,
+      due_time: editForm.due_time || null,
       actual_start_date: editForm.actual_start_date || null,
       actual_end_date: editForm.actual_end_date || null,
       assignee_id: editForm.assignee_id || null,
-      progress_percent: editForm.progress_percent === '' ? null : Number(editForm.progress_percent),
       description: editForm.description || null,
+      parent_id: editForm.parent_id || null,
+      manager_id: editForm.manager_id || null,
+      estimated_hours: editForm.estimated_hours === '' ? null : Number(editForm.estimated_hours),
+      progress_type: editForm.progress_type,
+      weight: editForm.weight === '' ? null : Number(editForm.weight),
+      // progress_percent chỉ gửi khi progress_type=percent (server prohibited
+      // khi quantity — hệ thống tự tính); progress_number/total/unit chỉ gửi
+      // khi quantity — đúng ràng buộc required_if/prohibited_if của Request.
+      ...(isQuantity
+        ? {
+            progress_number: editForm.progress_number === '' ? null : Number(editForm.progress_number),
+            progress_total: editForm.progress_total === '' ? null : Number(editForm.progress_total),
+            unit: editForm.unit || null,
+          }
+        : {
+            progress_percent: editForm.progress_percent === '' ? null : Number(editForm.progress_percent),
+          }),
     };
     const { data } = await window.axios.put(`/api/project/tasks/${selected.value.id}`, payload);
     applyTaskUpdate(data.task);
@@ -667,6 +745,21 @@ function dateRangeLabel(task) {
   return `${formatDate(task.start_date)} – ${formatDate(task.end_date)}`;
 }
 
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('vi-VN');
+}
+
+/** Nhóm A — variance_days: dương = trễ, âm = sớm, null = chưa có đủ mốc. */
+function formatVarianceDays(value) {
+  if (value == null) return '—';
+  if (value > 0) return `Trễ ${value} ngày`;
+  if (value < 0) return `Sớm ${Math.abs(value)} ngày`;
+  return 'Đúng hạn';
+}
+
 function cellText(task, key) {
   if (key === 'code') return task.code || '—';
   if (key === 'title') return task.title || '—';
@@ -682,6 +775,16 @@ function cellText(task, key) {
 
 function isGroupCollapsed(key) {
   return collapsedGroups.value.has(key);
+}
+
+/** Cây WBS — tái dùng nguyên collapsedGroups (Set + localStorage) với key
+ *  dạng `task-{id}` để không đụng key `project-{id}` của group ngoài. */
+function isTaskCollapsed(taskId) {
+  return collapsedGroups.value.has(`task-${taskId}`);
+}
+
+function toggleTaskCollapse(taskId) {
+  toggleGroup(`task-${taskId}`);
 }
 
 function toggleGroup(key) {
@@ -1459,7 +1562,26 @@ onBeforeUnmount(() => {
                   >
                     <span v-if="col.key === 'code'" class="task-page__pill task-page__pill--code">{{ task.code || '—' }}</span>
                     <span v-else-if="col.key === 'title'" class="task-page__name-cell">
-                      <span class="task-page__name-title">{{ task.title }}</span>
+                      <span
+                        class="task-page__name-title-row"
+                        :style="task.depth ? { paddingLeft: `${task.depth * 20}px` } : undefined"
+                      >
+                        <button
+                          v-if="task.hasChildren"
+                          type="button"
+                          class="task-page__tree-toggle"
+                          :aria-label="isTaskCollapsed(task.id) ? 'Mở rộng công việc con' : 'Thu gọn công việc con'"
+                          @click.stop="toggleTaskCollapse(task.id)"
+                        >
+                          <AppIcon
+                            name="chevronRight"
+                            :size="12"
+                            class="task-page__tree-chevron"
+                            :class="{ 'task-page__tree-chevron--open': !isTaskCollapsed(task.id) }"
+                          />
+                        </button>
+                        <span class="task-page__name-title">{{ task.title }}</span>
+                      </span>
                     </span>
                     <span
                       v-else-if="col.key === 'project'"
@@ -1506,6 +1628,23 @@ onBeforeUnmount(() => {
                       <UserAvatarTip v-if="task.creator" :user="task.creator" label="Người tạo" />
                       <span v-else>—</span>
                     </span>
+                    <span v-else-if="col.key === 'created_at'" class="task-page__cell">{{ formatDateTime(task.created_at) }}</span>
+                    <span v-else-if="col.key === 'updated_at'" class="task-page__cell">{{ formatDateTime(task.updated_at) }}</span>
+                    <span v-else-if="col.key === 'parent'" class="task-page__cell">{{ task.parent?.title || '—' }}</span>
+                    <span v-else-if="col.key === 'attachments_count'" class="task-page__cell">{{ task.attachments_count || 0 }}</span>
+                    <span v-else-if="col.key === 'estimated_hours'" class="task-page__cell">{{ task.estimated_hours ?? '—' }}</span>
+                    <span v-else-if="col.key === 'worklog_hours'" class="task-page__cell">{{ task.worklog_hours || 0 }}</span>
+                    <span v-else-if="col.key === 'manager'">
+                      <UserAvatarTip v-if="task.manager" :user="task.manager" label="Người quản lý" />
+                      <span v-else>—</span>
+                    </span>
+                    <span v-else-if="col.key === 'accepted_by'" class="task-page__cell">{{ task.accepted_by_user?.name || '—' }}</span>
+                    <span v-else-if="col.key === 'weight'" class="task-page__cell">{{ task.weight != null ? `${task.weight}%` : '—' }}</span>
+                    <span v-else-if="col.key === 'is_overdue'" class="task-page__pill" :class="`task-page__pill--${task.is_overdue ? 'danger' : 'success'}`">
+                      <span class="task-page__dot" :class="`task-page__dot--${task.is_overdue ? 'danger' : 'success'}`" />
+                      {{ task.is_overdue ? 'Quá hạn' : 'Đúng hạn' }}
+                    </span>
+                    <span v-else-if="col.key === 'variance_days'" class="task-page__cell">{{ formatVarianceDays(task.variance_days) }}</span>
                     <span v-else class="task-page__cell">{{ cellText(task, col.key) }}</span>
                   </td>
                 </tr>
@@ -1585,9 +1724,11 @@ onBeforeUnmount(() => {
                 @pointerdown="onKanbanCardPointerDown($event, task)"
                 @click="!isKanbanDragGroup && inspect(task)"
               >
+                <span v-if="task.is_overdue" class="task-kanban__overdue-dot" aria-hidden="true" />
                 <header class="task-kanban__card-head">
                   <span v-if="task.code" class="task-kanban__card-code">{{ task.code }}</span>
                   <span class="task-kanban__card-type">{{ task.project?.name || typeLabel(task.type) }}</span>
+                  <span v-if="task.weight != null" class="task-kanban__card-weight">{{ task.weight }}%</span>
                 </header>
                 <h3 class="task-kanban__card-title">{{ task.title }}</h3>
                 <div v-if="task.priority && task.priority !== 'low'" class="task-kanban__card-labels">
@@ -1596,14 +1737,22 @@ onBeforeUnmount(() => {
                   </span>
                 </div>
                 <p v-if="task.description" class="task-kanban__card-desc">{{ task.description }}</p>
-                <dl v-if="task.assignee?.name || dateRangeLabel(task)" class="task-kanban__card-facts">
+                <dl v-if="task.assignee?.name || task.manager?.name || dateRangeLabel(task)" class="task-kanban__card-facts">
                   <div v-if="task.assignee?.name" class="task-kanban__card-fact">
                     <dt>Người thực hiện</dt>
                     <dd>{{ task.assignee.name }}</dd>
                   </div>
+                  <div v-if="task.manager?.name" class="task-kanban__card-fact">
+                    <dt>Người quản lý</dt>
+                    <dd>{{ task.manager.name }}</dd>
+                  </div>
                   <div v-if="dateRangeLabel(task)" class="task-kanban__card-fact">
                     <dt>Thời hạn</dt>
                     <dd>{{ dateRangeLabel(task) }}</dd>
+                  </div>
+                  <div v-if="task.worklog_hours" class="task-kanban__card-fact">
+                    <dt>Thời gian thực hiện</dt>
+                    <dd>{{ task.worklog_hours }} giờ</dd>
                   </div>
                 </dl>
                 <div v-if="task.progress_percent != null" class="task-kanban__card-progress">
@@ -1705,16 +1854,54 @@ onBeforeUnmount(() => {
             </select>
           </label>
           <label class="task-page__field">
-            <span class="task-page__label">Tiến độ (%)</span>
-            <input v-model="editForm.progress_percent" type="number" min="0" max="100" class="task-page__input" />
+            <span class="task-page__label">Cách tính tiến độ</span>
+            <select v-model="editForm.progress_type" class="task-page__input">
+              <option v-for="(label, value) in TASK_PROGRESS_TYPE_LABELS" :key="value" :value="value">{{ label }}</option>
+            </select>
           </label>
+          <label class="task-page__field">
+            <span class="task-page__label">Tiến độ (%)</span>
+            <input
+              v-model="editForm.progress_percent"
+              type="number"
+              min="0"
+              max="100"
+              class="task-page__input"
+              :disabled="editForm.progress_type === 'quantity'"
+            />
+          </label>
+          <template v-if="editForm.progress_type === 'quantity'">
+            <label class="task-page__field">
+              <span class="task-page__label">Khối lượng đã hoàn thành</span>
+              <input v-model="editForm.progress_number" type="number" min="0" step="0.01" class="task-page__input" />
+            </label>
+            <label class="task-page__field">
+              <span class="task-page__label">Khối lượng cần hoàn thành</span>
+              <input v-model="editForm.progress_total" type="number" min="0.01" step="0.01" class="task-page__input" />
+            </label>
+            <label class="task-page__field">
+              <span class="task-page__label">Đơn vị</span>
+              <input v-model="editForm.unit" type="text" maxlength="50" class="task-page__input" />
+            </label>
+            <p v-if="editFormEstimatedPercent != null" class="task-page__hint">
+              Ước tính: {{ editFormEstimatedPercent }}% (hệ thống tự tính khi lưu)
+            </p>
+          </template>
           <label class="task-page__field">
             <span class="task-page__label">Ngày bắt đầu</span>
             <input v-model="editForm.start_date" type="date" class="task-page__input" />
           </label>
           <label class="task-page__field">
+            <span class="task-page__label">Giờ bắt đầu</span>
+            <input v-model="editForm.start_time" type="time" class="task-page__input" />
+          </label>
+          <label class="task-page__field">
             <span class="task-page__label">Ngày kết thúc</span>
             <input v-model="editForm.end_date" type="date" class="task-page__input" />
+          </label>
+          <label class="task-page__field">
+            <span class="task-page__label">Giờ hạn</span>
+            <input v-model="editForm.due_time" type="time" class="task-page__input" />
           </label>
           <label class="task-page__field">
             <span class="task-page__label">Bắt đầu thực tế</span>
@@ -1723,6 +1910,21 @@ onBeforeUnmount(() => {
           <label class="task-page__field">
             <span class="task-page__label">Kết thúc thực tế</span>
             <input v-model="editForm.actual_end_date" type="date" class="task-page__input" />
+          </label>
+          <label class="task-page__field">
+            <span class="task-page__label">Người quản lý</span>
+            <select v-model="editForm.manager_id" class="task-page__input">
+              <option value="">Chưa gán</option>
+              <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
+            </select>
+          </label>
+          <label class="task-page__field">
+            <span class="task-page__label">Thời gian dự kiến (giờ)</span>
+            <input v-model="editForm.estimated_hours" type="number" min="0" step="0.5" class="task-page__input" />
+          </label>
+          <label class="task-page__field">
+            <span class="task-page__label">Tỷ trọng (%)</span>
+            <input v-model="editForm.weight" type="number" min="0" max="100" step="0.1" class="task-page__input" />
           </label>
           <label class="task-page__field task-page__field--full">
             <span class="task-page__label">Mô tả</span>
@@ -1798,9 +2000,73 @@ onBeforeUnmount(() => {
             <span class="task-page__row-label">Mô tả</span>
             <span class="task-page__row-value">{{ selected.description }}</span>
           </div>
+
+          <div v-if="selected.parent" class="task-page__row">
+            <span class="task-page__row-label">Công việc cha</span>
+            <span class="task-page__row-value">{{ selected.parent.code ? `${selected.parent.code} — ` : '' }}{{ selected.parent.title }}</span>
+          </div>
+          <div class="task-page__row">
+            <span class="task-page__row-label">Tình trạng hạn</span>
+            <span class="task-page__row-value task-page__row-value--status">
+              <span class="task-page__dot" :class="`task-page__dot--${selected.is_overdue ? 'danger' : 'success'}`" />
+              {{ selected.is_overdue ? 'Quá hạn' : 'Đúng hạn' }}
+            </span>
+          </div>
+          <div v-if="selected.variance_days != null" class="task-page__row">
+            <span class="task-page__row-label">Chênh lệch</span>
+            <span class="task-page__row-value">{{ formatVarianceDays(selected.variance_days) }}</span>
+          </div>
+          <div v-if="selected.estimated_hours != null" class="task-page__row">
+            <span class="task-page__row-label">Thời gian dự kiến</span>
+            <span class="task-page__row-value">{{ selected.estimated_hours }} giờ</span>
+          </div>
+          <div class="task-page__row">
+            <span class="task-page__row-label">Thời gian thực hiện</span>
+            <span class="task-page__row-value">{{ selected.worklog_hours || 0 }} giờ</span>
+          </div>
+          <div v-if="selected.manager" class="task-page__row">
+            <span class="task-page__row-label">Người quản lý</span>
+            <span class="task-page__row-value task-page__row-person">
+              <UserAvatarTip :user="selected.manager" label="Người quản lý" />
+              <span>{{ selected.manager.name }}</span>
+            </span>
+          </div>
+          <div v-if="selected.accepted_by_user" class="task-page__row">
+            <span class="task-page__row-label">Người đã nhận</span>
+            <span class="task-page__row-value">{{ selected.accepted_by_user.name }} — {{ formatDateTime(selected.accepted_at) }}</span>
+          </div>
+          <div v-if="selected.progress_type === 'quantity'" class="task-page__row">
+            <span class="task-page__row-label">Khối lượng</span>
+            <span class="task-page__row-value">{{ selected.progress_number }} / {{ selected.progress_total }} {{ selected.unit }}</span>
+          </div>
+          <div v-if="selected.weight != null" class="task-page__row">
+            <span class="task-page__row-label">Tỷ trọng</span>
+            <span class="task-page__row-value">{{ selected.weight }}%</span>
+          </div>
+          <div v-if="selected.task_score" class="task-page__row">
+            <span class="task-page__row-label">Điểm đánh giá</span>
+            <span class="task-page__row-value">{{ selected.task_score.rating_score ?? '—' }}</span>
+          </div>
+          <div v-if="selected.task_score?.rating_result" class="task-page__row">
+            <span class="task-page__row-label">Kết quả đánh giá</span>
+            <span class="task-page__row-value">{{ selected.task_score.rating_result }}</span>
+          </div>
+          <div v-if="selected.task_score?.rating_desc" class="task-page__row">
+            <span class="task-page__row-label">Ý kiến đánh giá</span>
+            <span class="task-page__row-value">{{ selected.task_score.rating_desc }}</span>
+          </div>
+
           <div class="task-page__row">
             <span class="task-page__row-label">Người tạo</span>
             <span class="task-page__row-value">{{ selected.creator?.name || '—' }}</span>
+          </div>
+          <div class="task-page__row">
+            <span class="task-page__row-label">Ngày tạo</span>
+            <span class="task-page__row-value">{{ formatDateTime(selected.created_at) }}</span>
+          </div>
+          <div class="task-page__row">
+            <span class="task-page__row-label">Cập nhật lần cuối</span>
+            <span class="task-page__row-value">{{ formatDateTime(selected.updated_at) }}</span>
           </div>
         </div>
       </aside>
@@ -2249,6 +2515,13 @@ onBeforeUnmount(() => {
   grid-column: 1 / -1;
 }
 
+.task-page__hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
 .task-page__label {
   color: var(--color-text-muted);
   font-size: 0.75rem;
@@ -2389,6 +2662,35 @@ onBeforeUnmount(() => {
   font-weight: 400;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.task-page__name-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.task-page__tree-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.125rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.task-page__tree-chevron {
+  transition: transform 0.15s ease;
+}
+
+.task-page__tree-chevron--open {
+  transform: rotate(90deg);
 }
 
 .task-page__pill {
@@ -3221,6 +3523,23 @@ onBeforeUnmount(() => {
   flex: 1 1 auto;
   font-style: italic;
   text-align: right;
+}
+
+.task-kanban__card-weight {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.task-kanban__overdue-dot {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-danger);
 }
 
 .task-kanban__card-title {
