@@ -118,6 +118,20 @@ const MENU_SECTIONS = [
         configurableByDepartment: true,
       },
       {
+        // Công việc (Project Giai đoạn 2 — Task thật) — trang "Tất cả công
+        // việc" xuyên project, cạnh mục "Dự án". requiresAnyPermission vì
+        // role member chỉ có task.view_assigned (không có task.view) —
+        // TaskService::paginate() tự ép lọc theo assignee_id = chính mình
+        // khi viewer không có task.view/task.*.
+        // configurableByDepartment: true — đồng bộ thủ công với
+        // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
+        name: 'manager.project.tasks',
+        label: 'Công việc',
+        icon: 'layoutList',
+        requiresAnyPermission: ['task.view', 'task.view_assigned'],
+        configurableByDepartment: true,
+      },
+      {
         // Duyệt bài viết (toàn trường) — khác "social.moderate" (xoá bài
         // vi phạm theo phòng ban). Hiện với bất kỳ ai có social.review:
         // mặc định admin/super_admin (social.* / *), hoặc được cấp thêm
@@ -162,6 +176,10 @@ function itemPasses(item) {
     (!item.hideWhenSuperAdmin || !auth.showSuperAdminNav) &&
     (!item.requiresAdmin || auth.canViewActivityLog) &&
     (!item.requiresPermission || auth.can(item.requiresPermission)) &&
+    // requiresAnyPermission: OR nhiều key — dùng khi 1 mục cần hiện với
+    // nhiều permission khác nhau tuỳ vai trò (VD: "Công việc" hiện với
+    // task.view HOẶC task.view_assigned — xem TaskService::paginate()).
+    (!item.requiresAnyPermission || item.requiresAnyPermission.some((key) => auth.can(key))) &&
     !auth.hiddenMenuKeys.includes(item.name) &&
     // Ẩn toàn hệ thống (superadmin) thắng tuyệt đối per-department, áp dụng
     // cho MỌI tài khoản kể cả super_admin (không có ngoại lệ) — trang

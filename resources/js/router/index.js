@@ -82,6 +82,16 @@ router.beforeEach(async (to) => {
         return { name: 'home' };
     }
 
+    // requiresAnyPermission: OR nhiều key — dùng khi 1 trang cần vào được
+    // với nhiều permission khác nhau tuỳ vai trò (VD: manager.project.tasks
+    // với task.view HOẶC task.view_assigned — xem AppSidebar.vue).
+    if (
+        to.meta.requiresAnyPermission &&
+        !to.meta.requiresAnyPermission.some((key) => auth.can(key))
+    ) {
+        return { name: 'home' };
+    }
+
     // Menu bị superadmin ẩn Ở MỨC TOÀN HỆ THỐNG — thắng tuyệt đối
     // per-department, super_admin hiệu lực (không view-as) miễn nhiễm.
     // Chỉ chặn UX phía client; chặn thật ở backend qua middleware

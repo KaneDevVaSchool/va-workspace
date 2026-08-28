@@ -341,13 +341,13 @@ return [
         'project.manage_settings' => ['label' => 'Cấu hình dự án toàn hệ thống', 'module' => 'Dự án', 'description' => 'Cấu hình mã dự án, quy tắc hoạt động và danh sách nhân sự được phép tạo dự án (chỉ admin/super_admin — đã bao trùm qua project.*)', 'active' => true],
 
         // ---------- Công việc (task) ----------
-        'task.*' => ['label' => 'Toàn bộ công việc', 'module' => 'Công việc', 'description' => 'Toàn quyền quản lý công việc/task'],
-        'task.view' => ['label' => 'Xem công việc', 'module' => 'Công việc', 'description' => 'Xem danh sách và chi tiết công việc'],
-        'task.view_assigned' => ['label' => 'Xem công việc được giao', 'module' => 'Công việc', 'description' => 'Chỉ xem công việc được giao cho bản thân'],
-        'task.delegate' => ['label' => 'Uỷ quyền công việc', 'module' => 'Công việc', 'description' => 'Cho phép giao/chuyển task cho người khác thực hiện'],
-        'task.create' => ['label' => 'Tạo công việc', 'module' => 'Công việc', 'description' => 'Tạo mới công việc/task'],
-        'task.assign' => ['label' => 'Phân công công việc', 'module' => 'Công việc', 'description' => 'Giao task cho thành viên trong nhóm/phòng ban'],
-        'task.approve' => ['label' => 'Duyệt công việc', 'module' => 'Công việc', 'description' => 'Phê duyệt hoàn thành công việc'],
+        'task.*' => ['label' => 'Toàn bộ công việc', 'module' => 'Công việc', 'description' => 'Toàn quyền quản lý công việc/task', 'active' => true],
+        'task.view' => ['label' => 'Xem công việc', 'module' => 'Công việc', 'description' => 'Xem danh sách và chi tiết công việc', 'active' => true],
+        'task.view_assigned' => ['label' => 'Xem công việc được giao', 'module' => 'Công việc', 'description' => 'Chỉ xem công việc được giao cho bản thân', 'active' => true],
+        'task.delegate' => ['label' => 'Uỷ quyền công việc', 'module' => 'Công việc', 'description' => 'Cho phép giao/chuyển task cho người khác thực hiện', 'active' => true],
+        'task.create' => ['label' => 'Tạo công việc', 'module' => 'Công việc', 'description' => 'Tạo mới công việc/task', 'active' => true],
+        'task.assign' => ['label' => 'Phân công công việc', 'module' => 'Công việc', 'description' => 'Giao task cho thành viên trong nhóm/phòng ban', 'active' => true],
+        'task.approve' => ['label' => 'Duyệt công việc', 'module' => 'Công việc', 'description' => 'Phê duyệt hoàn thành công việc', 'active' => true],
 
         // ---------- Báo cáo ngày (daily_report) ----------
         'daily_report.*' => ['label' => 'Toàn bộ báo cáo ngày', 'module' => 'Báo cáo ngày', 'description' => 'Toàn quyền quản lý báo cáo ngày'],
