@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Project\App\Http\Controllers\ProjectController;
+use Modules\Project\App\Http\Controllers\TaskController;
 
 /*
 |--------------------------------------------------------------------------
@@ -16,6 +17,24 @@ use Modules\Project\App\Http\Controllers\ProjectController;
 */
 
 Route::middleware(['auth'])->prefix('project')->name('project.')->group(function () {
+
+    // ---------- Task (Project Giai đoạn 2 — WBS đa cấp, thuộc project) ----------
+    // Route tĩnh /tasks* PHẢI đăng ký trước GET /{project} (int binding, dòng
+    // dưới) — nếu không Laravel sẽ hiểu "tasks" là giá trị {project}.
+    Route::middleware('permission:task.view')->group(function () {
+        Route::get('/tasks/options', [TaskController::class, 'options'])->name('tasks.options');
+        Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
+        Route::get('/tasks/{task}', [TaskController::class, 'show'])->name('tasks.show');
+        Route::get('/{project}/tasks', [TaskController::class, 'treeByProject'])->name('tasks.tree');
+    });
+
+    Route::middleware('permission:task.create')
+        ->post('/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
+
+    Route::middleware('permission:task.create')->group(function () {
+        Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
+        Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
+    });
 
     // Danh mục giá trị cố định (type/status/importance/progress_method/scope_type)
     Route::get('/options', [ProjectController::class, 'options'])->name('options');

@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Modules\Project\App\Console\Commands\AutoStartProjectsCommand;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
+use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
 use Modules\Project\App\Repositories\ProjectRepository;
+use Modules\Project\App\Repositories\TaskRepository;
 
 class ProjectServiceProvider extends ServiceProvider
 {
@@ -16,6 +18,11 @@ class ProjectServiceProvider extends ServiceProvider
         $this->app->bind(
             ProjectRepositoryInterface::class,
             ProjectRepository::class,
+        );
+
+        $this->app->bind(
+            TaskRepositoryInterface::class,
+            TaskRepository::class,
         );
     }
 
