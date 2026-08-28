@@ -102,9 +102,19 @@ const scoreForm = reactive({ rating_score: '', rating_result: '', rating_desc: '
 const query = ref('');
 const projectId = ref('');
 const assigneeId = ref('');
+const managerId = ref('');
 const dateFrom = ref('');
 const dateTo = ref('');
+const isOverdueOnly = ref(false);
+const progressTypeFilter = ref('');
 const perPage = ref(20);
+const sortBy = ref('');
+const sortDir = ref('desc');
+
+const selectedTaskIds = ref(new Set());
+const bulkSaving = ref(false);
+const bulkManagerId = ref('');
+const bulkWeight = ref('');
 const activeTab = ref(typeof route.query.tab === 'string' && route.query.tab ? route.query.tab : 'all');
 const tabCounts = ref({});
 
@@ -177,7 +187,7 @@ const kanbanDrag = reactive({
 });
 
 const shownColumns = computed(() => TASK_COLUMNS.filter((col) => col.always || visibleColumns[col.key]));
-const colSpan = computed(() => Math.max(shownColumns.value.length, 1));
+const colSpan = computed(() => Math.max(shownColumns.value.length, 1) + 1); // +1 cột checkbox chọn dòng (PR7)
 const isKanban = computed(() => viewMode.value === 'kanban');
 const canEdit = computed(() => auth.can('task.create'));
 const canApprove = computed(() => auth.can('task.approve'));
@@ -200,8 +210,11 @@ const hasActiveFilters = computed(
     Boolean(query.value.trim()) ||
     Boolean(projectId.value) ||
     Boolean(assigneeId.value) ||
+    Boolean(managerId.value) ||
     Boolean(dateFrom.value) ||
     Boolean(dateTo.value) ||
+    isOverdueOnly.value ||
+    Boolean(progressTypeFilter.value) ||
     (activeTab.value && activeTab.value !== 'all'),
 );
 
@@ -444,9 +457,14 @@ function currentFilterParams() {
     q: query.value.trim() || undefined,
     project_id: projectId.value || undefined,
     assignee_id: assigneeId.value || undefined,
+    manager_id: managerId.value || undefined,
     date_from: dateFrom.value || undefined,
     date_to: dateTo.value || undefined,
+    is_overdue: isOverdueOnly.value ? 1 : undefined,
+    progress_type: progressTypeFilter.value || undefined,
     tab: activeTab.value && activeTab.value !== 'all' ? activeTab.value : undefined,
+    sort_by: sortBy.value || undefined,
+    sort_dir: sortBy.value ? sortDir.value : undefined,
   };
 }
 
@@ -475,6 +493,7 @@ async function loadTasks(page = 1) {
     tasks.value = data.tasks ?? [];
     meta.value = data.meta ?? { current_page: 1, last_page: 1, total: 0, from: 0, to: 0, per_page: 20 };
     tabCounts.value = data.tab_counts ?? {};
+    clearSelection();
 
     if (selected.value) {
       const fresh = tasks.value.find((t) => t.id === selected.value.id);
@@ -581,8 +600,11 @@ function clearFilters() {
   query.value = '';
   projectId.value = '';
   assigneeId.value = '';
+  managerId.value = '';
   dateFrom.value = '';
   dateTo.value = '';
+  isOverdueOnly.value = false;
+  progressTypeFilter.value = '';
   if (activeTab.value !== 'all') {
     selectTab('all');
     return;
@@ -951,6 +973,79 @@ function formatVarianceDays(value) {
   if (value > 0) return `Trễ ${value} ngày`;
   if (value < 0) return `Sớm ${Math.abs(value)} ngày`;
   return 'Đúng hạn';
+}
+
+/** Khớp TaskRepository::SORTABLE_COLUMNS (PR7) — chỉ giá trị đơn giản
+ *  (ngày/số), không sort theo quan hệ (manager/parent). */
+const SORTABLE_COLUMN_KEYS = ['end_date', 'progress_percent', 'weight', 'estimated_hours', 'worklog_hours', 'created_at'];
+
+function isSortableColumn(key) {
+  return SORTABLE_COLUMN_KEYS.includes(key);
+}
+
+/** 3 trạng thái: tăng → giảm → bỏ sort (về mặc định created_at desc). */
+function toggleSort(key) {
+  if (sortBy.value !== key) {
+    sortBy.value = key;
+    sortDir.value = 'asc';
+    return;
+  }
+  if (sortDir.value === 'asc') {
+    sortDir.value = 'desc';
+    return;
+  }
+  sortBy.value = '';
+  sortDir.value = 'desc';
+}
+
+function isTaskSelected(taskId) {
+  return selectedTaskIds.value.has(taskId);
+}
+
+function toggleTaskSelected(taskId) {
+  const next = new Set(selectedTaskIds.value);
+  if (next.has(taskId)) next.delete(taskId);
+  else next.add(taskId);
+  selectedTaskIds.value = next;
+}
+
+function toggleSelectAll() {
+  if (selectedTaskIds.value.size === tasks.value.length && tasks.value.length > 0) {
+    selectedTaskIds.value = new Set();
+    return;
+  }
+  selectedTaskIds.value = new Set(tasks.value.map((t) => t.id));
+}
+
+function clearSelection() {
+  selectedTaskIds.value = new Set();
+  bulkManagerId.value = '';
+  bulkWeight.value = '';
+}
+
+async function applyBulkUpdate() {
+  const payload = { task_ids: Array.from(selectedTaskIds.value) };
+  if (bulkManagerId.value !== '') payload.manager_id = bulkManagerId.value;
+  if (bulkWeight.value !== '') payload.weight = Number(bulkWeight.value);
+
+  if (!payload.manager_id && payload.weight === undefined) {
+    showClientToast('warning', 'Chọn ít nhất một trường để cập nhật hàng loạt.');
+    return;
+  }
+
+  bulkSaving.value = true;
+  try {
+    const { data } = await window.axios.patch('/api/project/tasks/bulk', payload);
+    const updatedById = new Map((data.tasks || []).map((t) => [t.id, t]));
+    tasks.value = tasks.value.map((t) => updatedById.get(t.id) || t);
+    showClientToast('success', `Đã cập nhật ${updatedById.size} công việc.`);
+    clearSelection();
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không cập nhật hàng loạt được.');
+  } finally {
+    bulkSaving.value = false;
+  }
 }
 
 function cellText(task, key) {
@@ -1416,7 +1511,10 @@ watch(tableZoom, (value) => {
 watch(selected, () => nextTick(fitColumnsToContent));
 watch(shownColumns, () => nextTick(fitColumnsToContent));
 watch(perPage, () => loadTasks(1));
-watch([projectId, assigneeId, dateFrom, dateTo], () => loadTasks(1));
+watch(
+  [projectId, assigneeId, managerId, dateFrom, dateTo, isOverdueOnly, progressTypeFilter, sortBy, sortDir],
+  () => loadTasks(1),
+);
 
 onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown);
@@ -1626,6 +1724,13 @@ onBeforeUnmount(() => {
                 <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
               </select>
             </div>
+            <div v-if="visibleFilters.manager_id" class="task-page__field">
+              <label class="task-page__label" for="task-manager">Người quản lý</label>
+              <select id="task-manager" v-model="managerId" class="task-page__input">
+                <option value="">Tất cả người quản lý</option>
+                <option v-for="u in allAssignableUsers" :key="u.id" :value="u.id">{{ u.name }}</option>
+              </select>
+            </div>
             <div v-if="visibleFilters.date_from" class="task-page__field">
               <label class="task-page__label" for="task-from">Từ ngày</label>
               <input id="task-from" v-model="dateFrom" type="date" class="task-page__input" />
@@ -1634,6 +1739,17 @@ onBeforeUnmount(() => {
               <label class="task-page__label" for="task-to">Đến ngày</label>
               <input id="task-to" v-model="dateTo" type="date" class="task-page__input" />
             </div>
+            <div v-if="visibleFilters.progress_type" class="task-page__field">
+              <label class="task-page__label" for="task-progress-type">Cách tính tiến độ</label>
+              <select id="task-progress-type" v-model="progressTypeFilter" class="task-page__input">
+                <option value="">Tất cả</option>
+                <option v-for="(label, value) in TASK_PROGRESS_TYPE_LABELS" :key="value" :value="value">{{ label }}</option>
+              </select>
+            </div>
+            <label v-if="visibleFilters.is_overdue" class="task-page__check">
+              <input type="checkbox" v-model="isOverdueOnly" />
+              <span>Chỉ hiện việc quá hạn</span>
+            </label>
           </div>
         </div>
 
@@ -1679,6 +1795,27 @@ onBeforeUnmount(() => {
           </template>
         </TablePagesBar>
 
+        <div v-if="!isKanban && selectedTaskIds.size > 0" class="task-page__bulk-bar">
+          <span class="task-page__bulk-count">Đã chọn {{ selectedTaskIds.size }} công việc</span>
+          <label class="task-page__field task-page__bulk-field">
+            <span class="task-page__label">Gán người quản lý</span>
+            <select v-model="bulkManagerId" class="task-page__input">
+              <option value="">Không đổi</option>
+              <option v-for="u in allAssignableUsers" :key="u.id" :value="u.id">{{ u.name }}</option>
+            </select>
+          </label>
+          <label class="task-page__field task-page__bulk-field">
+            <span class="task-page__label">Tỷ trọng (%)</span>
+            <input v-model="bulkWeight" type="number" min="0" max="100" step="0.1" class="task-page__input" />
+          </label>
+          <button type="button" class="task-page__btn" :disabled="bulkSaving" @click="applyBulkUpdate">
+            {{ bulkSaving ? 'Đang lưu…' : 'Áp dụng' }}
+          </button>
+          <button type="button" class="task-page__btn task-page__btn--ghost" @click="clearSelection">
+            Bỏ chọn
+          </button>
+        </div>
+
         <div
           v-if="!isKanban"
           ref="tableWrap"
@@ -1688,12 +1825,34 @@ onBeforeUnmount(() => {
         >
           <table class="task-page__table" :style="{ width: tableWidthPx }">
             <colgroup>
+              <col class="task-page__col-check" />
               <col v-for="col in shownColumns" :key="col.key" :style="{ width: colWidthStyle(col.key) }" />
             </colgroup>
             <thead>
               <tr>
+                <th class="task-page__th-check">
+                  <input
+                    type="checkbox"
+                    aria-label="Chọn tất cả công việc"
+                    :checked="tasks.length > 0 && selectedTaskIds.size === tasks.length"
+                    @change="toggleSelectAll"
+                  />
+                </th>
                 <th v-for="col in shownColumns" :key="col.key">
-                  <span>{{ col.label }}</span>
+                  <button
+                    v-if="isSortableColumn(col.key)"
+                    type="button"
+                    class="task-page__th-sort"
+                    @click="toggleSort(col.key)"
+                  >
+                    <span>{{ col.label }}</span>
+                    <AppIcon
+                      v-if="sortBy === col.key"
+                      :name="sortDir === 'asc' ? 'chevronsUp' : 'chevronsDown'"
+                      :size="12"
+                    />
+                  </button>
+                  <span v-else>{{ col.label }}</span>
                   <button
                     type="button"
                     class="task-page__resize"
@@ -1745,6 +1904,14 @@ onBeforeUnmount(() => {
                   ]"
                   @dblclick="inspect(task)"
                 >
+                  <td class="task-page__td-check" @click.stop>
+                    <input
+                      type="checkbox"
+                      :aria-label="`Chọn công việc ${task.title}`"
+                      :checked="isTaskSelected(task.id)"
+                      @change="toggleTaskSelected(task.id)"
+                    />
+                  </td>
                   <td
                     v-for="col in shownColumns"
                     :key="col.key"
@@ -2817,6 +2984,42 @@ onBeforeUnmount(() => {
   margin: var(--space-3) 0 0;
 }
 
+.task-page__bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.task-page__bulk-count {
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.task-page__bulk-field {
+  width: auto;
+  min-width: 10rem;
+}
+
+.task-page__col-check {
+  width: 2.25rem;
+}
+
+.task-page__th-check,
+.task-page__td-check {
+  width: 2.25rem;
+  text-align: center;
+}
+
 .task-page__filters {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3009,6 +3212,19 @@ onBeforeUnmount(() => {
   text-align: left;
   white-space: nowrap;
   box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-page__th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
 }
 
 .task-page__resize {

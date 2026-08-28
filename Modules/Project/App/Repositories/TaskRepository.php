@@ -15,14 +15,43 @@ use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
  */
 class TaskRepository implements TaskRepositoryInterface
 {
+    /**
+     * Cột được phép sort — chỉ giá trị đơn giản (ngày/số), không sort theo
+     * quan hệ (manager/parent) vì cần join, để lại nếu có nhu cầu rõ sau.
+     * key => cột SQL thật (worklog_hours là alias FE, cột SQL thật do
+     * withSum('worklogs','hours') sinh ra là worklogs_sum_hours).
+     */
+    private const SORTABLE_COLUMNS = [
+        'end_date' => 'end_date',
+        'progress_percent' => 'progress_percent',
+        'weight' => 'weight',
+        'estimated_hours' => 'estimated_hours',
+        'worklog_hours' => 'worklogs_sum_hours',
+        'created_at' => 'created_at',
+    ];
+
     public function paginate(array $filters, int $perPage, int $page, array $allowedProjectIds, User $viewer): LengthAwarePaginator
     {
         $query = $this->baseQuery()->whereIn('project_id', $allowedProjectIds);
 
         $this->applyFilters($query, $filters);
         $this->applyTabFilter($query, $filters['tab'] ?? null, $viewer);
+        $this->applySort($query, $filters['sort_by'] ?? null, $filters['sort_dir'] ?? null);
 
-        return $query->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
+        return $query->paginate($perPage, ['*'], 'page', $page);
+    }
+
+    private function applySort(Builder $query, ?string $sortBy, ?string $sortDir): void
+    {
+        $column = $sortBy !== null ? (self::SORTABLE_COLUMNS[$sortBy] ?? null) : null;
+        if ($column === null) {
+            $query->orderByDesc('created_at');
+
+            return;
+        }
+
+        $direction = $sortDir === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($column, $direction);
     }
 
     public function tabCounts(array $allowedProjectIds, ?int $forceAssigneeId, User $viewer): array

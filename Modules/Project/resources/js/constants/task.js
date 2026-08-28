@@ -101,8 +101,11 @@ export const TASK_COLUMNS = [
 export const TASK_FILTERS = [
   { key: 'project_id', label: 'Dự án', defaultOn: false },
   { key: 'assignee_id', label: 'Người thực hiện', defaultOn: false },
+  { key: 'manager_id', label: 'Người quản lý', defaultOn: false },
   { key: 'date_from', label: 'Từ ngày', defaultOn: false },
   { key: 'date_to', label: 'Đến ngày', defaultOn: false },
+  { key: 'is_overdue', label: 'Chỉ hiện việc quá hạn', defaultOn: false },
+  { key: 'progress_type', label: 'Cách tính tiến độ', defaultOn: false },
 ];
 
 export const COLUMN_STORAGE_KEY = 'va-task-columns-v2';

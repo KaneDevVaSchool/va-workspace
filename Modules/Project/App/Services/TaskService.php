@@ -248,6 +248,40 @@ class TaskService
         return $this->tasks->countByProject($projectId);
     }
 
+    /**
+     * Bulk actions (PR7) — chỉ cho phép whitelist manager_id/weight, KHÔNG
+     * cho bulk sửa status/title/assignee... tránh sai sót hàng loạt ngoài
+     * ý muốn (quyết định đã chốt trong plan). Chỉ áp dụng cho task thuộc
+     * phạm vi quyền viewer (project viewer được xem qua forViewer()) — task
+     * ngoài phạm vi bị bỏ qua âm thầm, không báo lỗi để tránh rò rỉ thông
+     * tin về task người dùng không có quyền truy cập.
+     *
+     * @param  list<int>  $taskIds
+     * @param  array<string, mixed>  $data
+     * @return list<Task>
+     */
+    public function bulkUpdate(array $taskIds, array $data, User $editor): array
+    {
+        $allowed = array_intersect_key($data, array_flip(['manager_id', 'weight']));
+        if ($allowed === [] || $taskIds === []) {
+            return [];
+        }
+
+        $allowedProjectIds = $this->projects->forViewer(Project::query(), $editor)->pluck('id')->all();
+        $allowed['updated_by'] = $editor->id;
+
+        $updated = [];
+        foreach ($taskIds as $taskId) {
+            $task = $this->tasks->find((int) $taskId);
+            if ($task === null || ! in_array($task->project_id, $allowedProjectIds, true)) {
+                continue;
+            }
+            $updated[] = $this->tasks->update($task, $allowed);
+        }
+
+        return $updated;
+    }
+
     public function present(Task $task): array
     {
         $overdue = $this->computeOverdue($task);

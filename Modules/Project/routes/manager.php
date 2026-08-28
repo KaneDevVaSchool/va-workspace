@@ -70,6 +70,15 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
         ->put('/tasks/{task}/score', [TaskScoreController::class, 'upsert'])
         ->name('tasks.score.upsert');
 
+    // ---------- Bulk actions (PR7) ----------
+    // PATCH /tasks/bulk là route tĩnh khác method (PATCH) với PUT/DELETE
+    // /tasks/{task} nên về lý thuyết không xung đột thật, nhưng đặt trước
+    // cho nhất quán với cách xử lý attachments/worklogs (route tĩnh trước
+    // wildcard) — tránh rủi ro nếu sau này có ai thêm PATCH /tasks/{task}.
+    Route::middleware('permission:task.create')
+        ->patch('/tasks/bulk', [TaskController::class, 'bulkUpdate'])
+        ->name('tasks.bulk-update');
+
     Route::middleware('permission:task.create')->group(function () {
         // update dùng implicit model binding (Task $task, khác int $task ở
         // show/destroy) — UpdateTaskRequest cần đọc progress_type HIỆN CÓ

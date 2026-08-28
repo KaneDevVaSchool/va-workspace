@@ -5,6 +5,7 @@ namespace Modules\Project\App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Modules\Project\App\Enums\TaskEnums;
+use Modules\Project\App\Http\Requests\BulkUpdateTaskRequest;
 use Modules\Project\App\Http\Requests\StoreTaskRequest;
 use Modules\Project\App\Http\Requests\UpdateTaskRequest;
 use Modules\Project\App\Models\Task;
@@ -27,7 +28,7 @@ class TaskController extends Controller
     {
         $filters = $request->only([
             'project_id', 'assignee_id', 'manager_id', 'status', 'type', 'progress_type',
-            'is_overdue', 'date_from', 'date_to', 'q', 'tab',
+            'is_overdue', 'date_from', 'date_to', 'q', 'tab', 'sort_by', 'sort_dir',
         ]);
         $perPage = (int) $request->input('per_page', 20);
         $page = (int) $request->input('page', 1);
@@ -125,5 +126,19 @@ class TaskController extends Controller
     public function options()
     {
         return response()->json(TaskEnums::options());
+    }
+
+    /** PATCH /api/project/tasks/bulk — chỉ manager_id/weight (whitelist). */
+    public function bulkUpdate(BulkUpdateTaskRequest $request)
+    {
+        $validated = $request->validated();
+        $taskIds = $validated['task_ids'];
+        unset($validated['task_ids']);
+
+        $updated = $this->service->bulkUpdate($taskIds, $validated, $request->user());
+
+        return response()->json([
+            'tasks' => collect($updated)->map(fn ($t) => $this->service->present($t))->values(),
+        ]);
     }
 }
