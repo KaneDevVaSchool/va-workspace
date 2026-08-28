@@ -4,13 +4,17 @@ namespace Modules\Project\App\Services;
 
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Services\PermissionService;
+use Modules\Project\App\Enums\TaskEnums;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\Task;
 use Modules\Project\App\Models\TaskScore;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Business logic của entity Task (Project Giai đoạn 2 — WBS đa cấp).
@@ -27,6 +31,8 @@ class TaskService
         private readonly TaskRepositoryInterface $tasks,
         private readonly ProjectRepositoryInterface $projects,
         private readonly PermissionService $permissions,
+        private readonly TaskExcelExporter $exporter,
+        private readonly TaskExcelImporter $importer,
     ) {}
 
     /** @param  array<string, mixed>  $filters */
@@ -41,6 +47,164 @@ class TaskService
         $allowedProjectIds = $this->projects->forViewer(Project::query(), $viewer)->pluck('id')->all();
 
         return $this->tasks->paginate($filters, $perPage, $page, $allowedProjectIds, $viewer);
+    }
+
+    /**
+     * Xuất danh sách công việc ra Excel theo đúng bộ lọc đang dùng trên
+     * trang "Tất cả công việc" (PR8).
+     *
+     * @param  array<string, mixed>  $filters
+     * @param  list<string>|null  $columnKeys  null = xuất đủ mọi cột (dùng làm file mẫu nhập lại)
+     */
+    public function export(array $filters, ?array $columnKeys, User $exportedBy): BinaryFileResponse
+    {
+        if (! $this->permissions->allows($exportedBy, 'task.view') && ! $this->permissions->allows($exportedBy, 'task.*')) {
+            $filters['assignee_id'] = $exportedBy->id;
+        }
+
+        $allowedProjectIds = $this->projects->forViewer(Project::query(), $exportedBy)->pluck('id')->all();
+        $tasks = $this->tasks->forExport($filters, $allowedProjectIds, $exportedBy);
+        $rows = $tasks->map(fn (Task $t) => $this->presentForExport($t))->values()->all();
+        $filename = 'Cong_viec_'.now()->format('Ymd_His').'.xlsx';
+
+        return $this->exporter->download($rows, $exportedBy, $filename, $columnKeys);
+    }
+
+    /**
+     * Đọc + xem trước file Excel — KHÔNG ghi DB (PR8).
+     *
+     * @return array{rows: list<array<string, mixed>>}
+     */
+    public function previewImport(UploadedFile $file, User $viewer): array
+    {
+        return $this->importer->preview($file, $viewer);
+    }
+
+    /**
+     * Re-resolve 1 dòng đơn sau khi người dùng sửa lỗi tại chỗ trong bảng
+     * xem trước — không đọc lại file (PR8).
+     *
+     * @param  array<string, mixed>  $cells
+     * @return array<string, mixed>
+     */
+    public function resolveImportRow(array $cells, User $viewer): array
+    {
+        return $this->importer->resolveSingle($cells, $viewer);
+    }
+
+    /**
+     * Ghi DB các dòng đã được xác nhận từ bước preview — KHÔNG đọc lại
+     * file. Frontend spread row.data lên top-level trước khi gửi (cùng
+     * pattern ProjectList.vue::confirmImportRows(): {...r.data, action,
+     * project_id, provided_fields, row}) — $row ở đây là field top-level,
+     * KHÔNG lồng trong 'data'. Dòng action=update sửa đúng task đã đối
+     * chiếu qua Mã công việc (chỉ ghi đè field nào Excel có giá trị —
+     * provided_fields); dòng action=create tạo mới. Tạo/sửa được dòng nào
+     * lưu dòng đó — 1 dòng lỗi không làm rollback các dòng khác (PR8).
+     *
+     * @param  list<array<string, mixed>>  $validatedRows
+     * @return array{created: list<array<string, mixed>>, updated: list<array<string, mixed>>, errors: list<array{row: int, message: string}>}
+     */
+    public function confirmImport(array $validatedRows, User $importedBy): array
+    {
+        $created = [];
+        $updated = [];
+        $errors = [];
+
+        foreach ($validatedRows as $row) {
+            $isUpdate = ($row['action'] ?? 'create') === 'update';
+
+            try {
+                $task = DB::transaction(function () use ($row, $importedBy, $isUpdate) {
+                    if ($isUpdate) {
+                        $taskId = (int) ($row['task_id'] ?? 0);
+                        $existing = $this->tasks->find($taskId);
+                        if ($existing === null) {
+                            throw new \RuntimeException('Công việc cần cập nhật không còn tồn tại.');
+                        }
+
+                        $payload = $this->onlyProvidedFields($row);
+                        $result = $this->update($existing, $payload, $importedBy);
+                    } else {
+                        $projectId = $row['project_id'] ?? null;
+                        if ($projectId === null) {
+                            throw new \RuntimeException('Thiếu dự án đích.');
+                        }
+                        $project = $this->projects->find((int) $projectId);
+                        if ($project === null) {
+                            throw new \RuntimeException('Không tìm thấy dự án đích.');
+                        }
+
+                        $payload = $row;
+                        unset(
+                            $payload['project_id'], $payload['project_code'],
+                            $payload['assignee_name'], $payload['manager_name'],
+                            $payload['action'], $payload['provided_fields'], $payload['row'],
+                            $payload['task_id'], $payload['code'],
+                        );
+                        $result = $this->create($project, $payload, $importedBy);
+                    }
+
+                    if (is_array($result)) {
+                        throw new \RuntimeException($result['error']);
+                    }
+
+                    return $result;
+                });
+
+                if ($isUpdate) {
+                    $updated[] = $this->present($task);
+                } else {
+                    $created[] = $this->present($task);
+                }
+            } catch (\Throwable $e) {
+                $verb = $isUpdate ? 'Không cập nhật được: ' : 'Không tạo được: ';
+                $errors[] = ['row' => $row['row'] ?? 0, 'message' => $verb.$e->getMessage()];
+            }
+        }
+
+        usort($errors, fn ($a, $b) => $a['row'] <=> $b['row']);
+
+        return ['created' => $created, 'updated' => $updated, 'errors' => $errors];
+    }
+
+    /**
+     * Lọc payload 1 dòng import xuống chỉ field nào Excel thực sự có giá
+     * trị (row['provided_fields'], sinh bởi TaskExcelImporter::resolveRow())
+     * — để update() giữ nguyên field còn lại thay vì ghi đè bằng rỗng.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function onlyProvidedFields(array $row): array
+    {
+        $provided = $row['provided_fields'] ?? [];
+
+        return array_intersect_key($row, array_flip($provided));
+    }
+
+    private function presentForExport(Task $task): array
+    {
+        return [
+            'code' => $task->code,
+            'project_code' => $task->project?->code ?? '',
+            'title' => $task->title,
+            'type_label' => TaskEnums::TYPE_LABELS[$task->type] ?? $task->type,
+            'status_label' => TaskEnums::STATUS_LABELS[$task->status] ?? $task->status,
+            'priority_label' => $task->priority ? (TaskEnums::PRIORITY_LABELS[$task->priority] ?? $task->priority) : '',
+            'assignee_email' => $task->assignee?->email ?? '',
+            'manager_email' => $task->manager?->email ?? '',
+            'start_date' => $task->start_date?->format('d/m/Y') ?? '',
+            'end_date' => $task->end_date?->format('d/m/Y') ?? '',
+            'progress_type_label' => TaskEnums::PROGRESS_TYPE_LABELS[$task->progress_type] ?? $task->progress_type,
+            'progress_percent' => $task->progress_percent !== null ? (string) $task->progress_percent : '',
+            'progress_number' => $task->progress_number !== null ? (string) $task->progress_number : '',
+            'progress_total' => $task->progress_total !== null ? (string) $task->progress_total : '',
+            'unit' => $task->unit ?? '',
+            'estimated_hours' => $task->estimated_hours !== null ? (string) $task->estimated_hours : '',
+            'weight' => $task->weight !== null ? (string) $task->weight : '',
+            'description' => $task->description ?? '',
+        ];
     }
 
     /** @return array<string, int> */

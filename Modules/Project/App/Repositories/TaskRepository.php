@@ -41,6 +41,17 @@ class TaskRepository implements TaskRepositoryInterface
         return $query->paginate($perPage, ['*'], 'page', $page);
     }
 
+    public function forExport(array $filters, array $allowedProjectIds, User $viewer): Collection
+    {
+        $query = $this->baseQuery()->whereIn('project_id', $allowedProjectIds);
+
+        $this->applyFilters($query, $filters);
+        $this->applyTabFilter($query, $filters['tab'] ?? null, $viewer);
+        $this->applySort($query, $filters['sort_by'] ?? null, $filters['sort_dir'] ?? null);
+
+        return $query->get();
+    }
+
     private function applySort(Builder $query, ?string $sortBy, ?string $sortDir): void
     {
         $column = $sortBy !== null ? (self::SORTABLE_COLUMNS[$sortBy] ?? null) : null;
@@ -83,6 +94,11 @@ class TaskRepository implements TaskRepositoryInterface
     public function find(int $id): ?Task
     {
         return $this->baseQuery()->find($id);
+    }
+
+    public function findByCode(string $code): ?Task
+    {
+        return $this->baseQuery()->where('code', $code)->first();
     }
 
     /**

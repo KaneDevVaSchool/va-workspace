@@ -24,15 +24,24 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     // ---------- Task (Project Giai đoạn 2 — WBS đa cấp, thuộc project) ----------
     // Route tĩnh /tasks* PHẢI đăng ký trước GET /{project} (int binding, dòng
     // dưới) — nếu không Laravel sẽ hiểu "tasks" là giá trị {project}.
+    // /tasks/export và /tasks/options cũng PHẢI đăng ký TRƯỚC GET /tasks/{task}
+    // (wildcard, cùng method GET) — cùng lý do đã áp dụng cho attachments/
+    // worklogs ở dưới (route tĩnh trước wildcard, tránh "export"/"options" bị
+    // Laravel hiểu nhầm là giá trị {task}).
     Route::middleware('permission:task.view')->group(function () {
         Route::get('/tasks/options', [TaskController::class, 'options'])->name('tasks.options');
+        Route::get('/tasks/export', [TaskController::class, 'export'])->name('tasks.export');
         Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
         Route::get('/tasks/{task}', [TaskController::class, 'show'])->name('tasks.show');
         Route::get('/{project}/tasks', [TaskController::class, 'treeByProject'])->name('tasks.tree');
     });
 
-    Route::middleware('permission:task.create')
-        ->post('/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
+    Route::middleware('permission:task.create')->group(function () {
+        Route::post('/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
+        Route::post('/tasks/import/preview', [TaskController::class, 'importPreview'])->name('tasks.import-preview');
+        Route::post('/tasks/import/resolve-row', [TaskController::class, 'importResolveRow'])->name('tasks.import-resolve-row');
+        Route::post('/tasks/import/confirm', [TaskController::class, 'importConfirm'])->name('tasks.import-confirm');
+    });
 
     // ---------- Đính kèm công việc (Nhóm D — bản tối thiểu, chỉ file) ----------
     // DELETE /tasks/attachments/{attachment} PHẢI đăng ký TRƯỚC DELETE

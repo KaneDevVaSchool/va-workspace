@@ -6,6 +6,10 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Modules\Project\App\Enums\TaskEnums;
 use Modules\Project\App\Http\Requests\BulkUpdateTaskRequest;
+use Modules\Project\App\Http\Requests\ConfirmImportTaskRequest;
+use Modules\Project\App\Http\Requests\ExportTaskRequest;
+use Modules\Project\App\Http\Requests\ImportTaskRequest;
+use Modules\Project\App\Http\Requests\ResolveImportTaskRowRequest;
 use Modules\Project\App\Http\Requests\StoreTaskRequest;
 use Modules\Project\App\Http\Requests\UpdateTaskRequest;
 use Modules\Project\App\Models\Task;
@@ -140,5 +144,35 @@ class TaskController extends Controller
         return response()->json([
             'tasks' => collect($updated)->map(fn ($t) => $this->service->present($t))->values(),
         ]);
+    }
+
+    /** GET /api/project/tasks/export — tôn trọng đúng bộ lọc đang áp dụng trên trang danh sách. */
+    public function export(ExportTaskRequest $request)
+    {
+        return $this->service->export($request->filters(), $request->columns(), $request->user());
+    }
+
+    /** POST /api/project/tasks/import/preview — đọc + xem trước, KHÔNG ghi DB. */
+    public function importPreview(ImportTaskRequest $request)
+    {
+        $result = $this->service->previewImport($request->file('file'), $request->user());
+
+        return response()->json($result);
+    }
+
+    /** POST /api/project/tasks/import/resolve-row — sửa lỗi 1 dòng tại chỗ, re-resolve. */
+    public function importResolveRow(ResolveImportTaskRowRequest $request)
+    {
+        $result = $this->service->resolveImportRow($request->validated(), $request->user());
+
+        return response()->json($result);
+    }
+
+    /** POST /api/project/tasks/import/confirm — nhận JSON các dòng đã preview, ghi DB thật. */
+    public function importConfirm(ConfirmImportTaskRequest $request)
+    {
+        $result = $this->service->confirmImport($request->validated()['rows'], $request->user());
+
+        return response()->json($result);
     }
 }

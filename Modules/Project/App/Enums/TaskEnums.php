@@ -75,4 +75,52 @@ class TaskEnums
             return ['value' => $value, 'label' => $labels[$value] ?? $value];
         }, $values);
     }
+
+    /**
+     * Đối chiếu input tiếng Việt (Excel import — PR8) ngược lại về value
+     * enum — nhận cả value gốc lẫn label, không phân biệt hoa/thường.
+     * Cùng pattern ProjectEnums::valueFromInput().
+     */
+    public static function typeFromInput(string $input): ?string
+    {
+        return self::valueFromInput($input, self::TYPES, self::TYPE_LABELS);
+    }
+
+    public static function statusFromInput(string $input): ?string
+    {
+        return self::valueFromInput($input, self::STATUSES, self::STATUS_LABELS);
+    }
+
+    public static function priorityFromInput(string $input): ?string
+    {
+        return self::valueFromInput($input, self::PRIORITIES, self::PRIORITY_LABELS);
+    }
+
+    public static function progressTypeFromInput(string $input): ?string
+    {
+        return self::valueFromInput($input, self::PROGRESS_TYPES, self::PROGRESS_TYPE_LABELS);
+    }
+
+    private static function valueFromInput(string $input, array $values, array $labels): ?string
+    {
+        $input = trim($input);
+        if ($input === '') {
+            return null;
+        }
+
+        $lower = mb_strtolower($input);
+        foreach ($values as $value) {
+            if (mb_strtolower($value) === $lower) {
+                return $value;
+            }
+        }
+
+        foreach ($labels as $value => $label) {
+            if (mb_strtolower((string) $label) === $lower) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
 }
