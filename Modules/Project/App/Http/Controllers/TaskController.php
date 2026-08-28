@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Modules\Project\App\Enums\TaskEnums;
 use Modules\Project\App\Http\Requests\StoreTaskRequest;
 use Modules\Project\App\Http\Requests\UpdateTaskRequest;
+use Modules\Project\App\Models\Task;
 use Modules\Project\App\Services\ProjectService;
 use Modules\Project\App\Services\TaskService;
 
@@ -24,7 +25,10 @@ class TaskController extends Controller
     /** GET /api/project/tasks — xuyên project, cho trang "Tất cả công việc". */
     public function index(Request $request)
     {
-        $filters = $request->only(['project_id', 'assignee_id', 'status', 'type', 'date_from', 'date_to', 'q', 'tab']);
+        $filters = $request->only([
+            'project_id', 'assignee_id', 'manager_id', 'status', 'type', 'progress_type',
+            'is_overdue', 'date_from', 'date_to', 'q', 'tab',
+        ]);
         $perPage = (int) $request->input('per_page', 20);
         $page = (int) $request->input('page', 1);
         $viewer = $request->user();
@@ -84,15 +88,14 @@ class TaskController extends Controller
         return response()->json(['task' => $this->service->present($result)], 201);
     }
 
-    /** PUT /api/project/tasks/{task} */
-    public function update(UpdateTaskRequest $request, int $task)
+    /**
+     * PUT /api/project/tasks/{task} — implicit model binding (khác int
+     * $task ở show/destroy): UpdateTaskRequest cần đọc progress_type hiện
+     * có trên $task để validate đúng khi client chỉ gửi một phần field.
+     */
+    public function update(UpdateTaskRequest $request, Task $task)
     {
-        $model = $this->service->find($task);
-        if ($model === null) {
-            return response()->json(['message' => 'Không tìm thấy công việc.'], 404);
-        }
-
-        $result = $this->service->update($model, $request->validated(), $request->user());
+        $result = $this->service->update($task, $request->validated(), $request->user());
 
         if (is_array($result)) {
             return response()->json(['message' => $result['error']], 422);

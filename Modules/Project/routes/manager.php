@@ -32,6 +32,11 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
         ->post('/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
 
     Route::middleware('permission:task.create')->group(function () {
+        // update dùng implicit model binding (Task $task, khác int $task ở
+        // show/destroy) — UpdateTaskRequest cần đọc progress_type HIỆN CÓ
+        // của task để validate đúng ràng buộc progress_number/progress_total
+        // khi client chỉ PUT một phần field (PATCH-semantics), không có cách
+        // nào lấy state đó ở tầng Request nếu không có model thật.
         Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
     });

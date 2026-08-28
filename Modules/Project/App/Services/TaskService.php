@@ -8,6 +8,7 @@ use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\Task;
+use Modules\Project\App\Models\TaskScore;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
 
@@ -137,6 +138,8 @@ class TaskService
 
         unset($data['titles']);
 
+        $data = $this->applyQuantityProgress($data);
+
         $payload = array_merge($data, [
             'project_id' => $project->id,
             'type' => $data['type'] ?? 'task',
@@ -173,9 +176,61 @@ class TaskService
             }
         }
 
+        $data = $this->applyQuantityProgress($data, $task);
+        $data = $this->applyAcceptedTracking($task, $data);
+
         $data['updated_by'] = $editor->id;
 
         return $this->tasks->update($task, $data);
+    }
+
+    /**
+     * Nhóm H — khi progress_type=quantity, tự tính progress_percent =
+     * round(progress_number / progress_total * 100), ghi đè giá trị client
+     * gửi (Request đã prohibited progress_percent trong trường hợp này nên
+     * $data không có sẵn field đó — hàm này là nguồn thật duy nhất).
+     * Không lưu trùng công thức — chỉ tính khi có đủ number + total > 0.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function applyQuantityProgress(array $data, ?Task $existing = null): array
+    {
+        $type = $data['progress_type'] ?? $existing?->progress_type ?? 'percent';
+        if ($type !== 'quantity') {
+            return $data;
+        }
+
+        $number = $data['progress_number'] ?? $existing?->progress_number;
+        $total = $data['progress_total'] ?? $existing?->progress_total;
+
+        if ($number !== null && $total !== null && (float) $total > 0) {
+            $data['progress_percent'] = (int) round(((float) $number / (float) $total) * 100);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Nhóm F — "Người đã nhận thực hiện": derived field, tự set khi status
+     * rời 'not_started' lần đầu tiên (accepted_by còn null). Không có input
+     * UI cho field này — set duy nhất ở đây.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function applyAcceptedTracking(Task $task, array $data): array
+    {
+        if (! array_key_exists('status', $data)) {
+            return $data;
+        }
+
+        if ($task->status === 'not_started' && $data['status'] !== 'not_started' && $task->accepted_by === null) {
+            $data['accepted_by'] = $task->assignee_id ?? $data['assignee_id'] ?? null;
+            $data['accepted_at'] = now();
+        }
+
+        return $data;
     }
 
     /** @return array{error: string}|true */
@@ -195,6 +250,8 @@ class TaskService
 
     public function present(Task $task): array
     {
+        $overdue = $this->computeOverdue($task);
+
         return [
             'id' => $task->id,
             'project_id' => $task->project_id,
@@ -202,6 +259,9 @@ class TaskService
                 ? ['id' => $task->project->id, 'code' => $task->project->code, 'name' => $task->project->name]
                 : null,
             'parent_id' => $task->parent_id,
+            'parent' => $task->relationLoaded('parent') && $task->parent !== null
+                ? ['id' => $task->parent->id, 'code' => $task->parent->code, 'title' => $task->parent->title]
+                : null,
             'code' => $task->code,
             'type' => $task->type,
             'title' => $task->title,
@@ -209,18 +269,84 @@ class TaskService
             'status' => $task->status,
             'priority' => $task->priority,
             'start_date' => $task->start_date?->toDateString(),
+            'start_time' => $task->start_time,
             'end_date' => $task->end_date?->toDateString(),
+            'due_time' => $task->due_time,
             'actual_start_date' => $task->actual_start_date?->toDateString(),
             'actual_end_date' => $task->actual_end_date?->toDateString(),
             'assignee_id' => $task->assignee_id,
             'assignee' => $this->presentUser($task->relationLoaded('assignee') ? $task->assignee : null),
             'progress_percent' => $task->progress_percent,
+            'progress_type' => $task->progress_type,
+            'progress_number' => $task->progress_number,
+            'progress_total' => $task->progress_total,
+            'unit' => $task->unit,
+            'estimated_hours' => $task->estimated_hours,
+            'worklog_hours' => (float) ($task->worklogs_sum_hours ?? 0),
+            'manager_id' => $task->manager_id,
+            'manager' => $this->presentUser($task->relationLoaded('manager') ? $task->manager : null),
+            'accepted_by' => $task->accepted_by,
+            'accepted_by_user' => $this->presentUser($task->relationLoaded('acceptedBy') ? $task->acceptedBy : null),
+            'accepted_at' => $task->accepted_at?->toIso8601String(),
+            'weight' => $task->weight,
             'sort_order' => $task->sort_order,
+            'attachments_count' => $task->attachments_count ?? 0,
+            'is_overdue' => $overdue['is_overdue'],
+            'overdue_days' => $overdue['overdue_days'],
+            'variance_days' => $overdue['variance_days'],
+            'task_score' => $this->presentTaskScore($task->relationLoaded('taskScore') ? $task->taskScore : null),
             'creator' => $this->presentUser($task->relationLoaded('creator') ? $task->creator : null),
             'created_by' => $task->created_by,
             'updated_by' => $task->updated_by,
             'created_at' => $task->created_at?->toIso8601String(),
             'updated_at' => $task->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Nhóm A — is_overdue/overdue_days/variance_days tính từ 1 nguồn công
+     * thức duy nhất, tránh trùng lặp (docs/VA_WORKSPACE_OVERVIEW.md §17):
+     *
+     * - is_overdue: end_date đã qua hôm nay và trạng thái chưa hoàn thành/huỷ.
+     *   PHẢI khớp TaskRepository::scopeOverdue() dùng cho tab/filter "Quá hạn".
+     * - variance_days: actual_end_date - end_date (dương = trễ, âm = sớm),
+     *   null nếu thiếu 1 trong 2 mốc.
+     * - overdue_days: chỉ có ý nghĩa khi task đã completed VÀ variance dương
+     *   (hoàn thành trễ) — khác is_overdue (task đang mở, chưa xong, đã qua hạn).
+     *
+     * @return array{is_overdue: bool, overdue_days: int|null, variance_days: int|null}
+     */
+    private function computeOverdue(Task $task): array
+    {
+        $today = now()->startOfDay();
+        $isOverdue = $task->end_date !== null
+            && $task->end_date->lt($today)
+            && ! in_array($task->status, ['completed', 'cancelled'], true);
+
+        $varianceDays = null;
+        if ($task->actual_end_date !== null && $task->end_date !== null) {
+            $varianceDays = $task->end_date->diffInDays($task->actual_end_date, false);
+        }
+
+        $overdueDays = ($task->status === 'completed' && $varianceDays !== null && $varianceDays > 0)
+            ? $varianceDays
+            : null;
+
+        return ['is_overdue' => $isOverdue, 'overdue_days' => $overdueDays, 'variance_days' => $varianceDays];
+    }
+
+    private function presentTaskScore(?TaskScore $score): ?array
+    {
+        if ($score === null) {
+            return null;
+        }
+
+        return [
+            'rating_score' => $score->rating_score,
+            'rating_result' => $score->rating_result,
+            'rating_desc' => $score->rating_desc,
+            'scored_by' => $score->scored_by,
+            'scored_at' => $score->scored_at?->toIso8601String(),
         ];
     }
 

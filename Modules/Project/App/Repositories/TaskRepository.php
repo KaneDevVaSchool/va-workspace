@@ -17,7 +17,7 @@ class TaskRepository implements TaskRepositoryInterface
 {
     public function paginate(array $filters, int $perPage, int $page, array $allowedProjectIds, User $viewer): LengthAwarePaginator
     {
-        $query = Task::query()->with(Task::WITH_PRESENT)->whereIn('project_id', $allowedProjectIds);
+        $query = $this->baseQuery()->whereIn('project_id', $allowedProjectIds);
 
         $this->applyFilters($query, $filters);
         $this->applyTabFilter($query, $filters['tab'] ?? null, $viewer);
@@ -27,7 +27,7 @@ class TaskRepository implements TaskRepositoryInterface
 
     public function tabCounts(array $allowedProjectIds, ?int $forceAssigneeId, User $viewer): array
     {
-        $tabs = ['all', 'not_started', 'in_progress', 'on_hold', 'completed', 'cancelled', 'my_tasks'];
+        $tabs = ['all', 'not_started', 'in_progress', 'on_hold', 'completed', 'cancelled', 'my_tasks', 'overdue'];
         $counts = [];
 
         foreach ($tabs as $tab) {
@@ -44,8 +44,7 @@ class TaskRepository implements TaskRepositoryInterface
 
     public function flatForProject(int $projectId): Collection
     {
-        return Task::query()
-            ->with(Task::WITH_PRESENT)
+        return $this->baseQuery()
             ->where('project_id', $projectId)
             ->orderBy('parent_id')
             ->orderBy('sort_order')
@@ -54,17 +53,38 @@ class TaskRepository implements TaskRepositoryInterface
 
     public function find(int $id): ?Task
     {
-        return Task::query()->with(Task::WITH_PRESENT)->find($id);
+        return $this->baseQuery()->find($id);
     }
+
+    /**
+     * Query nền tảng dùng chung cho list/tree/find — eager-load
+     * Task::WITH_PRESENT (đã gồm parent/manager/acceptedBy/taskScore) +
+     * withCount('attachments') + withSum('worklogs','hours') để
+     * TaskService::present() lấy được attachments_count/worklog_hours mà
+     * không phải N+1 query riêng cho từng task.
+     */
+    private function baseQuery(): Builder
+    {
+        return Task::query()
+            ->with(Task::WITH_PRESENT)
+            ->withCount('attachments')
+            ->withSum('worklogs', 'hours');
+    }
+
+    /** Field derived/chừa-chỗ KHÔNG nằm trong Task::$fillable — set qua forceFill. */
+    private const GUARDED_KEYS = [
+        'origin_department_id', // chừa chỗ Task Delegation (§6) — chưa dùng logic
+        'accepted_by', // derived — TaskService::applyAcceptedTracking() set
+        'accepted_at', // derived — TaskService::applyAcceptedTracking() set
+    ];
 
     public function create(array $data): Task
     {
-        // origin_department_id / delegated_to_* / delegation_status cố ý
-        // KHÔNG nằm trong Task::$fillable (chừa chỗ Task Delegation, §6 —
-        // không set qua form thường) — tách riêng để Service vẫn set được
-        // origin_department_id mặc định lúc tạo mà không mở fillable cho cả
-        // 4 cột nhạy cảm đó qua mass assignment thường.
-        $guarded = array_intersect_key($data, array_flip(['origin_department_id']));
+        // origin_department_id / accepted_by / accepted_at / delegated_to_* /
+        // delegation_status cố ý KHÔNG nằm trong Task::$fillable — tách riêng
+        // để Service vẫn set được các field derived/chừa-chỗ mà không mở
+        // fillable cho cả nhóm cột nhạy cảm đó qua mass assignment thường.
+        $guarded = array_intersect_key($data, array_flip(self::GUARDED_KEYS));
         $fillableData = array_diff_key($data, $guarded);
 
         $task = Task::query()->create($fillableData);
@@ -78,7 +98,14 @@ class TaskRepository implements TaskRepositoryInterface
 
     public function update(Task $task, array $data): Task
     {
-        $task->update($data);
+        $guarded = array_intersect_key($data, array_flip(self::GUARDED_KEYS));
+        $fillableData = array_diff_key($data, $guarded);
+
+        $task->update($fillableData);
+
+        if ($guarded !== []) {
+            $task->forceFill($guarded)->save();
+        }
 
         return $task->fresh(Task::WITH_PRESENT);
     }
@@ -126,12 +153,24 @@ class TaskRepository implements TaskRepositoryInterface
             $query->where('assignee_id', (int) $filters['assignee_id']);
         }
 
+        if (! empty($filters['manager_id'])) {
+            $query->where('manager_id', (int) $filters['manager_id']);
+        }
+
         if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
 
         if (! empty($filters['type'])) {
             $query->where('type', $filters['type']);
+        }
+
+        if (! empty($filters['progress_type'])) {
+            $query->where('progress_type', $filters['progress_type']);
+        }
+
+        if (! empty($filters['is_overdue'])) {
+            $this->scopeOverdue($query);
         }
 
         if (! empty($filters['date_from'])) {
@@ -165,5 +204,20 @@ class TaskRepository implements TaskRepositoryInterface
         if ($tab === 'my_tasks' && $viewer !== null) {
             $query->where('assignee_id', $viewer->id);
         }
+
+        if ($tab === 'overdue') {
+            $this->scopeOverdue($query);
+        }
+    }
+
+    /**
+     * Công thức "quá hạn" — PHẢI khớp TaskService::computeOverdue() (is_overdue):
+     * end_date đã qua hôm nay và trạng thái chưa hoàn thành/huỷ. Dùng chung
+     * cho cả tab "Quá hạn" và filter is_overdue để không lặp 2 nơi khác công thức.
+     */
+    private function scopeOverdue(Builder $query): void
+    {
+        $query->whereDate('end_date', '<', now()->toDateString())
+            ->whereNotIn('status', ['completed', 'cancelled']);
     }
 }
