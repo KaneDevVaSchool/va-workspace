@@ -39,7 +39,20 @@ class TaskService
 
         $allowedProjectIds = $this->projects->forViewer(Project::query(), $viewer)->pluck('id')->all();
 
-        return $this->tasks->paginate($filters, $perPage, $page, $allowedProjectIds);
+        return $this->tasks->paginate($filters, $perPage, $page, $allowedProjectIds, $viewer);
+    }
+
+    /** @return array<string, int> */
+    public function tabCounts(User $viewer): array
+    {
+        $forceAssigneeId = null;
+        if (! $this->permissions->allows($viewer, 'task.view') && ! $this->permissions->allows($viewer, 'task.*')) {
+            $forceAssigneeId = $viewer->id;
+        }
+
+        $allowedProjectIds = $this->projects->forViewer(Project::query(), $viewer)->pluck('id')->all();
+
+        return $this->tasks->tabCounts($allowedProjectIds, $forceAssigneeId, $viewer);
     }
 
     public function find(int $id): ?Task

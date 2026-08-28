@@ -24,7 +24,7 @@ class TaskController extends Controller
     /** GET /api/project/tasks — xuyên project, cho trang "Tất cả công việc". */
     public function index(Request $request)
     {
-        $filters = $request->only(['project_id', 'assignee_id', 'status', 'type', 'date_from', 'date_to', 'q']);
+        $filters = $request->only(['project_id', 'assignee_id', 'status', 'type', 'date_from', 'date_to', 'q', 'tab']);
         $perPage = (int) $request->input('per_page', 20);
         $page = (int) $request->input('page', 1);
         $viewer = $request->user();
@@ -41,6 +41,7 @@ class TaskController extends Controller
                 'to' => $paginated->lastItem() ?? 0,
                 'per_page' => $paginated->perPage(),
             ],
+            'tab_counts' => $this->service->tabCounts($viewer),
         ]);
     }
 

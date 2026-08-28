@@ -1,41 +1,79 @@
 <script setup>
 //
-// "Tất cả công việc" — trang xem/sửa/xoá Task xuyên nhiều dự án, theo mẫu
-// vàng data-table (ActivityLog.vue): filter → TablePagesBar top → bảng kéo
-// cột → TablePagesBar bottom → panel chi tiết 28rem. Tạo Task mới KHÔNG có
-// ở trang này (giữ nguyên tập trung ở menu chuột phải trong ProjectList) —
-// xem plan Project Giai đoạn 2.
+// "Tất cả công việc" — cùng chrome với ProjectList: tìm trên PageHeader,
+// hàng tab (Danh sách / Kanban + lọc nhanh có đếm), bảng nhóm theo dự án,
+// pill/progress, kéo cột, panel chi tiết 28rem. Tạo công việc mới vẫn
+// không có ở trang này (menu chuột phải trong từng dự án).
 //
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
-import { formatDate } from '@/lib/formatTime';
 import { showClientToast } from '@/lib/clientToast';
 import { useDragScroll } from '@/composables/useDragScroll';
+import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import {
   COLUMN_STORAGE_KEY,
   COLUMN_WIDTH_KEY,
+  COLLAPSED_GROUPS_KEY,
   FILTER_STORAGE_KEY,
+  KANBAN_ASSIGNEES_KEY,
+  KANBAN_GROUP_KEY,
   TASK_COLUMNS,
   TASK_FILTERS,
   TASK_PRIORITY_LABELS,
+  TASK_PRIORITY_TONES,
   TASK_STATUS_LABELS,
+  TASK_STATUS_TAB_KEYS,
   TASK_STATUS_TONES,
   TASK_STATUSES,
+  TASK_TABS,
   TASK_TYPE_LABELS,
+  TASK_TYPE_TONES,
+  VIEW_MODE_KEY,
   ZOOM_STORAGE_KEY,
   loadVisibility,
   saveVisibility,
 } from '../constants/task.js';
 
+const route = useRoute();
+const router = useRouter();
+const auth = useAuthStore();
+
 const CELL_PAD_X = 32;
 const COL_EXTRA = 24;
 const ASSIGNEE_AVATAR_EXTRA = 42;
+const STATUS_DOT_EXTRA = 28;
+const MIN_COL_PX = 72;
+const UNGROUPED_KEY = '__ungrouped__';
+const KANBAN_PER_PAGE = 500;
+const KANBAN_DRAG_THRESHOLD = 7;
+const KANBAN_GROUP_MODES = ['status', 'assignees', 'project', 'priority', 'type'];
+const THEME_TONES = [
+  'primary',
+  'secondary',
+  'tertiary',
+  'gold',
+  'umber',
+  'success',
+  'warning',
+  'info',
+  'violet',
+  'teal',
+  'rose',
+];
+
 let measureCtx = null;
 let wrapObserver = null;
+let kanbanPointer = null;
+let kanbanPendingX = 0;
+let kanbanPendingY = 0;
+let kanbanRaf = 0;
+let kanbanScrollRaf = 0;
+let kanbanJustMovedTimer = 0;
 
 const tasks = ref([]);
 const meta = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0, per_page: 20 });
@@ -49,24 +87,27 @@ const confirmingDelete = ref(false);
 const query = ref('');
 const projectId = ref('');
 const assigneeId = ref('');
-const status = ref('');
 const dateFrom = ref('');
 const dateTo = ref('');
 const perPage = ref(20);
+const activeTab = ref(typeof route.query.tab === 'string' && route.query.tab ? route.query.tab : 'all');
+const tabCounts = ref({});
 
 const projects = ref([]);
 const users = ref([]);
 
 const visibleColumns = reactive(loadVisibility(COLUMN_STORAGE_KEY, TASK_COLUMNS));
 const visibleFilters = reactive(loadVisibility(FILTER_STORAGE_KEY, TASK_FILTERS));
+const columnWidths = reactive(loadColumnWidths());
+const collapsedGroups = ref(new Set(loadCollapsedGroups()));
 
 const tableWrap = ref(null);
+const kanbanWrap = ref(null);
 const resizing = ref(false);
-const MIN_COL_PX = 72;
+const tableZoom = ref(loadZoom());
 
 useDragScroll(tableWrap, { isBlocked: () => resizing.value });
-
-const columnWidths = reactive(loadColumnWidths());
+useDragScroll(kanbanWrap, { axis: 'x', isBlocked: () => kanbanDrag.active });
 
 const editForm = reactive({
   title: '',
@@ -81,49 +122,276 @@ const editForm = reactive({
   description: '',
 });
 
+const viewMode = ref(loadViewMode());
+const kanbanGroupBy = ref(loadKanbanGroup());
+const kanbanAssigneeIds = ref(loadKanbanAssigneeIds());
+const kanbanAssigneePickerOpen = ref(false);
+const viewModeOpen = ref(false);
+const kanbanStatusUpdating = ref(new Set());
+const kanbanJustMovedId = ref(null);
+const kanbanDrag = reactive({
+  active: false,
+  settling: false,
+  taskId: null,
+  fromKey: null,
+  overKey: null,
+  task: null,
+  width: 0,
+  height: 0,
+  x: 0,
+  y: 0,
+});
+
 const shownColumns = computed(() => TASK_COLUMNS.filter((col) => col.always || visibleColumns[col.key]));
 const colSpan = computed(() => Math.max(shownColumns.value.length, 1));
+const isKanban = computed(() => viewMode.value === 'kanban');
+const canEdit = computed(() => auth.can('task.create'));
+
+const KANBAN_GROUP_LABELS = {
+  status: 'Theo trạng thái',
+  assignees: 'Theo người thực hiện',
+  project: 'Theo dự án',
+  priority: 'Theo mức độ ưu tiên',
+  type: 'Theo loại',
+};
+
+const viewModeTriggerLabel = computed(() => {
+  if (!isKanban.value) return 'Danh sách';
+  return KANBAN_GROUP_LABELS[kanbanGroupBy.value] || 'Kanban';
+});
 
 const hasActiveFilters = computed(
   () =>
     Boolean(query.value.trim()) ||
     Boolean(projectId.value) ||
     Boolean(assigneeId.value) ||
-    Boolean(status.value) ||
     Boolean(dateFrom.value) ||
-    Boolean(dateTo.value),
+    Boolean(dateTo.value) ||
+    (activeTab.value && activeTab.value !== 'all'),
 );
 
 const hasVisibleFilterFields = computed(() => TASK_FILTERS.some((item) => visibleFilters[item.key]));
 
-const tableZoom = ref(loadZoom());
 const tableWidthPx = computed(() => {
   const keys = shownColumns.value.map((col) => col.key);
   const sum = keys.reduce((total, key) => total + (Number(columnWidths[key]) || 0), 0);
   return sum > 0 ? `${sum}px` : '100%';
 });
 
+const groupedTasks = computed(() => {
+  const groups = new Map();
+  for (const task of tasks.value) {
+    const key = task.project_id ? `project-${task.project_id}` : UNGROUPED_KEY;
+    const label = task.project?.name || 'Chưa gắn dự án';
+    if (!groups.has(key)) {
+      groups.set(key, { key, label, tone: hashTone(key), tasks: [] });
+    }
+    groups.get(key).tasks.push(task);
+  }
+  return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+});
+
+const allAssignableUsers = computed(() => {
+  const map = new Map();
+  for (const user of users.value) map.set(user.id, user);
+  for (const task of tasks.value) {
+    if (task.assignee) map.set(task.assignee.id, task.assignee);
+  }
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+});
+
+const kanbanSelectedUsers = computed(() =>
+  kanbanAssigneeIds.value.map((id) => allAssignableUsers.value.find((u) => u.id === id)).filter(Boolean),
+);
+
+const kanbanStatusFill = computed(
+  () => isKanban.value && kanbanGroupBy.value === 'status' && TASK_STATUS_TAB_KEYS.includes(activeTab.value),
+);
+
+const kanbanSpread = computed(
+  () => isKanban.value && (kanbanGroupBy.value === 'priority' || kanbanGroupBy.value === 'type'),
+);
+
+const kanbanStatusColumns = computed(() => {
+  const cols = TASK_STATUSES.filter((item) => item.value).map((item) => ({
+    key: item.value,
+    dropKey: item.value,
+    label: item.label,
+    tone: statusTone(item.value),
+    tasks: tasks.value.filter((task) => task.status === item.value),
+  }));
+  if (!kanbanStatusFill.value) return cols;
+  return cols.filter((col) => col.tasks.length > 0);
+});
+
+const kanbanAssigneeColumns = computed(() =>
+  kanbanSelectedUsers.value.map((user, index) => ({
+    key: `user-${user.id}`,
+    label: user.name,
+    tone: THEME_TONES[index % THEME_TONES.length],
+    user,
+    tasks: tasks.value.filter((task) => task.assignee_id === user.id),
+  })),
+);
+
+const kanbanProjectColumns = computed(() => {
+  const map = new Map();
+  for (const task of tasks.value) {
+    const id = task.project_id || 0;
+    const label = task.project?.name || 'Chưa gắn dự án';
+    if (!map.has(id)) {
+      map.set(id, { key: `project-${id}`, label, tone: hashTone(`project-${id}`), tasks: [] });
+    }
+    map.get(id).tasks.push(task);
+  }
+  return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+});
+
+const kanbanPriorityColumns = computed(() =>
+  [
+    { value: 'urgent', label: 'Khẩn cấp', tone: 'danger' },
+    { value: 'high', label: 'Cao', tone: 'gold' },
+    { value: 'medium', label: 'Trung bình', tone: 'info' },
+    { value: 'low', label: 'Thấp', tone: 'neutral' },
+    { value: '', label: 'Chưa đặt', tone: 'tertiary' },
+  ].map((item) => ({
+    key: `priority-${item.value || 'none'}`,
+    dropKey: item.value || '__none__',
+    label: item.label,
+    tone: item.tone,
+    tasks: tasks.value.filter((task) => (task.priority || '') === item.value),
+  })),
+);
+
+const kanbanTypeColumns = computed(() =>
+  Object.entries(TASK_TYPE_LABELS).map(([value, label]) => ({
+    key: `type-${value}`,
+    dropKey: value,
+    label,
+    tone: TASK_TYPE_TONES[value] || 'neutral',
+    tasks: tasks.value.filter((task) => task.type === value),
+  })),
+);
+
+const kanbanColumns = computed(() => {
+  if (kanbanGroupBy.value === 'assignees') return kanbanAssigneeColumns.value;
+  if (kanbanGroupBy.value === 'project') return kanbanProjectColumns.value;
+  if (kanbanGroupBy.value === 'priority') return kanbanPriorityColumns.value;
+  if (kanbanGroupBy.value === 'type') return kanbanTypeColumns.value;
+  return kanbanStatusColumns.value;
+});
+
+const isKanbanDragGroup = computed(
+  () => kanbanGroupBy.value === 'status' || kanbanGroupBy.value === 'priority' || kanbanGroupBy.value === 'type',
+);
+
+const kanbanCardsMovable = computed(() => {
+  if (!isKanbanDragGroup.value || !canEdit.value) return false;
+  if (kanbanStatusFill.value && kanbanStatusColumns.value.length < 2) return false;
+  return true;
+});
+
+const kanbanGhostStyle = computed(() => {
+  const rotate = kanbanDrag.settling ? 0 : 3.5;
+  const scale = kanbanDrag.settling ? 1 : 1.04;
+  return {
+    width: `${kanbanDrag.width}px`,
+    height: `${kanbanDrag.height}px`,
+    transform: `translate3d(${Math.round(kanbanDrag.x)}px, ${Math.round(kanbanDrag.y)}px, 0) rotate(${rotate}deg) scale(${scale})`,
+  };
+});
+
+const kanbanGhostTone = computed(() => {
+  const col = kanbanColumns.value.find((item) => item.dropKey === kanbanDrag.fromKey);
+  return col?.tone || 'primary';
+});
+
+function loadViewMode() {
+  try {
+    const raw = localStorage.getItem(VIEW_MODE_KEY);
+    if (raw === 'list' || raw === 'kanban') return raw;
+  } catch {
+    // Bỏ qua.
+  }
+  return 'list';
+}
+
+function loadKanbanGroup() {
+  try {
+    const raw = localStorage.getItem(KANBAN_GROUP_KEY);
+    if (KANBAN_GROUP_MODES.includes(raw)) return raw;
+  } catch {
+    // Bỏ qua.
+  }
+  return 'status';
+}
+
+function loadKanbanAssigneeIds() {
+  try {
+    const raw = localStorage.getItem(KANBAN_ASSIGNEES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadCollapsedGroups() {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_GROUPS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCollapsedGroups() {
+  try {
+    localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify(Array.from(collapsedGroups.value)));
+  } catch {
+    // Bỏ qua.
+  }
+}
+
+function loadZoom() {
+  try {
+    const raw = Number(localStorage.getItem(ZOOM_STORAGE_KEY));
+    if (raw === 0.9 || raw === 1 || raw === 1.15) return raw;
+  } catch {
+    // Bỏ qua.
+  }
+  return 1;
+}
+
+function loadColumnWidths() {
+  try {
+    const raw = localStorage.getItem(COLUMN_WIDTH_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+  } catch {
+    // Bỏ qua nếu trình duyệt chặn localStorage.
+  }
+  return {};
+}
+
 function currentFilterParams() {
   return {
     q: query.value.trim() || undefined,
     project_id: projectId.value || undefined,
     assignee_id: assigneeId.value || undefined,
-    status: status.value || undefined,
     date_from: dateFrom.value || undefined,
     date_to: dateTo.value || undefined,
+    tab: activeTab.value && activeTab.value !== 'all' ? activeTab.value : undefined,
   };
 }
 
 async function loadOptions() {
-  // 2 API độc lập — role chỉ có task.view_assigned (không có project.view,
-  // VD nhân viên thường) sẽ bị 403 ở /api/project nhưng vẫn cần
-  // assignable-users hoạt động bình thường, nên KHÔNG gộp Promise.all
-  // (1 API lỗi không được kéo API còn lại theo).
   try {
     const { data } = await window.axios.get('/api/project', { params: { per_page: 200 } });
     projects.value = (data.projects ?? []).map((p) => ({ id: p.id, name: p.name, code: p.code }));
   } catch {
-    // Không có quyền xem danh sách dự án — bỏ qua, dropdown "Dự án" chỉ rỗng.
+    // Không có quyền xem danh sách dự án — dropdown "Dự án" chỉ rỗng.
   }
 
   try {
@@ -138,14 +406,16 @@ async function loadTasks(page = 1) {
   loading.value = true;
   try {
     const { data } = await window.axios.get('/api/project/tasks', {
-      params: { ...currentFilterParams(), page, per_page: perPage.value },
+      params: { ...currentFilterParams(), page, per_page: isKanban.value ? KANBAN_PER_PAGE : perPage.value },
     });
     tasks.value = data.tasks ?? [];
     meta.value = data.meta ?? { current_page: 1, last_page: 1, total: 0, from: 0, to: 0, per_page: 20 };
+    tabCounts.value = data.tab_counts ?? {};
 
-    if (selected.value && !tasks.value.some((t) => t.id === selected.value.id)) {
-      selected.value = null;
-      editing.value = false;
+    if (selected.value) {
+      const fresh = tasks.value.find((t) => t.id === selected.value.id);
+      selected.value = fresh || null;
+      if (!fresh) editing.value = false;
     }
     nextTick(fitColumnsToContent);
   } catch (error) {
@@ -161,13 +431,98 @@ function goPage(page) {
   loadTasks(page);
 }
 
+function tabCount(key) {
+  return tabCounts.value[key] ?? 0;
+}
+
+function selectTab(key) {
+  if (activeTab.value === key) return;
+  activeTab.value = key;
+  router.replace({ query: { ...route.query, tab: key === 'all' ? undefined : key } });
+  loadTasks(1);
+}
+
+function setViewMode(mode) {
+  viewModeOpen.value = false;
+  if (viewMode.value === mode) return;
+  viewMode.value = mode;
+  try {
+    localStorage.setItem(VIEW_MODE_KEY, mode);
+  } catch {
+    // Bỏ qua.
+  }
+  loadTasks(1);
+}
+
+function toggleViewModeMenu() {
+  viewModeOpen.value = !viewModeOpen.value;
+}
+
+function closeViewModeMenu() {
+  viewModeOpen.value = false;
+}
+
+function chooseKanbanGroup(mode) {
+  const switching = viewMode.value !== 'kanban';
+  if (kanbanGroupBy.value !== mode) {
+    kanbanGroupBy.value = mode;
+    try {
+      localStorage.setItem(KANBAN_GROUP_KEY, mode);
+    } catch {
+      // Bỏ qua.
+    }
+  }
+  if (switching) {
+    viewMode.value = 'kanban';
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, 'kanban');
+    } catch {
+      // Bỏ qua.
+    }
+    loadTasks(1);
+  }
+  closeViewModeMenu();
+}
+
+function saveKanbanAssigneeIds() {
+  try {
+    localStorage.setItem(KANBAN_ASSIGNEES_KEY, JSON.stringify(kanbanAssigneeIds.value));
+  } catch {
+    // Bỏ qua.
+  }
+}
+
+function toggleKanbanAssignee(userId) {
+  const next = kanbanAssigneeIds.value.includes(userId)
+    ? kanbanAssigneeIds.value.filter((id) => id !== userId)
+    : [...kanbanAssigneeIds.value, userId];
+  kanbanAssigneeIds.value = next;
+  saveKanbanAssigneeIds();
+}
+
+function removeKanbanAssignee(userId) {
+  kanbanAssigneeIds.value = kanbanAssigneeIds.value.filter((id) => id !== userId);
+  saveKanbanAssigneeIds();
+}
+
+function toggleKanbanAssigneePicker() {
+  kanbanAssigneePickerOpen.value = !kanbanAssigneePickerOpen.value;
+}
+
+function closeKanbanAssigneePicker() {
+  kanbanAssigneePickerOpen.value = false;
+}
+
 function clearFilters() {
   query.value = '';
   projectId.value = '';
   assigneeId.value = '';
-  status.value = '';
   dateFrom.value = '';
   dateTo.value = '';
+  if (activeTab.value !== 'all') {
+    selectTab('all');
+    return;
+  }
   loadTasks(1);
 }
 
@@ -201,6 +556,12 @@ function cancelEdit() {
   editing.value = false;
 }
 
+function applyTaskUpdate(updated) {
+  const index = tasks.value.findIndex((t) => t.id === updated.id);
+  if (index !== -1) tasks.value[index] = updated;
+  if (selected.value?.id === updated.id) selected.value = updated;
+}
+
 async function saveEdit() {
   if (!selected.value) return;
   saving.value = true;
@@ -218,10 +579,7 @@ async function saveEdit() {
       description: editForm.description || null,
     };
     const { data } = await window.axios.put(`/api/project/tasks/${selected.value.id}`, payload);
-    const updated = data.task;
-    const index = tasks.value.findIndex((t) => t.id === updated.id);
-    if (index !== -1) tasks.value[index] = updated;
-    selected.value = updated;
+    applyTaskUpdate(data.task);
     editing.value = false;
     showClientToast('success', 'Đã cập nhật công việc.');
   } catch (error) {
@@ -266,44 +624,72 @@ function typeLabel(value) {
   return TASK_TYPE_LABELS[value] || value || '—';
 }
 
+function typeTone(value) {
+  return TASK_TYPE_TONES[value] || 'neutral';
+}
+
 function priorityLabel(value) {
   if (!value) return '—';
   return TASK_PRIORITY_LABELS[value] || value;
 }
 
+function priorityTone(value) {
+  return TASK_PRIORITY_TONES[value] || 'neutral';
+}
+
+function progressTone(percent) {
+  if (percent == null) return 'neutral';
+  if (percent >= 80) return 'success';
+  if (percent >= 50) return 'tertiary';
+  if (percent >= 25) return 'gold';
+  return 'warning';
+}
+
+function hashTone(key) {
+  if (!key || key === UNGROUPED_KEY) return 'neutral';
+  let hash = 0;
+  const text = String(key);
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 31 + text.charCodeAt(i)) | 0;
+  }
+  return THEME_TONES[Math.abs(hash) % THEME_TONES.length];
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('vi-VN');
+}
+
+function dateRangeLabel(task) {
+  if (!task.start_date && !task.end_date) return '';
+  return `${formatDate(task.start_date)} – ${formatDate(task.end_date)}`;
+}
+
 function cellText(task, key) {
+  if (key === 'code') return task.code || '—';
   if (key === 'title') return task.title || '—';
   if (key === 'project') return task.project?.name || '—';
-  if (key === 'start_date') return formatDate(task.start_date) || '—';
-  if (key === 'end_date') return formatDate(task.end_date) || '—';
-  if (key === 'actual_start_date') return formatDate(task.actual_start_date) || '—';
-  if (key === 'actual_end_date') return formatDate(task.actual_end_date) || '—';
+  if (key === 'start_date' || key === 'end_date' || key === 'actual_start_date' || key === 'actual_end_date') {
+    return formatDate(task[key]);
+  }
   if (key === 'progress_percent') return task.progress_percent == null ? '—' : `${task.progress_percent}%`;
   if (key === 'type') return typeLabel(task.type);
   if (key === 'priority') return priorityLabel(task.priority);
-  if (key === 'id') return String(task.id ?? '—');
   return '—';
 }
 
-function loadZoom() {
-  try {
-    const raw = Number(localStorage.getItem(ZOOM_STORAGE_KEY));
-    if (raw === 0.9 || raw === 1 || raw === 1.15) return raw;
-  } catch {
-    // Bỏ qua.
-  }
-  return 1;
+function isGroupCollapsed(key) {
+  return collapsedGroups.value.has(key);
 }
 
-function loadColumnWidths() {
-  try {
-    const raw = localStorage.getItem(COLUMN_WIDTH_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
-  } catch {
-    // Bỏ qua nếu trình duyệt chặn localStorage.
-  }
-  return {};
+function toggleGroup(key) {
+  const next = new Set(collapsedGroups.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  collapsedGroups.value = next;
+  saveCollapsedGroups();
 }
 
 function colWidthStyle(key) {
@@ -330,11 +716,13 @@ function readTableFonts() {
   return {
     header: fontOf(table?.querySelector('thead th'), '600 12px "Be Vietnam Pro", sans-serif'),
     cell: fontOf(table?.querySelector('tbody td'), '400 14px "Be Vietnam Pro", sans-serif'),
+    title: fontOf(table?.querySelector('.task-page__name-title'), '600 14px "Be Vietnam Pro", sans-serif'),
   };
 }
 
 function columnContentWidth(key, fonts) {
   const label = TASK_COLUMNS.find((col) => col.key === key)?.label ?? '';
+  const valueFont = key === 'title' ? fonts.title : fonts.cell;
   let maxW = measureText(label, fonts.header);
   for (const task of tasks.value) {
     if (key === 'assignee') {
@@ -342,10 +730,13 @@ function columnContentWidth(key, fonts) {
     } else if (key === 'status') {
       maxW = Math.max(maxW, measureText(statusLabel(task.status), fonts.cell));
     } else {
-      maxW = Math.max(maxW, measureText(cellText(task, key), fonts.cell));
+      maxW = Math.max(maxW, measureText(cellText(task, key), valueFont));
     }
   }
-  const extra = key === 'assignee' ? ASSIGNEE_AVATAR_EXTRA : 0;
+  let extra = 0;
+  if (key === 'assignee') extra = ASSIGNEE_AVATAR_EXTRA;
+  if (key === 'status' || key === 'priority') extra = STATUS_DOT_EXTRA;
+  if (key === 'progress_percent') extra = 64;
   return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
 }
 
@@ -370,7 +761,7 @@ function distributeExtraWidth(widths, keys, available) {
 function fitColumnsToContent() {
   const wrap = tableWrap.value;
   const keys = shownColumns.value.map((col) => col.key);
-  if (!wrap || keys.length === 0 || resizing.value) return;
+  if (!wrap || keys.length === 0 || resizing.value || isKanban.value) return;
 
   const fonts = readTableFonts();
   const measured = {};
@@ -433,18 +824,285 @@ function onFilterToggle(key, checked) {
   visibleFilters[key] = checked;
 }
 
+function kanbanDropKeyOf(task) {
+  if (kanbanGroupBy.value === 'status') return task.status;
+  if (kanbanGroupBy.value === 'type') return task.type;
+  return task.priority || '__none__';
+}
+
+function kanbanDropSlot(col) {
+  return (
+    isKanbanDragGroup.value &&
+    kanbanDrag.active &&
+    col.dropKey &&
+    kanbanDrag.overKey === col.dropKey &&
+    kanbanDrag.fromKey !== col.dropKey
+  );
+}
+
+function prefersReducedMotion() {
+  return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+}
+
+function waitMs(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function stopKanbanPointerListeners() {
+  window.removeEventListener('pointermove', onKanbanPointerMove);
+  window.removeEventListener('pointerup', onKanbanPointerUp);
+  window.removeEventListener('pointercancel', onKanbanPointerCancel);
+}
+
+function resetKanbanDragFields() {
+  kanbanDrag.active = false;
+  kanbanDrag.settling = false;
+  kanbanDrag.taskId = null;
+  kanbanDrag.fromKey = null;
+  kanbanDrag.overKey = null;
+  kanbanDrag.task = null;
+  kanbanDrag.width = 0;
+  kanbanDrag.height = 0;
+  kanbanDrag.x = 0;
+  kanbanDrag.y = 0;
+}
+
+function clearKanbanDrag() {
+  if (kanbanRaf) {
+    cancelAnimationFrame(kanbanRaf);
+    kanbanRaf = 0;
+  }
+  if (kanbanScrollRaf) {
+    cancelAnimationFrame(kanbanScrollRaf);
+    kanbanScrollRaf = 0;
+  }
+  stopKanbanPointerListeners();
+  kanbanPointer = null;
+  document.body.style.userSelect = '';
+  document.body.style.cursor = '';
+  document.body.classList.remove('task-kanban-dragging');
+  resetKanbanDragFields();
+}
+
+function readKanbanDropKey(clientX, clientY) {
+  const el = document.elementFromPoint(clientX, clientY);
+  const col = el?.closest?.('.task-kanban__col');
+  return col?.dataset?.dropKey || null;
+}
+
+function autoScrollKanban(clientX, clientY) {
+  const wrap = kanbanWrap.value;
+  if (!wrap) return;
+  const rect = wrap.getBoundingClientRect();
+  const edge = 56;
+  if (clientX < rect.left + edge) wrap.scrollLeft -= 18;
+  else if (clientX > rect.right - edge) wrap.scrollLeft += 18;
+
+  const body = document.elementFromPoint(clientX, clientY)?.closest?.('.task-kanban__col-body');
+  if (!body) return;
+  const bodyRect = body.getBoundingClientRect();
+  if (clientY < bodyRect.top + 44) body.scrollTop -= 14;
+  else if (clientY > bodyRect.bottom - 44) body.scrollTop += 14;
+}
+
+function runKanbanAutoScroll() {
+  kanbanScrollRaf = 0;
+  if (!kanbanDrag.active || kanbanDrag.settling) return;
+  autoScrollKanban(kanbanPendingX, kanbanPendingY);
+  kanbanScrollRaf = requestAnimationFrame(runKanbanAutoScroll);
+}
+
+function flushKanbanGhost() {
+  kanbanRaf = 0;
+  if (!kanbanDrag.active || kanbanDrag.settling) return;
+  kanbanDrag.x = kanbanPendingX - (kanbanPointer?.grabX || 0);
+  kanbanDrag.y = kanbanPendingY - (kanbanPointer?.grabY || 0);
+  const over = readKanbanDropKey(kanbanPendingX, kanbanPendingY);
+  if (over) kanbanDrag.overKey = over;
+}
+
+function startKanbanDrag(event) {
+  const pointer = kanbanPointer;
+  if (!pointer) return;
+  const rect = pointer.cardEl.getBoundingClientRect();
+  pointer.grabX = event.clientX - rect.left;
+  pointer.grabY = event.clientY - rect.top;
+  kanbanDrag.active = true;
+  kanbanDrag.settling = false;
+  kanbanDrag.taskId = pointer.task.id;
+  kanbanDrag.fromKey = kanbanDropKeyOf(pointer.task);
+  kanbanDrag.overKey = kanbanDrag.fromKey;
+  kanbanDrag.task = pointer.task;
+  kanbanDrag.width = rect.width;
+  kanbanDrag.height = rect.height;
+  kanbanDrag.x = rect.left;
+  kanbanDrag.y = rect.top;
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'grabbing';
+  document.body.classList.add('task-kanban-dragging');
+  event.preventDefault();
+  if (!kanbanScrollRaf) kanbanScrollRaf = requestAnimationFrame(runKanbanAutoScroll);
+}
+
+function onKanbanCardPointerDown(event, task) {
+  if (!isKanbanDragGroup.value) return;
+  if (event.button !== 0) return;
+  if (kanbanStatusUpdating.value.has(task.id)) return;
+  if (event.target.closest('button, a, input, select, textarea, [role="menu"]')) return;
+  if (kanbanDrag.active || kanbanDrag.settling) return;
+
+  kanbanPointer = {
+    task,
+    cardEl: event.currentTarget,
+    startX: event.clientX,
+    startY: event.clientY,
+    grabX: 0,
+    grabY: 0,
+  };
+  kanbanPendingX = event.clientX;
+  kanbanPendingY = event.clientY;
+  window.addEventListener('pointermove', onKanbanPointerMove);
+  window.addEventListener('pointerup', onKanbanPointerUp);
+  window.addEventListener('pointercancel', onKanbanPointerCancel);
+}
+
+function onKanbanPointerMove(event) {
+  if (!kanbanPointer) return;
+  kanbanPendingX = event.clientX;
+  kanbanPendingY = event.clientY;
+  if (!kanbanDrag.active) {
+    if (!kanbanCardsMovable.value) return;
+    const dist = Math.hypot(event.clientX - kanbanPointer.startX, event.clientY - kanbanPointer.startY);
+    if (dist < KANBAN_DRAG_THRESHOLD) return;
+    startKanbanDrag(event);
+  }
+  if (!kanbanRaf) kanbanRaf = requestAnimationFrame(flushKanbanGhost);
+}
+
+async function settleKanbanGhost(rect) {
+  if (!rect || prefersReducedMotion()) return;
+  kanbanDrag.settling = true;
+  kanbanDrag.x = rect.left;
+  kanbanDrag.y = rect.top;
+  await waitMs(220);
+}
+
+async function onKanbanPointerUp() {
+  const pointer = kanbanPointer;
+  const wasDragging = kanbanDrag.active;
+  stopKanbanPointerListeners();
+
+  if (!wasDragging) {
+    kanbanPointer = null;
+    if (pointer?.task) inspect(pointer.task);
+    return;
+  }
+
+  const taskId = kanbanDrag.taskId;
+  const fromKey = kanbanDrag.fromKey;
+  const target = kanbanDrag.overKey;
+  const sameColumn = !target || target === fromKey;
+
+  if (sameColumn) {
+    const origin = pointer?.cardEl?.getBoundingClientRect();
+    await settleKanbanGhost(origin);
+    if (!kanbanDrag.active) return;
+    clearKanbanDrag();
+    return;
+  }
+
+  const slot = kanbanWrap.value?.querySelector('.task-kanban__placeholder');
+  await settleKanbanGhost(slot?.getBoundingClientRect());
+  if (!kanbanDrag.active) return;
+  clearKanbanDrag();
+  await commitKanbanDrop(taskId, target);
+}
+
+function onKanbanPointerCancel() {
+  clearKanbanDrag();
+}
+
+function markKanbanJustMoved(taskId) {
+  kanbanJustMovedId.value = taskId;
+  window.clearTimeout(kanbanJustMovedTimer);
+  kanbanJustMovedTimer = window.setTimeout(() => {
+    if (kanbanJustMovedId.value === taskId) kanbanJustMovedId.value = null;
+  }, 360);
+}
+
+async function patchTask(taskId, payload, successMessage) {
+  const task = tasks.value.find((item) => item.id === taskId);
+  if (!task) return;
+
+  const previous = { ...task };
+  Object.assign(task, payload);
+  markKanbanJustMoved(taskId);
+  const busy = new Set(kanbanStatusUpdating.value);
+  busy.add(taskId);
+  kanbanStatusUpdating.value = busy;
+
+  try {
+    const { data } = await window.axios.put(`/api/project/tasks/${taskId}`, payload);
+    applyTaskUpdate(data.task);
+    showClientToast('success', successMessage);
+  } catch (error) {
+    Object.assign(task, previous);
+    showClientToast('error', error?.response?.data?.message || 'Không cập nhật được công việc.');
+  } finally {
+    const next = new Set(kanbanStatusUpdating.value);
+    next.delete(taskId);
+    kanbanStatusUpdating.value = next;
+  }
+}
+
+async function commitKanbanDrop(taskId, targetKey) {
+  if (kanbanGroupBy.value === 'status') {
+    await patchTask(taskId, { status: targetKey }, `Đã chuyển sang ${statusLabel(targetKey)}.`);
+    return;
+  }
+  if (kanbanGroupBy.value === 'priority') {
+    const priority = targetKey === '__none__' ? null : targetKey;
+    await patchTask(taskId, { priority }, `Đã đổi mức độ ưu tiên thành ${priorityLabel(priority)}.`);
+    return;
+  }
+  if (kanbanGroupBy.value === 'type') {
+    await patchTask(taskId, { type: targetKey }, `Đã chuyển sang ${typeLabel(targetKey)}.`);
+  }
+}
+
 function handleDocumentKeydown(event) {
   if (event.key !== 'Escape') return;
   if (confirmingDelete.value) {
     confirmingDelete.value = false;
     return;
   }
+  if (kanbanDrag.active) {
+    clearKanbanDrag();
+    return;
+  }
   if (editing.value) {
     cancelEdit();
     return;
   }
-  if (selected.value) {
-    closePanel();
+  if (viewModeOpen.value) {
+    closeViewModeMenu();
+    return;
+  }
+  if (kanbanAssigneePickerOpen.value) {
+    closeKanbanAssigneePicker();
+    return;
+  }
+  if (selected.value) closePanel();
+}
+
+function handleDocumentClickForPickers(event) {
+  if (kanbanAssigneePickerOpen.value) {
+    const el = document.getElementById('task-kanban-assignee-root');
+    if (el && !el.contains(event.target)) closeKanbanAssigneePicker();
+  }
+  if (viewModeOpen.value) {
+    const el = document.getElementById('task-view-mode-root');
+    if (el && !el.contains(event.target)) closeViewModeMenu();
   }
 }
 
@@ -461,13 +1119,12 @@ watch(tableZoom, (value) => {
 });
 watch(selected, () => nextTick(fitColumnsToContent));
 watch(shownColumns, () => nextTick(fitColumnsToContent));
-
-watch([projectId, assigneeId, status, dateFrom, dateTo, perPage], () => {
-  loadTasks(1);
-});
+watch(perPage, () => loadTasks(1));
+watch([projectId, assigneeId, dateFrom, dateTo], () => loadTasks(1));
 
 onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown);
+  document.addEventListener('mousedown', handleDocumentClickForPickers);
   loadOptions();
   loadTasks(1);
   nextTick(() => {
@@ -488,7 +1145,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleDocumentKeydown);
+  document.removeEventListener('mousedown', handleDocumentClickForPickers);
   wrapObserver?.disconnect();
+  clearKanbanDrag();
+  window.clearTimeout(kanbanJustMovedTimer);
 });
 </script>
 
@@ -497,9 +1157,18 @@ onBeforeUnmount(() => {
     <PageHeader
       title="Tất cả công việc"
       icon="layoutList"
-      description="Xem, sửa và xoá công việc xuyên toàn bộ dự án. Tạo công việc mới qua menu chuột phải trong từng dự án."
+      description="Quản lý danh sách công việc của tổ chức."
     >
       <template #actions>
+        <div class="task-page__header-search">
+          <AppIcon name="search" :size="15" />
+          <input
+            v-model="query"
+            type="search"
+            placeholder="Tìm theo tên công việc…"
+            @keydown.enter="loadTasks(1)"
+          />
+        </div>
         <button type="button" class="task-page__header-btn" :disabled="loading" @click="loadTasks(meta.current_page)">
           <AppIcon name="refresh" :size="16" :class="{ 'task-page__spin': loading }" />
           Làm mới
@@ -509,20 +1178,144 @@ onBeforeUnmount(() => {
 
     <div class="task-page__body">
       <div class="task-page__main">
-        <div v-if="hasVisibleFilterFields" class="task-page__toolbar">
-          <div class="task-page__filters">
-            <div v-if="visibleFilters.q" class="task-page__field">
-              <label class="task-page__label" for="task-q">Tìm kiếm</label>
-              <input
-                id="task-q"
-                v-model="query"
-                type="search"
-                class="task-page__input"
-                placeholder="Tên công việc…"
-                @keydown.enter="loadTasks(1)"
-              />
+        <div class="task-tabs-row">
+          <div id="task-view-mode-root" class="task-view-mode">
+            <button
+              type="button"
+              class="task-view-mode__trigger"
+              aria-haspopup="menu"
+              :aria-expanded="viewModeOpen"
+              aria-label="Chế độ xem"
+              @click.stop="toggleViewModeMenu"
+            >
+              <AppIcon :name="isKanban ? 'layoutGrid' : 'layoutList'" :size="15" />
+              <span>{{ viewModeTriggerLabel }}</span>
+              <AppIcon name="chevronDown" :size="14" />
+            </button>
+            <div v-if="viewModeOpen" class="task-view-mode__menu" role="menu" @click.stop>
+              <button
+                type="button"
+                class="task-view-mode__item"
+                :class="{ 'task-view-mode__item--on': !isKanban }"
+                role="menuitem"
+                @click="setViewMode('list')"
+              >
+                <AppIcon name="layoutList" :size="15" />
+                <span>Danh sách</span>
+                <AppIcon v-if="!isKanban" name="check" :size="14" />
+              </button>
+              <p class="task-view-mode__group">Kanban</p>
+              <button
+                type="button"
+                class="task-view-mode__item"
+                :class="{ 'task-view-mode__item--on': isKanban && kanbanGroupBy === 'status' }"
+                role="menuitem"
+                @click="chooseKanbanGroup('status')"
+              >
+                <AppIcon name="layoutGrid" :size="15" />
+                <span>Theo trạng thái</span>
+                <AppIcon v-if="isKanban && kanbanGroupBy === 'status'" name="check" :size="14" />
+              </button>
+              <button
+                type="button"
+                class="task-view-mode__item"
+                :class="{ 'task-view-mode__item--on': isKanban && kanbanGroupBy === 'assignees' }"
+                role="menuitem"
+                @click="chooseKanbanGroup('assignees')"
+              >
+                <AppIcon name="users" :size="15" />
+                <span>Theo người thực hiện</span>
+                <AppIcon v-if="isKanban && kanbanGroupBy === 'assignees'" name="check" :size="14" />
+              </button>
+              <button
+                type="button"
+                class="task-view-mode__item"
+                :class="{ 'task-view-mode__item--on': isKanban && kanbanGroupBy === 'project' }"
+                role="menuitem"
+                @click="chooseKanbanGroup('project')"
+              >
+                <AppIcon name="layers" :size="15" />
+                <span>Theo dự án</span>
+                <AppIcon v-if="isKanban && kanbanGroupBy === 'project'" name="check" :size="14" />
+              </button>
+              <button
+                type="button"
+                class="task-view-mode__item"
+                :class="{ 'task-view-mode__item--on': isKanban && kanbanGroupBy === 'priority' }"
+                role="menuitem"
+                @click="chooseKanbanGroup('priority')"
+              >
+                <AppIcon name="bookmark" :size="15" />
+                <span>Theo mức độ ưu tiên</span>
+                <AppIcon v-if="isKanban && kanbanGroupBy === 'priority'" name="check" :size="14" />
+              </button>
+              <button
+                type="button"
+                class="task-view-mode__item"
+                :class="{ 'task-view-mode__item--on': isKanban && kanbanGroupBy === 'type' }"
+                role="menuitem"
+                @click="chooseKanbanGroup('type')"
+              >
+                <AppIcon name="gitBranch" :size="15" />
+                <span>Theo loại</span>
+                <AppIcon v-if="isKanban && kanbanGroupBy === 'type'" name="check" :size="14" />
+              </button>
+            </div>
+          </div>
+
+          <nav class="task-tabs hide-scrollbar" aria-label="Lọc nhanh công việc">
+            <button
+              v-for="tab in TASK_TABS"
+              :key="tab.key"
+              type="button"
+              class="task-tabs__item"
+              :class="[`task-tabs__item--${tab.tone}`, { 'task-tabs__item--active': activeTab === tab.key }]"
+              @click="selectTab(tab.key)"
+            >
+              <span class="task-tabs__label">{{ tab.label }}</span>
+              <span class="task-tabs__count">{{ tabCount(tab.key) }}</span>
+            </button>
+          </nav>
+        </div>
+
+        <div v-if="isKanban && kanbanGroupBy === 'assignees'" class="task-view-bar">
+          <div id="task-kanban-assignee-root" class="task-kanban-members">
+            <button
+              type="button"
+              class="task-kanban-members__trigger"
+              :aria-expanded="kanbanAssigneePickerOpen"
+              @click.stop="toggleKanbanAssigneePicker"
+            >
+              <AppIcon name="userPlus" :size="15" />
+              Chọn người thực hiện
+              <span v-if="kanbanSelectedUsers.length" class="task-kanban-members__count">{{ kanbanSelectedUsers.length }}</span>
+            </button>
+
+            <div v-if="kanbanAssigneePickerOpen" class="task-kanban-members__dropdown hide-scrollbar" @click.stop>
+              <label v-for="user in allAssignableUsers" :key="user.id" class="task-kanban-members__option">
+                <input
+                  type="checkbox"
+                  :checked="kanbanAssigneeIds.includes(user.id)"
+                  @change="toggleKanbanAssignee(user.id)"
+                />
+                <span>{{ user.name }}</span>
+              </label>
+              <p v-if="!allAssignableUsers.length" class="task-kanban-members__empty">Chưa có người thực hiện nào.</p>
             </div>
 
+            <span v-if="kanbanSelectedUsers.length" class="task-kanban-members__chips">
+              <span v-for="user in kanbanSelectedUsers" :key="user.id" class="task-kanban-members__chip">
+                {{ user.name }}
+                <button type="button" aria-label="Bỏ chọn người này" @click="removeKanbanAssignee(user.id)">
+                  <AppIcon name="close" :size="10" />
+                </button>
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <div v-if="!isKanban && hasVisibleFilterFields" class="task-page__toolbar">
+          <div class="task-page__filters">
             <div v-if="visibleFilters.project_id" class="task-page__field">
               <label class="task-page__label" for="task-project">Dự án</label>
               <select id="task-project" v-model="projectId" class="task-page__input">
@@ -530,7 +1323,6 @@ onBeforeUnmount(() => {
                 <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
               </select>
             </div>
-
             <div v-if="visibleFilters.assignee_id" class="task-page__field">
               <label class="task-page__label" for="task-assignee">Người thực hiện</label>
               <select id="task-assignee" v-model="assigneeId" class="task-page__input">
@@ -538,21 +1330,10 @@ onBeforeUnmount(() => {
                 <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
               </select>
             </div>
-
-            <div v-if="visibleFilters.status" class="task-page__field">
-              <label class="task-page__label" for="task-status">Trạng thái</label>
-              <select id="task-status" v-model="status" class="task-page__input">
-                <option v-for="item in TASK_STATUSES" :key="item.value || 'all'" :value="item.value">
-                  {{ item.label }}
-                </option>
-              </select>
-            </div>
-
             <div v-if="visibleFilters.date_from" class="task-page__field">
               <label class="task-page__label" for="task-from">Từ ngày</label>
               <input id="task-from" v-model="dateFrom" type="date" class="task-page__input" />
             </div>
-
             <div v-if="visibleFilters.date_to" class="task-page__field">
               <label class="task-page__label" for="task-to">Đến ngày</label>
               <input id="task-to" v-model="dateTo" type="date" class="task-page__input" />
@@ -561,6 +1342,7 @@ onBeforeUnmount(() => {
         </div>
 
         <TablePagesBar
+          v-if="!isKanban"
           placement="top"
           :from="meta.from || 0"
           :to="meta.to || 0"
@@ -602,6 +1384,7 @@ onBeforeUnmount(() => {
         </TablePagesBar>
 
         <div
+          v-if="!isKanban"
           ref="tableWrap"
           class="task-page__table-wrap hide-scrollbar"
           :class="{ 'task-page__table-wrap--resizing': resizing }"
@@ -630,36 +1413,109 @@ onBeforeUnmount(() => {
                 <td :colspan="colSpan" class="task-page__empty">Đang tải…</td>
               </tr>
               <tr v-else-if="tasks.length === 0">
-                <td :colspan="colSpan" class="task-page__empty">Chưa có công việc nào.</td>
+                <td :colspan="colSpan" class="task-page__empty">
+                  {{ hasActiveFilters ? 'Không tìm thấy công việc khớp bộ lọc.' : 'Chưa có công việc nào.' }}
+                </td>
               </tr>
-              <tr
-                v-for="task in tasks"
-                v-else
-                :key="task.id"
-                :class="{ 'task-page__row--active': selected?.id === task.id }"
-                @click="inspect(task)"
-              >
-                <td v-for="col in shownColumns" :key="col.key">
-                  <template v-if="col.key === 'assignee'">
-                    <span class="task-page__person">
-                      <UserAvatarTip :user="task.assignee" label="Người thực hiện" />
-                      <span class="task-page__cell">{{ task.assignee?.name || '—' }}</span>
+              <template v-for="group in groupedTasks" v-else :key="group.key">
+                <tr
+                  class="task-page__group-row"
+                  :class="`task-page__group-row--${group.tone}`"
+                  @click="toggleGroup(group.key)"
+                >
+                  <td :colspan="colSpan">
+                    <span class="task-page__group-toggle">
+                      <span class="task-page__group-head">
+                        <AppIcon
+                          name="chevronRight"
+                          :size="14"
+                          class="task-page__group-chevron"
+                          :class="{ 'task-page__group-chevron--open': !isGroupCollapsed(group.key) }"
+                        />
+                        <span class="task-page__group-label">{{ group.label }}</span>
+                      </span>
+                      <span class="task-page__group-count">{{ group.tasks.length }} công việc</span>
                     </span>
-                  </template>
-                  <template v-else-if="col.key === 'status'">
-                    <span class="task-page__status">
+                  </td>
+                </tr>
+                <tr
+                  v-for="task in group.tasks"
+                  v-show="!isGroupCollapsed(group.key)"
+                  :key="task.id"
+                  class="task-page__data-row"
+                  :class="[
+                    `task-page__data-row--${group.tone}`,
+                    { 'task-page__row--active': selected?.id === task.id },
+                  ]"
+                  @dblclick="inspect(task)"
+                >
+                  <td
+                    v-for="col in shownColumns"
+                    :key="col.key"
+                    :class="{
+                      'task-page__td--name': col.key === 'title',
+                      'task-page__td--avatar': col.key === 'assignee' || col.key === 'creator',
+                    }"
+                  >
+                    <span v-if="col.key === 'code'" class="task-page__pill task-page__pill--code">{{ task.code || '—' }}</span>
+                    <span v-else-if="col.key === 'title'" class="task-page__name-cell">
+                      <span class="task-page__name-title">{{ task.title }}</span>
+                    </span>
+                    <span
+                      v-else-if="col.key === 'project'"
+                      class="task-page__pill"
+                      :class="`task-page__pill--${hashTone(`project-${task.project_id}`)}`"
+                    >
+                      {{ task.project?.name || '—' }}
+                    </span>
+                    <span v-else-if="col.key === 'assignee'">
+                      <UserAvatarTip v-if="task.assignee" :user="task.assignee" label="Người thực hiện" />
+                      <span v-else>—</span>
+                    </span>
+                    <span v-else-if="col.key === 'status'" class="task-page__pill" :class="`task-page__pill--${statusTone(task.status)}`">
                       <span class="task-page__dot" :class="`task-page__dot--${statusTone(task.status)}`" />
                       {{ statusLabel(task.status) }}
                     </span>
-                  </template>
-                  <span v-else class="task-page__cell">{{ cellText(task, col.key) }}</span>
-                </td>
-              </tr>
+                    <span v-else-if="col.key === 'priority'" class="task-page__pill" :class="`task-page__pill--${priorityTone(task.priority)}`">
+                      <span class="task-page__dot" :class="`task-page__dot--${priorityTone(task.priority)}`" />
+                      {{ priorityLabel(task.priority) }}
+                    </span>
+                    <span v-else-if="col.key === 'start_date'" class="task-page__pill task-page__pill--date">{{ formatDate(task.start_date) }}</span>
+                    <span v-else-if="col.key === 'end_date'" class="task-page__pill task-page__pill--date">{{ formatDate(task.end_date) }}</span>
+                    <span v-else-if="col.key === 'actual_start_date'" class="task-page__pill task-page__pill--date">{{ formatDate(task.actual_start_date) }}</span>
+                    <span v-else-if="col.key === 'actual_end_date'" class="task-page__pill task-page__pill--date">{{ formatDate(task.actual_end_date) }}</span>
+                    <span v-else-if="col.key === 'progress_percent'" class="task-page__progress-cell">
+                      <template v-if="task.progress_percent != null">
+                        <span class="task-page__mini-track">
+                          <span
+                            class="task-page__mini-fill"
+                            :class="`task-page__mini-fill--${progressTone(task.progress_percent)}`"
+                            :style="{ width: `${task.progress_percent}%` }"
+                          />
+                        </span>
+                        <span class="task-page__pill" :class="`task-page__pill--${progressTone(task.progress_percent)}`">
+                          {{ task.progress_percent }}%
+                        </span>
+                      </template>
+                      <span v-else>—</span>
+                    </span>
+                    <span v-else-if="col.key === 'type'" class="task-page__pill" :class="`task-page__pill--${typeTone(task.type)}`">
+                      {{ typeLabel(task.type) }}
+                    </span>
+                    <span v-else-if="col.key === 'creator'">
+                      <UserAvatarTip v-if="task.creator" :user="task.creator" label="Người tạo" />
+                      <span v-else>—</span>
+                    </span>
+                    <span v-else class="task-page__cell">{{ cellText(task, col.key) }}</span>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
 
         <TablePagesBar
+          v-if="!isKanban"
           placement="bottom"
           paging-only
           :from="meta.from || 0"
@@ -671,6 +1527,118 @@ onBeforeUnmount(() => {
           @update:page="goPage"
           @update:per-page="perPage = $event"
         />
+
+        <div
+          v-if="isKanban"
+          ref="kanbanWrap"
+          class="task-kanban hide-scrollbar"
+          :class="{
+            'task-kanban--dragging': kanbanDrag.active,
+            'task-kanban--fill': kanbanStatusFill,
+            'task-kanban--spread': kanbanSpread,
+          }"
+        >
+          <p v-if="kanbanGroupBy === 'assignees' && !kanbanSelectedUsers.length" class="task-kanban__hint">
+            Chọn ít nhất một người thực hiện ở trên để xem theo cột.
+          </p>
+          <p v-else-if="kanbanStatusFill && !kanbanStatusColumns.length" class="task-kanban__hint">
+            Không có công việc nào.
+          </p>
+          <p v-else-if="!kanbanColumns.length" class="task-kanban__hint">
+            Không có công việc nào.
+          </p>
+          <div
+            v-for="col in kanbanColumns"
+            :key="col.key"
+            class="task-kanban__col"
+            :class="[
+              `task-kanban__col--${col.tone || 'primary'}`,
+              { 'task-kanban__col--drop': isKanbanDragGroup && kanbanDrag.active && kanbanDrag.overKey === col.dropKey },
+            ]"
+            :data-drop-key="isKanbanDragGroup ? col.dropKey : undefined"
+          >
+            <header class="task-kanban__col-head">
+              <div class="task-kanban__col-head-main">
+                <UserAvatarTip v-if="col.user" :user="col.user" label="Người thực hiện" />
+                <span class="task-kanban__col-title">{{ col.label }}</span>
+              </div>
+              <span class="task-kanban__col-count">{{ col.tasks.length }}</span>
+            </header>
+
+            <div class="task-kanban__col-body hide-scrollbar">
+              <div
+                v-if="kanbanDropSlot(col)"
+                class="task-kanban__placeholder"
+                :style="{ height: `${kanbanDrag.height}px` }"
+              />
+
+              <article
+                v-for="task in col.tasks"
+                :key="task.id"
+                class="task-kanban__card"
+                :class="{
+                  'task-kanban__card--movable': kanbanCardsMovable,
+                  'task-kanban__card--slot': kanbanDrag.active && kanbanDrag.taskId === task.id,
+                  'task-kanban__card--enter': kanbanJustMovedId === task.id,
+                }"
+                data-no-drag-scroll
+                @pointerdown="onKanbanCardPointerDown($event, task)"
+                @click="!isKanbanDragGroup && inspect(task)"
+              >
+                <header class="task-kanban__card-head">
+                  <span v-if="task.code" class="task-kanban__card-code">{{ task.code }}</span>
+                  <span class="task-kanban__card-type">{{ task.project?.name || typeLabel(task.type) }}</span>
+                </header>
+                <h3 class="task-kanban__card-title">{{ task.title }}</h3>
+                <div v-if="task.priority && task.priority !== 'low'" class="task-kanban__card-labels">
+                  <span class="task-kanban__importance" :class="`task-kanban__importance--${priorityTone(task.priority)}`">
+                    {{ priorityLabel(task.priority) }}
+                  </span>
+                </div>
+                <p v-if="task.description" class="task-kanban__card-desc">{{ task.description }}</p>
+                <dl v-if="task.assignee?.name || dateRangeLabel(task)" class="task-kanban__card-facts">
+                  <div v-if="task.assignee?.name" class="task-kanban__card-fact">
+                    <dt>Người thực hiện</dt>
+                    <dd>{{ task.assignee.name }}</dd>
+                  </div>
+                  <div v-if="dateRangeLabel(task)" class="task-kanban__card-fact">
+                    <dt>Thời hạn</dt>
+                    <dd>{{ dateRangeLabel(task) }}</dd>
+                  </div>
+                </dl>
+                <div v-if="task.progress_percent != null" class="task-kanban__card-progress">
+                  <div class="task-kanban__card-progress-head">
+                    <span class="task-kanban__card-progress-label">Tiến độ</span>
+                    <span class="task-kanban__card-progress-value">{{ task.progress_percent }}%</span>
+                  </div>
+                  <span class="task-page__mini-track">
+                    <span
+                      class="task-page__mini-fill"
+                      :class="`task-page__mini-fill--${progressTone(task.progress_percent)}`"
+                      :style="{ width: `${task.progress_percent}%` }"
+                    />
+                  </span>
+                </div>
+                <footer class="task-kanban__card-foot">
+                  <span class="task-kanban__card-avatars">
+                    <UserAvatarTip v-if="task.assignee" :user="task.assignee" label="Người thực hiện" />
+                  </span>
+                  <span class="task-kanban__card-meta">
+                    <span class="task-kanban__card-stat">{{ statusLabel(task.status) }}</span>
+                  </span>
+                </footer>
+                <span v-if="kanbanCardsMovable" class="task-kanban__card-grip" aria-hidden="true">
+                  <AppIcon name="gripVertical" :size="14" />
+                </span>
+                <div v-if="kanbanStatusUpdating.has(task.id)" class="task-kanban__card-busy">
+                  <AppIcon name="refresh" :size="14" class="task-page__spin" />
+                </div>
+              </article>
+
+              <p v-if="!col.tasks.length && !kanbanDropSlot(col)" class="task-kanban__col-empty">Không có công việc nào.</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <aside v-if="selected" class="task-page__side" aria-label="Chi tiết công việc">
@@ -678,7 +1646,7 @@ onBeforeUnmount(() => {
           <h2 class="task-page__side-title">Chi tiết công việc</h2>
           <div class="task-page__side-actions">
             <button
-              v-if="!editing"
+              v-if="!editing && canEdit"
               type="button"
               class="task-page__icon-btn"
               aria-label="Sửa công việc"
@@ -687,7 +1655,7 @@ onBeforeUnmount(() => {
               <AppIcon name="pencil" :size="16" />
             </button>
             <button
-              v-if="!editing"
+              v-if="!editing && canEdit"
               type="button"
               class="task-page__icon-btn"
               aria-label="Xoá công việc"
@@ -730,6 +1698,13 @@ onBeforeUnmount(() => {
             </select>
           </label>
           <label class="task-page__field">
+            <span class="task-page__label">Mức độ ưu tiên</span>
+            <select v-model="editForm.priority" class="task-page__input">
+              <option value="">Chưa đặt</option>
+              <option v-for="(label, value) in TASK_PRIORITY_LABELS" :key="value" :value="value">{{ label }}</option>
+            </select>
+          </label>
+          <label class="task-page__field">
             <span class="task-page__label">Tiến độ (%)</span>
             <input v-model="editForm.progress_percent" type="number" min="0" max="100" class="task-page__input" />
           </label>
@@ -769,12 +1744,19 @@ onBeforeUnmount(() => {
             <span class="task-page__row-value">{{ selected.project?.name || '—' }}</span>
           </div>
           <div class="task-page__row">
+            <span class="task-page__row-label">Mã công việc</span>
+            <span class="task-page__row-value">{{ selected.code || selected.id }}</span>
+          </div>
+          <div class="task-page__row">
             <span class="task-page__row-label">Loại</span>
             <span class="task-page__row-value">{{ typeLabel(selected.type) }}</span>
           </div>
           <div class="task-page__row">
             <span class="task-page__row-label">Trạng thái</span>
-            <span class="task-page__row-value">{{ statusLabel(selected.status) }}</span>
+            <span class="task-page__row-value task-page__row-value--status">
+              <span class="task-page__dot" :class="`task-page__dot--${statusTone(selected.status)}`" />
+              {{ statusLabel(selected.status) }}
+            </span>
           </div>
           <div class="task-page__row">
             <span class="task-page__row-label">Mức độ ưu tiên</span>
@@ -787,19 +1769,22 @@ onBeforeUnmount(() => {
               <span>{{ selected.assignee?.name || 'Chưa gán' }}</span>
             </span>
           </div>
-          <div class="task-page__row">
+          <div v-if="selected.progress_percent != null" class="task-page__row task-page__row--progress">
             <span class="task-page__row-label">Tiến độ</span>
-            <span class="task-page__row-value">
-              {{ selected.progress_percent == null ? 'Chưa cập nhật' : `${selected.progress_percent}%` }}
+            <span class="task-page__progress">
+              <span class="task-page__progress-track">
+                <span class="task-page__progress-fill" :style="{ width: `${selected.progress_percent}%` }" />
+              </span>
+              <span class="task-page__row-value">{{ selected.progress_percent }}%</span>
             </span>
           </div>
           <div class="task-page__row">
             <span class="task-page__row-label">Ngày bắt đầu</span>
-            <span class="task-page__row-value">{{ formatDate(selected.start_date) || '—' }}</span>
+            <span class="task-page__row-value">{{ formatDate(selected.start_date) }}</span>
           </div>
           <div class="task-page__row">
             <span class="task-page__row-label">Ngày kết thúc</span>
-            <span class="task-page__row-value">{{ formatDate(selected.end_date) || '—' }}</span>
+            <span class="task-page__row-value">{{ formatDate(selected.end_date) }}</span>
           </div>
           <div v-if="selected.actual_start_date" class="task-page__row">
             <span class="task-page__row-label">Bắt đầu thực tế</span>
@@ -817,10 +1802,6 @@ onBeforeUnmount(() => {
             <span class="task-page__row-label">Người tạo</span>
             <span class="task-page__row-value">{{ selected.creator?.name || '—' }}</span>
           </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Mã công việc</span>
-            <span class="task-page__row-value">{{ selected.id }}</span>
-          </div>
         </div>
       </aside>
     </div>
@@ -835,6 +1816,25 @@ onBeforeUnmount(() => {
       @confirm="confirmDelete"
       @update:open="confirmingDelete = $event"
     />
+
+    <Teleport to="body">
+      <div
+        v-if="kanbanDrag.active && kanbanDrag.task"
+        class="task-kanban__ghost"
+        :class="{
+          'task-kanban__ghost--live': !kanbanDrag.settling,
+          'task-kanban__ghost--settle': kanbanDrag.settling,
+          [`task-kanban__ghost--${kanbanGhostTone}`]: true,
+        }"
+        :style="kanbanGhostStyle"
+      >
+        <header class="task-kanban__card-head">
+          <span v-if="kanbanDrag.task.code" class="task-kanban__card-code">{{ kanbanDrag.task.code }}</span>
+          <span class="task-kanban__card-type">{{ kanbanDrag.task.project?.name || typeLabel(kanbanDrag.task.type) }}</span>
+        </header>
+        <h3 class="task-kanban__card-title">{{ kanbanDrag.task.title }}</h3>
+      </div>
+    </Teleport>
   </section>
 </template>
 
@@ -843,7 +1843,7 @@ onBeforeUnmount(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: var(--space-5);
+  padding: 0 var(--space-5) var(--space-3);
   overflow: hidden;
 }
 
@@ -874,6 +1874,32 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
+.task-page__header-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.task-page__header-search input {
+  width: 15rem;
+  max-width: 40vw;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+}
+
+.task-page__header-search input:focus {
+  outline: none;
+}
+
 .task-page__spin {
   animation: task-spin 0.8s linear infinite;
 }
@@ -900,19 +1926,313 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.task-tabs-row {
+  position: relative;
+  z-index: 12;
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-view-mode {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.task-view-mode__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5625rem 0.75rem 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 1px 0 0 var(--color-border);
+}
+
+.task-view-mode__trigger:hover,
+.task-view-mode__trigger[aria-expanded='true'] {
+  color: var(--color-primary);
+  background: var(--color-primary-surface);
+}
+
+.task-view-mode__menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 17.5rem;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-lg);
+}
+
+.task-view-mode__group {
+  margin: 0.25rem 0 0.125rem;
+  padding: 0.25rem 0.625rem;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.task-view-mode__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-view-mode__item span {
+  flex: 1;
+}
+
+.task-view-mode__item:hover,
+.task-view-mode__item--on {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
+.task-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 0.125rem;
+  overflow-x: auto;
+}
+
+.task-tabs__item {
+  --tab-accent: var(--color-primary);
+  --tab-bg: var(--color-primary-surface);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5625rem 0.75rem 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.task-tabs__item:hover,
+.task-tabs__item--active {
+  color: var(--tab-accent);
+  background: var(--tab-bg);
+}
+
+.task-tabs__item--active {
+  box-shadow: 0 2px 0 var(--tab-accent);
+}
+
+.task-tabs__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.125rem;
+  padding: 0 0.3125rem;
+  border-radius: var(--radius-full);
+  background: var(--tab-bg);
+  color: var(--tab-accent);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.task-tabs__item--active .task-tabs__count {
+  background: var(--tab-accent);
+  color: #fff;
+}
+
+.task-tabs__item--primary {
+  --tab-accent: var(--color-primary);
+  --tab-bg: var(--color-primary-surface);
+}
+.task-tabs__item--success {
+  --tab-accent: var(--color-success);
+  --tab-bg: var(--color-success-tint-bg);
+}
+.task-tabs__item--info {
+  --tab-accent: var(--color-info);
+  --tab-bg: var(--color-info-tint-bg);
+}
+.task-tabs__item--warning {
+  --tab-accent: var(--color-warning);
+  --tab-bg: var(--color-warning-tint-bg);
+}
+.task-tabs__item--gold {
+  --tab-accent: var(--color-gold-600);
+  --tab-bg: var(--color-gold-surface);
+}
+.task-tabs__item--tertiary {
+  --tab-accent: var(--color-tertiary);
+  --tab-bg: var(--color-tertiary-surface);
+}
+.task-tabs__item--umber {
+  --tab-accent: var(--color-umber);
+  --tab-bg: var(--color-umber-surface);
+}
+
+.task-view-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.task-kanban-members {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.task-kanban-members__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.task-kanban-members__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.3125rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.task-kanban-members__dropdown {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.375rem);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 15rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-lg);
+}
+
+.task-kanban-members__option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.task-kanban-members__option:hover {
+  background: var(--color-primary-surface);
+}
+
+.task-kanban-members__empty {
+  margin: 0;
+  padding: 0.375rem 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.task-kanban-members__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.task-kanban-members__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.25rem 0.375rem 0.25rem 0.625rem;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.task-kanban-members__chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
 .task-page__toolbar {
   position: relative;
   z-index: 6;
   flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin: var(--space-3) 0;
+  margin: var(--space-3) 0 0;
 }
 
 .task-page__filters {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-3);
   width: 100%;
 }
@@ -952,42 +2272,6 @@ onBeforeUnmount(() => {
   min-height: 4.5rem;
 }
 
-.task-page__btn {
-  height: 2.375rem;
-  padding: 0 1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-family: var(--font-family-base);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.task-page__btn:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.task-page__btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.task-page__btn--ghost {
-  background: var(--color-surface);
-  color: var(--color-text);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-}
-
-.task-page__btn--ghost:hover:not(:disabled) {
-  background: var(--color-surface-muted);
-}
-
 .task-page__check {
   display: flex;
   align-items: center;
@@ -1021,12 +2305,13 @@ onBeforeUnmount(() => {
 .task-page__table thead th {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
+  overflow: hidden;
   padding: var(--space-3) var(--space-4);
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: calc(0.75rem * var(--table-zoom, 1));
   letter-spacing: 0.02em;
   text-align: left;
   white-space: nowrap;
@@ -1066,37 +2351,311 @@ onBeforeUnmount(() => {
   color: var(--color-text);
   vertical-align: middle;
   white-space: nowrap;
-  box-shadow: 0 1px 0 var(--color-border);
+  overflow: hidden;
+  box-shadow: inset 0 -1px 0 var(--color-border);
+}
+
+.task-page__td--name {
+  overflow: visible;
+  white-space: normal;
+  vertical-align: top;
+}
+
+.task-page__td--avatar {
+  overflow: visible;
 }
 
 .task-page__table tbody tr {
   cursor: pointer;
 }
 
-.task-page__table tbody tr:hover td {
-  background: var(--color-surface-muted);
+.task-page__table tbody tr.task-page__data-row:hover td {
+  filter: brightness(0.97);
 }
 
 .task-page__row--active td {
-  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)) !important;
 }
 
-.task-page__cell {
-  display: block;
-  white-space: nowrap;
-}
-
-.task-page__person {
+.task-page__name-cell {
   display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  min-width: 0;
+  flex-direction: column;
+  gap: 0.3125rem;
+  white-space: normal;
 }
 
-.task-page__status {
+.task-page__name-title {
+  display: block;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.task-page__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  max-width: 100%;
+  padding: 0.1875rem 0.5625rem;
+  border-radius: 0;
+  background: var(--pill-bg, var(--color-surface-muted));
+  color: var(--pill-fg, var(--color-text));
+  font-size: calc(0.75rem * var(--table-zoom, 1));
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.task-page__pill--primary {
+  --pill-bg: var(--color-primary-50);
+  --pill-fg: var(--color-primary-900);
+}
+.task-page__pill--secondary {
+  --pill-bg: var(--color-secondary-50);
+  --pill-fg: var(--color-secondary-800);
+}
+.task-page__pill--tertiary {
+  --pill-bg: var(--color-tertiary-50);
+  --pill-fg: var(--color-tertiary-800);
+}
+.task-page__pill--gold {
+  --pill-bg: var(--color-gold-50);
+  --pill-fg: var(--color-gold-800);
+}
+.task-page__pill--success {
+  --pill-bg: var(--color-success-tint-bg);
+  --pill-fg: var(--color-success-tint-fg);
+}
+.task-page__pill--info {
+  --pill-bg: var(--color-info-tint-bg);
+  --pill-fg: var(--color-info-tint-fg);
+}
+.task-page__pill--warning {
+  --pill-bg: var(--color-warning-tint-bg);
+  --pill-fg: var(--color-warning-tint-fg);
+}
+.task-page__pill--danger {
+  --pill-bg: var(--color-danger-tint-bg);
+  --pill-fg: var(--color-danger-tint-fg);
+}
+.task-page__pill--violet {
+  --pill-bg: color-mix(in srgb, var(--color-tertiary-surface) 65%, var(--color-primary-surface));
+  --pill-fg: color-mix(in srgb, var(--color-tertiary) 58%, var(--color-primary));
+}
+.task-page__pill--teal {
+  --pill-bg: color-mix(in srgb, var(--color-secondary-surface) 62%, var(--color-tertiary-surface));
+  --pill-fg: color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary-800));
+}
+.task-page__pill--rose {
+  --pill-bg: color-mix(in srgb, var(--color-primary-surface) 62%, var(--color-gold-surface));
+  --pill-fg: color-mix(in srgb, var(--color-primary) 55%, var(--color-gold-800));
+}
+.task-page__pill--umber {
+  --pill-bg: var(--color-umber-surface);
+  --pill-fg: var(--color-umber-700);
+}
+.task-page__pill--neutral,
+.task-page__pill--code,
+.task-page__pill--date {
+  --pill-bg: var(--color-surface-muted);
+  --pill-fg: var(--color-text);
+}
+
+.task-page__progress-cell {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.task-page__mini-track {
+  display: block;
+  width: 3.25rem;
+  height: 0.375rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  overflow: hidden;
+}
+
+.task-page__mini-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary);
+}
+
+.task-page__mini-fill--success {
+  background: var(--color-success);
+}
+.task-page__mini-fill--tertiary {
+  background: var(--color-tertiary);
+}
+.task-page__mini-fill--gold {
+  background: var(--color-gold);
+}
+.task-page__mini-fill--warning {
+  background: var(--color-warning);
+}
+.task-page__mini-fill--neutral {
+  background: var(--color-text-muted);
+}
+
+.task-page__group-row {
+  cursor: pointer;
+}
+
+.task-page__group-row td {
+  position: relative;
+  width: 100%;
+  overflow: visible;
+  padding: var(--space-2) var(--space-4) var(--space-2) calc(var(--space-4) + 3px + var(--space-2)) !important;
+  background: var(--color-surface);
+  color: var(--group-fg, var(--color-text));
+  box-shadow: inset 0 -2px 0 var(--group-accent, var(--color-border)) !important;
+}
+
+.task-page__group-row td::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--group-accent, var(--color-border));
+}
+
+.task-page__group-row--primary {
+  --group-fg: var(--color-primary);
+  --group-accent: var(--color-primary);
+}
+.task-page__group-row--secondary {
+  --group-fg: var(--color-secondary);
+  --group-accent: var(--color-secondary);
+}
+.task-page__group-row--tertiary {
+  --group-fg: var(--color-tertiary);
+  --group-accent: var(--color-tertiary);
+}
+.task-page__group-row--gold {
+  --group-fg: var(--color-gold);
+  --group-accent: var(--color-gold);
+}
+.task-page__group-row--info {
+  --group-fg: var(--color-info);
+  --group-accent: var(--color-info);
+}
+.task-page__group-row--warning {
+  --group-fg: var(--color-warning);
+  --group-accent: var(--color-warning);
+}
+.task-page__group-row--success {
+  --group-fg: var(--color-success);
+  --group-accent: var(--color-success);
+}
+.task-page__group-row--violet {
+  --group-fg: color-mix(in srgb, var(--color-tertiary) 58%, var(--color-primary));
+  --group-accent: color-mix(in srgb, var(--color-tertiary) 58%, var(--color-primary));
+}
+.task-page__group-row--teal {
+  --group-fg: color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary));
+  --group-accent: color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary));
+}
+.task-page__group-row--rose {
+  --group-fg: color-mix(in srgb, var(--color-primary) 55%, var(--color-gold));
+  --group-accent: color-mix(in srgb, var(--color-primary) 55%, var(--color-gold));
+}
+.task-page__group-row--umber {
+  --group-fg: var(--color-umber);
+  --group-accent: var(--color-umber);
+}
+.task-page__group-row--neutral {
+  --group-fg: var(--color-text);
+  --group-accent: var(--color-text-muted);
+}
+
+.task-page__group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+}
+
+.task-page__group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.task-page__group-chevron {
+  flex-shrink: 0;
+  color: var(--group-accent, var(--color-text-muted));
+  transition: transform 0.15s ease;
+}
+
+.task-page__group-chevron--open {
+  transform: rotate(90deg);
+}
+
+.task-page__group-label {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: calc(0.8125rem * var(--table-zoom, 1));
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-page__group-count {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  margin-left: auto;
+  height: calc(1.125rem * var(--table-zoom, 1));
+  padding: 0 0.4375rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--group-accent, var(--color-text-muted)) 14%, var(--color-surface));
+  color: var(--group-accent, var(--color-text-muted));
+  font-size: calc(0.6875rem * var(--table-zoom, 1));
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.task-page__data-row--primary td {
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
+}
+.task-page__data-row--secondary td {
+  background: color-mix(in srgb, var(--color-secondary) 4%, var(--color-surface));
+}
+.task-page__data-row--tertiary td {
+  background: color-mix(in srgb, var(--color-tertiary) 4%, var(--color-surface));
+}
+.task-page__data-row--gold td {
+  background: color-mix(in srgb, var(--color-gold) 5%, var(--color-surface));
+}
+.task-page__data-row--info td {
+  background: color-mix(in srgb, var(--color-info) 4%, var(--color-surface));
+}
+.task-page__data-row--warning td {
+  background: color-mix(in srgb, var(--color-warning) 5%, var(--color-surface));
+}
+.task-page__data-row--success td {
+  background: color-mix(in srgb, var(--color-success) 4%, var(--color-surface));
+}
+.task-page__data-row--violet td {
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-tertiary) 58%, var(--color-primary)) 4%, var(--color-surface));
+}
+.task-page__data-row--teal td {
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary)) 4%, var(--color-surface));
+}
+.task-page__data-row--rose td {
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-primary) 55%, var(--color-gold)) 4%, var(--color-surface));
+}
+.task-page__data-row--umber td {
+  background: color-mix(in srgb, var(--color-umber) 5%, var(--color-surface));
 }
 
 .task-page__dot {
@@ -1113,24 +2672,27 @@ onBeforeUnmount(() => {
   height: 0.625rem;
 }
 
-.task-page__dot--neutral {
-  background: var(--color-text-muted);
+.task-page__dot--primary {
+  background: var(--color-primary);
 }
-
-.task-page__dot--info {
-  background: var(--color-info);
-}
-
-.task-page__dot--warning {
-  background: var(--color-gold);
-}
-
 .task-page__dot--success {
   background: var(--color-success);
 }
-
+.task-page__dot--info {
+  background: var(--color-info);
+}
+.task-page__dot--gold,
+.task-page__dot--warning {
+  background: var(--color-gold);
+}
 .task-page__dot--danger {
   background: var(--color-danger);
+}
+.task-page__dot--tertiary {
+  background: var(--color-tertiary);
+}
+.task-page__dot--umber {
+  background: var(--color-umber);
 }
 
 .task-page__empty {
@@ -1210,20 +2772,23 @@ onBeforeUnmount(() => {
   background: var(--color-text-muted);
 }
 
+.task-page__side-lead--primary::before,
 .task-page__side-lead--info::before {
-  background: var(--color-info);
+  background: var(--color-primary);
 }
-
+.task-page__side-lead--gold::before,
 .task-page__side-lead--warning::before {
   background: var(--color-gold);
 }
-
 .task-page__side-lead--success::before {
   background: var(--color-success);
 }
-
+.task-page__side-lead--umber::before,
 .task-page__side-lead--danger::before {
   background: var(--color-danger);
+}
+.task-page__side-lead--tertiary::before {
+  background: var(--color-tertiary);
 }
 
 .task-page__side-lead-project {
@@ -1273,8 +2838,16 @@ onBeforeUnmount(() => {
 .task-page__row-value {
   color: var(--color-text);
   font-style: italic;
+  font-weight: 400;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.task-page__row-value--status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.375rem;
 }
 
 .task-page__row-person {
@@ -1282,6 +2855,28 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.task-page__progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.task-page__progress-track {
+  display: block;
+  width: 5rem;
+  height: 0.375rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  overflow: hidden;
+}
+
+.task-page__progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-primary);
 }
 
 .task-page__form {
@@ -1296,6 +2891,515 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
+}
+
+.task-page__btn {
+  height: 2.375rem;
+  padding: 0 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.task-page__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.task-page__btn--ghost {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.task-kanban {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 var(--space-2);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.task-kanban--dragging {
+  cursor: grabbing;
+}
+
+.task-kanban--fill {
+  overflow-x: hidden;
+}
+
+.task-kanban--fill .task-kanban__col,
+.task-kanban--spread .task-kanban__col {
+  flex: 1 1 0;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+}
+
+.task-kanban--fill .task-kanban__col-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+  align-content: start;
+  overflow-y: auto;
+}
+
+.task-kanban--spread {
+  overflow-x: hidden;
+}
+
+.task-kanban__col {
+  --col-accent: var(--color-primary);
+  --col-head: var(--color-primary);
+  --col-on: var(--color-on-primary);
+  --col-well: var(--color-primary-surface);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 22rem;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--col-well);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--col-accent) 18%, var(--color-border));
+}
+
+.task-kanban__col--drop {
+  background: color-mix(in srgb, var(--col-well) 82%, var(--color-surface));
+  box-shadow:
+    inset 0 0 0 2px var(--col-accent),
+    0 12px 28px color-mix(in srgb, var(--col-accent) 18%, transparent);
+  transform: translateY(-2px);
+}
+
+.task-kanban__col--primary {
+  --col-accent: var(--color-primary);
+  --col-head: var(--color-primary);
+  --col-on: var(--color-on-primary);
+  --col-well: var(--color-primary-surface);
+}
+.task-kanban__col--secondary {
+  --col-accent: var(--color-secondary);
+  --col-head: var(--color-secondary);
+  --col-on: var(--color-on-secondary);
+  --col-well: var(--color-secondary-surface);
+}
+.task-kanban__col--tertiary {
+  --col-accent: var(--color-tertiary);
+  --col-head: var(--color-tertiary);
+  --col-on: var(--color-on-tertiary);
+  --col-well: var(--color-tertiary-surface);
+}
+.task-kanban__col--gold {
+  --col-accent: var(--color-gold-600);
+  --col-head: var(--color-gold-600);
+  --col-on: var(--color-on-gold);
+  --col-well: var(--color-gold-surface);
+}
+.task-kanban__col--success {
+  --col-accent: var(--color-success);
+  --col-head: var(--color-success);
+  --col-on: #ffffff;
+  --col-well: var(--color-success-tint-bg);
+}
+.task-kanban__col--danger {
+  --col-accent: var(--color-danger);
+  --col-head: var(--color-danger);
+  --col-on: var(--color-on-primary);
+  --col-well: var(--color-danger-tint-bg);
+}
+.task-kanban__col--warning {
+  --col-accent: var(--color-warning);
+  --col-head: color-mix(in srgb, var(--color-warning) 82%, var(--color-text));
+  --col-on: #ffffff;
+  --col-well: var(--color-warning-tint-bg);
+}
+.task-kanban__col--info {
+  --col-accent: var(--color-info);
+  --col-head: var(--color-info);
+  --col-on: #ffffff;
+  --col-well: var(--color-info-tint-bg);
+}
+.task-kanban__col--violet {
+  --col-accent: color-mix(in srgb, var(--color-tertiary) 58%, var(--color-primary));
+  --col-head: color-mix(in srgb, var(--color-tertiary) 58%, var(--color-primary));
+  --col-on: #ffffff;
+  --col-well: color-mix(in srgb, var(--color-tertiary-surface) 65%, var(--color-primary-surface));
+}
+.task-kanban__col--teal {
+  --col-accent: color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary));
+  --col-head: color-mix(in srgb, var(--color-secondary) 62%, var(--color-tertiary));
+  --col-on: #ffffff;
+  --col-well: color-mix(in srgb, var(--color-secondary-surface) 62%, var(--color-tertiary-surface));
+}
+.task-kanban__col--rose {
+  --col-accent: color-mix(in srgb, var(--color-primary) 55%, var(--color-gold));
+  --col-head: color-mix(in srgb, var(--color-primary) 55%, var(--color-gold));
+  --col-on: #ffffff;
+  --col-well: color-mix(in srgb, var(--color-primary-surface) 62%, var(--color-gold-surface));
+}
+.task-kanban__col--umber {
+  --col-accent: var(--color-umber);
+  --col-head: var(--color-umber);
+  --col-on: var(--color-on-umber);
+  --col-well: var(--color-umber-surface);
+}
+.task-kanban__col--neutral {
+  --col-accent: var(--color-text-muted);
+  --col-head: var(--color-text-muted);
+  --col-on: #ffffff;
+  --col-well: var(--color-surface-muted);
+}
+
+.task-kanban__col-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0.875rem var(--space-4);
+  background: var(--col-head);
+  color: var(--col-on);
+}
+
+.task-kanban__col-head-main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.task-kanban__col-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--col-on);
+  font-size: 0.875rem;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-kanban__col-count {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.5rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--col-on) 18%, transparent);
+  color: var(--col-on);
+  font-size: 0.75rem;
+}
+
+.task-kanban__col-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: var(--space-3);
+}
+
+.task-kanban__col-empty,
+.task-kanban__hint {
+  margin: var(--space-3) auto;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.task-kanban__placeholder {
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--col-accent) 14%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--col-accent) 32%, transparent);
+}
+
+.task-kanban__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 0.625rem;
+  min-width: 0;
+  min-height: 11.5rem;
+  padding: var(--space-4);
+  padding-left: calc(var(--space-2) + 3px + var(--space-4));
+  overflow: visible;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.task-kanban__card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--col-accent);
+}
+
+.task-kanban__card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.task-kanban__card--movable {
+  touch-action: none;
+  cursor: grab;
+}
+
+.task-kanban__card--slot {
+  overflow: hidden;
+  background: color-mix(in srgb, var(--col-accent) 12%, var(--color-surface-muted));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--col-accent) 26%, transparent);
+}
+
+.task-kanban__card--slot > *:not(.task-kanban__card-busy) {
+  visibility: hidden;
+}
+
+.task-kanban__card--slot::before {
+  opacity: 0;
+}
+
+.task-kanban__card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-right: 1.125rem;
+}
+
+.task-kanban__card-code,
+.task-kanban__card-type {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-kanban__card-type {
+  flex-shrink: 0;
+  font-style: italic;
+}
+
+.task-kanban__card-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.task-kanban__card-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.task-kanban__importance {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+}
+
+.task-kanban__importance--danger {
+  background: var(--color-danger-tint-bg);
+  color: var(--color-danger-tint-fg);
+}
+.task-kanban__importance--gold {
+  background: var(--color-gold-surface);
+  color: var(--color-gold-700);
+}
+.task-kanban__importance--info {
+  background: var(--color-info-tint-bg);
+  color: var(--color-info-tint-fg);
+}
+
+.task-kanban__card-desc {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.task-kanban__card-facts {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.task-kanban__card-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0.375rem 0;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-kanban__card-fact dt {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.task-kanban__card-fact dt::after {
+  content: ':';
+}
+
+.task-kanban__card-fact dd {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.75rem;
+  font-style: italic;
+  text-align: right;
+}
+
+.task-kanban__card-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.task-kanban__card-progress-head {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.task-kanban__card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: 0.625rem;
+  box-shadow: 0 -1px 0 var(--color-border);
+}
+
+.task-kanban__card-meta,
+.task-kanban__card-stat {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.task-kanban__card-grip {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  color: var(--color-text-muted);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.task-kanban__card--movable:hover .task-kanban__card-grip {
+  opacity: 0.5;
+}
+
+.task-kanban__card-busy {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 1;
+  display: inline-flex;
+  color: var(--color-primary);
+}
+
+.task-kanban__ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 80;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  min-height: 11.5rem;
+  padding: var(--space-4);
+  padding-left: calc(var(--space-2) + 3px + var(--space-4));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+  transform-origin: top left;
+}
+
+.task-kanban__ghost::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--col-accent, var(--color-primary));
+}
+
+.task-kanban__ghost--primary {
+  --col-accent: var(--color-primary);
+}
+.task-kanban__ghost--gold {
+  --col-accent: var(--color-gold-600);
+}
+.task-kanban__ghost--success {
+  --col-accent: var(--color-success);
+}
+.task-kanban__ghost--danger {
+  --col-accent: var(--color-danger);
+}
+.task-kanban__ghost--info {
+  --col-accent: var(--color-info);
+}
+.task-kanban__ghost--tertiary {
+  --col-accent: var(--color-tertiary);
+}
+.task-kanban__ghost--umber {
+  --col-accent: var(--color-umber);
+}
+
+.task-kanban__ghost--live {
+  box-shadow:
+    var(--shadow-lg),
+    0 18px 40px color-mix(in srgb, var(--col-accent, var(--color-primary)) 18%, transparent);
+}
+
+:global(body.task-kanban-dragging) {
+  cursor: grabbing;
 }
 
 @media (max-width: 1279px) {
@@ -1313,7 +3417,7 @@ onBeforeUnmount(() => {
   }
 
   .task-page__filters {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .task-page__form {
@@ -1323,21 +3427,25 @@ onBeforeUnmount(() => {
 
 @media (max-width: 768px) {
   .task-page {
-    padding: var(--space-4);
+    padding: 0 var(--space-4) var(--space-2);
   }
 
-  .task-page__filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .task-page__header-search input {
+    width: 10rem;
   }
 }
 
 @media (max-width: 480px) {
   .task-page {
-    padding: var(--space-3);
+    padding: 0 var(--space-3) var(--space-2);
   }
 
-  .task-page__filters {
-    grid-template-columns: minmax(0, 1fr);
+  .task-page__header-search input {
+    width: 8rem;
+  }
+
+  .task-kanban__col {
+    width: 13.5rem;
   }
 }
 

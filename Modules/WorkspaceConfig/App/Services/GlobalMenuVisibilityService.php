@@ -41,6 +41,18 @@ class GlobalMenuVisibilityService
             'icon' => 'clipboardCheck',
             'audience' => 'Menu này chỉ hiện với trưởng phòng và phó phòng. Super Admin tạo mẫu dùng chung ở một trang riêng khác.',
         ],
+        'manager.project.index' => [
+            'label' => 'Dự án',
+            'section' => 'manager',
+            'icon' => 'layers',
+            'audience' => 'Super Admin và mọi tài khoản có quyền xem dự án đều thấy mục này.',
+        ],
+        'manager.project.tasks' => [
+            'label' => 'Công việc',
+            'section' => 'manager',
+            'icon' => 'layoutList',
+            'audience' => 'Super Admin và mọi tài khoản có quyền xem công việc (kể cả nhân viên chỉ xem việc được giao) đều thấy mục này.',
+        ],
         'manager.social.moderation' => [
             'label' => 'Duyệt bài viết',
             'section' => 'manager',

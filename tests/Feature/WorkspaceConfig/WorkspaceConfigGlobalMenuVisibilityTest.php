@@ -43,7 +43,9 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
             ->assertOk()
             ->assertJsonPath('menus.0.menu_key', 'home')
             ->assertJsonPath('menus.0.is_hidden', false)
-            ->assertJsonCount(10, 'menus');
+            ->assertJsonCount(12, 'menus')
+            ->assertJsonFragment(['menu_key' => 'manager.project.index', 'default_label' => 'Dự án'])
+            ->assertJsonFragment(['menu_key' => 'manager.project.tasks', 'default_label' => 'Công việc']);
 
         $this->actingAs($superAdmin)
             ->putJson('/api/workspace-config/global-menu', [

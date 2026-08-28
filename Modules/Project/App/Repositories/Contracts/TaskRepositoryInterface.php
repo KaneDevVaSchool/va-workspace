@@ -18,7 +18,15 @@ interface TaskRepositoryInterface
      * @param  array<string, mixed>  $filters
      * @param  list<int>  $allowedProjectIds  danh sách project_id viewer được xem (RBAC = RBAC Project chứa Task)
      */
-    public function paginate(array $filters, int $perPage, int $page, array $allowedProjectIds): LengthAwarePaginator;
+    public function paginate(array $filters, int $perPage, int $page, array $allowedProjectIds, \App\Models\User $viewer): LengthAwarePaginator;
+
+    /**
+     * Đếm số Task theo từng tab lọc nhanh (Tất cả / trạng thái / Bạn thực hiện).
+     *
+     * @param  list<int>  $allowedProjectIds
+     * @return array<string, int>
+     */
+    public function tabCounts(array $allowedProjectIds, ?int $forceAssigneeId, \App\Models\User $viewer): array;
 
     /** Toàn bộ Task của 1 project, dạng phẳng, sắp theo parent_id/sort_order — dùng để build cây WBS. */
     public function flatForProject(int $projectId): Collection;

@@ -2,9 +2,11 @@
 
 namespace Modules\Project\App\Repositories;
 
+use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Modules\Project\App\Enums\TaskEnums;
 use Modules\Project\App\Models\Task;
 use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
 
@@ -13,13 +15,31 @@ use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
  */
 class TaskRepository implements TaskRepositoryInterface
 {
-    public function paginate(array $filters, int $perPage, int $page, array $allowedProjectIds): LengthAwarePaginator
+    public function paginate(array $filters, int $perPage, int $page, array $allowedProjectIds, User $viewer): LengthAwarePaginator
     {
         $query = Task::query()->with(Task::WITH_PRESENT)->whereIn('project_id', $allowedProjectIds);
 
         $this->applyFilters($query, $filters);
+        $this->applyTabFilter($query, $filters['tab'] ?? null, $viewer);
 
         return $query->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
+    }
+
+    public function tabCounts(array $allowedProjectIds, ?int $forceAssigneeId, User $viewer): array
+    {
+        $tabs = ['all', 'not_started', 'in_progress', 'on_hold', 'completed', 'cancelled', 'my_tasks'];
+        $counts = [];
+
+        foreach ($tabs as $tab) {
+            $query = Task::query()->whereIn('project_id', $allowedProjectIds);
+            if ($forceAssigneeId !== null) {
+                $query->where('assignee_id', $forceAssigneeId);
+            }
+            $this->applyTabFilter($query, $tab === 'all' ? null : $tab, $viewer);
+            $counts[$tab] = $query->count();
+        }
+
+        return $counts;
     }
 
     public function flatForProject(int $projectId): Collection
@@ -127,6 +147,23 @@ class TaskRepository implements TaskRepositoryInterface
             if ($q !== '') {
                 $query->where('title', 'like', '%'.$q.'%');
             }
+        }
+    }
+
+    private function applyTabFilter(Builder $query, ?string $tab, ?User $viewer): void
+    {
+        if ($tab === null || $tab === '' || $tab === 'all') {
+            return;
+        }
+
+        if (in_array($tab, TaskEnums::STATUSES, true)) {
+            $query->where('status', $tab);
+
+            return;
+        }
+
+        if ($tab === 'my_tasks' && $viewer !== null) {
+            $query->where('assignee_id', $viewer->id);
         }
     }
 }

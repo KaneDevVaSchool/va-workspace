@@ -28,6 +28,18 @@ export const SIDEBAR_MENU_CATALOG = {
     sectionLabel: 'Quản lý',
     description: 'Tạo và sửa mẫu đánh giá. Superadmin tạo mẫu dùng chung toàn hệ thống.',
   },
+  'manager.project.index': {
+    icon: 'layers',
+    section: 'manager',
+    sectionLabel: 'Quản lý',
+    description: 'Danh sách dự án. Superadmin và mọi tài khoản có quyền xem dự án đều thấy mục này.',
+  },
+  'manager.project.tasks': {
+    icon: 'layoutList',
+    section: 'manager',
+    sectionLabel: 'Quản lý',
+    description: 'Tất cả công việc xuyên dự án. Superadmin và mọi tài khoản có quyền xem công việc đều thấy mục này.',
+  },
 };
 
 export const SIDEBAR_SECTIONS = {

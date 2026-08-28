@@ -15,19 +15,25 @@ export const TASK_STATUS_LABELS = {
   cancelled: 'Đã huỷ',
 };
 
-/** Dot màu theo trạng thái — quy tắc §14 CLAUDE.md, không dùng badge/pill. */
+/** Tone pill/tab theo trạng thái — khớp bảng dự án (primary / gold / success / umber). */
 export const TASK_STATUS_TONES = {
-  not_started: 'neutral',
-  in_progress: 'info',
-  on_hold: 'warning',
+  not_started: 'tertiary',
+  in_progress: 'primary',
+  on_hold: 'gold',
   completed: 'success',
-  cancelled: 'danger',
+  cancelled: 'umber',
 };
 
 export const TASK_TYPE_LABELS = {
   task: 'Công việc',
   phase: 'Giai đoạn',
   category: 'Danh mục',
+};
+
+export const TASK_TYPE_TONES = {
+  task: 'info',
+  phase: 'gold',
+  category: 'violet',
 };
 
 export const TASK_PRIORITY_LABELS = {
@@ -37,35 +43,56 @@ export const TASK_PRIORITY_LABELS = {
   urgent: 'Khẩn cấp',
 };
 
+export const TASK_PRIORITY_TONES = {
+  low: 'neutral',
+  medium: 'info',
+  high: 'gold',
+  urgent: 'danger',
+};
+
+export const TASK_TABS = [
+  { key: 'all', label: 'Tất cả', tone: 'primary' },
+  { key: 'in_progress', label: 'Đang thực hiện', tone: 'info' },
+  { key: 'completed', label: 'Hoàn thành', tone: 'success' },
+  { key: 'on_hold', label: 'Tạm dừng', tone: 'gold' },
+  { key: 'not_started', label: 'Chưa bắt đầu', tone: 'warning' },
+  { key: 'cancelled', label: 'Đã huỷ', tone: 'umber' },
+  { key: 'my_tasks', label: 'Bạn thực hiện', tone: 'tertiary' },
+];
+
+export const TASK_STATUS_TAB_KEYS = ['not_started', 'in_progress', 'on_hold', 'completed', 'cancelled'];
+
 export const TASK_COLUMNS = [
+  { key: 'code', label: 'Mã công việc', defaultOn: true },
   { key: 'title', label: 'Tên công việc', defaultOn: true, always: true },
   { key: 'project', label: 'Dự án', defaultOn: true },
   { key: 'assignee', label: 'Người thực hiện', defaultOn: true },
   { key: 'status', label: 'Trạng thái', defaultOn: true },
+  { key: 'priority', label: 'Mức độ ưu tiên', defaultOn: true },
   { key: 'start_date', label: 'Ngày bắt đầu', defaultOn: true },
   { key: 'end_date', label: 'Ngày kết thúc', defaultOn: true },
   { key: 'progress_percent', label: 'Tiến độ', defaultOn: true },
+  { key: 'type', label: 'Loại', defaultOn: false },
   { key: 'actual_start_date', label: 'Bắt đầu thực tế', defaultOn: false },
   { key: 'actual_end_date', label: 'Kết thúc thực tế', defaultOn: false },
-  { key: 'type', label: 'Loại', defaultOn: false },
-  { key: 'priority', label: 'Mức độ ưu tiên', defaultOn: false },
   { key: 'creator', label: 'Người tạo', defaultOn: false },
-  { key: 'id', label: 'Mã công việc', defaultOn: false },
 ];
 
 export const TASK_FILTERS = [
-  { key: 'q', label: 'Tìm kiếm', defaultOn: true },
-  { key: 'project_id', label: 'Dự án', defaultOn: true },
-  { key: 'assignee_id', label: 'Người thực hiện', defaultOn: true },
-  { key: 'status', label: 'Trạng thái', defaultOn: true },
-  { key: 'date_from', label: 'Từ ngày', defaultOn: true },
-  { key: 'date_to', label: 'Đến ngày', defaultOn: true },
+  { key: 'project_id', label: 'Dự án', defaultOn: false },
+  { key: 'assignee_id', label: 'Người thực hiện', defaultOn: false },
+  { key: 'date_from', label: 'Từ ngày', defaultOn: false },
+  { key: 'date_to', label: 'Đến ngày', defaultOn: false },
 ];
 
-export const COLUMN_STORAGE_KEY = 'va-task-columns-v1';
-export const FILTER_STORAGE_KEY = 'va-task-filters-v1';
-export const COLUMN_WIDTH_KEY = 'va-task-column-widths-v1';
+export const COLUMN_STORAGE_KEY = 'va-task-columns-v2';
+export const FILTER_STORAGE_KEY = 'va-task-filters-v2';
+export const COLUMN_WIDTH_KEY = 'va-task-column-widths-v2';
 export const ZOOM_STORAGE_KEY = 'va-task-zoom-v1';
+export const VIEW_MODE_KEY = 'va-task-view-mode';
+export const KANBAN_GROUP_KEY = 'va-task-kanban-group';
+export const KANBAN_ASSIGNEES_KEY = 'va-task-kanban-assignees';
+export const COLLAPSED_GROUPS_KEY = 'va-task-collapsed-groups';
 
 export function loadVisibility(storageKey, items) {
   const defaults = {};
