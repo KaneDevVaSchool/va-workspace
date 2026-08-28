@@ -59,8 +59,13 @@ class GlobalMenuVisibilityRepository implements GlobalMenuVisibilityRepositoryIn
 
     public function sortOrders(): array
     {
+        // Chỉ item đã kéo-thả (có section_key). Toggle/đổi tên cũng tạo row
+        // với sort_order mặc định 0 — nếu trả 0 thì AppSidebar đẩy mục đó
+        // lên đầu, lệch với trang cấu hình.
         return GlobalMenuVisibility::query()
             ->whereNotNull('sort_order')
+            ->whereNotNull('section_key')
+            ->where('section_key', '!=', '')
             ->pluck('sort_order', 'menu_key')
             ->map(fn ($v) => (int) $v)
             ->all();

@@ -7,6 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\Role;
 use Modules\Identity\Database\Seeders\RoleSeeder;
+use Modules\WorkspaceConfig\App\Services\GlobalMenuVisibilityService;
 use Tests\TestCase;
 
 class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
@@ -250,5 +251,88 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
         $this->actingAs($superAdmin)
             ->getJson('/api/social/moderation')
             ->assertStatus(403);
+    }
+
+    public function test_listing_keeps_catalog_order_after_hide_and_does_not_pollute_me_order(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $superAdmin = $this->makeSuperAdmin();
+        $catalogKeys = array_keys(GlobalMenuVisibilityService::CATALOG);
+
+        $before = $this->actingAs($superAdmin)
+            ->getJson('/api/workspace-config/global-menu')
+            ->assertOk()
+            ->json('menus.*.menu_key');
+
+        $this->assertSame($catalogKeys, $before);
+        $this->assertSame('social.feed', $before[1]);
+        $this->assertSame('manager.evaluation.view', $before[2]);
+
+        $this->actingAs($superAdmin)
+            ->putJson('/api/workspace-config/global-menu', [
+                'menu_key' => 'manager.social.moderation',
+                'is_hidden' => true,
+            ])
+            ->assertOk();
+
+        $after = $this->actingAs($superAdmin)
+            ->getJson('/api/workspace-config/global-menu')
+            ->assertOk()
+            ->json('menus.*.menu_key');
+
+        $this->assertSame($catalogKeys, $after);
+
+        $order = $this->actingAs($superAdmin)
+            ->getJson('/api/me')
+            ->assertOk()
+            ->json('global_menu_order');
+
+        $this->assertSame([], (array) $order);
+    }
+
+    public function test_reorder_moves_item_and_updates_me_payload(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $superAdmin = $this->makeSuperAdmin();
+
+        $items = [];
+        foreach (GlobalMenuVisibilityService::CATALOG as $menuKey => $meta) {
+            if ($menuKey === 'manager.project.tasks') {
+                continue;
+            }
+            $items[] = [
+                'menu_key' => $menuKey,
+                'section' => $meta['section'],
+                'sort_order' => 0,
+            ];
+        }
+        array_unshift($items, [
+            'menu_key' => 'manager.project.tasks',
+            'section' => 'general',
+            'sort_order' => 0,
+        ]);
+        foreach ($items as $index => &$item) {
+            $item['sort_order'] = $index;
+        }
+        unset($item);
+
+        $this->actingAs($superAdmin)
+            ->putJson('/api/workspace-config/global-menu/layout', [
+                'items' => $items,
+            ])
+            ->assertOk()
+            ->assertJsonPath('menus.0.menu_key', 'manager.project.tasks')
+            ->assertJsonPath('menus.0.section', 'general')
+            ->assertJsonPath('menus.0.sort_order', 0)
+            ->assertJsonPath('menus.1.menu_key', 'home');
+
+        $me = $this->actingAs($superAdmin)
+            ->getJson('/api/me')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(0, $me['global_menu_order']['manager.project.tasks']);
+        $this->assertSame('general', $me['global_menu_item_sections']['manager.project.tasks']);
+        $this->assertSame(1, $me['global_menu_order']['home']);
     }
 }

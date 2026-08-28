@@ -44,7 +44,9 @@ export const SIDEBAR_MENU_CATALOG = {
 
 export const SIDEBAR_SECTIONS = {
   general: { id: 'general', defaultLabel: 'Điều hướng' },
+  admin: { id: 'admin', defaultLabel: 'Quản trị' },
   manager: { id: 'manager', defaultLabel: 'Quản lý' },
+  'superadmin-workspace-config': { id: 'superadmin-workspace-config', defaultLabel: 'Cấu hình Workspace' },
 };
 
 const SECTION_ORDER = ['general', 'manager', 'other'];
@@ -86,17 +88,26 @@ export function sectionLabelMap(sectionConfigs = []) {
   return map;
 }
 
+function sectionMeta(sectionConfigs, id, fallbackLabel) {
+  const cfg = (sectionConfigs || []).find((section) => section?.id === id);
+  const fallback = fallbackLabel || sectionDefaultLabel(id);
+  return {
+    label: cfg?.label || fallback,
+    defaultLabel: cfg?.defaultLabel || cfg?.default_label || fallback,
+  };
+}
+
 export function groupMenus(menus, sectionConfigs = [], { includeEmpty = false, sectionOrder: customSectionOrder = null } = {}) {
   const effectiveSectionOrder = customSectionOrder ?? SECTION_ORDER;
-  const labels = sectionLabelMap(sectionConfigs);
   const groups = new Map();
 
   for (const id of effectiveSectionOrder) {
     if (id === 'other') continue;
+    const meta = sectionMeta(sectionConfigs, id);
     groups.set(id, {
       id,
-      label: labels[id] || sectionDefaultLabel(id),
-      defaultLabel: sectionDefaultLabel(id),
+      label: meta.label,
+      defaultLabel: meta.defaultLabel,
       items: [],
     });
   }
@@ -105,10 +116,11 @@ export function groupMenus(menus, sectionConfigs = [], { includeEmpty = false, s
     const item = enrichMenu(menu);
     const sectionId = item.section || 'other';
     if (!groups.has(sectionId)) {
+      const meta = sectionMeta(sectionConfigs, sectionId, item.sectionLabel);
       groups.set(sectionId, {
         id: sectionId,
-        label: labels[sectionId] || item.sectionLabel || sectionDefaultLabel(sectionId),
-        defaultLabel: item.sectionLabel || sectionDefaultLabel(sectionId),
+        label: meta.label,
+        defaultLabel: meta.defaultLabel,
         items: [],
       });
     }
@@ -116,7 +128,9 @@ export function groupMenus(menus, sectionConfigs = [], { includeEmpty = false, s
   }
 
   for (const group of groups.values()) {
-    group.items.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.menu_key.localeCompare(b.menu_key));
+    // sort ổn định: cùng sort_order giữ thứ tự catalog/API (khớp AppSidebar),
+    // không xếp alphabet theo menu_key — lệch với menu trái.
+    group.items.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   }
 
   return effectiveSectionOrder.filter((id) => groups.has(id))

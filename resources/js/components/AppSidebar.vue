@@ -244,11 +244,13 @@ const visibleSections = computed(() => {
         .sort((a, b) => {
           // Thứ tự: department (chỉ configurable) > global > mặc định
           const getOrder = (item) => {
-            if (item.configurableByDepartment && Number.isFinite(Number(menuOrder[item.name]))) {
-              return Number(menuOrder[item.name]);
+            if (item.configurableByDepartment && Object.hasOwn(menuOrder, item.name)) {
+              const deptOrder = Number(menuOrder[item.name]);
+              if (Number.isFinite(deptOrder)) return deptOrder;
             }
-            if (Number.isFinite(Number(globalMenuOrder[item.name]))) {
-              return Number(globalMenuOrder[item.name]);
+            if (Object.hasOwn(globalMenuOrder, item.name)) {
+              const globalOrder = Number(globalMenuOrder[item.name]);
+              if (Number.isFinite(globalOrder)) return globalOrder;
             }
             return 1000 + item.originalIndex;
           };

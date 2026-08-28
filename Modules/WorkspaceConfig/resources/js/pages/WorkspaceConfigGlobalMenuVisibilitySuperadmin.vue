@@ -30,8 +30,16 @@ function applyAuthLayout(nextMenus) {
   for (const item of nextMenus) {
     order[item.menu_key] = item.sort_order;
     itemSections[item.menu_key] = item.section;
+    auth.setGlobalMenuKeyHidden(item.menu_key, Boolean(item.is_hidden));
+    auth.setGlobalMenuLabel(item.menu_key, item.custom_label || '');
   }
   auth.setGlobalMenuLayout({ order, itemSections });
+}
+
+function applyAuthSections(nextSections) {
+  for (const section of nextSections) {
+    auth.setGlobalMenuSectionLabel(section.id, section.custom_label || '');
+  }
 }
 
 function applyMenu(menuKey, patch) {
@@ -57,9 +65,11 @@ function applyFromResponse(payload) {
 function applyFullResponse(data) {
   if (Array.isArray(data.menus)) {
     menus.value = data.menus.map((item) => ({ ...item, is_visible: !item.is_hidden }));
+    applyAuthLayout(menus.value);
   }
   if (Array.isArray(data.sections)) {
     sections.value = data.sections.map((item) => ({ ...item }));
+    applyAuthSections(sections.value);
   }
 }
 
@@ -194,7 +204,6 @@ async function reorder(nextMenus) {
       items: layoutPayload(menus.value),
     });
     applyFullResponse(data);
-    applyAuthLayout(menus.value);
   } catch (error) {
     menus.value = previousMenus;
     applyAuthLayout(previousMenus);
