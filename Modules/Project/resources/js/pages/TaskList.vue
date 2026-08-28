@@ -26,6 +26,8 @@ import {
   TASK_FILTERS,
   TASK_PRIORITY_LABELS,
   TASK_PRIORITY_TONES,
+  TASK_PROGRESS_TYPE_LABELS,
+  TASK_SCORE_RESULT_SUGGESTIONS,
   TASK_STATUS_LABELS,
   TASK_STATUS_TAB_KEYS,
   TASK_STATUS_TONES,
@@ -84,12 +86,74 @@ const saving = ref(false);
 const deleting = ref(false);
 const confirmingDelete = ref(false);
 
+const taskAttachments = ref([]);
+const attachmentUploading = ref(false);
+const attachmentInput = ref(null);
+
+const taskWorklogs = ref([]);
+const worklogFormOpen = ref(false);
+const worklogSaving = ref(false);
+const worklogForm = reactive({ work_date: '', hours: '', note: '' });
+const confirmingDeleteWorklog = ref(null);
+
+const scoreSaving = ref(false);
+const scoreForm = reactive({ rating_score: '', rating_result: '', rating_desc: '' });
+
 const query = ref('');
 const projectId = ref('');
 const assigneeId = ref('');
+const managerId = ref('');
 const dateFrom = ref('');
 const dateTo = ref('');
+const isOverdueOnly = ref(false);
+const progressTypeFilter = ref('');
 const perPage = ref(20);
+const sortBy = ref('');
+const sortDir = ref('desc');
+
+const selectedTaskIds = ref(new Set());
+const bulkSaving = ref(false);
+const bulkManagerId = ref('');
+const bulkWeight = ref('');
+
+// ---------- Xuất/Nhập Excel (PR8) — cùng khuôn ProjectList.vue ----------
+const exporting = ref(false);
+const importDialogOpen = ref(false);
+const importStep = ref('select');
+const importFile = ref(null);
+const importPreview = ref(null);
+const importSelectedRows = ref(new Set());
+const importResult = ref(null);
+const previewing = ref(false);
+const confirming = ref(false);
+const editingRowKey = ref(null);
+const editingRowDraft = reactive({});
+const resolvingRow = ref(false);
+
+/** key frontend (cột Excel) — khớp TaskExcelExporter::COLUMNS; 'code'/'project_code' luôn xuất. */
+const EXPORT_COLUMNS = [
+  { key: 'code', label: 'Mã công việc', always: true },
+  { key: 'project_code', label: 'Mã dự án', always: true },
+  { key: 'title', label: 'Tên công việc' },
+  { key: 'type_label', label: 'Loại' },
+  { key: 'status_label', label: 'Trạng thái' },
+  { key: 'priority_label', label: 'Mức độ ưu tiên' },
+  { key: 'assignee_email', label: 'Người thực hiện (email)' },
+  { key: 'manager_email', label: 'Người quản lý (email)' },
+  { key: 'start_date', label: 'Ngày bắt đầu' },
+  { key: 'end_date', label: 'Ngày kết thúc' },
+  { key: 'progress_type_label', label: 'Cách tính tiến độ' },
+  { key: 'progress_percent', label: 'Tiến độ (%)' },
+  { key: 'progress_number', label: 'Khối lượng hoàn thành' },
+  { key: 'progress_total', label: 'Khối lượng cần hoàn thành' },
+  { key: 'unit', label: 'Đơn vị' },
+  { key: 'estimated_hours', label: 'Thời gian dự kiến (giờ)' },
+  { key: 'weight', label: 'Tỷ trọng (%)' },
+  { key: 'description', label: 'Mô tả' },
+];
+const exportDialogOpen = ref(false);
+const exportSelectedColumns = ref(new Set(EXPORT_COLUMNS.map((c) => c.key)));
+
 const activeTab = ref(typeof route.query.tab === 'string' && route.query.tab ? route.query.tab : 'all');
 const tabCounts = ref({});
 
@@ -114,12 +178,31 @@ const editForm = reactive({
   status: 'not_started',
   priority: '',
   start_date: '',
+  start_time: '',
   end_date: '',
+  due_time: '',
   actual_start_date: '',
   actual_end_date: '',
   assignee_id: '',
   progress_percent: '',
   description: '',
+  parent_id: '',
+  manager_id: '',
+  estimated_hours: '',
+  progress_type: 'percent',
+  progress_number: '',
+  progress_total: '',
+  unit: '',
+  weight: '',
+});
+
+/** Ước tính progress_percent phía client khi progress_type=quantity — chỉ
+ *  hiển thị tham khảo trước khi lưu, server luôn là nguồn thật (present()). */
+const editFormEstimatedPercent = computed(() => {
+  const number = Number(editForm.progress_number);
+  const total = Number(editForm.progress_total);
+  if (!editForm.progress_number || !total || total <= 0) return null;
+  return Math.round((number / total) * 100);
 });
 
 const viewMode = ref(loadViewMode());
@@ -143,9 +226,10 @@ const kanbanDrag = reactive({
 });
 
 const shownColumns = computed(() => TASK_COLUMNS.filter((col) => col.always || visibleColumns[col.key]));
-const colSpan = computed(() => Math.max(shownColumns.value.length, 1));
+const colSpan = computed(() => Math.max(shownColumns.value.length, 1) + 1); // +1 cột checkbox chọn dòng (PR7)
 const isKanban = computed(() => viewMode.value === 'kanban');
 const canEdit = computed(() => auth.can('task.create'));
+const canApprove = computed(() => auth.can('task.approve'));
 
 const KANBAN_GROUP_LABELS = {
   status: 'Theo trạng thái',
@@ -165,8 +249,11 @@ const hasActiveFilters = computed(
     Boolean(query.value.trim()) ||
     Boolean(projectId.value) ||
     Boolean(assigneeId.value) ||
+    Boolean(managerId.value) ||
     Boolean(dateFrom.value) ||
     Boolean(dateTo.value) ||
+    isOverdueOnly.value ||
+    Boolean(progressTypeFilter.value) ||
     (activeTab.value && activeTab.value !== 'all'),
 );
 
@@ -188,8 +275,37 @@ const groupedTasks = computed(() => {
     }
     groups.get(key).tasks.push(task);
   }
-  return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+  const list = Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+  for (const group of list) {
+    group.tasks = buildTaskTree(group.tasks);
+  }
+  return list;
 });
+
+/**
+ * Cây WBS thu gọn/mở rộng theo parent_id trong phạm vi 1 group (dự án) —
+ * thứ tự cha-trước-con, kèm depth để thụt lề + hasChildren để hiện mũi tên.
+ * Chỉ áp dụng List view (Kanban giữ nguyên phẳng theo status/assignee/...).
+ */
+function buildTaskTree(tasksInGroup) {
+  const byParent = new Map();
+  for (const task of tasksInGroup) {
+    const key = task.parent_id ?? 0;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key).push(task);
+  }
+
+  const result = [];
+  function walk(parentKey, depth) {
+    for (const task of byParent.get(parentKey) || []) {
+      const hasChildren = byParent.has(task.id);
+      result.push({ ...task, depth, hasChildren });
+      if (hasChildren && !isTaskCollapsed(task.id)) walk(task.id, depth + 1);
+    }
+  }
+  walk(0, 0);
+  return result;
+}
 
 const allAssignableUsers = computed(() => {
   const map = new Map();
@@ -380,9 +496,14 @@ function currentFilterParams() {
     q: query.value.trim() || undefined,
     project_id: projectId.value || undefined,
     assignee_id: assigneeId.value || undefined,
+    manager_id: managerId.value || undefined,
     date_from: dateFrom.value || undefined,
     date_to: dateTo.value || undefined,
+    is_overdue: isOverdueOnly.value ? 1 : undefined,
+    progress_type: progressTypeFilter.value || undefined,
     tab: activeTab.value && activeTab.value !== 'all' ? activeTab.value : undefined,
+    sort_by: sortBy.value || undefined,
+    sort_dir: sortBy.value ? sortDir.value : undefined,
   };
 }
 
@@ -411,6 +532,7 @@ async function loadTasks(page = 1) {
     tasks.value = data.tasks ?? [];
     meta.value = data.meta ?? { current_page: 1, last_page: 1, total: 0, from: 0, to: 0, per_page: 20 };
     tabCounts.value = data.tab_counts ?? {};
+    clearSelection();
 
     if (selected.value) {
       const fresh = tasks.value.find((t) => t.id === selected.value.id);
@@ -517,8 +639,11 @@ function clearFilters() {
   query.value = '';
   projectId.value = '';
   assigneeId.value = '';
+  managerId.value = '';
   dateFrom.value = '';
   dateTo.value = '';
+  isOverdueOnly.value = false;
+  progressTypeFilter.value = '';
   if (activeTab.value !== 'all') {
     selectTab('all');
     return;
@@ -530,11 +655,189 @@ function inspect(task) {
   if (selected.value?.id === task.id) return;
   selected.value = task;
   editing.value = false;
+  loadAttachments(task.id);
+  loadWorklogs(task.id);
+  worklogFormOpen.value = false;
+  hydrateScoreForm(task);
+}
+
+function hydrateScoreForm(task) {
+  scoreForm.rating_score = task.task_score?.rating_score ?? '';
+  scoreForm.rating_result = task.task_score?.rating_result || '';
+  scoreForm.rating_desc = task.task_score?.rating_desc || '';
 }
 
 function closePanel() {
   selected.value = null;
   editing.value = false;
+  taskAttachments.value = [];
+  taskWorklogs.value = [];
+  worklogFormOpen.value = false;
+}
+
+async function loadAttachments(taskId) {
+  taskAttachments.value = [];
+  try {
+    const { data } = await window.axios.get(`/api/project/tasks/${taskId}/attachments`);
+    taskAttachments.value = data.attachments ?? [];
+  } catch {
+    // Bỏ qua — panel vẫn hiển thị, chỉ danh sách đính kèm rỗng.
+  }
+}
+
+function triggerAttachmentInput() {
+  attachmentInput.value?.click();
+}
+
+async function onAttachmentChange(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file || !selected.value) return;
+
+  attachmentUploading.value = true;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const { data } = await window.axios.post(`/api/project/tasks/${selected.value.id}/attachments`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    taskAttachments.value = [data.attachment, ...taskAttachments.value];
+    bumpAttachmentsCount(1);
+    showClientToast('success', 'Đã tải lên tệp đính kèm.');
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không tải lên được tệp đính kèm.');
+  } finally {
+    attachmentUploading.value = false;
+  }
+}
+
+async function removeAttachment(attachment) {
+  try {
+    await window.axios.delete(`/api/project/tasks/attachments/${attachment.id}`);
+    taskAttachments.value = taskAttachments.value.filter((a) => a.id !== attachment.id);
+    bumpAttachmentsCount(-1);
+    showClientToast('success', 'Đã xoá tệp đính kèm.');
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không xoá được tệp đính kèm.');
+  }
+}
+
+/** Cập nhật attachments_count tại chỗ trên selected + dòng trong bảng list —
+ *  tránh gọi lại toàn bộ danh sách chỉ để phản ánh 1 thay đổi nhỏ (CLAUDE.md §14). */
+function bumpAttachmentsCount(delta) {
+  if (!selected.value) return;
+  const nextCount = Math.max(0, (selected.value.attachments_count || 0) + delta);
+  selected.value = { ...selected.value, attachments_count: nextCount };
+  const index = tasks.value.findIndex((t) => t.id === selected.value.id);
+  if (index !== -1) tasks.value[index] = { ...tasks.value[index], attachments_count: nextCount };
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return '';
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(0)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+async function loadWorklogs(taskId) {
+  taskWorklogs.value = [];
+  try {
+    const { data } = await window.axios.get(`/api/project/tasks/${taskId}/worklogs`);
+    taskWorklogs.value = data.worklogs ?? [];
+  } catch {
+    // Bỏ qua — panel vẫn hiển thị, chỉ danh sách nhật ký giờ làm rỗng.
+  }
+}
+
+function openWorklogForm() {
+  worklogForm.work_date = new Date().toISOString().slice(0, 10);
+  worklogForm.hours = '';
+  worklogForm.note = '';
+  worklogFormOpen.value = true;
+}
+
+function cancelWorklogForm() {
+  worklogFormOpen.value = false;
+}
+
+async function saveWorklog() {
+  if (!selected.value) return;
+  worklogSaving.value = true;
+  try {
+    const payload = {
+      work_date: worklogForm.work_date,
+      hours: Number(worklogForm.hours),
+      note: worklogForm.note || null,
+    };
+    const { data } = await window.axios.post(`/api/project/tasks/${selected.value.id}/worklogs`, payload);
+    taskWorklogs.value = [data.worklog, ...taskWorklogs.value];
+    bumpWorklogHours(payload.hours);
+    worklogFormOpen.value = false;
+    showClientToast('success', 'Đã thêm giờ làm.');
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không thêm được giờ làm.');
+  } finally {
+    worklogSaving.value = false;
+  }
+}
+
+function canEditWorklog(log) {
+  return log.user_id === auth.user?.id || auth.can('task.approve');
+}
+
+function askDeleteWorklog(log) {
+  confirmingDeleteWorklog.value = log;
+}
+
+async function confirmDeleteWorklog() {
+  const log = confirmingDeleteWorklog.value;
+  if (!log) return;
+  try {
+    await window.axios.delete(`/api/project/tasks/worklogs/${log.id}`);
+    taskWorklogs.value = taskWorklogs.value.filter((l) => l.id !== log.id);
+    bumpWorklogHours(-Number(log.hours));
+    showClientToast('success', 'Đã xoá nhật ký giờ làm.');
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không xoá được nhật ký giờ làm.');
+  } finally {
+    confirmingDeleteWorklog.value = null;
+  }
+}
+
+/** Cộng/trừ worklog_hours tại chỗ trên selected + dòng trong bảng list —
+ *  tránh gọi lại toàn bộ danh sách chỉ để phản ánh 1 thay đổi nhỏ (CLAUDE.md §14). */
+function bumpWorklogHours(delta) {
+  if (!selected.value) return;
+  const nextHours = Math.max(0, Number(selected.value.worklog_hours || 0) + delta);
+  selected.value = { ...selected.value, worklog_hours: nextHours };
+  const index = tasks.value.findIndex((t) => t.id === selected.value.id);
+  if (index !== -1) tasks.value[index] = { ...tasks.value[index], worklog_hours: nextHours };
+}
+
+async function saveScore() {
+  if (!selected.value) return;
+  scoreSaving.value = true;
+  try {
+    const payload = {
+      rating_score: scoreForm.rating_score === '' ? null : Number(scoreForm.rating_score),
+      rating_result: scoreForm.rating_result || null,
+      rating_desc: scoreForm.rating_desc || null,
+    };
+    const { data } = await window.axios.put(`/api/project/tasks/${selected.value.id}/score`, payload);
+    selected.value = { ...selected.value, task_score: data.task_score };
+    const index = tasks.value.findIndex((t) => t.id === selected.value.id);
+    if (index !== -1) tasks.value[index] = { ...tasks.value[index], task_score: data.task_score };
+    showClientToast('success', 'Đã lưu đánh giá.');
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không lưu được đánh giá.');
+  } finally {
+    scoreSaving.value = false;
+  }
 }
 
 function startEdit() {
@@ -543,12 +846,22 @@ function startEdit() {
   editForm.status = selected.value.status || 'not_started';
   editForm.priority = selected.value.priority || '';
   editForm.start_date = selected.value.start_date || '';
+  editForm.start_time = selected.value.start_time || '';
   editForm.end_date = selected.value.end_date || '';
+  editForm.due_time = selected.value.due_time || '';
   editForm.actual_start_date = selected.value.actual_start_date || '';
   editForm.actual_end_date = selected.value.actual_end_date || '';
   editForm.assignee_id = selected.value.assignee_id || '';
   editForm.progress_percent = selected.value.progress_percent ?? '';
   editForm.description = selected.value.description || '';
+  editForm.parent_id = selected.value.parent_id || '';
+  editForm.manager_id = selected.value.manager_id || '';
+  editForm.estimated_hours = selected.value.estimated_hours ?? '';
+  editForm.progress_type = selected.value.progress_type || 'percent';
+  editForm.progress_number = selected.value.progress_number ?? '';
+  editForm.progress_total = selected.value.progress_total ?? '';
+  editForm.unit = selected.value.unit || '';
+  editForm.weight = selected.value.weight ?? '';
   editing.value = true;
 }
 
@@ -566,17 +879,36 @@ async function saveEdit() {
   if (!selected.value) return;
   saving.value = true;
   try {
+    const isQuantity = editForm.progress_type === 'quantity';
     const payload = {
       title: editForm.title.trim(),
       status: editForm.status,
       priority: editForm.priority || null,
       start_date: editForm.start_date || null,
+      start_time: editForm.start_time || null,
       end_date: editForm.end_date || null,
+      due_time: editForm.due_time || null,
       actual_start_date: editForm.actual_start_date || null,
       actual_end_date: editForm.actual_end_date || null,
       assignee_id: editForm.assignee_id || null,
-      progress_percent: editForm.progress_percent === '' ? null : Number(editForm.progress_percent),
       description: editForm.description || null,
+      parent_id: editForm.parent_id || null,
+      manager_id: editForm.manager_id || null,
+      estimated_hours: editForm.estimated_hours === '' ? null : Number(editForm.estimated_hours),
+      progress_type: editForm.progress_type,
+      weight: editForm.weight === '' ? null : Number(editForm.weight),
+      // progress_percent chỉ gửi khi progress_type=percent (server prohibited
+      // khi quantity — hệ thống tự tính); progress_number/total/unit chỉ gửi
+      // khi quantity — đúng ràng buộc required_if/prohibited_if của Request.
+      ...(isQuantity
+        ? {
+            progress_number: editForm.progress_number === '' ? null : Number(editForm.progress_number),
+            progress_total: editForm.progress_total === '' ? null : Number(editForm.progress_total),
+            unit: editForm.unit || null,
+          }
+        : {
+            progress_percent: editForm.progress_percent === '' ? null : Number(editForm.progress_percent),
+          }),
     };
     const { data } = await window.axios.put(`/api/project/tasks/${selected.value.id}`, payload);
     applyTaskUpdate(data.task);
@@ -667,6 +999,348 @@ function dateRangeLabel(task) {
   return `${formatDate(task.start_date)} – ${formatDate(task.end_date)}`;
 }
 
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('vi-VN');
+}
+
+/** Nhóm A — variance_days: dương = trễ, âm = sớm, null = chưa có đủ mốc. */
+function formatVarianceDays(value) {
+  if (value == null) return '—';
+  if (value > 0) return `Trễ ${value} ngày`;
+  if (value < 0) return `Sớm ${Math.abs(value)} ngày`;
+  return 'Đúng hạn';
+}
+
+/** Khớp TaskRepository::SORTABLE_COLUMNS (PR7) — chỉ giá trị đơn giản
+ *  (ngày/số), không sort theo quan hệ (manager/parent). */
+const SORTABLE_COLUMN_KEYS = ['end_date', 'progress_percent', 'weight', 'estimated_hours', 'worklog_hours', 'created_at'];
+
+function isSortableColumn(key) {
+  return SORTABLE_COLUMN_KEYS.includes(key);
+}
+
+/** 3 trạng thái: tăng → giảm → bỏ sort (về mặc định created_at desc). */
+function toggleSort(key) {
+  if (sortBy.value !== key) {
+    sortBy.value = key;
+    sortDir.value = 'asc';
+    return;
+  }
+  if (sortDir.value === 'asc') {
+    sortDir.value = 'desc';
+    return;
+  }
+  sortBy.value = '';
+  sortDir.value = 'desc';
+}
+
+function isTaskSelected(taskId) {
+  return selectedTaskIds.value.has(taskId);
+}
+
+function toggleTaskSelected(taskId) {
+  const next = new Set(selectedTaskIds.value);
+  if (next.has(taskId)) next.delete(taskId);
+  else next.add(taskId);
+  selectedTaskIds.value = next;
+}
+
+function toggleSelectAll() {
+  if (selectedTaskIds.value.size === tasks.value.length && tasks.value.length > 0) {
+    selectedTaskIds.value = new Set();
+    return;
+  }
+  selectedTaskIds.value = new Set(tasks.value.map((t) => t.id));
+}
+
+function clearSelection() {
+  selectedTaskIds.value = new Set();
+  bulkManagerId.value = '';
+  bulkWeight.value = '';
+}
+
+async function applyBulkUpdate() {
+  const payload = { task_ids: Array.from(selectedTaskIds.value) };
+  if (bulkManagerId.value !== '') payload.manager_id = bulkManagerId.value;
+  if (bulkWeight.value !== '') payload.weight = Number(bulkWeight.value);
+
+  if (!payload.manager_id && payload.weight === undefined) {
+    showClientToast('warning', 'Chọn ít nhất một trường để cập nhật hàng loạt.');
+    return;
+  }
+
+  bulkSaving.value = true;
+  try {
+    const { data } = await window.axios.patch('/api/project/tasks/bulk', payload);
+    const updatedById = new Map((data.tasks || []).map((t) => [t.id, t]));
+    tasks.value = tasks.value.map((t) => updatedById.get(t.id) || t);
+    showClientToast('success', `Đã cập nhật ${updatedById.size} công việc.`);
+    clearSelection();
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không cập nhật hàng loạt được.');
+  } finally {
+    bulkSaving.value = false;
+  }
+}
+
+// ---------- Xuất/Nhập Excel (PR8) — cùng khuôn ProjectList.vue::downloadFile() ----------
+async function downloadFile(url, params, busyRef, fallbackFilename, successMsg, failMsg) {
+  busyRef.value = true;
+  try {
+    const response = await window.axios.get(url, {
+      params,
+      paramsSerializer: { indexes: null },
+      responseType: 'blob',
+    });
+    const blob = response.data;
+    if (blob.type && blob.type.includes('json')) {
+      const json = JSON.parse(await blob.text());
+      throw new Error(json.message || failMsg);
+    }
+
+    const disposition = response.headers['content-disposition'] || '';
+    const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const plainMatch = disposition.match(/filename="?([^"]+)"?/i);
+    const filename = decodeURIComponent(utfMatch?.[1] || plainMatch?.[1] || fallbackFilename);
+
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+    showClientToast('success', successMsg);
+  } catch (error) {
+    showClientToast('error', error?.message || failMsg);
+  } finally {
+    busyRef.value = false;
+  }
+}
+
+async function exportExcel(columnKeys = null) {
+  await downloadFile(
+    '/api/project/tasks/export',
+    { ...currentFilterParams(), ...(columnKeys ? { columns: columnKeys } : {}) },
+    exporting,
+    'Cong_viec.xlsx',
+    'Đã tải file Excel.',
+    'Không xuất được file Excel.',
+  );
+}
+
+function openExportDialog() {
+  exportSelectedColumns.value = new Set(EXPORT_COLUMNS.map((c) => c.key));
+  exportDialogOpen.value = true;
+}
+
+function closeExportDialog() {
+  if (exporting.value) return;
+  exportDialogOpen.value = false;
+}
+
+function toggleExportColumn(key) {
+  const col = EXPORT_COLUMNS.find((c) => c.key === key);
+  if (col?.always) return;
+  const next = new Set(exportSelectedColumns.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  exportSelectedColumns.value = next;
+}
+
+function selectAllExportColumns() {
+  exportSelectedColumns.value = new Set(EXPORT_COLUMNS.map((c) => c.key));
+}
+
+function deselectAllExportColumns() {
+  exportSelectedColumns.value = new Set(EXPORT_COLUMNS.filter((c) => c.always).map((c) => c.key));
+}
+
+async function submitExportDialog() {
+  await exportExcel(Array.from(exportSelectedColumns.value));
+  if (!exporting.value) exportDialogOpen.value = false;
+}
+
+function openImportDialog() {
+  importFile.value = null;
+  importPreview.value = null;
+  importResult.value = null;
+  importSelectedRows.value = new Set();
+  importStep.value = 'select';
+  editingRowKey.value = null;
+  importDialogOpen.value = true;
+}
+
+function closeImportDialog() {
+  if (previewing.value || confirming.value) return;
+  importDialogOpen.value = false;
+}
+
+function onImportFileChange(event) {
+  importFile.value = event.target.files?.[0] ?? null;
+}
+
+function backToSelect() {
+  importStep.value = 'select';
+  importPreview.value = null;
+  editingRowKey.value = null;
+}
+
+function toggleImportRowSelected(rowNum) {
+  const next = new Set(importSelectedRows.value);
+  if (next.has(rowNum)) next.delete(rowNum);
+  else next.add(rowNum);
+  importSelectedRows.value = next;
+}
+
+async function runImportPreview() {
+  if (!importFile.value) {
+    showClientToast('error', 'Vui lòng chọn file Excel cần nhập.');
+    return;
+  }
+  previewing.value = true;
+  try {
+    const formData = new FormData();
+    formData.append('file', importFile.value);
+    const { data } = await window.axios.post('/api/project/tasks/import/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    importPreview.value = data;
+    importSelectedRows.value = new Set((data.rows ?? []).filter((r) => r.status === 'valid').map((r) => r.row));
+    importStep.value = 'preview';
+  } catch (err) {
+    if (err?.response?.status === 422) {
+      showClientToast('error', err.response.data?.message || 'File không hợp lệ.');
+    } else {
+      showClientToast('error', err?.response?.data?.message || 'Không đọc được file Excel.');
+    }
+  } finally {
+    previewing.value = false;
+  }
+}
+
+function importRowDraftFromData(row) {
+  const d = row.data ?? {};
+  return {
+    code: row.code || '',
+    project_code: d.project_code || '',
+    title: d.title || '',
+    type_input: typeLabel(d.type) === '—' ? '' : typeLabel(d.type),
+    status_input: statusLabel(d.status) === '—' ? '' : statusLabel(d.status),
+    priority_input: d.priority ? priorityLabel(d.priority) : '',
+    assignee_input: d.assignee_name ? d.assignee_name : '',
+    manager_input: d.manager_name ? d.manager_name : '',
+    start_input: d.start_date ? formatDate(d.start_date) : '',
+    end_input: d.end_date ? formatDate(d.end_date) : '',
+    progress_type_input: TASK_PROGRESS_TYPE_LABELS[d.progress_type] || '',
+    progress_percent_input: d.progress_percent != null ? String(d.progress_percent) : '',
+    progress_number_input: d.progress_number != null ? String(d.progress_number) : '',
+    progress_total_input: d.progress_total != null ? String(d.progress_total) : '',
+    unit: d.unit || '',
+    estimated_hours_input: d.estimated_hours != null ? String(d.estimated_hours) : '',
+    weight_input: d.weight != null ? String(d.weight) : '',
+    description: d.description || '',
+  };
+}
+
+function startEditImportRow(row) {
+  editingRowKey.value = row.row;
+  Object.assign(editingRowDraft, importRowDraftFromData(row));
+}
+
+function cancelEditImportRow() {
+  editingRowKey.value = null;
+}
+
+async function saveEditImportRow(row) {
+  resolvingRow.value = true;
+  try {
+    const { data } = await window.axios.post('/api/project/tasks/import/resolve-row', { ...editingRowDraft });
+    const rows = importPreview.value?.rows ?? [];
+    const idx = rows.findIndex((r) => r.row === row.row);
+    if (idx !== -1) {
+      rows[idx] = { ...data, row: row.row };
+      if (data.status === 'valid') {
+        importSelectedRows.value = new Set([...importSelectedRows.value, row.row]);
+      } else {
+        const next = new Set(importSelectedRows.value);
+        next.delete(row.row);
+        importSelectedRows.value = next;
+      }
+    }
+    editingRowKey.value = null;
+  } catch (err) {
+    showClientToast('error', err?.response?.data?.message || 'Không sửa được dòng này.');
+  } finally {
+    resolvingRow.value = false;
+  }
+}
+
+async function confirmImportRows() {
+  const rows = (importPreview.value?.rows ?? [])
+    .filter((r) => r.status === 'valid' && importSelectedRows.value.has(r.row))
+    .map((r) => ({ ...r.data, action: r.action, task_id: r.task_id, provided_fields: r.provided_fields, row: r.row }));
+  if (rows.length === 0) {
+    showClientToast('error', 'Chưa chọn dòng hợp lệ nào để nhập.');
+    return;
+  }
+  confirming.value = true;
+  try {
+    const { data } = await window.axios.post('/api/project/tasks/import/confirm', { rows });
+    importResult.value = data;
+    importStep.value = 'result';
+    if (data.created?.length || data.updated?.length) {
+      await loadTasks(1);
+    }
+    const createdCount = data.created?.length ?? 0;
+    const updatedCount = data.updated?.length ?? 0;
+    const errorCount = data.errors?.length ?? 0;
+    if ((createdCount || updatedCount) && !errorCount) {
+      showClientToast('success', `Đã tạo ${createdCount} công việc, cập nhật ${updatedCount} công việc.`);
+    } else if (createdCount || updatedCount) {
+      showClientToast('warning', `Đã tạo ${createdCount} công việc, cập nhật ${updatedCount} công việc, còn ${errorCount} dòng lỗi.`);
+    } else {
+      showClientToast('error', 'Không nhập được công việc nào, xem chi tiết lỗi bên dưới.');
+    }
+  } catch (err) {
+    showClientToast('error', err?.response?.data?.message || 'Không nhập được công việc.');
+  } finally {
+    confirming.value = false;
+  }
+}
+
+const taskDataExportOptions = computed(() => {
+  const options = [
+    {
+      key: 'excel',
+      label: 'Xuất Excel',
+      description: 'Chọn cột và xuất theo bộ lọc hiện tại.',
+      onSelect: openExportDialog,
+    },
+  ];
+  if (canEdit.value) {
+    options.push({
+      key: 'import',
+      label: 'Nhập Excel',
+      description: 'Tải file lên, xem trước rồi mới xác nhận nhập',
+      separatorBefore: true,
+      onSelect: openImportDialog,
+    });
+  }
+  return options;
+});
+
+const taskDataExportBusyKey = computed(() => {
+  if (exporting.value) return 'excel';
+  if (previewing.value || confirming.value) return 'import';
+  return undefined;
+});
+
 function cellText(task, key) {
   if (key === 'code') return task.code || '—';
   if (key === 'title') return task.title || '—';
@@ -682,6 +1356,16 @@ function cellText(task, key) {
 
 function isGroupCollapsed(key) {
   return collapsedGroups.value.has(key);
+}
+
+/** Cây WBS — tái dùng nguyên collapsedGroups (Set + localStorage) với key
+ *  dạng `task-{id}` để không đụng key `project-{id}` của group ngoài. */
+function isTaskCollapsed(taskId) {
+  return collapsedGroups.value.has(`task-${taskId}`);
+}
+
+function toggleTaskCollapse(taskId) {
+  toggleGroup(`task-${taskId}`);
 }
 
 function toggleGroup(key) {
@@ -1120,7 +1804,10 @@ watch(tableZoom, (value) => {
 watch(selected, () => nextTick(fitColumnsToContent));
 watch(shownColumns, () => nextTick(fitColumnsToContent));
 watch(perPage, () => loadTasks(1));
-watch([projectId, assigneeId, dateFrom, dateTo], () => loadTasks(1));
+watch(
+  [projectId, assigneeId, managerId, dateFrom, dateTo, isOverdueOnly, progressTypeFilter, sortBy, sortDir],
+  () => loadTasks(1),
+);
 
 onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown);
@@ -1158,6 +1845,9 @@ onBeforeUnmount(() => {
       title="Tất cả công việc"
       icon="layoutList"
       description="Quản lý danh sách công việc của tổ chức."
+      export-label="Dữ liệu"
+      :export-options="taskDataExportOptions"
+      :export-busy-key="taskDataExportBusyKey"
     >
       <template #actions>
         <div class="task-page__header-search">
@@ -1330,6 +2020,13 @@ onBeforeUnmount(() => {
                 <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
               </select>
             </div>
+            <div v-if="visibleFilters.manager_id" class="task-page__field">
+              <label class="task-page__label" for="task-manager">Người quản lý</label>
+              <select id="task-manager" v-model="managerId" class="task-page__input">
+                <option value="">Tất cả người quản lý</option>
+                <option v-for="u in allAssignableUsers" :key="u.id" :value="u.id">{{ u.name }}</option>
+              </select>
+            </div>
             <div v-if="visibleFilters.date_from" class="task-page__field">
               <label class="task-page__label" for="task-from">Từ ngày</label>
               <input id="task-from" v-model="dateFrom" type="date" class="task-page__input" />
@@ -1338,6 +2035,17 @@ onBeforeUnmount(() => {
               <label class="task-page__label" for="task-to">Đến ngày</label>
               <input id="task-to" v-model="dateTo" type="date" class="task-page__input" />
             </div>
+            <div v-if="visibleFilters.progress_type" class="task-page__field">
+              <label class="task-page__label" for="task-progress-type">Cách tính tiến độ</label>
+              <select id="task-progress-type" v-model="progressTypeFilter" class="task-page__input">
+                <option value="">Tất cả</option>
+                <option v-for="(label, value) in TASK_PROGRESS_TYPE_LABELS" :key="value" :value="value">{{ label }}</option>
+              </select>
+            </div>
+            <label v-if="visibleFilters.is_overdue" class="task-page__check">
+              <input type="checkbox" v-model="isOverdueOnly" />
+              <span>Chỉ hiện việc quá hạn</span>
+            </label>
           </div>
         </div>
 
@@ -1383,6 +2091,27 @@ onBeforeUnmount(() => {
           </template>
         </TablePagesBar>
 
+        <div v-if="!isKanban && selectedTaskIds.size > 0" class="task-page__bulk-bar">
+          <span class="task-page__bulk-count">Đã chọn {{ selectedTaskIds.size }} công việc</span>
+          <label class="task-page__field task-page__bulk-field">
+            <span class="task-page__label">Gán người quản lý</span>
+            <select v-model="bulkManagerId" class="task-page__input">
+              <option value="">Không đổi</option>
+              <option v-for="u in allAssignableUsers" :key="u.id" :value="u.id">{{ u.name }}</option>
+            </select>
+          </label>
+          <label class="task-page__field task-page__bulk-field">
+            <span class="task-page__label">Tỷ trọng (%)</span>
+            <input v-model="bulkWeight" type="number" min="0" max="100" step="0.1" class="task-page__input" />
+          </label>
+          <button type="button" class="task-page__btn" :disabled="bulkSaving" @click="applyBulkUpdate">
+            {{ bulkSaving ? 'Đang lưu…' : 'Áp dụng' }}
+          </button>
+          <button type="button" class="task-page__btn task-page__btn--ghost" @click="clearSelection">
+            Bỏ chọn
+          </button>
+        </div>
+
         <div
           v-if="!isKanban"
           ref="tableWrap"
@@ -1392,12 +2121,34 @@ onBeforeUnmount(() => {
         >
           <table class="task-page__table" :style="{ width: tableWidthPx }">
             <colgroup>
+              <col class="task-page__col-check" />
               <col v-for="col in shownColumns" :key="col.key" :style="{ width: colWidthStyle(col.key) }" />
             </colgroup>
             <thead>
               <tr>
+                <th class="task-page__th-check">
+                  <input
+                    type="checkbox"
+                    aria-label="Chọn tất cả công việc"
+                    :checked="tasks.length > 0 && selectedTaskIds.size === tasks.length"
+                    @change="toggleSelectAll"
+                  />
+                </th>
                 <th v-for="col in shownColumns" :key="col.key">
-                  <span>{{ col.label }}</span>
+                  <button
+                    v-if="isSortableColumn(col.key)"
+                    type="button"
+                    class="task-page__th-sort"
+                    @click="toggleSort(col.key)"
+                  >
+                    <span>{{ col.label }}</span>
+                    <AppIcon
+                      v-if="sortBy === col.key"
+                      :name="sortDir === 'asc' ? 'chevronsUp' : 'chevronsDown'"
+                      :size="12"
+                    />
+                  </button>
+                  <span v-else>{{ col.label }}</span>
                   <button
                     type="button"
                     class="task-page__resize"
@@ -1449,6 +2200,14 @@ onBeforeUnmount(() => {
                   ]"
                   @dblclick="inspect(task)"
                 >
+                  <td class="task-page__td-check" @click.stop>
+                    <input
+                      type="checkbox"
+                      :aria-label="`Chọn công việc ${task.title}`"
+                      :checked="isTaskSelected(task.id)"
+                      @change="toggleTaskSelected(task.id)"
+                    />
+                  </td>
                   <td
                     v-for="col in shownColumns"
                     :key="col.key"
@@ -1459,7 +2218,26 @@ onBeforeUnmount(() => {
                   >
                     <span v-if="col.key === 'code'" class="task-page__pill task-page__pill--code">{{ task.code || '—' }}</span>
                     <span v-else-if="col.key === 'title'" class="task-page__name-cell">
-                      <span class="task-page__name-title">{{ task.title }}</span>
+                      <span
+                        class="task-page__name-title-row"
+                        :style="task.depth ? { paddingLeft: `${task.depth * 20}px` } : undefined"
+                      >
+                        <button
+                          v-if="task.hasChildren"
+                          type="button"
+                          class="task-page__tree-toggle"
+                          :aria-label="isTaskCollapsed(task.id) ? 'Mở rộng công việc con' : 'Thu gọn công việc con'"
+                          @click.stop="toggleTaskCollapse(task.id)"
+                        >
+                          <AppIcon
+                            name="chevronRight"
+                            :size="12"
+                            class="task-page__tree-chevron"
+                            :class="{ 'task-page__tree-chevron--open': !isTaskCollapsed(task.id) }"
+                          />
+                        </button>
+                        <span class="task-page__name-title">{{ task.title }}</span>
+                      </span>
                     </span>
                     <span
                       v-else-if="col.key === 'project'"
@@ -1506,6 +2284,23 @@ onBeforeUnmount(() => {
                       <UserAvatarTip v-if="task.creator" :user="task.creator" label="Người tạo" />
                       <span v-else>—</span>
                     </span>
+                    <span v-else-if="col.key === 'created_at'" class="task-page__cell">{{ formatDateTime(task.created_at) }}</span>
+                    <span v-else-if="col.key === 'updated_at'" class="task-page__cell">{{ formatDateTime(task.updated_at) }}</span>
+                    <span v-else-if="col.key === 'parent'" class="task-page__cell">{{ task.parent?.title || '—' }}</span>
+                    <span v-else-if="col.key === 'attachments_count'" class="task-page__cell">{{ task.attachments_count || 0 }}</span>
+                    <span v-else-if="col.key === 'estimated_hours'" class="task-page__cell">{{ task.estimated_hours ?? '—' }}</span>
+                    <span v-else-if="col.key === 'worklog_hours'" class="task-page__cell">{{ task.worklog_hours || 0 }}</span>
+                    <span v-else-if="col.key === 'manager'">
+                      <UserAvatarTip v-if="task.manager" :user="task.manager" label="Người quản lý" />
+                      <span v-else>—</span>
+                    </span>
+                    <span v-else-if="col.key === 'accepted_by'" class="task-page__cell">{{ task.accepted_by_user?.name || '—' }}</span>
+                    <span v-else-if="col.key === 'weight'" class="task-page__cell">{{ task.weight != null ? `${task.weight}%` : '—' }}</span>
+                    <span v-else-if="col.key === 'is_overdue'" class="task-page__pill" :class="`task-page__pill--${task.is_overdue ? 'danger' : 'success'}`">
+                      <span class="task-page__dot" :class="`task-page__dot--${task.is_overdue ? 'danger' : 'success'}`" />
+                      {{ task.is_overdue ? 'Quá hạn' : 'Đúng hạn' }}
+                    </span>
+                    <span v-else-if="col.key === 'variance_days'" class="task-page__cell">{{ formatVarianceDays(task.variance_days) }}</span>
                     <span v-else class="task-page__cell">{{ cellText(task, col.key) }}</span>
                   </td>
                 </tr>
@@ -1585,9 +2380,11 @@ onBeforeUnmount(() => {
                 @pointerdown="onKanbanCardPointerDown($event, task)"
                 @click="!isKanbanDragGroup && inspect(task)"
               >
+                <span v-if="task.is_overdue" class="task-kanban__overdue-dot" aria-hidden="true" />
                 <header class="task-kanban__card-head">
                   <span v-if="task.code" class="task-kanban__card-code">{{ task.code }}</span>
                   <span class="task-kanban__card-type">{{ task.project?.name || typeLabel(task.type) }}</span>
+                  <span v-if="task.weight != null" class="task-kanban__card-weight">{{ task.weight }}%</span>
                 </header>
                 <h3 class="task-kanban__card-title">{{ task.title }}</h3>
                 <div v-if="task.priority && task.priority !== 'low'" class="task-kanban__card-labels">
@@ -1596,14 +2393,22 @@ onBeforeUnmount(() => {
                   </span>
                 </div>
                 <p v-if="task.description" class="task-kanban__card-desc">{{ task.description }}</p>
-                <dl v-if="task.assignee?.name || dateRangeLabel(task)" class="task-kanban__card-facts">
+                <dl v-if="task.assignee?.name || task.manager?.name || dateRangeLabel(task)" class="task-kanban__card-facts">
                   <div v-if="task.assignee?.name" class="task-kanban__card-fact">
                     <dt>Người thực hiện</dt>
                     <dd>{{ task.assignee.name }}</dd>
                   </div>
+                  <div v-if="task.manager?.name" class="task-kanban__card-fact">
+                    <dt>Người quản lý</dt>
+                    <dd>{{ task.manager.name }}</dd>
+                  </div>
                   <div v-if="dateRangeLabel(task)" class="task-kanban__card-fact">
                     <dt>Thời hạn</dt>
                     <dd>{{ dateRangeLabel(task) }}</dd>
+                  </div>
+                  <div v-if="task.worklog_hours" class="task-kanban__card-fact">
+                    <dt>Thời gian thực hiện</dt>
+                    <dd>{{ task.worklog_hours }} giờ</dd>
                   </div>
                 </dl>
                 <div v-if="task.progress_percent != null" class="task-kanban__card-progress">
@@ -1705,16 +2510,54 @@ onBeforeUnmount(() => {
             </select>
           </label>
           <label class="task-page__field">
-            <span class="task-page__label">Tiến độ (%)</span>
-            <input v-model="editForm.progress_percent" type="number" min="0" max="100" class="task-page__input" />
+            <span class="task-page__label">Cách tính tiến độ</span>
+            <select v-model="editForm.progress_type" class="task-page__input">
+              <option v-for="(label, value) in TASK_PROGRESS_TYPE_LABELS" :key="value" :value="value">{{ label }}</option>
+            </select>
           </label>
+          <label class="task-page__field">
+            <span class="task-page__label">Tiến độ (%)</span>
+            <input
+              v-model="editForm.progress_percent"
+              type="number"
+              min="0"
+              max="100"
+              class="task-page__input"
+              :disabled="editForm.progress_type === 'quantity'"
+            />
+          </label>
+          <template v-if="editForm.progress_type === 'quantity'">
+            <label class="task-page__field">
+              <span class="task-page__label">Khối lượng đã hoàn thành</span>
+              <input v-model="editForm.progress_number" type="number" min="0" step="0.01" class="task-page__input" />
+            </label>
+            <label class="task-page__field">
+              <span class="task-page__label">Khối lượng cần hoàn thành</span>
+              <input v-model="editForm.progress_total" type="number" min="0.01" step="0.01" class="task-page__input" />
+            </label>
+            <label class="task-page__field">
+              <span class="task-page__label">Đơn vị</span>
+              <input v-model="editForm.unit" type="text" maxlength="50" class="task-page__input" />
+            </label>
+            <p v-if="editFormEstimatedPercent != null" class="task-page__hint">
+              Ước tính: {{ editFormEstimatedPercent }}% (hệ thống tự tính khi lưu)
+            </p>
+          </template>
           <label class="task-page__field">
             <span class="task-page__label">Ngày bắt đầu</span>
             <input v-model="editForm.start_date" type="date" class="task-page__input" />
           </label>
           <label class="task-page__field">
+            <span class="task-page__label">Giờ bắt đầu</span>
+            <input v-model="editForm.start_time" type="time" class="task-page__input" />
+          </label>
+          <label class="task-page__field">
             <span class="task-page__label">Ngày kết thúc</span>
             <input v-model="editForm.end_date" type="date" class="task-page__input" />
+          </label>
+          <label class="task-page__field">
+            <span class="task-page__label">Giờ hạn</span>
+            <input v-model="editForm.due_time" type="time" class="task-page__input" />
           </label>
           <label class="task-page__field">
             <span class="task-page__label">Bắt đầu thực tế</span>
@@ -1723,6 +2566,21 @@ onBeforeUnmount(() => {
           <label class="task-page__field">
             <span class="task-page__label">Kết thúc thực tế</span>
             <input v-model="editForm.actual_end_date" type="date" class="task-page__input" />
+          </label>
+          <label class="task-page__field">
+            <span class="task-page__label">Người quản lý</span>
+            <select v-model="editForm.manager_id" class="task-page__input">
+              <option value="">Chưa gán</option>
+              <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
+            </select>
+          </label>
+          <label class="task-page__field">
+            <span class="task-page__label">Thời gian dự kiến (giờ)</span>
+            <input v-model="editForm.estimated_hours" type="number" min="0" step="0.5" class="task-page__input" />
+          </label>
+          <label class="task-page__field">
+            <span class="task-page__label">Tỷ trọng (%)</span>
+            <input v-model="editForm.weight" type="number" min="0" max="100" step="0.1" class="task-page__input" />
           </label>
           <label class="task-page__field task-page__field--full">
             <span class="task-page__label">Mô tả</span>
@@ -1798,11 +2656,193 @@ onBeforeUnmount(() => {
             <span class="task-page__row-label">Mô tả</span>
             <span class="task-page__row-value">{{ selected.description }}</span>
           </div>
+
+          <div v-if="selected.parent" class="task-page__row">
+            <span class="task-page__row-label">Công việc cha</span>
+            <span class="task-page__row-value">{{ selected.parent.code ? `${selected.parent.code} — ` : '' }}{{ selected.parent.title }}</span>
+          </div>
+          <div class="task-page__row">
+            <span class="task-page__row-label">Tình trạng hạn</span>
+            <span class="task-page__row-value task-page__row-value--status">
+              <span class="task-page__dot" :class="`task-page__dot--${selected.is_overdue ? 'danger' : 'success'}`" />
+              {{ selected.is_overdue ? 'Quá hạn' : 'Đúng hạn' }}
+            </span>
+          </div>
+          <div v-if="selected.variance_days != null" class="task-page__row">
+            <span class="task-page__row-label">Chênh lệch</span>
+            <span class="task-page__row-value">{{ formatVarianceDays(selected.variance_days) }}</span>
+          </div>
+          <div v-if="selected.estimated_hours != null" class="task-page__row">
+            <span class="task-page__row-label">Thời gian dự kiến</span>
+            <span class="task-page__row-value">{{ selected.estimated_hours }} giờ</span>
+          </div>
+          <div class="task-page__row">
+            <span class="task-page__row-label">Thời gian thực hiện</span>
+            <span class="task-page__row-value">{{ selected.worklog_hours || 0 }} giờ</span>
+          </div>
+          <div v-if="selected.manager" class="task-page__row">
+            <span class="task-page__row-label">Người quản lý</span>
+            <span class="task-page__row-value task-page__row-person">
+              <UserAvatarTip :user="selected.manager" label="Người quản lý" />
+              <span>{{ selected.manager.name }}</span>
+            </span>
+          </div>
+          <div v-if="selected.accepted_by_user" class="task-page__row">
+            <span class="task-page__row-label">Người đã nhận</span>
+            <span class="task-page__row-value">{{ selected.accepted_by_user.name }} — {{ formatDateTime(selected.accepted_at) }}</span>
+          </div>
+          <div v-if="selected.progress_type === 'quantity'" class="task-page__row">
+            <span class="task-page__row-label">Khối lượng</span>
+            <span class="task-page__row-value">{{ selected.progress_number }} / {{ selected.progress_total }} {{ selected.unit }}</span>
+          </div>
+          <div v-if="selected.weight != null" class="task-page__row">
+            <span class="task-page__row-label">Tỷ trọng</span>
+            <span class="task-page__row-value">{{ selected.weight }}%</span>
+          </div>
+          <div v-if="selected.task_score" class="task-page__row">
+            <span class="task-page__row-label">Điểm đánh giá</span>
+            <span class="task-page__row-value">{{ selected.task_score.rating_score ?? '—' }}</span>
+          </div>
+          <div v-if="selected.task_score?.rating_result" class="task-page__row">
+            <span class="task-page__row-label">Kết quả đánh giá</span>
+            <span class="task-page__row-value">{{ selected.task_score.rating_result }}</span>
+          </div>
+          <div v-if="selected.task_score?.rating_desc" class="task-page__row">
+            <span class="task-page__row-label">Ý kiến đánh giá</span>
+            <span class="task-page__row-value">{{ selected.task_score.rating_desc }}</span>
+          </div>
+
           <div class="task-page__row">
             <span class="task-page__row-label">Người tạo</span>
             <span class="task-page__row-value">{{ selected.creator?.name || '—' }}</span>
           </div>
+          <div class="task-page__row">
+            <span class="task-page__row-label">Ngày tạo</span>
+            <span class="task-page__row-value">{{ formatDateTime(selected.created_at) }}</span>
+          </div>
+          <div class="task-page__row">
+            <span class="task-page__row-label">Cập nhật lần cuối</span>
+            <span class="task-page__row-value">{{ formatDateTime(selected.updated_at) }}</span>
+          </div>
         </div>
+
+        <section v-if="!editing" class="task-page__subsection">
+          <h3 class="task-page__subsection-title">Tệp đính kèm</h3>
+          <div v-if="taskAttachments.length" class="task-page__attachment-list">
+            <div v-for="att in taskAttachments" :key="att.id" class="task-page__attachment">
+              <AppIcon name="fileText" :size="16" />
+              <a :href="att.file_url" target="_blank" rel="noopener" class="task-page__attachment-name">
+                {{ att.file_name }}
+              </a>
+              <span v-if="att.file_size" class="task-page__attachment-size">{{ formatFileSize(att.file_size) }}</span>
+              <button
+                v-if="canEdit"
+                type="button"
+                class="task-page__icon-btn"
+                aria-label="Xoá tệp đính kèm"
+                @click="removeAttachment(att)"
+              >
+                <AppIcon name="trash" :size="14" />
+              </button>
+            </div>
+          </div>
+          <button
+            v-if="canEdit"
+            type="button"
+            class="task-page__btn task-page__btn--ghost"
+            :disabled="attachmentUploading"
+            @click="triggerAttachmentInput"
+          >
+            {{ attachmentUploading ? 'Đang tải lên…' : 'Tải file lên' }}
+          </button>
+          <input ref="attachmentInput" type="file" class="task-page__hidden-input" @change="onAttachmentChange" />
+        </section>
+
+        <section v-if="!editing" class="task-page__subsection">
+          <h3 class="task-page__subsection-title">Nhật ký giờ làm</h3>
+          <ul v-if="taskWorklogs.length" class="task-page__worklog-list">
+            <li v-for="log in taskWorklogs" :key="log.id" class="task-page__worklog-item">
+              <span class="task-page__worklog-main">
+                <span class="task-page__worklog-user">{{ log.user?.name || '—' }}</span>
+                <span class="task-page__worklog-date">{{ formatDate(log.work_date) }}</span>
+                <span class="task-page__worklog-hours">{{ log.hours }} giờ</span>
+              </span>
+              <span v-if="log.note" class="task-page__worklog-note">{{ log.note }}</span>
+              <button
+                v-if="canEditWorklog(log)"
+                type="button"
+                class="task-page__icon-btn"
+                aria-label="Xoá nhật ký giờ làm"
+                @click="askDeleteWorklog(log)"
+              >
+                <AppIcon name="trash" :size="14" />
+              </button>
+            </li>
+          </ul>
+
+          <form v-if="worklogFormOpen" class="task-page__form task-page__form--compact" @submit.prevent="saveWorklog">
+            <label class="task-page__field">
+              <span class="task-page__label">Ngày làm</span>
+              <input v-model="worklogForm.work_date" type="date" class="task-page__input" required />
+            </label>
+            <label class="task-page__field">
+              <span class="task-page__label">Số giờ</span>
+              <input v-model="worklogForm.hours" type="number" min="0.25" max="24" step="0.25" class="task-page__input" required />
+            </label>
+            <label class="task-page__field task-page__field--full">
+              <span class="task-page__label">Ghi chú</span>
+              <textarea v-model="worklogForm.note" class="task-page__input task-page__textarea" rows="2" />
+            </label>
+            <div class="task-page__form-actions">
+              <button type="button" class="task-page__btn task-page__btn--ghost" :disabled="worklogSaving" @click="cancelWorklogForm">
+                Huỷ
+              </button>
+              <button type="submit" class="task-page__btn" :disabled="worklogSaving">
+                {{ worklogSaving ? 'Đang lưu…' : 'Lưu' }}
+              </button>
+            </div>
+          </form>
+          <button
+            v-else-if="canEdit"
+            type="button"
+            class="task-page__btn task-page__btn--ghost"
+            @click="openWorklogForm"
+          >
+            + Thêm giờ làm
+          </button>
+        </section>
+
+        <section v-if="!editing && canApprove" class="task-page__subsection">
+          <h3 class="task-page__subsection-title">Đánh giá công việc</h3>
+          <form class="task-page__form" @submit.prevent="saveScore">
+            <label class="task-page__field">
+              <span class="task-page__label">Điểm số</span>
+              <input v-model="scoreForm.rating_score" type="number" min="0" step="0.1" class="task-page__input" />
+            </label>
+            <label class="task-page__field">
+              <span class="task-page__label">Kết quả</span>
+              <input
+                v-model="scoreForm.rating_result"
+                type="text"
+                maxlength="100"
+                list="task-score-suggestions"
+                class="task-page__input"
+              />
+              <datalist id="task-score-suggestions">
+                <option v-for="s in TASK_SCORE_RESULT_SUGGESTIONS" :key="s" :value="s" />
+              </datalist>
+            </label>
+            <label class="task-page__field task-page__field--full">
+              <span class="task-page__label">Ý kiến đánh giá</span>
+              <textarea v-model="scoreForm.rating_desc" class="task-page__input task-page__textarea" rows="3" />
+            </label>
+            <div class="task-page__form-actions">
+              <button type="submit" class="task-page__btn" :disabled="scoreSaving">
+                {{ scoreSaving ? 'Đang lưu…' : 'Lưu đánh giá' }}
+              </button>
+            </div>
+          </form>
+        </section>
       </aside>
     </div>
 
@@ -1816,6 +2856,390 @@ onBeforeUnmount(() => {
       @confirm="confirmDelete"
       @update:open="confirmingDelete = $event"
     />
+
+    <ConfirmDialog
+      :open="Boolean(confirmingDeleteWorklog)"
+      title="Xoá nhật ký giờ làm"
+      description="Bạn có chắc muốn xoá dòng nhật ký giờ làm này? Thao tác này không thể hoàn tác."
+      confirm-label="Xoá"
+      danger
+      @confirm="confirmDeleteWorklog"
+      @update:open="confirmingDeleteWorklog = $event ? confirmingDeleteWorklog : null"
+    />
+
+    <Teleport to="body">
+      <Transition name="task-dialog-fade">
+        <div
+          v-if="exportDialogOpen"
+          class="task-page__dialog"
+          role="presentation"
+          @mousedown.self="closeExportDialog"
+        >
+          <div
+            class="task-page__dialog-panel task-page__dialog-panel--import"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="task-export-title"
+          >
+            <div class="task-page__dialog-head">
+              <span class="task-page__dialog-icon" aria-hidden="true">
+                <AppIcon name="fileDown" :size="22" :stroke-width="1.75" />
+              </span>
+              <div class="task-page__dialog-head-copy">
+                <h2 id="task-export-title" class="task-page__dialog-title">Xuất công việc ra Excel</h2>
+              </div>
+              <button
+                type="button"
+                class="task-page__dialog-close"
+                aria-label="Đóng"
+                :disabled="exporting"
+                @click="closeExportDialog"
+              >
+                <AppIcon name="close" :size="16" />
+              </button>
+            </div>
+
+            <div class="task-page__dialog-body">
+              <p class="task-page__import-hint">
+                Xuất theo đúng bộ lọc đang xem trên trang. Chọn cột cần xuất — Mã công việc và Mã dự án luôn được xuất.
+              </p>
+              <div class="task-page__export-toolbar">
+                <button type="button" class="task-page__import-template" @click="selectAllExportColumns">Chọn tất cả</button>
+                <button type="button" class="task-page__import-template" @click="deselectAllExportColumns">Bỏ chọn tất cả</button>
+              </div>
+              <div class="task-page__export-grid">
+                <label
+                  v-for="col in EXPORT_COLUMNS"
+                  :key="col.key"
+                  class="task-page__export-col"
+                  :class="{ 'task-page__export-col--disabled': col.always }"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="exportSelectedColumns.has(col.key)"
+                    :disabled="col.always"
+                    @change="toggleExportColumn(col.key)"
+                  />
+                  <span>{{ col.label }}</span>
+                </label>
+              </div>
+            </div>
+            <div class="task-page__dialog-actions">
+              <button type="button" class="task-page__dialog-btn task-page__dialog-btn--ghost" :disabled="exporting" @click="closeExportDialog">
+                Đóng
+              </button>
+              <button
+                type="button"
+                class="task-page__dialog-btn task-page__dialog-btn--primary"
+                :disabled="exporting || exportSelectedColumns.size === 0"
+                @click="submitExportDialog"
+              >
+                {{ exporting ? 'Đang xuất…' : `Xuất Excel (${exportSelectedColumns.size} cột)` }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <Teleport to="body">
+      <Transition name="task-dialog-fade">
+        <div
+          v-if="importDialogOpen"
+          class="task-page__dialog"
+          role="presentation"
+          @mousedown.self="closeImportDialog"
+        >
+          <div
+            class="task-page__dialog-panel"
+            :class="importStep === 'preview' ? 'task-page__dialog-panel--preview' : 'task-page__dialog-panel--import'"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="task-import-title"
+          >
+            <div class="task-page__dialog-head">
+              <span class="task-page__dialog-icon" aria-hidden="true">
+                <AppIcon name="fileUp" :size="22" :stroke-width="1.75" />
+              </span>
+              <div class="task-page__dialog-head-copy">
+                <h2 id="task-import-title" class="task-page__dialog-title">Nhập công việc từ Excel</h2>
+              </div>
+              <button
+                type="button"
+                class="task-page__dialog-close"
+                aria-label="Đóng"
+                :disabled="previewing || confirming"
+                @click="closeImportDialog"
+              >
+                <AppIcon name="close" :size="16" />
+              </button>
+            </div>
+
+            <template v-if="importStep === 'select'">
+              <div class="task-page__dialog-body">
+                <p class="task-page__import-hint">
+                  Chọn file Excel (.xlsx) đúng theo cấu trúc cột đã xuất. Để trống Mã công việc để tạo công việc mới (khi đó Mã dự án và Tên công việc là bắt buộc). Điền đúng Mã công việc đã có để cập nhật công việc đó — ô nào để trống khi cập nhật sẽ giữ nguyên giá trị cũ, không bị xoá. Người thực hiện / người quản lý nhập bằng email hoặc tên.
+                  <button type="button" class="task-page__import-template" :disabled="exporting" @click="exportExcel()">
+                    Tải file mẫu (xuất danh sách hiện tại, đủ cột)
+                  </button>
+                </p>
+                <div class="task-page__dialog-field">
+                  <label class="task-page__dialog-label" for="task-import-file">
+                    File Excel
+                    <span class="task-page__dialog-req" aria-hidden="true">*</span>
+                  </label>
+                  <input
+                    id="task-import-file"
+                    type="file"
+                    accept=".xlsx"
+                    class="task-page__import-file"
+                    :disabled="previewing"
+                    @change="onImportFileChange"
+                  />
+                </div>
+              </div>
+              <div class="task-page__dialog-actions">
+                <button type="button" class="task-page__dialog-btn task-page__dialog-btn--ghost" :disabled="previewing" @click="closeImportDialog">
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  class="task-page__dialog-btn task-page__dialog-btn--primary"
+                  :disabled="previewing || !importFile"
+                  @click="runImportPreview"
+                >
+                  {{ previewing ? 'Đang đọc file…' : 'Xem trước' }}
+                </button>
+              </div>
+            </template>
+
+            <template v-else-if="importStep === 'preview'">
+              <div class="task-page__dialog-body task-page__dialog-body--preview">
+                <div class="task-page__import-summary">
+                  <span class="task-page__import-dot task-page__import-dot--ok" />
+                  {{ importSelectedRows.size }}/{{ importPreview?.rows?.length ?? 0 }}
+                  dòng hợp lệ được chọn để nhập. Nhấn vào dòng lỗi để sửa trực tiếp.
+                </div>
+                <div class="task-page__preview-table-wrap hide-scrollbar">
+                  <table class="task-page__preview-table">
+                    <thead>
+                      <tr>
+                        <th class="task-page__preview-th task-page__preview-th--check"></th>
+                        <th class="task-page__preview-th">Dòng</th>
+                        <th class="task-page__preview-th">Hành động</th>
+                        <th class="task-page__preview-th">Mã công việc</th>
+                        <th class="task-page__preview-th">Mã dự án</th>
+                        <th class="task-page__preview-th">Tên công việc</th>
+                        <th class="task-page__preview-th">Trạng thái</th>
+                        <th class="task-page__preview-th">Ưu tiên</th>
+                        <th class="task-page__preview-th">Người thực hiện</th>
+                        <th class="task-page__preview-th">Người quản lý</th>
+                        <th class="task-page__preview-th">Ngày bắt đầu</th>
+                        <th class="task-page__preview-th">Ngày kết thúc</th>
+                        <th class="task-page__preview-th">Tiến độ</th>
+                        <th class="task-page__preview-th">Mô tả</th>
+                        <th class="task-page__preview-th">Trạng thái dòng</th>
+                        <th class="task-page__preview-th">Ghi chú</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template v-for="row in importPreview?.rows ?? []" :key="row.row">
+                        <tr
+                          v-if="editingRowKey !== row.row"
+                          class="task-page__preview-row"
+                          :class="{ 'task-page__preview-row--invalid': row.status !== 'valid' }"
+                          @dblclick="startEditImportRow(row)"
+                        >
+                          <td class="task-page__preview-td task-page__preview-td--check">
+                            <input
+                              v-if="row.status === 'valid'"
+                              type="checkbox"
+                              :checked="importSelectedRows.has(row.row)"
+                              @change="toggleImportRowSelected(row.row)"
+                            />
+                          </td>
+                          <td class="task-page__preview-td">{{ row.row }}</td>
+                          <td class="task-page__preview-td">
+                            {{ row.action === 'update' ? `Cập nhật công việc ${row.code || ''}` : 'Tạo mới' }}
+                          </td>
+                          <td class="task-page__preview-td">{{ row.code || '—' }}</td>
+                          <td class="task-page__preview-td">{{ row.data?.project_code || '—' }}</td>
+                          <td class="task-page__preview-td">{{ row.data?.title || '—' }}</td>
+                          <td class="task-page__preview-td">{{ statusLabel(row.data?.status) }}</td>
+                          <td class="task-page__preview-td">{{ priorityLabel(row.data?.priority) }}</td>
+                          <td class="task-page__preview-td">{{ row.data?.assignee_name || '—' }}</td>
+                          <td class="task-page__preview-td">{{ row.data?.manager_name || '—' }}</td>
+                          <td class="task-page__preview-td">{{ formatDate(row.data?.start_date) }}</td>
+                          <td class="task-page__preview-td">{{ formatDate(row.data?.end_date) }}</td>
+                          <td class="task-page__preview-td">{{ row.data?.progress_percent != null ? `${row.data.progress_percent}%` : '—' }}</td>
+                          <td class="task-page__preview-td task-page__preview-td--desc">{{ row.data?.description || '—' }}</td>
+                          <td class="task-page__preview-td">
+                            <span class="task-page__import-summary">
+                              <span
+                                class="task-page__import-dot"
+                                :class="row.status === 'valid' ? 'task-page__import-dot--ok' : 'task-page__import-dot--error'"
+                              />
+                              {{ row.status === 'valid' ? 'Hợp lệ' : 'Không hợp lệ' }}
+                            </span>
+                          </td>
+                          <td class="task-page__preview-td task-page__preview-td--issues">
+                            <p v-for="(issue, idx) in row.issues" :key="idx" class="task-page__preview-issue">
+                              {{ issue.message }}
+                            </p>
+                            <button
+                              v-if="row.status !== 'valid'"
+                              type="button"
+                              class="task-page__import-template"
+                              @click="startEditImportRow(row)"
+                            >
+                              Sửa dòng này
+                            </button>
+                          </td>
+                        </tr>
+                        <tr v-else class="task-page__preview-row task-page__preview-row--editing">
+                          <td class="task-page__preview-td" colspan="16">
+                            <div class="task-page__edit-grid">
+                              <label class="task-page__edit-field">
+                                <span>Mã công việc</span>
+                                <input v-model="editingRowDraft.code" type="text" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Mã dự án</span>
+                                <input v-model="editingRowDraft.project_code" type="text" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Tên công việc</span>
+                                <input v-model="editingRowDraft.title" type="text" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Trạng thái</span>
+                                <input v-model="editingRowDraft.status_input" type="text" list="task-import-status-options" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Mức độ ưu tiên</span>
+                                <input v-model="editingRowDraft.priority_input" type="text" list="task-import-priority-options" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Người thực hiện (email)</span>
+                                <input v-model="editingRowDraft.assignee_input" type="text" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Người quản lý (email)</span>
+                                <input v-model="editingRowDraft.manager_input" type="text" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Ngày bắt đầu</span>
+                                <input v-model="editingRowDraft.start_input" type="text" placeholder="dd/mm/yyyy" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Ngày kết thúc</span>
+                                <input v-model="editingRowDraft.end_input" type="text" placeholder="dd/mm/yyyy" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Cách tính tiến độ</span>
+                                <input v-model="editingRowDraft.progress_type_input" type="text" list="task-import-progress-type-options" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Tiến độ (%)</span>
+                                <input v-model="editingRowDraft.progress_percent_input" type="text" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Khối lượng hoàn thành</span>
+                                <input v-model="editingRowDraft.progress_number_input" type="text" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Khối lượng cần hoàn thành</span>
+                                <input v-model="editingRowDraft.progress_total_input" type="text" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Đơn vị</span>
+                                <input v-model="editingRowDraft.unit" type="text" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Thời gian dự kiến (giờ)</span>
+                                <input v-model="editingRowDraft.estimated_hours_input" type="text" />
+                              </label>
+                              <label class="task-page__edit-field">
+                                <span>Tỷ trọng (%)</span>
+                                <input v-model="editingRowDraft.weight_input" type="text" />
+                              </label>
+                              <label class="task-page__edit-field task-page__edit-field--full">
+                                <span>Mô tả</span>
+                                <input v-model="editingRowDraft.description" type="text" />
+                              </label>
+                            </div>
+                            <div class="task-page__edit-actions">
+                              <button type="button" class="task-page__dialog-btn task-page__dialog-btn--ghost" :disabled="resolvingRow" @click="cancelEditImportRow">
+                                Huỷ
+                              </button>
+                              <button
+                                type="button"
+                                class="task-page__dialog-btn task-page__dialog-btn--primary"
+                                :disabled="resolvingRow"
+                                @click="saveEditImportRow(row)"
+                              >
+                                {{ resolvingRow ? 'Đang kiểm tra…' : 'Lưu và kiểm tra lại' }}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                  <datalist id="task-import-status-options">
+                    <option v-for="(label, value) in TASK_STATUS_LABELS" :key="value" :value="label" />
+                  </datalist>
+                  <datalist id="task-import-priority-options">
+                    <option v-for="(label, value) in TASK_PRIORITY_LABELS" :key="value" :value="label" />
+                  </datalist>
+                  <datalist id="task-import-progress-type-options">
+                    <option v-for="(label, value) in TASK_PROGRESS_TYPE_LABELS" :key="value" :value="label" />
+                  </datalist>
+                </div>
+              </div>
+              <div class="task-page__dialog-actions">
+                <button type="button" class="task-page__dialog-btn task-page__dialog-btn--ghost" :disabled="confirming" @click="backToSelect">
+                  Quay lại
+                </button>
+                <button
+                  type="button"
+                  class="task-page__dialog-btn task-page__dialog-btn--primary"
+                  :disabled="confirming || importSelectedRows.size === 0"
+                  @click="confirmImportRows"
+                >
+                  {{ confirming ? 'Đang nhập…' : `Xác nhận nhập (${importSelectedRows.size})` }}
+                </button>
+              </div>
+            </template>
+
+            <template v-else>
+              <div class="task-page__dialog-body">
+                <div v-if="importResult" class="task-page__import-result">
+                  <div class="task-page__import-summary">
+                    <span class="task-page__import-dot task-page__import-dot--ok" />
+                    Đã tạo {{ importResult.created.length }} công việc, cập nhật {{ importResult.updated?.length ?? 0 }} công việc
+                    <template v-if="importResult.errors.length">
+                      , còn {{ importResult.errors.length }} dòng lỗi
+                    </template>.
+                  </div>
+                  <ul v-if="importResult.errors.length" class="task-page__import-errors">
+                    <li v-for="err in importResult.errors" :key="err.row" class="task-page__import-error">
+                      <span class="task-page__import-dot task-page__import-dot--error" />
+                      Dòng {{ err.row }}: {{ err.message }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div class="task-page__dialog-actions">
+                <button type="button" class="task-page__dialog-btn task-page__dialog-btn--primary" @click="closeImportDialog">
+                  Đóng
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <Teleport to="body">
       <div
@@ -2230,6 +3654,42 @@ onBeforeUnmount(() => {
   margin: var(--space-3) 0 0;
 }
 
+.task-page__bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.task-page__bulk-count {
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.task-page__bulk-field {
+  width: auto;
+  min-width: 10rem;
+}
+
+.task-page__col-check {
+  width: 2.25rem;
+}
+
+.task-page__th-check,
+.task-page__td-check {
+  width: 2.25rem;
+  text-align: center;
+}
+
 .task-page__filters {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2247,6 +3707,112 @@ onBeforeUnmount(() => {
 
 .task-page__field--full {
   grid-column: 1 / -1;
+}
+
+.task-page__hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.task-page__hidden-input {
+  display: none;
+}
+
+.task-page__subsection {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  box-shadow: 0 -1px 0 var(--color-border);
+}
+
+.task-page__subsection-title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.task-page__attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.task-page__attachment {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  box-shadow: 0 1px 0 var(--color-border);
+  font-size: 0.8125rem;
+}
+
+.task-page__attachment-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+
+.task-page__attachment-size {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.task-page__worklog-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.task-page__worklog-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  box-shadow: 0 1px 0 var(--color-border);
+  font-size: 0.8125rem;
+}
+
+.task-page__worklog-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.task-page__worklog-user {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.task-page__worklog-date,
+.task-page__worklog-hours {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.task-page__worklog-note {
+  flex-basis: 100%;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.task-page__form--compact {
+  margin-bottom: var(--space-2);
 }
 
 .task-page__label {
@@ -2316,6 +3882,19 @@ onBeforeUnmount(() => {
   text-align: left;
   white-space: nowrap;
   box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-page__th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
 }
 
 .task-page__resize {
@@ -2389,6 +3968,35 @@ onBeforeUnmount(() => {
   font-weight: 400;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.task-page__name-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.task-page__tree-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.125rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.task-page__tree-chevron {
+  transition: transform 0.15s ease;
+}
+
+.task-page__tree-chevron--open {
+  transform: rotate(90deg);
 }
 
 .task-page__pill {
@@ -3223,6 +4831,23 @@ onBeforeUnmount(() => {
   text-align: right;
 }
 
+.task-kanban__card-weight {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.task-kanban__overdue-dot {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-danger);
+}
+
 .task-kanban__card-title {
   margin: 0;
   flex-shrink: 0;
@@ -3519,6 +5144,450 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .task-page__spin {
     animation: none;
+  }
+}
+
+/* ---------- Xuất/Nhập Excel (PR8) — cùng khuôn ProjectList.vue ---------- */
+.task-page__dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: var(--color-sidebar-overlay);
+}
+
+.task-page__dialog-panel {
+  width: min(54rem, calc(100vw - 2.5rem));
+  height: auto;
+  max-width: calc(100vw - 2.5rem);
+  max-height: calc(100vh - 2.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 1rem 1.25rem 1rem;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.task-page__dialog-panel--import {
+  width: min(40rem, calc(100vw - 2.5rem));
+  height: auto;
+  max-height: calc(100vh - 2.5rem);
+}
+
+.task-page__dialog-panel--preview {
+  width: min(90rem, calc(100vw - 2.5rem));
+  height: calc(100vh - 2.5rem);
+  max-height: calc(100vh - 2.5rem);
+}
+
+.task-page__dialog-head,
+.task-page__dialog-actions {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  background: var(--color-surface);
+}
+
+.task-page__dialog-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  box-shadow: 0 1px 0 var(--color-border);
+  padding-bottom: var(--space-3);
+}
+
+.task-page__dialog-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.task-page__dialog-head-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-page__dialog-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.task-page__dialog-close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.task-page__dialog-close:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.task-page__dialog-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.task-page__dialog-body--preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.task-page__dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.task-page__dialog-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.task-page__dialog-btn--primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.task-page__dialog-btn--primary:hover {
+  background: var(--color-primary-hover);
+}
+
+.task-page__dialog-btn--ghost {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.task-page__dialog-btn--ghost:hover {
+  background: var(--color-surface-muted);
+}
+
+.task-page__dialog-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.task-page__dialog-field {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  column-gap: 0.875rem;
+  row-gap: 0.375rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.task-page__dialog-label {
+  padding-top: 0.65rem;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.task-page__dialog-req {
+  color: var(--color-primary);
+}
+
+.task-page__import-hint {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.task-page__import-template {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.task-page__import-template:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.task-page__import-file {
+  width: 100%;
+  padding: 0.4375rem 0.625rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+}
+
+.task-page__import-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.task-page__import-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.task-page__import-errors {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  max-height: 12rem;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.task-page__import-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.task-page__import-dot {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: 0.375rem;
+  border-radius: var(--radius-full);
+}
+
+.task-page__import-dot--ok {
+  background: var(--color-success);
+}
+
+.task-page__import-dot--error {
+  background: var(--color-danger);
+}
+
+.task-page__preview-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.task-page__preview-table {
+  width: 100%;
+  min-width: 80rem;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.task-page__preview-th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-page__preview-th--check {
+  width: 2rem;
+}
+
+.task-page__preview-td {
+  padding: var(--space-2) var(--space-3);
+  vertical-align: top;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-page__preview-td--check {
+  text-align: center;
+}
+
+.task-page__preview-td--issues {
+  min-width: 16rem;
+}
+
+.task-page__preview-row--invalid {
+  opacity: 0.7;
+}
+
+.task-page__preview-issue {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.task-page__preview-issue + .task-page__preview-issue {
+  margin-top: 0.125rem;
+}
+
+.task-page__preview-td--desc {
+  min-width: 12rem;
+  max-width: 18rem;
+}
+
+.task-page__preview-row:not(.task-page__preview-row--editing) {
+  cursor: pointer;
+}
+
+.task-page__preview-row--editing {
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
+}
+
+.task-page__edit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.task-page__edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.task-page__edit-field--full {
+  grid-column: 1 / -1;
+}
+
+.task-page__edit-field input {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.task-page__edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.task-page__export-toolbar {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.task-page__export-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+}
+
+.task-page__export-col {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.task-page__export-col:hover {
+  background: var(--color-surface-muted);
+}
+
+.task-page__export-col--disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.task-page__export-col--disabled:hover {
+  background: transparent;
+}
+
+.task-dialog-fade-enter-active,
+.task-dialog-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.task-dialog-fade-enter-from,
+.task-dialog-fade-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 768px) {
+  .task-page__dialog-panel,
+  .task-page__dialog-panel--import,
+  .task-page__dialog-panel--preview {
+    width: calc(100vw - 1.5rem);
+    height: auto;
+    max-height: calc(100vh - 1.5rem);
+  }
+
+  .task-page__edit-grid,
+  .task-page__export-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -24,6 +24,11 @@ class NotificationService
 
     public const TYPE_GROUP_INVITE = 'group_invite';
 
+    /** Module Project — mở rộng entity Task (Nhóm E/G), xem plan mở rộng Task PR5/PR6. */
+    public const TYPE_TASK_WORKLOG_ADDED = 'task_worklog_added';
+
+    public const TYPE_TASK_SCORED = 'task_scored';
+
     public function __construct(
         private readonly UserNotificationRepositoryInterface $notifications,
         private readonly UserRepositoryInterface $users,

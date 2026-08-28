@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Modules\Identity\App\Models\Department;
 
 /**
@@ -25,12 +26,24 @@ use Modules\Identity\App\Models\Department;
  * @property string      $status
  * @property string|null $priority
  * @property string|null $start_date
+ * @property string|null $start_time         giờ trong ngày start_date, tuỳ chọn
  * @property string|null $end_date
+ * @property string|null $due_time           giờ hạn trong ngày end_date, tuỳ chọn
  * @property string|null $actual_start_date
  * @property string|null $actual_end_date
  * @property int|null    $assignee_id
- * @property int|null    $progress_percent   0-100, nhập tay ở giai đoạn này
+ * @property int|null    $progress_percent   0-100 — nhập tay khi progress_type=percent,
+ *                                            tự tính khi progress_type=quantity (TaskService)
+ * @property string      $progress_type      percent | quantity
+ * @property float|null  $progress_number    khối lượng đã hoàn thành (khi quantity)
+ * @property float|null  $progress_total     khối lượng cần hoàn thành — mẫu số (khi quantity)
+ * @property string|null $unit               đơn vị đo khối lượng, tự do
+ * @property float|null  $estimated_hours    thời gian dự kiến, nhập tay
  * @property int         $sort_order
+ * @property float|null  $weight             % tỷ trọng trong phạm vi Project, nhập tay
+ * @property int|null    $manager_id         người quản lý, nhập tay — không mặc định = creator/assignee
+ * @property int|null    $accepted_by        người đã nhận thực hiện — derived, TaskService tự set
+ * @property string|null $accepted_at        thời điểm nhận — derived, TaskService tự set
  * @property int|null    $origin_department_id          chừa chỗ Task Delegation (§6) — chưa dùng logic
  * @property int|null    $delegated_to_department_id    chừa chỗ Task Delegation (§6) — chưa dùng logic
  * @property int|null    $delegated_to_employee_id      chừa chỗ Task Delegation (§6) — chưa dùng logic
@@ -42,7 +55,9 @@ class Task extends Model
 {
     protected $table = 'tasks';
 
-    public const WITH_PRESENT = ['project', 'parent', 'assignee', 'creator', 'updater'];
+    public const WITH_PRESENT = [
+        'project', 'parent', 'assignee', 'manager', 'acceptedBy', 'creator', 'updater', 'taskScore',
+    ];
 
     public const TYPES = ['task', 'phase', 'category'];
 
@@ -56,12 +71,21 @@ class Task extends Model
         'status',
         'priority',
         'start_date',
+        'start_time',
         'end_date',
+        'due_time',
         'actual_start_date',
         'actual_end_date',
         'assignee_id',
         'progress_percent',
+        'progress_type',
+        'progress_number',
+        'progress_total',
+        'unit',
+        'estimated_hours',
         'sort_order',
+        'weight',
+        'manager_id',
         'created_by',
         'updated_by',
         // origin_department_id / delegated_to_department_id /
@@ -69,6 +93,10 @@ class Task extends Model
         // form thường ở giai đoạn này (Task Delegation §6 — chỉ chừa cột,
         // sẽ set trực tiếp khi TaskService::delegate() được cài đặt ở
         // Phase 3).
+        //
+        // accepted_by / accepted_at KHÔNG fillable — derived field, chỉ
+        // TaskService::applyAcceptedTracking() set qua forceFill trong
+        // Repository, giống pattern origin_department_id ở trên.
     ];
 
     protected $casts = [
@@ -77,7 +105,12 @@ class Task extends Model
         'actual_start_date' => 'date',
         'actual_end_date' => 'date',
         'progress_percent' => 'integer',
+        'progress_number' => 'decimal:2',
+        'progress_total' => 'decimal:2',
+        'estimated_hours' => 'decimal:2',
+        'weight' => 'decimal:2',
         'sort_order' => 'integer',
+        'accepted_at' => 'datetime',
     ];
 
     public function project(): BelongsTo
@@ -98,6 +131,35 @@ class Task extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assignee_id');
+    }
+
+    /** Người quản lý — nhập tay, không mặc định = creator/assignee. */
+    public function manager(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'manager_id');
+    }
+
+    /** Người đã nhận thực hiện — derived, xem TaskService::applyAcceptedTracking(). */
+    public function acceptedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'accepted_by');
+    }
+
+    /** Đánh giá tối thiểu — 1 task = 1 bản ghi hiện hành (unique task_id). */
+    public function taskScore(): HasOne
+    {
+        return $this->hasOne(TaskScore::class);
+    }
+
+    /** Worklog chấm công giờ thực tế — mỗi người chỉ tự ghi giờ của mình. */
+    public function worklogs(): HasMany
+    {
+        return $this->hasMany(TaskWorklog::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(TaskAttachment::class);
     }
 
     public function originDepartment(): BelongsTo

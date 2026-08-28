@@ -21,6 +21,15 @@ interface TaskRepositoryInterface
     public function paginate(array $filters, int $perPage, int $page, array $allowedProjectIds, \App\Models\User $viewer): LengthAwarePaginator;
 
     /**
+     * Toàn bộ Task khớp filter hiện tại (không phân trang) — dùng cho Xuất
+     * Excel, tôn trọng đúng bộ lọc đang áp dụng trên trang danh sách (PR8).
+     *
+     * @param  array<string, mixed>  $filters
+     * @param  list<int>  $allowedProjectIds
+     */
+    public function forExport(array $filters, array $allowedProjectIds, \App\Models\User $viewer): Collection;
+
+    /**
      * Đếm số Task theo từng tab lọc nhanh (Tất cả / trạng thái / Bạn thực hiện).
      *
      * @param  list<int>  $allowedProjectIds
@@ -32,6 +41,9 @@ interface TaskRepositoryInterface
     public function flatForProject(int $projectId): Collection;
 
     public function find(int $id): ?Task;
+
+    /** Đối chiếu theo mã công việc khi nhập Excel (PR8) — điểm xác định dòng cần update. */
+    public function findByCode(string $code): ?Task;
 
     /** @param  array<string, mixed>  $data */
     public function create(array $data): Task;

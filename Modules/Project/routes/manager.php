@@ -2,7 +2,10 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Project\App\Http\Controllers\ProjectController;
+use Modules\Project\App\Http\Controllers\TaskAttachmentController;
 use Modules\Project\App\Http\Controllers\TaskController;
+use Modules\Project\App\Http\Controllers\TaskScoreController;
+use Modules\Project\App\Http\Controllers\TaskWorklogController;
 
 /*
 |--------------------------------------------------------------------------
@@ -21,17 +24,76 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     // ---------- Task (Project Giai đoạn 2 — WBS đa cấp, thuộc project) ----------
     // Route tĩnh /tasks* PHẢI đăng ký trước GET /{project} (int binding, dòng
     // dưới) — nếu không Laravel sẽ hiểu "tasks" là giá trị {project}.
+    // /tasks/export và /tasks/options cũng PHẢI đăng ký TRƯỚC GET /tasks/{task}
+    // (wildcard, cùng method GET) — cùng lý do đã áp dụng cho attachments/
+    // worklogs ở dưới (route tĩnh trước wildcard, tránh "export"/"options" bị
+    // Laravel hiểu nhầm là giá trị {task}).
     Route::middleware('permission:task.view')->group(function () {
         Route::get('/tasks/options', [TaskController::class, 'options'])->name('tasks.options');
+        Route::get('/tasks/export', [TaskController::class, 'export'])->name('tasks.export');
         Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
         Route::get('/tasks/{task}', [TaskController::class, 'show'])->name('tasks.show');
         Route::get('/{project}/tasks', [TaskController::class, 'treeByProject'])->name('tasks.tree');
     });
 
+    Route::middleware('permission:task.create')->group(function () {
+        Route::post('/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
+        Route::post('/tasks/import/preview', [TaskController::class, 'importPreview'])->name('tasks.import-preview');
+        Route::post('/tasks/import/resolve-row', [TaskController::class, 'importResolveRow'])->name('tasks.import-resolve-row');
+        Route::post('/tasks/import/confirm', [TaskController::class, 'importConfirm'])->name('tasks.import-confirm');
+    });
+
+    // ---------- Đính kèm công việc (Nhóm D — bản tối thiểu, chỉ file) ----------
+    // DELETE /tasks/attachments/{attachment} PHẢI đăng ký TRƯỚC DELETE
+    // /tasks/{task} bên dưới — cùng method DELETE, nếu {task} (wildcard)
+    // đăng ký trước thì "attachments" sẽ bị Laravel hiểu nhầm là giá trị
+    // {task} và route attachments không bao giờ được match tới.
+    Route::middleware('permission:task.view')
+        ->get('/tasks/{task}/attachments', [TaskAttachmentController::class, 'index'])
+        ->name('tasks.attachments.index');
+    Route::middleware('permission:task.create')->group(function () {
+        Route::post('/tasks/{task}/attachments', [TaskAttachmentController::class, 'store'])->name('tasks.attachments.store');
+        Route::delete('/tasks/attachments/{attachment}', [TaskAttachmentController::class, 'destroy'])->name('tasks.attachments.destroy');
+    });
+
+    // ---------- Worklog chấm công giờ thực tế (Nhóm E) ----------
+    // PUT/DELETE /tasks/worklogs/{worklog} cùng lý do PHẢI đăng ký TRƯỚC
+    // PUT/DELETE /tasks/{task} bên dưới (tránh "worklogs" bị nuốt làm {task}).
+    Route::middleware('permission:task.view')
+        ->get('/tasks/{task}/worklogs', [TaskWorklogController::class, 'index'])
+        ->name('tasks.worklogs.index');
+    Route::middleware('permission:task.create')->group(function () {
+        Route::post('/tasks/{task}/worklogs', [TaskWorklogController::class, 'store'])->name('tasks.worklogs.store');
+        Route::put('/tasks/worklogs/{worklog}', [TaskWorklogController::class, 'update'])->name('tasks.worklogs.update');
+        Route::delete('/tasks/worklogs/{worklog}', [TaskWorklogController::class, 'destroy'])->name('tasks.worklogs.destroy');
+    });
+
+    // ---------- Đánh giá tối thiểu (Nhóm G) ----------
+    // /tasks/{task}/score cùng cấu trúc /tasks/{task}/xxx như attachments/
+    // worklogs ở trên — không xung đột route wildcard /tasks/{task} (khác
+    // số lượng path segment), không cần lưu ý thứ tự đặc biệt.
+    Route::middleware('permission:task.view')
+        ->get('/tasks/{task}/score', [TaskScoreController::class, 'show'])
+        ->name('tasks.score.show');
+    Route::middleware('permission:task.approve')
+        ->put('/tasks/{task}/score', [TaskScoreController::class, 'upsert'])
+        ->name('tasks.score.upsert');
+
+    // ---------- Bulk actions (PR7) ----------
+    // PATCH /tasks/bulk là route tĩnh khác method (PATCH) với PUT/DELETE
+    // /tasks/{task} nên về lý thuyết không xung đột thật, nhưng đặt trước
+    // cho nhất quán với cách xử lý attachments/worklogs (route tĩnh trước
+    // wildcard) — tránh rủi ro nếu sau này có ai thêm PATCH /tasks/{task}.
     Route::middleware('permission:task.create')
-        ->post('/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
+        ->patch('/tasks/bulk', [TaskController::class, 'bulkUpdate'])
+        ->name('tasks.bulk-update');
 
     Route::middleware('permission:task.create')->group(function () {
+        // update dùng implicit model binding (Task $task, khác int $task ở
+        // show/destroy) — UpdateTaskRequest cần đọc progress_type HIỆN CÓ
+        // của task để validate đúng ràng buộc progress_number/progress_total
+        // khi client chỉ PUT một phần field (PATCH-semantics), không có cách
+        // nào lấy state đó ở tầng Request nếu không có model thật.
         Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
     });
