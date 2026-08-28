@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Project\App\Http\Controllers\ProjectController;
+use Modules\Project\App\Http\Controllers\TaskAttachmentController;
 use Modules\Project\App\Http\Controllers\TaskController;
 
 /*
@@ -30,6 +31,19 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
 
     Route::middleware('permission:task.create')
         ->post('/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
+
+    // ---------- Đính kèm công việc (Nhóm D — bản tối thiểu, chỉ file) ----------
+    // DELETE /tasks/attachments/{attachment} PHẢI đăng ký TRƯỚC DELETE
+    // /tasks/{task} bên dưới — cùng method DELETE, nếu {task} (wildcard)
+    // đăng ký trước thì "attachments" sẽ bị Laravel hiểu nhầm là giá trị
+    // {task} và route attachments không bao giờ được match tới.
+    Route::middleware('permission:task.view')
+        ->get('/tasks/{task}/attachments', [TaskAttachmentController::class, 'index'])
+        ->name('tasks.attachments.index');
+    Route::middleware('permission:task.create')->group(function () {
+        Route::post('/tasks/{task}/attachments', [TaskAttachmentController::class, 'store'])->name('tasks.attachments.store');
+        Route::delete('/tasks/attachments/{attachment}', [TaskAttachmentController::class, 'destroy'])->name('tasks.attachments.destroy');
+    });
 
     Route::middleware('permission:task.create')->group(function () {
         // update dùng implicit model binding (Task $task, khác int $task ở

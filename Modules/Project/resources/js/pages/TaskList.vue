@@ -85,6 +85,10 @@ const saving = ref(false);
 const deleting = ref(false);
 const confirmingDelete = ref(false);
 
+const taskAttachments = ref([]);
+const attachmentUploading = ref(false);
+const attachmentInput = ref(null);
+
 const query = ref('');
 const projectId = ref('');
 const assigneeId = ref('');
@@ -579,11 +583,79 @@ function inspect(task) {
   if (selected.value?.id === task.id) return;
   selected.value = task;
   editing.value = false;
+  loadAttachments(task.id);
 }
 
 function closePanel() {
   selected.value = null;
   editing.value = false;
+  taskAttachments.value = [];
+}
+
+async function loadAttachments(taskId) {
+  taskAttachments.value = [];
+  try {
+    const { data } = await window.axios.get(`/api/project/tasks/${taskId}/attachments`);
+    taskAttachments.value = data.attachments ?? [];
+  } catch {
+    // Bỏ qua — panel vẫn hiển thị, chỉ danh sách đính kèm rỗng.
+  }
+}
+
+function triggerAttachmentInput() {
+  attachmentInput.value?.click();
+}
+
+async function onAttachmentChange(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file || !selected.value) return;
+
+  attachmentUploading.value = true;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const { data } = await window.axios.post(`/api/project/tasks/${selected.value.id}/attachments`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    taskAttachments.value = [data.attachment, ...taskAttachments.value];
+    bumpAttachmentsCount(1);
+    showClientToast('success', 'Đã tải lên tệp đính kèm.');
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không tải lên được tệp đính kèm.');
+  } finally {
+    attachmentUploading.value = false;
+  }
+}
+
+async function removeAttachment(attachment) {
+  try {
+    await window.axios.delete(`/api/project/tasks/attachments/${attachment.id}`);
+    taskAttachments.value = taskAttachments.value.filter((a) => a.id !== attachment.id);
+    bumpAttachmentsCount(-1);
+    showClientToast('success', 'Đã xoá tệp đính kèm.');
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không xoá được tệp đính kèm.');
+  }
+}
+
+/** Cập nhật attachments_count tại chỗ trên selected + dòng trong bảng list —
+ *  tránh gọi lại toàn bộ danh sách chỉ để phản ánh 1 thay đổi nhỏ (CLAUDE.md §14). */
+function bumpAttachmentsCount(delta) {
+  if (!selected.value) return;
+  const nextCount = Math.max(0, (selected.value.attachments_count || 0) + delta);
+  selected.value = { ...selected.value, attachments_count: nextCount };
+  const index = tasks.value.findIndex((t) => t.id === selected.value.id);
+  if (index !== -1) tasks.value[index] = { ...tasks.value[index], attachments_count: nextCount };
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return '';
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(0)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
 }
 
 function startEdit() {
@@ -2069,6 +2141,38 @@ onBeforeUnmount(() => {
             <span class="task-page__row-value">{{ formatDateTime(selected.updated_at) }}</span>
           </div>
         </div>
+
+        <section v-if="!editing" class="task-page__subsection">
+          <h3 class="task-page__subsection-title">Tệp đính kèm</h3>
+          <div v-if="taskAttachments.length" class="task-page__attachment-list">
+            <div v-for="att in taskAttachments" :key="att.id" class="task-page__attachment">
+              <AppIcon name="fileText" :size="16" />
+              <a :href="att.file_url" target="_blank" rel="noopener" class="task-page__attachment-name">
+                {{ att.file_name }}
+              </a>
+              <span v-if="att.file_size" class="task-page__attachment-size">{{ formatFileSize(att.file_size) }}</span>
+              <button
+                v-if="canEdit"
+                type="button"
+                class="task-page__icon-btn"
+                aria-label="Xoá tệp đính kèm"
+                @click="removeAttachment(att)"
+              >
+                <AppIcon name="trash" :size="14" />
+              </button>
+            </div>
+          </div>
+          <button
+            v-if="canEdit"
+            type="button"
+            class="task-page__btn task-page__btn--ghost"
+            :disabled="attachmentUploading"
+            @click="triggerAttachmentInput"
+          >
+            {{ attachmentUploading ? 'Đang tải lên…' : 'Tải file lên' }}
+          </button>
+          <input ref="attachmentInput" type="file" class="task-page__hidden-input" @change="onAttachmentChange" />
+        </section>
       </aside>
     </div>
 
@@ -2518,6 +2622,54 @@ onBeforeUnmount(() => {
 .task-page__hint {
   grid-column: 1 / -1;
   margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.task-page__hidden-input {
+  display: none;
+}
+
+.task-page__subsection {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  box-shadow: 0 -1px 0 var(--color-border);
+}
+
+.task-page__subsection-title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.task-page__attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.task-page__attachment {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  box-shadow: 0 1px 0 var(--color-border);
+  font-size: 0.8125rem;
+}
+
+.task-page__attachment-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+
+.task-page__attachment-size {
+  flex-shrink: 0;
   color: var(--color-text-muted);
   font-size: 0.75rem;
 }
