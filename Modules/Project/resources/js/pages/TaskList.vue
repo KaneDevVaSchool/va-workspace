@@ -106,7 +106,7 @@ const kanbanWrap = ref(null);
 const resizing = ref(false);
 const tableZoom = ref(loadZoom());
 
-useDragScroll(tableWrap, { isBlocked: () => resizing.value });
+useDragScroll(tableWrap, { isBlocked: () => resizing.value, axis: 'x' });
 useDragScroll(kanbanWrap, { axis: 'x', isBlocked: () => kanbanDrag.active });
 
 const editForm = reactive({
@@ -716,7 +716,7 @@ function readTableFonts() {
   return {
     header: fontOf(table?.querySelector('thead th'), '600 12px "Be Vietnam Pro", sans-serif'),
     cell: fontOf(table?.querySelector('tbody td'), '400 14px "Be Vietnam Pro", sans-serif'),
-    title: fontOf(table?.querySelector('.task-page__name-title'), '600 14px "Be Vietnam Pro", sans-serif'),
+    title: fontOf(table?.querySelector('.task-page__name-title'), '400 14px "Be Vietnam Pro", sans-serif'),
   };
 }
 
@@ -2386,7 +2386,7 @@ onBeforeUnmount(() => {
 
 .task-page__name-title {
   display: block;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -2802,7 +2802,7 @@ onBeforeUnmount(() => {
 .task-page__side-lead-desc {
   margin: 0;
   color: var(--color-text);
-  font-weight: 600;
+  font-weight: 400;
   font-size: 0.9375rem;
   line-height: 1.45;
 }
@@ -2939,6 +2939,7 @@ onBeforeUnmount(() => {
 
 .task-kanban--fill {
   overflow-x: hidden;
+  overflow-y: hidden;
 }
 
 .task-kanban--fill .task-kanban__col,
@@ -2951,9 +2952,15 @@ onBeforeUnmount(() => {
 
 .task-kanban--fill .task-kanban__col-body {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
   align-content: start;
+  align-items: stretch;
+  overflow-x: hidden;
   overflow-y: auto;
+}
+
+.task-kanban--fill .task-kanban__card {
+  max-width: 100%;
 }
 
 .task-kanban--spread {
@@ -3141,8 +3148,9 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   gap: 0.625rem;
   min-width: 0;
-  min-height: 11.5rem;
+  min-height: 18rem;
   padding: var(--space-4);
+  padding-bottom: var(--space-5);
   padding-left: calc(var(--space-2) + 3px + var(--space-4));
   overflow: visible;
   border-radius: var(--radius-md);
@@ -3205,13 +3213,19 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.task-kanban__card-type {
+.task-kanban__card-code {
   flex-shrink: 0;
+}
+
+.task-kanban__card-type {
+  flex: 1 1 auto;
   font-style: italic;
+  text-align: right;
 }
 
 .task-kanban__card-title {
   margin: 0;
+  flex-shrink: 0;
   color: var(--color-text);
   font-size: 0.9375rem;
   font-weight: 400;
@@ -3222,7 +3236,9 @@ onBeforeUnmount(() => {
 .task-kanban__card-labels {
   display: flex;
   flex-wrap: wrap;
+  flex-shrink: 0;
   gap: 0.25rem;
+  min-width: 0;
 }
 
 .task-kanban__importance {
@@ -3248,6 +3264,7 @@ onBeforeUnmount(() => {
 
 .task-kanban__card-desc {
   margin: 0;
+  flex-shrink: 0;
   color: var(--color-text-muted);
   font-size: 0.75rem;
   line-height: 1.45;
@@ -3257,7 +3274,9 @@ onBeforeUnmount(() => {
 .task-kanban__card-facts {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   margin: 0;
+  min-width: 0;
 }
 
 .task-kanban__card-fact {
@@ -3265,11 +3284,13 @@ onBeforeUnmount(() => {
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
+  min-width: 0;
   padding: 0.375rem 0;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
 .task-kanban__card-fact dt {
+  flex-shrink: 0;
   margin: 0;
   color: var(--color-text-muted);
   font-size: 0.75rem;
@@ -3281,41 +3302,82 @@ onBeforeUnmount(() => {
 
 .task-kanban__card-fact dd {
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
   color: var(--color-text);
   font-size: 0.75rem;
   font-style: italic;
   text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-kanban__card-progress {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   gap: 0.375rem;
+  min-width: 0;
 }
 
 .task-kanban__card-progress-head {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.task-kanban__card-progress-label {
   color: var(--color-text-muted);
   font-size: 0.75rem;
 }
 
+.task-kanban__card-progress-label::after {
+  content: ':';
+}
+
+.task-kanban__card-progress-value {
+  flex-shrink: 0;
+  color: var(--color-text);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.task-kanban__card-progress .task-page__mini-track {
+  width: 100%;
+}
+
 .task-kanban__card-foot {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  min-width: 0;
   margin-top: auto;
   padding-top: 0.625rem;
+  overflow: visible;
   box-shadow: 0 -1px 0 var(--color-border);
+}
+
+.task-kanban__card-avatars {
+  display: flex;
+  flex-shrink: 0;
+  min-width: max-content;
+  align-items: center;
+  padding: 2px;
+  overflow: visible;
 }
 
 .task-kanban__card-meta,
 .task-kanban__card-stat {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   color: var(--color-text-muted);
   font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .task-kanban__card-grip {
@@ -3349,8 +3411,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
-  min-height: 11.5rem;
+  min-height: 18rem;
   padding: var(--space-4);
+  padding-bottom: var(--space-5);
   padding-left: calc(var(--space-2) + 3px + var(--space-4));
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -3446,6 +3509,10 @@ onBeforeUnmount(() => {
 
   .task-kanban__col {
     width: 13.5rem;
+  }
+
+  .task-kanban--fill .task-kanban__col-body {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

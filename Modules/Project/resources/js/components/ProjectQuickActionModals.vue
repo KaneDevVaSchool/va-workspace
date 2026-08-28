@@ -111,6 +111,27 @@ const projectLabel = computed(() => {
 const statusTone = computed(() => STATUS_TONES[props.project?.status] || 'neutral');
 const statusLabel = computed(() => STATUS_LABELS[props.project?.status] || props.project?.status || '—');
 
+const bannerMeta = computed(() => {
+  const p = props.project;
+  if (!p) return [];
+  const items = [];
+  if (p.code) {
+    items.push({ key: 'code', label: 'Mã dự án', value: p.code });
+  }
+  if (props.kind === 'members' && p.name) {
+    items.push({ key: 'name', label: 'Tên dự án', value: p.name });
+  }
+  items.push({ key: 'status', label: 'Trạng thái', value: statusLabel.value, status: true });
+  if (props.kind !== 'members' && (p.start_date || p.end_date)) {
+    items.push({
+      key: 'dates',
+      label: 'Thời gian',
+      value: `${formatDate(p.start_date)} – ${formatDate(p.end_date)}`,
+    });
+  }
+  return items;
+});
+
 const preferredDeptIds = computed(() => {
   const ids = [];
   const p = props.project;
@@ -580,27 +601,25 @@ watch(
         </div>
 
         <form class="proj-qa__body hide-scrollbar" @submit.prevent="submit">
-          <div v-if="project && kind !== 'members'" class="proj-qa__banner" :class="`proj-qa__banner--${statusTone}`">
-            <span v-if="project.code" class="proj-qa__chip proj-qa__chip--code">{{ project.code }}</span>
-            <span class="proj-qa__chip" :class="`proj-qa__chip--${statusTone}`">
-              <span class="proj-qa__chip-dot" aria-hidden="true" />
-              {{ statusLabel }}
-            </span>
-            <span v-if="project.start_date || project.end_date" class="proj-qa__chip proj-qa__chip--date">
-              <AppIcon name="calendar" :size="12" :stroke-width="1.75" />
-              {{ formatDate(project.start_date) }} – {{ formatDate(project.end_date) }}
-            </span>
+          <div v-if="project" class="proj-qa__banner" :class="`proj-qa__banner--${statusTone}`">
+            <div
+              v-for="item in bannerMeta"
+              :key="item.key"
+              class="proj-qa__meta"
+              :class="{ 'proj-qa__meta--grow': item.key === 'name' }"
+            >
+              <span class="proj-qa__meta-label">{{ item.label }}</span>
+              <span
+                class="proj-qa__meta-value"
+                :class="{ 'proj-qa__meta-value--status': item.status }"
+              >
+                <span v-if="item.status" class="proj-qa__meta-dot" aria-hidden="true" />
+                {{ item.value }}
+              </span>
+            </div>
           </div>
 
           <div v-if="kind === 'members'" class="proj-qa__grid">
-            <div class="proj-qa__banner proj-qa__field--full" :class="`proj-qa__banner--${statusTone}`">
-              <span v-if="project?.code" class="proj-qa__chip proj-qa__chip--code">{{ project.code }}</span>
-              <span class="proj-qa__banner-name">{{ project?.name }}</span>
-              <span class="proj-qa__chip" :class="`proj-qa__chip--${statusTone}`">
-                <span class="proj-qa__chip-dot" aria-hidden="true" />
-                {{ statusLabel }}
-              </span>
-            </div>
             <div class="proj-qa__field">
               <span class="proj-qa__label">
                 Người tham gia
@@ -1146,8 +1165,8 @@ watch(
   position: relative;
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
+  align-items: baseline;
+  gap: 0.5rem 1.5rem;
   grid-column: 1 / -1;
   padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
   border-radius: var(--radius-md);
@@ -1195,15 +1214,77 @@ watch(
   background: var(--color-info);
 }
 
-.proj-qa__banner-name {
-  flex: 1;
+.proj-qa__meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.375rem;
   min-width: 0;
-  overflow: hidden;
+}
+
+.proj-qa__meta--grow {
+  flex: 1;
+}
+
+.proj-qa__meta-label {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.proj-qa__meta-label::after {
+  content: ':';
+}
+
+.proj-qa__meta-value {
+  min-width: 0;
   color: var(--color-text);
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-style: italic;
+}
+
+.proj-qa__meta--grow .proj-qa__meta-value {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.proj-qa__meta-value--status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.proj-qa__meta-dot {
+  flex-shrink: 0;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+
+.proj-qa__banner--primary .proj-qa__meta-dot {
+  background: var(--color-primary);
+}
+
+.proj-qa__banner--success .proj-qa__meta-dot {
+  background: var(--color-success);
+}
+
+.proj-qa__banner--gold .proj-qa__meta-dot,
+.proj-qa__banner--warning .proj-qa__meta-dot {
+  background: var(--color-gold);
+}
+
+.proj-qa__banner--umber .proj-qa__meta-dot {
+  background: var(--color-umber);
+}
+
+.proj-qa__banner--tertiary .proj-qa__meta-dot {
+  background: var(--color-tertiary);
+}
+
+.proj-qa__banner--info .proj-qa__meta-dot {
+  background: var(--color-info);
 }
 
 .proj-qa__chip {
