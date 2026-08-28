@@ -131,6 +131,12 @@ class Project extends Model
         return $this->hasMany(ProjectQuickItem::class);
     }
 
+    /** Công việc thật (Project Giai đoạn 2) — thay thế dần quickItems(). */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
+    }
+
     public function lead(): BelongsTo
     {
         return $this->belongsTo(User::class, 'lead_user_id');
