@@ -89,6 +89,12 @@ const taskAttachments = ref([]);
 const attachmentUploading = ref(false);
 const attachmentInput = ref(null);
 
+const taskWorklogs = ref([]);
+const worklogFormOpen = ref(false);
+const worklogSaving = ref(false);
+const worklogForm = reactive({ work_date: '', hours: '', note: '' });
+const confirmingDeleteWorklog = ref(null);
+
 const query = ref('');
 const projectId = ref('');
 const assigneeId = ref('');
@@ -584,12 +590,16 @@ function inspect(task) {
   selected.value = task;
   editing.value = false;
   loadAttachments(task.id);
+  loadWorklogs(task.id);
+  worklogFormOpen.value = false;
 }
 
 function closePanel() {
   selected.value = null;
   editing.value = false;
   taskAttachments.value = [];
+  taskWorklogs.value = [];
+  worklogFormOpen.value = false;
 }
 
 async function loadAttachments(taskId) {
@@ -656,6 +666,83 @@ function formatFileSize(bytes) {
   const kb = bytes / 1024;
   if (kb < 1024) return `${kb.toFixed(0)} KB`;
   return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+async function loadWorklogs(taskId) {
+  taskWorklogs.value = [];
+  try {
+    const { data } = await window.axios.get(`/api/project/tasks/${taskId}/worklogs`);
+    taskWorklogs.value = data.worklogs ?? [];
+  } catch {
+    // Bỏ qua — panel vẫn hiển thị, chỉ danh sách nhật ký giờ làm rỗng.
+  }
+}
+
+function openWorklogForm() {
+  worklogForm.work_date = new Date().toISOString().slice(0, 10);
+  worklogForm.hours = '';
+  worklogForm.note = '';
+  worklogFormOpen.value = true;
+}
+
+function cancelWorklogForm() {
+  worklogFormOpen.value = false;
+}
+
+async function saveWorklog() {
+  if (!selected.value) return;
+  worklogSaving.value = true;
+  try {
+    const payload = {
+      work_date: worklogForm.work_date,
+      hours: Number(worklogForm.hours),
+      note: worklogForm.note || null,
+    };
+    const { data } = await window.axios.post(`/api/project/tasks/${selected.value.id}/worklogs`, payload);
+    taskWorklogs.value = [data.worklog, ...taskWorklogs.value];
+    bumpWorklogHours(payload.hours);
+    worklogFormOpen.value = false;
+    showClientToast('success', 'Đã thêm giờ làm.');
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không thêm được giờ làm.');
+  } finally {
+    worklogSaving.value = false;
+  }
+}
+
+function canEditWorklog(log) {
+  return log.user_id === auth.user?.id || auth.can('task.approve');
+}
+
+function askDeleteWorklog(log) {
+  confirmingDeleteWorklog.value = log;
+}
+
+async function confirmDeleteWorklog() {
+  const log = confirmingDeleteWorklog.value;
+  if (!log) return;
+  try {
+    await window.axios.delete(`/api/project/tasks/worklogs/${log.id}`);
+    taskWorklogs.value = taskWorklogs.value.filter((l) => l.id !== log.id);
+    bumpWorklogHours(-Number(log.hours));
+    showClientToast('success', 'Đã xoá nhật ký giờ làm.');
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không xoá được nhật ký giờ làm.');
+  } finally {
+    confirmingDeleteWorklog.value = null;
+  }
+}
+
+/** Cộng/trừ worklog_hours tại chỗ trên selected + dòng trong bảng list —
+ *  tránh gọi lại toàn bộ danh sách chỉ để phản ánh 1 thay đổi nhỏ (CLAUDE.md §14). */
+function bumpWorklogHours(delta) {
+  if (!selected.value) return;
+  const nextHours = Math.max(0, Number(selected.value.worklog_hours || 0) + delta);
+  selected.value = { ...selected.value, worklog_hours: nextHours };
+  const index = tasks.value.findIndex((t) => t.id === selected.value.id);
+  if (index !== -1) tasks.value[index] = { ...tasks.value[index], worklog_hours: nextHours };
 }
 
 function startEdit() {
@@ -2173,6 +2260,60 @@ onBeforeUnmount(() => {
           </button>
           <input ref="attachmentInput" type="file" class="task-page__hidden-input" @change="onAttachmentChange" />
         </section>
+
+        <section v-if="!editing" class="task-page__subsection">
+          <h3 class="task-page__subsection-title">Nhật ký giờ làm</h3>
+          <ul v-if="taskWorklogs.length" class="task-page__worklog-list">
+            <li v-for="log in taskWorklogs" :key="log.id" class="task-page__worklog-item">
+              <span class="task-page__worklog-main">
+                <span class="task-page__worklog-user">{{ log.user?.name || '—' }}</span>
+                <span class="task-page__worklog-date">{{ formatDate(log.work_date) }}</span>
+                <span class="task-page__worklog-hours">{{ log.hours }} giờ</span>
+              </span>
+              <span v-if="log.note" class="task-page__worklog-note">{{ log.note }}</span>
+              <button
+                v-if="canEditWorklog(log)"
+                type="button"
+                class="task-page__icon-btn"
+                aria-label="Xoá nhật ký giờ làm"
+                @click="askDeleteWorklog(log)"
+              >
+                <AppIcon name="trash" :size="14" />
+              </button>
+            </li>
+          </ul>
+
+          <form v-if="worklogFormOpen" class="task-page__form task-page__form--compact" @submit.prevent="saveWorklog">
+            <label class="task-page__field">
+              <span class="task-page__label">Ngày làm</span>
+              <input v-model="worklogForm.work_date" type="date" class="task-page__input" required />
+            </label>
+            <label class="task-page__field">
+              <span class="task-page__label">Số giờ</span>
+              <input v-model="worklogForm.hours" type="number" min="0.25" max="24" step="0.25" class="task-page__input" required />
+            </label>
+            <label class="task-page__field task-page__field--full">
+              <span class="task-page__label">Ghi chú</span>
+              <textarea v-model="worklogForm.note" class="task-page__input task-page__textarea" rows="2" />
+            </label>
+            <div class="task-page__form-actions">
+              <button type="button" class="task-page__btn task-page__btn--ghost" :disabled="worklogSaving" @click="cancelWorklogForm">
+                Huỷ
+              </button>
+              <button type="submit" class="task-page__btn" :disabled="worklogSaving">
+                {{ worklogSaving ? 'Đang lưu…' : 'Lưu' }}
+              </button>
+            </div>
+          </form>
+          <button
+            v-else-if="canEdit"
+            type="button"
+            class="task-page__btn task-page__btn--ghost"
+            @click="openWorklogForm"
+          >
+            + Thêm giờ làm
+          </button>
+        </section>
       </aside>
     </div>
 
@@ -2185,6 +2326,16 @@ onBeforeUnmount(() => {
       danger
       @confirm="confirmDelete"
       @update:open="confirmingDelete = $event"
+    />
+
+    <ConfirmDialog
+      :open="Boolean(confirmingDeleteWorklog)"
+      title="Xoá nhật ký giờ làm"
+      description="Bạn có chắc muốn xoá dòng nhật ký giờ làm này? Thao tác này không thể hoàn tác."
+      confirm-label="Xoá"
+      danger
+      @confirm="confirmDeleteWorklog"
+      @update:open="confirmingDeleteWorklog = $event ? confirmingDeleteWorklog : null"
     />
 
     <Teleport to="body">
@@ -2672,6 +2823,57 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   color: var(--color-text-muted);
   font-size: 0.75rem;
+}
+
+.task-page__worklog-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.task-page__worklog-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  box-shadow: 0 1px 0 var(--color-border);
+  font-size: 0.8125rem;
+}
+
+.task-page__worklog-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.task-page__worklog-user {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.task-page__worklog-date,
+.task-page__worklog-hours {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.task-page__worklog-note {
+  flex-basis: 100%;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.task-page__form--compact {
+  margin-bottom: var(--space-2);
 }
 
 .task-page__label {

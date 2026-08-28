@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Project\App\Http\Controllers\ProjectController;
 use Modules\Project\App\Http\Controllers\TaskAttachmentController;
 use Modules\Project\App\Http\Controllers\TaskController;
+use Modules\Project\App\Http\Controllers\TaskWorklogController;
 
 /*
 |--------------------------------------------------------------------------
@@ -43,6 +44,18 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     Route::middleware('permission:task.create')->group(function () {
         Route::post('/tasks/{task}/attachments', [TaskAttachmentController::class, 'store'])->name('tasks.attachments.store');
         Route::delete('/tasks/attachments/{attachment}', [TaskAttachmentController::class, 'destroy'])->name('tasks.attachments.destroy');
+    });
+
+    // ---------- Worklog chấm công giờ thực tế (Nhóm E) ----------
+    // PUT/DELETE /tasks/worklogs/{worklog} cùng lý do PHẢI đăng ký TRƯỚC
+    // PUT/DELETE /tasks/{task} bên dưới (tránh "worklogs" bị nuốt làm {task}).
+    Route::middleware('permission:task.view')
+        ->get('/tasks/{task}/worklogs', [TaskWorklogController::class, 'index'])
+        ->name('tasks.worklogs.index');
+    Route::middleware('permission:task.create')->group(function () {
+        Route::post('/tasks/{task}/worklogs', [TaskWorklogController::class, 'store'])->name('tasks.worklogs.store');
+        Route::put('/tasks/worklogs/{worklog}', [TaskWorklogController::class, 'update'])->name('tasks.worklogs.update');
+        Route::delete('/tasks/worklogs/{worklog}', [TaskWorklogController::class, 'destroy'])->name('tasks.worklogs.destroy');
     });
 
     Route::middleware('permission:task.create')->group(function () {
