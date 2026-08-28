@@ -45,6 +45,18 @@ class TaskEnums
         'urgent' => 'Khẩn cấp',
     ];
 
+    /**
+     * Cách tính tiến độ — 'percent' nhập tay progress_percent trực tiếp (mặc
+     * định, hành vi hiện có); 'quantity' tự tính progress_percent từ
+     * progress_number/progress_total (TaskService), không nhập tay % trực tiếp.
+     */
+    public const PROGRESS_TYPES = ['percent', 'quantity'];
+
+    public const PROGRESS_TYPE_LABELS = [
+        'percent' => 'Theo phần trăm',
+        'quantity' => 'Theo khối lượng',
+    ];
+
     /** Danh sách options đầy đủ trả về cho frontend — GET /api/project/tasks/options. */
     public static function options(): array
     {
@@ -52,6 +64,7 @@ class TaskEnums
             'type' => self::mapOptions(self::TYPES, self::TYPE_LABELS),
             'status' => self::mapOptions(self::STATUSES, self::STATUS_LABELS),
             'priority' => self::mapOptions(self::PRIORITIES, self::PRIORITY_LABELS),
+            'progress_type' => self::mapOptions(self::PROGRESS_TYPES, self::PROGRESS_TYPE_LABELS),
         ];
     }
 
