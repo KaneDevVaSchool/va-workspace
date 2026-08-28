@@ -32,7 +32,7 @@ const KIND_META = {
   task: { title: 'Thêm công việc', icon: 'plus', tone: 'info' },
   phase: { title: 'Thêm phase', icon: 'flag', tone: 'secondary' },
   baseline: { title: 'Chốt baseline', icon: 'flag', tone: 'warning' },
-  dates: { title: 'Cập nhật thời gian', icon: 'calendar', tone: 'info' },
+  dates: { title: 'Cập nhật thời gian dự án', icon: 'calendar', tone: 'info' },
   description: { title: 'Cập nhật mô tả dự án', icon: 'fileText', tone: 'violet' },
   duplicate: { title: 'Nhân bản dự án', icon: 'copy', tone: 'success' },
 };
@@ -62,10 +62,20 @@ const baselines = ref([]);
 const itemCounts = ref({ work_items: 0, baseline: 0, task: 0, task_category: 0, phase: 0 });
 const startInput = ref(null);
 const endInput = ref(null);
+const actualStartInput = ref(null);
+const actualEndInput = ref(null);
+const plannedBlock = ref(null);
+const actualBlock = ref(null);
 const firstField = ref(null);
 
 const membersForm = reactive({ member_ids: [], follower_ids: [] });
-const datesForm = reactive({ start_date: '', end_date: '' });
+const datesForm = reactive({
+  start_date: '',
+  end_date: '',
+  actual_start_date: '',
+  actual_end_date: '',
+  shift_task_dates: false,
+});
 const descriptionForm = reactive({ description: '' });
 const categoryForm = reactive({ title: '' });
 const phaseForm = reactive({ title: '', start_date: '', end_date: '' });
@@ -122,6 +132,12 @@ const baselineInfo = computed(() => {
 });
 
 const durationLabel = computed(() => daysBetween(datesForm.start_date, datesForm.end_date));
+const actualDurationLabel = computed(() => daysBetween(datesForm.actual_start_date, datesForm.actual_end_date));
+const plannedDaysCompact = computed(() => compactDays(datesForm.start_date, datesForm.end_date));
+const actualDaysCompact = computed(() => compactDays(datesForm.actual_start_date, datesForm.actual_end_date));
+const plannedRangeInvalid = computed(() => Boolean(datesForm.start_date && datesForm.end_date && !plannedDaysCompact.value));
+const actualRangeInvalid = computed(() => Boolean(datesForm.actual_start_date && datesForm.actual_end_date && !actualDaysCompact.value));
+const isActualFocus = computed(() => dateFocus.value === 'actual' || dateFocus.value === 'actual_end');
 const phaseDurationLabel = computed(() => daysBetween(phaseForm.start_date, phaseForm.end_date));
 const taskDurationLabel = computed(() => daysBetween(taskForm.start_date, taskForm.end_date));
 
@@ -134,7 +150,9 @@ const bulkTitles = computed(() =>
 
 const panelClass = computed(() => {
   if (props.kind === 'members' || props.kind === 'task' || props.kind === 'description') return 'proj-qa__panel--xl';
-  if (props.kind === 'phase' || props.kind === 'category' || props.kind === 'baseline') return 'proj-qa__panel--lg';
+  if (props.kind === 'phase' || props.kind === 'category' || props.kind === 'baseline' || props.kind === 'dates') {
+    return 'proj-qa__panel--lg';
+  }
   return 'proj-qa__panel--md';
 });
 
@@ -146,12 +164,21 @@ const primaryLabel = computed(() => {
 });
 
 function daysBetween(start, end) {
+  const n = dayCount(start, end);
+  return n == null ? null : `${n} ngày`;
+}
+
+function compactDays(start, end) {
+  const n = dayCount(start, end);
+  return n == null ? '' : `${n}d`;
+}
+
+function dayCount(start, end) {
   if (!start || !end) return null;
   const a = new Date(`${start}T00:00:00`);
   const b = new Date(`${end}T00:00:00`);
   if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) || b < a) return null;
-  const n = Math.round((b - a) / 86400000) + 1;
-  return `${n} ngày`;
+  return Math.round((b - a) / 86400000) + 1;
 }
 
 function formatDate(value) {
@@ -203,6 +230,9 @@ function resetForms(p) {
   membersForm.follower_ids = (p.followers || []).map((f) => f.id);
   datesForm.start_date = p.start_date || '';
   datesForm.end_date = p.end_date || '';
+  datesForm.actual_start_date = p.actual_start_date || '';
+  datesForm.actual_end_date = p.actual_end_date || '';
+  datesForm.shift_task_dates = Boolean(p.shift_task_dates_with_project);
   descriptionForm.description = p.description || '';
   categoryForm.title = '';
   phaseForm.title = '';
@@ -221,8 +251,15 @@ function resetForms(p) {
 function focusFirst() {
   nextTick(() => {
     if (props.kind === 'dates') {
+      if (isActualFocus.value) {
+        if (dateFocus.value === 'actual_end') actualEndInput.value?.focus();
+        else actualStartInput.value?.focus();
+        actualBlock.value?.scrollIntoView({ block: 'nearest' });
+        return;
+      }
       if (dateFocus.value === 'end') endInput.value?.focus();
       else startInput.value?.focus();
+      plannedBlock.value?.scrollIntoView({ block: 'nearest' });
       return;
     }
     firstField.value?.focus();
@@ -315,13 +352,24 @@ async function submit() {
       return;
     }
     if (props.kind === 'dates') {
-      const err = dateRangeError(datesForm.start_date, datesForm.end_date);
-      if (err) {
-        showClientToast('error', err);
+      const plannedErr = dateRangeError(datesForm.start_date, datesForm.end_date);
+      if (plannedErr) {
+        showClientToast('error', plannedErr);
+        return;
+      }
+      const actualErr = dateRangeError(datesForm.actual_start_date, datesForm.actual_end_date);
+      if (actualErr) {
+        showClientToast('error', 'Ngày kết thúc thực tế phải sau hoặc bằng ngày bắt đầu thực tế.');
         return;
       }
       await patchProject(
-        { start_date: datesForm.start_date || null, end_date: datesForm.end_date || null },
+        {
+          start_date: datesForm.start_date || null,
+          end_date: datesForm.end_date || null,
+          actual_start_date: datesForm.actual_start_date || null,
+          actual_end_date: datesForm.actual_end_date || null,
+          shift_task_dates_with_project: Boolean(datesForm.shift_task_dates),
+        },
         'Đã cập nhật thời gian dự án.',
       );
       return;
@@ -446,6 +494,13 @@ watch(
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown);
 });
+
+watch(
+  () => props.extra?.focus,
+  () => {
+    if (props.kind === 'dates') focusFirst();
+  },
+);
 </script>
 
 <template>
@@ -480,7 +535,7 @@ onBeforeUnmount(() => {
           </span>
           <div class="proj-qa__head-copy">
             <h2 :id="`proj-qa-title-${kind}`" class="proj-qa__title">{{ dialogMeta.title }}</h2>
-            <p v-if="project" class="proj-qa__sub">{{ projectLabel }}</p>
+            <p v-if="project && kind !== 'dates'" class="proj-qa__sub">{{ projectLabel }}</p>
           </div>
           <button type="button" class="proj-qa__close" aria-label="Đóng" :disabled="saving" @click="close">
             <AppIcon name="close" :size="16" />
@@ -488,19 +543,26 @@ onBeforeUnmount(() => {
         </div>
 
         <form class="proj-qa__body hide-scrollbar" @submit.prevent="submit">
-          <div v-if="project && kind !== 'members'" class="proj-qa__banner">
+          <div v-if="project && kind !== 'members'" class="proj-qa__banner" :class="`proj-qa__banner--${statusTone}`">
             <span v-if="project.code" class="proj-qa__chip proj-qa__chip--code">{{ project.code }}</span>
-            <span class="proj-qa__chip" :class="`proj-qa__chip--${statusTone}`">{{ statusLabel }}</span>
+            <span class="proj-qa__chip" :class="`proj-qa__chip--${statusTone}`">
+              <span class="proj-qa__chip-dot" aria-hidden="true" />
+              {{ statusLabel }}
+            </span>
             <span v-if="project.start_date || project.end_date" class="proj-qa__chip proj-qa__chip--date">
+              <AppIcon name="calendar" :size="12" :stroke-width="1.75" />
               {{ formatDate(project.start_date) }} – {{ formatDate(project.end_date) }}
             </span>
           </div>
 
           <div v-if="kind === 'members'" class="proj-qa__grid">
-            <div class="proj-qa__banner proj-qa__field--full">
+            <div class="proj-qa__banner proj-qa__field--full" :class="`proj-qa__banner--${statusTone}`">
               <span v-if="project?.code" class="proj-qa__chip proj-qa__chip--code">{{ project.code }}</span>
               <span class="proj-qa__banner-name">{{ project?.name }}</span>
-              <span class="proj-qa__chip" :class="`proj-qa__chip--${statusTone}`">{{ statusLabel }}</span>
+              <span class="proj-qa__chip" :class="`proj-qa__chip--${statusTone}`">
+                <span class="proj-qa__chip-dot" aria-hidden="true" />
+                {{ statusLabel }}
+              </span>
             </div>
             <div class="proj-qa__field">
               <span class="proj-qa__label">
@@ -696,24 +758,87 @@ onBeforeUnmount(() => {
             </section>
           </div>
 
-          <div v-else-if="kind === 'dates'" class="proj-qa__grid">
+          <div v-else-if="kind === 'dates'" class="proj-qa__dates">
             <label class="proj-qa__field">
-              <span class="proj-qa__label">Ngày bắt đầu</span>
-              <input ref="startInput" v-model="datesForm.start_date" type="date" class="proj-qa__input">
+              <span class="proj-qa__label">Tên dự án</span>
+              <input :value="projectLabel" type="text" class="proj-qa__input" disabled>
             </label>
-            <label class="proj-qa__field">
-              <span class="proj-qa__label">Ngày kết thúc</span>
-              <input ref="endInput" v-model="datesForm.end_date" type="date" class="proj-qa__input">
-            </label>
-            <div v-if="durationLabel" class="proj-qa__stat proj-qa__field--full">
-              Thời gian thực hiện <strong>{{ durationLabel }}</strong>
-            </div>
-            <div
-              v-else-if="datesForm.start_date && datesForm.end_date"
-              class="proj-qa__stat proj-qa__stat--warn proj-qa__field--full"
+
+            <section
+              ref="plannedBlock"
+              class="proj-qa__block"
+              :class="{ 'proj-qa__block--active': !isActualFocus }"
             >
-              Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.
-            </div>
+              <h3 class="proj-qa__block-title">Thời gian dự án</h3>
+              <div class="proj-qa__dates-row">
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">Bắt đầu</span>
+                  <input ref="startInput" v-model="datesForm.start_date" type="date" class="proj-qa__input">
+                </label>
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">Kết thúc</span>
+                  <input ref="endInput" v-model="datesForm.end_date" type="date" class="proj-qa__input">
+                </label>
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">Ngày</span>
+                  <input
+                    :value="plannedDaysCompact"
+                    type="text"
+                    class="proj-qa__input"
+                    disabled
+                    :aria-label="durationLabel || 'Số ngày dự án'"
+                  >
+                </label>
+              </div>
+              <div v-if="plannedRangeInvalid" class="proj-qa__stat proj-qa__stat--warn">
+                Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.
+              </div>
+              <label class="proj-qa__check">
+                <input v-model="datesForm.shift_task_dates" type="checkbox">
+                <span>Thay đổi thời gian của công việc</span>
+              </label>
+            </section>
+
+            <section
+              ref="actualBlock"
+              class="proj-qa__block proj-qa__block--actual"
+              :class="{ 'proj-qa__block--active': isActualFocus }"
+            >
+              <h3 class="proj-qa__block-title">Thời gian thực tế</h3>
+              <div class="proj-qa__dates-row">
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">BĐ thực tế</span>
+                  <input
+                    ref="actualStartInput"
+                    v-model="datesForm.actual_start_date"
+                    type="date"
+                    class="proj-qa__input"
+                  >
+                </label>
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">KT thực tế</span>
+                  <input
+                    ref="actualEndInput"
+                    v-model="datesForm.actual_end_date"
+                    type="date"
+                    class="proj-qa__input"
+                  >
+                </label>
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">Ngày</span>
+                  <input
+                    :value="actualDaysCompact"
+                    type="text"
+                    class="proj-qa__input"
+                    disabled
+                    :aria-label="actualDurationLabel || 'Số ngày thực tế'"
+                  >
+                </label>
+              </div>
+              <div v-if="actualRangeInvalid" class="proj-qa__stat proj-qa__stat--warn">
+                Ngày kết thúc thực tế phải sau hoặc bằng ngày bắt đầu thực tế.
+              </div>
+            </section>
           </div>
 
           <div v-else-if="kind === 'description'" class="proj-qa__grid">
@@ -981,11 +1106,56 @@ onBeforeUnmount(() => {
 }
 
 .proj-qa__banner {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   grid-column: 1 / -1;
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.proj-qa__body > .proj-qa__banner {
+  margin-bottom: var(--space-4);
+}
+
+.proj-qa__banner::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-primary);
+}
+
+.proj-qa__banner--primary::before {
+  background: var(--color-primary);
+}
+
+.proj-qa__banner--success::before {
+  background: var(--color-success);
+}
+
+.proj-qa__banner--gold::before,
+.proj-qa__banner--warning::before {
+  background: var(--color-gold);
+}
+
+.proj-qa__banner--umber::before {
+  background: var(--color-umber);
+}
+
+.proj-qa__banner--tertiary::before {
+  background: var(--color-tertiary);
+}
+
+.proj-qa__banner--info::before {
+  background: var(--color-info);
 }
 
 .proj-qa__banner-name {
@@ -1002,18 +1172,43 @@ onBeforeUnmount(() => {
 .proj-qa__chip {
   display: inline-flex;
   align-items: center;
+  gap: 0.375rem;
   max-width: 100%;
-  padding: 0.1875rem 0.5625rem;
-  border-radius: var(--radius-sm);
+  padding: 0.3125rem 0.75rem;
+  border-radius: 999px;
   background: var(--color-surface-muted);
   color: var(--color-text);
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.3;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 16%, transparent);
 }
 
-.proj-qa__chip--code,
+.proj-qa__chip :deep(svg) {
+  flex-shrink: 0;
+}
+
+.proj-qa__chip-dot {
+  flex-shrink: 0;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.proj-qa__chip--code {
+  background: var(--color-primary-50);
+  color: var(--color-primary-900);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
 .proj-qa__chip--date,
+.proj-qa__chip--neutral {
+  background: var(--color-info-tint-bg);
+  color: var(--color-info-tint-fg);
+}
+
 .proj-qa__chip--neutral {
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
@@ -1108,6 +1303,75 @@ onBeforeUnmount(() => {
   color: var(--color-text);
   font-size: 0.9375rem;
   font-weight: 700;
+}
+
+.proj-qa__dates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.proj-qa__dates-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(5.5rem, 0.55fr);
+  gap: var(--space-3);
+}
+
+.proj-qa__block {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.proj-qa__block::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-info);
+}
+
+.proj-qa__block--actual::before {
+  background: var(--color-success);
+}
+
+.proj-qa__block--active {
+  box-shadow: var(--shadow-sm), 0 0 0 1px color-mix(in srgb, var(--qa-tone) 28%, transparent);
+}
+
+.proj-qa__block-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.proj-qa__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: fit-content;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.proj-qa__check input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--qa-tone);
+  cursor: pointer;
 }
 
 .proj-qa__stats {
@@ -1225,7 +1489,8 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
-  .proj-qa__grid {
+  .proj-qa__grid,
+  .proj-qa__dates-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
