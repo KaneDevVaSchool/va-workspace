@@ -118,7 +118,10 @@ class TaskRepository implements TaskRepositoryInterface
 
     /** Field derived/chừa-chỗ KHÔNG nằm trong Task::$fillable — set qua forceFill. */
     private const GUARDED_KEYS = [
-        'origin_department_id', // chừa chỗ Task Delegation (§6) — chưa dùng logic
+        'origin_department_id', // Task Delegation §6 — TaskService::bulkDelegate()
+        'delegated_to_department_id',
+        'delegated_to_employee_id',
+        'delegation_status',
         'accepted_by', // derived — TaskService::applyAcceptedTracking() set
         'accepted_at', // derived — TaskService::applyAcceptedTracking() set
     ];

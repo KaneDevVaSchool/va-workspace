@@ -7,6 +7,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Modules\Identity\App\Models\Department;
+use Modules\Identity\App\Services\NotificationService;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Project\App\Enums\TaskEnums;
 use Modules\Project\App\Models\Project;
@@ -33,6 +34,7 @@ class TaskService
         private readonly PermissionService $permissions,
         private readonly TaskExcelExporter $exporter,
         private readonly TaskExcelImporter $importer,
+        private readonly NotificationService $notifications,
     ) {}
 
     /** @param  array<string, mixed>  $filters */
@@ -446,6 +448,67 @@ class TaskService
         return $updated;
     }
 
+    /**
+     * Chuyển giao hàng loạt (Phase 3 §6) — 1 người nhận áp dụng cho toàn bộ
+     * task đã chọn. Đổi assignee_id + set origin_department_id (giữ nguyên
+     * nếu đã có, else lấy từ project) / delegated_to_department_id (phòng ban
+     * người nhận) / delegated_to_employee_id / delegation_status='pending'.
+     *
+     * @param  list<int>  $taskIds
+     * @return list<Task>
+     */
+    public function bulkDelegate(array $taskIds, int $delegatedToEmployeeId, User $editor): array
+    {
+        if ($taskIds === []) {
+            return [];
+        }
+
+        $recipient = $this->projects->findUser($delegatedToEmployeeId);
+        if ($recipient === null) {
+            return [];
+        }
+
+        $allowedProjectIds = $this->projects->forViewer(Project::query(), $editor)->pluck('id')->all();
+
+        $updated = [];
+        foreach ($taskIds as $taskId) {
+            $task = $this->tasks->find((int) $taskId);
+            if ($task === null || ! in_array($task->project_id, $allowedProjectIds, true)) {
+                continue;
+            }
+
+            $updated[] = $this->tasks->update($task, [
+                'assignee_id' => $recipient->id,
+                'origin_department_id' => $task->origin_department_id ?? $task->project?->owner_department_id,
+                'delegated_to_department_id' => $recipient->department_id,
+                'delegated_to_employee_id' => $recipient->id,
+                'delegation_status' => 'pending',
+                'updated_by' => $editor->id,
+            ]);
+        }
+
+        if ($updated !== []) {
+            $this->notifyDelegation($updated, $recipient, $editor);
+        }
+
+        return $updated;
+    }
+
+    /** @param  list<Task>  $tasks */
+    private function notifyDelegation(array $tasks, User $recipient, User $actor): void
+    {
+        $count = count($tasks);
+        $this->notifications->notify(
+            $recipient,
+            $actor,
+            NotificationService::TYPE_TASK_DELEGATED,
+            $count === 1 ? 'Bạn được chuyển giao 1 công việc' : "Bạn được chuyển giao {$count} công việc",
+            $tasks[0]->title,
+            null,
+            ['task_ids' => array_map(fn ($t) => $t->id, $tasks)],
+        );
+    }
+
     public function present(Task $task): array
     {
         $overdue = $this->computeOverdue($task);
@@ -454,8 +517,23 @@ class TaskService
             'id' => $task->id,
             'project_id' => $task->project_id,
             'project' => $task->relationLoaded('project') && $task->project !== null
-                ? ['id' => $task->project->id, 'code' => $task->project->code, 'name' => $task->project->name]
+                ? [
+                    'id' => $task->project->id,
+                    'code' => $task->project->code,
+                    'name' => $task->project->name,
+                    'owner_department' => $this->presentDept(
+                        $task->project->relationLoaded('ownerDepartment')
+                            ? $task->project->ownerDepartment
+                            : null
+                    ),
+                    'executing_department' => $this->presentDept(
+                        $task->project->relationLoaded('executingDepartment')
+                            ? $task->project->executingDepartment
+                            : null
+                    ),
+                ]
                 : null,
+            'department' => $this->presentDept($this->resolveTaskDepartment($task)),
             'parent_id' => $task->parent_id,
             'parent' => $task->relationLoaded('parent') && $task->parent !== null
                 ? ['id' => $task->parent->id, 'code' => $task->parent->code, 'title' => $task->parent->title]
@@ -486,6 +564,11 @@ class TaskService
             'accepted_by' => $task->accepted_by,
             'accepted_by_user' => $this->presentUser($task->relationLoaded('acceptedBy') ? $task->acceptedBy : null),
             'accepted_at' => $task->accepted_at?->toIso8601String(),
+            'origin_department' => $this->presentDept($task->relationLoaded('originDepartment') ? $task->originDepartment : null),
+            'delegated_to_department' => $this->presentDept($task->relationLoaded('delegatedToDepartment') ? $task->delegatedToDepartment : null),
+            'delegated_to_employee_id' => $task->delegated_to_employee_id,
+            'delegated_to_employee' => $this->presentUser($task->relationLoaded('delegatedToEmployee') ? $task->delegatedToEmployee : null),
+            'delegation_status' => $task->delegation_status,
             'weight' => $task->weight,
             'sort_order' => $task->sort_order,
             'attachments_count' => $task->attachments_count ?? 0,
@@ -559,6 +642,50 @@ class TaskService
             'name' => $user->name,
             'email' => $user->email,
             'avatar_url' => $user->avatar_url,
+        ];
+    }
+
+    /**
+     * Phòng ban gắn với công việc — ưu tiên phòng nhận chuyển giao, rồi
+     * phòng gốc, phòng của người thực hiện, cuối cùng phòng thực hiện /
+     * sở hữu của dự án.
+     */
+    private function resolveTaskDepartment(Task $task): ?Department
+    {
+        if ($task->relationLoaded('delegatedToDepartment') && $task->delegatedToDepartment) {
+            return $task->delegatedToDepartment;
+        }
+
+        if ($task->relationLoaded('originDepartment') && $task->originDepartment) {
+            return $task->originDepartment;
+        }
+
+        $assignee = $task->relationLoaded('assignee') ? $task->assignee : null;
+        if ($assignee && $assignee->relationLoaded('department') && $assignee->department) {
+            return $assignee->department;
+        }
+
+        $project = $task->relationLoaded('project') ? $task->project : null;
+        if ($project?->relationLoaded('executingDepartment') && $project->executingDepartment) {
+            return $project->executingDepartment;
+        }
+        if ($project?->relationLoaded('ownerDepartment') && $project->ownerDepartment) {
+            return $project->ownerDepartment;
+        }
+
+        return null;
+    }
+
+    /** @return array{id: int, name: string}|null */
+    private function presentDept(?Department $dept): ?array
+    {
+        if ($dept === null) {
+            return null;
+        }
+
+        return [
+            'id' => $dept->id,
+            'name' => $dept->name,
         ];
     }
 }

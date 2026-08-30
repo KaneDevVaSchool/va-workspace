@@ -13,6 +13,7 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   searchLabel: { type: String, default: 'Tìm người phụ trách' },
   placeholder: { type: String, default: '' },
+  removeAriaLabel: { type: String, default: 'Bỏ phụ trách chính' },
   preferredDepartmentIds: { type: Array, default: () => [] },
 });
 
@@ -131,7 +132,7 @@ function initial(name) {
       <button
         type="button"
         class="proj-user-picker__remove"
-        aria-label="Bỏ phụ trách chính"
+        :aria-label="removeAriaLabel"
         :disabled="disabled"
         @click="clear"
       >

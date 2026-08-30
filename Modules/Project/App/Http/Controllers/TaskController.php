@@ -5,6 +5,7 @@ namespace Modules\Project\App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Modules\Project\App\Enums\TaskEnums;
+use Modules\Project\App\Http\Requests\BulkDelegateTaskRequest;
 use Modules\Project\App\Http\Requests\BulkUpdateTaskRequest;
 use Modules\Project\App\Http\Requests\ConfirmImportTaskRequest;
 use Modules\Project\App\Http\Requests\ExportTaskRequest;
@@ -140,6 +141,22 @@ class TaskController extends Controller
         unset($validated['task_ids']);
 
         $updated = $this->service->bulkUpdate($taskIds, $validated, $request->user());
+
+        return response()->json([
+            'tasks' => collect($updated)->map(fn ($t) => $this->service->present($t))->values(),
+        ]);
+    }
+
+    /** PATCH /api/project/tasks/bulk-delegate — chuyển giao hàng loạt (Phase 3 §6). */
+    public function bulkDelegate(BulkDelegateTaskRequest $request)
+    {
+        $validated = $request->validated();
+
+        $updated = $this->service->bulkDelegate(
+            $validated['task_ids'],
+            (int) $validated['delegated_to_employee_id'],
+            $request->user(),
+        );
 
         return response()->json([
             'tasks' => collect($updated)->map(fn ($t) => $this->service->present($t))->values(),

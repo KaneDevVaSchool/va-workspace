@@ -442,9 +442,9 @@ class ProjectService
         ]);
     }
 
-    public function assignableUsers(User $currentUser): Collection
+    public function assignableUsers(User $currentUser, bool $unrestricted = false): Collection
     {
-        if ($currentUser->isSuperAdmin()) {
+        if ($currentUser->isSuperAdmin() || ($unrestricted && $this->permissions->allows($currentUser, 'task.delegate'))) {
             return $this->projects->allUsers();
         }
 

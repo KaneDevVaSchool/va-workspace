@@ -57,6 +57,16 @@ class TaskEnums
         'quantity' => 'Theo khối lượng',
     ];
 
+    public const DELEGATION_STATUSES = ['pending', 'accepted', 'in_progress', 'done', 'rejected'];
+
+    public const DELEGATION_STATUS_LABELS = [
+        'pending' => 'Chờ tiếp nhận',
+        'accepted' => 'Đã tiếp nhận',
+        'in_progress' => 'Đang thực hiện',
+        'done' => 'Hoàn thành',
+        'rejected' => 'Từ chối',
+    ];
+
     /** Danh sách options đầy đủ trả về cho frontend — GET /api/project/tasks/options. */
     public static function options(): array
     {

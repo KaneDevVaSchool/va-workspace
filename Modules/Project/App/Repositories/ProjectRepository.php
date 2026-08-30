@@ -322,6 +322,11 @@ class ProjectRepository implements ProjectRepositoryInterface
             ->get();
     }
 
+    public function findUser(int $id): ?User
+    {
+        return User::query()->with('department:id,name')->find($id);
+    }
+
     public function forViewer(Builder $query, User $viewer): Builder
     {
         if ($viewer->isSuperAdmin() || app(PermissionService::class)->allows($viewer, 'project.*')) {

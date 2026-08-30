@@ -88,6 +88,10 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
         ->patch('/tasks/bulk', [TaskController::class, 'bulkUpdate'])
         ->name('tasks.bulk-update');
 
+    Route::middleware('permission:task.delegate')
+        ->patch('/tasks/bulk-delegate', [TaskController::class, 'bulkDelegate'])
+        ->name('tasks.bulk-delegate');
+
     Route::middleware('permission:task.create')->group(function () {
         // update dùng implicit model binding (Task $task, khác int $task ở
         // show/destroy) — UpdateTaskRequest cần đọc progress_type HIỆN CÓ

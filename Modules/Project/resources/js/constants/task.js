@@ -50,6 +50,22 @@ export const TASK_PRIORITY_TONES = {
   urgent: 'danger',
 };
 
+export const TASK_DELEGATION_STATUS_LABELS = {
+  pending: 'Chờ tiếp nhận',
+  accepted: 'Đã tiếp nhận',
+  in_progress: 'Đang thực hiện',
+  done: 'Hoàn thành',
+  rejected: 'Từ chối',
+};
+
+export const TASK_DELEGATION_STATUS_TONES = {
+  pending: 'gold',
+  accepted: 'info',
+  in_progress: 'primary',
+  done: 'success',
+  rejected: 'umber',
+};
+
 export const TASK_TABS = [
   { key: 'all', label: 'Tất cả', tone: 'primary' },
   { key: 'in_progress', label: 'Đang thực hiện', tone: 'info' },

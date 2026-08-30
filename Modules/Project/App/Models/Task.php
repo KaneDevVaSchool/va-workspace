@@ -44,10 +44,10 @@ use Modules\Identity\App\Models\Department;
  * @property int|null    $manager_id         người quản lý, nhập tay — không mặc định = creator/assignee
  * @property int|null    $accepted_by        người đã nhận thực hiện — derived, TaskService tự set
  * @property string|null $accepted_at        thời điểm nhận — derived, TaskService tự set
- * @property int|null    $origin_department_id          chừa chỗ Task Delegation (§6) — chưa dùng logic
- * @property int|null    $delegated_to_department_id    chừa chỗ Task Delegation (§6) — chưa dùng logic
- * @property int|null    $delegated_to_employee_id      chừa chỗ Task Delegation (§6) — chưa dùng logic
- * @property string|null $delegation_status             chừa chỗ Task Delegation (§6) — chưa dùng logic
+ * @property int|null    $origin_department_id          phòng ban gốc khi chuyển giao (Task Delegation §6)
+ * @property int|null    $delegated_to_department_id    phòng ban người tiếp nhận
+ * @property int|null    $delegated_to_employee_id      người tiếp nhận
+ * @property string|null $delegation_status             pending | accepted | in_progress | done | rejected
  * @property int|null    $created_by
  * @property int|null    $updated_by
  */
@@ -56,7 +56,18 @@ class Task extends Model
     protected $table = 'tasks';
 
     public const WITH_PRESENT = [
-        'project', 'parent', 'assignee', 'manager', 'acceptedBy', 'creator', 'updater', 'taskScore',
+        'project.ownerDepartment',
+        'project.executingDepartment',
+        'parent',
+        'assignee.department',
+        'manager',
+        'acceptedBy',
+        'creator',
+        'updater',
+        'taskScore',
+        'originDepartment',
+        'delegatedToDepartment',
+        'delegatedToEmployee',
     ];
 
     public const TYPES = ['task', 'phase', 'category'];
@@ -90,9 +101,8 @@ class Task extends Model
         'updated_by',
         // origin_department_id / delegated_to_department_id /
         // delegated_to_employee_id / delegation_status KHÔNG fillable qua
-        // form thường ở giai đoạn này (Task Delegation §6 — chỉ chừa cột,
-        // sẽ set trực tiếp khi TaskService::delegate() được cài đặt ở
-        // Phase 3).
+        // form thường — TaskService::bulkDelegate() set qua Repository
+        // forceFill() (Task Delegation §6).
         //
         // accepted_by / accepted_at KHÔNG fillable — derived field, chỉ
         // TaskService::applyAcceptedTracking() set qua forceFill trong

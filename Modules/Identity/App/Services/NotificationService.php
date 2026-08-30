@@ -29,6 +29,8 @@ class NotificationService
 
     public const TYPE_TASK_SCORED = 'task_scored';
 
+    public const TYPE_TASK_DELEGATED = 'task_delegated';
+
     public function __construct(
         private readonly UserNotificationRepositoryInterface $notifications,
         private readonly UserRepositoryInterface $users,

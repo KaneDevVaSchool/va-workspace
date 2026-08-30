@@ -75,6 +75,8 @@ interface ProjectRepositoryInterface
 
     public function allUsers(): Collection;
 
+    public function findUser(int $id): ?User;
+
     /** Áp bộ lọc quyền xem dự án theo viewer (mục A) lên query đã build sẵn. */
     public function forViewer(Builder $query, User $viewer): Builder;
 

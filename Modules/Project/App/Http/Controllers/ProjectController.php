@@ -263,7 +263,8 @@ class ProjectController extends Controller
 
     public function assignableUsers(Request $request)
     {
-        $users = $this->service->assignableUsers($request->user());
+        $unrestricted = $request->boolean('unrestricted');
+        $users = $this->service->assignableUsers($request->user(), $unrestricted);
 
         return response()->json([
             'users' => $users->map(fn ($u) => [
