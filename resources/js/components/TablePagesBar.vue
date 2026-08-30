@@ -83,6 +83,10 @@ function onClearFilters() {
   emit('clear-filters');
 }
 
+function closeMenus() {
+  open.value = null;
+}
+
 function onDocumentClick(event) {
   if (!open.value || !root.value) return;
   if (!root.value.contains(event.target)) {
@@ -209,9 +213,14 @@ onBeforeUnmount(() => {
           <AppIcon v-if="extraMenuIcon" :name="extraMenuIcon" :size="15" :stroke-width="1.75" />
           <span>{{ extraMenuLabel }}</span>
         </button>
-        <div v-if="open === 'extra'" class="table-pages__menu" role="menu">
-          <p class="table-pages__menu-title">{{ extraMenuTitle || extraMenuLabel }}</p>
-          <slot name="extra" />
+        <div
+          v-if="open === 'extra'"
+          class="table-pages__menu"
+          :class="{ 'table-pages__menu--options': !extraMenuTitle }"
+          role="menu"
+        >
+          <p v-if="extraMenuTitle" class="table-pages__menu-title">{{ extraMenuTitle }}</p>
+          <slot name="extra" :close="closeMenus" />
         </div>
       </div>
       </template>
@@ -331,7 +340,8 @@ onBeforeUnmount(() => {
 
 .table-pages__icon,
 .table-pages__nav,
-.table-pages__page {
+.table-pages__page,
+:slotted(.table-pages__icon) {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -349,7 +359,8 @@ onBeforeUnmount(() => {
 
 .table-pages__icon:hover,
 .table-pages__nav:hover:not(:disabled),
-.table-pages__page:hover {
+.table-pages__page:hover,
+:slotted(.table-pages__icon):hover {
   background: var(--color-surface-muted);
   color: var(--color-primary);
 }
@@ -410,6 +421,11 @@ onBeforeUnmount(() => {
   width: 12.5rem;
 }
 
+.table-pages__menu--options {
+  width: 13.5rem;
+  padding: var(--space-2);
+}
+
 .table-pages__pages {
   max-height: 10rem;
   overflow: auto;
@@ -423,7 +439,8 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
-.table-pages__item {
+.table-pages__item,
+:slotted(.table-pages__item) {
   display: flex;
   width: 100%;
   align-items: center;
@@ -438,11 +455,13 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.table-pages__item:hover {
+.table-pages__item:hover,
+:slotted(.table-pages__item:hover) {
   background: var(--color-surface-muted);
 }
 
-.table-pages__item--on {
+.table-pages__item--on,
+:slotted(.table-pages__item--on) {
   color: var(--color-primary);
   font-weight: 600;
   background: color-mix(in srgb, var(--color-primary) 8%, transparent);
