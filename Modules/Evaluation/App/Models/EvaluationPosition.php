@@ -3,11 +3,10 @@
 namespace Modules\Evaluation\App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * "Vị trí đánh giá" — danh mục chức danh HOẶC phòng ban dùng chung toàn hệ
- * thống, gán N-N vào EvaluationTemplate.
+ * thống.
  *
  * @property int         $id
  * @property string      $name
@@ -31,14 +30,4 @@ class EvaluationPosition extends Model
         'hrm_position_uuid',
         'created_by',
     ];
-
-    public function templates(): BelongsToMany
-    {
-        return $this->belongsToMany(
-            EvaluationTemplate::class,
-            'evaluation_template_positions',
-            'evaluation_position_id',
-            'evaluation_template_id',
-        );
-    }
 }

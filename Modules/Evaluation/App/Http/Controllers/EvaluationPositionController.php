@@ -15,8 +15,7 @@ use Modules\Identity\App\Services\PermissionService;
  * "Vị trí đánh giá" là danh mục DÙNG CHUNG toàn hệ thống (không scoped theo
  * department_id, khác evaluation_criteria) — CHỈ ĐỌC, không có tạo/sửa/xoá
  * tay ở đây nữa. Danh mục sẽ nối API VA-HRM sau này (định danh HRM lưu vào
- * cột hrm_position_uuid đã có sẵn ở bảng evaluation_positions). Xem
- * plans/2026-08-26-mau-danh-gia.md.
+ * cột hrm_position_uuid đã có sẵn ở bảng evaluation_positions).
  */
 class EvaluationPositionController extends Controller
 {

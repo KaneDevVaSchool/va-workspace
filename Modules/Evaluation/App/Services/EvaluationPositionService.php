@@ -7,9 +7,8 @@ use Modules\Evaluation\App\Models\EvaluationPosition;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationPositionRepositoryInterface;
 
 /**
- * "Vị trí đánh giá" — danh mục chức danh dùng chung toàn hệ thống, gán N-N
- * vào EvaluationTemplate. CHỈ ĐỌC — không còn tạo/sửa/xoá tay, danh mục sẽ
- * nối API VA-HRM sau này. Xem plans/2026-08-26-mau-danh-gia.md (PR3).
+ * "Vị trí đánh giá" — danh mục chức danh dùng chung toàn hệ thống. CHỈ ĐỌC —
+ * không còn tạo/sửa/xoá tay, danh mục sẽ nối API VA-HRM sau này.
  */
 class EvaluationPositionService
 {

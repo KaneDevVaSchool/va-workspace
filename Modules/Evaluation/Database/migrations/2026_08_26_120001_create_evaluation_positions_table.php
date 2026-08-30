@@ -5,18 +5,16 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * "Vị trí đánh giá" (Evaluation Giai đoạn C, PR3) — danh mục CHỨC DANH dùng
- * chung toàn hệ thống (không thuộc riêng phòng ban), gán N-N vào
- * evaluation_templates để sau này Giai đoạn D tự chọn mẫu theo vị trí của
- * người được đánh giá.
+ * "Vị trí đánh giá" — danh mục CHỨC DANH dùng chung toàn hệ thống (không
+ * thuộc riêng phòng ban). Trước đây còn gán N-N vào evaluation_templates
+ * (Mẫu đánh giá) — bảng pivot đó đã bị xoá cùng tính năng Mẫu đánh giá,
+ * xem migration 2026_08_31_000002_drop_evaluation_templates_tables.php.
  *
  * `hrm_position_uuid` chỉ là tham chiếu đối chiếu (nullable), KHÔNG phải
  * nguồn sự thật — cùng nguyên tắc `teams.hrm_team_uuid` (§8 overview),
  * chờ VA-HRM có API thật (xem docs/known-issues.md, memory
  * hrm-employee-sync-future). Danh mục tự quản trong Workspace ở giai đoạn
  * này.
- *
- * Xem docs/VA_WORKSPACE_OVERVIEW.md §7, §21 và plans/2026-08-26-mau-danh-gia.md.
  */
 return new class extends Migration
 {
@@ -32,27 +30,10 @@ return new class extends Migration
 
             $table->unique('name');
         });
-
-        Schema::create('evaluation_template_positions', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('evaluation_template_id')
-                ->constrained('evaluation_templates', 'id', 'eval_tpl_positions_template_fk')
-                ->cascadeOnDelete();
-            $table->foreignId('evaluation_position_id')
-                ->constrained('evaluation_positions', 'id', 'eval_tpl_positions_position_fk')
-                ->cascadeOnDelete();
-            $table->timestamps();
-
-            $table->unique(
-                ['evaluation_template_id', 'evaluation_position_id'],
-                'eval_tpl_positions_unique',
-            );
-        });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('evaluation_template_positions');
         Schema::dropIfExists('evaluation_positions');
     }
 };
