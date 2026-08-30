@@ -91,23 +91,8 @@ const MENU_SECTIONS = [
         // Menu, Tiêu chí) cũng không phải mục sidebar.
       },
       {
-        // Mẫu đánh giá (Evaluation Giai đoạn C) — mục sidebar RIÊNG, khác
-        // "Tiêu chí đánh giá" (Giai đoạn B, vẫn là tab trong Hub).
-        // department_director/deputy trở lên (evaluation.manage_department)
-        // và superadmin (tạo mẫu dùng chung toàn hệ thống).
-        // Xem plans/2026-08-26-mau-danh-gia.md §2.3.
-        // configurableByDepartment: true — đồng bộ thủ công với
-        // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
-        name: 'manager.evaluation-templates.index',
-        label: 'Mẫu đánh giá',
-        icon: 'clipboardCheck',
-        requiresPermission: 'evaluation.manage_department',
-        configurableByDepartment: true,
-      },
-      {
         // Khung chấm điểm — mục sidebar RIÊNG của phòng ban, khác tab
-        // "Tiêu chí đánh giá" trong hub Cấu hình. Cùng quyền
-        // evaluation.manage_department với Mẫu đánh giá.
+        // "Tiêu chí đánh giá" trong hub Cấu hình.
         // configurableByDepartment: true — đồng bộ thủ công với
         // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
         name: 'manager.evaluation-score-kit.index',

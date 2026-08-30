@@ -22,12 +22,6 @@ export const SIDEBAR_MENU_CATALOG = {
     sectionLabel: 'Điều hướng',
     description: 'Xem tiêu chí đánh giá của phòng ban (chỉ đọc).',
   },
-  'manager.evaluation-templates.index': {
-    icon: 'listChecks',
-    section: 'manager',
-    sectionLabel: 'Quản lý',
-    description: 'Tạo và sửa mẫu đánh giá. Superadmin tạo mẫu dùng chung toàn hệ thống.',
-  },
   'manager.evaluation-score-kit.index': {
     icon: 'layers',
     section: 'manager',

@@ -165,21 +165,21 @@ class WorkspaceConfigSidebarTest extends TestCase
         $this->actingAs($director)
             ->putJson('/api/workspace-config/sidebar/layout', [
                 'items' => [
-                    ['menu_key' => 'manager.evaluation-templates.index', 'section' => 'general'],
+                    ['menu_key' => 'manager.evaluation-score-kit.index', 'section' => 'general'],
                     ['menu_key' => 'home', 'section' => 'general'],
                     ['menu_key' => 'social.feed', 'section' => 'general'],
                     ['menu_key' => 'manager.evaluation.view', 'section' => 'general'],
                 ],
             ])
             ->assertOk()
-            ->assertJsonPath('menus.0.menu_key', 'manager.evaluation-templates.index')
+            ->assertJsonPath('menus.0.menu_key', 'manager.evaluation-score-kit.index')
             ->assertJsonPath('menus.0.section', 'general')
             ->assertJsonPath('menus.0.sort_order', 0)
             ->assertJsonPath('menus.1.menu_key', 'home');
 
         $this->assertDatabaseHas('department_sidebar_configs', [
             'department_id' => $dept->id,
-            'menu_key' => 'manager.evaluation-templates.index',
+            'menu_key' => 'manager.evaluation-score-kit.index',
             'section_key' => 'general',
             'sort_order' => 0,
         ]);
@@ -189,8 +189,8 @@ class WorkspaceConfigSidebarTest extends TestCase
             ->assertOk()
             ->json();
 
-        $this->assertSame(0, $me['menu_order']['manager.evaluation-templates.index']);
-        $this->assertSame('general', $me['menu_item_sections']['manager.evaluation-templates.index']);
+        $this->assertSame(0, $me['menu_order']['manager.evaluation-score-kit.index']);
+        $this->assertSame('general', $me['menu_item_sections']['manager.evaluation-score-kit.index']);
     }
 
     public function test_director_can_rename_sidebar_section(): void

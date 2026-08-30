@@ -36,12 +36,6 @@ class GlobalMenuVisibilityService
             'icon' => 'settings',
             'audience' => 'Menu này chỉ hiện với trưởng phòng và phó phòng, không phải Super Admin.',
         ],
-        'manager.evaluation-templates.index' => [
-            'label' => 'Mẫu đánh giá',
-            'section' => 'manager',
-            'icon' => 'clipboardCheck',
-            'audience' => 'Menu này chỉ hiện với trưởng phòng và phó phòng. Super Admin tạo mẫu dùng chung ở một trang riêng khác.',
-        ],
         'manager.evaluation-score-kit.index' => [
             'label' => 'Khung chấm điểm',
             'section' => 'manager',
