@@ -34,3 +34,53 @@ hoạch rõ ràng, không chạy `--force` một cách bị động.
 Khi HRM cung cấp API: đổi binding trong `IdentityServiceProvider`, không
 đổi Controller/Service. Team **không** nằm trong đợt thay này (`team_lead_id`
 là sở hữu Workspace).
+
+## Bulk actions Task không bọc transaction (2026-08-30)
+
+`TaskService::bulkUpdate()` và `bulkDelegate()`
+(`Modules/Project/App/Services/TaskService.php`) lặp qua từng task, gọi
+`find()` + `update()` riêng cho mỗi task, không bọc `DB::transaction()`. Nếu
+lỗi giữa chừng (mất kết nối DB, timeout khi chọn hàng trăm task), một phần
+task đã đổi dữ liệu, phần còn lại giữ nguyên — không có cách rollback, và
+response không phản ánh rõ ràng phần nào thất bại. **Cần làm**: bọc
+`DB::transaction()` quanh vòng lặp, cân nhắc chuyển sang update hàng loạt
+bằng 1 câu query thay vì N query riêng lẻ khi có thời gian.
+
+## Filter Lịch (`overlap_from`/`overlap_to`) không có index phù hợp (2026-08-30)
+
+`TaskRepository::applyFilters()` dùng
+`whereRaw('DATE(COALESCE(start_date, end_date)) <= ?', ...)` để lọc task
+chồng khoảng ngày cho chế độ xem Lịch — biểu thức tính toán trên cột không
+tận dụng được index thường trên `start_date`/`end_date`. Bảng `tasks` còn
+nhỏ nên chưa ảnh hưởng hiệu năng thực tế; cần đánh giá lại (functional
+index hoặc đổi cách lọc) khi dữ liệu lớn hơn.
+
+## Task Delegation — chưa siết phạm vi người nhận theo phòng ban (2026-08-30)
+
+`BulkDelegateTaskRequest` chỉ validate `exists:users,id`; kết hợp với
+`ProjectService::assignableUsers(unrestricted: true)` (dùng khi FE mở dropdown
+chọn người nhận), bất kỳ ai có quyền `task.delegate` có thể chuyển giao task
+cho **bất kỳ user nào trong toàn hệ thống**, không giới hạn theo phòng ban
+liên quan tới task/project. Cần siết lại phạm vi hợp lý khi làm tiếp Phase 3
+đầy đủ (`plans/2026-08-30-task-delegation-hoan-thien.md`).
+
+## Vi phạm nhẹ pattern Controller/Service gọi Eloquent trực tiếp (2026-08-30)
+
+Rà soát phát hiện vài chỗ Service/Controller gọi thẳng Eloquent Model thay
+vì qua Repository (vi phạm §5 CLAUDE.md):
+
+- `TaskService` gọi `Project::query()` trực tiếp ở 5 chỗ (để truyền vào
+  `ProjectRepositoryInterface::forViewer(Builder $query, ...)` — chữ ký
+  interface hiện bắt buộc nhận `Builder` từ ngoài).
+- `Modules/Identity/App/Http/Controllers/PermissionMatrixController.php`,
+  `ViewAsController.php`, `SuperAdminBootstrap.php` gọi `Role::query()`
+  trực tiếp trong Controller.
+- `Modules/Social/App/Services/SocialGroupService.php`,
+  `SocialHashtagService.php`, `SocialPollService.php` gọi thẳng
+  `User::query()`/`SocialHashtag::query()`/`SocialPoll::query()`/
+  `DB::table(...)`, bỏ qua Repository hoàn toàn.
+
+Không chặn tính năng hiện tại (code chạy đúng) — ghi nhận làm nợ kỹ thuật,
+cân nhắc dọn khi có đợt refactor Identity/Social hoặc khi sửa
+`ProjectRepositoryInterface::forViewer()` để tự khởi tạo query bên trong
+thay vì nhận từ ngoài.

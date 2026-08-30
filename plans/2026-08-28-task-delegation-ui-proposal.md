@@ -1,8 +1,17 @@
 # Đề xuất: UI "Chuyển giao" hàng loạt cho Task (Task Delegation §6)
 
-> **Trạng thái: ĐỀ XUẤT — chưa triển khai.** Ghi lại tham chiếu UI hệ cũ
-> user gửi (2026-08-28) trong lúc làm PR7 (Filter/Sort/Bulk actions) của
-> plan mở rộng Task. Không code gì cho tài liệu này.
+> **Trạng thái: MỘT PHẦN ĐÃ TRIỂN KHAI (2026-08-30)** — xem
+> `docs/VA_WORKSPACE_OVERVIEW.md` §6. Đã làm: nút "Chuyển giao" +
+> `TaskService::bulkDelegate()`, chuyển hàng loạt task cho **1 người tiếp
+> nhận duy nhất** (không phân biệt vai trò), set `delegation_status='pending'`
+> và thông báo cho người nhận. **Chưa làm** (giữ nguyên là đề xuất bên dưới):
+> modal 3 cột nhiều dòng theo **đa vai trò** (Người quản trị / Người thực
+> hiện / Người theo dõi), luồng người nhận accept/reject đổi
+> `delegation_status`, thông báo 2 chiều về watcher phòng ban nguồn. Xem plan
+> tiếp theo: `plans/2026-08-30-task-delegation-hoan-thien.md`.
+>
+> Ghi chú gốc (2026-08-28): tham chiếu UI hệ cũ user gửi trong lúc làm PR7
+> (Filter/Sort/Bulk actions) của plan mở rộng Task.
 
 ## Bối cảnh
 

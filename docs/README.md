@@ -3,6 +3,11 @@
 Tài liệu kỹ thuật của dự án: kiến trúc, quy ước, hướng dẫn setup,
 quyết định thiết kế, nợ kỹ thuật.
 
+**`docs/` là nguồn sự thật cho code đã chạy** — khác với `plans/` (đề xuất/kế
+hoạch viết trước khi code, có thể lệch hướng khi triển khai thực tế). Khi 1
+plan triển khai xong, cập nhật doc tương ứng ở đây; chi tiết quy ước 2 chiều
+xem `plans/README.md`.
+
 ## Đọc trước
 
 | File | Dùng khi |
