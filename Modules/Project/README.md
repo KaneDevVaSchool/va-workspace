@@ -50,7 +50,7 @@ Modules/Project/
 Route trang quản lý Vue (`manager.project.index`) là route Vue Router thuần
 (SPA), được Laravel phục vụ qua fallback catch-all trong `routes/web.php`
 gốc — KHÔNG có route Laravel `manager.project.index` thật, giống hệt cách
-Evaluation làm với `manager.evaluation-templates.index`.
+Evaluation làm với `manager.evaluation-score-kit.index`.
 
 API JSON thật đăng ký trong `Modules/Project/routes/manager.php`, được
 `ProjectServiceProvider::registerRoutes()` nạp với `prefix('api')->name('api.project.')`

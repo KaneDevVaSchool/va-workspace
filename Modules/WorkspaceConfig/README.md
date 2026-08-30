@@ -7,13 +7,7 @@ của phòng ban mình:
 
 - **Thành viên** — nhân sự phòng ban, CRUD nhóm, gán vai trò (đã có).
 - **Menu (sidebar)** — bật/tắt mục menu áp dụng riêng cho phòng ban (đã có).
-- **Tiêu chí đánh giá** (Giai đoạn B, module `Evaluation` — đã có).
-
-**Mẫu đánh giá (Giai đoạn C, module `Evaluation`, đã xong) KHÔNG nằm trong
-Hub này** — khác tiêu chí đánh giá, mẫu đánh giá có mục **sidebar riêng**
-(`/manager/evaluation-templates`, không phải tab ở đây), vì mẫu là entity
-độc lập, có thể đánh dấu dùng chung cho toàn hệ thống chứ không "thuộc về"
-đúng 1 phòng ban như tiêu chí. Xem `plans/2026-08-26-mau-danh-gia.md`.
+- **Tiêu chí đánh giá** (module `Evaluation` — đã có).
 
 super_admin xem TỔNG HỢP workspace của mọi phòng ban (1 bảng liệt kê + bấm
 vào xem chi tiết từng phòng ban), nhưng không sửa thay department_director.
@@ -68,9 +62,10 @@ có ngoại lệ, kể cả 2 controller mỏng trong module này.
 
 ## Việc tiếp theo
 
-Giai đoạn B (tiêu chí đánh giá, tab trong Hub) và Giai đoạn C (Mẫu đánh giá,
-module `Evaluation`, mục sidebar riêng — xem ghi chú ở trên) **đều đã xong**.
-Chi tiết: `plans/2026-08-26-mau-danh-gia.md`.
+Tiêu chí đánh giá (tab trong Hub, module `Evaluation`) đã xong. Tính năng
+"Mẫu đánh giá" (mục sidebar riêng, gộp nhiều tiêu chí thành 1 bộ có trọng
+số) đã bị **xoá khỏi phạm vi dự án** — chưa từng có phiếu đánh giá thật dùng
+đến.
 
-Giai đoạn D (sau, không phải đợt này): phiếu đánh giá đầy đủ (hội đồng nhiều
-vai trò, kỳ đánh giá) — xem `docs/VA_WORKSPACE_OVERVIEW.md` §7 và §21.
+Phiếu đánh giá đầy đủ (hội đồng nhiều vai trò, kỳ đánh giá) — nếu làm lại
+trong tương lai, xem `docs/VA_WORKSPACE_OVERVIEW.md` §7 và §21.

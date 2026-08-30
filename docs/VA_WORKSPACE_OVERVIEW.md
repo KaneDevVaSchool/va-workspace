@@ -6,7 +6,19 @@
 >
 > Đây là **tài liệu sống**: phần nền tảng đã có trong repo, phần nghiệp vụ (Project, Initiative, KPI…) vẫn là kế hoạch. Schema/route của các module chưa dựng là đề xuất theo `.claude/CLAUDE.md`.
 >
-> Cập nhật: 2026-08-30 (đợt 2) — module `Project`: **Task đứng độc lập +
+> Cập nhật: 2026-08-31 — **xoá tính năng "Mẫu đánh giá"** (module
+> `Evaluation` Giai đoạn C: `EvaluationTemplate` + tiêu chí/vị trí/trường
+> tùy biến đi kèm, trang `/manager/evaluation-templates`) khỏi phạm vi dự
+> án — đã dựng xong từ 2026-08-26 nhưng chưa từng có phiếu đánh giá thực tế
+> (Giai đoạn D) dùng đến. Gỡ route/controller/service/repository/model,
+> drop bảng `evaluation_templates`/`evaluation_template_criteria`/
+> `evaluation_template_custom_fields`/`evaluation_template_positions`
+> (migration mới, xem `Modules/Evaluation/Database/migrations`), mục
+> sidebar riêng, quyền `evaluation.manage_global_template`. Danh mục "Vị trí
+> đánh giá" (`evaluation_positions`) **vẫn giữ lại** — độc lập, chỉ mất
+> quan hệ N-N với mẫu. Xem `docs/modules/Evaluation.md` và §7.1, §19, §21.
+>
+> Cập nhật trước — 2026-08-30 (đợt 2) — module `Project`: **Task đứng độc lập +
 > đa vai trò theo dõi/phối hợp**. (1) **Task không bắt buộc thuộc Project**:
 > `tasks.project_id` nay nullable (migration
 > `2026_08_30_100009_make_tasks_project_id_nullable`) — để trống là "công
@@ -121,10 +133,9 @@ Nền tảng **Phase 0 + Phase 1 đã xong**. Các module nghiệp vụ (Project
 
 ### Việc nên làm tiếp — đọc §21
 
-**Bước kế tiếp: module `Evaluation` Giai đoạn C (Mẫu đánh giá)** — Giai đoạn B
-(tab «Tiêu chí đánh giá» trong `WorkspaceConfigHub`) đã xong. Kế hoạch chi
-tiết Giai đoạn C: `plans/2026-08-26-mau-danh-gia.md`. Không nhảy sang
-Initiative/Project khi Evaluation còn dở.
+Giai đoạn B của `Evaluation` (tab «Tiêu chí đánh giá» trong `WorkspaceConfigHub`)
+đã xong. Giai đoạn C (Mẫu đánh giá) từng được dựng rồi **xoá khỏi phạm vi dự
+án** (2026-08-31) — xem §21 Bước 2, `docs/modules/Evaluation.md`.
 
 ---
 
@@ -466,14 +477,13 @@ tasks
 | Hệ điểm | Bảng cấu hình | Module | Áp dụng cho | Kỳ |
 |---|---|---|---|---|
 | Daily Report | `daily_report_scoring_configs` | `WorkspaceConfig` | Báo cáo ngày — 5 tiêu chí | Ngày |
-| Evaluation | `evaluation_criteria` + `evaluation_templates` (Giai đoạn C, kế hoạch) | `Evaluation` | Đánh giá nhân sự định kỳ | Quý/Tháng/Năm |
+| Evaluation | `evaluation_criteria` | `Evaluation` | Đánh giá nhân sự định kỳ (chưa có phiếu đánh giá thực tế) | Quý/Tháng/Năm |
 | Task Scoring | `task_scoring_configs` | `TaskScoringConfig` | Từng Task hoàn thành | Theo task |
 
-> `evaluation_templates` (Mẫu đánh giá — Giai đoạn C) gộp nhiều
-> `evaluation_criteria` thành 1 bộ có trọng số, gán được cho "Vị trí đánh
-> giá" và có thể đánh dấu dùng chung toàn hệ thống. Schema đề xuất chi tiết:
-> `plans/2026-08-26-mau-danh-gia.md` §4. Chưa có phiếu đánh giá thực tế
-> (Giai đoạn D).
+> Tính năng "Mẫu đánh giá" (`evaluation_templates` — gộp nhiều
+> `evaluation_criteria` thành 1 bộ có trọng số) từng được dựng rồi **xoá
+> khỏi phạm vi dự án** (2026-08-31), chưa từng có phiếu đánh giá thực tế
+> dùng đến. Xem `docs/modules/Evaluation.md`.
 
 ### 7.2 Schema `task_scoring_configs`
 
@@ -547,8 +557,6 @@ erDiagram
   TASK }o--o| DEPARTMENT : "delegated_to"
   EMPLOYEE ||--o{ DAILY_REPORT : "1/ngày"
   DAILY_REPORT ||--o| DAILY_REPORT_SCORE : ""
-  EVALUATION_TEMPLATE ||--o{ EVALUATION_FORM : ""
-  EVALUATION_FORM ||--o{ EVALUATION_FORM_SUBMISSION : ""
   DEPARTMENT ||--o{ TASK_SCORING_CONFIG : ""
   DEPARTMENT ||--o{ DAILY_REPORT_SCORING_CONFIG : ""
   PROJECT ||--o{ PROJECT_EXPENSE : ""
@@ -775,7 +783,7 @@ project_documents          -- "Tài liệu dự án": có folder, người dùng
 | **1** | Bảng `teams`, 9 role, PermissionCatalog + UI ma trận, View-as, activity log | Phase 0 | **Xong** — Team trong Identity; CRUD nhóm trên hub WorkspaceConfig |
 | **1b** | Hub `WorkspaceConfig`: thành viên, gán role, sidebar theo phòng ban, overview super_admin | Phase 1 | **Xong** — thiếu tab Evaluation |
 | **1c** | Module `Evaluation` Giai đoạn B: tiêu chí đánh giá (2 kiểu), tab trong WorkspaceConfigHub | Phase 1b | **Xong** |
-| **1e** | Module `Evaluation` Giai đoạn C: Mẫu đánh giá + Vị trí đánh giá + mẫu dùng chung toàn hệ thống + trường tùy biến + Export Excel, mục **sidebar riêng** (khác Giai đoạn B). Kế hoạch: `plans/2026-08-26-mau-danh-gia.md` | Phase 1c | **Xong** — Import bị bỏ khỏi phạm vi có chủ đích (cấu trúc lồng nhau, rủi ro cao hơn lợi ích) |
+| **1e** | Module `Evaluation` Giai đoạn C: Mẫu đánh giá + Vị trí đánh giá + mẫu dùng chung toàn hệ thống + trường tùy biến + Export Excel, mục **sidebar riêng** (khác Giai đoạn B). Kế hoạch: `plans/2026-08-26-mau-danh-gia.md` | Phase 1c | **Đã xoá (2026-08-31)** — dựng xong rồi bị bỏ khỏi phạm vi dự án, chưa từng có phiếu đánh giá thực tế dùng đến. "Vị trí đánh giá" (`evaluation_positions`) vẫn còn, chỉ mất quan hệ với mẫu |
 | **1d** *(ngoài kế hoạch)* | Module `Social`: bảng tin, cảm xúc, bình luận, poll, nhóm — làm song song, không nằm trong lộ trình gốc | — | **Xong phần lõi** — lượt xem + giới hạn hiển thị theo phòng ban đang dở (working tree), xem `docs/modules/Social.md` §5 |
 | **1f** *(ngoài thứ tự gốc)* | Module `Project` Giai đoạn 1: CRUD, loại dự án, phạm vi/nhãn/thành viên, đính kèm, import/export Excel, nhân bản dự án, ngày thực tế, menu chuột phải tạo nhanh mục (`project_quick_items`) | — | **Xong Giai đoạn 1** — làm trước Initiative dù roadmap gốc đặt Project ở Phase 2 |
 | **1g** *(ngoài thứ tự gốc)* | Module `Project` Giai đoạn 2: entity `Task` thật (bảng `tasks`, WBS đa cấp `parent_id`, `type ∈ {task,phase,category}`), trang "Tất cả công việc" xuyên project, `ProjectQuickActionModals` chuyển sang API Task thật, cột chừa chỗ Task Delegation (§6, chưa có logic) | Phase 1f | **Xong** — `project_quick_items` chỉ còn dùng cho `baseline`/`signature`; **chưa có** Sprint/Worklog/Gantt UI thật, chưa roll-up `progress_percent` lên Project |
@@ -831,35 +839,17 @@ Tab thứ 3 trên `WorkspaceConfigHub`: **Tiêu chí đánh giá**.
 - UI: tab trong `WorkspaceConfigHub.vue` + `router.js`, không có mục sidebar riêng (cùng pattern Thành viên / Menu).
 - Super_admin: chỉ xem tiêu chí trên trang chi tiết phòng ban, không sửa thay trưởng phòng.
 
-### Bước 2 — Module `Evaluation` Giai đoạn C: Mẫu đánh giá (Xong)
+### Bước 2 — Module `Evaluation` Giai đoạn C: Mẫu đánh giá (Đã xoá — 2026-08-31)
 
-Kế hoạch chi tiết + lịch sử quyết định: **`plans/2026-08-26-mau-danh-gia.md`**
-(PR1–PR6 đều đã hoàn tất, verify qua smoke test backend + `vite build`).
-Tóm tắt:
+Đã dựng xong toàn bộ (PR1–PR6, kế hoạch cũ: `plans/2026-08-26-mau-danh-gia.md`)
+rồi bị **xoá khỏi phạm vi dự án** — chưa từng có phiếu đánh giá thực tế
+(Giai đoạn D) dùng đến, và trang không còn cần thiết. Đã gỡ route, model,
+migration (drop bảng), mục sidebar, quyền `evaluation.manage_global_template`.
+"Vị trí đánh giá" (`evaluation_positions`) — danh mục dùng chung, CHỈ ĐỌC —
+**vẫn giữ lại**, chỉ mất quan hệ N-N với mẫu đánh giá. Chi tiết hiện trạng:
+`docs/modules/Evaluation.md`.
 
-- Mẫu đánh giá + Vị trí đánh giá + mẫu dùng chung toàn hệ thống + trường
-  tùy biến + Export Excel — chia thành 6 PR nhỏ (xem plan §7).
-- Mẫu thuộc về 1 phòng ban theo mặc định (giống tiêu chí), nhưng
-  `department_director` trở lên có thể đánh dấu `is_global` — dùng chung cho
-  **toàn bộ hệ thống** (mọi phòng ban thấy/dùng được), quyền riêng
-  `evaluation.manage_global_template`. Mẫu global được chọn tiêu chí từ bất
-  kỳ phòng ban nào (UI hiện tên phòng ban nguồn).
-- **Đổi nguyên tắc UI so với Giai đoạn B**: trang Mẫu đánh giá có **mục
-  sidebar riêng** (`/manager/evaluation-templates`), không phải tab trong
-  `WorkspaceConfigHub` — vì mẫu đánh giá là entity độc lập, có thể dùng
-  chung nhiều phòng ban, không còn "thuộc về" đúng 1 phòng ban như tiêu
-  chí. Tiêu chí đánh giá (Giai đoạn B) **không đổi vị trí**, vẫn là tab
-  trong Hub. Chỉ department_director/deputy trở lên thấy mục này.
-  `resources/js/router/index.js` có thêm guard tổng quát
-  `meta.requiresPermission` cho route dạng này.
-- Mã mẫu tự sinh `EVT-0001` (tiền tố + 4 chữ số).
-- **Import bị bỏ khỏi phạm vi có chủ đích** (PR6) — khác tiêu chí đánh giá
-  (phẳng, 1 dòng = 1 bản ghi), mẫu có cấu trúc lồng nhau (N-N tiêu chí kèm
-  trọng số riêng, N-N vị trí, trường tùy biến JSON) không phẳng an toàn
-  thành 1 dòng Excel để nhập lại; chỉ làm Export dùng
-  `phpoffice/phpspreadsheet` (đã có sẵn trong `composer.json`).
-
-### Bước 3 — sau khi Mẫu đánh giá chạy (Project Giai đoạn 2 — Task — đã xong, xem §19 Phase 1g)
+### Bước 3 — (Project Giai đoạn 2 — Task — đã xong, xem §19 Phase 1g)
 
 | Ưu tiên | Khi nào chọn |
 |---|---|

@@ -11,8 +11,7 @@ use Illuminate\Support\Facades\Schema;
  * để trống (null) — sẽ tổng hợp từ Task tương lai, KHÔNG tính gì ở đây.
  *
  * `code` tự sinh dạng PRJ0001, PRJ0002… tăng dần — sinh trong
- * ProjectRepository::nextCode() bằng transaction + lock (xem
- * EvaluationTemplateRepository::nextCodeSequence() làm mẫu tương tự).
+ * ProjectRepository::nextCode() bằng transaction + lock.
  */
 return new class extends Migration
 {

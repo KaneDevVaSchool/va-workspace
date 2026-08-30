@@ -4,9 +4,9 @@ namespace Modules\Project\App\Enums;
 
 /**
  * Danh mục giá trị cố định (enum-string) của module Project — theo đúng
- * convention const-array đã dùng ở Evaluation (xem
- * EvaluationTemplateCustomField::FIELD_TYPES / TYPE_LABELS), không dùng
- * PHP enum (repo chưa có tiền lệ PHP enum ở module nào khác).
+ * convention const-array đã dùng ở các module khác (danh sách giá trị hợp
+ * lệ + nhãn tiếng Việt trong 1 const array), không dùng PHP enum (repo chưa
+ * có tiền lệ PHP enum ở module nào khác).
  *
  * Export ra JSON cho frontend qua ProjectController::options() —
  * GET /api/project/options.

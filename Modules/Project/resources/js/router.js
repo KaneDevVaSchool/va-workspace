@@ -1,11 +1,11 @@
 /**
  * Route Vue của module Project — import/gộp vào resources/js/router/index.js.
  *
- * "Dự án" là mục sidebar riêng trong nhóm "Quản lý" — cùng nhóm với "Mẫu
- * đánh giá". Route này CHỈ tồn tại phía Vue Router (SPA) — Laravel phục vụ
- * qua fallback catch-all trong routes/web.php gốc, không có route Laravel
- * "manager.project.index" thật (giống hệt cách Evaluation làm với
- * manager.evaluation-templates.index — xem Modules/Evaluation/resources/js/router.js).
+ * "Dự án" là mục sidebar riêng trong nhóm "Quản lý". Route này CHỈ tồn tại
+ * phía Vue Router (SPA) — Laravel phục vụ qua fallback catch-all trong
+ * routes/web.php gốc, không có route Laravel "manager.project.index" thật
+ * (giống hệt cách Evaluation làm với manager.evaluation-score-kit.index —
+ * xem Modules/Evaluation/resources/js/router.js).
  */
 export default [
   {

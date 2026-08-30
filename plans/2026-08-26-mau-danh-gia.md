@@ -1,5 +1,12 @@
 # Mẫu đánh giá — Evaluation Giai đoạn C
 
+> **ĐÃ XOÁ KHỎI PHẠM VI DỰ ÁN (2026-08-31)**. Tính năng mô tả trong kế hoạch
+> này đã được dựng xong đầy đủ rồi bị gỡ bỏ toàn bộ (route, controller,
+> service, repository, model, migration đã drop bảng, trang Vue, mục
+> sidebar, quyền `evaluation.manage_global_template`) — chưa từng có phiếu
+> đánh giá thực tế (Giai đoạn D) dùng đến. Tài liệu này chỉ còn giá trị lịch
+> sử/tham khảo. Hiện trạng module `Evaluation`: `docs/modules/Evaluation.md`.
+
 > Tiếp theo sau Giai đoạn B (Tiêu chí đánh giá — đã xong, xem
 > `docs/VA_WORKSPACE_OVERVIEW.md` §7, §21 và `Modules/Evaluation/README.md`
 > nếu có). Tham khảo UI mẫu: màn hình "Danh sách mẫu đánh giá" +
