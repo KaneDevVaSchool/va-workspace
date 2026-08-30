@@ -40,6 +40,15 @@ interface TaskRepositoryInterface
     /** Toàn bộ Task của 1 project, dạng phẳng, sắp theo parent_id/sort_order — dùng để build cây WBS. */
     public function flatForProject(int $projectId): Collection;
 
+    /**
+     * Gõ-tìm công việc cha khi tạo: trong 1 dự án, hoặc công việc thường xuyên
+     * (project_id null) nếu không chọn dự án. $id khác null thì hydrat đúng bản ghi.
+     *
+     * @param  list<int>  $allowedProjectIds
+     * @return Collection<int, Task>
+     */
+    public function searchParents(\App\Models\User $viewer, array $allowedProjectIds, ?int $projectId, string $q, int $limit, ?int $id = null): Collection;
+
     public function find(int $id): ?Task;
 
     /** Đối chiếu theo mã công việc khi nhập Excel (PR8) — điểm xác định dòng cần update. */
@@ -50,6 +59,9 @@ interface TaskRepositoryInterface
 
     /** @param  array<string, mixed>  $data */
     public function update(Task $task, array $data): Task;
+
+    /** @param list<int> $watcherIds @param list<int> $collaboratorIds */
+    public function syncPeople(Task $task, array $watcherIds, array $collaboratorIds): Task;
 
     public function delete(Task $task): bool;
 

@@ -5,6 +5,7 @@ namespace Modules\Project\App\Services;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Services\NotificationService;
@@ -193,7 +194,7 @@ class TaskService
             'title' => $task->title,
             'type_label' => TaskEnums::TYPE_LABELS[$task->type] ?? $task->type,
             'status_label' => TaskEnums::STATUS_LABELS[$task->status] ?? $task->status,
-            'priority_label' => $task->priority ? (TaskEnums::PRIORITY_LABELS[$task->priority] ?? $task->priority) : '',
+            'priority_label' => TaskEnums::priorityLabel($task->priority),
             'assignee_email' => $task->assignee?->email ?? '',
             'manager_email' => $task->manager?->email ?? '',
             'start_date' => $task->start_date?->format('d/m/Y') ?? '',
@@ -270,8 +271,12 @@ class TaskService
      * @param  array<string, mixed>  $data
      * @return Task|array{error: string}
      */
-    public function create(Project $project, array $data, User $creator): Task|array
+    public function create(?Project $project, array $data, User $creator): Task|array
     {
+        if ($project !== null && ! $this->projects->viewerCanAssignTo($creator, $project)) {
+            return ['error' => 'Bạn không thể tạo công việc trong dự án này.'];
+        }
+
         $titles = $data['titles'] ?? null;
         if (is_array($titles) && $titles !== []) {
             $last = null;
@@ -289,33 +294,100 @@ class TaskService
     }
 
     /**
-     * @param  array<string, mixed>  $data
-     * @return Task|array{error: string}
+     * Gõ-tìm công việc cha khi tạo: trong dự án đã chọn, hoặc công việc
+     * thường xuyên nếu không gắn dự án.
+     *
+     * @return list<array<string, mixed>>
      */
-    private function createSingle(Project $project, array $data, User $creator): Task|array
+    public function searchParents(string $q, ?int $projectId, User $viewer, ?int $id = null): array
     {
-        $parentId = $data['parent_id'] ?? null;
-        if ($parentId !== null) {
-            $parent = $this->tasks->find((int) $parentId);
-            if ($parent === null || $parent->project_id !== $project->id) {
-                return ['error' => 'Công việc cha không thuộc dự án này.'];
+        if ($projectId !== null) {
+            $project = $this->projects->find($projectId);
+            if ($project === null || ! $this->projects->viewerCanAssignTo($viewer, $project)) {
+                return [];
             }
         }
 
-        unset($data['titles']);
+        $allowedProjectIds = $this->projects->forViewer(Project::query(), $viewer)->pluck('id')->all();
+        $tasks = $this->tasks->searchParents($viewer, $allowedProjectIds, $projectId, $q, 20, $id);
+
+        return $tasks->map(fn (Task $task) => [
+            'id' => $task->id,
+            'title' => $task->title,
+            'code' => $task->code,
+            'project_id' => $task->project_id,
+            'start_date' => $task->start_date?->toDateString(),
+            'end_date' => $task->end_date?->toDateString(),
+            'project' => $task->project !== null
+                ? ['id' => $task->project->id, 'code' => $task->project->code, 'name' => $task->project->name]
+                : null,
+        ])->values()->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return Task|array{error: string}
+     */
+    private function createSingle(?Project $project, array $data, User $creator): Task|array
+    {
+        $parentId = $data['parent_id'] ?? null;
+        $parent = null;
+        if ($parentId !== null) {
+            $parent = $this->tasks->find((int) $parentId);
+            if ($parent === null) {
+                return ['error' => 'Công việc cha không tồn tại.'];
+            }
+            if ($parent->project_id !== ($project?->id)) {
+                return $project === null
+                    ? ['error' => 'Công việc cha của công việc thường xuyên không được thuộc một dự án.']
+                    : ['error' => 'Công việc cha không thuộc dự án này.'];
+            }
+
+            $dateError = $this->validateChildDateRange($parent, $data);
+            if ($dateError !== null) {
+                return ['error' => $dateError];
+            }
+        }
+
+        $watcherIds = array_map('intval', $data['watcher_ids'] ?? []);
+        $collaboratorIds = array_map('intval', $data['collaborator_ids'] ?? []);
+        unset($data['titles'], $data['watcher_ids'], $data['collaborator_ids'], $data['project_id']);
 
         $data = $this->applyQuantityProgress($data);
+        if (array_key_exists('priority', $data)) {
+            $data['priority'] = TaskEnums::normalizePriority($data['priority'] ?? null);
+        }
 
         $payload = array_merge($data, [
-            'project_id' => $project->id,
+            'project_id' => $project?->id,
             'type' => $data['type'] ?? 'task',
             'status' => $data['status'] ?? 'not_started',
-            'origin_department_id' => $project->owner_department_id,
+            'origin_department_id' => $project?->owner_department_id ?? $creator->department_id,
             'created_by' => $creator->id,
             'updated_by' => $creator->id,
         ]);
 
-        return $this->tasks->create($payload);
+        return DB::transaction(function () use ($payload, $watcherIds, $collaboratorIds) {
+            $task = $this->tasks->create($payload);
+
+            return $this->tasks->syncPeople($task, $watcherIds, $collaboratorIds);
+        });
+    }
+
+    private function validateChildDateRange(Task $parent, array $data): ?string
+    {
+        $start = ! empty($data['start_date']) ? Carbon::parse($data['start_date'])->startOfDay() : null;
+        $end = ! empty($data['end_date']) ? Carbon::parse($data['end_date'])->startOfDay() : null;
+
+        if ($start !== null && $parent->start_date !== null && $start->lt($parent->start_date)) {
+            return 'Ngày bắt đầu công việc con phải nằm trong thời gian thực hiện công việc cha.';
+        }
+
+        if ($end !== null && $parent->end_date !== null && $end->gt($parent->end_date)) {
+            return 'Ngày kết thúc công việc con phải nằm trong thời gian thực hiện công việc cha.';
+        }
+
+        return null;
     }
 
     /**
@@ -338,11 +410,34 @@ class TaskService
 
             $newParent = $this->tasks->find($newParentId);
             if ($newParent === null || $newParent->project_id !== $task->project_id) {
-                return ['error' => 'Công việc cha không thuộc cùng dự án.'];
+                return ['error' => $task->project_id === null
+                    ? 'Công việc cha của công việc thường xuyên không được thuộc một dự án.'
+                    : 'Công việc cha không thuộc cùng dự án.'];
+            }
+        }
+
+        $effectiveParentId = array_key_exists('parent_id', $data) ? $data['parent_id'] : $task->parent_id;
+        if ($effectiveParentId !== null) {
+            $effectiveParent = $this->tasks->find((int) $effectiveParentId);
+            if ($effectiveParent === null || $effectiveParent->project_id !== $task->project_id) {
+                return ['error' => $task->project_id === null
+                    ? 'Công việc cha của công việc thường xuyên không được thuộc một dự án.'
+                    : 'Công việc cha không thuộc cùng dự án.'];
+            }
+
+            $dateError = $this->validateChildDateRange($effectiveParent, [
+                'start_date' => array_key_exists('start_date', $data) ? $data['start_date'] : $task->start_date,
+                'end_date' => array_key_exists('end_date', $data) ? $data['end_date'] : $task->end_date,
+            ]);
+            if ($dateError !== null) {
+                return ['error' => $dateError];
             }
         }
 
         $data = $this->applyQuantityProgress($data, $task);
+        if (array_key_exists('priority', $data)) {
+            $data['priority'] = TaskEnums::normalizePriority($data['priority'] ?? null);
+        }
         $data = $this->applyAcceptedTracking($task, $data);
 
         $data['updated_by'] = $editor->id;
@@ -439,7 +534,7 @@ class TaskService
         $updated = [];
         foreach ($taskIds as $taskId) {
             $task = $this->tasks->find((int) $taskId);
-            if ($task === null || ! in_array($task->project_id, $allowedProjectIds, true)) {
+            if ($task === null || ! $this->viewerCanAccessTask($task, $editor, $allowedProjectIds)) {
                 continue;
             }
             $updated[] = $this->tasks->update($task, $allowed);
@@ -473,7 +568,7 @@ class TaskService
         $updated = [];
         foreach ($taskIds as $taskId) {
             $task = $this->tasks->find((int) $taskId);
-            if ($task === null || ! in_array($task->project_id, $allowedProjectIds, true)) {
+            if ($task === null || ! $this->viewerCanAccessTask($task, $editor, $allowedProjectIds)) {
                 continue;
             }
 
@@ -492,6 +587,41 @@ class TaskService
         }
 
         return $updated;
+    }
+
+    /** @param  list<int>  $allowedProjectIds */
+    private function viewerCanAccessTask(Task $task, User $viewer, array $allowedProjectIds): bool
+    {
+        if ($task->project_id !== null) {
+            return in_array($task->project_id, $allowedProjectIds, true);
+        }
+
+        if ($viewer->isSuperAdmin()
+            || $this->permissions->allows($viewer, 'project.*')
+            || $this->permissions->allows($viewer, 'task.*')) {
+            return true;
+        }
+
+        if ($viewer->department_id && $task->origin_department_id === $viewer->department_id) {
+            return true;
+        }
+
+        if (in_array($viewer->id, array_filter([$task->assignee_id, $task->manager_id, $task->created_by]), true)) {
+            return true;
+        }
+
+        $watchers = $task->relationLoaded('watchers')
+            ? $task->watchers
+            : $task->watchers()->get();
+        if ($watchers->contains('id', $viewer->id)) {
+            return true;
+        }
+
+        $collaborators = $task->relationLoaded('collaborators')
+            ? $task->collaborators
+            : $task->collaborators()->get();
+
+        return $collaborators->contains('id', $viewer->id);
     }
 
     /** @param  list<Task>  $tasks */
@@ -544,6 +674,7 @@ class TaskService
             'description' => $task->description,
             'status' => $task->status,
             'priority' => $task->priority,
+            'priority_label' => TaskEnums::priorityLabel($task->priority),
             'start_date' => $task->start_date?->toDateString(),
             'start_time' => $task->start_time,
             'end_date' => $task->end_date?->toDateString(),
@@ -561,6 +692,22 @@ class TaskService
             'worklog_hours' => (float) ($task->worklogs_sum_hours ?? 0),
             'manager_id' => $task->manager_id,
             'manager' => $this->presentUser($task->relationLoaded('manager') ? $task->manager : null),
+            'watchers' => $task->relationLoaded('watchers')
+                ? $task->watchers->map(fn (User $user) => $this->presentUser($user))->values()->all()
+                : [],
+            'collaborators' => $task->relationLoaded('collaborators')
+                ? $task->collaborators->map(fn (User $user) => $this->presentUser($user))->values()->all()
+                : [],
+            'constrain_child_dates' => (bool) $task->constrain_child_dates,
+            'hide_cross_tasks_from_assignees' => (bool) $task->hide_cross_tasks_from_assignees,
+            'hide_from_parent_assignees' => (bool) $task->hide_from_parent_assignees,
+            'hide_from_parent_followers' => (bool) $task->hide_from_parent_followers,
+            'hide_child_tasks_from_followers' => (bool) $task->hide_child_tasks_from_followers,
+            'allow_child_people_view_parent' => (bool) $task->allow_child_people_view_parent,
+            'auto_complete_on_report' => (bool) $task->auto_complete_on_report,
+            'completed_interaction_policy' => $task->completed_interaction_policy,
+            'report_description_requirement' => $task->report_description_requirement,
+            'report_attachment_requirement' => $task->report_attachment_requirement,
             'accepted_by' => $task->accepted_by,
             'accepted_by_user' => $this->presentUser($task->relationLoaded('acceptedBy') ? $task->acceptedBy : null),
             'accepted_at' => $task->accepted_at?->toIso8601String(),

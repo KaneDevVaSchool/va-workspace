@@ -160,6 +160,7 @@ function showPreferredSplit(index) {
             :src="item.avatar_url"
             alt=""
             class="proj-member-picker__avatar-img"
+            referrerpolicy="no-referrer"
             @error="onAvatarError(item.id)"
           />
           <template v-else>{{ initial(item.name) }}</template>
@@ -224,6 +225,7 @@ function showPreferredSplit(index) {
                 :src="item.avatar_url"
                 alt=""
                 class="proj-member-picker__avatar-img"
+                referrerpolicy="no-referrer"
                 @error="onAvatarError(item.id)"
               />
               <template v-else>{{ initial(item.name) }}</template>

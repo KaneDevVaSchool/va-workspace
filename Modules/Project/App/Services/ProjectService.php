@@ -451,6 +451,30 @@ class ProjectService
         return $this->projects->assignableUsersInDepartment($currentUser->department_id);
     }
 
+    /**
+     * Gõ-tìm dự án được phép gắn khi tạo công việc (phòng ban hoặc đang tham gia).
+     *
+     * @return list<array{id:int,code:?string,name:string,owner_department:?array,executing_department:?array}>
+     */
+    public function searchAssignable(string $q, User $viewer, int $limit = 20, ?int $id = null): array
+    {
+        return $this->projects->searchAssignable($q, $viewer, $limit, $id)
+            ->map(fn (Project $project) => [
+                'id' => $project->id,
+                'code' => $project->code,
+                'name' => $project->name,
+                'owner_department' => $this->presentDepartment($project->ownerDepartment),
+                'executing_department' => $this->presentDepartment($project->executingDepartment),
+            ])
+            ->values()
+            ->all();
+    }
+
+    public function viewerCanAssignTo(User $viewer, Project $project): bool
+    {
+        return $this->projects->viewerCanAssignTo($viewer, $project);
+    }
+
     // ---------- Theo dõi dự án (mục B) ----------
 
     public function follow(Project $project, User $user): void

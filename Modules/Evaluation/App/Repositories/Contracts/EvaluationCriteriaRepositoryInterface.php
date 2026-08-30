@@ -48,6 +48,14 @@ interface EvaluationCriteriaRepositoryInterface
     /** Đổi trạng thái use_in_evaluation (hiện trên ĐGNL). */
     public function toggleUseInEvaluation(EvaluationCriteria $criterion, ?int $updatedBy = null): EvaluationCriteria;
 
+    /**
+     * Gán / bỏ gán tiêu chí làm nguồn loại công việc của phòng ban.
+     * Khi bật, các tiêu chí khác cùng phòng bị tắt cờ này.
+     */
+    public function assignUseForTaskType(EvaluationCriteria $criterion, bool $enabled, ?int $updatedBy = null): EvaluationCriteria;
+
+    public function findTaskTypeCriterion(int $departmentId): ?EvaluationCriteria;
+
     /** Cập nhật sort_order theo mảng IDs (giữ nguyên phòng ban). */
     public function reorder(int $departmentId, array $orderedIds): void;
 }

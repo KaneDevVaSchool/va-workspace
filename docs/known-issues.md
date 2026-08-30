@@ -84,3 +84,26 @@ Không chặn tính năng hiện tại (code chạy đúng) — ghi nhận làm 
 cân nhắc dọn khi có đợt refactor Identity/Social hoặc khi sửa
 `ProjectRepositoryInterface::forViewer()` để tự khởi tạo query bên trong
 thay vì nhận từ ngoài.
+
+## `progress_type` mới (`checklist`/`child_weight`/`timeline`) chỉ khai enum, chưa có logic tính (2026-08-30)
+
+`TaskEnums::PROGRESS_TYPES` đã thêm 3 giá trị mới cùng nhãn hiển thị, và
+`StoreTaskRequest`/`UpdateTaskRequest` chấp nhận chúng khi validate, nhưng
+`TaskService::applyQuantityProgress()` (nơi tự tính `progress_percent`) mới
+xử lý `percent`/`quantity` như trước — chọn `checklist`/`child_weight`/
+`timeline` hiện không tự tính gì, `progress_percent` sẽ đứng yên theo giá
+trị nhập tay hoặc null. Cần cài đặt logic tương ứng trước khi cho phép chọn
+3 phương pháp này trên UI thật (hiện `TaskCreate.vue`/`TaskList.vue` đã có
+sẵn trong danh sách lựa chọn qua `TaskEnums::options()`).
+
+## Creation settings mới trên Task — cột + validate đã có, enforcement runtime chưa rà soát (2026-08-30)
+
+Migration `2026_08_30_100008_add_creation_settings_to_tasks_table` thêm 10
+cột cấu hình (ẩn/hiện chéo cha-con-người theo dõi, tự động hoàn thành theo
+báo cáo, chính sách tương tác sau hoàn thành, yêu cầu mô tả/đính kèm báo
+cáo). `StoreTaskRequest`/`UpdateTaskRequest`/`TaskService::present()` đã
+đọc/ghi/trả các cột này, nhưng chưa rà soát toàn bộ nơi các cờ này cần được
+**thực thi** (ví dụ: `hide_from_parent_followers` có thực sự lọc bớt dữ
+liệu trả về ở `TaskRepository`/`TaskList.vue` chưa; `auto_complete_on_report`
+có tự đổi `status='completed'` khi tạo báo cáo chưa). Cần kiểm tra từng cờ
+trước khi công bố tính năng "hoàn chỉnh" cho người dùng cuối.

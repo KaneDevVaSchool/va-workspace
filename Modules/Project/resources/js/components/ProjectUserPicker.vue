@@ -23,6 +23,7 @@ const query = ref('');
 const open = ref(false);
 const highlighted = ref(0);
 const inputRef = ref(null);
+const brokenAvatars = ref(new Set());
 
 const selectedUser = computed(() => {
   if (props.modelValue === '' || props.modelValue == null) return null;
@@ -117,12 +118,32 @@ function onKeydown(event) {
 function initial(name) {
   return (name || '').trim().charAt(0).toUpperCase() || '?';
 }
+
+function hasPhoto(user) {
+  return Boolean(user?.avatar_url) && !brokenAvatars.value.has(String(user.id));
+}
+
+function onAvatarError(userId) {
+  const next = new Set(brokenAvatars.value);
+  next.add(String(userId));
+  brokenAvatars.value = next;
+}
 </script>
 
 <template>
   <div class="proj-user-picker">
     <div v-if="selectedUser" class="proj-user-picker__row">
-      <span class="proj-user-picker__avatar" aria-hidden="true">{{ initial(selectedUser.name) }}</span>
+      <span class="proj-user-picker__avatar" aria-hidden="true">
+        <img
+          v-if="hasPhoto(selectedUser)"
+          :src="selectedUser.avatar_url"
+          alt=""
+          class="proj-user-picker__avatar-img"
+          referrerpolicy="no-referrer"
+          @error="onAvatarError(selectedUser.id)"
+        />
+        <template v-else>{{ initial(selectedUser.name) }}</template>
+      </span>
       <span class="proj-user-picker__copy">
         <span class="proj-user-picker__name">{{ selectedUser.name }}</span>
         <span v-if="selectedUser.department?.name || selectedUser.email" class="proj-user-picker__meta">
@@ -172,7 +193,17 @@ function initial(name) {
           :aria-selected="index === highlighted ? 'true' : 'false'"
           @mousedown.prevent="pick(item)"
         >
-          <span class="proj-user-picker__option-avatar" aria-hidden="true">{{ initial(item.name) }}</span>
+          <span class="proj-user-picker__option-avatar" aria-hidden="true">
+            <img
+              v-if="hasPhoto(item)"
+              :src="item.avatar_url"
+              alt=""
+              class="proj-user-picker__avatar-img"
+              referrerpolicy="no-referrer"
+              @error="onAvatarError(item.id)"
+            />
+            <template v-else>{{ initial(item.name) }}</template>
+          </span>
           <span class="proj-user-picker__option-copy">
             <span>{{ item.name }}</span>
             <span class="proj-user-picker__option-meta">
@@ -213,11 +244,18 @@ function initial(name) {
   flex-shrink: 0;
   width: 1.75rem;
   height: 1.75rem;
+  overflow: hidden;
   border-radius: var(--radius-full);
   background: var(--color-primary-surface);
   color: var(--color-primary);
   font-size: 0.75rem;
   font-weight: 700;
+}
+
+.proj-user-picker__avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .proj-user-picker__copy,

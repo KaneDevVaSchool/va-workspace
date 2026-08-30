@@ -281,6 +281,17 @@ class ProjectController extends Controller
         ]);
     }
 
+    /** GET /api/project/assignable-projects — gõ-tìm dự án được phép gắn công việc. */
+    public function assignableProjects(Request $request)
+    {
+        $q = trim((string) $request->input('q', ''));
+        $id = $request->filled('id') ? (int) $request->input('id') : null;
+
+        return response()->json([
+            'projects' => $this->service->searchAssignable($q, $request->user(), 20, $id),
+        ]);
+    }
+
     public function options(Request $request)
     {
         return response()->json(array_merge(ProjectEnums::options(), [

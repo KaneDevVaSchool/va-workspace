@@ -69,6 +69,9 @@ Route::prefix('evaluation')->name('evaluation.')->group(function () {
     Route::patch('/criteria/{id}/toggle-evaluation', [EvaluationCriteriaController::class, 'toggleUseInEvaluation'])
         ->name('criteria.toggle-evaluation');
 
+    Route::patch('/criteria/{id}/toggle-task-type', [EvaluationCriteriaController::class, 'toggleUseForTaskType'])
+        ->name('criteria.toggle-task-type');
+
     // Xoá tiêu chí
     Route::delete('/criteria/{id}', [EvaluationCriteriaController::class, 'destroy'])
         ->name('criteria.destroy');

@@ -43,6 +43,12 @@ const COLUMNS = [
         defaultOn: true,
         align: "center",
     },
+    {
+        key: "use_for_task_type",
+        label: "Loại công việc",
+        defaultOn: true,
+        align: "center",
+    },
     { key: "created_at", label: "Ngày tạo", defaultOn: false },
     { key: "creator", label: "Người tạo", defaultOn: true, align: "center" },
     {
@@ -64,7 +70,7 @@ const FILTERS = [
 const TYPE_LABELS = { scale: "Thang điểm", behavior: "Cộng/trừ" };
 const TYPE_CODE_PREFIX = "TCA";
 const TYPE_CODE_PAD = 4;
-const COL_KEY = "va-eval-criteria-columns-v5";
+const COL_KEY = "va-eval-criteria-columns-v6";
 const FILTER_KEY = "va-eval-criteria-filters-v2";
 const WIDTH_KEY = "va-eval-criteria-widths";
 const ZOOM_KEY = "va-eval-criteria-zoom";
@@ -134,6 +140,7 @@ const form = reactive({
     description: "",
     is_active: true,
     use_in_evaluation: true,
+    use_for_task_type: false,
     allow_half: false,
     levels: [],
 });
@@ -372,6 +379,8 @@ const criterionUnchanged = computed(() => {
     if (Boolean(form.is_active) !== Boolean(current.is_active)) return false;
     if (Boolean(form.use_in_evaluation) !== Boolean(current.use_in_evaluation))
         return false;
+    if (Boolean(form.use_for_task_type) !== Boolean(current.use_for_task_type))
+        return false;
     if (Boolean(form.allow_half) !== Boolean(current.allow_half)) return false;
     const nextLevels = form.levels.map(levelSnapshot);
     const prevLevels = (current.levels ?? []).map(levelSnapshot);
@@ -512,7 +521,7 @@ function computeDefaultWidths() {
         let max = measureText(col.label) + COL_EXTRA;
         if (col.key === "status") {
             max = Math.max(max, BADGE_CELL_PX + CELL_PAD_X);
-        } else if (col.key === "use_in_evaluation") {
+        } else if (col.key === "use_in_evaluation" || col.key === "use_for_task_type") {
             max = Math.max(max, SWITCH_CELL_PX + CELL_PAD_X);
         } else if (col.key === "creator" || col.key === "updater") {
             max = Math.max(max, AVATAR_CELL_PX + CELL_PAD_X);
@@ -903,6 +912,7 @@ async function saveCriterion() {
         description: form.description || null,
         is_active: form.is_active,
         use_in_evaluation: Boolean(form.use_in_evaluation),
+        use_for_task_type: Boolean(form.use_for_task_type),
         allow_half: Boolean(form.allow_half),
         levels: form.levels
             .filter((l) => (l.label ?? "").trim() !== "")
@@ -924,6 +934,13 @@ async function saveCriterion() {
                 (c) => c.id === data.criterion.id,
             );
             if (idx !== -1) allCriteria.value[idx] = data.criterion;
+            if (data.criterion.use_for_task_type) {
+                allCriteria.value = allCriteria.value.map((c) =>
+                    c.id === data.criterion.id
+                        ? data.criterion
+                        : { ...c, use_for_task_type: false },
+                );
+            }
             if (selected.value?.id === data.criterion.id)
                 selected.value = data.criterion;
             dialogKind.value = null;
@@ -937,6 +954,13 @@ async function saveCriterion() {
                 payload,
             );
             allCriteria.value.unshift(data.criterion);
+            if (data.criterion.use_for_task_type) {
+                allCriteria.value = allCriteria.value.map((c) =>
+                    c.id === data.criterion.id
+                        ? data.criterion
+                        : { ...c, use_for_task_type: false },
+                );
+            }
             dialogKind.value = null;
             showClientToast(
                 "success",
@@ -1026,6 +1050,35 @@ async function toggleUseInEvaluation(criterion) {
     }
 }
 
+async function toggleUseForTaskType(criterion) {
+    togglingId.value = criterion.id;
+    try {
+        const { data } = await window.axios.patch(
+            `/api/evaluation/criteria/${criterion.id}/toggle-task-type`,
+        );
+        const assigned = Boolean(data.criterion.use_for_task_type);
+        allCriteria.value = allCriteria.value.map((c) => {
+            if (c.id === data.criterion.id) return data.criterion;
+            return assigned ? { ...c, use_for_task_type: false } : c;
+        });
+        if (selected.value?.id === criterion.id) selected.value = data.criterion;
+        showClientToast(
+            "success",
+            assigned
+                ? `Đã gán "${data.criterion.name}" cho loại công việc.`
+                : `Đã bỏ gán "${data.criterion.name}" khỏi loại công việc.`,
+        );
+    } catch (err) {
+        showClientToast(
+            "error",
+            err?.response?.data?.message ||
+                "Không gán được tiêu chí cho loại công việc.",
+        );
+    } finally {
+        togglingId.value = null;
+    }
+}
+
 // ─── dialog / panel helpers ──────────────────────────────────────────────────
 
 function resetCriterionForm() {
@@ -1036,6 +1089,7 @@ function resetCriterionForm() {
     form.description = "";
     form.is_active = true;
     form.use_in_evaluation = true;
+    form.use_for_task_type = false;
     form.allow_half = false;
     form.levels = defaultLevels("scale");
     formErrors.value = {};
@@ -1051,6 +1105,7 @@ function fillCriterionForm(criterion) {
     form.description = criterion.description ?? "";
     form.is_active = criterion.is_active;
     form.use_in_evaluation = criterion.use_in_evaluation !== false;
+    form.use_for_task_type = Boolean(criterion.use_for_task_type);
     form.allow_half =
         Boolean(criterion.allow_half) || hasHalfScore(criterion.levels);
     form.levels = (criterion.levels ?? []).map((level) => mapLevel(level));
@@ -1830,6 +1885,45 @@ onBeforeUnmount(() => {
                                     </button>
                                 </td>
                                 <td
+                                    v-if="visibleColumns.use_for_task_type"
+                                    class="eval-page__td eval-page__td--center"
+                                >
+                                    <button
+                                        type="button"
+                                        class="eval-page__switch"
+                                        :class="{
+                                            'eval-page__switch--on':
+                                                entry.criterion
+                                                    .use_for_task_type,
+                                        }"
+                                        role="switch"
+                                        :aria-checked="
+                                            entry.criterion.use_for_task_type
+                                                ? 'true'
+                                                : 'false'
+                                        "
+                                        aria-label="Dùng cho loại công việc"
+                                        :disabled="
+                                            !canManage ||
+                                            togglingId === entry.criterion.id ||
+                                            (entry.criterion.type !==
+                                                'scale' &&
+                                                !entry.criterion
+                                                    .use_for_task_type)
+                                        "
+                                        @click.stop="
+                                            toggleUseForTaskType(
+                                                entry.criterion,
+                                            )
+                                        "
+                                    >
+                                        <span
+                                            class="eval-page__switch-thumb"
+                                            aria-hidden="true"
+                                        />
+                                    </button>
+                                </td>
+                                <td
                                     v-if="visibleColumns.created_at"
                                     class="eval-page__td"
                                 >
@@ -2085,6 +2179,12 @@ onBeforeUnmount(() => {
                         <dt>Dùng trong ĐGNL</dt>
                         <dd>
                             {{ selected.use_in_evaluation ? "Có" : "Không" }}
+                        </dd>
+                    </div>
+                    <div class="eval-page__dl-row">
+                        <dt>Loại công việc</dt>
+                        <dd>
+                            {{ selected.use_for_task_type ? "Có" : "Không" }}
                         </dd>
                     </div>
                     <div class="eval-page__dl-row">
@@ -2884,6 +2984,45 @@ onBeforeUnmount(() => {
                                                     @click="
                                                         form.use_in_evaluation =
                                                             !form.use_in_evaluation
+                                                    "
+                                                >
+                                                    <span
+                                                        class="eval-page__switch-thumb"
+                                                        aria-hidden="true"
+                                                    />
+                                                </button>
+                                            </div>
+                                            <div class="eval-page__half-toggle">
+                                                <span
+                                                    id="eval-use-task-type-label"
+                                                    class="eval-page__half-toggle-label"
+                                                    >Dùng cho loại công việc</span
+                                                >
+                                                <button
+                                                    type="button"
+                                                    class="eval-page__switch"
+                                                    :class="{
+                                                        'eval-page__switch--on':
+                                                            form.use_for_task_type,
+                                                    }"
+                                                    role="switch"
+                                                    aria-labelledby="eval-use-task-type-label"
+                                                    :aria-checked="
+                                                        form.use_for_task_type
+                                                            ? 'true'
+                                                            : 'false'
+                                                    "
+                                                    :disabled="
+                                                        formSaving ||
+                                                        (dialogTab === 'edit' &&
+                                                            !form.id) ||
+                                                        (form.type !==
+                                                            'scale' &&
+                                                            !form.use_for_task_type)
+                                                    "
+                                                    @click="
+                                                        form.use_for_task_type =
+                                                            !form.use_for_task_type
                                                     "
                                                 >
                                                     <span

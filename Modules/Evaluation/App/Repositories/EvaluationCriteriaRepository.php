@@ -115,6 +115,38 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
         return $criterion->fresh(EvaluationCriteria::WITH_PRESENT);
     }
 
+    public function assignUseForTaskType(EvaluationCriteria $criterion, bool $enabled, ?int $updatedBy = null): EvaluationCriteria
+    {
+        if ($enabled) {
+            EvaluationCriteria::query()
+                ->where('department_id', $criterion->department_id)
+                ->where('id', '!=', $criterion->id)
+                ->where('use_for_task_type', true)
+                ->update(array_filter([
+                    'use_for_task_type' => false,
+                    'updated_by' => $updatedBy,
+                ], fn ($value) => $value !== null));
+        }
+
+        $payload = ['use_for_task_type' => $enabled];
+        if ($updatedBy !== null) {
+            $payload['updated_by'] = $updatedBy;
+        }
+        $criterion->update($payload);
+
+        return $criterion->fresh(EvaluationCriteria::WITH_PRESENT);
+    }
+
+    public function findTaskTypeCriterion(int $departmentId): ?EvaluationCriteria
+    {
+        return EvaluationCriteria::query()
+            ->with(EvaluationCriteria::WITH_PRESENT)
+            ->where('department_id', $departmentId)
+            ->where('use_for_task_type', true)
+            ->where('is_active', true)
+            ->first();
+    }
+
     public function reorder(int $departmentId, array $orderedIds): void
     {
         foreach ($orderedIds as $index => $id) {

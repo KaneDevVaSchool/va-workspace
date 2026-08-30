@@ -49,7 +49,7 @@ class TaskExcelExporter
         'title' => ['Tên công việc', 32],
         'type_label' => ['Loại', 14],
         'status_label' => ['Trạng thái', 16],
-        'priority_label' => ['Mức độ ưu tiên', 16],
+        'priority_label' => ['Mức độ quan trọng', 16],
         'assignee_email' => ['Người thực hiện (email)', 24],
         'manager_email' => ['Người quản lý (email)', 24],
         'start_date' => ['Ngày bắt đầu', 14],

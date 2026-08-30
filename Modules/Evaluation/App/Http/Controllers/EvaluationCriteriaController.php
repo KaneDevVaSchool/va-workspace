@@ -32,6 +32,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  *   DELETE /api/evaluation/criteria/{id}           — xoá tiêu chí
  *   PATCH  /api/evaluation/criteria/{id}/toggle              — bật/tắt is_active
  *   PATCH  /api/evaluation/criteria/{id}/toggle-evaluation   — bật/tắt use_in_evaluation
+ *   PATCH  /api/evaluation/criteria/{id}/toggle-task-type    — gán/bỏ gán làm loại công việc
  *
  * department_id luôn lấy từ user (manager route) — trưởng phòng chỉ xem/sửa PB mình.
  * Ngoại lệ: GET với ?department_id có thể dùng cho superadmin (kiểm tra workspace_config.view_all).
@@ -295,6 +296,38 @@ class EvaluationCriteriaController extends Controller
         $this->recordCriterionActivity(
             'evaluation_criteria.update',
             ($updated->use_in_evaluation ? 'Bật' : 'Tắt').' ĐGNL cho tiêu chí "'.$updated->name.'"',
+            $request->user(),
+            $updated,
+        );
+
+        return response()->json(['criterion' => $this->service->present($updated)]);
+    }
+
+    public function toggleUseForTaskType(Request $request, int $id): JsonResponse
+    {
+        $departmentId = $this->departmentIdOrFail($request);
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
+        }
+
+        if (! $this->permissions->allows($request->user(), 'evaluation.manage_department', 'department', $departmentId)) {
+            return response()->json(['message' => 'Bạn không có quyền cập nhật tiêu chí đánh giá.'], 403);
+        }
+
+        $criterion = $this->service->findByDepartmentOrFail($id, $departmentId);
+        if ($criterion instanceof JsonResponse) {
+            return $criterion;
+        }
+
+        if ($criterion->type !== 'scale' && ! $criterion->use_for_task_type) {
+            return response()->json(['message' => 'Chỉ tiêu chí thang điểm mới gán được cho loại công việc.'], 422);
+        }
+
+        $updated = $this->service->toggleUseForTaskType($criterion, (int) $request->user()->id);
+
+        $this->recordCriterionActivity(
+            'evaluation_criteria.update',
+            ($updated->use_for_task_type ? 'Gán' : 'Bỏ gán').' tiêu chí "'.$updated->name.'" cho loại công việc',
             $request->user(),
             $updated,
         );

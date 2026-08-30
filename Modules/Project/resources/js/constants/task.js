@@ -37,6 +37,11 @@ export const TASK_TYPE_TONES = {
 };
 
 export const TASK_PRIORITY_LABELS = {
+  support: 'Phụ trợ',
+  assist: 'Hỗ trợ',
+  important: 'Quan trọng',
+  high_priority: 'Ưu tiên cao',
+  strategic: 'Chiến lược / Sống còn',
   low: 'Thấp',
   medium: 'Trung bình',
   high: 'Cao',
@@ -44,6 +49,11 @@ export const TASK_PRIORITY_LABELS = {
 };
 
 export const TASK_PRIORITY_TONES = {
+  support: 'neutral',
+  assist: 'info',
+  important: 'tertiary',
+  high_priority: 'gold',
+  strategic: 'danger',
   low: 'neutral',
   medium: 'info',
   high: 'gold',
@@ -78,8 +88,11 @@ export const TASK_TABS = [
 ];
 
 export const TASK_PROGRESS_TYPE_LABELS = {
-  percent: 'Theo phần trăm',
-  quantity: 'Theo khối lượng',
+  percent: 'Theo % người dùng tự cập nhật',
+  quantity: 'Theo tỷ lệ hoàn thành khối lượng công việc',
+  checklist: 'Theo tỷ lệ hoàn thành đầu việc',
+  child_weight: 'Theo tỷ trọng công việc con',
+  timeline: 'Tự động theo thời gian hoàn thành công việc',
 };
 
 /** Gợi ý datalist cho "Kết quả đánh giá" — tự do, KHÔNG ràng buộc enum. */
@@ -93,7 +106,7 @@ export const TASK_COLUMNS = [
   { key: 'project', label: 'Dự án', defaultOn: true },
   { key: 'assignee', label: 'Người thực hiện', defaultOn: true },
   { key: 'status', label: 'Trạng thái', defaultOn: true },
-  { key: 'priority', label: 'Mức độ ưu tiên', defaultOn: true },
+  { key: 'priority', label: 'Mức độ quan trọng', defaultOn: true },
   { key: 'start_date', label: 'Ngày bắt đầu', defaultOn: true },
   { key: 'end_date', label: 'Ngày kết thúc', defaultOn: true },
   { key: 'progress_percent', label: 'Tiến độ', defaultOn: true },
@@ -176,7 +189,7 @@ export const LIST_GROUP_OPTIONS = [
   { value: 'deadline', label: 'Cảnh báo đến hạn' },
   { value: 'status', label: 'Trạng thái' },
   { value: 'type', label: 'Loại công việc' },
-  { value: 'priority', label: 'Độ ưu tiên' },
+  { value: 'priority', label: 'Mức độ quan trọng' },
   { value: 'project', label: 'Dự án' },
   { value: 'date', label: 'Theo ngày' },
 ];

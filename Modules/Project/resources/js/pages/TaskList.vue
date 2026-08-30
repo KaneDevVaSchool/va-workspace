@@ -1,9 +1,10 @@
 <script setup>
 //
 // "Tất cả công việc" — cùng chrome với ProjectList: tìm trên PageHeader,
-// hàng tab (Danh sách / Kanban + lọc nhanh có đếm), bảng nhóm theo dự án,
-// pill/progress, kéo cột, panel chi tiết 28rem. Tạo công việc mới vẫn
-// không có ở trang này (menu chuột phải trong từng dự án).
+// hàng tab (Danh sách / Kanban / Lịch + lọc nhanh có đếm), bảng nhóm theo
+// (dự án / trạng thái / hạn / …),
+// pill/progress, kéo cột, panel chi tiết 28rem. Dấu + cạnh tiêu đề mở trang
+// tạo công việc riêng.
 //
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -12,18 +13,28 @@ import AppIcon from '@/components/AppIcon.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import DualProgressBar from '@/components/DualProgressBar.vue';
 import { showClientToast } from '@/lib/clientToast';
+import { computeExpectedProgress } from '@/lib/progress';
 import { useDragScroll } from '@/composables/useDragScroll';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
+import ProjectUserPicker from '../components/ProjectUserPicker.vue';
+import TaskCalendarView from '../components/TaskCalendarView.vue';
+import TaskViewModeMenu from '../components/TaskViewModeMenu.vue';
 import {
+  CALENDAR_MODE_KEY,
+  CALENDAR_MODE_VALUES,
   COLUMN_STORAGE_KEY,
   COLUMN_WIDTH_KEY,
   COLLAPSED_GROUPS_KEY,
-  FILTER_STORAGE_KEY,
   KANBAN_ASSIGNEES_KEY,
   KANBAN_GROUP_KEY,
+  LIST_GROUP_KEY,
+  LIST_GROUP_MODES,
+  LIST_GROUP_OPTIONS,
   TASK_COLUMNS,
-  TASK_FILTERS,
+  TASK_DELEGATION_STATUS_LABELS,
+  TASK_DELEGATION_STATUS_TONES,
   TASK_PRIORITY_LABELS,
   TASK_PRIORITY_TONES,
   TASK_PROGRESS_TYPE_LABELS,
@@ -37,6 +48,7 @@ import {
   TASK_TYPE_TONES,
   VIEW_MODE_KEY,
   ZOOM_STORAGE_KEY,
+  calendarOverlapRange,
   loadVisibility,
   saveVisibility,
 } from '../constants/task.js';
@@ -100,21 +112,26 @@ const scoreSaving = ref(false);
 const scoreForm = reactive({ rating_score: '', rating_result: '', rating_desc: '' });
 
 const query = ref('');
-const projectId = ref('');
-const assigneeId = ref('');
-const managerId = ref('');
-const dateFrom = ref('');
-const dateTo = ref('');
-const isOverdueOnly = ref(false);
-const progressTypeFilter = ref('');
 const perPage = ref(20);
 const sortBy = ref('');
 const sortDir = ref('desc');
 
 const selectedTaskIds = ref(new Set());
-const bulkSaving = ref(false);
-const bulkManagerId = ref('');
-const bulkWeight = ref('');
+
+const DELEGATE_ROLES = [
+  { value: 'assignee', label: 'Người thực hiện' },
+  { value: 'manager', label: 'Người quản trị' },
+  { value: 'watcher', label: 'Người theo dõi' },
+];
+let delegateRowSeq = 1;
+function newDelegateRow() {
+  return { key: delegateRowSeq++, role: '', fromUserId: '', toUserId: '' };
+}
+
+const delegateDialogOpen = ref(false);
+const delegateSaving = ref(false);
+const delegateCandidates = ref([]);
+const delegateRows = ref([newDelegateRow()]);
 
 // ---------- Xuất/Nhập Excel (PR8) — cùng khuôn ProjectList.vue ----------
 const exporting = ref(false);
@@ -137,7 +154,7 @@ const EXPORT_COLUMNS = [
   { key: 'title', label: 'Tên công việc' },
   { key: 'type_label', label: 'Loại' },
   { key: 'status_label', label: 'Trạng thái' },
-  { key: 'priority_label', label: 'Mức độ ưu tiên' },
+  { key: 'priority_label', label: 'Mức độ quan trọng' },
   { key: 'assignee_email', label: 'Người thực hiện (email)' },
   { key: 'manager_email', label: 'Người quản lý (email)' },
   { key: 'start_date', label: 'Ngày bắt đầu' },
@@ -157,11 +174,10 @@ const exportSelectedColumns = ref(new Set(EXPORT_COLUMNS.map((c) => c.key)));
 const activeTab = ref(typeof route.query.tab === 'string' && route.query.tab ? route.query.tab : 'all');
 const tabCounts = ref({});
 
-const projects = ref([]);
 const users = ref([]);
+const importanceOptions = ref([]);
 
 const visibleColumns = reactive(loadVisibility(COLUMN_STORAGE_KEY, TASK_COLUMNS));
-const visibleFilters = reactive(loadVisibility(FILTER_STORAGE_KEY, TASK_FILTERS));
 const columnWidths = reactive(loadColumnWidths());
 const collapsedGroups = ref(new Set(loadCollapsedGroups()));
 
@@ -206,6 +222,7 @@ const editFormEstimatedPercent = computed(() => {
 });
 
 const viewMode = ref(loadViewMode());
+const listGroupBy = ref(loadListGroup());
 const kanbanGroupBy = ref(loadKanbanGroup());
 const kanbanAssigneeIds = ref(loadKanbanAssigneeIds());
 const kanbanAssigneePickerOpen = ref(false);
@@ -227,9 +244,17 @@ const kanbanDrag = reactive({
 
 const shownColumns = computed(() => TASK_COLUMNS.filter((col) => col.always || visibleColumns[col.key]));
 const colSpan = computed(() => Math.max(shownColumns.value.length, 1) + 1); // +1 cột checkbox chọn dòng (PR7)
+const isList = computed(() => viewMode.value === 'list');
 const isKanban = computed(() => viewMode.value === 'kanban');
+const isCalendar = computed(() => viewMode.value === 'calendar');
+const calendarMode = ref(loadCalendarMode());
+const calendarRange = ref(calendarOverlapRange(loadCalendarMode(), new Date()));
 const canEdit = computed(() => auth.can('task.create'));
 const canApprove = computed(() => auth.can('task.approve'));
+const canDelegate = computed(() => auth.can('task.delegate'));
+
+/** Xem lịch công việc của toàn bộ mọi người — super_admin / admin / người có quyền rộng. */
+const canViewAllTasks = computed(() => auth.canViewAs || auth.canViewActivityLog);
 
 const KANBAN_GROUP_LABELS = {
   status: 'Theo trạng thái',
@@ -240,24 +265,20 @@ const KANBAN_GROUP_LABELS = {
 };
 
 const viewModeTriggerLabel = computed(() => {
+  if (isCalendar.value) return 'Lịch';
   if (!isKanban.value) return 'Danh sách';
   return KANBAN_GROUP_LABELS[kanbanGroupBy.value] || 'Kanban';
 });
 
-const hasActiveFilters = computed(
-  () =>
-    Boolean(query.value.trim()) ||
-    Boolean(projectId.value) ||
-    Boolean(assigneeId.value) ||
-    Boolean(managerId.value) ||
-    Boolean(dateFrom.value) ||
-    Boolean(dateTo.value) ||
-    isOverdueOnly.value ||
-    Boolean(progressTypeFilter.value) ||
-    (activeTab.value && activeTab.value !== 'all'),
-);
+const viewModeTriggerIcon = computed(() => {
+  if (isCalendar.value) return 'calendar';
+  if (isKanban.value) return 'layoutGrid';
+  return 'layoutList';
+});
 
-const hasVisibleFilterFields = computed(() => TASK_FILTERS.some((item) => visibleFilters[item.key]));
+const hasActiveFilters = computed(
+  () => Boolean(query.value.trim()) || (activeTab.value && activeTab.value !== 'all'),
+);
 
 const tableWidthPx = computed(() => {
   const keys = shownColumns.value.map((col) => col.key);
@@ -266,18 +287,31 @@ const tableWidthPx = computed(() => {
 });
 
 const groupedTasks = computed(() => {
+  const mode = listGroupBy.value;
   const groups = new Map();
   for (const task of tasks.value) {
-    const key = task.project_id ? `project-${task.project_id}` : UNGROUPED_KEY;
-    const label = task.project?.name || 'Chưa gắn dự án';
-    if (!groups.has(key)) {
-      groups.set(key, { key, label, tone: hashTone(key), tasks: [] });
+    const bucket = listGroupBucket(task, mode);
+    if (!groups.has(bucket.key)) {
+      groups.set(bucket.key, {
+        key: bucket.key,
+        label: bucket.label,
+        tone: bucket.tone,
+        order: bucket.order,
+        tasks: [],
+      });
     }
-    groups.get(key).tasks.push(task);
+    groups.get(bucket.key).tasks.push(task);
   }
-  const list = Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+  const list = Array.from(groups.values()).sort((a, b) => {
+    if (mode === 'project') return a.label.localeCompare(b.label, 'vi');
+    if (a.order !== b.order) return a.order - b.order;
+    return a.label.localeCompare(b.label, 'vi');
+  });
   for (const group of list) {
-    group.tasks = buildTaskTree(group.tasks);
+    group.count = group.tasks.length;
+    if (mode === 'project') {
+      group.tasks = buildTaskTree(group.tasks);
+    }
   }
   return list;
 });
@@ -354,7 +388,7 @@ const kanbanProjectColumns = computed(() => {
   const map = new Map();
   for (const task of tasks.value) {
     const id = task.project_id || 0;
-    const label = task.project?.name || 'Chưa gắn dự án';
+    const label = task.project?.name || 'Công việc thường xuyên';
     if (!map.has(id)) {
       map.set(id, { key: `project-${id}`, label, tone: hashTone(`project-${id}`), tasks: [] });
     }
@@ -363,21 +397,37 @@ const kanbanProjectColumns = computed(() => {
   return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'vi'));
 });
 
-const kanbanPriorityColumns = computed(() =>
-  [
-    { value: 'urgent', label: 'Khẩn cấp', tone: 'danger' },
-    { value: 'high', label: 'Cao', tone: 'gold' },
-    { value: 'medium', label: 'Trung bình', tone: 'info' },
-    { value: 'low', label: 'Thấp', tone: 'neutral' },
+const kanbanPriorityColumns = computed(() => {
+  const levels = importanceOptions.value.length
+    ? [...importanceOptions.value].reverse().map((opt) => ({
+        value: opt.value,
+        label: opt.label,
+        tone: TASK_PRIORITY_TONES[opt.value] || 'neutral',
+      }))
+    : [
+        { value: 'strategic', label: 'Chiến lược / Sống còn', tone: 'danger' },
+        { value: 'high_priority', label: 'Ưu tiên cao', tone: 'gold' },
+        { value: 'important', label: 'Quan trọng', tone: 'tertiary' },
+        { value: 'assist', label: 'Hỗ trợ', tone: 'info' },
+        { value: 'support', label: 'Phụ trợ', tone: 'neutral' },
+      ];
+
+  return [
+    ...levels,
     { value: '', label: 'Chưa đặt', tone: 'tertiary' },
   ].map((item) => ({
     key: `priority-${item.value || 'none'}`,
     dropKey: item.value || '__none__',
     label: item.label,
     tone: item.tone,
-    tasks: tasks.value.filter((task) => (task.priority || '') === item.value),
-  })),
-);
+    tasks: tasks.value.filter((task) => {
+      const value = task.priority || '';
+      if (value === item.value) return true;
+      const aliases = { low: 'support', medium: 'important', high: 'high_priority', urgent: 'strategic' };
+      return aliases[value] === item.value;
+    }),
+  }));
+});
 
 const kanbanTypeColumns = computed(() =>
   Object.entries(TASK_TYPE_LABELS).map(([value, label]) => ({
@@ -425,11 +475,21 @@ const kanbanGhostTone = computed(() => {
 function loadViewMode() {
   try {
     const raw = localStorage.getItem(VIEW_MODE_KEY);
-    if (raw === 'list' || raw === 'kanban') return raw;
+    if (raw === 'list' || raw === 'kanban' || raw === 'calendar') return raw;
   } catch {
     // Bỏ qua.
   }
   return 'list';
+}
+
+function loadCalendarMode() {
+  try {
+    const raw = localStorage.getItem(CALENDAR_MODE_KEY);
+    if (CALENDAR_MODE_VALUES.includes(raw)) return raw;
+  } catch {
+    // Bỏ qua.
+  }
+  return 'month';
 }
 
 function loadKanbanGroup() {
@@ -440,6 +500,119 @@ function loadKanbanGroup() {
     // Bỏ qua.
   }
   return 'status';
+}
+
+function loadListGroup() {
+  try {
+    const raw = localStorage.getItem(LIST_GROUP_KEY);
+    if (LIST_GROUP_MODES.includes(raw)) return raw;
+  } catch {
+    // Bỏ qua.
+  }
+  return 'project';
+}
+
+function chooseListGroup(mode) {
+  if (!LIST_GROUP_MODES.includes(mode) || listGroupBy.value === mode) return;
+  listGroupBy.value = mode;
+  try {
+    localStorage.setItem(LIST_GROUP_KEY, mode);
+  } catch {
+    // Bỏ qua.
+  }
+}
+
+function parseYmd(value) {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function startOfToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function listGroupBucket(task, mode) {
+  if (mode === 'status') {
+    const value = task.status || '';
+    return {
+      key: `status-${value || 'none'}`,
+      label: TASK_STATUS_LABELS[value] || 'Không rõ trạng thái',
+      tone: statusTone(value),
+      order: TASK_STATUSES.findIndex((item) => item.value === value),
+    };
+  }
+  if (mode === 'type') {
+    const value = task.type || '';
+    const keys = Object.keys(TASK_TYPE_LABELS);
+    return {
+      key: `type-${value || 'none'}`,
+      label: TASK_TYPE_LABELS[value] || 'Không rõ loại',
+      tone: typeTone(value),
+      order: keys.indexOf(value),
+    };
+  }
+  if (mode === 'priority') {
+    const order = ['strategic', 'high_priority', 'important', 'assist', 'support', 'urgent', 'high', 'medium', 'low', ''];
+    const value = task.priority || '';
+    const index = order.indexOf(value);
+    return {
+      key: `priority-${value || 'none'}`,
+      label: value ? priorityLabel(value) : 'Chưa đặt',
+      tone: value ? priorityTone(value) : 'tertiary',
+      order: index === -1 ? order.length : index,
+    };
+  }
+  if (mode === 'date') {
+    const end = parseYmd(task.end_date);
+    if (!end) {
+      return {
+        key: 'date-none',
+        label: 'Không có ngày kết thúc',
+        tone: 'neutral',
+        order: Number.POSITIVE_INFINITY,
+      };
+    }
+    const ymd = String(task.end_date).slice(0, 10);
+    return {
+      key: `date-${ymd}`,
+      label: formatDate(task.end_date),
+      tone: hashTone(ymd),
+      order: end.getTime(),
+    };
+  }
+  if (mode === 'deadline') {
+    if (task.status === 'completed' || task.status === 'cancelled') {
+      return { key: 'deadline-closed', label: 'Đã đóng', tone: 'neutral', order: 6 };
+    }
+    if (task.is_overdue) {
+      return { key: 'deadline-overdue', label: 'Quá hạn', tone: 'danger', order: 1 };
+    }
+    const end = parseYmd(task.end_date);
+    if (!end) {
+      return { key: 'deadline-none', label: 'Không có ngày kết thúc', tone: 'tertiary', order: 5 };
+    }
+    const days = Math.round((end.getTime() - startOfToday().getTime()) / 86400000);
+    if (days < 0) {
+      return { key: 'deadline-overdue', label: 'Quá hạn', tone: 'danger', order: 1 };
+    }
+    if (days === 0) {
+      return { key: 'deadline-today', label: 'Đến hạn hôm nay', tone: 'warning', order: 2 };
+    }
+    if (days <= 7) {
+      return { key: 'deadline-soon', label: 'Sắp đến hạn', tone: 'gold', order: 3 };
+    }
+    return { key: 'deadline-later', label: 'Còn hạn', tone: 'success', order: 4 };
+  }
+  const key = task.project_id ? `project-${task.project_id}` : UNGROUPED_KEY;
+  return {
+    key,
+    label: task.project?.name || 'Công việc thường xuyên',
+    tone: hashTone(key),
+    order: 0,
+  };
 }
 
 function loadKanbanAssigneeIds() {
@@ -494,32 +667,25 @@ function loadColumnWidths() {
 function currentFilterParams() {
   return {
     q: query.value.trim() || undefined,
-    project_id: projectId.value || undefined,
-    assignee_id: assigneeId.value || undefined,
-    manager_id: managerId.value || undefined,
-    date_from: dateFrom.value || undefined,
-    date_to: dateTo.value || undefined,
-    is_overdue: isOverdueOnly.value ? 1 : undefined,
-    progress_type: progressTypeFilter.value || undefined,
     tab: activeTab.value && activeTab.value !== 'all' ? activeTab.value : undefined,
     sort_by: sortBy.value || undefined,
     sort_dir: sortBy.value ? sortDir.value : undefined,
+    ...(isCalendar.value && calendarRange.value.from && calendarRange.value.to
+      ? { overlap_from: calendarRange.value.from, overlap_to: calendarRange.value.to }
+      : {}),
   };
 }
 
 async function loadOptions() {
   try {
-    const { data } = await window.axios.get('/api/project', { params: { per_page: 200 } });
-    projects.value = (data.projects ?? []).map((p) => ({ id: p.id, name: p.name, code: p.code }));
+    const [usersRes, optionsRes] = await Promise.all([
+      window.axios.get('/api/project/assignable-users'),
+      window.axios.get('/api/project/tasks/options'),
+    ]);
+    users.value = usersRes.data.users ?? [];
+    importanceOptions.value = optionsRes.data.importance ?? [];
   } catch {
-    // Không có quyền xem danh sách dự án — dropdown "Dự án" chỉ rỗng.
-  }
-
-  try {
-    const { data } = await window.axios.get('/api/project/assignable-users');
-    users.value = data.users ?? [];
-  } catch {
-    // Bỏ qua — dropdown "Người thực hiện" chỉ rỗng.
+    // Bỏ qua — dropdown người thực hiện trong form sửa chỉ rỗng.
   }
 }
 
@@ -527,7 +693,11 @@ async function loadTasks(page = 1) {
   loading.value = true;
   try {
     const { data } = await window.axios.get('/api/project/tasks', {
-      params: { ...currentFilterParams(), page, per_page: isKanban.value ? KANBAN_PER_PAGE : perPage.value },
+      params: {
+        ...currentFilterParams(),
+        page,
+        per_page: isKanban.value || isCalendar.value ? KANBAN_PER_PAGE : perPage.value,
+      },
     });
     tasks.value = data.tasks ?? [];
     meta.value = data.meta ?? { current_page: 1, last_page: 1, total: 0, from: 0, to: 0, per_page: 20 };
@@ -584,6 +754,26 @@ function closeViewModeMenu() {
   viewModeOpen.value = false;
 }
 
+function onCalendarRange(next) {
+  if (calendarRange.value.from === next.from && calendarRange.value.to === next.to) return;
+  calendarRange.value = next;
+  if (isCalendar.value) loadTasks(1);
+}
+
+function onCalendarMode(next) {
+  calendarMode.value = next;
+}
+
+function editFromCalendar(task) {
+  inspect(task);
+  startEdit();
+}
+
+function deleteFromCalendar(task) {
+  inspect(task);
+  askDelete();
+}
+
 function chooseKanbanGroup(mode) {
   const switching = viewMode.value !== 'kanban';
   if (kanbanGroupBy.value !== mode) {
@@ -637,13 +827,6 @@ function closeKanbanAssigneePicker() {
 
 function clearFilters() {
   query.value = '';
-  projectId.value = '';
-  assigneeId.value = '';
-  managerId.value = '';
-  dateFrom.value = '';
-  dateTo.value = '';
-  isOverdueOnly.value = false;
-  progressTypeFilter.value = '';
   if (activeTab.value !== 'all') {
     selectTab('all');
     return;
@@ -956,12 +1139,25 @@ function typeLabel(value) {
   return TASK_TYPE_LABELS[value] || value || '—';
 }
 
+function departmentName(task) {
+  return (
+    task?.department?.name
+    || task?.delegated_to_department?.name
+    || task?.origin_department?.name
+    || task?.project?.executing_department?.name
+    || task?.project?.owner_department?.name
+    || '—'
+  );
+}
+
 function typeTone(value) {
   return TASK_TYPE_TONES[value] || 'neutral';
 }
 
 function priorityLabel(value) {
   if (!value) return '—';
+  const fromCriterion = importanceOptions.value.find((opt) => opt.value === value);
+  if (fromCriterion) return fromCriterion.label;
   return TASK_PRIORITY_LABELS[value] || value;
 }
 
@@ -1058,32 +1254,161 @@ function toggleSelectAll() {
 
 function clearSelection() {
   selectedTaskIds.value = new Set();
-  bulkManagerId.value = '';
-  bulkWeight.value = '';
+  delegateRows.value = [newDelegateRow()];
 }
 
-async function applyBulkUpdate() {
-  const payload = { task_ids: Array.from(selectedTaskIds.value) };
-  if (bulkManagerId.value !== '') payload.manager_id = bulkManagerId.value;
-  if (bulkWeight.value !== '') payload.weight = Number(bulkWeight.value);
+async function loadDelegateCandidates() {
+  try {
+    const { data } = await window.axios.get('/api/project/assignable-users', {
+      params: { unrestricted: 1 },
+    });
+    delegateCandidates.value = data.users ?? [];
+  } catch {
+    delegateCandidates.value = [];
+  }
+}
 
-  if (!payload.manager_id && payload.weight === undefined) {
-    showClientToast('warning', 'Chọn ít nhất một trường để cập nhật hàng loạt.');
+function selectedTasksForDelegate() {
+  return tasks.value.filter((t) => selectedTaskIds.value.has(t.id));
+}
+
+function enrichDelegateUser(user) {
+  if (!user) return null;
+  const full = delegateCandidates.value.find((u) => String(u.id) === String(user.id));
+  return full ? { ...user, ...full } : user;
+}
+
+function holdersForDelegateRole(role) {
+  if (!role) return [];
+  if (role === 'watcher') return delegateCandidates.value;
+  const map = new Map();
+  for (const task of selectedTasksForDelegate()) {
+    const user = role === 'assignee' ? task.assignee : role === 'manager' ? task.manager : null;
+    if (user) map.set(user.id, enrichDelegateUser(user));
+  }
+  const holders = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+  return holders.length ? holders : delegateCandidates.value;
+}
+
+function recipientsForDelegateRow(row) {
+  const fromId = String(row.fromUserId || '');
+  if (!fromId) return delegateCandidates.value;
+  return delegateCandidates.value.filter((u) => String(u.id) !== fromId);
+}
+
+function delegateRolesForRow(row) {
+  const used = new Set(delegateRows.value.filter((r) => r.key !== row.key && r.role).map((r) => r.role));
+  return DELEGATE_ROLES.filter((item) => !used.has(item.value));
+}
+
+function taskIdsForDelegateRow(row) {
+  return selectedTasksForDelegate()
+    .filter((task) => {
+      if (row.role === 'assignee') return String(task.assignee_id) === String(row.fromUserId);
+      if (row.role === 'manager') return String(task.manager_id) === String(row.fromUserId);
+      return false;
+    })
+    .map((task) => task.id);
+}
+
+function onDelegateRoleChange(row) {
+  row.fromUserId = '';
+  row.toUserId = '';
+  const holders = holdersForDelegateRole(row.role);
+  if (holders.length === 1) row.fromUserId = holders[0].id;
+}
+
+function onDelegateFromChange(row) {
+  if (row.toUserId && String(row.toUserId) === String(row.fromUserId)) {
+    row.toUserId = '';
+  }
+}
+
+function addDelegateRow() {
+  if (delegateRows.value.length >= DELEGATE_ROLES.length) return;
+  delegateRows.value = [...delegateRows.value, newDelegateRow()];
+}
+
+function removeDelegateRow(key) {
+  if (delegateRows.value.length <= 1) return;
+  delegateRows.value = delegateRows.value.filter((row) => row.key !== key);
+}
+
+const canAddDelegateRow = computed(() => delegateRows.value.length < DELEGATE_ROLES.length);
+const delegateFormReady = computed(
+  () =>
+    delegateRows.value.length > 0 &&
+    delegateRows.value.every((row) => row.role && row.fromUserId && row.toUserId),
+);
+
+function applyTaskUpdates(updatedTasks) {
+  const updatedById = new Map((updatedTasks || []).map((t) => [t.id, t]));
+  if (!updatedById.size) return 0;
+  tasks.value = tasks.value.map((t) => updatedById.get(t.id) || t);
+  if (selected.value && updatedById.has(selected.value.id)) {
+    selected.value = updatedById.get(selected.value.id);
+  }
+  return updatedById.size;
+}
+
+function openDelegateDialog() {
+  delegateRows.value = [newDelegateRow()];
+  delegateDialogOpen.value = true;
+  if (!delegateCandidates.value.length) loadDelegateCandidates();
+}
+
+function closeDelegateDialog() {
+  if (!delegateSaving.value) delegateDialogOpen.value = false;
+}
+
+async function applyBulkDelegate() {
+  if (!delegateFormReady.value) {
+    showClientToast('warning', 'Điền đủ vai trò, người chuyển giao và người tiếp nhận.');
     return;
   }
 
-  bulkSaving.value = true;
+  const actionable = delegateRows.value.filter((row) => row.role !== 'watcher');
+  const hasWatcher = delegateRows.value.some((row) => row.role === 'watcher');
+  if (actionable.length === 0) {
+    showClientToast('warning', 'Chưa hỗ trợ chuyển giao vai trò Người theo dõi.');
+    return;
+  }
+
+  delegateSaving.value = true;
   try {
-    const { data } = await window.axios.patch('/api/project/tasks/bulk', payload);
-    const updatedById = new Map((data.tasks || []).map((t) => [t.id, t]));
-    tasks.value = tasks.value.map((t) => updatedById.get(t.id) || t);
-    showClientToast('success', `Đã cập nhật ${updatedById.size} công việc.`);
-    clearSelection();
+    let total = 0;
+    for (const row of actionable) {
+      const taskIds = taskIdsForDelegateRow(row);
+      if (taskIds.length === 0) {
+        showClientToast('warning', 'Không có công việc nào khớp người chuyển giao đã chọn.');
+        continue;
+      }
+      if (row.role === 'assignee') {
+        const { data } = await window.axios.patch('/api/project/tasks/bulk-delegate', {
+          task_ids: taskIds,
+          delegated_to_employee_id: row.toUserId,
+        });
+        total += applyTaskUpdates(data.tasks);
+      } else if (row.role === 'manager') {
+        const { data } = await window.axios.patch('/api/project/tasks/bulk', {
+          task_ids: taskIds,
+          manager_id: row.toUserId,
+        });
+        total += applyTaskUpdates(data.tasks);
+      }
+    }
+    if (hasWatcher) {
+      showClientToast('warning', 'Chưa hỗ trợ chuyển giao vai trò Người theo dõi.');
+    }
+    if (total > 0) {
+      showClientToast('success', `Đã chuyển giao ${total} công việc.`);
+      delegateDialogOpen.value = false;
+      clearSelection();
+    }
   } catch (error) {
-    const message = error?.response?.data?.message;
-    showClientToast('error', message || 'Không cập nhật hàng loạt được.');
+    showClientToast('error', error?.response?.data?.message || 'Không chuyển giao được.');
   } finally {
-    bulkSaving.value = false;
+    delegateSaving.value = false;
   }
 }
 
@@ -1344,7 +1669,7 @@ const taskDataExportBusyKey = computed(() => {
 function cellText(task, key) {
   if (key === 'code') return task.code || '—';
   if (key === 'title') return task.title || '—';
-  if (key === 'project') return task.project?.name || '—';
+  if (key === 'project') return task.project?.name || 'Công việc thường xuyên';
   if (key === 'start_date' || key === 'end_date' || key === 'actual_start_date' || key === 'actual_end_date') {
     return formatDate(task[key]);
   }
@@ -1445,7 +1770,7 @@ function distributeExtraWidth(widths, keys, available) {
 function fitColumnsToContent() {
   const wrap = tableWrap.value;
   const keys = shownColumns.value.map((col) => col.key);
-  if (!wrap || keys.length === 0 || resizing.value || isKanban.value) return;
+  if (!wrap || keys.length === 0 || resizing.value || isKanban.value || isCalendar.value) return;
 
   const fonts = readTableFonts();
   const measured = {};
@@ -1502,10 +1827,6 @@ function onColumnToggle(key, checked) {
     }
   }
   visibleColumns[key] = checked;
-}
-
-function onFilterToggle(key, checked) {
-  visibleFilters[key] = checked;
 }
 
 function kanbanDropKeyOf(task) {
@@ -1791,7 +2112,6 @@ function handleDocumentClickForPickers(event) {
 }
 
 watch(visibleColumns, (value) => saveVisibility(COLUMN_STORAGE_KEY, value), { deep: true });
-watch(visibleFilters, (value) => saveVisibility(FILTER_STORAGE_KEY, value), { deep: true });
 watch(columnWidths, (value) => saveVisibility(COLUMN_WIDTH_KEY, value), { deep: true });
 watch(tableZoom, (value) => {
   try {
@@ -1804,10 +2124,7 @@ watch(tableZoom, (value) => {
 watch(selected, () => nextTick(fitColumnsToContent));
 watch(shownColumns, () => nextTick(fitColumnsToContent));
 watch(perPage, () => loadTasks(1));
-watch(
-  [projectId, assigneeId, managerId, dateFrom, dateTo, isOverdueOnly, progressTypeFilter, sortBy, sortDir],
-  () => loadTasks(1),
-);
+watch([sortBy, sortDir], () => loadTasks(1));
 
 onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown);
@@ -1840,11 +2157,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="task-page">
+  <section class="task-page" :class="{ 'task-page--calendar': isCalendar }">
     <PageHeader
       title="Tất cả công việc"
       icon="layoutList"
       description="Quản lý danh sách công việc của tổ chức."
+      :primary-action="canEdit
+        ? { label: 'Tạo công việc', icon: 'plus', to: { name: 'manager.project.tasks.create' } }
+        : null"
       export-label="Dữ liệu"
       :export-options="taskDataExportOptions"
       :export-busy-key="taskDataExportBusyKey"
@@ -1868,90 +2188,20 @@ onBeforeUnmount(() => {
 
     <div class="task-page__body">
       <div class="task-page__main">
-        <div class="task-tabs-row">
-          <div id="task-view-mode-root" class="task-view-mode">
-            <button
-              type="button"
-              class="task-view-mode__trigger"
-              aria-haspopup="menu"
-              :aria-expanded="viewModeOpen"
-              aria-label="Chế độ xem"
-              @click.stop="toggleViewModeMenu"
-            >
-              <AppIcon :name="isKanban ? 'layoutGrid' : 'layoutList'" :size="15" />
-              <span>{{ viewModeTriggerLabel }}</span>
-              <AppIcon name="chevronDown" :size="14" />
-            </button>
-            <div v-if="viewModeOpen" class="task-view-mode__menu" role="menu" @click.stop>
-              <button
-                type="button"
-                class="task-view-mode__item"
-                :class="{ 'task-view-mode__item--on': !isKanban }"
-                role="menuitem"
-                @click="setViewMode('list')"
-              >
-                <AppIcon name="layoutList" :size="15" />
-                <span>Danh sách</span>
-                <AppIcon v-if="!isKanban" name="check" :size="14" />
-              </button>
-              <p class="task-view-mode__group">Kanban</p>
-              <button
-                type="button"
-                class="task-view-mode__item"
-                :class="{ 'task-view-mode__item--on': isKanban && kanbanGroupBy === 'status' }"
-                role="menuitem"
-                @click="chooseKanbanGroup('status')"
-              >
-                <AppIcon name="layoutGrid" :size="15" />
-                <span>Theo trạng thái</span>
-                <AppIcon v-if="isKanban && kanbanGroupBy === 'status'" name="check" :size="14" />
-              </button>
-              <button
-                type="button"
-                class="task-view-mode__item"
-                :class="{ 'task-view-mode__item--on': isKanban && kanbanGroupBy === 'assignees' }"
-                role="menuitem"
-                @click="chooseKanbanGroup('assignees')"
-              >
-                <AppIcon name="users" :size="15" />
-                <span>Theo người thực hiện</span>
-                <AppIcon v-if="isKanban && kanbanGroupBy === 'assignees'" name="check" :size="14" />
-              </button>
-              <button
-                type="button"
-                class="task-view-mode__item"
-                :class="{ 'task-view-mode__item--on': isKanban && kanbanGroupBy === 'project' }"
-                role="menuitem"
-                @click="chooseKanbanGroup('project')"
-              >
-                <AppIcon name="layers" :size="15" />
-                <span>Theo dự án</span>
-                <AppIcon v-if="isKanban && kanbanGroupBy === 'project'" name="check" :size="14" />
-              </button>
-              <button
-                type="button"
-                class="task-view-mode__item"
-                :class="{ 'task-view-mode__item--on': isKanban && kanbanGroupBy === 'priority' }"
-                role="menuitem"
-                @click="chooseKanbanGroup('priority')"
-              >
-                <AppIcon name="bookmark" :size="15" />
-                <span>Theo mức độ ưu tiên</span>
-                <AppIcon v-if="isKanban && kanbanGroupBy === 'priority'" name="check" :size="14" />
-              </button>
-              <button
-                type="button"
-                class="task-view-mode__item"
-                :class="{ 'task-view-mode__item--on': isKanban && kanbanGroupBy === 'type' }"
-                role="menuitem"
-                @click="chooseKanbanGroup('type')"
-              >
-                <AppIcon name="gitBranch" :size="15" />
-                <span>Theo loại</span>
-                <AppIcon v-if="isKanban && kanbanGroupBy === 'type'" name="check" :size="14" />
-              </button>
-            </div>
-          </div>
+        <div v-if="!isCalendar" class="task-tabs-row">
+          <TaskViewModeMenu
+            :open="viewModeOpen"
+            :is-list="isList"
+            :is-kanban="isKanban"
+            :is-calendar="isCalendar"
+            :kanban-group-by="kanbanGroupBy"
+            :trigger-label="viewModeTriggerLabel"
+            :trigger-icon="viewModeTriggerIcon"
+            @toggle="toggleViewModeMenu"
+            @select-list="setViewMode('list')"
+            @select-calendar="setViewMode('calendar')"
+            @select-kanban="chooseKanbanGroup"
+          />
 
           <nav class="task-tabs hide-scrollbar" aria-label="Lọc nhanh công việc">
             <button
@@ -2004,53 +2254,8 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="!isKanban && hasVisibleFilterFields" class="task-page__toolbar">
-          <div class="task-page__filters">
-            <div v-if="visibleFilters.project_id" class="task-page__field">
-              <label class="task-page__label" for="task-project">Dự án</label>
-              <select id="task-project" v-model="projectId" class="task-page__input">
-                <option value="">Tất cả dự án</option>
-                <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
-              </select>
-            </div>
-            <div v-if="visibleFilters.assignee_id" class="task-page__field">
-              <label class="task-page__label" for="task-assignee">Người thực hiện</label>
-              <select id="task-assignee" v-model="assigneeId" class="task-page__input">
-                <option value="">Tất cả người thực hiện</option>
-                <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
-              </select>
-            </div>
-            <div v-if="visibleFilters.manager_id" class="task-page__field">
-              <label class="task-page__label" for="task-manager">Người quản lý</label>
-              <select id="task-manager" v-model="managerId" class="task-page__input">
-                <option value="">Tất cả người quản lý</option>
-                <option v-for="u in allAssignableUsers" :key="u.id" :value="u.id">{{ u.name }}</option>
-              </select>
-            </div>
-            <div v-if="visibleFilters.date_from" class="task-page__field">
-              <label class="task-page__label" for="task-from">Từ ngày</label>
-              <input id="task-from" v-model="dateFrom" type="date" class="task-page__input" />
-            </div>
-            <div v-if="visibleFilters.date_to" class="task-page__field">
-              <label class="task-page__label" for="task-to">Đến ngày</label>
-              <input id="task-to" v-model="dateTo" type="date" class="task-page__input" />
-            </div>
-            <div v-if="visibleFilters.progress_type" class="task-page__field">
-              <label class="task-page__label" for="task-progress-type">Cách tính tiến độ</label>
-              <select id="task-progress-type" v-model="progressTypeFilter" class="task-page__input">
-                <option value="">Tất cả</option>
-                <option v-for="(label, value) in TASK_PROGRESS_TYPE_LABELS" :key="value" :value="value">{{ label }}</option>
-              </select>
-            </div>
-            <label v-if="visibleFilters.is_overdue" class="task-page__check">
-              <input type="checkbox" v-model="isOverdueOnly" />
-              <span>Chỉ hiện việc quá hạn</span>
-            </label>
-          </div>
-        </div>
-
         <TablePagesBar
-          v-if="!isKanban"
+          v-if="isList"
           placement="top"
           :from="meta.from || 0"
           :to="meta.to || 0"
@@ -2061,23 +2266,15 @@ onBeforeUnmount(() => {
           :zoom="tableZoom"
           show-search
           :show-clear-filters="hasActiveFilters"
-          :filters-active="hasActiveFilters"
+          extra-menu-icon="layers"
+          extra-menu-label="Nhóm theo"
+          :extra-menu-active="listGroupBy !== 'project'"
           @search="loadTasks(1)"
           @clear-filters="clearFilters"
           @update:page="goPage"
           @update:per-page="perPage = $event"
           @update:zoom="tableZoom = $event"
         >
-          <template #filters>
-            <label v-for="item in TASK_FILTERS" :key="item.key" class="task-page__check">
-              <input
-                type="checkbox"
-                :checked="visibleFilters[item.key]"
-                @change="onFilterToggle(item.key, $event.target.checked)"
-              />
-              <span>{{ item.label }}</span>
-            </label>
-          </template>
           <template #settings>
             <label v-for="col in TASK_COLUMNS" :key="col.key" class="task-page__check">
               <input
@@ -2089,31 +2286,29 @@ onBeforeUnmount(() => {
               <span>{{ col.label }}</span>
             </label>
           </template>
+          <template #extra="{ close }">
+            <button
+              v-for="opt in LIST_GROUP_OPTIONS"
+              :key="opt.value"
+              type="button"
+              class="table-pages__item"
+              :class="{ 'table-pages__item--on': listGroupBy === opt.value }"
+              role="menuitem"
+              @click="chooseListGroup(opt.value); close?.()"
+            >
+              {{ opt.label }}
+            </button>
+          </template>
+          <template v-if="isList && selectedTaskIds.size > 0 && canDelegate" #actions>
+            <button type="button" class="table-pages__icon" @click="openDelegateDialog">
+              <AppIcon name="arrowRight" :size="15" :stroke-width="1.75" />
+              <span>Chuyển giao</span>
+            </button>
+          </template>
         </TablePagesBar>
 
-        <div v-if="!isKanban && selectedTaskIds.size > 0" class="task-page__bulk-bar">
-          <span class="task-page__bulk-count">Đã chọn {{ selectedTaskIds.size }} công việc</span>
-          <label class="task-page__field task-page__bulk-field">
-            <span class="task-page__label">Gán người quản lý</span>
-            <select v-model="bulkManagerId" class="task-page__input">
-              <option value="">Không đổi</option>
-              <option v-for="u in allAssignableUsers" :key="u.id" :value="u.id">{{ u.name }}</option>
-            </select>
-          </label>
-          <label class="task-page__field task-page__bulk-field">
-            <span class="task-page__label">Tỷ trọng (%)</span>
-            <input v-model="bulkWeight" type="number" min="0" max="100" step="0.1" class="task-page__input" />
-          </label>
-          <button type="button" class="task-page__btn" :disabled="bulkSaving" @click="applyBulkUpdate">
-            {{ bulkSaving ? 'Đang lưu…' : 'Áp dụng' }}
-          </button>
-          <button type="button" class="task-page__btn task-page__btn--ghost" @click="clearSelection">
-            Bỏ chọn
-          </button>
-        </div>
-
         <div
-          v-if="!isKanban"
+          v-if="isList"
           ref="tableWrap"
           class="task-page__table-wrap hide-scrollbar"
           :class="{ 'task-page__table-wrap--resizing': resizing }"
@@ -2185,7 +2380,7 @@ onBeforeUnmount(() => {
                         />
                         <span class="task-page__group-label">{{ group.label }}</span>
                       </span>
-                      <span class="task-page__group-count">{{ group.tasks.length }} công việc</span>
+                      <span class="task-page__group-count">{{ group.count ?? group.tasks.length }} công việc</span>
                     </span>
                   </td>
                 </tr>
@@ -2244,7 +2439,7 @@ onBeforeUnmount(() => {
                       class="task-page__pill"
                       :class="`task-page__pill--${hashTone(`project-${task.project_id}`)}`"
                     >
-                      {{ task.project?.name || '—' }}
+                      {{ task.project?.name || 'Công việc thường xuyên' }}
                     </span>
                     <span v-else-if="col.key === 'assignee'">
                       <UserAvatarTip v-if="task.assignee" :user="task.assignee" label="Người thực hiện" />
@@ -2263,18 +2458,12 @@ onBeforeUnmount(() => {
                     <span v-else-if="col.key === 'actual_start_date'" class="task-page__pill task-page__pill--date">{{ formatDate(task.actual_start_date) }}</span>
                     <span v-else-if="col.key === 'actual_end_date'" class="task-page__pill task-page__pill--date">{{ formatDate(task.actual_end_date) }}</span>
                     <span v-else-if="col.key === 'progress_percent'" class="task-page__progress-cell">
-                      <template v-if="task.progress_percent != null">
-                        <span class="task-page__mini-track">
-                          <span
-                            class="task-page__mini-fill"
-                            :class="`task-page__mini-fill--${progressTone(task.progress_percent)}`"
-                            :style="{ width: `${task.progress_percent}%` }"
-                          />
-                        </span>
-                        <span class="task-page__pill" :class="`task-page__pill--${progressTone(task.progress_percent)}`">
-                          {{ task.progress_percent }}%
-                        </span>
-                      </template>
+                      <DualProgressBar
+                        v-if="task.progress_percent != null"
+                        :actual="task.progress_percent"
+                        :expected="computeExpectedProgress(task.start_date, task.end_date)"
+                        size="sm"
+                      />
                       <span v-else>—</span>
                     </span>
                     <span v-else-if="col.key === 'type'" class="task-page__pill" :class="`task-page__pill--${typeTone(task.type)}`">
@@ -2310,7 +2499,7 @@ onBeforeUnmount(() => {
         </div>
 
         <TablePagesBar
-          v-if="!isKanban"
+          v-if="isList"
           placement="bottom"
           paging-only
           :from="meta.from || 0"
@@ -2444,6 +2633,37 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
+
+        <TaskCalendarView
+          v-if="isCalendar"
+          :tasks="tasks"
+          :loading="loading"
+          :can-edit="canEdit"
+          :can-view-all="canViewAllTasks"
+          :current-user-id="auth.user?.id ?? null"
+          @range-change="onCalendarRange"
+          @mode-change="onCalendarMode"
+          @inspect="inspect"
+          @edit="editFromCalendar"
+          @delete="deleteFromCalendar"
+        >
+          <template #view-mode>
+            <TaskViewModeMenu
+              toolbar
+              :open="viewModeOpen"
+              :is-list="isList"
+              :is-kanban="isKanban"
+              :is-calendar="isCalendar"
+              :kanban-group-by="kanbanGroupBy"
+              :trigger-label="viewModeTriggerLabel"
+              :trigger-icon="viewModeTriggerIcon"
+              @toggle="toggleViewModeMenu"
+              @select-list="setViewMode('list')"
+              @select-calendar="setViewMode('calendar')"
+              @select-kanban="chooseKanbanGroup"
+            />
+          </template>
+        </TaskCalendarView>
       </div>
 
       <aside v-if="selected" class="task-page__side" aria-label="Chi tiết công việc">
@@ -2477,7 +2697,7 @@ onBeforeUnmount(() => {
         <div class="task-page__side-lead" :class="`task-page__side-lead--${statusTone(selected.status)}`">
           <span class="task-page__dot task-page__dot--lg" :class="`task-page__dot--${statusTone(selected.status)}`" />
           <div>
-            <span class="task-page__side-lead-project">{{ selected.project?.name || '—' }}</span>
+            <span class="task-page__side-lead-project">{{ selected.project?.name || 'Công việc thường xuyên' }}</span>
             <p class="task-page__side-lead-desc">{{ selected.title }}</p>
           </div>
         </div>
@@ -2503,10 +2723,16 @@ onBeforeUnmount(() => {
             </select>
           </label>
           <label class="task-page__field">
-            <span class="task-page__label">Mức độ ưu tiên</span>
+            <span class="task-page__label">Mức độ quan trọng</span>
             <select v-model="editForm.priority" class="task-page__input">
               <option value="">Chưa đặt</option>
-              <option v-for="(label, value) in TASK_PRIORITY_LABELS" :key="value" :value="value">{{ label }}</option>
+              <option
+                v-for="opt in (importanceOptions.length ? importanceOptions : Object.entries(TASK_PRIORITY_LABELS).map(([value, label]) => ({ value, label })))"
+                :key="opt.value"
+                :value="opt.value"
+              >
+                {{ opt.label }}
+              </option>
             </select>
           </label>
           <label class="task-page__field">
@@ -2599,7 +2825,11 @@ onBeforeUnmount(() => {
         <div v-else class="task-page__rows">
           <div class="task-page__row">
             <span class="task-page__row-label">Dự án</span>
-            <span class="task-page__row-value">{{ selected.project?.name || '—' }}</span>
+            <span class="task-page__row-value">{{ selected.project?.name || 'Công việc thường xuyên' }}</span>
+          </div>
+          <div class="task-page__row">
+            <span class="task-page__row-label">Phòng ban</span>
+            <span class="task-page__row-value">{{ departmentName(selected) }}</span>
           </div>
           <div class="task-page__row">
             <span class="task-page__row-label">Mã công việc</span>
@@ -2617,7 +2847,7 @@ onBeforeUnmount(() => {
             </span>
           </div>
           <div class="task-page__row">
-            <span class="task-page__row-label">Mức độ ưu tiên</span>
+            <span class="task-page__row-label">Mức độ quan trọng</span>
             <span class="task-page__row-value">{{ priorityLabel(selected.priority) }}</span>
           </div>
           <div class="task-page__row">
@@ -2629,12 +2859,11 @@ onBeforeUnmount(() => {
           </div>
           <div v-if="selected.progress_percent != null" class="task-page__row task-page__row--progress">
             <span class="task-page__row-label">Tiến độ</span>
-            <span class="task-page__progress">
-              <span class="task-page__progress-track">
-                <span class="task-page__progress-fill" :style="{ width: `${selected.progress_percent}%` }" />
-              </span>
-              <span class="task-page__row-value">{{ selected.progress_percent }}%</span>
-            </span>
+            <DualProgressBar
+              :actual="selected.progress_percent"
+              :expected="computeExpectedProgress(selected.start_date, selected.end_date)"
+              size="md"
+            />
           </div>
           <div class="task-page__row">
             <span class="task-page__row-label">Ngày bắt đầu</span>
@@ -2690,6 +2919,17 @@ onBeforeUnmount(() => {
           <div v-if="selected.accepted_by_user" class="task-page__row">
             <span class="task-page__row-label">Người đã nhận</span>
             <span class="task-page__row-value">{{ selected.accepted_by_user.name }} — {{ formatDateTime(selected.accepted_at) }}</span>
+          </div>
+          <div v-if="selected.delegation_status" class="task-page__row">
+            <span class="task-page__row-label">Chuyển giao</span>
+            <span class="task-page__row-value task-page__row-value--status">
+              <span class="task-page__dot" :class="`task-page__dot--${TASK_DELEGATION_STATUS_TONES[selected.delegation_status] || 'muted'}`" />
+              {{ TASK_DELEGATION_STATUS_LABELS[selected.delegation_status] || selected.delegation_status }}
+            </span>
+          </div>
+          <div v-if="selected.delegated_to_employee" class="task-page__row">
+            <span class="task-page__row-label">Chuyển giao cho</span>
+            <span class="task-page__row-value">{{ selected.delegated_to_employee.name }}</span>
           </div>
           <div v-if="selected.progress_type === 'quantity'" class="task-page__row">
             <span class="task-page__row-label">Khối lượng</span>
@@ -2945,6 +3185,135 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <Transition name="task-dialog-fade">
         <div
+          v-if="delegateDialogOpen"
+          class="task-page__dialog"
+          role="presentation"
+          @mousedown.self="closeDelegateDialog"
+        >
+          <div
+            class="task-page__dialog-panel task-page__dialog-panel--delegate"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="task-delegate-title"
+          >
+            <div class="task-page__dialog-head">
+              <span class="task-page__dialog-icon" aria-hidden="true">
+                <AppIcon name="users" :size="22" :stroke-width="1.75" />
+              </span>
+              <div class="task-page__dialog-head-copy">
+                <h2 id="task-delegate-title" class="task-page__dialog-title">
+                  Chuyển giao {{ selectedTaskIds.size }} công việc
+                </h2>
+              </div>
+              <button
+                type="button"
+                class="task-page__dialog-close"
+                aria-label="Đóng"
+                :disabled="delegateSaving"
+                @click="closeDelegateDialog"
+              >
+                <AppIcon name="close" :size="16" />
+              </button>
+            </div>
+
+            <div class="task-page__dialog-body hide-scrollbar">
+              <div class="task-page__delegate-form">
+                <div v-for="(row, rowIndex) in delegateRows" :key="row.key" class="task-page__delegate-block">
+                  <div class="task-page__delegate-row">
+                    <div class="task-page__delegate-field">
+                      <span class="task-page__delegate-label">
+                        Vai trò chuyển giao <span class="task-page__dialog-req">*</span>
+                      </span>
+                      <select
+                        v-model="row.role"
+                        class="task-page__input"
+                        :disabled="delegateSaving"
+                        @change="onDelegateRoleChange(row)"
+                      >
+                        <option value="">Chọn vai trò</option>
+                        <option v-for="item in delegateRolesForRow(row)" :key="item.value" :value="item.value">
+                          {{ item.label }}
+                        </option>
+                      </select>
+                    </div>
+                    <div class="task-page__delegate-field">
+                      <span class="task-page__delegate-label">
+                        Người chuyển giao <span class="task-page__dialog-req">*</span>
+                      </span>
+                      <ProjectUserPicker
+                        v-model="row.fromUserId"
+                        :users="holdersForDelegateRole(row.role)"
+                        :disabled="delegateSaving || !row.role"
+                        search-label="Tìm người chuyển giao"
+                        placeholder="Chọn người chuyển giao"
+                        remove-aria-label="Bỏ người chuyển giao"
+                        @update:model-value="onDelegateFromChange(row)"
+                      />
+                    </div>
+                    <div class="task-page__delegate-field">
+                      <span class="task-page__delegate-label">
+                        Người tiếp nhận <span class="task-page__dialog-req">*</span>
+                      </span>
+                      <ProjectUserPicker
+                        v-model="row.toUserId"
+                        :users="recipientsForDelegateRow(row)"
+                        :disabled="delegateSaving"
+                        search-label="Tìm người tiếp nhận"
+                        placeholder="Chọn người tiếp nhận"
+                        remove-aria-label="Bỏ người tiếp nhận"
+                      />
+                    </div>
+                    <button
+                      v-if="rowIndex > 0"
+                      type="button"
+                      class="task-page__delegate-icon-btn"
+                      aria-label="Xoá dòng"
+                      :disabled="delegateSaving"
+                      @click="removeDelegateRow(row.key)"
+                    >
+                      <AppIcon name="minus" :size="16" :stroke-width="2" />
+                    </button>
+                  </div>
+                </div>
+                <button
+                  v-if="canAddDelegateRow"
+                  type="button"
+                  class="task-page__delegate-add"
+                  :disabled="delegateSaving"
+                  @click="addDelegateRow"
+                >
+                  <AppIcon name="plus" :size="16" :stroke-width="2.25" />
+                  Thêm vai trò
+                </button>
+              </div>
+            </div>
+
+            <div class="task-page__dialog-actions">
+              <button
+                type="button"
+                class="task-page__dialog-btn task-page__dialog-btn--ghost"
+                :disabled="delegateSaving"
+                @click="closeDelegateDialog"
+              >
+                Huỷ bỏ
+              </button>
+              <button
+                type="button"
+                class="task-page__dialog-btn task-page__dialog-btn--primary"
+                :disabled="delegateSaving || !delegateFormReady"
+                @click="applyBulkDelegate"
+              >
+                {{ delegateSaving ? 'Đang cập nhật…' : 'Cập nhật' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <Teleport to="body">
+      <Transition name="task-dialog-fade">
+        <div
           v-if="importDialogOpen"
           class="task-page__dialog"
           role="presentation"
@@ -3116,7 +3485,7 @@ onBeforeUnmount(() => {
                                 <input v-model="editingRowDraft.status_input" type="text" list="task-import-status-options" />
                               </label>
                               <label class="task-page__edit-field">
-                                <span>Mức độ ưu tiên</span>
+                                <span>Mức độ quan trọng</span>
                                 <input v-model="editingRowDraft.priority_input" type="text" list="task-import-priority-options" />
                               </label>
                               <label class="task-page__edit-field">
@@ -3271,6 +3640,12 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.task-page--calendar {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
 .task-page__header-btn {
   flex-shrink: 0;
   display: inline-flex;
@@ -3342,12 +3717,22 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.task-page--calendar .task-page__body {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+}
+
 .task-page__main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.task-page--calendar .task-page__main {
+  overflow: visible;
 }
 
 .task-tabs-row {
@@ -3358,6 +3743,10 @@ onBeforeUnmount(() => {
   align-items: stretch;
   min-width: 0;
   box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-page--calendar .task-tabs-row {
+  display: none !important;
 }
 
 .task-view-mode {
@@ -3381,6 +3770,25 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   cursor: pointer;
   box-shadow: 1px 0 0 var(--color-border);
+}
+
+.task-view-mode--toolbar {
+  position: relative;
+  z-index: 13;
+  align-items: center;
+}
+
+.task-view-mode--toolbar .task-view-mode__trigger {
+  height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.task-view-mode--toolbar .task-view-mode__menu {
+  right: 0;
+  left: auto;
 }
 
 .task-view-mode__trigger:hover,
@@ -3647,39 +4055,6 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.task-page__toolbar {
-  position: relative;
-  z-index: 6;
-  flex-shrink: 0;
-  margin: var(--space-3) 0 0;
-}
-
-.task-page__bulk-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-3);
-  flex-shrink: 0;
-  margin: var(--space-2) 0 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 20%, transparent);
-}
-
-.task-page__bulk-count {
-  flex-shrink: 0;
-  align-self: center;
-  color: var(--color-text);
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.task-page__bulk-field {
-  width: auto;
-  min-width: 10rem;
-}
-
 .task-page__col-check {
   width: 2.25rem;
 }
@@ -3688,13 +4063,6 @@ onBeforeUnmount(() => {
 .task-page__td-check {
   width: 2.25rem;
   text-align: center;
-}
-
-.task-page__filters {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3);
-  width: 100%;
 }
 
 .task-page__field {
@@ -3846,6 +4214,33 @@ onBeforeUnmount(() => {
   color: var(--color-text);
   font-size: 0.8125rem;
   cursor: pointer;
+}
+
+.table-pages__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  padding: 0.4375rem 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.table-pages__item:hover {
+  color: var(--color-primary);
+  background: var(--color-surface-muted);
+}
+
+.table-pages__item--on {
+  color: var(--color-text);
+  font-weight: 500;
+  background: var(--color-surface-muted);
 }
 
 .task-page__table-wrap {
@@ -4465,28 +4860,6 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
 }
 
-.task-page__progress {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.task-page__progress-track {
-  display: block;
-  width: 5rem;
-  height: 0.375rem;
-  border-radius: var(--radius-full);
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  overflow: hidden;
-}
-
-.task-page__progress-fill {
-  display: block;
-  height: 100%;
-  background: var(--color-primary);
-}
-
 .task-page__form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5104,10 +5477,6 @@ onBeforeUnmount(() => {
     min-height: 16rem;
   }
 
-  .task-page__filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .task-page__form {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -5178,6 +5547,30 @@ onBeforeUnmount(() => {
   width: min(40rem, calc(100vw - 2.5rem));
   height: auto;
   max-height: calc(100vh - 2.5rem);
+}
+
+.task-page__dialog-panel--delegate {
+  width: min(64rem, calc(100vw - 2.5rem));
+  height: auto;
+  max-height: calc(100vh - 2.5rem);
+  gap: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+.task-page__dialog-panel--delegate .task-page__dialog-head {
+  padding: 1rem 1.25rem;
+}
+
+.task-page__dialog-panel--delegate .task-page__dialog-body {
+  padding: 1.25rem;
+  overflow: visible;
+  background: var(--color-surface-muted);
+}
+
+.task-page__dialog-panel--delegate .task-page__dialog-actions {
+  padding: 1rem 1.25rem;
+  box-shadow: 0 -1px 0 var(--color-border);
 }
 
 .task-page__dialog-panel--preview {
@@ -5323,6 +5716,129 @@ onBeforeUnmount(() => {
 
 .task-page__dialog-req {
   color: var(--color-primary);
+}
+
+.task-page__delegate-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 16rem;
+}
+
+.task-page__delegate-block {
+  position: relative;
+  z-index: 0;
+  min-width: 0;
+  padding: var(--space-4);
+  padding-left: calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.task-page__delegate-block:has(.task-page__delegate-icon-btn) {
+  padding-right: 2.75rem;
+}
+
+.task-page__delegate-block:focus-within {
+  z-index: 2;
+}
+
+.task-page__delegate-block::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-primary);
+}
+
+.task-page__delegate-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.task-page__delegate-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.task-page__delegate-label {
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.task-page__delegate-field .task-page__input {
+  min-height: 2.75rem;
+}
+
+.task-page__delegate-field :deep(.proj-user-picker__search),
+.task-page__delegate-field :deep(.proj-user-picker__row) {
+  min-height: 2.75rem;
+}
+
+.task-page__delegate-field :deep(.proj-user-picker__list) {
+  z-index: 40;
+}
+
+.task-page__delegate-icon-btn {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.task-page__delegate-icon-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  color: var(--color-danger);
+}
+
+.task-page__delegate-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.task-page__delegate-add {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--space-2);
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.task-page__delegate-add:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+}
+
+.task-page__delegate-add:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .task-page__import-hint {
@@ -5579,6 +6095,7 @@ onBeforeUnmount(() => {
 @media (max-width: 768px) {
   .task-page__dialog-panel,
   .task-page__dialog-panel--import,
+  .task-page__dialog-panel--delegate,
   .task-page__dialog-panel--preview {
     width: calc(100vw - 1.5rem);
     height: auto;
@@ -5586,8 +6103,9 @@ onBeforeUnmount(() => {
   }
 
   .task-page__edit-grid,
-  .task-page__export-grid {
-    grid-template-columns: 1fr;
+  .task-page__export-grid,
+  .task-page__delegate-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

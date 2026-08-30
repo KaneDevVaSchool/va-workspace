@@ -15,9 +15,9 @@ use Modules\Project\App\Models\ProjectAttachment;
 use Modules\Project\App\Models\ProjectCreatorAllowlist;
 use Modules\Project\App\Models\ProjectFollower;
 use Modules\Project\App\Models\ProjectLabel;
+use Modules\Project\App\Models\ProjectQuickItem;
 use Modules\Project\App\Models\ProjectScope;
 use Modules\Project\App\Models\ProjectSetting;
-use Modules\Project\App\Models\ProjectQuickItem;
 use Modules\Project\App\Models\ProjectType;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
 
@@ -348,6 +348,51 @@ class ProjectRepository implements ProjectRepositoryInterface
                     $f->where('users.id', $viewer->id);
                 });
         });
+    }
+
+    public function forAssignableTaskProject(Builder $query, User $viewer): Builder
+    {
+        if ($viewer->isSuperAdmin() || app(PermissionService::class)->allows($viewer, 'project.*')) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $sub) use ($viewer) {
+            $sub->where('owner_department_id', $viewer->department_id)
+                ->orWhere('executing_department_id', $viewer->department_id)
+                ->orWhereHas('executingDepartments', function (Builder $d) use ($viewer) {
+                    $d->where('departments.id', $viewer->department_id);
+                })
+                ->orWhere('lead_user_id', $viewer->id)
+                ->orWhere('created_by', $viewer->id)
+                ->orWhereHas('members', function (Builder $m) use ($viewer) {
+                    $m->where('users.id', $viewer->id);
+                });
+        });
+    }
+
+    public function viewerCanAssignTo(User $viewer, Project $project): bool
+    {
+        return $this->forAssignableTaskProject(Project::query()->whereKey($project->id), $viewer)->exists();
+    }
+
+    public function searchAssignable(string $q, User $viewer, int $limit = 20, ?int $id = null): Collection
+    {
+        $query = Project::query()->with(['ownerDepartment:id,name', 'executingDepartment:id,name']);
+        $this->forAssignableTaskProject($query, $viewer);
+
+        if ($id !== null) {
+            return $query->whereKey($id)->limit(1)->get();
+        }
+
+        $q = trim($q);
+        if ($q !== '') {
+            $query->where(function (Builder $sub) use ($q) {
+                $sub->where('name', 'like', '%'.$q.'%')
+                    ->orWhere('code', 'like', '%'.$q.'%');
+            });
+        }
+
+        return $query->orderBy('name')->limit($limit)->get();
     }
 
     public function tabCounts(User $viewer): array

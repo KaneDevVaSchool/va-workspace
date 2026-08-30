@@ -6,21 +6,61 @@
 >
 > Đây là **tài liệu sống**: phần nền tảng đã có trong repo, phần nghiệp vụ (Project, Initiative, KPI…) vẫn là kế hoạch. Schema/route của các module chưa dựng là đề xuất theo `.claude/CLAUDE.md`.
 >
-> Cập nhật: 2026-08-30 — module `Project`: 3 tính năng mới cho trang "Tất
-> cả công việc" (`TaskList.vue`). (1) **Task Delegation Phase 3 §6 — một
-> phần**: `TaskService::bulkDelegate()` chuyển hàng loạt task cho 1 người
-> tiếp nhận (permission `task.delegate`), 4 cột delegation trên `tasks`
-> nay có logic thật, thông báo `NotificationService::TYPE_TASK_DELEGATED`
-> cho người nhận — **chưa có** luồng người nhận accept/reject
-> (`delegation_status` dừng ở `pending`) và **chưa có** đa vai trò (quản
-> trị/thực hiện/theo dõi) như UI hệ cũ tham khảo ở
-> `plans/2026-08-28-task-delegation-ui-proposal.md`; xem §6.2 và plan tiếp
-> theo `plans/2026-08-30-task-delegation-hoan-thien.md`. (2) **Chế độ xem
-> Lịch**: `TaskCalendarView.vue` (tháng/tuần) cạnh Danh sách/Kanban, filter
-> `overlap_from`/`overlap_to` mới trong `TaskRepository` (mọi task chồng
-> lên khoảng ngày đang xem, kể cả task nhiều ngày). (3) **Dual Progress
-> Bar dùng chung** (`resources/js/components/DualProgressBar.vue`): thanh
-> tiến độ 2 lớp (thực tế vs dự kiến theo mốc ngày,
+> Cập nhật: 2026-08-30 (đợt 2) — module `Project`: **Task đứng độc lập +
+> đa vai trò theo dõi/phối hợp**. (1) **Task không bắt buộc thuộc Project**:
+> `tasks.project_id` nay nullable (migration
+> `2026_08_30_100009_make_tasks_project_id_nullable`) — để trống là "công
+> việc thường xuyên" (không gắn WBS dự án nào), `origin_department_id` khi
+> đó lấy từ phòng ban người tạo. Trang tạo mới riêng
+> `TaskCreate.vue` (`/manager/project/tasks/create`) cho phép chọn dự án
+> tuỳ chọn (gõ-tìm `GET assignable-projects`) và công việc cha tuỳ chọn
+> (gõ-tìm `GET assignable-parent-tasks`, ràng buộc ngày con nằm trong ngày
+> cha nếu `constrain_child_dates`); route ghi `POST /manager/project/tasks`
+> (`TaskController::storeStandalone`) cạnh route cũ `POST
+> /manager/project/{project}/tasks`. (2) **Watchers/Collaborators**
+> (bảng `task_watchers`, `task_collaborators`, many-to-many `User`) — đúng
+> phần "đa vai trò" mà `plans/2026-08-30-task-delegation-hoan-thien.md` đã
+> xếp ngoài phạm vi lúc đó vì chưa có bảng riêng; hiện là theo dõi/phối hợp
+> thuần (chưa phải accept/reject delegation — xem §6.2, plan đó vẫn còn
+> hiệu lực cho phần delegation accept/reject). (3) **Creation settings**
+> mới trên `tasks` (migration `2026_08_30_100008_add_creation_settings_to_tasks_table`):
+> cờ ẩn/hiện chéo cha-con-người theo dõi (`hide_cross_tasks_from_assignees`,
+> `hide_from_parent_assignees`, `hide_from_parent_followers`,
+> `hide_child_tasks_from_followers`, `allow_child_people_view_parent`),
+> tự động hoàn thành khi có báo cáo (`auto_complete_on_report`), chính sách
+> tương tác sau khi hoàn thành (`completed_interaction_policy: allow|deny|
+> inherit`), yêu cầu mô tả/đính kèm khi báo cáo
+> (`report_description_requirement`/`report_attachment_requirement: none|
+> on_report|on_completion`) — **đã có cột + validate, UI/enforcement runtime
+> đọc các cờ này chưa rà soát hết**. (4) **Mức độ quan trọng thống nhất
+> thang B1 5 bậc** (`TaskEnums::PRIORITIES` nay `support/assist/important/
+> high_priority/strategic`, alias 2 chiều với `low/medium/high/urgent` cũ
+> qua `PRIORITY_ALIASES` để không vỡ dữ liệu cũ). (5) **`progress_type`
+> khai thêm 3 giá trị** `checklist`/`child_weight`/`timeline` trong enum —
+> **chỉ khai báo, chưa có logic tính** trong `TaskService` (mới `percent`/
+> `quantity` chạy thật). (6) **Evaluation ↔ Project**: tiêu chí đánh giá
+> phòng ban (loại `scale`) có thêm cờ `use_for_task_type` — mỗi phòng gán
+> tối đa 1 tiêu chí làm nguồn thang "loại công việc" hiện trên form tạo
+> việc (`TaskImportanceOptions::forDepartment()`, exclusive ở tầng Service,
+> API `GET tasks/options` trả `importance` từ tiêu chí đã gán hoặc fallback
+> thang cứng `ProjectEnums` nếu phòng chưa gán). Xem §2, §5.2(Evaluation),
+> §6, §16.
+>
+> Cập nhật trước — 2026-08-30 (đợt 1) — module `Project`: 3 tính năng mới
+> cho trang "Tất cả công việc" (`TaskList.vue`). (1) **Task Delegation
+> Phase 3 §6 — một phần**: `TaskService::bulkDelegate()` chuyển hàng loạt
+> task cho 1 người tiếp nhận (permission `task.delegate`), 4 cột delegation
+> trên `tasks` nay có logic thật, thông báo
+> `NotificationService::TYPE_TASK_DELEGATED` cho người nhận — **chưa có**
+> luồng người nhận accept/reject (`delegation_status` dừng ở `pending`) và
+> **chưa có** đa vai trò (quản trị/thực hiện/theo dõi) như UI hệ cũ tham
+> khảo ở `plans/2026-08-28-task-delegation-ui-proposal.md`; xem §6.2 và
+> plan tiếp theo `plans/2026-08-30-task-delegation-hoan-thien.md`. (2) **Chế
+> độ xem Lịch**: `TaskCalendarView.vue` (tháng/tuần) cạnh Danh sách/Kanban,
+> filter `overlap_from`/`overlap_to` mới trong `TaskRepository` (mọi task
+> chồng lên khoảng ngày đang xem, kể cả task nhiều ngày). (3) **Dual
+> Progress Bar dùng chung** (`resources/js/components/DualProgressBar.vue`):
+> thanh tiến độ 2 lớp (thực tế vs dự kiến theo mốc ngày,
 > `resources/js/lib/progress.js`), áp dụng cho `ProjectList.vue` thay
 > thanh tiến độ đơn cũ. Xem §2, §6, §19.
 >
@@ -68,7 +108,7 @@ Nền tảng **Phase 0 + Phase 1 đã xong**. Các module nghiệp vụ (Project
 | `Identity` | Google SSO (Sanctum **session/cookie**, không Bearer stateless), User/Department (stub chờ HRM), **9 role**, RBAC engine + UI ma trận `/superadmin/permissions`, View-as, Team, nhật ký hoạt động, shortcut | Gộp Auth + Department + Team + một phần Audit/SystemConfig — **không** tách module riêng |
 | `WorkspaceConfig` | Hub trưởng phòng: thành viên, CRUD nhóm, gán vai trò, bật/tắt menu; super_admin: overview + chi tiết phòng ban (chỉ xem) | Tab **Tiêu chí đánh giá** chưa có — đây là việc tiếp theo |
 | `Social` | Bảng tin nội bộ: đăng bài (4 loại tường), cảm xúc, bình luận đa cấp, poll, nhóm, sticker, `@mention`, ghim, lượt xem, giới hạn hiển thị theo phòng ban | **Không nằm trong kế hoạch gốc** — dựng ngoài lộ trình §19, chưa có ở bản đồ §2 trước bản cập nhật này. Chi tiết: `docs/modules/Social.md` |
-| `Project` | Giai đoạn 1: CRUD dự án (loại dự án, phạm vi/scope, nhãn, thành viên/theo dõi, đính kèm), import/export Excel, nhân bản dự án, ngày kế hoạch + thực tế. Giai đoạn 2: entity **`Task`** thật (bảng `tasks`, WBS đa cấp `parent_id`, `type ∈ {task,phase,category}`), trang **"Tất cả công việc"** xuyên project (`TaskList.vue`), tạo Task qua menu chuột phải (`ProjectQuickActionModals.vue`). Bổ sung 2026-08-30: **Task Delegation hàng loạt** (`TaskService::bulkDelegate()`, 1 người nhận, permission `task.delegate`), **chế độ xem Lịch** (`TaskCalendarView.vue`, tháng/tuần), **Dual Progress Bar** dùng chung | Giai đoạn 1+2 đã xong; **chưa có** Sprint/Worklog/Gantt UI thật, chưa roll-up tiến độ lên Project. Task Delegation (§6) đã có logic bulk delegate nhưng **chưa** có luồng accept/reject của người nhận và **chưa** có đa vai trò (quản trị/thực hiện/theo dõi). `project_quick_items` chỉ còn dùng cho baseline/signature. Xem §2, §6, §10, §16 |
+| `Project` | Giai đoạn 1: CRUD dự án (loại dự án, phạm vi/scope, nhãn, thành viên/theo dõi, đính kèm), import/export Excel, nhân bản dự án, ngày kế hoạch + thực tế. Giai đoạn 2: entity **`Task`** thật (bảng `tasks`, WBS đa cấp `parent_id`, `type ∈ {task,phase,category}`), trang **"Tất cả công việc"** xuyên project (`TaskList.vue`), tạo Task qua menu chuột phải (`ProjectQuickActionModals.vue`) hoặc trang riêng **`TaskCreate.vue`**. Bổ sung 2026-08-30 đợt 1: **Task Delegation hàng loạt** (`TaskService::bulkDelegate()`, 1 người nhận, permission `task.delegate`), **chế độ xem Lịch** (`TaskCalendarView.vue`, tháng/tuần), **Dual Progress Bar** dùng chung. Bổ sung 2026-08-30 đợt 2: **Task đứng độc lập** (`project_id` nullable — "công việc thường xuyên"), **watchers/collaborators** many-to-many, **creation settings** (ẩn/hiện chéo, tự hoàn thành theo báo cáo, yêu cầu mô tả/đính kèm báo cáo), mức độ quan trọng thống nhất thang B1 5 bậc, liên kết tiêu chí đánh giá phòng ban làm nguồn "loại công việc" (`use_for_task_type`) | Giai đoạn 1+2 đã xong; **chưa có** Sprint/Worklog/Gantt UI thật, chưa roll-up tiến độ lên Project. Task Delegation (§6) đã có logic bulk delegate nhưng **chưa** có luồng accept/reject của người nhận (watchers/collaborators mới thêm là theo dõi/phối hợp, không phải delegation). `progress_type` đã khai `checklist`/`child_weight`/`timeline` trong enum nhưng **chưa có logic tính**. Creation settings đã có cột + validate, enforcement runtime chưa rà soát hết. `project_quick_items` chỉ còn dùng cho baseline/signature. Xem §2, §6, §10, §16 |
 | `Example` | Module mẫu | Copy khi tạo module mới (`new-module`) |
 
 **Quyết định đã chốt khi làm Identity/WorkspaceConfig (khác bản plan gốc):**
@@ -399,13 +439,18 @@ tasks
    yên vĩnh viễn ở `pending` cho tới khi làm tiếp. Vì vậy phần "watcher
    phòng ban nguồn nhận thông báo mỗi khi `delegation_status` đổi" (đề xuất
    gốc) chưa từng chạy trong thực tế.
-5. **Không có** đa vai trò (Người quản trị / Người thực hiện / Người theo
-   dõi) như UI hệ cũ tham khảo ở
-   `plans/2026-08-28-task-delegation-ui-proposal.md` — hiện tại 1 lần
-   chuyển giao chỉ đổi **1 vai trò duy nhất** (`assignee_id`), không có
-   watcher (many-to-many) hay đổi `manager_id` cùng lúc qua endpoint
-   delegate thật (đổi `manager_id` hàng loạt vẫn đi qua endpoint
-   `tasks/bulk` — `permission:task.create`, tách biệt khỏi delegate).
+5. Đa vai trò kiểu UI hệ cũ tham khảo ở
+   `plans/2026-08-28-task-delegation-ui-proposal.md` vẫn **chưa đầy đủ**
+   trong luồng delegate: 1 lần chuyển giao (`bulkDelegate`) chỉ đổi **1 vai
+   trò duy nhất** (`assignee_id`), không đổi watcher/collaborator hay
+   `manager_id` cùng lúc (đổi `manager_id` hàng loạt vẫn đi qua endpoint
+   `tasks/bulk` — `permission:task.create`, tách biệt khỏi delegate). Tuy
+   nhiên bảng many-to-many cho theo dõi/phối hợp **đã có** từ 2026-08-30
+   đợt 2 — `task_watchers`/`task_collaborators` (`Task::watchers()`/
+   `collaborators()`, set qua `watcher_ids`/`collaborator_ids` khi tạo task
+   ở `TaskCreate.vue`) — nhưng đây là theo dõi/phối hợp thuần, **không**
+   phải người quản trị delegation và chưa gắn vào luồng accept/reject ở
+   mục 4.
 6. Phân quyền hiện tại: `BulkDelegateTaskRequest` chỉ validate
    `exists:users,id`, chưa giới hạn người nhận theo phòng ban liên quan tới
    task — người có `task.delegate` có thể chọn bất kỳ user nào trong toàn
@@ -834,4 +879,4 @@ Khi triển khai từng phase, tạo `docs/modules/{TenModule}.md` theo `docs/RE
 
 ---
 
-*Tài liệu sống của toàn dự án. Phần đã có: `Identity`, `WorkspaceConfig`, `Evaluation` Giai đoạn B + C, `Social` (phần lõi), `Project` Giai đoạn 1 (CRUD + nhân bản + menu chuột phải tạo nhanh mục) + Giai đoạn 2 (`Task` thật, WBS đa cấp, trang "Tất cả công việc") + bổ sung 2026-08-30 (Task Delegation hàng loạt — một phần, chế độ xem Lịch, Dual Progress Bar). Việc tiếp theo: §21 (hoàn thiện Task Delegation Phase 3, rồi Evaluation Giai đoạn D, `Initiative`, roll-up tiến độ).*
+*Tài liệu sống của toàn dự án. Phần đã có: `Identity`, `WorkspaceConfig`, `Evaluation` Giai đoạn B + C, `Social` (phần lõi), `Project` Giai đoạn 1 (CRUD + nhân bản + menu chuột phải tạo nhanh mục) + Giai đoạn 2 (`Task` thật, WBS đa cấp, trang "Tất cả công việc") + bổ sung 2026-08-30 đợt 1 (Task Delegation hàng loạt — một phần, chế độ xem Lịch, Dual Progress Bar) + đợt 2 (Task đứng độc lập không cần Project, watchers/collaborators, creation settings, mức độ quan trọng thang B1, liên kết Evaluation → loại công việc). Việc tiếp theo: §21 (hoàn thiện Task Delegation Phase 3 — accept/reject vẫn thiếu, rồi Evaluation Giai đoạn D, `Initiative`, roll-up tiến độ, logic tính progress_type mới).*

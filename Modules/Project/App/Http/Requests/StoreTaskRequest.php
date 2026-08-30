@@ -20,13 +20,14 @@ class StoreTaskRequest extends FormRequest
 
         return [
             'parent_id' => ['nullable', 'integer', 'exists:tasks,id'],
+            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
             'type' => ['nullable', 'string', 'in:'.implode(',', TaskEnums::TYPES)],
             'title' => [$needsTitle ? 'required' : 'nullable', 'string', 'max:255'],
             'titles' => ['nullable', 'array', 'min:1'],
             'titles.*' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
             'status' => ['nullable', 'string', 'in:'.implode(',', TaskEnums::STATUSES)],
-            'priority' => ['nullable', 'string', 'in:'.implode(',', TaskEnums::PRIORITIES)],
+            'priority' => ['nullable', 'string', 'max:50', Rule::in(TaskEnums::acceptedPriorities())],
             'start_date' => ['nullable', 'date'],
             'start_time' => ['nullable', 'date_format:H:i'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
@@ -35,6 +36,26 @@ class StoreTaskRequest extends FormRequest
             'actual_end_date' => ['nullable', 'date', 'after_or_equal:actual_start_date'],
             'assignee_id' => ['nullable', 'integer', 'exists:users,id'],
             'manager_id' => ['nullable', 'integer', 'exists:users,id'],
+            'watcher_ids' => ['nullable', 'array'],
+            'watcher_ids.*' => ['integer', 'distinct', 'exists:users,id'],
+            'collaborator_ids' => ['nullable', 'array'],
+            'collaborator_ids.*' => ['integer', 'distinct', 'exists:users,id'],
+            'constrain_child_dates' => ['nullable', 'boolean'],
+            'hide_cross_tasks_from_assignees' => ['nullable', 'boolean'],
+            'hide_from_parent_assignees' => ['nullable', 'boolean'],
+            'hide_from_parent_followers' => ['nullable', 'boolean'],
+            'hide_child_tasks_from_followers' => ['nullable', 'boolean'],
+            'allow_child_people_view_parent' => ['nullable', 'boolean'],
+            'auto_complete_on_report' => ['nullable', 'boolean'],
+            'completed_interaction_policy' => [
+                'nullable', 'string', Rule::in(TaskEnums::COMPLETED_INTERACTION_POLICIES),
+            ],
+            'report_description_requirement' => [
+                'nullable', 'string', Rule::in(TaskEnums::REPORT_REQUIREMENTS),
+            ],
+            'report_attachment_requirement' => [
+                'nullable', 'string', Rule::in(TaskEnums::REPORT_REQUIREMENTS),
+            ],
             // progress_type=quantity → progress_percent do Service tự tính,
             // KHÔNG nhận từ client (tránh lệch nguồn dữ liệu thật).
             'progress_percent' => [
@@ -66,6 +87,7 @@ class StoreTaskRequest extends FormRequest
     {
         return [
             'parent_id.exists' => 'Công việc cha không tồn tại.',
+            'project_id.exists' => 'Dự án không tồn tại.',
             'type.in' => 'Loại công việc không hợp lệ.',
             'title.required' => 'Tên công việc là bắt buộc.',
             'title.max' => 'Tên công việc không được vượt quá 255 ký tự.',
@@ -84,6 +106,11 @@ class StoreTaskRequest extends FormRequest
             'actual_end_date.after_or_equal' => 'Ngày kết thúc thực tế phải sau hoặc bằng ngày bắt đầu thực tế.',
             'assignee_id.exists' => 'Người thực hiện không tồn tại.',
             'manager_id.exists' => 'Người quản lý không tồn tại.',
+            'watcher_ids.*.exists' => 'Có người theo dõi không tồn tại.',
+            'collaborator_ids.*.exists' => 'Có người phối hợp không tồn tại.',
+            'completed_interaction_policy.in' => 'Cài đặt thảo luận sau hoàn thành không hợp lệ.',
+            'report_description_requirement.in' => 'Yêu cầu mô tả báo cáo không hợp lệ.',
+            'report_attachment_requirement.in' => 'Yêu cầu file báo cáo không hợp lệ.',
             'progress_percent.min' => 'Tiến độ tối thiểu là 0%.',
             'progress_percent.max' => 'Tiến độ tối đa là 100%.',
             'progress_percent.prohibited' => 'Không thể nhập tay tiến độ khi tính theo khối lượng — hệ thống tự tính.',

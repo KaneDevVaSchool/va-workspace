@@ -28,7 +28,7 @@ class UpdateTaskRequest extends FormRequest
             'title' => ['sometimes', 'string', 'max:255'],
             'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'status' => ['sometimes', 'string', 'in:'.implode(',', TaskEnums::STATUSES)],
-            'priority' => ['sometimes', 'nullable', 'string', 'in:'.implode(',', TaskEnums::PRIORITIES)],
+            'priority' => ['sometimes', 'nullable', 'string', 'max:50', Rule::in(TaskEnums::acceptedPriorities())],
             'start_date' => ['sometimes', 'nullable', 'date'],
             'start_time' => ['sometimes', 'nullable', 'date_format:H:i'],
             'end_date' => ['sometimes', 'nullable', 'date', 'after_or_equal:start_date'],

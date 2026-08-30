@@ -17,6 +17,7 @@ use Modules\Identity\App\Models\Department;
  * @property bool        $is_active
  * @property bool        $allow_half          cho phép trọng số bước 0.5
  * @property bool        $use_in_evaluation   hiện trên trang ĐGNL của thành viên
+ * @property bool        $use_for_task_type   nguồn mức độ quan trọng / loại công việc của phòng ban
  * @property int         $sort_order
  * @property int|null    $created_by
  * @property int|null    $updated_by
@@ -37,6 +38,7 @@ class EvaluationCriteria extends Model
         'is_active',
         'allow_half',
         'use_in_evaluation',
+        'use_for_task_type',
         'sort_order',
         'created_by',
         'updated_by',
@@ -47,6 +49,7 @@ class EvaluationCriteria extends Model
         'is_active'          => 'boolean',
         'allow_half'         => 'boolean',
         'use_in_evaluation'  => 'boolean',
+        'use_for_task_type'  => 'boolean',
     ];
 
     public function department(): BelongsTo

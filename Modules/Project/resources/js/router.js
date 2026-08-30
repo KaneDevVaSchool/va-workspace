@@ -49,6 +49,16 @@ export default [
     },
   },
   {
+    path: '/manager/project/tasks/create',
+    name: 'manager.project.tasks.create',
+    component: () => import('./pages/TaskCreate.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Tạo công việc',
+      requiresPermission: 'task.create',
+    },
+  },
+  {
     // "Tất cả công việc" (Project Giai đoạn 2 — Task thật) — mục sidebar
     // riêng cạnh "Dự án". requiresAnyPermission vì role member chỉ có
     // task.view_assigned (không có task.view) — xem AppSidebar.vue.

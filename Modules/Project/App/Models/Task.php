@@ -5,51 +5,53 @@ namespace Modules\Project\App\Models;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Modules\Identity\App\Models\Department;
 
 /**
  * Công việc (Task module — Project Giai đoạn 2: WBS đa cấp, thay thế dần
- * ProjectQuickItem cho kind task/task_category/phase). Task luôn thuộc 1
- * Project qua project_id bắt buộc, tự làm "phase"/"danh mục" qua cột `type`
+ * ProjectQuickItem cho kind task/task_category/phase). Task có thể thuộc 1
+ * Project (`project_id`) hoặc đứng riêng là công việc thường xuyên
+ * (`project_id` null). Tự làm "phase"/"danh mục" qua cột `type`
  * + `parent_id` (không tách bảng phases riêng — xem
  * docs/VA_WORKSPACE_OVERVIEW.md §16, plan Project Giai đoạn 2 QD1/QD2).
  *
- * @property int         $id
- * @property int         $project_id
- * @property int|null    $parent_id
+ * @property int $id
+ * @property int|null $project_id
+ * @property int|null $parent_id
  * @property string|null $code
- * @property string      $type               task | phase | category
- * @property string      $title
+ * @property string $type task | phase | category
+ * @property string $title
  * @property string|null $description
- * @property string      $status
+ * @property string $status
  * @property string|null $priority
  * @property string|null $start_date
- * @property string|null $start_time         giờ trong ngày start_date, tuỳ chọn
+ * @property string|null $start_time giờ trong ngày start_date, tuỳ chọn
  * @property string|null $end_date
- * @property string|null $due_time           giờ hạn trong ngày end_date, tuỳ chọn
+ * @property string|null $due_time giờ hạn trong ngày end_date, tuỳ chọn
  * @property string|null $actual_start_date
  * @property string|null $actual_end_date
- * @property int|null    $assignee_id
- * @property int|null    $progress_percent   0-100 — nhập tay khi progress_type=percent,
- *                                            tự tính khi progress_type=quantity (TaskService)
- * @property string      $progress_type      percent | quantity
- * @property float|null  $progress_number    khối lượng đã hoàn thành (khi quantity)
- * @property float|null  $progress_total     khối lượng cần hoàn thành — mẫu số (khi quantity)
- * @property string|null $unit               đơn vị đo khối lượng, tự do
- * @property float|null  $estimated_hours    thời gian dự kiến, nhập tay
- * @property int         $sort_order
- * @property float|null  $weight             % tỷ trọng trong phạm vi Project, nhập tay
- * @property int|null    $manager_id         người quản lý, nhập tay — không mặc định = creator/assignee
- * @property int|null    $accepted_by        người đã nhận thực hiện — derived, TaskService tự set
- * @property string|null $accepted_at        thời điểm nhận — derived, TaskService tự set
- * @property int|null    $origin_department_id          phòng ban gốc khi chuyển giao (Task Delegation §6)
- * @property int|null    $delegated_to_department_id    phòng ban người tiếp nhận
- * @property int|null    $delegated_to_employee_id      người tiếp nhận
- * @property string|null $delegation_status             pending | accepted | in_progress | done | rejected
- * @property int|null    $created_by
- * @property int|null    $updated_by
+ * @property int|null $assignee_id
+ * @property int|null $progress_percent 0-100 — nhập tay khi progress_type=percent,
+ *                                      tự tính khi progress_type=quantity (TaskService)
+ * @property string $progress_type percent | quantity
+ * @property float|null $progress_number khối lượng đã hoàn thành (khi quantity)
+ * @property float|null $progress_total khối lượng cần hoàn thành — mẫu số (khi quantity)
+ * @property string|null $unit đơn vị đo khối lượng, tự do
+ * @property float|null $estimated_hours thời gian dự kiến, nhập tay
+ * @property int $sort_order
+ * @property float|null $weight % tỷ trọng trong phạm vi Project, nhập tay
+ * @property int|null $manager_id người quản lý, nhập tay — không mặc định = creator/assignee
+ * @property int|null $accepted_by người đã nhận thực hiện — derived, TaskService tự set
+ * @property string|null $accepted_at thời điểm nhận — derived, TaskService tự set
+ * @property int|null $origin_department_id phòng ban gốc khi chuyển giao (Task Delegation §6)
+ * @property int|null $delegated_to_department_id phòng ban người tiếp nhận
+ * @property int|null $delegated_to_employee_id người tiếp nhận
+ * @property string|null $delegation_status pending | accepted | in_progress | done | rejected
+ * @property int|null $created_by
+ * @property int|null $updated_by
  */
 class Task extends Model
 {
@@ -64,6 +66,8 @@ class Task extends Model
         'acceptedBy',
         'creator',
         'updater',
+        'watchers.department',
+        'collaborators.department',
         'taskScore',
         'originDepartment',
         'delegatedToDepartment',
@@ -85,6 +89,16 @@ class Task extends Model
         'start_time',
         'end_date',
         'due_time',
+        'constrain_child_dates',
+        'hide_cross_tasks_from_assignees',
+        'hide_from_parent_assignees',
+        'hide_from_parent_followers',
+        'hide_child_tasks_from_followers',
+        'allow_child_people_view_parent',
+        'auto_complete_on_report',
+        'completed_interaction_policy',
+        'report_description_requirement',
+        'report_attachment_requirement',
         'actual_start_date',
         'actual_end_date',
         'assignee_id',
@@ -121,6 +135,13 @@ class Task extends Model
         'weight' => 'decimal:2',
         'sort_order' => 'integer',
         'accepted_at' => 'datetime',
+        'constrain_child_dates' => 'boolean',
+        'hide_cross_tasks_from_assignees' => 'boolean',
+        'hide_from_parent_assignees' => 'boolean',
+        'hide_from_parent_followers' => 'boolean',
+        'hide_child_tasks_from_followers' => 'boolean',
+        'allow_child_people_view_parent' => 'boolean',
+        'auto_complete_on_report' => 'boolean',
     ];
 
     public function project(): BelongsTo
@@ -141,6 +162,16 @@ class Task extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assignee_id');
+    }
+
+    public function watchers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'task_watchers', 'task_id', 'user_id');
+    }
+
+    public function collaborators(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'task_collaborators', 'task_id', 'user_id');
     }
 
     /** Người quản lý — nhập tay, không mặc định = creator/assignee. */

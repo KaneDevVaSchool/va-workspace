@@ -36,26 +36,48 @@ class TaskEnums
         'cancelled' => 'Đã huỷ',
     ];
 
-    public const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
+    /**
+     * Mức độ quan trọng — cùng 5 bậc với ProjectEnums / tiêu chí B1.
+     * Key cũ (low/medium/high/urgent) vẫn nhận khi đọc dữ liệu tồn tại.
+     */
+    public const PRIORITIES = ['support', 'assist', 'important', 'high_priority', 'strategic'];
 
     public const PRIORITY_LABELS = [
+        'support' => 'Phụ trợ',
+        'assist' => 'Hỗ trợ',
+        'important' => 'Quan trọng',
+        'high_priority' => 'Ưu tiên cao',
+        'strategic' => 'Chiến lược / Sống còn',
         'low' => 'Thấp',
         'medium' => 'Trung bình',
         'high' => 'Cao',
         'urgent' => 'Khẩn cấp',
     ];
 
+    public const PRIORITY_ALIASES = [
+        'low' => 'support',
+        'medium' => 'important',
+        'high' => 'high_priority',
+        'urgent' => 'strategic',
+    ];
+
     /**
-     * Cách tính tiến độ — 'percent' nhập tay progress_percent trực tiếp (mặc
-     * định, hành vi hiện có); 'quantity' tự tính progress_percent từ
-     * progress_number/progress_total (TaskService), không nhập tay % trực tiếp.
+     * Cách tính tiến độ. `percent` và `quantity` giữ nguyên value cũ để tương
+     * thích dữ liệu; các phương pháp còn lại lấy dữ liệu từ cấu trúc công việc.
      */
-    public const PROGRESS_TYPES = ['percent', 'quantity'];
+    public const PROGRESS_TYPES = ['percent', 'quantity', 'checklist', 'child_weight', 'timeline'];
 
     public const PROGRESS_TYPE_LABELS = [
-        'percent' => 'Theo phần trăm',
-        'quantity' => 'Theo khối lượng',
+        'percent' => 'Theo % người dùng tự cập nhật',
+        'quantity' => 'Theo tỷ lệ hoàn thành khối lượng công việc',
+        'checklist' => 'Theo tỷ lệ hoàn thành đầu việc',
+        'child_weight' => 'Theo tỷ trọng công việc con',
+        'timeline' => 'Tự động theo thời gian hoàn thành công việc',
     ];
+
+    public const COMPLETED_INTERACTION_POLICIES = ['allow', 'deny', 'inherit'];
+
+    public const REPORT_REQUIREMENTS = ['none', 'on_report', 'on_completion'];
 
     public const DELEGATION_STATUSES = ['pending', 'accepted', 'in_progress', 'done', 'rejected'];
 
@@ -103,7 +125,51 @@ class TaskEnums
 
     public static function priorityFromInput(string $input): ?string
     {
-        return self::valueFromInput($input, self::PRIORITIES, self::PRIORITY_LABELS);
+        $direct = self::valueFromInput($input, self::PRIORITIES, self::PRIORITY_LABELS);
+        if ($direct !== null) {
+            return self::PRIORITY_ALIASES[$direct] ?? $direct;
+        }
+
+        $lower = mb_strtolower(trim($input));
+        if ($lower !== '' && isset(self::PRIORITY_ALIASES[$lower])) {
+            return self::PRIORITY_ALIASES[$lower];
+        }
+
+        return ProjectEnums::importanceFromInput($input);
+    }
+
+    public static function normalizePriority(?string $input): ?string
+    {
+        if ($input === null || trim($input) === '') {
+            return null;
+        }
+
+        return self::priorityFromInput($input);
+    }
+
+    public static function priorityLabel(?string $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        $canonical = self::PRIORITY_ALIASES[$value] ?? $value;
+
+        return self::PRIORITY_LABELS[$canonical]
+            ?? self::PRIORITY_LABELS[$value]
+            ?? ProjectEnums::IMPORTANCE_LABELS[$canonical]
+            ?? $value;
+    }
+
+    /** @return list<string> */
+    public static function acceptedPriorities(): array
+    {
+        return array_values(array_unique(array_merge(
+            self::PRIORITIES,
+            array_keys(self::PRIORITY_ALIASES),
+            array_keys(self::PRIORITY_LABELS),
+            ['B1-1', 'B1-2', 'B1-3', 'B1-4', 'B1-5', 'b1-1', 'b1-2', 'b1-3', 'b1-4', 'b1-5'],
+        )));
     }
 
     public static function progressTypeFromInput(string $input): ?string

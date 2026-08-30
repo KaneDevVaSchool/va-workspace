@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Modules\Identity\App\Services\PermissionService;
 use Modules\Project\App\Enums\TaskEnums;
 use Modules\Project\App\Models\Task;
 use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
@@ -32,7 +33,8 @@ class TaskRepository implements TaskRepositoryInterface
 
     public function paginate(array $filters, int $perPage, int $page, array $allowedProjectIds, User $viewer): LengthAwarePaginator
     {
-        $query = $this->baseQuery()->whereIn('project_id', $allowedProjectIds);
+        $query = $this->baseQuery();
+        $this->applyViewerScope($query, $allowedProjectIds, $viewer);
 
         $this->applyFilters($query, $filters);
         $this->applyTabFilter($query, $filters['tab'] ?? null, $viewer);
@@ -43,7 +45,8 @@ class TaskRepository implements TaskRepositoryInterface
 
     public function forExport(array $filters, array $allowedProjectIds, User $viewer): Collection
     {
-        $query = $this->baseQuery()->whereIn('project_id', $allowedProjectIds);
+        $query = $this->baseQuery();
+        $this->applyViewerScope($query, $allowedProjectIds, $viewer);
 
         $this->applyFilters($query, $filters);
         $this->applyTabFilter($query, $filters['tab'] ?? null, $viewer);
@@ -71,7 +74,8 @@ class TaskRepository implements TaskRepositoryInterface
         $counts = [];
 
         foreach ($tabs as $tab) {
-            $query = Task::query()->whereIn('project_id', $allowedProjectIds);
+            $query = Task::query();
+            $this->applyViewerScope($query, $allowedProjectIds, $viewer);
             if ($forceAssigneeId !== null) {
                 $query->where('assignee_id', $forceAssigneeId);
             }
@@ -89,6 +93,92 @@ class TaskRepository implements TaskRepositoryInterface
             ->orderBy('parent_id')
             ->orderBy('sort_order')
             ->get();
+    }
+
+    public function searchParents(
+        User $viewer,
+        array $allowedProjectIds,
+        ?int $projectId,
+        string $q,
+        int $limit,
+        ?int $id = null,
+    ): Collection {
+        $query = Task::query()->with(['project:id,code,name']);
+
+        if ($id !== null) {
+            $query->whereKey($id);
+            $this->applyViewerScope($query, $allowedProjectIds, $viewer);
+
+            return $query->limit(1)->get();
+        }
+
+        if ($projectId !== null) {
+            if (! $this->hasGlobalProjectAccess($viewer) && ! in_array($projectId, $allowedProjectIds, true)) {
+                return collect();
+            }
+            $query->where('project_id', $projectId);
+        } else {
+            $query->whereNull('project_id');
+            $this->constrainStandalone($query, $viewer);
+        }
+
+        $q = trim($q);
+        if ($q !== '') {
+            $query->where(function (Builder $sub) use ($q) {
+                $sub->where('title', 'like', '%'.$q.'%')
+                    ->orWhere('code', 'like', '%'.$q.'%');
+            });
+        }
+
+        return $query->orderBy('title')->limit($limit)->get();
+    }
+
+    /**
+     * Task thuộc dự án viewer được xem, hoặc công việc thường xuyên
+     * (project_id null) trong phạm vi phòng ban / người liên quan.
+     *
+     * @param  list<int>  $allowedProjectIds
+     */
+    private function applyViewerScope(Builder $query, array $allowedProjectIds, User $viewer): void
+    {
+        $query->where(function (Builder $scope) use ($allowedProjectIds, $viewer) {
+            if ($allowedProjectIds !== []) {
+                $scope->whereIn('project_id', $allowedProjectIds);
+            }
+            $scope->orWhere(function (Builder $standalone) use ($viewer) {
+                $standalone->whereNull('project_id');
+                $this->constrainStandalone($standalone, $viewer);
+            });
+        });
+    }
+
+    private function constrainStandalone(Builder $query, User $viewer): void
+    {
+        if ($this->seesAllStandalone($viewer)) {
+            return;
+        }
+
+        $query->where(function (Builder $access) use ($viewer) {
+            if ($viewer->department_id) {
+                $access->where('origin_department_id', $viewer->department_id);
+            }
+            $access->orWhere('assignee_id', $viewer->id)
+                ->orWhere('manager_id', $viewer->id)
+                ->orWhere('created_by', $viewer->id)
+                ->orWhereHas('watchers', fn (Builder $w) => $w->where('users.id', $viewer->id))
+                ->orWhereHas('collaborators', fn (Builder $c) => $c->where('users.id', $viewer->id));
+        });
+    }
+
+    private function seesAllStandalone(User $viewer): bool
+    {
+        return $this->hasGlobalProjectAccess($viewer)
+            || app(PermissionService::class)->allows($viewer, 'task.*');
+    }
+
+    private function hasGlobalProjectAccess(User $viewer): bool
+    {
+        return $viewer->isSuperAdmin() || app(PermissionService::class)->allows($viewer, 'project.*');
     }
 
     public function find(int $id): ?Task
@@ -154,6 +244,14 @@ class TaskRepository implements TaskRepositoryInterface
         if ($guarded !== []) {
             $task->forceFill($guarded)->save();
         }
+
+        return $task->fresh(Task::WITH_PRESENT);
+    }
+
+    public function syncPeople(Task $task, array $watcherIds, array $collaboratorIds): Task
+    {
+        $task->watchers()->sync(array_values(array_unique($watcherIds)));
+        $task->collaborators()->sync(array_values(array_unique($collaboratorIds)));
 
         return $task->fresh(Task::WITH_PRESENT);
     }

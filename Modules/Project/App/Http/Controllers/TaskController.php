@@ -15,6 +15,7 @@ use Modules\Project\App\Http\Requests\StoreTaskRequest;
 use Modules\Project\App\Http\Requests\UpdateTaskRequest;
 use Modules\Project\App\Models\Task;
 use Modules\Project\App\Services\ProjectService;
+use Modules\Project\App\Services\TaskImportanceOptions;
 use Modules\Project\App\Services\TaskService;
 
 /**
@@ -26,6 +27,7 @@ class TaskController extends Controller
     public function __construct(
         private readonly TaskService $service,
         private readonly ProjectService $projects,
+        private readonly TaskImportanceOptions $importanceOptions,
     ) {}
 
     /** GET /api/project/tasks — xuyên project, cho trang "Tất cả công việc". */
@@ -78,7 +80,7 @@ class TaskController extends Controller
         return response()->json(['task' => $this->service->present($model)]);
     }
 
-    /** POST /api/project/{project}/tasks — tạo Task luôn trong ngữ cảnh 1 project. */
+    /** POST /api/project/{project}/tasks — tạo Task trong ngữ cảnh 1 project. */
     public function store(StoreTaskRequest $request, int $project)
     {
         $model = $this->projects->find($project);
@@ -93,6 +95,39 @@ class TaskController extends Controller
         }
 
         return response()->json(['task' => $this->service->present($result)], 201);
+    }
+
+    /** POST /api/project/tasks — tạo công việc, project_id tuỳ chọn (trống = thường xuyên). */
+    public function storeStandalone(StoreTaskRequest $request)
+    {
+        $projectId = $request->validated()['project_id'] ?? null;
+        $project = null;
+        if ($projectId !== null) {
+            $project = $this->projects->find((int) $projectId);
+            if ($project === null) {
+                return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+            }
+        }
+
+        $result = $this->service->create($project, $request->validated(), $request->user());
+
+        if (is_array($result)) {
+            return response()->json(['message' => $result['error']], 422);
+        }
+
+        return response()->json(['task' => $this->service->present($result)], 201);
+    }
+
+    /** GET /api/project/assignable-parent-tasks — gõ-tìm công việc cha khi tạo. */
+    public function assignableParents(Request $request)
+    {
+        $q = trim((string) $request->input('q', ''));
+        $projectId = $request->filled('project_id') ? (int) $request->input('project_id') : null;
+        $id = $request->filled('id') ? (int) $request->input('id') : null;
+
+        return response()->json([
+            'tasks' => $this->service->searchParents($q, $projectId, $request->user(), $id),
+        ]);
     }
 
     /**
@@ -129,9 +164,14 @@ class TaskController extends Controller
     }
 
     /** GET /api/project/tasks/options */
-    public function options()
+    public function options(Request $request)
     {
-        return response()->json(TaskEnums::options());
+        $departmentId = $request->filled('department_id')
+            ? (int) $request->input('department_id')
+            : ($request->user()?->department_id ? (int) $request->user()->department_id : null);
+        $importance = $this->importanceOptions->forDepartment($departmentId);
+
+        return response()->json(array_merge(TaskEnums::options(), $importance));
     }
 
     /** PATCH /api/project/tasks/bulk — chỉ manager_id/weight (whitelist). */

@@ -5,7 +5,7 @@
 // v-model nhận/phát chuỗi ISO yyyy-mm-dd (giống input type="date") để không
 // phải đổi format khi submit lên backend.
 //
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppIcon from './AppIcon.vue';
 
 const props = defineProps({
@@ -27,7 +27,9 @@ const MONTH_NAMES = [
 ];
 
 const root = ref(null);
+const popupRef = ref(null);
 const open = ref(false);
+const popupStyle = ref({});
 
 function parseIso(value) {
   if (!value) return null;
@@ -144,20 +146,59 @@ const yearOptions = computed(() => {
   return years.sort((a, b) => a - b);
 });
 
-function onClickOutside(event) {
-  if (root.value && !root.value.contains(event.target)) closePopup();
+function placePopup() {
+  const el = root.value;
+  if (!el || !open.value) return;
+  const rect = el.getBoundingClientRect();
+  const gap = 6;
+  const pad = 8;
+  const width = Math.min(17.5 * 16, window.innerWidth - pad * 2);
+  const estimatedH = 20 * 16;
+  const spaceBelow = window.innerHeight - rect.bottom - pad;
+  const spaceAbove = rect.top - pad;
+  const openUp = spaceBelow < estimatedH && spaceAbove > spaceBelow;
+  const left = Math.min(Math.max(pad, rect.left), window.innerWidth - width - pad);
+
+  popupStyle.value = openUp
+    ? {
+        top: 'auto',
+        bottom: `${window.innerHeight - rect.top + gap}px`,
+        left: `${left}px`,
+        width: `${width}px`,
+      }
+    : {
+        top: `${rect.bottom + gap}px`,
+        bottom: 'auto',
+        left: `${left}px`,
+        width: `${width}px`,
+      };
 }
 
-watch(open, (isOpen) => {
+function onClickOutside(event) {
+  const inRoot = root.value?.contains(event.target);
+  const inPopup = popupRef.value?.contains(event.target);
+  if (!inRoot && !inPopup) closePopup();
+}
+
+watch(open, async (isOpen) => {
   if (isOpen) {
-    nextTick(() => document.addEventListener('mousedown', onClickOutside));
-  } else {
-    document.removeEventListener('mousedown', onClickOutside);
+    await nextTick();
+    placePopup();
+    document.addEventListener('mousedown', onClickOutside);
+    return;
   }
+  document.removeEventListener('mousedown', onClickOutside);
+});
+
+onMounted(() => {
+  window.addEventListener('resize', placePopup);
+  window.addEventListener('scroll', placePopup, true);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onClickOutside);
+  window.removeEventListener('resize', placePopup);
+  window.removeEventListener('scroll', placePopup, true);
 });
 </script>
 
@@ -175,53 +216,62 @@ onBeforeUnmount(() => {
       <span class="app-date__text">{{ displayText || placeholder }}</span>
     </button>
 
-    <div v-if="open" class="app-date__popup" role="dialog" aria-label="Chọn ngày">
-      <div class="app-date__nav">
-        <button type="button" class="app-date__nav-btn" aria-label="Tháng trước" @click="prevMonth">
-          <AppIcon name="chevronLeft" :size="15" :stroke-width="2" />
-        </button>
+    <Teleport to="body">
+      <div
+        v-if="open"
+        ref="popupRef"
+        class="app-date__popup"
+        role="dialog"
+        aria-label="Chọn ngày"
+        :style="popupStyle"
+      >
+        <div class="app-date__nav">
+          <button type="button" class="app-date__nav-btn" aria-label="Tháng trước" @click="prevMonth">
+            <AppIcon name="chevronLeft" :size="15" :stroke-width="2" />
+          </button>
 
-        <div class="app-date__nav-selects">
-          <select v-model.number="viewMonth" class="app-date__select" aria-label="Chọn tháng">
-            <option v-for="(name, idx) in MONTH_NAMES" :key="idx" :value="idx">{{ name }}</option>
-          </select>
-          <select v-model.number="viewYear" class="app-date__select" aria-label="Chọn năm">
-            <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
-          </select>
+          <div class="app-date__nav-selects">
+            <select v-model.number="viewMonth" class="app-date__select" aria-label="Chọn tháng">
+              <option v-for="(name, idx) in MONTH_NAMES" :key="idx" :value="idx">{{ name }}</option>
+            </select>
+            <select v-model.number="viewYear" class="app-date__select" aria-label="Chọn năm">
+              <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
+            </select>
+          </div>
+
+          <button type="button" class="app-date__nav-btn" aria-label="Tháng sau" @click="nextMonth">
+            <AppIcon name="chevronRight" :size="15" :stroke-width="2" />
+          </button>
         </div>
 
-        <button type="button" class="app-date__nav-btn" aria-label="Tháng sau" @click="nextMonth">
-          <AppIcon name="chevronRight" :size="15" :stroke-width="2" />
-        </button>
-      </div>
+        <div class="app-date__weekdays">
+          <span v-for="w in WEEKDAYS" :key="w">{{ w }}</span>
+        </div>
 
-      <div class="app-date__weekdays">
-        <span v-for="w in WEEKDAYS" :key="w">{{ w }}</span>
-      </div>
+        <div class="app-date__grid">
+          <button
+            v-for="cell in calendarCells"
+            :key="cell.iso"
+            type="button"
+            class="app-date__cell"
+            :class="{
+              'app-date__cell--out': !cell.inMonth,
+              'app-date__cell--today': cell.isToday,
+              'app-date__cell--selected': cell.isSelected,
+            }"
+            :disabled="cell.disabled"
+            @click="pick(cell)"
+          >
+            {{ cell.date.getDate() }}
+          </button>
+        </div>
 
-      <div class="app-date__grid">
-        <button
-          v-for="cell in calendarCells"
-          :key="cell.iso"
-          type="button"
-          class="app-date__cell"
-          :class="{
-            'app-date__cell--out': !cell.inMonth,
-            'app-date__cell--today': cell.isToday,
-            'app-date__cell--selected': cell.isSelected,
-          }"
-          :disabled="cell.disabled"
-          @click="pick(cell)"
-        >
-          {{ cell.date.getDate() }}
-        </button>
+        <div class="app-date__footer">
+          <button type="button" class="app-date__link" @click="goToday">Hôm nay</button>
+          <button v-if="modelValue" type="button" class="app-date__link app-date__link--muted" @click="clearValue">Bỏ chọn</button>
+        </div>
       </div>
-
-      <div class="app-date__footer">
-        <button type="button" class="app-date__link" @click="goToday">Hôm nay</button>
-        <button v-if="modelValue" type="button" class="app-date__link app-date__link--muted" @click="clearValue">Bỏ chọn</button>
-      </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -285,15 +335,14 @@ onBeforeUnmount(() => {
 }
 
 .app-date__popup {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 0.375rem);
-  left: 0;
+  position: fixed;
+  z-index: 1500;
   width: 17.5rem;
   padding: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: #fff;
+  isolation: isolate;
   box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
 }
 

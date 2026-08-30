@@ -286,7 +286,7 @@ class EvaluationCriteriaService
         $allowHalf = (bool) ($data['allow_half'] ?? false);
         $normalized = $this->normalizeLevels($data['type'], $data['levels'] ?? [], $allowHalf);
 
-        return $this->criteria->create([
+        $criterion = $this->criteria->create([
             'department_id'     => $departmentId,
             'criterion_type_id' => $this->resolveTypeId($departmentId, $data['criterion_type_id'] ?? null),
             'name'              => trim($data['name']),
@@ -296,10 +296,17 @@ class EvaluationCriteriaService
             'is_active'           => $data['is_active'] ?? true,
             'allow_half'          => $allowHalf,
             'use_in_evaluation'   => $data['use_in_evaluation'] ?? true,
+            'use_for_task_type'   => false,
             'sort_order'          => $data['sort_order'] ?? 0,
             'created_by'          => $createdBy,
             'updated_by'          => $createdBy,
         ]);
+
+        if (! empty($data['use_for_task_type'])) {
+            return $this->criteria->assignUseForTaskType($criterion, true, $createdBy);
+        }
+
+        return $criterion;
     }
 
     public function update(
@@ -343,7 +350,17 @@ class EvaluationCriteriaService
             );
         }
 
-        return $this->criteria->update($criterion, $payload);
+        $updated = $this->criteria->update($criterion, $payload);
+
+        if (array_key_exists('use_for_task_type', $data)) {
+            return $this->criteria->assignUseForTaskType(
+                $updated,
+                (bool) $data['use_for_task_type'],
+                $updatedBy,
+            );
+        }
+
+        return $updated;
     }
 
     public function toggleActive(EvaluationCriteria $criterion, ?int $updatedBy = null): EvaluationCriteria
@@ -354,6 +371,15 @@ class EvaluationCriteriaService
     public function toggleUseInEvaluation(EvaluationCriteria $criterion, ?int $updatedBy = null): EvaluationCriteria
     {
         return $this->criteria->toggleUseInEvaluation($criterion, $updatedBy);
+    }
+
+    public function toggleUseForTaskType(EvaluationCriteria $criterion, ?int $updatedBy = null): EvaluationCriteria
+    {
+        return $this->criteria->assignUseForTaskType(
+            $criterion,
+            ! $criterion->use_for_task_type,
+            $updatedBy,
+        );
     }
 
     public function delete(EvaluationCriteria $criterion): bool
@@ -414,6 +440,7 @@ class EvaluationCriteriaService
             'is_active'          => $criterion->is_active,
             'allow_half'         => (bool) $criterion->allow_half,
             'use_in_evaluation'  => (bool) $criterion->use_in_evaluation,
+            'use_for_task_type'  => (bool) $criterion->use_for_task_type,
             'sort_order'         => $criterion->sort_order,
             'created_by'         => $criterion->created_by,
             'updated_by'         => $criterion->updated_by,

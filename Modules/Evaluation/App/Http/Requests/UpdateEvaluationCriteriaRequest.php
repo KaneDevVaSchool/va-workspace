@@ -53,6 +53,7 @@ class UpdateEvaluationCriteriaRequest extends FormRequest
             'is_active' => ['boolean'],
             'allow_half' => ['boolean'],
             'use_in_evaluation' => ['boolean'],
+            'use_for_task_type' => ['boolean'],
             'sort_order' => ['integer', 'min:0'],
         ];
     }

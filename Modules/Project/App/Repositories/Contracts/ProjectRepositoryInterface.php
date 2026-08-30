@@ -10,8 +10,8 @@ use Modules\Identity\App\Models\Department;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\ProjectAttachment;
 use Modules\Project\App\Models\ProjectLabel;
-use Modules\Project\App\Models\ProjectSetting;
 use Modules\Project\App\Models\ProjectQuickItem;
+use Modules\Project\App\Models\ProjectSetting;
 use Modules\Project\App\Models\ProjectType;
 
 /**
@@ -79,6 +79,22 @@ interface ProjectRepositoryInterface
 
     /** Áp bộ lọc quyền xem dự án theo viewer (mục A) lên query đã build sẵn. */
     public function forViewer(Builder $query, User $viewer): Builder;
+
+    /**
+     * Dự án được gắn khi tạo công việc: thuộc phòng ban viewer, hoặc viewer
+     * đang tham gia (phụ trách / tạo / thành viên) — không gồm người chỉ theo dõi.
+     */
+    public function forAssignableTaskProject(Builder $query, User $viewer): Builder;
+
+    public function viewerCanAssignTo(User $viewer, Project $project): bool;
+
+    /**
+     * Gõ-tìm dự án để gắn công việc. $id khác null thì chỉ trả đúng bản ghi
+     * đó (nếu viewer được gắn), dùng để hydrat ô đã chọn.
+     *
+     * @return Collection<int, Project>
+     */
+    public function searchAssignable(string $q, User $viewer, int $limit = 20, ?int $id = null): Collection;
 
     /** @return array<string, int> */
     public function tabCounts(User $viewer): array;

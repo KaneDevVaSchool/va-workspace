@@ -69,9 +69,20 @@ class ProjectEnums
         'phụ trợ' => 'support',
         'b1-1 phụ trợ' => 'support',
         'b1-1' => 'support',
+        'hỗ trợ' => 'assist',
+        'b1-2 hỗ trợ' => 'assist',
+        'b1-2' => 'assist',
+        'quan trọng' => 'important',
+        'b1-3 quan trọng' => 'important',
+        'b1-3' => 'important',
+        'ưu tiên cao' => 'high_priority',
+        'b1-4 ưu tiên cao' => 'high_priority',
+        'b1-4' => 'high_priority',
         'chiến lược' => 'strategic',
         'sống còn' => 'strategic',
         'chiến lược / sống còn' => 'strategic',
+        'b1-5 chiến lược / sống còn' => 'strategic',
+        'b1-5' => 'strategic',
     ];
 
     /** Phương pháp tính tiến độ. */

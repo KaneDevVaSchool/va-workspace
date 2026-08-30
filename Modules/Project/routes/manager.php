@@ -37,6 +37,7 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     });
 
     Route::middleware('permission:task.create')->group(function () {
+        Route::post('/tasks', [TaskController::class, 'storeStandalone'])->name('tasks.store-standalone');
         Route::post('/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
         Route::post('/tasks/import/preview', [TaskController::class, 'importPreview'])->name('tasks.import-preview');
         Route::post('/tasks/import/resolve-row', [TaskController::class, 'importResolveRow'])->name('tasks.import-resolve-row');
@@ -107,6 +108,8 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
 
     // Danh sách user để chọn "Phụ trách chính" / "Người thực hiện"
     Route::get('/assignable-users', [ProjectController::class, 'assignableUsers'])->name('assignable-users');
+    Route::get('/assignable-projects', [ProjectController::class, 'assignableProjects'])->name('assignable-projects');
+    Route::get('/assignable-parent-tasks', [TaskController::class, 'assignableParents'])->name('assignable-parent-tasks');
 
     // Nhãn tự do (mục E) — đọc chỉ cần đăng nhập, tạo cũng vậy (gõ-tìm-tạo ngay trong form).
     Route::get('/labels', [ProjectController::class, 'labelsIndex'])->name('labels.index');
