@@ -76,8 +76,8 @@ router.beforeEach(async (to) => {
     }
 
     // Route yêu cầu 1 permission cụ thể (vd. mục sidebar riêng ngoài phạm vi
-    // requiresSuperAdmin/requiresAdmin) — vd. manager.evaluation-templates.index
-    // department_director/deputy trở lên + superadmin (evaluation.manage_department).
+    // requiresSuperAdmin/requiresAdmin) — vd. manager.evaluation-score-kit.index
+    // department_director/deputy trở lên (evaluation.manage_department).
     if (to.meta.requiresPermission && !auth.can(to.meta.requiresPermission)) {
         return { name: 'home' };
     }
