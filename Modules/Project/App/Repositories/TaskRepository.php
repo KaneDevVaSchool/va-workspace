@@ -229,6 +229,16 @@ class TaskRepository implements TaskRepositoryInterface
             $query->whereDate('end_date', '<=', $filters['date_to']);
         }
 
+        // Lịch: mọi task chồng lên khoảng đang xem (kể cả kéo dài nhiều ngày).
+        if (! empty($filters['overlap_from']) && ! empty($filters['overlap_to'])) {
+            $from = $filters['overlap_from'];
+            $to = $filters['overlap_to'];
+            $query->where(function (Builder $q) {
+                $q->whereNotNull('start_date')->orWhereNotNull('end_date');
+            })->whereRaw('DATE(COALESCE(start_date, end_date)) <= ?', [$to])
+                ->whereRaw('DATE(COALESCE(end_date, start_date)) >= ?', [$from]);
+        }
+
         if (! empty($filters['q'])) {
             $q = trim((string) $filters['q']);
             if ($q !== '') {

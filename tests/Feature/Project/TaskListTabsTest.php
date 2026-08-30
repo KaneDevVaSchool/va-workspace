@@ -81,4 +81,42 @@ class TaskListTabsTest extends TestCase
         $this->assertCount(1, $mine->json('tasks'));
         $this->assertSame('Đang làm', $mine->json('tasks.0.title'));
     }
+
+    public function test_index_overlap_filter_returns_tasks_spanning_the_calendar_range(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'B', 'name' => 'Phòng B', 'is_active' => true]);
+        $viewer = $this->makeUser(['department_id' => $dept->id]);
+        $project = $this->makeProject([
+            'owner_department_id' => $dept->id,
+            'created_by' => $viewer->id,
+        ]);
+
+        $this->makeTask($project, [
+            'title' => 'Trong tháng',
+            'start_date' => '2026-08-10',
+            'end_date' => '2026-08-12',
+        ]);
+        $this->makeTask($project, [
+            'title' => 'Kéo dài sang tháng',
+            'start_date' => '2026-07-20',
+            'end_date' => '2026-08-05',
+        ]);
+        $this->makeTask($project, [
+            'title' => 'Tháng trước',
+            'start_date' => '2026-07-01',
+            'end_date' => '2026-07-15',
+        ]);
+        $this->makeTask($project, [
+            'title' => 'Không có ngày',
+        ]);
+
+        $response = $this->actingAs($viewer)->getJson(
+            '/api/project/tasks?overlap_from=2026-08-01&overlap_to=2026-08-31&per_page=50'
+        );
+        $response->assertOk();
+        $titles = collect($response->json('tasks'))->pluck('title')->all();
+        $this->assertEqualsCanonicalizing(['Trong tháng', 'Kéo dài sang tháng'], $titles);
+    }
 }

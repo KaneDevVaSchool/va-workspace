@@ -114,24 +114,74 @@ export const TASK_COLUMNS = [
   { key: 'variance_days', label: 'Chênh lệch (ngày)', defaultOn: false },
 ];
 
-export const TASK_FILTERS = [
-  { key: 'project_id', label: 'Dự án', defaultOn: false },
-  { key: 'assignee_id', label: 'Người thực hiện', defaultOn: false },
-  { key: 'manager_id', label: 'Người quản lý', defaultOn: false },
-  { key: 'date_from', label: 'Từ ngày', defaultOn: false },
-  { key: 'date_to', label: 'Đến ngày', defaultOn: false },
-  { key: 'is_overdue', label: 'Chỉ hiện việc quá hạn', defaultOn: false },
-  { key: 'progress_type', label: 'Cách tính tiến độ', defaultOn: false },
-];
-
 export const COLUMN_STORAGE_KEY = 'va-task-columns-v2';
-export const FILTER_STORAGE_KEY = 'va-task-filters-v2';
 export const COLUMN_WIDTH_KEY = 'va-task-column-widths-v2';
 export const ZOOM_STORAGE_KEY = 'va-task-zoom-v1';
 export const VIEW_MODE_KEY = 'va-task-view-mode';
 export const KANBAN_GROUP_KEY = 'va-task-kanban-group';
 export const KANBAN_ASSIGNEES_KEY = 'va-task-kanban-assignees';
 export const COLLAPSED_GROUPS_KEY = 'va-task-collapsed-groups';
+export const LIST_GROUP_KEY = 'va-task-list-group';
+export const CALENDAR_MODE_KEY = 'va-task-calendar-mode';
+
+export const CALENDAR_MODES = [
+  { value: 'month', label: 'Xem theo tháng', short: 'Tháng' },
+  { value: 'week', label: 'Xem theo tuần', short: 'Tuần' },
+];
+
+export const CALENDAR_MODE_VALUES = CALENDAR_MODES.map((item) => item.value);
+
+export const WEEKDAY_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+export function toYmd(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function parseYmd(value) {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+export function startOfWeekMonday(date) {
+  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dow = (next.getDay() + 6) % 7;
+  next.setDate(next.getDate() - dow);
+  return next;
+}
+
+export function addDays(date, days) {
+  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+export function calendarOverlapRange(mode, cursor) {
+  const c = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
+  if (mode === 'week') {
+    const start = startOfWeekMonday(c);
+    return { from: toYmd(start), to: toYmd(addDays(start, 6)) };
+  }
+  const first = new Date(c.getFullYear(), c.getMonth(), 1);
+  const start = startOfWeekMonday(first);
+  const last = new Date(c.getFullYear(), c.getMonth() + 1, 0);
+  return { from: toYmd(start), to: toYmd(addDays(startOfWeekMonday(last), 6)) };
+}
+
+export const LIST_GROUP_OPTIONS = [
+  { value: 'deadline', label: 'Cảnh báo đến hạn' },
+  { value: 'status', label: 'Trạng thái' },
+  { value: 'type', label: 'Loại công việc' },
+  { value: 'priority', label: 'Độ ưu tiên' },
+  { value: 'project', label: 'Dự án' },
+  { value: 'date', label: 'Theo ngày' },
+];
+
+export const LIST_GROUP_MODES = LIST_GROUP_OPTIONS.map((item) => item.value);
 
 export function loadVisibility(storageKey, items) {
   const defaults = {};

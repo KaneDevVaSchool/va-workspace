@@ -33,7 +33,8 @@ class TaskController extends Controller
     {
         $filters = $request->only([
             'project_id', 'assignee_id', 'manager_id', 'status', 'type', 'progress_type',
-            'is_overdue', 'date_from', 'date_to', 'q', 'tab', 'sort_by', 'sort_dir',
+            'is_overdue', 'date_from', 'date_to', 'overlap_from', 'overlap_to',
+            'q', 'tab', 'sort_by', 'sort_dir',
         ]);
         $perPage = (int) $request->input('per_page', 20);
         $page = (int) $request->input('page', 1);
