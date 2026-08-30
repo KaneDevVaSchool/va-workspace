@@ -2,9 +2,11 @@
 
 namespace Modules\Project\App\Http\Requests;
 
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Modules\Project\App\Enums\TaskEnums;
+use Modules\Project\App\Services\TaskImportanceOptions;
 
 class UpdateTaskRequest extends FormRequest
 {
@@ -28,7 +30,7 @@ class UpdateTaskRequest extends FormRequest
             'title' => ['sometimes', 'string', 'max:255'],
             'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'status' => ['sometimes', 'string', 'in:'.implode(',', TaskEnums::STATUSES)],
-            'priority' => ['sometimes', 'nullable', 'string', 'max:50', Rule::in(TaskEnums::acceptedPriorities())],
+            'priority' => ['sometimes', 'nullable', 'string', 'max:50', $this->priorityRule()],
             'start_date' => ['sometimes', 'nullable', 'date'],
             'start_time' => ['sometimes', 'nullable', 'date_format:H:i'],
             'end_date' => ['sometimes', 'nullable', 'date', 'after_or_equal:start_date'],
@@ -96,5 +98,24 @@ class UpdateTaskRequest extends FormRequest
             'weight.min' => 'Tỷ trọng tối thiểu là 0%.',
             'weight.max' => 'Tỷ trọng tối đa là 100%.',
         ];
+    }
+
+    private function priorityRule(): Closure
+    {
+        $task = $this->route('task');
+        $accepted = app(TaskImportanceOptions::class)->acceptedValuesForContext(
+            $task?->project_id,
+            $this->user()?->department_id,
+            $task?->origin_department_id,
+        );
+
+        return function (string $attribute, mixed $value, Closure $fail) use ($accepted) {
+            if ($value === null || $value === '') {
+                return;
+            }
+            if (! TaskEnums::isAcceptedValue((string) $value, $accepted)) {
+                $fail('Mức độ ưu tiên không hợp lệ.');
+            }
+        };
     }
 }

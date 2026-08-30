@@ -14,6 +14,7 @@ import ProjectLabelPicker from './ProjectLabelPicker.vue';
 import ProjectDepartmentPicker from './ProjectDepartmentPicker.vue';
 import ProjectUserPicker from './ProjectUserPicker.vue';
 import ProjectTypeSelect from './ProjectTypeSelect.vue';
+import OptionPicker from './OptionPicker.vue';
 
 const RULE_DEFS = [
   {
@@ -76,6 +77,14 @@ const IMPORTANCE_COLOR = {
 function importanceColor(value) {
   return IMPORTANCE_COLOR[value] || 'umber';
 }
+
+const progressMethodOptions = computed(() =>
+  (props.options.progress_method || []).map((opt) => ({
+    value: opt.value,
+    label: opt.label,
+    description: opt.description || '',
+  })),
+);
 
 const props = defineProps({
   form: { type: Object, required: true },
@@ -446,18 +455,16 @@ function toggleRule(key) {
       </div>
 
       <div class="proj-form__grid">
-        <div v-if="!isCreate" class="proj-form__field">
-          <label class="proj-form__label" for="proj-form-progress">Phương pháp tính tiến độ</label>
-          <select
-            id="proj-form-progress"
-            :value="form.progress_method"
-            class="proj-page__input"
+        <div class="proj-form__field proj-form__field--wide">
+          <span id="proj-form-progress-label" class="proj-form__label">Cách tính tiến độ dự án</span>
+          <OptionPicker
+            :model-value="form.progress_method"
+            :options="progressMethodOptions"
             :disabled="disabled"
-            @change="set('progress_method', $event.target.value)"
-          >
-            <option v-for="opt in options.progress_method" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-          </select>
-          <span v-if="progressMethodDescription" class="proj-form__caption">{{ progressMethodDescription }}</span>
+            labelled-by="proj-form-progress-label"
+            placeholder="Chọn cách tính tiến độ"
+            @update:model-value="set('progress_method', $event)"
+          />
         </div>
 
         <div class="proj-form__field proj-form__field--wide">

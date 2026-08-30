@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Evaluation\App\Http\Controllers\EvaluationCriteriaController;
 use Modules\Evaluation\App\Http\Controllers\EvaluationCriterionTypeController;
 use Modules\Evaluation\App\Http\Controllers\EvaluationPositionController;
+use Modules\Evaluation\App\Http\Controllers\EvaluationScoreKitController;
 use Modules\Evaluation\App\Http\Controllers\EvaluationTemplateController;
 
 /*
@@ -19,6 +20,12 @@ use Modules\Evaluation\App\Http\Controllers\EvaluationTemplateController;
 */
 
 Route::prefix('evaluation')->name('evaluation.')->group(function () {
+
+    Route::get('/score-kit', [EvaluationScoreKitController::class, 'show'])
+        ->name('score-kit.show');
+
+    Route::put('/score-kit', [EvaluationScoreKitController::class, 'update'])
+        ->name('score-kit.update');
 
     Route::get('/criterion-types', [EvaluationCriterionTypeController::class, 'index'])
         ->name('criterion-types.index');
@@ -71,6 +78,9 @@ Route::prefix('evaluation')->name('evaluation.')->group(function () {
 
     Route::patch('/criteria/{id}/toggle-task-type', [EvaluationCriteriaController::class, 'toggleUseForTaskType'])
         ->name('criteria.toggle-task-type');
+
+    Route::patch('/criteria/{id}/task-score-levels', [EvaluationCriteriaController::class, 'updateTaskScoreLevels'])
+        ->name('criteria.task-score-levels');
 
     // Xoá tiêu chí
     Route::delete('/criteria/{id}', [EvaluationCriteriaController::class, 'destroy'])

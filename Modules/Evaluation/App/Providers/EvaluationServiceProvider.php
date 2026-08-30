@@ -7,10 +7,12 @@ use Illuminate\Support\ServiceProvider;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriteriaRepositoryInterface;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriterionTypeRepositoryInterface;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationPositionRepositoryInterface;
+use Modules\Evaluation\App\Repositories\Contracts\EvaluationScoreKitRepositoryInterface;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationTemplateRepositoryInterface;
 use Modules\Evaluation\App\Repositories\EvaluationCriteriaRepository;
 use Modules\Evaluation\App\Repositories\EvaluationCriterionTypeRepository;
 use Modules\Evaluation\App\Repositories\EvaluationPositionRepository;
+use Modules\Evaluation\App\Repositories\EvaluationScoreKitRepository;
 use Modules\Evaluation\App\Repositories\EvaluationTemplateRepository;
 
 class EvaluationServiceProvider extends ServiceProvider
@@ -32,6 +34,10 @@ class EvaluationServiceProvider extends ServiceProvider
         $this->app->bind(
             EvaluationPositionRepositoryInterface::class,
             EvaluationPositionRepository::class,
+        );
+        $this->app->bind(
+            EvaluationScoreKitRepositoryInterface::class,
+            EvaluationScoreKitRepository::class,
         );
     }
 

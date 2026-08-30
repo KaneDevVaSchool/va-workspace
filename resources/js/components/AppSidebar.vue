@@ -105,6 +105,19 @@ const MENU_SECTIONS = [
         configurableByDepartment: true,
       },
       {
+        // Khung chấm điểm — mục sidebar RIÊNG của phòng ban, khác tab
+        // "Tiêu chí đánh giá" trong hub Cấu hình. Cùng quyền
+        // evaluation.manage_department với Mẫu đánh giá.
+        // configurableByDepartment: true — đồng bộ thủ công với
+        // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
+        name: 'manager.evaluation-score-kit.index',
+        label: 'Khung chấm điểm',
+        icon: 'layers',
+        requiresPermission: 'evaluation.manage_department',
+        hideWhenSuperAdmin: true,
+        configurableByDepartment: true,
+      },
+      {
         // Dự án (Project module — giai đoạn 1: CRUD) — mục sidebar riêng,
         // cùng nhóm "Quản lý" với "Mẫu đánh giá". Ai xem được danh sách dự
         // án (project.view) đều thấy mục này — department_director trở lên

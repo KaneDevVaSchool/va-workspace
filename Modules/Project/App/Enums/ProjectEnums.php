@@ -89,15 +89,15 @@ class ProjectEnums
     public const PROGRESS_METHODS = ['average', 'duration_weighted', 'task_weighted'];
 
     public const PROGRESS_METHOD_LABELS = [
-        'average' => 'Bình quân % hoàn thành',
+        'average' => 'Theo bình quân % tiến độ các công việc thuộc dự án',
         'duration_weighted' => 'Theo tỷ trọng ngày thực hiện',
         'task_weighted' => 'Theo tỷ trọng công việc',
     ];
 
     public const PROGRESS_METHOD_DESCRIPTIONS = [
-        'average' => 'Lấy trung bình cộng phần trăm hoàn thành của tất cả công việc trong dự án.',
-        'duration_weighted' => 'Công việc kéo dài nhiều ngày hơn sẽ ảnh hưởng nhiều hơn đến tiến độ chung.',
-        'task_weighted' => 'Mỗi công việc được gán một tỷ trọng riêng, tiến độ chung tính theo tỷ trọng đó.',
+        'average' => 'Ví dụ dự án gồm 2 công việc A và B. Công việc A tiến độ 40%, công việc B tiến độ 60%. Tiến độ dự án là (60+40)/2 = 50%',
+        'duration_weighted' => 'Ví dụ dự án gồm 2 công việc A và B. Công việc A yêu cầu thực hiện trong 4 ngày, tiến độ 40% Công việc B yêu cầu thực hiện trong 6 ngày, tiến độ 50% Tiến độ dự án là ((4*40 + 6*50)/(4*100 + 6*100)) * 100 = 46%',
+        'task_weighted' => 'Ví dụ Dự án gồm 2 công việc A và B Công việc A có Tỷ trọng là 40, tiến độ là 50% Công việc B có Tỷ trọng là 30, tiến độ là 40% Tiến độ của dự án là [(40x50)+(30x40)]/(40+30)=45.71%',
     ];
 
     /** Phạm vi triển khai — mỗi dự án chỉ chọn 1. */
@@ -148,7 +148,17 @@ class ProjectEnums
 
     public static function progressMethodFromInput(string $input): ?string
     {
-        return self::valueFromInput($input, self::PROGRESS_METHODS, self::PROGRESS_METHOD_LABELS);
+        $direct = self::valueFromInput($input, self::PROGRESS_METHODS, self::PROGRESS_METHOD_LABELS);
+        if ($direct !== null) {
+            return $direct;
+        }
+
+        $aliases = [
+            'bình quân % hoàn thành' => 'average',
+            'theo bình quân % tiến độ các công việc' => 'average',
+        ];
+
+        return $aliases[mb_strtolower(trim($input))] ?? null;
     }
 
     /** @return list<array{value: string, label: string, description: string, weight: int}> */

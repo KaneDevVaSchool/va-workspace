@@ -54,6 +54,13 @@ interface EvaluationCriteriaRepositoryInterface
      */
     public function assignUseForTaskType(EvaluationCriteria $criterion, bool $enabled, ?int $updatedBy = null): EvaluationCriteria;
 
+    /**
+     * Gói / bỏ gói các mức thang điểm vào khung chấm điểm theo công việc.
+     *
+     * @param  list<string>  $codes
+     */
+    public function setTaskScoreLevelCodes(EvaluationCriteria $criterion, array $codes, ?int $updatedBy = null): EvaluationCriteria;
+
     public function findTaskTypeCriterion(int $departmentId): ?EvaluationCriteria;
 
     /** Cập nhật sort_order theo mảng IDs (giữ nguyên phòng ban). */

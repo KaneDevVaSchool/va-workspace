@@ -297,6 +297,7 @@ class EvaluationCriteriaService
             'allow_half'          => $allowHalf,
             'use_in_evaluation'   => $data['use_in_evaluation'] ?? true,
             'use_for_task_type'   => false,
+            'task_score_level_codes' => [],
             'sort_order'          => $data['sort_order'] ?? 0,
             'created_by'          => $createdBy,
             'updated_by'          => $createdBy,
@@ -336,6 +337,10 @@ class EvaluationCriteriaService
             'use_in_evaluation'  => array_key_exists('use_in_evaluation', $data)
                 ? (bool) $data['use_in_evaluation']
                 : (bool) $criterion->use_in_evaluation,
+            'task_score_level_codes' => $this->pruneTaskScoreLevelCodes(
+                $criterion->task_score_level_codes ?? [],
+                $normalized,
+            ),
             'sort_order'         => $data['sort_order'] ?? $criterion->sort_order,
         ];
 
@@ -380,6 +385,27 @@ class EvaluationCriteriaService
             ! $criterion->use_for_task_type,
             $updatedBy,
         );
+    }
+
+    /**
+     * @param  list<string>  $codes
+     */
+    public function setTaskScoreLevelCodes(
+        EvaluationCriteria $criterion,
+        array $codes,
+        ?int $updatedBy = null,
+    ): EvaluationCriteria {
+        $allowed = $criterion->allowedLevelKeys();
+        $clean = [];
+        foreach ($codes as $code) {
+            $key = strtoupper(trim((string) $code));
+            if ($key === '' || ! in_array($key, $allowed, true) || in_array($key, $clean, true)) {
+                continue;
+            }
+            $clean[] = $key;
+        }
+
+        return $this->criteria->setTaskScoreLevelCodes($criterion, $clean, $updatedBy);
     }
 
     public function delete(EvaluationCriteria $criterion): bool
@@ -441,6 +467,7 @@ class EvaluationCriteriaService
             'allow_half'         => (bool) $criterion->allow_half,
             'use_in_evaluation'  => (bool) $criterion->use_in_evaluation,
             'use_for_task_type'  => (bool) $criterion->use_for_task_type,
+            'task_score_level_codes' => array_values($criterion->task_score_level_codes ?? []),
             'sort_order'         => $criterion->sort_order,
             'created_by'         => $criterion->created_by,
             'updated_by'         => $criterion->updated_by,
@@ -526,5 +553,30 @@ class EvaluationCriteriaService
         }
 
         return $result;
+    }
+
+    /**
+     * Bỏ mã mức đã gói nhưng không còn tồn tại sau khi sửa thang điểm.
+     *
+     * @param  list<string>|null  $codes
+     * @param  list<array{code?: string}>  $levels
+     * @return list<string>
+     */
+    private function pruneTaskScoreLevelCodes(?array $codes, array $levels): array
+    {
+        $allowed = [];
+        foreach ($levels as $index => $level) {
+            $allowed[] = EvaluationCriteria::levelKey($level, $index);
+        }
+
+        $kept = [];
+        foreach ($codes ?? [] as $code) {
+            $key = strtoupper(trim((string) $code));
+            if ($key !== '' && in_array($key, $allowed, true) && ! in_array($key, $kept, true)) {
+                $kept[] = $key;
+            }
+        }
+
+        return $kept;
     }
 }

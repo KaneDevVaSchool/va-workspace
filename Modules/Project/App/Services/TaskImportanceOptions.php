@@ -6,6 +6,8 @@ use App\Models\User;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriteriaRepositoryInterface;
 use Modules\Project\App\Enums\ProjectEnums;
+use Modules\Project\App\Enums\TaskEnums;
+use Modules\Project\App\Models\Project;
 
 /**
  * Mức độ quan trọng / loại công việc lấy từ tiêu chí mà phòng ban
@@ -29,6 +31,74 @@ class TaskImportanceOptions
         $departmentId = $user?->department_id ? (int) $user->department_id : null;
 
         return $this->forDepartment($departmentId);
+    }
+
+    /**
+     * Value hợp lệ khi tạo/sửa task: bộ 5 bậc cứng + mã/nhãn tiêu chí
+     * loại công việc của phòng ban (owner dự án, hoặc phòng ban user).
+     *
+     * @return list<string>
+     */
+    public function acceptedValuesForContext(
+        ?int $projectId = null,
+        ?int $userDepartmentId = null,
+        ?int $originDepartmentId = null,
+    ): array {
+        $departmentId = $originDepartmentId
+            ?? $this->departmentIdFromProject($projectId)
+            ?? $userDepartmentId;
+
+        return $this->acceptedValues($departmentId);
+    }
+
+    /** @return list<string> */
+    public function acceptedValues(?int $departmentId): array
+    {
+        $values = TaskEnums::acceptedPriorities();
+        foreach ($this->forDepartment($departmentId)['importance'] as $opt) {
+            foreach (['value', 'code', 'label'] as $key) {
+                $raw = trim((string) ($opt[$key] ?? ''));
+                if ($raw !== '') {
+                    $values[] = $raw;
+                }
+            }
+        }
+
+        return array_values(array_unique($values));
+    }
+
+    public function matchAccepted(?string $input, ?int $departmentId): ?string
+    {
+        if ($input === null || trim($input) === '') {
+            return null;
+        }
+
+        $mapped = TaskEnums::priorityFromInput($input);
+        if ($mapped !== null) {
+            return $mapped;
+        }
+
+        $accepted = $this->acceptedValues($departmentId);
+        $lower = mb_strtolower(trim($input));
+        foreach ($accepted as $item) {
+            if (mb_strtolower((string) $item) === $lower) {
+                return (string) $item;
+            }
+        }
+
+        return null;
+    }
+
+    private function departmentIdFromProject(?int $projectId): ?int
+    {
+        if (! $projectId) {
+            return null;
+        }
+
+        $project = Project::query()->find($projectId);
+
+        return $project?->owner_department_id
+            ?? $project?->executing_department_id;
     }
 
     /**

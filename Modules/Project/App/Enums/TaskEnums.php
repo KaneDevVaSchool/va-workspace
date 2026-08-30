@@ -62,10 +62,14 @@ class TaskEnums
     ];
 
     /**
-     * Cách tính tiến độ. `percent` và `quantity` giữ nguyên value cũ để tương
-     * thích dữ liệu; các phương pháp còn lại lấy dữ liệu từ cấu trúc công việc.
+     * Cách tính tiến độ. `percent`/`quantity`/`checklist`/`child_weight`/
+     * `timeline` giữ value cũ để tương thích dữ liệu. Form tạo việc chỉ
+     * chọn 3 phương pháp roll-up (cùng key với ProjectEnums).
      */
-    public const PROGRESS_TYPES = ['percent', 'quantity', 'checklist', 'child_weight', 'timeline'];
+    public const PROGRESS_TYPES = [
+        'percent', 'quantity', 'checklist', 'child_weight', 'timeline',
+        'average', 'duration_weighted', 'task_weighted',
+    ];
 
     public const PROGRESS_TYPE_LABELS = [
         'percent' => 'Theo % người dùng tự cập nhật',
@@ -73,6 +77,9 @@ class TaskEnums
         'checklist' => 'Theo tỷ lệ hoàn thành đầu việc',
         'child_weight' => 'Theo tỷ trọng công việc con',
         'timeline' => 'Tự động theo thời gian hoàn thành công việc',
+        'average' => 'Theo bình quân % tiến độ các công việc thuộc dự án',
+        'duration_weighted' => 'Theo tỷ trọng ngày thực hiện',
+        'task_weighted' => 'Theo tỷ trọng công việc',
     ];
 
     public const COMPLETED_INTERACTION_POLICIES = ['allow', 'deny', 'inherit'];
@@ -144,7 +151,22 @@ class TaskEnums
             return null;
         }
 
-        return self::priorityFromInput($input);
+        // Giữ mã mức do phòng ban tự đặt (tiêu chí loại công việc) khi
+        // không map được về 5 bậc cứng — form gửi đúng value từ /tasks/options.
+        return self::priorityFromInput($input) ?? trim($input);
+    }
+
+    /** @param  list<string>  $accepted */
+    public static function isAcceptedValue(string $input, array $accepted): bool
+    {
+        $lower = mb_strtolower(trim($input));
+        foreach ($accepted as $item) {
+            if (mb_strtolower((string) $item) === $lower) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static function priorityLabel(?string $value): string

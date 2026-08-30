@@ -11,6 +11,7 @@ use Modules\Evaluation\App\Http\Requests\ExportEvaluationCriteriaRequest;
 use Modules\Evaluation\App\Http\Requests\ImportEvaluationCriteriaRequest;
 use Modules\Evaluation\App\Http\Requests\StoreEvaluationCriteriaRequest;
 use Modules\Evaluation\App\Http\Requests\UpdateEvaluationCriteriaRequest;
+use Modules\Evaluation\App\Http\Requests\UpdateTaskScoreLevelsRequest;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
 use Modules\Evaluation\App\Services\EvaluationCriteriaService;
 use Modules\Identity\App\Models\ActivityLog;
@@ -33,6 +34,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  *   PATCH  /api/evaluation/criteria/{id}/toggle              — bật/tắt is_active
  *   PATCH  /api/evaluation/criteria/{id}/toggle-evaluation   — bật/tắt use_in_evaluation
  *   PATCH  /api/evaluation/criteria/{id}/toggle-task-type    — gán/bỏ gán làm loại công việc
+ *   PATCH  /api/evaluation/criteria/{id}/task-score-levels   — gói mức thang điểm vào khung chấm task
  *
  * department_id luôn lấy từ user (manager route) — trưởng phòng chỉ xem/sửa PB mình.
  * Ngoại lệ: GET với ?department_id có thể dùng cho superadmin (kiểm tra workspace_config.view_all).
@@ -328,6 +330,42 @@ class EvaluationCriteriaController extends Controller
         $this->recordCriterionActivity(
             'evaluation_criteria.update',
             ($updated->use_for_task_type ? 'Gán' : 'Bỏ gán').' tiêu chí "'.$updated->name.'" cho loại công việc',
+            $request->user(),
+            $updated,
+        );
+
+        return response()->json(['criterion' => $this->service->present($updated)]);
+    }
+
+    public function updateTaskScoreLevels(UpdateTaskScoreLevelsRequest $request, int $id): JsonResponse
+    {
+        $departmentId = $this->departmentIdOrFail($request);
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
+        }
+
+        if (! $this->permissions->allows($request->user(), 'evaluation.manage_department', 'department', $departmentId)) {
+            return response()->json(['message' => 'Bạn không có quyền cập nhật tiêu chí đánh giá.'], 403);
+        }
+
+        $criterion = $this->service->findByDepartmentOrFail($id, $departmentId);
+        if ($criterion instanceof JsonResponse) {
+            return $criterion;
+        }
+
+        $codes = array_map('strval', $request->input('codes', []));
+        $updated = $this->service->setTaskScoreLevelCodes(
+            $criterion,
+            $codes,
+            (int) $request->user()->id,
+        );
+
+        $count = count($updated->task_score_level_codes ?? []);
+        $this->recordCriterionActivity(
+            'evaluation_criteria.update',
+            $count > 0
+                ? 'Gói '.$count.' mức của tiêu chí "'.$updated->name.'" vào khung chấm điểm'
+                : 'Bỏ gói tiêu chí "'.$updated->name.'" khỏi khung chấm điểm',
             $request->user(),
             $updated,
         );

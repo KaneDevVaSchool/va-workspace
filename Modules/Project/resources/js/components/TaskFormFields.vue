@@ -10,16 +10,14 @@ import ProjectMemberPicker from './ProjectMemberPicker.vue';
 import ProjectUserPicker from './ProjectUserPicker.vue';
 import TaskParentPicker from './TaskParentPicker.vue';
 import TaskProjectPicker from './TaskProjectPicker.vue';
-import {
-  TASK_PROGRESS_TYPE_LABELS,
-  TASK_TYPE_LABELS,
-} from '../constants/task.js';
+import OptionPicker from './OptionPicker.vue';
+import { TASK_PROGRESS_METHOD_OPTIONS } from '../constants/task.js';
 
 const STEP_SECTIONS = {
   1: ['general', 'schedule'],
   2: ['people'],
   3: ['settings'],
-  4: ['rules'],
+  4: ['rules', 'policy'],
 };
 
 const FALLBACK_IMPORTANCE = [
@@ -40,14 +38,6 @@ const PRIORITY_COLOR = {
   medium: 'tertiary',
   high: 'gold',
   urgent: 'primary',
-};
-
-const PROGRESS_DESC = {
-  percent: 'Người dùng nhập trực tiếp phần trăm hoàn thành.',
-  quantity: 'Tính từ khối lượng đã làm trên tổng khối lượng.',
-  checklist: 'Tính theo số đầu việc đã hoàn thành.',
-  child_weight: 'Tổng hợp tiến độ theo tỷ trọng các công việc con.',
-  timeline: 'Tự động tăng hoặc giảm theo thời điểm hoàn thành.',
 };
 
 const RULE_DEFS = [
@@ -98,6 +88,30 @@ const REQUIREMENT_OPTIONS = [
   { value: 'none', label: 'Không yêu cầu' },
   { value: 'on_report', label: 'Yêu cầu khi báo cáo' },
   { value: 'on_completion', label: 'Yêu cầu khi báo cáo hoàn thành' },
+];
+
+const POLICY_DEFS = [
+  {
+    key: 'completed_interaction_policy',
+    icon: 'messageCircle',
+    tone: 'tertiary',
+    label: 'Thảo luận và file sau hoàn thành',
+    options: INTERACTION_OPTIONS,
+  },
+  {
+    key: 'report_description_requirement',
+    icon: 'fileText',
+    tone: 'secondary',
+    label: 'Mô tả khi báo cáo',
+    options: REQUIREMENT_OPTIONS,
+  },
+  {
+    key: 'report_attachment_requirement',
+    icon: 'paperclip',
+    tone: 'gold',
+    label: 'File khi báo cáo',
+    options: REQUIREMENT_OPTIONS,
+  },
 ];
 
 const props = defineProps({
@@ -169,11 +183,13 @@ const enabledRulesCount = computed(
   () => RULE_DEFS.filter((rule) => Boolean(props.form[rule.key])).length,
 );
 
-const isQuantity = computed(() => props.form.progress_type === 'quantity');
-
 function toggleRule(key) {
   if (props.disabled) return;
   set(key, !props.form[key]);
+}
+
+function policyLabel(options, value) {
+  return options.find((option) => option.value === value)?.label || '';
 }
 
 function priorityColor(value) {
@@ -181,7 +197,7 @@ function priorityColor(value) {
 }
 
 const importanceTitle = computed(
-  () => props.importanceCriterion?.name || 'Mức độ quan trọng',
+  () => props.importanceCriterion?.name || 'Loại công việc',
 );
 
 const importanceRows = computed(() => {
@@ -502,22 +518,9 @@ const importanceRows = computed(() => {
       </header>
 
       <div class="proj-form__grid">
-        <div class="proj-form__field">
-          <label class="proj-form__label" for="task-form-type">Loại công việc</label>
-          <select
-            id="task-form-type"
-            :value="form.type"
-            class="proj-page__input"
-            :disabled="disabled"
-            @change="set('type', $event.target.value)"
-          >
-            <option v-for="(label, value) in TASK_TYPE_LABELS" :key="value" :value="value">{{ label }}</option>
-          </select>
-        </div>
-
-        <div class="proj-form__field proj-form__field--span2">
-          <span class="proj-form__label">{{ importanceTitle }}</span>
-          <div class="proj-form__importance" role="radiogroup" :aria-label="importanceTitle">
+        <div class="proj-form__field proj-form__field--wide">
+          <span id="task-form-type-label" class="proj-form__label">{{ importanceTitle }}</span>
+          <div class="proj-form__importance" role="radiogroup" aria-labelledby="task-form-type-label">
             <button
               v-for="opt in importanceRows"
               :key="opt.value"
@@ -543,70 +546,16 @@ const importanceRows = computed(() => {
         </div>
 
         <div class="proj-form__field proj-form__field--wide">
-          <span class="proj-form__label">Cách tính tiến độ</span>
-          <div class="proj-form__importance" role="radiogroup" aria-label="Cách tính tiến độ">
-            <button
-              v-for="(label, value) in TASK_PROGRESS_TYPE_LABELS"
-              :key="value"
-              type="button"
-              class="proj-form__importance-row proj-form__importance-row--secondary"
-              :class="{ 'proj-form__importance-row--on': form.progress_type === value }"
-              role="radio"
-              :aria-checked="form.progress_type === value ? 'true' : 'false'"
-              :disabled="disabled"
-              @click="set('progress_type', value)"
-            >
-              <span class="proj-form__importance-dot" aria-hidden="true" />
-              <span class="proj-form__importance-name">{{ label }}</span>
-              <span class="proj-form__importance-desc">{{ PROGRESS_DESC[value] }}</span>
-            </button>
-          </div>
+          <span id="task-form-progress-label" class="proj-form__label">Cách tính tiến độ dự án</span>
+          <OptionPicker
+            :model-value="form.progress_type"
+            :options="TASK_PROGRESS_METHOD_OPTIONS"
+            :disabled="disabled"
+            labelled-by="task-form-progress-label"
+            placeholder="Chọn cách tính tiến độ"
+            @update:model-value="set('progress_type', $event)"
+          />
         </div>
-
-        <template v-if="isQuantity">
-          <div class="proj-form__field">
-            <label class="proj-form__label" for="task-form-progress-number">Khối lượng đã hoàn thành</label>
-            <input
-              id="task-form-progress-number"
-              :value="form.progress_number"
-              type="number"
-              min="0"
-              step="0.01"
-              class="proj-page__input"
-              :disabled="disabled"
-              @input="set('progress_number', $event.target.value)"
-            />
-          </div>
-          <div class="proj-form__field">
-            <label class="proj-form__label" for="task-form-progress-total">
-              Khối lượng cần hoàn thành <span class="proj-form__required">*</span>
-            </label>
-            <input
-              id="task-form-progress-total"
-              :value="form.progress_total"
-              type="number"
-              min="0.01"
-              step="0.01"
-              class="proj-page__input"
-              :class="{ 'proj-page__input--error': fieldError('progress_total') }"
-              :disabled="disabled"
-              @input="set('progress_total', $event.target.value)"
-            />
-          </div>
-          <div class="proj-form__field">
-            <label class="proj-form__label" for="task-form-unit">Đơn vị</label>
-            <input
-              id="task-form-unit"
-              :value="form.unit"
-              type="text"
-              maxlength="50"
-              class="proj-page__input"
-              placeholder="VD: sản phẩm"
-              :disabled="disabled"
-              @input="set('unit', $event.target.value)"
-            />
-          </div>
-        </template>
       </div>
     </section>
 
@@ -616,8 +565,37 @@ const importanceRows = computed(() => {
           <AppIcon name="shield" :size="16" :stroke-width="1.75" />
         </span>
         <h2 class="proj-form__section-title">Cài đặt quyền bổ sung</h2>
-        <span class="proj-form__section-note">{{ enabledRulesCount }}/{{ RULE_DEFS.length }} đang bật</span>
+        <span
+          class="proj-form__section-note"
+          :class="{ 'proj-form__section-note--on': enabledRulesCount > 0 }"
+        >
+          {{ enabledRulesCount }}/{{ RULE_DEFS.length }} đang bật
+        </span>
       </header>
+
+      <p class="proj-rules__story">
+        Người thực hiện
+        <span :class="form.hide_cross_tasks_from_assignees ? 'proj-rules__story-val' : 'proj-rules__story-gap'">
+          {{ form.hide_cross_tasks_from_assignees ? 'không xem' : 'được xem' }}
+        </span>
+        việc chéo, người làm việc cha
+        <span :class="form.hide_from_parent_assignees ? 'proj-rules__story-val' : 'proj-rules__story-gap'">
+          {{ form.hide_from_parent_assignees ? 'không xem' : 'được xem' }}
+        </span>
+        việc này, người theo dõi việc cha
+        <span :class="form.hide_from_parent_followers ? 'proj-rules__story-val' : 'proj-rules__story-gap'">
+          {{ form.hide_from_parent_followers ? 'không xem' : 'được xem' }}
+        </span>
+        việc này, người theo dõi
+        <span :class="form.hide_child_tasks_from_followers ? 'proj-rules__story-val' : 'proj-rules__story-gap'">
+          {{ form.hide_child_tasks_from_followers ? 'không xem' : 'được xem' }}
+        </span>
+        việc con, người ở việc con
+        <span :class="form.allow_child_people_view_parent ? 'proj-rules__story-val' : 'proj-rules__story-gap'">
+          {{ form.allow_child_people_view_parent ? 'được xem' : 'không xem' }}
+        </span>
+        việc cha.
+      </p>
 
       <div class="proj-rules">
         <article
@@ -656,9 +634,38 @@ const importanceRows = computed(() => {
           </div>
         </article>
       </div>
+    </section>
+
+    <section v-if="showSection('policy')" class="proj-form__section">
+      <header class="proj-form__section-head">
+        <span class="proj-form__section-icon proj-form__section-icon--primary">
+          <AppIcon name="clipboardCheck" :size="16" :stroke-width="1.75" />
+        </span>
+        <h2 class="proj-form__section-title">Báo cáo và hoàn thành</h2>
+      </header>
+
+      <p class="proj-rules__story proj-rules__story--primary">
+        Sau báo cáo hoàn thành, công việc
+        <span :class="form.auto_complete_on_report ? 'proj-rules__story-val' : 'proj-rules__story-gap'">
+          {{ form.auto_complete_on_report ? 'tự chuyển' : 'không tự chuyển' }}
+        </span>
+        sang Hoàn thành. Thảo luận và file:
+        <span class="proj-rules__story-val">{{ policyLabel(INTERACTION_OPTIONS, form.completed_interaction_policy) }}</span>.
+        Mô tả khi báo cáo:
+        <span class="proj-rules__story-val">{{ policyLabel(REQUIREMENT_OPTIONS, form.report_description_requirement) }}</span>.
+        File khi báo cáo:
+        <span class="proj-rules__story-val">{{ policyLabel(REQUIREMENT_OPTIONS, form.report_attachment_requirement) }}</span>.
+      </p>
 
       <div class="task-form__policy">
-        <article class="proj-rules__card proj-rules__card--primary" :class="{ 'proj-rules__card--on': form.auto_complete_on_report }">
+        <article
+          class="proj-rules__card proj-rules__card--primary task-form__policy-complete"
+          :class="{
+            'proj-rules__card--on': form.auto_complete_on_report,
+            'proj-rules__card--disabled': disabled,
+          }"
+          @click="toggleRule('auto_complete_on_report')"
+        >
           <div class="proj-rules__head">
             <span class="proj-rules__icon">
               <AppIcon name="check" :size="16" :stroke-width="1.75" />
@@ -677,57 +684,46 @@ const importanceRows = computed(() => {
               :aria-checked="form.auto_complete_on_report ? 'true' : 'false'"
               aria-labelledby="task-form-rule-auto-complete"
               :disabled="disabled"
-              @click="set('auto_complete_on_report', !form.auto_complete_on_report)"
+              @click.stop="toggleRule('auto_complete_on_report')"
             >
               <span class="proj-rules__switch-thumb" aria-hidden="true" />
             </button>
           </div>
         </article>
 
-        <fieldset class="task-form__fieldset">
-          <legend>Thảo luận và file sau hoàn thành</legend>
-          <label v-for="option in INTERACTION_OPTIONS" :key="option.value" class="task-form__radio">
-            <input
-              :checked="form.completed_interaction_policy === option.value"
-              type="radio"
-              name="completed_interaction_policy"
-              :value="option.value"
+        <article
+          v-for="policy in POLICY_DEFS"
+          :key="policy.key"
+          class="task-form__policy-card"
+          :class="[`task-form__policy-card--${policy.tone}`, { 'task-form__policy-card--disabled': disabled }]"
+        >
+          <div class="task-form__policy-head">
+            <span class="task-form__policy-icon">
+              <AppIcon :name="policy.icon" :size="16" :stroke-width="1.75" />
+            </span>
+            <h3 class="task-form__policy-label">{{ policy.label }}</h3>
+          </div>
+          <div
+            class="task-form__choice-list"
+            role="radiogroup"
+            :aria-label="policy.label"
+          >
+            <button
+              v-for="option in policy.options"
+              :key="`${policy.key}-${option.value}`"
+              type="button"
+              class="task-form__choice"
+              :class="{ 'task-form__choice--on': form[policy.key] === option.value }"
+              role="radio"
+              :aria-checked="form[policy.key] === option.value ? 'true' : 'false'"
               :disabled="disabled"
-              @change="set('completed_interaction_policy', option.value)"
-            />
-            <span>{{ option.label }}</span>
-          </label>
-        </fieldset>
-
-        <fieldset class="task-form__fieldset">
-          <legend>Mô tả khi báo cáo</legend>
-          <label v-for="option in REQUIREMENT_OPTIONS" :key="option.value" class="task-form__radio">
-            <input
-              :checked="form.report_description_requirement === option.value"
-              type="radio"
-              name="report_description_requirement"
-              :value="option.value"
-              :disabled="disabled"
-              @change="set('report_description_requirement', option.value)"
-            />
-            <span>{{ option.label }}</span>
-          </label>
-        </fieldset>
-
-        <fieldset class="task-form__fieldset">
-          <legend>File khi báo cáo</legend>
-          <label v-for="option in REQUIREMENT_OPTIONS" :key="`file-${option.value}`" class="task-form__radio">
-            <input
-              :checked="form.report_attachment_requirement === option.value"
-              type="radio"
-              name="report_attachment_requirement"
-              :value="option.value"
-              :disabled="disabled"
-              @change="set('report_attachment_requirement', option.value)"
-            />
-            <span>{{ option.label }}</span>
-          </label>
-        </fieldset>
+              @click="set(policy.key, option.value)"
+            >
+              <span class="task-form__choice-dot" aria-hidden="true" />
+              <span class="task-form__choice-name">{{ option.label }}</span>
+            </button>
+          </div>
+        </article>
       </div>
     </section>
   </div>
@@ -762,10 +758,18 @@ const importanceRows = computed(() => {
 
 .proj-form__section-note {
   margin-left: auto;
-  padding-left: var(--space-3);
+  padding: 0.125rem 0.625rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
   color: var(--color-text-muted);
   font-size: 0.75rem;
+  font-weight: 700;
   white-space: nowrap;
+}
+
+.proj-form__section-note--on {
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
 }
 
 .proj-form__section-icon {
@@ -1166,6 +1170,54 @@ const importanceRows = computed(() => {
   line-height: 1.4;
 }
 
+.proj-rules__story {
+  position: relative;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  padding-left: calc(var(--space-2) + 3px + var(--space-3));
+  border-radius: var(--radius-md);
+  background: var(--color-tertiary-surface);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.proj-rules__story::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-tertiary);
+}
+
+.proj-rules__story--primary {
+  background: var(--color-primary-surface);
+}
+
+.proj-rules__story--primary::before {
+  background: var(--color-primary);
+}
+
+.proj-rules__story-val {
+  color: var(--color-tertiary-700);
+  font-weight: 700;
+}
+
+.proj-rules__story--primary .proj-rules__story-val {
+  color: var(--color-primary);
+}
+
+.proj-rules__story-gap {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-weight: 500;
+}
+
 .proj-rules {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1191,6 +1243,10 @@ const importanceRows = computed(() => {
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
+}
+
+.proj-rules__card:focus-within {
+  z-index: 3;
 }
 
 .proj-rules__card::before {
@@ -1274,10 +1330,10 @@ const importanceRows = computed(() => {
 
 .proj-rules__title {
   margin: 0;
-  color: var(--color-text);
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.4;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.45;
 }
 
 .proj-rules__switch {
@@ -1296,6 +1352,15 @@ const importanceRows = computed(() => {
 
 .proj-rules__switch--on {
   background: var(--step-color);
+}
+
+.proj-rules__switch:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+.proj-rules__switch:focus-visible {
+  outline: 2px solid var(--color-primary-200);
+  outline-offset: 2px;
 }
 
 .proj-rules__switch:disabled {
@@ -1321,36 +1386,170 @@ const importanceRows = computed(() => {
 
 .task-form__policy {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
-  margin-top: var(--space-3);
-}
-
-.task-form__fieldset {
-  margin: 0;
-  padding: var(--space-4);
-  border: 0;
+  padding: var(--space-3);
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
+}
+
+.task-form__policy-complete {
+  grid-column: 1 / -1;
+}
+
+.task-form__policy-card {
+  --step-color: var(--color-gold-600);
+  --step-surface: var(--color-gold-surface);
+
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  padding-left: calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.task-form__policy-card:focus-within {
+  z-index: 3;
+}
+
+.task-form__policy-card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--step-color);
+}
+
+.task-form__policy-card--tertiary {
+  --step-color: var(--color-tertiary);
+  --step-surface: var(--color-tertiary-surface);
+}
+
+.task-form__policy-card--secondary {
+  --step-color: var(--color-secondary);
+  --step-surface: var(--color-secondary-surface);
+}
+
+.task-form__policy-card--gold {
+  --step-color: var(--color-gold-600);
+  --step-surface: var(--color-gold-surface);
+}
+
+.task-form__policy-card--disabled {
+  opacity: 0.7;
+}
+
+.task-form__policy-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.task-form__policy-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  background: var(--step-surface);
+  color: var(--step-color);
+}
+
+.task-form__policy-label {
+  margin: 0;
+  color: var(--step-color);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.task-form__choice-list {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-md);
   box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
-.task-form__fieldset legend {
-  padding: 0 var(--space-2);
+.task-form__choice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 0.625rem var(--space-3) 0.625rem calc(var(--space-3) + 3px);
+  border: none;
+  background: var(--color-surface);
+  box-shadow: 0 1px 0 var(--color-border), inset 3px 0 0 var(--color-border);
   color: var(--color-text);
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-family: var(--font-family-base);
+  text-align: left;
+  cursor: pointer;
 }
 
-.task-form__radio {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
-  color: var(--color-text);
+.task-form__choice:last-child {
+  box-shadow: inset 3px 0 0 var(--color-border);
+}
+
+.task-form__choice:hover:not(:disabled):not(.task-form__choice--on) {
+  background: var(--color-surface-muted);
+}
+
+.task-form__choice--on {
+  background: var(--step-surface);
+  box-shadow: 0 1px 0 var(--color-border), inset 3px 0 0 var(--step-color);
+}
+
+.task-form__choice--on:last-child {
+  box-shadow: inset 3px 0 0 var(--step-color);
+}
+
+.task-form__choice:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.task-form__choice:focus-visible {
+  z-index: 1;
+  outline: 2px solid var(--color-primary-200);
+  outline-offset: -2px;
+}
+
+.task-form__choice-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+}
+
+.task-form__choice--on .task-form__choice-dot {
+  background: var(--step-color);
+}
+
+.task-form__choice-name {
+  min-width: 0;
   font-size: 0.8125rem;
-  line-height: 1.45;
-  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.task-form__choice--on .task-form__choice-name {
+  color: var(--step-color);
+  font-weight: 700;
 }
 
 .proj-form input[type='checkbox'],
@@ -1409,6 +1608,10 @@ const importanceRows = computed(() => {
   .proj-form__grid--2col,
   .proj-form__grid--4col {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .task-form__policy {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

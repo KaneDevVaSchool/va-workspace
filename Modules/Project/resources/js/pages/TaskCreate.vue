@@ -51,7 +51,7 @@ const form = reactive({
   collaborator_ids: [],
   type: 'task',
   priority: 'important',
-  progress_type: 'percent',
+  progress_type: 'average',
   progress_number: '0',
   progress_total: '',
   unit: '',
@@ -193,8 +193,22 @@ function mergeUsers(list) {
   );
 }
 
+function currentUserId() {
+  if (!auth.user?.id) return null;
+  const fromList = users.value.find((u) => String(u.id) === String(auth.user.id));
+  return fromList?.id ?? auth.user.id;
+}
+
 function applyDefaultManager() {
-  if (!form.manager_id && auth.user?.id) form.manager_id = auth.user.id;
+  if (form.manager_id) return;
+  const id = currentUserId();
+  if (id) form.manager_id = id;
+}
+
+function applyDefaultWatcher() {
+  if (form.watcher_ids.length) return;
+  const id = currentUserId();
+  if (id) form.watcher_ids = [id];
 }
 
 function applyDefaultImportance() {
@@ -227,6 +241,7 @@ async function loadMeta() {
     ]);
     users.value = mergeUsers(usersRes.data.users ?? []);
     applyDefaultManager();
+    applyDefaultWatcher();
   } catch (error) {
     showClientToast('error', error?.response?.data?.message || 'Không tải được dữ liệu tạo công việc.');
   } finally {
@@ -240,7 +255,9 @@ watch(
     if (!id) return;
     users.value = mergeUsers(users.value);
     applyDefaultManager();
+    applyDefaultWatcher();
   },
+  { immediate: true },
 );
 
 function validateBeforeSubmit() {

@@ -18,6 +18,7 @@ use Modules\Identity\App\Models\Department;
  * @property bool        $allow_half          cho phép trọng số bước 0.5
  * @property bool        $use_in_evaluation   hiện trên trang ĐGNL của thành viên
  * @property bool        $use_for_task_type   nguồn mức độ quan trọng / loại công việc của phòng ban
+ * @property array       $task_score_level_codes  mã mức đã gói vào khung chấm điểm theo công việc
  * @property int         $sort_order
  * @property int|null    $created_by
  * @property int|null    $updated_by
@@ -39,6 +40,7 @@ class EvaluationCriteria extends Model
         'allow_half',
         'use_in_evaluation',
         'use_for_task_type',
+        'task_score_level_codes',
         'sort_order',
         'created_by',
         'updated_by',
@@ -49,8 +51,35 @@ class EvaluationCriteria extends Model
         'is_active'          => 'boolean',
         'allow_half'         => 'boolean',
         'use_in_evaluation'  => 'boolean',
-        'use_for_task_type'  => 'boolean',
+        'use_for_task_type'      => 'boolean',
+        'task_score_level_codes' => 'array',
     ];
+
+    /**
+     * Khoá ổn định của một mức: code nếu có, không thì #index.
+     *
+     * @param  array{code?: string}  $level
+     */
+    public static function levelKey(array $level, int $index): string
+    {
+        $code = strtoupper(trim((string) ($level['code'] ?? '')));
+
+        return $code !== '' ? $code : '#'.$index;
+    }
+
+    /** @return list<string> */
+    public function allowedLevelKeys(): array
+    {
+        $keys = [];
+        foreach ($this->levels ?? [] as $index => $level) {
+            if (! is_array($level)) {
+                continue;
+            }
+            $keys[] = self::levelKey($level, $index);
+        }
+
+        return $keys;
+    }
 
     public function department(): BelongsTo
     {

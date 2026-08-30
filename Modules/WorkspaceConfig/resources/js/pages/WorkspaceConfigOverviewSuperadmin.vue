@@ -7,10 +7,11 @@
 // cùng shape khi sau này load phòng ban từ API HRM.
 //
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
+import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useDragScroll } from '@/composables/useDragScroll';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -34,12 +35,18 @@ import {
 
 const CELL_PAD_X = 32;
 const COL_EXTRA = 24;
+const DIRECTOR_AVATAR_EXTRA = 42;
+const ACTION_COL_PX = 56;
+const ACTION_MENU_WIDTH = 200;
 let measureCtx = null;
 let wrapObserver = null;
 
+const router = useRouter();
 const allDepartments = ref([]);
 const loading = ref(false);
 const selected = ref(null);
+const openActionMenuId = ref(null);
+const actionMenuPos = reactive({ top: 0, left: 0, flip: false });
 
 const query = ref('');
 const isActive = ref('');
@@ -60,7 +67,7 @@ const columnWidths = reactive(loadColumnWidths());
 const tableZoom = ref(loadZoom());
 
 const shownColumns = computed(() => OVERVIEW_COLUMNS.filter((col) => visibleColumns[col.key]));
-const colSpan = computed(() => Math.max(shownColumns.value.length, 1));
+const colSpan = computed(() => Math.max(shownColumns.value.length, 1) + 1);
 
 const filteredDepartments = computed(() => {
   const q = query.value.trim().toLowerCase();
@@ -114,10 +121,20 @@ const emptyTableMessage = computed(() =>
   hasActiveFilters.value ? 'Không có phòng ban khớp bộ lọc.' : 'Chưa có phòng ban nào.',
 );
 
+const stats = computed(() => {
+  const rows = allDepartments.value;
+  return {
+    total: rows.length,
+    active: rows.filter((department) => department.is_active).length,
+    noDirector: rows.filter((department) => !department.director).length,
+    noConfig: rows.filter((department) => !department.has_config).length,
+  };
+});
+
 const tableWidthPx = computed(() => {
   const keys = shownColumns.value.map((col) => col.key);
-  const sum = keys.reduce((total, key) => total + (Number(columnWidths[key]) || 0), 0);
-  return sum > 0 ? `${sum}px` : '100%';
+  const sum = keys.reduce((total, key) => total + (Number(columnWidths[key]) || 0), 0) + ACTION_COL_PX;
+  return sum > ACTION_COL_PX ? `${sum}px` : '100%';
 });
 
 function filterHasValue(key) {
@@ -160,7 +177,88 @@ function clearFilters() {
 }
 
 function inspect(department) {
+  closeActionMenu();
   selected.value = department;
+}
+
+function directorUser(department) {
+  if (!department?.director) return null;
+  return {
+    id: department.director.id,
+    name: department.director.name,
+    email: department.director.email,
+    avatar_url: department.director.avatar_url || null,
+  };
+}
+
+function leadTone(department) {
+  if (!department?.is_active) return 'danger';
+  if (!department.director) return 'warning';
+  if (!department.has_config) return 'info';
+  return 'success';
+}
+
+function leadCaption(department) {
+  if (!department?.is_active) return 'Phòng ban ngừng hoạt động';
+  if (!department.director) return 'Chưa gán trưởng đơn vị';
+  if (!department.has_config) return 'Chưa có cấu hình workspace';
+  return 'Workspace đã sẵn sàng';
+}
+
+function statIsActive(kind) {
+  const onlyThis =
+    !query.value.trim() &&
+    (kind === 'active' ? isActive.value === 'yes' : !isActive.value) &&
+    (kind === 'noConfig' ? hasConfig.value === 'no' : !hasConfig.value) &&
+    (kind === 'noDirector' ? hasDirector.value === 'no' : !hasDirector.value);
+  if (kind === 'total') return !hasActiveFilters.value;
+  return onlyThis;
+}
+
+function applyStatFilter(kind) {
+  if (kind !== 'total' && statIsActive(kind)) {
+    clearFilters();
+    return;
+  }
+  query.value = '';
+  isActive.value = kind === 'active' ? 'yes' : '';
+  hasConfig.value = kind === 'noConfig' ? 'no' : '';
+  hasDirector.value = kind === 'noDirector' ? 'no' : '';
+}
+
+function openDepartment(department) {
+  closeActionMenu();
+  router.push({
+    name: 'superadmin.workspace-config.department-detail',
+    params: { departmentId: department.id },
+  });
+}
+
+function toggleActionMenu(id, event) {
+  if (openActionMenuId.value === id) {
+    openActionMenuId.value = null;
+    return;
+  }
+  const rect = event.currentTarget.getBoundingClientRect();
+  const flip = window.innerHeight - rect.bottom < 132;
+  actionMenuPos.top = flip ? rect.top - 4 : rect.bottom + 4;
+  actionMenuPos.left = Math.max(8, rect.right - ACTION_MENU_WIDTH);
+  actionMenuPos.flip = flip;
+  openActionMenuId.value = id;
+}
+
+function closeActionMenu() {
+  openActionMenuId.value = null;
+}
+
+function handleDocumentClick(event) {
+  if (!openActionMenuId.value) return;
+  if (event.target?.closest?.('.wc-overview__actions, .wc-overview__action-menu')) return;
+  closeActionMenu();
+}
+
+function handleTableScroll() {
+  if (openActionMenuId.value) closeActionMenu();
 }
 
 function cellText(department, key) {
@@ -242,7 +340,8 @@ function columnContentWidth(key, fonts) {
   if (key === 'is_active' || key === 'has_config') {
     maxW += 14;
   }
-  return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA));
+  const extra = key === 'director' ? DIRECTOR_AVATAR_EXTRA : 0;
+  return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
 }
 
 function distributeExtraWidth(widths, keys, available) {
@@ -274,7 +373,7 @@ function fitColumnsToContent() {
     measured[key] = columnContentWidth(key, fonts);
   }
 
-  const next = distributeExtraWidth(measured, keys, wrap.clientWidth);
+  const next = distributeExtraWidth(measured, keys, Math.max(0, wrap.clientWidth - ACTION_COL_PX));
   for (const key of keys) {
     columnWidths[key] = next[key];
   }
@@ -331,6 +430,10 @@ function onFilterToggle(key, checked) {
 
 function handleDocumentKeydown(event) {
   if (event.key !== 'Escape') return;
+  if (openActionMenuId.value) {
+    closeActionMenu();
+    return;
+  }
   if (selected.value) {
     selected.value = null;
   }
@@ -366,6 +469,7 @@ watch(filteredDepartments, (rows) => {
 
 onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown);
+  document.addEventListener('click', handleDocumentClick);
   loadDepartments();
   nextTick(() => {
     fitColumnsToContent();
@@ -378,6 +482,7 @@ onMounted(() => {
         fitColumnsToContent();
       });
       wrapObserver.observe(tableWrap.value);
+      tableWrap.value.addEventListener('scroll', handleTableScroll, { passive: true });
     }
   });
   document.fonts?.ready?.then(() => nextTick(fitColumnsToContent));
@@ -385,6 +490,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleDocumentKeydown);
+  document.removeEventListener('click', handleDocumentClick);
+  tableWrap.value?.removeEventListener('scroll', handleTableScroll);
   wrapObserver?.disconnect();
 });
 </script>
@@ -393,19 +500,63 @@ onBeforeUnmount(() => {
   <section class="wc-overview">
     <PageHeader
       title="Cấu hình Workspace"
-      icon="settings"
+      subtitle="Tổng hợp workspace mọi phòng ban"
+      icon="building"
       :breadcrumbs="[
         { label: 'Trang chủ', to: { name: 'home' } },
         { label: 'Cấu hình Workspace' },
       ]"
     >
       <template #actions>
+        <RouterLink class="wc-overview__header-btn" :to="{ name: 'superadmin.workspace-config.global-menu' }">
+          <AppIcon name="eyeOff" :size="16" />
+          Menu toàn hệ thống
+        </RouterLink>
         <button type="button" class="wc-overview__header-btn" :disabled="loading" @click="loadDepartments">
           <AppIcon name="refresh" :size="16" :class="{ 'wc-overview__spin': loading }" />
           Làm mới
         </button>
       </template>
     </PageHeader>
+
+    <div class="wc-overview__stats" aria-label="Tóm tắt phòng ban">
+      <button
+        type="button"
+        class="wc-overview__stat wc-overview__stat--info"
+        :class="{ 'wc-overview__stat--on': statIsActive('total') }"
+        @click="applyStatFilter('total')"
+      >
+        <span class="wc-overview__stat-value">{{ stats.total }}</span>
+        <span class="wc-overview__stat-label">Tổng phòng ban</span>
+      </button>
+      <button
+        type="button"
+        class="wc-overview__stat wc-overview__stat--success"
+        :class="{ 'wc-overview__stat--on': statIsActive('active') }"
+        @click="applyStatFilter('active')"
+      >
+        <span class="wc-overview__stat-value">{{ stats.active }}</span>
+        <span class="wc-overview__stat-label">Đang hoạt động</span>
+      </button>
+      <button
+        type="button"
+        class="wc-overview__stat wc-overview__stat--warning"
+        :class="{ 'wc-overview__stat--on': statIsActive('noDirector') }"
+        @click="applyStatFilter('noDirector')"
+      >
+        <span class="wc-overview__stat-value">{{ stats.noDirector }}</span>
+        <span class="wc-overview__stat-label">Chưa gán trưởng</span>
+      </button>
+      <button
+        type="button"
+        class="wc-overview__stat wc-overview__stat--danger"
+        :class="{ 'wc-overview__stat--on': statIsActive('noConfig') }"
+        @click="applyStatFilter('noConfig')"
+      >
+        <span class="wc-overview__stat-value">{{ stats.noConfig }}</span>
+        <span class="wc-overview__stat-label">Chưa có cấu hình</span>
+      </button>
+    </div>
 
     <div class="wc-overview__body">
       <div class="wc-overview__main">
@@ -509,6 +660,7 @@ onBeforeUnmount(() => {
                 :key="col.key"
                 :style="{ width: colWidthStyle(col.key) }"
               />
+              <col :style="{ width: `${ACTION_COL_PX}px` }" />
             </colgroup>
             <thead>
               <tr>
@@ -522,6 +674,7 @@ onBeforeUnmount(() => {
                     @mousedown.stop.prevent="startResize($event, col.key)"
                   />
                 </th>
+                <th class="wc-overview__th-action">Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -542,12 +695,15 @@ onBeforeUnmount(() => {
               >
                 <td v-for="col in shownColumns" :key="col.key">
                   <template v-if="col.key === 'director'">
-                    <template v-if="department.director">
-                      <span>{{ department.director.name }}</span>
-                      <span v-if="department.director.email" class="wc-overview__muted">
-                        {{ department.director.email }}
+                    <span v-if="department.director" class="wc-overview__person">
+                      <UserAvatarTip :user="directorUser(department)" label="Trưởng đơn vị" />
+                      <span class="wc-overview__person-text">
+                        <span>{{ department.director.name }}</span>
+                        <span v-if="department.director.email" class="wc-overview__muted">
+                          {{ department.director.email }}
+                        </span>
                       </span>
-                    </template>
+                    </span>
                     <span v-else class="wc-overview__muted">Chưa gán trưởng đơn vị</span>
                   </template>
                   <template v-else-if="col.key === 'is_active'">
@@ -563,6 +719,50 @@ onBeforeUnmount(() => {
                     />
                   </template>
                   <span v-else>{{ cellText(department, col.key) }}</span>
+                </td>
+                <td class="wc-overview__td-action" @click.stop>
+                  <span class="wc-overview__actions">
+                    <button
+                      type="button"
+                      class="wc-overview__action-trigger"
+                      :class="{ 'wc-overview__action-trigger--open': openActionMenuId === department.id }"
+                      aria-haspopup="menu"
+                      :aria-expanded="openActionMenuId === department.id"
+                      aria-label="Thao tác"
+                      @click="toggleActionMenu(department.id, $event)"
+                    >
+                      <AppIcon name="moreVertical" :size="16" :stroke-width="1.75" />
+                    </button>
+                    <Teleport to="body">
+                      <div
+                        v-if="openActionMenuId === department.id"
+                        class="wc-overview__action-menu"
+                        :class="{ 'wc-overview__action-menu--flip': actionMenuPos.flip }"
+                        role="menu"
+                        aria-label="Thao tác phòng ban"
+                        :style="{ top: actionMenuPos.top + 'px', left: actionMenuPos.left + 'px' }"
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="wc-overview__action-item"
+                          @click="inspect(department)"
+                        >
+                          <AppIcon name="info" :size="15" />
+                          <span>Xem chi tiết</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="wc-overview__action-item"
+                          @click="openDepartment(department)"
+                        >
+                          <AppIcon name="externalLink" :size="15" />
+                          <span>Xem workspace phòng ban</span>
+                        </button>
+                      </div>
+                    </Teleport>
+                  </span>
                 </td>
               </tr>
             </tbody>
@@ -591,7 +791,13 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <p class="wc-overview__side-lead">{{ selected.name }}</p>
+        <div class="wc-overview__side-lead" :class="`wc-overview__side-lead--${leadTone(selected)}`">
+          <span class="wc-overview__dot" :class="`wc-overview__dot--${leadTone(selected)}`" />
+          <div>
+            <span class="wc-overview__side-lead-action">{{ leadCaption(selected) }}</span>
+            <p class="wc-overview__side-lead-desc">{{ selected.name }}</p>
+          </div>
+        </div>
 
         <div class="wc-overview__rows">
           <div class="wc-overview__row">
@@ -618,7 +824,10 @@ onBeforeUnmount(() => {
           </div>
           <div class="wc-overview__row">
             <span class="wc-overview__row-label">Trưởng đơn vị</span>
-            <span class="wc-overview__row-value">{{ selected.director?.name || 'Chưa gán' }}</span>
+            <span class="wc-overview__row-value wc-overview__row-actor">
+              <UserAvatarTip v-if="selected.director" :user="directorUser(selected)" label="Trưởng đơn vị" />
+              <span>{{ selected.director?.name || 'Chưa gán' }}</span>
+            </span>
           </div>
           <div class="wc-overview__row">
             <span class="wc-overview__row-label">Email liên hệ</span>
@@ -673,6 +882,7 @@ onBeforeUnmount(() => {
   font-family: var(--font-family-base);
   font-size: 0.875rem;
   font-weight: 500;
+  text-decoration: none;
   box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
   cursor: pointer;
 }
@@ -694,6 +904,77 @@ onBeforeUnmount(() => {
   to {
     transform: rotate(360deg);
   }
+}
+
+.wc-overview__stats {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+}
+
+.wc-overview__stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  min-width: 0;
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.wc-overview__stat::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.wc-overview__stat--success::before {
+  background: var(--color-success);
+}
+
+.wc-overview__stat--warning::before {
+  background: var(--color-warning);
+}
+
+.wc-overview__stat--danger::before {
+  background: var(--color-danger);
+}
+
+.wc-overview__stat--info::before {
+  background: var(--color-info);
+}
+
+.wc-overview__stat:hover,
+.wc-overview__stat--on {
+  background: var(--color-surface-muted);
+}
+
+.wc-overview__stat-value {
+  color: var(--color-text);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.wc-overview__stat-label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .wc-overview__body {
@@ -719,7 +1000,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  margin: var(--space-3) 0;
+  margin: var(--space-2) 0 var(--space-3);
 }
 
 .wc-overview__filters {
@@ -761,6 +1042,11 @@ onBeforeUnmount(() => {
   font-size: 0.875rem;
 }
 
+.wc-overview__input:focus {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  outline-offset: 1px;
+}
+
 .wc-overview__check {
   display: flex;
   align-items: center;
@@ -784,6 +1070,8 @@ onBeforeUnmount(() => {
   overflow: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .wc-overview__table-wrap--resizing {
@@ -845,7 +1133,7 @@ onBeforeUnmount(() => {
 .wc-overview__table tbody td {
   padding: var(--space-3) var(--space-4);
   color: var(--color-text);
-  vertical-align: top;
+  vertical-align: middle;
   white-space: nowrap;
   box-shadow: 0 1px 0 var(--color-border);
 }
@@ -884,6 +1172,94 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
 }
 
+.wc-overview__table tbody td .wc-overview__person,
+.wc-overview__table tbody td .wc-overview__actions {
+  display: flex;
+}
+
+.wc-overview__person {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.wc-overview__person-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.wc-overview__th-action,
+.wc-overview__td-action {
+  text-align: center;
+}
+
+.wc-overview__actions {
+  position: relative;
+  display: inline-flex;
+}
+
+.wc-overview__action-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.wc-overview__action-trigger:hover,
+.wc-overview__action-trigger--open {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.wc-overview__action-menu {
+  position: fixed;
+  z-index: 1200;
+  width: 12.5rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-lg);
+  text-align: left;
+}
+
+.wc-overview__action-menu--flip {
+  transform: translateY(-100%);
+}
+
+.wc-overview__action-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wc-overview__action-item:hover {
+  background: var(--color-surface-muted);
+}
+
 .wc-overview__side {
   flex-shrink: 0;
   width: 28rem;
@@ -891,7 +1267,7 @@ onBeforeUnmount(() => {
   padding: var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-surface-muted);
 }
 
 .wc-overview__side-head {
@@ -922,15 +1298,87 @@ onBeforeUnmount(() => {
 }
 
 .wc-overview__icon-btn:hover {
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
 }
 
 .wc-overview__side-lead {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
   margin: var(--space-3) 0 var(--space-4);
-  color: var(--color-text);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.wc-overview__side-lead::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.wc-overview__side-lead--success::before {
+  background: var(--color-success);
+}
+
+.wc-overview__side-lead--danger::before {
+  background: var(--color-danger);
+}
+
+.wc-overview__side-lead--info::before {
+  background: var(--color-info);
+}
+
+.wc-overview__side-lead--warning::before {
+  background: var(--color-warning);
+}
+
+.wc-overview__side-lead-action {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
   font-weight: 600;
+}
+
+.wc-overview__side-lead-desc {
+  margin: 0;
+  color: var(--color-text);
   font-size: 0.9375rem;
+  font-weight: 600;
   line-height: 1.45;
+}
+
+.wc-overview__dot {
+  flex-shrink: 0;
+  margin-top: 0.375rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-text-muted);
+}
+
+.wc-overview__dot--success {
+  background: var(--color-success);
+}
+
+.wc-overview__dot--danger {
+  background: var(--color-danger);
+}
+
+.wc-overview__dot--info {
+  background: var(--color-info);
+}
+
+.wc-overview__dot--warning {
+  background: var(--color-warning);
 }
 
 .wc-overview__rows {
@@ -964,8 +1412,20 @@ onBeforeUnmount(() => {
 .wc-overview__row-value {
   color: var(--color-text);
   font-style: italic;
+  font-weight: 400;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.wc-overview__row-value :deep(.status-mark) {
+  font-style: normal;
+}
+
+.wc-overview__row-actor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .wc-overview__side-link {
@@ -991,6 +1451,10 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1024px) {
+  .wc-overview__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .wc-overview__body {
     flex-direction: column;
   }

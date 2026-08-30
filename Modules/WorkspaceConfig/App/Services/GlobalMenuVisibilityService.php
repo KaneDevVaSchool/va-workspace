@@ -42,6 +42,12 @@ class GlobalMenuVisibilityService
             'icon' => 'clipboardCheck',
             'audience' => 'Menu này chỉ hiện với trưởng phòng và phó phòng. Super Admin tạo mẫu dùng chung ở một trang riêng khác.',
         ],
+        'manager.evaluation-score-kit.index' => [
+            'label' => 'Khung chấm điểm',
+            'section' => 'manager',
+            'icon' => 'layers',
+            'audience' => 'Menu này chỉ hiện với trưởng phòng và phó phòng. Chọn cách tính điểm gốc ± theo việc, hoặc theo trọng số khó/dễ và mức dự án.',
+        ],
         'manager.project.index' => [
             'label' => 'Dự án',
             'section' => 'manager',

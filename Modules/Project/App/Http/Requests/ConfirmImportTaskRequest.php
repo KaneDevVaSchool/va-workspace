@@ -2,9 +2,11 @@
 
 namespace Modules\Project\App\Http\Requests;
 
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Modules\Project\App\Enums\TaskEnums;
+use Modules\Project\App\Services\TaskImportanceOptions;
 
 /**
  * Bước 2 của luồng nhập Excel — nhận JSON các dòng đã qua bước preview,
@@ -44,7 +46,23 @@ class ConfirmImportTaskRequest extends FormRequest
             ],
             'rows.*.type' => ['nullable', 'string', Rule::in(TaskEnums::TYPES)],
             'rows.*.status' => ['nullable', 'string', Rule::in(TaskEnums::STATUSES)],
-            'rows.*.priority' => ['nullable', 'string', Rule::in(TaskEnums::PRIORITIES)],
+            'rows.*.priority' => [
+                'nullable', 'string', 'max:50',
+                function (string $attribute, mixed $value, Closure $fail) {
+                    if ($value === null || $value === '') {
+                        return;
+                    }
+                    $index = $this->rowIndex($attribute);
+                    $projectId = $this->input("rows.{$index}.project_id");
+                    $accepted = app(TaskImportanceOptions::class)->acceptedValuesForContext(
+                        $projectId !== null && $projectId !== '' ? (int) $projectId : null,
+                        $this->user()?->department_id,
+                    );
+                    if (! TaskEnums::isAcceptedValue((string) $value, $accepted)) {
+                        $fail('Mức độ ưu tiên không hợp lệ.');
+                    }
+                },
+            ],
             'rows.*.assignee_id' => ['nullable', 'integer', 'exists:users,id'],
             'rows.*.manager_id' => ['nullable', 'integer', 'exists:users,id'],
             'rows.*.start_date' => ['nullable', 'date'],

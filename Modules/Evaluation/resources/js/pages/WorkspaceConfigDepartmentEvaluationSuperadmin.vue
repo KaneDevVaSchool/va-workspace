@@ -293,10 +293,6 @@ const tableBodyRows = computed(() => {
           <span class="dept-eval__row-value">{{ selected.use_in_evaluation ? 'Có' : 'Không' }}</span>
         </div>
         <div class="dept-eval__row">
-          <span class="dept-eval__row-label">Loại công việc</span>
-          <span class="dept-eval__row-value">{{ selected.use_for_task_type ? 'Có' : 'Không' }}</span>
-        </div>
-        <div class="dept-eval__row">
           <span class="dept-eval__row-label">Điểm tối đa</span>
           <span class="dept-eval__row-value">{{ formatScore(selected.max_score) }}</span>
         </div>

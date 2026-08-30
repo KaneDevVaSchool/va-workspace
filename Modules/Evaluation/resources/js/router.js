@@ -21,4 +21,17 @@ export default [
       requiresPermission: 'evaluation.manage_department',
     },
   },
+  {
+    // Khung chấm điểm — mục sidebar riêng của phòng ban (cùng nhóm Mẫu
+    // đánh giá). Gói từng thang điểm tiêu chí để chấm điểm theo task.
+    // URL cũ /manager/workspace-config/task-type redirect sang đây.
+    path: '/manager/evaluation-score-kit',
+    name: 'manager.evaluation-score-kit.index',
+    component: () => import('./pages/EvaluationScoreKit.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Khung chấm điểm',
+      requiresPermission: 'evaluation.manage_department',
+    },
+  },
 ];

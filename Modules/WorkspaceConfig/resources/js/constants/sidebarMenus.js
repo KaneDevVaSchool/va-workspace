@@ -28,6 +28,12 @@ export const SIDEBAR_MENU_CATALOG = {
     sectionLabel: 'Quản lý',
     description: 'Tạo và sửa mẫu đánh giá. Superadmin tạo mẫu dùng chung toàn hệ thống.',
   },
+  'manager.evaluation-score-kit.index': {
+    icon: 'layers',
+    section: 'manager',
+    sectionLabel: 'Quản lý',
+    description: 'Chọn cách tính điểm của phòng: điểm gốc ± theo việc, hoặc theo trọng số khó/dễ và mức dự án.',
+  },
   'manager.project.index': {
     icon: 'layers',
     section: 'manager',

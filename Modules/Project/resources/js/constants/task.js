@@ -93,7 +93,32 @@ export const TASK_PROGRESS_TYPE_LABELS = {
   checklist: 'Theo tỷ lệ hoàn thành đầu việc',
   child_weight: 'Theo tỷ trọng công việc con',
   timeline: 'Tự động theo thời gian hoàn thành công việc',
+  average: 'Theo bình quân % tiến độ các công việc thuộc dự án',
+  duration_weighted: 'Theo tỷ trọng ngày thực hiện',
+  task_weighted: 'Theo tỷ trọng công việc',
 };
+
+/** 3 cách tính tiến độ khi tạo việc / tạo dự án — khớp form hệ cũ. */
+export const TASK_PROGRESS_METHOD_OPTIONS = [
+  {
+    value: 'average',
+    label: 'Theo bình quân % tiến độ các công việc thuộc dự án',
+    description:
+      'Ví dụ dự án gồm 2 công việc A và B. Công việc A tiến độ 40%, công việc B tiến độ 60%. Tiến độ dự án là (60+40)/2 = 50%',
+  },
+  {
+    value: 'duration_weighted',
+    label: 'Theo tỷ trọng ngày thực hiện',
+    description:
+      'Ví dụ dự án gồm 2 công việc A và B. Công việc A yêu cầu thực hiện trong 4 ngày, tiến độ 40% Công việc B yêu cầu thực hiện trong 6 ngày, tiến độ 50% Tiến độ dự án là ((4*40 + 6*50)/(4*100 + 6*100)) * 100 = 46%',
+  },
+  {
+    value: 'task_weighted',
+    label: 'Theo tỷ trọng công việc',
+    description:
+      'Ví dụ Dự án gồm 2 công việc A và B Công việc A có Tỷ trọng là 40, tiến độ là 50% Công việc B có Tỷ trọng là 30, tiến độ là 40% Tiến độ của dự án là [(40x50)+(30x40)]/(40+30)=45.71%',
+  },
+];
 
 /** Gợi ý datalist cho "Kết quả đánh giá" — tự do, KHÔNG ràng buộc enum. */
 export const TASK_SCORE_RESULT_SUGGESTIONS = ['Đạt', 'Không đạt', 'Xuất sắc', 'Cần cải thiện'];

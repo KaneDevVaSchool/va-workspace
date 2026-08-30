@@ -3,7 +3,7 @@ export const OVERVIEW_COLUMNS = [
   { key: 'is_active', label: 'Trạng thái', defaultOn: true },
   { key: 'has_config', label: 'Cấu hình', defaultOn: true },
   { key: 'director', label: 'Quản lý phòng ban', defaultOn: true },
-  { key: 'member_count', label: 'Số thành viên', defaultOn: true },
+  { key: 'member_count', label: 'Số thành viên', defaultOn: false },
   { key: 'code', label: 'Mã phòng ban', defaultOn: false },
   { key: 'criteria_count', label: 'Số tiêu chí đánh giá', defaultOn: false },
   { key: 'id', label: 'Mã bản ghi', defaultOn: false },
@@ -34,7 +34,7 @@ export const CONFIG_FILTER_OPTIONS = [
   { value: 'no', label: 'Chưa có cấu hình' },
 ];
 
-export const COLUMN_STORAGE_KEY = 'va-wc-overview-columns-v2';
+export const COLUMN_STORAGE_KEY = 'va-wc-overview-columns-v3';
 export const FILTER_STORAGE_KEY = 'va-wc-overview-filters';
 export const COLUMN_WIDTH_KEY = 'va-wc-overview-column-widths';
 export const ZOOM_STORAGE_KEY = 'va-wc-overview-zoom';

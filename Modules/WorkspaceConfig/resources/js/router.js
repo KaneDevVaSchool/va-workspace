@@ -48,6 +48,11 @@ export default [
         component: () => import('@modules/Evaluation/resources/js/pages/WorkspaceConfigEvaluation.vue'),
         meta: { requiresAuth: true, title: 'Tiêu chí đánh giá' },
       },
+      {
+        path: 'task-type',
+        name: 'manager.workspace-config.task-type',
+        redirect: { name: 'manager.evaluation-score-kit.index' },
+      },
     ],
   },
   {

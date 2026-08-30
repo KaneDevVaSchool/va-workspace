@@ -82,6 +82,7 @@ class TaskExcelImporter
         private readonly TaskRepositoryInterface $tasks,
         private readonly ProjectRepositoryInterface $projects,
         private readonly PermissionService $permissions,
+        private readonly TaskImportanceOptions $importanceOptions,
     ) {}
 
     /** @return array{rows: list<array<string, mixed>>} */
@@ -250,7 +251,13 @@ class TaskExcelImporter
         }
 
         $priorityInput = trim((string) ($cells['priority_input'] ?? ''));
-        $priority = $priorityInput === '' ? null : TaskEnums::priorityFromInput($priorityInput);
+        $priorityDepartmentId = $project?->owner_department_id
+            ?? $project?->executing_department_id
+            ?? ($isUpdate && $task instanceof Task ? $task->origin_department_id : null)
+            ?? $viewer->department_id;
+        $priority = $priorityInput === ''
+            ? null
+            : $this->importanceOptions->matchAccepted($priorityInput, $priorityDepartmentId);
         if ($priorityInput !== '' && $priority === null) {
             $issues[] = ['type' => 'invalid_priority', 'message' => 'Mức độ ưu tiên không hợp lệ.'];
         }

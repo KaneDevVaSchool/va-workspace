@@ -137,6 +137,17 @@ class EvaluationCriteriaRepository implements EvaluationCriteriaRepositoryInterf
         return $criterion->fresh(EvaluationCriteria::WITH_PRESENT);
     }
 
+    public function setTaskScoreLevelCodes(EvaluationCriteria $criterion, array $codes, ?int $updatedBy = null): EvaluationCriteria
+    {
+        $payload = ['task_score_level_codes' => array_values($codes)];
+        if ($updatedBy !== null) {
+            $payload['updated_by'] = $updatedBy;
+        }
+        $criterion->update($payload);
+
+        return $criterion->fresh(EvaluationCriteria::WITH_PRESENT);
+    }
+
     public function findTaskTypeCriterion(int $departmentId): ?EvaluationCriteria
     {
         return EvaluationCriteria::query()

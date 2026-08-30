@@ -61,6 +61,7 @@ const form = reactive({
   end_date: '',
   status: 'planning',
   importance: 'important',
+  progress_method: 'average',
   description: '',
   member_ids: [],
   follower_ids: [],
@@ -172,6 +173,7 @@ async function loadMeta() {
       form.hide_cross_tasks_from_assignees = Boolean(data.hide_cross_tasks_from_assignees);
       form.hide_child_tasks_from_followers = Boolean(data.hide_child_tasks_from_followers);
       form.constrain_task_dates_to_project = Boolean(data.constrain_task_dates_to_project);
+      if (data.default_progress_method) form.progress_method = data.default_progress_method;
     } catch {
       // Không có quyền cài đặt — giữ mặc định tắt.
     }
@@ -207,6 +209,7 @@ async function submitForm() {
     end_date: form.end_date || null,
     status: form.status,
     importance: form.importance,
+    progress_method: form.progress_method,
     description: form.description || null,
     member_ids: form.member_ids,
     follower_ids: form.follower_ids,
@@ -231,7 +234,7 @@ async function submitForm() {
       }
     }
 
-    showClientToast('success', `Đã tạo dự án "${data.project.name}". Phương pháp tính tiến độ thiết lập tại Cài đặt dự án.`);
+    showClientToast('success', `Đã tạo dự án "${data.project.name}".`);
     router.push({ name: 'manager.project.index' });
   } catch (err) {
     if (err?.response?.status === 422) {
