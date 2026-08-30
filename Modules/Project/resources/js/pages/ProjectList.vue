@@ -44,7 +44,9 @@ import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
+import DualProgressBar from '@/components/DualProgressBar.vue';
 import { showClientToast } from '@/lib/clientToast';
+import { computeExpectedProgress } from '@/lib/progress';
 import { useDragScroll } from '@/composables/useDragScroll';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import ProjectLabelPicker from '../components/ProjectLabelPicker.vue';
@@ -2425,18 +2427,12 @@ onBeforeUnmount(() => {
                       {{ progressMethodLabel(project.progress_method) }}
                     </span>
                     <span v-else-if="col.key === 'progress'" class="proj-page__progress-cell">
-                      <template v-if="project.progress_percent != null">
-                        <span class="proj-page__mini-track">
-                          <span
-                            class="proj-page__mini-fill"
-                            :class="`proj-page__mini-fill--${progressTone(project.progress_percent)}`"
-                            :style="{ width: `${project.progress_percent}%` }"
-                          />
-                        </span>
-                        <span class="proj-page__pill" :class="`proj-page__pill--${progressTone(project.progress_percent)}`">
-                          {{ project.progress_percent }}%
-                        </span>
-                      </template>
+                      <DualProgressBar
+                        v-if="project.progress_percent != null"
+                        :actual="project.progress_percent"
+                        :expected="computeExpectedProgress(project.start_date, project.end_date)"
+                        size="sm"
+                      />
                       <span v-else>—</span>
                     </span>
                     <span
@@ -2747,12 +2743,11 @@ onBeforeUnmount(() => {
           </div>
           <div v-if="selected.progress_percent != null" class="proj-page__row proj-page__row--progress">
             <span class="proj-page__row-label">Tiến độ</span>
-            <span class="proj-page__progress">
-              <span class="proj-page__progress-track">
-                <span class="proj-page__progress-fill" :style="{ width: `${selected.progress_percent}%` }" />
-              </span>
-              <span class="proj-page__row-value">{{ selected.progress_percent }}%</span>
-            </span>
+            <DualProgressBar
+              :actual="selected.progress_percent"
+              :expected="computeExpectedProgress(selected.start_date, selected.end_date)"
+              size="md"
+            />
           </div>
           <div class="proj-page__row">
             <span class="proj-page__row-label">Điểm đánh giá</span>
@@ -6095,32 +6090,6 @@ onBeforeUnmount(() => {
 
 .proj-page__row--progress {
   align-items: center;
-}
-
-.proj-page__progress {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 1;
-  min-width: 0;
-  justify-content: flex-end;
-}
-
-.proj-page__progress-track {
-  flex: 1;
-  max-width: 8rem;
-  height: 0.375rem;
-  border-radius: var(--radius-full);
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  overflow: hidden;
-}
-
-.proj-page__progress-fill {
-  display: block;
-  height: 100%;
-  border-radius: var(--radius-full);
-  background: linear-gradient(90deg, var(--color-tertiary), var(--color-secondary));
 }
 
 .proj-page__section {
