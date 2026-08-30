@@ -495,6 +495,11 @@ class TaskSeeder extends Seeder
                 ],
             ],
 
+            // Dự án riêng để demo Lịch công việc (chế độ xem theo tuần) khi
+            // nhiều công việc/nhiều phòng ban chồng giờ trong cùng 1 ngày —
+            // không phải cây WBS, chỉ là danh sách phẳng có start_time/due_time.
+            'Tuần cao điểm phối hợp liên phòng ban' => $this->overlapDemoTasks(),
+
             'Nghiên cứu ứng dụng AI hỗ trợ giảng dạy' => [
                 [
                     'title' => 'Khảo sát công cụ AI hiện có',
@@ -516,6 +521,155 @@ class TaskSeeder extends Seeder
                     'end_date' => now()->subDays(30)->toDateString(),
                     'progress_percent' => 5,
                 ],
+            ],
+        ];
+    }
+
+    /**
+     * Danh sách phẳng công việc có giờ cụ thể (start_time/due_time), cố tình
+     * chồng khung giờ + trải nhiều người thực hiện (nhiều phòng ban: CNTT,
+     * Đào tạo, Nhân sự, Tài chính, BGH) trong cùng 1 ngày — dữ liệu để kiểm
+     * tra chế độ xem theo tuần của Lịch công việc scale tốt khi có nhiều
+     * việc chồng giờ (TaskCalendarView.vue::layoutTimedColumns()).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function overlapDemoTasks(): array
+    {
+        $today = now()->toDateString();
+        $tomorrow = now()->addDay()->toDateString();
+
+        return [
+            // Hôm nay 08:00–09:30 — 4 việc chồng nhau, 4 phòng ban khác nhau.
+            [
+                'title' => 'Họp giao ban đầu tuần',
+                'status' => 'in_progress',
+                'priority' => 'high',
+                'assignee_email' => ':creator',
+                'start_date' => $today,
+                'end_date' => $today,
+                'start_time' => '08:00',
+                'due_time' => '09:00',
+                'progress_percent' => 30,
+                'description' => 'Điểm nhanh tiến độ các phòng ban trong tuần.',
+            ],
+            [
+                'title' => 'Chuẩn bị phòng máy thi thử',
+                'status' => 'not_started',
+                'priority' => 'medium',
+                'assignee_email' => 'duc.cntt@example.com',
+                'start_date' => $today,
+                'end_date' => $today,
+                'start_time' => '08:15',
+                'due_time' => '09:30',
+                'progress_percent' => 0,
+            ],
+            [
+                'title' => 'Tư vấn tuyển sinh trực tiếp',
+                'status' => 'in_progress',
+                'priority' => 'urgent',
+                'assignee_email' => 'tuan.dt@example.com',
+                'start_date' => $today,
+                'end_date' => $today,
+                'start_time' => '08:30',
+                'due_time' => '09:15',
+                'progress_percent' => 60,
+            ],
+            [
+                'title' => 'Đối chiếu bảng lương tháng',
+                'status' => 'on_hold',
+                'priority' => 'medium',
+                'assignee_email' => 'phong.tc@example.com',
+                'start_date' => $today,
+                'end_date' => $today,
+                'start_time' => '08:45',
+                'due_time' => '09:45',
+                'progress_percent' => 20,
+                'description' => 'Tạm dừng chờ số liệu từ phòng Nhân sự.',
+            ],
+
+            // Hôm nay 10:00–11:30 — 2 việc chồng 1 phần (không phải toàn bộ).
+            [
+                'title' => 'Phỏng vấn ứng viên giảng viên',
+                'status' => 'in_progress',
+                'priority' => 'high',
+                'assignee_email' => 'son.ns@example.com',
+                'start_date' => $today,
+                'end_date' => $today,
+                'start_time' => '10:00',
+                'due_time' => '11:00',
+                'progress_percent' => 45,
+            ],
+            [
+                'title' => 'Bàn giao thiết bị phòng Lab 2',
+                'status' => 'completed',
+                'priority' => 'low',
+                'assignee_email' => 'linh.cntt@example.com',
+                'start_date' => $today,
+                'end_date' => $today,
+                'start_time' => '10:30',
+                'due_time' => '11:30',
+                'progress_percent' => 100,
+            ],
+
+            // Hôm nay 14:00 — 1 việc riêng lẻ, không chồng.
+            [
+                'title' => 'Duyệt nội dung truyền thông tuyển sinh',
+                'status' => 'not_started',
+                'priority' => 'medium',
+                'assignee_email' => 'mai.dt@example.com',
+                'start_date' => $today,
+                'end_date' => $today,
+                'start_time' => '14:00',
+                'due_time' => '15:00',
+                'progress_percent' => 0,
+            ],
+
+            // Hôm nay, cả ngày (không giờ) — kiểm tra dải "Cả ngày".
+            [
+                'title' => 'Trực đường dây nóng tuyển sinh',
+                'status' => 'in_progress',
+                'priority' => 'low',
+                'assignee_email' => 'hoa.bgh@example.com',
+                'start_date' => $today,
+                'end_date' => $tomorrow,
+                'progress_percent' => 50,
+            ],
+
+            // Ngày mai 08:30–10:00 — 3 việc chồng nhau, để kiểm tra cụm khác
+            // cùng lúc hiển thị đúng cột riêng cho từng ngày.
+            [
+                'title' => 'Kiểm tra hệ thống mạng trước sự kiện',
+                'status' => 'in_progress',
+                'priority' => 'urgent',
+                'assignee_email' => 'duc.cntt@example.com',
+                'start_date' => $tomorrow,
+                'end_date' => $tomorrow,
+                'start_time' => '08:30',
+                'due_time' => '10:00',
+                'progress_percent' => 35,
+            ],
+            [
+                'title' => 'Tập huấn lễ tân đón phụ huynh',
+                'status' => 'not_started',
+                'priority' => 'medium',
+                'assignee_email' => 'thao.ns@example.com',
+                'start_date' => $tomorrow,
+                'end_date' => $tomorrow,
+                'start_time' => '09:00',
+                'due_time' => '10:00',
+                'progress_percent' => 0,
+            ],
+            [
+                'title' => 'Duyệt kịch bản chương trình khai mạc',
+                'status' => 'not_started',
+                'priority' => 'high',
+                'assignee_email' => 'yen.tc@example.com',
+                'start_date' => $tomorrow,
+                'end_date' => $tomorrow,
+                'start_time' => '09:15',
+                'due_time' => '09:45',
+                'progress_percent' => 0,
             ],
         ];
     }
@@ -543,7 +697,9 @@ class TaskSeeder extends Seeder
                 'status' => $node['status'] ?? 'not_started',
                 'priority' => $node['priority'] ?? null,
                 'start_date' => $node['start_date'] ?? null,
+                'start_time' => $node['start_time'] ?? null,
                 'end_date' => $node['end_date'] ?? null,
+                'due_time' => $node['due_time'] ?? null,
                 'actual_start_date' => $node['actual_start_date'] ?? null,
                 'actual_end_date' => $node['actual_end_date'] ?? null,
                 'assignee_id' => $assigneeId,

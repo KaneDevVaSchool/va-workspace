@@ -145,6 +145,31 @@ class ProjectSeeder extends Seeder
                 'lead_email' => 'tuan.dt@example.com',
             ],
 
+            // 6. Nhiều công việc chồng giờ trong cùng ngày, nhiều phòng ban —
+            //    dữ liệu demo riêng cho Lịch công việc (chế độ xem theo tuần),
+            //    xem TaskSeeder::overlapDemoTasks().
+            [
+                'name' => 'Tuần cao điểm phối hợp liên phòng ban',
+                'type' => 'Nội bộ',
+                'owner_code' => 'BGH',
+                'executing_codes' => ['CNTT', 'DT', 'NS', 'TC'],
+                'status' => 'in_progress',
+                'importance' => 'high_priority',
+                'progress_method' => 'task_weighted',
+                'start_date' => now()->toDateString(),
+                'end_date' => now()->addDays(7)->toDateString(),
+                'description' => 'Nhiều việc gấp diễn ra cùng lúc trong tuần — các phòng ban phối hợp theo khung giờ cụ thể.',
+                'labels' => ['Ưu tiên'],
+                'member_emails' => [
+                    'duc.cntt@example.com', 'linh.cntt@example.com',
+                    'tuan.dt@example.com', 'mai.dt@example.com',
+                    'son.ns@example.com', 'thao.ns@example.com',
+                    'phong.tc@example.com', 'yen.tc@example.com',
+                    'hoa.bgh@example.com',
+                ],
+                'lead_email' => 'hoa.bgh@example.com',
+            ],
+
             // Thêm 2 mẫu phụ để trải đủ trạng thái/tab lọc trên list.
             [
                 'name' => 'Xây dựng chương trình khách hàng thân thiết',
