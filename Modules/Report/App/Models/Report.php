@@ -26,7 +26,36 @@ class Report extends Model
 {
     public const TYPE_PERSONNEL_EVALUATION = 'personnel_evaluation';
 
+    public const TYPE_DEPARTMENT_WORK = 'department_work';
+
+    public const TYPE_PERSONAL_WORK = 'personal_work';
+
+    public const TYPE_PROJECT_MONTHLY = 'project_monthly';
+
+    public const TYPE_PROJECT_GOVERNANCE = 'project_governance';
+
+    public const TYPE_TIMESHEET_DETAIL = 'timesheet_detail';
+
+    /**
+     * Loại báo cáo tạo được ngay bây giờ.
+     *
+     * Năm loại còn lại (xem TYPES_COMING_SOON) đã có tên và mô tả để người dùng
+     * biết sắp có gì, nhưng chưa dựng phần tính số liệu — chưa nằm ở đây thì
+     * request validate cũng tự chặn, không cần thêm chỗ kiểm tra thứ hai.
+     */
     public const TYPES = [self::TYPE_PERSONNEL_EVALUATION];
+
+    /**
+     * Loại đã lên kế hoạch, chưa tạo được. Trang danh sách vẫn hiện để người
+     * dùng thấy lộ trình thay vì tưởng hệ thống chỉ có đúng một loại báo cáo.
+     */
+    public const TYPES_COMING_SOON = [
+        self::TYPE_DEPARTMENT_WORK,
+        self::TYPE_PERSONAL_WORK,
+        self::TYPE_PROJECT_MONTHLY,
+        self::TYPE_PROJECT_GOVERNANCE,
+        self::TYPE_TIMESHEET_DETAIL,
+    ];
 
     public const PERIOD_TYPES = ['month', 'quarter', 'custom'];
 

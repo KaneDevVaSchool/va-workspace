@@ -89,19 +89,31 @@ interface, không gọi Eloquent trực tiếp).
   khó tạo chuẩn, tiến độ và chất lượng tạo điểm thực; case study một việc
   và thang xếp loại theo %.
 - **Tổng hợp đánh giá** (`EvaluationSummary.vue`): màn hình làm việc chính khi
-  chấm điểm cuối kỳ. Chọn kỳ (tháng / tuần / ngày / khoảng ngày — mặc định
-  tháng) rồi xem toàn bộ nhân sự phòng ban trên **một bảng tiêu đề 2 tầng**:
-  nhóm cột công việc (Tổng / Đang thực hiện / Hoàn thành, mỗi nhóm có Số
-  lượng · Đúng hạn · Quá hạn), nhóm cột theo từng tiêu chí hành vi, và nhóm
-  cột điểm (Khởi đầu · Công việc · Cộng · Trừ · Điểm cuối · Xếp loại).
-  Route `/manager/evaluation-events` (giữ nguyên path và route name cũ để
-  sidebar / phân quyền / cấu hình sidebar phòng ban không phải đổi theo).
+  chấm điểm cuối kỳ, **chỉ trưởng phòng thấy nhân sự phòng mình** —
+  `EvaluationEventController` / `EvaluationSummaryController` lấy
+  `department_id` từ chính tài khoản đăng nhập, không nhận tham số từ trình
+  duyệt, nên không có cách nào xem phòng khác. Route
+  `/manager/evaluation-events` (giữ nguyên path và route name cũ để sidebar /
+  phân quyền / cấu hình sidebar phòng ban không phải đổi theo).
 
-  Mở rộng một dòng (nút mũi tên đầu dòng, hoặc double-click) hiện **từng công
-  việc** kèm tên, dự án, hạn, ngày hoàn thành, tình trạng đúng hạn và điểm
-  đóng góp — **ghi nhận đánh giá diễn ra ngay trên dòng công việc đó** (trước
-  đây là danh sách phẳng + modal riêng, nay đã bỏ). Cuối phần chi tiết có ô
-  ghi nhận không gắn công việc (`task_id = null`).
+  Bố cục **hai vùng, chọn nhân sự mới hiện**: cột trái là danh sách hẹp
+  (22rem) chỉ để chọn người — hạng, tên, số việc, điểm cuối và xếp loại; toàn
+  bộ chỗ còn lại là **khu chấm điểm của đúng người đang chọn**. Chưa chọn ai
+  thì khu đó hiện số tổng quan phòng ban (nhân sự / trung bình / cao nhất /
+  thấp nhất + phân bổ xếp loại bấm được để lọc). Đây **không** theo mẫu vàng
+  `data-table`: trang này không phải danh sách tra cứu mà là bàn làm việc cho
+  từng người, nên không có kéo cột / TablePagesBar / phân trang.
+
+  Khu chấm điểm gồm: thẻ phân rã điểm (khởi đầu → công việc → cộng → trừ →
+  điểm cuối, kèm so với trung bình phòng và thanh tiến độ hoàn thành việc),
+  điểm theo từng tiêu chí, rồi 3 thẻ **Công việc / Ghi nhận / Chấm điểm**.
+  Ghi nhận đánh giá làm ngay ở thẻ "Chấm điểm", có thể gắn với một công việc
+  cụ thể (từ nút "Chấm điểm cho việc này" ở thẻ Công việc) hoặc không gắn
+  việc nào (`task_id = null`). Chuyển nhanh giữa các nhân sự bằng phím mũi
+  tên lên/xuống, `Esc` để đóng.
+
+  Màn hình hẹp (≤900px) không đủ chỗ cho hai vùng: khu chấm điểm phủ lên
+  danh sách, đóng lại là quay về danh sách.
 
   `GET /api/evaluation/summary?from=&to=` trả `rows` (mỗi nhân sự một dòng,
   kèm `task_status_counts`, `criterion_totals`, `task_breakdown`,

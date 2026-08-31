@@ -163,6 +163,7 @@ class EvaluationScoreComputeService
                 'score' => $score,
                 'occurred_at' => $event->occurred_at?->toDateString(),
                 'reason' => $event->reason,
+                'task_id' => $event->task_id ? (int) $event->task_id : null,
             ];
         }
 

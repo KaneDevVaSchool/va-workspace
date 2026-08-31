@@ -1,20 +1,15 @@
 <script setup>
 /**
- * Tổng hợp đánh giá — màn hình làm việc chính khi chấm điểm cuối kỳ.
+ * Tổng hợp đánh giá — bảng làm việc chấm điểm cả phòng ban trong một kỳ.
  *
- * CỐ Ý KHÔNG theo mẫu bảng dữ liệu (.cursor/rules/data-table.mdc): trang này
- * không phải danh sách bản ghi để tra cứu, mà là chỗ nhìn cả phòng ban rồi
- * chấm điểm từng người. Bảng 30 cột kéo ngang trả lời sai câu hỏi người dùng
- * đang hỏi ("ai đang yếu, vì sao"), nên ở đây dùng:
- *
- *   - Danh sách người, mỗi người một dòng, số cột cố định và luôn vừa khung.
- *   - Ngăn chi tiết bên phải cho từng người (công việc + ghi nhận), thay cho
- *     dòng bung ra giữa bảng.
- *   - Không kéo cột, không kéo ngang, không thanh cuộn ngang ở đâu cả.
+ * Không theo mẫu danh sách phẳng: mỗi người một dòng, ngăn chi tiết đẩy ngang
+ * để xem việc / ghi nhận / chấm điểm. Giao diện góc vuông, không viên thuốc,
+ * không dùng màu thương hiệu đỏ.
  */
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { formatDate } from '@/lib/formatTime';
 import { showClientToast } from '@/lib/clientToast';
 import {
@@ -22,7 +17,11 @@ import {
   TASK_STATUS_LABELS,
   TIMELINESS_LABELS,
   TIMELINESS_TONES,
+  loadSort,
+  saveSort,
 } from '@modules/Report/resources/js/constants/report.js';
+
+const SORT_STORAGE_KEY = 'va-evaluation-summary-sort-v2';
 
 const rows = ref([]);
 const criteria = ref([]);
@@ -30,8 +29,6 @@ const summary = ref(null);
 const versionNo = ref(null);
 const loading = ref(false);
 const loadError = ref('');
-
-/* ---------- Kỳ đánh giá ---------- */
 
 function todayISO() {
   const now = new Date();
@@ -44,7 +41,6 @@ function isoOf(date) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 }
 
-/** Ngày cuối của tháng dạng "2026-08". */
 function lastDayOfMonth(month) {
   const [year, mon] = month.split('-').map(Number);
   return new Date(year, mon, 0).getDate();
@@ -57,18 +53,16 @@ function monthRange(month) {
   };
 }
 
-/**
- * Kỳ đang xem — luôn là một khoảng ngày.
- *
- * Người dùng chọn nhanh bằng nút (tháng này / tháng trước / quý này), hoặc mở
- * phần "Chọn khoảng khác" để gõ tay. Máy chủ chỉ nhận từ ngày / đến ngày.
- */
+function monthTitle(month) {
+  const [year, mon] = month.split('-').map(Number);
+  return `Tháng ${mon} năm ${year}`;
+}
+
 const periodFrom = ref('');
 const periodTo = ref('');
 const periodName = ref('');
 const customOpen = ref(false);
 
-/** Các kỳ bấm một nút là xong — phủ gần hết nhu cầu thật. */
 const quickPeriods = computed(() => {
   const today = todayISO();
   const now = new Date();
@@ -101,7 +95,41 @@ function applyQuickPeriod(item) {
   customOpen.value = false;
 }
 
-/** Kỳ nhanh nào đang trùng khoảng đang xem — để tô nút đang chọn. */
+function applyMonth(month) {
+  const range = monthRange(month);
+  periodFrom.value = range.from;
+  periodTo.value = range.to;
+  periodName.value = monthTitle(month);
+  customOpen.value = false;
+}
+
+function isFullMonthRange(from, to) {
+  if (!from || !to) return false;
+  const range = monthRange(from.slice(0, 7));
+  return range.from === from && range.to === to;
+}
+
+function shiftPeriod(delta) {
+  if (!periodFrom.value || !periodTo.value) return;
+
+  if (isFullMonthRange(periodFrom.value, periodTo.value)) {
+    const [year, month] = periodFrom.value.slice(0, 7).split('-').map(Number);
+    const next = new Date(year, month - 1 + delta, 1);
+    applyMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`);
+    return;
+  }
+
+  const fromDate = new Date(`${periodFrom.value}T00:00:00`);
+  const toDate = new Date(`${periodTo.value}T00:00:00`);
+  const span = Math.round((toDate - fromDate) / 86400000) + 1;
+  fromDate.setDate(fromDate.getDate() + delta * span);
+  toDate.setDate(toDate.getDate() + delta * span);
+  periodFrom.value = isoOf(fromDate);
+  periodTo.value = isoOf(toDate);
+  periodName.value = '';
+  customOpen.value = false;
+}
+
 const activeQuickKey = computed(
   () =>
     quickPeriods.value.find(
@@ -115,38 +143,40 @@ const period = computed(() => {
   return { from: periodFrom.value, to: periodTo.value };
 });
 
-const periodLabel = computed(() => {
+const periodHeadline = computed(() => {
+  if (!period.value) return 'Chưa chọn kỳ';
+  if (isFullMonthRange(period.value.from, period.value.to)) {
+    return monthTitle(period.value.from.slice(0, 7));
+  }
+  return periodName.value || 'Khoảng ngày';
+});
+
+const periodRangeText = computed(() => {
   if (!period.value) return '';
-  const range = `${formatDate(period.value.from)} – ${formatDate(period.value.to)}`;
-  return activeQuickKey.value ? `${periodName.value} (${range})` : range;
+  return `${formatDate(period.value.from)} – ${formatDate(period.value.to)}`;
 });
 
 const periodInvalid = computed(
   () => Boolean(periodFrom.value && periodTo.value && periodFrom.value > periodTo.value),
 );
 
-/* ---------- Lọc và sắp xếp ---------- */
-
 const query = ref('');
-const sortKey = ref('final_score');
-const sortDir = ref('desc');
-
-/** Lọc nhanh theo tình trạng — trả lời thẳng "ai cần để mắt tới". */
+const savedSort = loadSort(SORT_STORAGE_KEY, { key: 'final_score', dir: 'desc' });
+const sortKey = ref(savedSort.key);
+const sortDir = ref(savedSort.dir);
 const focus = ref('all');
+const rankFilter = ref('');
 
 const FOCUS_OPTIONS = [
   { key: 'all', label: 'Tất cả' },
   { key: 'overdue', label: 'Có việc quá hạn' },
-  { key: 'unrated', label: 'Chưa ghi nhận lần nào' },
-  { key: 'no_task', label: 'Không có việc trong kỳ' },
+  { key: 'unrated', label: 'Chưa ghi nhận' },
+  { key: 'no_task', label: 'Không có việc' },
+  { key: 'below_avg', label: 'Dưới trung bình' },
 ];
 
 function overdueOf(row) {
   return row.task_status_counts?.by_timeliness?.overdue ?? 0;
-}
-
-function onTimeOf(row) {
-  return row.task_status_counts?.by_timeliness?.on_time ?? 0;
 }
 
 function doneOf(row) {
@@ -157,12 +187,18 @@ function totalTasksOf(row) {
   return row.task_status_counts?.total ?? 0;
 }
 
-/** Một người có thuộc nhóm lọc `key` không — nhận key rời để đếm được cả các
- * nhóm đang KHÔNG chọn, phục vụ con số cạnh mỗi nút lọc. */
+function missingOf(row) {
+  return row.missing_total ?? 0;
+}
+
 function matchesFocusKey(row, key) {
   if (key === 'overdue') return overdueOf(row) > 0;
   if (key === 'unrated') return (row.event_count ?? 0) === 0;
   if (key === 'no_task') return totalTasksOf(row) === 0;
+  if (key === 'below_avg') {
+    const avg = Number(summary.value?.average_score) || 0;
+    return (Number(row.final_score) || 0) < avg;
+  }
   return true;
 }
 
@@ -182,7 +218,11 @@ const filteredRows = computed(() => {
   const needle = query.value.trim().toLowerCase();
 
   const list = rows.value.filter((row) => {
-    if (needle && !String(row.user_name ?? '').toLowerCase().includes(needle)) return false;
+    if (needle) {
+      const hay = `${row.user_name ?? ''} ${row.classification_label ?? ''}`.toLowerCase();
+      if (!hay.includes(needle)) return false;
+    }
+    if (rankFilter.value && row.classification_code !== rankFilter.value) return false;
     return matchesFocus(row);
   });
 
@@ -197,35 +237,46 @@ const filteredRows = computed(() => {
     if (sortKey.value === 'overdue') {
       return (overdueOf(a) - overdueOf(b)) * dir;
     }
+    if (sortKey.value === 'rank') {
+      return (rankOf(a) - rankOf(b)) * dir;
+    }
+    if (sortKey.value === 'classification') {
+      return (
+        String(a.classification_label ?? '').localeCompare(
+          String(b.classification_label ?? ''),
+          'vi',
+        ) * dir
+      );
+    }
     return ((Number(a[sortKey.value]) || 0) - (Number(b[sortKey.value]) || 0)) * dir;
   });
 });
 
-/** Cột xếp được — bấm lại cột đang xếp thì đảo chiều. */
 const SORT_OPTIONS = [
+  { key: 'rank', label: 'Hạng' },
+  { key: 'user_name', label: 'Nhân sự' },
+  { key: 'tasks', label: 'Công việc' },
   { key: 'final_score', label: 'Điểm cuối' },
-  { key: 'user_name', label: 'Tên nhân sự' },
-  { key: 'tasks', label: 'Số công việc' },
-  { key: 'overdue', label: 'Việc quá hạn' },
+  { key: 'classification', label: 'Xếp loại' },
 ];
 
-function toggleSort(key) {
-  if (sortKey.value === key) {
-    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
-    return;
-  }
-  sortKey.value = key;
-  sortDir.value = key === 'user_name' ? 'asc' : 'desc';
-}
+watch([sortKey, sortDir], () => {
+  saveSort(SORT_STORAGE_KEY, { key: sortKey.value, dir: sortDir.value });
+});
 
-const filtersActive = computed(() => Boolean(query.value) || focus.value !== 'all');
+const filtersActive = computed(
+  () => Boolean(query.value) || focus.value !== 'all' || Boolean(rankFilter.value),
+);
 
 function clearFilters() {
   query.value = '';
   focus.value = 'all';
+  rankFilter.value = '';
 }
 
-/* ---------- Hiển thị số ---------- */
+function toggleRankFilter(code) {
+  rankFilter.value = rankFilter.value === code ? '' : code;
+}
 
 function formatNumber(value) {
   const num = Number(value) || 0;
@@ -238,29 +289,40 @@ function signedText(value) {
   return num > 0 ? `+${formatNumber(num)}` : formatNumber(num);
 }
 
-/** Tỉ lệ hoàn thành của một người — thanh nhỏ trên dòng cho thấy ngay khối lượng. */
 function donePercent(row) {
   const total = totalTasksOf(row);
   if (total === 0) return 0;
   return Math.round((doneOf(row) / total) * 100);
 }
 
-/**
- * Vị trí điểm của một người trên thang điểm cả phòng ban — dùng vẽ thanh so
- * sánh. Cả phòng bằng điểm nhau thì vẽ đầy, không chia cho 0.
- */
-function scorePercent(row) {
-  const scores = rows.value.map((item) => Number(item.final_score) || 0);
-  if (scores.length === 0) return 0;
-  const max = Math.max(...scores, 0);
-  const min = Math.min(...scores, 0);
-  if (max === min) return 100;
-  return Math.round(((Number(row.final_score) || 0) - min) / (max - min) * 100);
+function deltaVsAvg(row) {
+  const avg = Number(summary.value?.average_score) || 0;
+  return (Number(row.final_score) || 0) - avg;
 }
 
-/* ---------- Phân bố xếp loại ---------- */
+const rankMap = computed(() => {
+  const sorted = [...rows.value].sort((a, b) => {
+    const score = (Number(b.final_score) || 0) - (Number(a.final_score) || 0);
+    if (score !== 0) return score;
+    return String(a.user_name ?? '').localeCompare(String(b.user_name ?? ''), 'vi');
+  });
+  const map = {};
+  sorted.forEach((row, index) => {
+    map[row.user_id] = index + 1;
+  });
+  return map;
+});
 
-/** Các mức xếp loại có người đạt — mức trống không chiếm chỗ trên thanh. */
+function rankOf(row) {
+  return rankMap.value[row.user_id] ?? 0;
+}
+
+function padRank(row) {
+  const rank = rankOf(row);
+  const width = String(rows.value.length || 1).length;
+  return String(rank).padStart(width, '0');
+}
+
 const distribution = computed(() =>
   (summary.value?.distribution ?? []).filter((item) => item.count > 0),
 );
@@ -271,7 +333,22 @@ function distributionPercent(item) {
   return Math.round((item.count / total) * 100);
 }
 
-/* ---------- Tải dữ liệu ---------- */
+function compositionParts(row) {
+  const start = Math.max(0, Number(row.start_score) || 0);
+  const task = Number(row.task_adjustment) || 0;
+  const bonus = Number(row.bonus) || 0;
+  const penalty = Number(row.penalty) || 0;
+  const posTask = Math.max(0, task);
+  const negTask = Math.max(0, -task);
+  const total = start + posTask + bonus + penalty + negTask;
+  if (total <= 0) return [];
+  return [
+    { key: 'start', tone: 'gold', width: (start / total) * 100 },
+    { key: 'task', tone: 'teal', width: (posTask / total) * 100 },
+    { key: 'bonus', tone: 'ok', width: (bonus / total) * 100 },
+    { key: 'cut', tone: 'cut', width: ((penalty + negTask) / total) * 100 },
+  ].filter((part) => part.width > 0.5);
+}
 
 async function loadSummary() {
   if (!period.value) {
@@ -310,18 +387,21 @@ async function loadSummary() {
   }
 }
 
-/* ---------- Ngăn chi tiết một nhân sự ---------- */
-
 const selectedId = ref(null);
 
 const selected = computed(
   () => rows.value.find((row) => row.user_id === selectedId.value) ?? null,
 );
 
-/** Bấm một lần để xem — không đổi dữ liệu gì (quy tắc 14). */
 function select(row) {
+  if (selectedId.value === row.user_id) {
+    closeDetail();
+    return;
+  }
   selectedId.value = row.user_id;
   detailTab.value = 'tasks';
+  taskFocus.value = 'all';
+  resetDraft();
 }
 
 function closeDetail() {
@@ -329,12 +409,16 @@ function closeDetail() {
   resetDraft();
 }
 
-/** Chuyển sang người kế tiếp / trước đó ngay trong ngăn chi tiết. */
 function step(offset) {
   const list = filteredRows.value;
   const index = list.findIndex((row) => row.user_id === selectedId.value);
   const next = list[index + offset];
-  if (next) select(next);
+  if (next) {
+    selectedId.value = next.user_id;
+    detailTab.value = 'tasks';
+    taskFocus.value = 'all';
+    resetDraft();
+  }
 }
 
 const stepInfo = computed(() => {
@@ -349,8 +433,8 @@ const stepInfo = computed(() => {
 });
 
 const detailTab = ref('tasks');
+const taskFocus = ref('all');
 
-/** Công việc của người đang mở, xếp việc quá hạn lên trước cho dễ xử lý. */
 const detailTasks = computed(() => {
   const row = selected.value;
   if (!row) return [];
@@ -361,7 +445,22 @@ const detailTasks = computed(() => {
   });
 });
 
-/** Toàn bộ ghi nhận của người đang mở, mới nhất lên trước. */
+const visibleTasks = computed(() => {
+  if (taskFocus.value === 'overdue') {
+    return detailTasks.value.filter((task) => task.on_time_state === 'overdue');
+  }
+  if (taskFocus.value === 'open') {
+    return detailTasks.value.filter((task) => task.status !== 'completed');
+  }
+  return detailTasks.value;
+});
+
+const taskFocusCounts = computed(() => ({
+  all: detailTasks.value.length,
+  overdue: detailTasks.value.filter((task) => task.on_time_state === 'overdue').length,
+  open: detailTasks.value.filter((task) => task.status !== 'completed').length,
+}));
+
 const detailEvents = computed(() => {
   const row = selected.value;
   if (!row) return [];
@@ -370,6 +469,8 @@ const detailEvents = computed(() => {
   );
 });
 
+const selectedCriteria = computed(() => selected.value?.criterion_totals ?? []);
+
 function taskTitleOf(taskId) {
   if (!taskId) return '';
   return (
@@ -377,22 +478,23 @@ function taskTitleOf(taskId) {
   );
 }
 
-/* ---------- Ghi nhận đánh giá ---------- */
-
-/**
- * Form ghi nhận — một form duy nhất trong ngăn chi tiết, gắn công việc là tuỳ
- * chọn. Trước đây mỗi dòng công việc có một cặp select riêng, nhìn rất rối và
- * người dùng không biết cái nào ăn vào đâu.
- */
-const draft = reactive({ criterion_id: '', level_code: '', task_id: '', reason: '' });
+const draft = reactive({
+  criterion_id: '',
+  level_code: '',
+  task_id: '',
+  reason: '',
+  occurred_at: '',
+});
 const saving = ref(false);
 const removingId = ref(null);
+const confirmRemoveId = ref(null);
 
 function resetDraft() {
   draft.criterion_id = '';
   draft.level_code = '';
   draft.task_id = '';
   draft.reason = '';
+  draft.occurred_at = period.value?.to ?? '';
 }
 
 const selectedCriterion = computed(
@@ -406,14 +508,23 @@ const draftLevel = computed(
 );
 
 const canRecord = computed(
-  () => Boolean(draft.criterion_id && draft.level_code) && !saving.value,
+  () => Boolean(draft.criterion_id && draft.level_code && draft.occurred_at) && !saving.value,
 );
 
 function onCriterionChange() {
   draft.level_code = '';
 }
 
-/** Mở sẵn form ghi nhận cho đúng công việc vừa bấm. */
+const criteriaGroups = computed(() => {
+  const map = new Map();
+  for (const item of criteria.value) {
+    const label = String(item.criterion_type_name ?? '').trim() || 'Tiêu chí khác';
+    if (!map.has(label)) map.set(label, []);
+    map.get(label).push(item);
+  }
+  return [...map.entries()].map(([label, items]) => ({ label, items }));
+});
+
 function recordForTask(task) {
   detailTab.value = 'record';
   draft.task_id = String(task.task_id);
@@ -422,13 +533,6 @@ function recordForTask(task) {
 
 const criterionField = ref(null);
 
-/**
- * Ghi nhận một mức tiêu chí cho nhân sự đang mở.
- *
- * Máy chủ trả về dòng đã tính lại — thay nguyên dòng đó vào danh sách. KHÔNG
- * tự cộng điểm ở đây: điểm cuối còn phụ thuộc khung chấm điểm, công việc và
- * xếp loại, tự cộng ở trình duyệt sẽ sớm lệch với máy chủ.
- */
 async function record() {
   const row = selected.value;
   if (!row || !canRecord.value || !period.value) return;
@@ -439,7 +543,7 @@ async function record() {
       user_id: row.user_id,
       criterion_id: draft.criterion_id,
       level_code: draft.level_code,
-      occurred_at: period.value.to,
+      occurred_at: draft.occurred_at || period.value.to,
       task_id: draft.task_id || null,
       reason: draft.reason.trim() || null,
       period_from: period.value.from,
@@ -467,13 +571,10 @@ async function record() {
   }
 }
 
-/** Thay đúng một dòng bằng số liệu máy chủ vừa tính lại. */
 function applyRow(fresh) {
   const index = rows.value.findIndex((row) => row.user_id === fresh.user_id);
   if (index >= 0) rows.value[index] = fresh;
 }
-
-const confirmRemoveId = ref(null);
 
 async function removeEvent(event) {
   if (removingId.value || !period.value) return;
@@ -493,9 +594,101 @@ async function removeEvent(event) {
   }
 }
 
-/* ---------- Vòng đời ---------- */
+function confirmRemove() {
+  const event = detailEvents.value.find((item) => item.event_id === confirmRemoveId.value);
+  if (event) removeEvent(event);
+}
 
-watch(period, () => loadSummary());
+function onConfirmOpen(open) {
+  if (!open) confirmRemoveId.value = null;
+}
+
+function csvCell(value) {
+  const text = String(value ?? '');
+  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+const exportOptions = computed(() => [
+  {
+    key: 'csv',
+    label: 'Xuất bảng CSV',
+    description: 'Danh sách nhân sự đang lọc, theo kỳ đang xem.',
+    icon: 'fileSpreadsheet',
+    onSelect: exportCsv,
+  },
+]);
+
+function exportCsv() {
+  const headers = [
+    'Hạng',
+    'Nhân sự',
+    'Số việc',
+    'Hoàn thành',
+    'Quá hạn',
+    'Điểm khởi đầu',
+    'Từ công việc',
+    'Điểm cộng',
+    'Điểm trừ',
+    'Điểm cuối',
+    'Xếp loại',
+    'Số ghi nhận',
+  ];
+  const lines = [headers.join(',')];
+  for (const row of filteredRows.value) {
+    lines.push(
+      [
+        rankOf(row),
+        csvCell(row.user_name),
+        totalTasksOf(row),
+        doneOf(row),
+        overdueOf(row),
+        formatNumber(row.start_score),
+        formatNumber(row.task_adjustment),
+        formatNumber(row.bonus),
+        formatNumber(row.penalty),
+        formatNumber(row.final_score),
+        csvCell(row.classification_label ?? ''),
+        row.event_count ?? 0,
+      ].join(','),
+    );
+  }
+  const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const stamp = period.value ? `${period.value.from}_${period.value.to}` : todayISO();
+  link.href = url;
+  link.download = `tong-hop-danh-gia_${stamp}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function isTypingTarget(el) {
+  const tag = el?.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable;
+}
+
+function onKeydown(event) {
+  if (confirmRemoveId.value) return;
+  if (event.key === 'Escape' && selectedId.value && !isTypingTarget(event.target)) {
+    closeDetail();
+    return;
+  }
+  if (isTypingTarget(event.target) || !selectedId.value) return;
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    step(1);
+  }
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    step(-1);
+  }
+}
+
+watch(period, () => {
+  if (period.value) draft.occurred_at = period.value.to;
+  loadSummary();
+});
 
 watch(
   () => [periodFrom.value, periodTo.value],
@@ -505,273 +698,256 @@ watch(
 );
 
 onMounted(() => {
-  // Kỳ mở sẵn: tháng này, hoặc kỳ đã chọn lần trước nếu còn hợp lệ.
   const saved = localStorage.getItem(SUMMARY_PERIOD_KEY);
   const match = quickPeriods.value.find((item) => item.key === saved);
   applyQuickPeriod(match ?? quickPeriods.value[0]);
+  document.addEventListener('keydown', onKeydown);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown);
 });
 
 watch(activeQuickKey, (value) => {
   try {
     if (value) localStorage.setItem(SUMMARY_PERIOD_KEY, value);
   } catch {
-    // Trình duyệt chặn localStorage thì bỏ qua, không làm hỏng trang.
+    // Trình duyệt chặn localStorage thì bỏ qua.
   }
 });
 </script>
 
 <template>
-  <section class="eval">
+  <section class="board">
     <PageHeader
       title="Tổng hợp đánh giá"
       icon="clipboardCheck"
-      description="Toàn bộ nhân sự phòng ban trong một kỳ: công việc, điểm theo tiêu chí và điểm cuối."
-    />
+      description="Chấm điểm cả phòng ban trong một kỳ: việc, tiêu chí và điểm cuối."
+      export-label="Xuất bảng"
+      :export-options="exportOptions"
+    >
+      <template #actions>
+        <button type="button" class="board__header-btn" :disabled="loading" @click="loadSummary">
+          <AppIcon name="refresh" :size="16" :class="{ 'board__spin': loading }" />
+          Làm mới
+        </button>
+      </template>
+    </PageHeader>
 
-    <!-- Chọn kỳ — bấm nút là xong, gõ tay chỉ khi cần khoảng lạ. -->
-    <div class="eval__period">
-      <div class="eval__quick">
+    <div class="board__period">
+      <div class="board__period-nav">
+        <button type="button" class="board__square" aria-label="Kỳ trước" @click="shiftPeriod(-1)">
+          <AppIcon name="chevronLeft" :size="18" />
+        </button>
+        <div class="board__period-copy">
+          <p class="board__period-title">{{ periodHeadline }}</p>
+          <p v-if="periodRangeText" class="board__period-range">
+            {{ periodRangeText }}
+            <span v-if="versionNo"> · Khung chấm điểm phiên bản {{ versionNo }}</span>
+          </p>
+        </div>
+        <button type="button" class="board__square" aria-label="Kỳ sau" @click="shiftPeriod(1)">
+          <AppIcon name="chevronRight" :size="18" />
+        </button>
+      </div>
+
+      <div class="board__period-links">
         <button
           v-for="item in quickPeriods"
           :key="item.key"
           type="button"
-          class="eval__quick-btn"
-          :class="{ 'eval__quick-btn--on': activeQuickKey === item.key }"
+          class="board__text-btn"
+          :class="{ 'board__text-btn--on': activeQuickKey === item.key }"
           @click="applyQuickPeriod(item)"
         >
           {{ item.label }}
         </button>
         <button
           type="button"
-          class="eval__quick-btn eval__quick-btn--more"
-          :class="{ 'eval__quick-btn--on': customOpen || !activeQuickKey }"
+          class="board__text-btn"
+          :class="{ 'board__text-btn--on': customOpen || (!activeQuickKey && period) }"
           :aria-expanded="customOpen"
           @click="customOpen = !customOpen"
         >
-          Chọn khoảng khác
-          <AppIcon :name="customOpen ? 'chevronDown' : 'chevronRight'" :size="14" />
+          Khoảng khác
         </button>
       </div>
-
-      <p class="eval__period-now">
-        <span v-if="periodLabel">Đang xem: <strong>{{ periodLabel }}</strong></span>
-        <span v-if="versionNo" class="eval__period-version">
-          Khung chấm điểm phiên bản {{ versionNo }}
-        </span>
-      </p>
     </div>
 
-    <div v-if="customOpen" class="eval__custom">
-      <div class="eval__field">
-        <label class="eval__label" for="eval-from">Từ ngày</label>
-        <input id="eval-from" v-model="periodFrom" type="date" class="eval__input" />
+    <div v-if="customOpen" class="board__custom">
+      <div class="board__field">
+        <label class="board__label" for="board-from">Từ ngày</label>
+        <input id="board-from" v-model="periodFrom" type="date" class="board__input" />
       </div>
-      <div class="eval__field">
-        <label class="eval__label" for="eval-to">Đến ngày</label>
-        <input id="eval-to" v-model="periodTo" type="date" class="eval__input" />
+      <div class="board__field">
+        <label class="board__label" for="board-to">Đến ngày</label>
+        <input id="board-to" v-model="periodTo" type="date" class="board__input" />
       </div>
-      <p v-if="periodInvalid" class="eval__custom-warn">
-        Ngày bắt đầu đang sau ngày kết thúc.
-      </p>
+      <p v-if="periodInvalid" class="board__warn">Ngày bắt đầu đang sau ngày kết thúc.</p>
     </div>
 
-    <!-- Số liệu tổng của kỳ + phân bố xếp loại. -->
-    <div v-if="summary && !loadError" class="eval__overview">
-      <div class="eval__stats">
-        <div class="eval__stat">
-          <span class="eval__stat-label">Số nhân sự</span>
-          <span class="eval__stat-value">{{ summary.total_people }}</span>
-        </div>
-        <div class="eval__stat">
-          <span class="eval__stat-label">Điểm trung bình</span>
-          <span class="eval__stat-value">{{ formatNumber(summary.average_score) }}</span>
-        </div>
-        <div class="eval__stat">
-          <span class="eval__stat-label">Cao nhất</span>
-          <span class="eval__stat-value">{{ formatNumber(summary.highest_score) }}</span>
-        </div>
-        <div class="eval__stat">
-          <span class="eval__stat-label">Thấp nhất</span>
-          <span class="eval__stat-value">{{ formatNumber(summary.lowest_score) }}</span>
-        </div>
-      </div>
-
-      <div v-if="distribution.length" class="eval__dist">
-        <div class="eval__dist-bar">
-          <span
-            v-for="(item, index) in distribution"
-            :key="item.code ?? index"
-            class="eval__dist-seg"
-            :class="`eval__dist-seg--${index % 5}`"
-            :style="{ width: `${distributionPercent(item)}%` }"
-          />
-        </div>
-        <ul class="eval__dist-legend">
-          <li v-for="(item, index) in distribution" :key="item.code ?? index">
-            <span class="eval__dot" :class="`eval__dot--rank-${index % 5}`" />
-            {{ item.label }}: {{ item.count }} người
-          </li>
-        </ul>
-      </div>
-    </div>
-
-    <p v-if="summary && summary.missing_total > 0 && !loadError" class="eval__warn">
+    <p v-if="summary && summary.missing_total > 0 && !loadError" class="board__note">
       Có {{ summary.missing_total }} chỗ thiếu dữ liệu chấm điểm (độ khó, tiến độ hoặc chất
-      lượng công việc) nên điểm công việc có thể chưa phản ánh đủ.
+      lượng công việc) nên điểm việc có thể chưa phản ánh đủ.
     </p>
 
-    <!-- Lọc nhanh theo tình trạng — trả lời "ai cần để mắt tới". -->
-    <div class="eval__toolbar">
-      <div class="eval__focus">
-        <button
-          v-for="option in FOCUS_OPTIONS"
-          :key="option.key"
-          type="button"
-          class="eval__focus-btn"
-          :class="{ 'eval__focus-btn--on': focus === option.key }"
-          @click="focus = option.key"
-        >
-          {{ option.label }}
-          <span class="eval__focus-count">{{ focusCounts[option.key] ?? 0 }}</span>
-        </button>
-      </div>
+    <div class="board__workspace">
+      <div class="board__roster">
+        <div class="board__roster-head">
+          <div class="board__field board__field--search">
+            <label class="board__label" for="board-q">Tìm nhân sự</label>
+            <input id="board-q" v-model="query" type="search" class="board__input" />
+          </div>
 
-      <div class="eval__toolbar-right">
-        <div class="eval__search">
-          <AppIcon name="search" :size="16" class="eval__search-icon" />
-          <label class="eval__sr" for="eval-q">Tìm nhân sự theo tên</label>
-          <input id="eval-q" v-model="query" type="search" class="eval__search-input" />
-        </div>
+          <div class="board__focus">
+            <button
+              v-for="option in FOCUS_OPTIONS"
+              :key="option.key"
+              type="button"
+              class="board__text-btn"
+              :class="{ 'board__text-btn--on': focus === option.key }"
+              @click="focus = option.key"
+            >
+              {{ option.label }}
+              <span class="board__count">{{ focusCounts[option.key] ?? 0 }}</span>
+            </button>
+          </div>
 
-        <button
-          v-if="filtersActive"
-          type="button"
-          class="eval__ghost-btn"
-          @click="clearFilters"
-        >
-          Bỏ lọc
-        </button>
-      </div>
-    </div>
+          <div class="board__roster-sort">
+            <label class="board__label" for="board-sort">Xếp theo</label>
+            <select id="board-sort" v-model="sortKey" class="board__input">
+              <option v-for="option in SORT_OPTIONS" :key="option.key" :value="option.key">
+                {{ option.label }}
+              </option>
+            </select>
+            <button
+              type="button"
+              class="board__square board__square--sm"
+              :aria-label="sortDir === 'asc' ? 'Đang xếp tăng dần' : 'Đang xếp giảm dần'"
+              @click="sortDir = sortDir === 'asc' ? 'desc' : 'asc'"
+            >
+              <AppIcon :name="sortDir === 'asc' ? 'chevronsUp' : 'chevronsDown'" :size="14" />
+            </button>
+          </div>
 
-    <div class="eval__main">
-      <div class="eval__list-wrap">
-        <!-- Đầu danh sách: bấm để đổi cách sắp xếp. -->
-        <div class="eval__sortbar">
-          <span class="eval__sortbar-label">Sắp xếp theo</span>
-          <button
-            v-for="option in SORT_OPTIONS"
-            :key="option.key"
-            type="button"
-            class="eval__sort-btn"
-            :class="{ 'eval__sort-btn--on': sortKey === option.key }"
-            @click="toggleSort(option.key)"
-          >
-            {{ option.label }}
-            <span v-if="sortKey === option.key" class="eval__sort-dir">
-              {{ sortDir === 'asc' ? 'tăng dần' : 'giảm dần' }}
-            </span>
+          <button v-if="filtersActive" type="button" class="board__ghost" @click="clearFilters">
+            Bỏ lọc
           </button>
         </div>
 
-        <p v-if="loading" class="eval__state">Đang tải…</p>
-        <p v-else-if="loadError" class="eval__state eval__state--error">{{ loadError }}</p>
-        <p v-else-if="filteredRows.length === 0" class="eval__state">
+        <p v-if="loading" class="board__state">Đang tải…</p>
+        <p v-else-if="loadError" class="board__state board__state--error">{{ loadError }}</p>
+        <p v-else-if="filteredRows.length === 0" class="board__state">
           <span v-if="filtersActive">Không có nhân sự nào khớp với điều kiện đang lọc.</span>
           <span v-else>Kỳ này chưa có nhân sự nào để tổng hợp.</span>
         </p>
 
-        <ul v-else class="eval__list">
+        <ul v-else class="board__list hide-scrollbar" role="list">
           <li
             v-for="row in filteredRows"
             :key="row.user_id"
-            class="eval__person"
-            :class="{ 'eval__person--on': selectedId === row.user_id }"
+            class="board__person"
+            :class="{ 'board__person--on': selectedId === row.user_id }"
           >
-            <button type="button" class="eval__person-btn" @click="select(row)">
-              <span class="eval__person-main">
-                <span class="eval__person-name">{{ row.user_name }}</span>
-                <span class="eval__person-sub">
-                  <span v-if="totalTasksOf(row) === 0">Không có việc nào trong kỳ</span>
+            <button type="button" class="board__person-btn" @click="select(row)">
+              <span class="board__person-rank">{{ padRank(row) }}</span>
+
+              <span class="board__person-main">
+                <span class="board__person-name">{{ row.user_name }}</span>
+                <span class="board__person-meta">
+                  <span v-if="totalTasksOf(row) === 0">Không có việc</span>
                   <template v-else>
-                    {{ doneOf(row) }}/{{ totalTasksOf(row) }} việc hoàn thành
-                    <span v-if="overdueOf(row) > 0" class="eval__flag">
-                      <span class="eval__dot eval__dot--danger" />
-                      {{ overdueOf(row) }} việc quá hạn
-                    </span>
-                    <span v-else-if="onTimeOf(row) > 0" class="eval__flag">
-                      <span class="eval__dot eval__dot--ok" />
-                      đúng hạn cả kỳ
+                    {{ doneOf(row) }}/{{ totalTasksOf(row) }} việc
+                    <span v-if="overdueOf(row) > 0" class="board__flag">
+                      <span class="board__mark board__mark--cut" />
+                      {{ overdueOf(row) }} quá hạn
                     </span>
                   </template>
                 </span>
-                <span class="eval__meter" aria-hidden="true">
-                  <span class="eval__meter-fill" :style="{ width: `${donePercent(row)}%` }" />
-                </span>
               </span>
 
-              <span class="eval__person-events">
-                <span class="eval__person-cap">Ghi nhận</span>
-                <span class="eval__person-events-value">
-                  <span v-if="row.bonus" class="eval__plus">+{{ formatNumber(row.bonus) }}</span>
-                  <span v-if="row.penalty" class="eval__minus">
-                    -{{ formatNumber(row.penalty) }}
-                  </span>
-                  <span v-if="!row.bonus && !row.penalty" class="eval__muted">chưa có</span>
-                </span>
-              </span>
-
-              <span class="eval__person-score">
-                <span class="eval__person-cap">Điểm cuối</span>
-                <span class="eval__person-score-value">{{ formatNumber(row.final_score) }}</span>
-                <span class="eval__meter eval__meter--score" aria-hidden="true">
-                  <span
-                    class="eval__meter-fill eval__meter-fill--score"
-                    :style="{ width: `${scorePercent(row)}%` }"
-                  />
-                </span>
-              </span>
-
-              <span class="eval__person-rank">
-                <span class="eval__person-cap">Xếp loại</span>
-                <span class="eval__person-rank-value">
+              <span class="board__person-score">
+                <span class="board__person-score-value">{{ formatNumber(row.final_score) }}</span>
+                <span class="board__person-class">
                   {{ row.classification_label ?? 'Chưa xếp loại' }}
                 </span>
               </span>
-
-              <AppIcon name="chevronRight" :size="16" class="eval__person-caret" />
             </button>
           </li>
         </ul>
       </div>
 
-      <!-- Ngăn chi tiết — chỉ hiện khi đã chọn một người (quy tắc 14). -->
-      <aside v-if="selected" class="eval__detail">
-        <header class="eval__detail-head">
-          <div class="eval__detail-title-wrap">
-            <h2 class="eval__detail-title">{{ selected.user_name }}</h2>
-            <p class="eval__detail-sub">
-              Điểm cuối {{ formatNumber(selected.final_score) }} ·
-              {{ selected.classification_label ?? 'Chưa xếp loại' }}
-            </p>
+      <section v-if="!selected" class="board__intro" aria-label="Tổng quan phòng ban">
+        <div v-if="summary && !loadError" class="board__intro-body">
+          <div class="board__kpis">
+            <div class="board__kpi">
+              <span class="board__kpi-label">Nhân sự</span>
+              <span class="board__kpi-value">{{ summary.total_people }}</span>
+            </div>
+            <div class="board__kpi">
+              <span class="board__kpi-label">Trung bình phòng</span>
+              <span class="board__kpi-value">{{ formatNumber(summary.average_score) }}</span>
+            </div>
+            <div class="board__kpi">
+              <span class="board__kpi-label">Cao nhất</span>
+              <span class="board__kpi-value">{{ formatNumber(summary.highest_score) }}</span>
+            </div>
+            <div class="board__kpi">
+              <span class="board__kpi-label">Thấp nhất</span>
+              <span class="board__kpi-value">{{ formatNumber(summary.lowest_score) }}</span>
+            </div>
           </div>
 
-          <div class="eval__detail-nav">
+          <div v-if="distribution.length" class="board__ranks">
+            <button
+              v-for="(item, index) in distribution"
+              :key="item.code ?? index"
+              type="button"
+              class="board__rank"
+              :class="{ 'board__rank--on': rankFilter === item.code }"
+              @click="toggleRankFilter(item.code)"
+            >
+              <span class="board__mark" :class="`board__mark--tone-${index % 5}`" />
+              <span class="board__rank-label">{{ item.label }}</span>
+              <span class="board__rank-count">{{ item.count }}</span>
+              <span class="board__rank-pct">{{ distributionPercent(item) }}%</span>
+            </button>
+          </div>
+
+          <p class="board__intro-hint">
+            Chọn một nhân sự ở danh sách bên trái để xem công việc trong kỳ và chấm điểm.
+          </p>
+        </div>
+
+        <p v-else-if="!loading" class="board__state">
+          Chọn một nhân sự ở danh sách bên trái để bắt đầu chấm điểm.
+        </p>
+      </section>
+
+      <aside v-else class="board__inspect">
+        <header class="board__inspect-head">
+          <div class="board__inspect-lead">
+            <p class="board__inspect-kicker">Hạng {{ rankOf(selected) }}/{{ rows.length }}</p>
+            <h2 class="board__inspect-title">{{ selected.user_name }}</h2>
+            <p class="board__inspect-score">
+              {{ formatNumber(selected.final_score) }}
+              <span>{{ selected.classification_label ?? 'Chưa xếp loại' }}</span>
+            </p>
+          </div>
+          <div class="board__inspect-nav">
             <button
               type="button"
-              class="eval__icon-btn"
+              class="board__square board__square--sm"
               aria-label="Nhân sự trước đó"
               :disabled="!stepInfo.hasPrev"
               @click="step(-1)"
             >
               <AppIcon name="chevronLeft" :size="16" />
             </button>
-            <span class="eval__detail-pos">
-              {{ stepInfo.index + 1 }}/{{ stepInfo.total }}
-            </span>
+            <span class="board__inspect-pos">{{ stepInfo.index + 1 }}/{{ stepInfo.total }}</span>
             <button
               type="button"
-              class="eval__icon-btn"
+              class="board__square board__square--sm"
               aria-label="Nhân sự kế tiếp"
               :disabled="!stepInfo.hasNext"
               @click="step(1)"
@@ -780,7 +956,7 @@ watch(activeQuickKey, (value) => {
             </button>
             <button
               type="button"
-              class="eval__icon-btn"
+              class="board__square board__square--sm"
               aria-label="Đóng phần chi tiết"
               @click="closeDetail"
             >
@@ -789,38 +965,76 @@ watch(activeQuickKey, (value) => {
           </div>
         </header>
 
-        <!-- Điểm cuối được ghép từ đâu — nhìn là hiểu, không phải đoán. -->
-        <dl class="eval__breakdown">
-          <div class="eval__breakdown-row">
-            <dt class="eval__breakdown-key">Điểm khởi đầu</dt>
-            <dd class="eval__breakdown-val">{{ formatNumber(selected.start_score) }}</dd>
+        <div class="board__inspect-lead-card">
+          <div class="board__stack" aria-hidden="true">
+            <span
+              v-for="part in compositionParts(selected)"
+              :key="part.key"
+              class="board__stack-seg"
+              :class="`board__stack-seg--${part.tone}`"
+              :style="{ width: `${part.width}%` }"
+            />
           </div>
-          <div class="eval__breakdown-row">
-            <dt class="eval__breakdown-key">Từ công việc</dt>
-            <dd class="eval__breakdown-val">{{ signedText(selected.task_adjustment) }}</dd>
+          <div class="board__row">
+            <span class="board__row-label">Điểm khởi đầu</span>
+            <span class="board__row-value">{{ formatNumber(selected.start_score) }}</span>
           </div>
-          <div class="eval__breakdown-row">
-            <dt class="eval__breakdown-key">Điểm cộng</dt>
-            <dd class="eval__breakdown-val eval__plus">{{ signedText(selected.bonus) }}</dd>
+          <div class="board__row">
+            <span class="board__row-label">Từ công việc</span>
+            <span class="board__row-value">{{ signedText(selected.task_adjustment) }}</span>
           </div>
-          <div class="eval__breakdown-row">
-            <dt class="eval__breakdown-key">Điểm trừ</dt>
-            <dd class="eval__breakdown-val eval__minus">
+          <div class="board__row">
+            <span class="board__row-label">Điểm cộng</span>
+            <span class="board__row-value board__plus">{{ signedText(selected.bonus) }}</span>
+          </div>
+          <div class="board__row">
+            <span class="board__row-label">Điểm trừ</span>
+            <span class="board__row-value board__minus">
               {{ selected.penalty ? `-${formatNumber(selected.penalty)}` : '0' }}
-            </dd>
+            </span>
           </div>
-          <div class="eval__breakdown-row eval__breakdown-row--total">
-            <dt class="eval__breakdown-key">Điểm cuối</dt>
-            <dd class="eval__breakdown-val">{{ formatNumber(selected.final_score) }}</dd>
+          <div class="board__row">
+            <span class="board__row-label">Điểm cuối</span>
+            <span class="board__row-value">{{ formatNumber(selected.final_score) }}</span>
           </div>
-        </dl>
+          <div class="board__row">
+            <span class="board__row-label">So với trung bình phòng</span>
+            <span
+              class="board__row-value"
+              :class="deltaVsAvg(selected) >= 0 ? 'board__plus' : 'board__minus'"
+            >
+              {{ signedText(deltaVsAvg(selected)) }}
+            </span>
+          </div>
+          <div class="board__row board__row--total">
+            <span class="board__row-label">Công việc hoàn thành</span>
+            <span class="board__row-value">
+              {{ doneOf(selected) }}/{{ totalTasksOf(selected) }} ({{ donePercent(selected) }}%)
+            </span>
+          </div>
+          <div class="board__meter" aria-hidden="true">
+            <span class="board__meter-fill" :style="{ width: `${donePercent(selected)}%` }" />
+          </div>
+        </div>
 
-        <div class="eval__tabs" role="tablist">
+        <div v-if="selectedCriteria.length" class="board__criteria">
+          <div v-for="item in selectedCriteria" :key="item.criterion_id" class="board__row">
+            <span class="board__row-label">{{ item.criterion_name }}</span>
+            <span
+              class="board__row-value"
+              :class="item.score >= 0 ? 'board__plus' : 'board__minus'"
+            >
+              {{ signedText(item.score) }} · {{ item.count }} lần
+            </span>
+          </div>
+        </div>
+
+        <div class="board__tabs" role="tablist">
           <button
             type="button"
             role="tab"
-            class="eval__tab"
-            :class="{ 'eval__tab--on': detailTab === 'tasks' }"
+            class="board__tab"
+            :class="{ 'board__tab--on': detailTab === 'tasks' }"
             :aria-selected="detailTab === 'tasks'"
             @click="detailTab = 'tasks'"
           >
@@ -829,8 +1043,8 @@ watch(activeQuickKey, (value) => {
           <button
             type="button"
             role="tab"
-            class="eval__tab"
-            :class="{ 'eval__tab--on': detailTab === 'events' }"
+            class="board__tab"
+            :class="{ 'board__tab--on': detailTab === 'events' }"
             :aria-selected="detailTab === 'events'"
             @click="detailTab = 'events'"
           >
@@ -839,8 +1053,8 @@ watch(activeQuickKey, (value) => {
           <button
             type="button"
             role="tab"
-            class="eval__tab"
-            :class="{ 'eval__tab--on': detailTab === 'record' }"
+            class="board__tab"
+            :class="{ 'board__tab--on': detailTab === 'record' }"
             :aria-selected="detailTab === 'record'"
             @click="detailTab = 'record'"
           >
@@ -848,85 +1062,114 @@ watch(activeQuickKey, (value) => {
           </button>
         </div>
 
-        <div class="eval__detail-body hide-scrollbar">
-          <!-- Công việc trong kỳ -->
+        <div class="board__inspect-body hide-scrollbar">
           <template v-if="detailTab === 'tasks'">
-            <p v-if="detailTasks.length === 0" class="eval__state eval__state--sm">
-              Nhân sự này không có công việc nào thuộc kỳ đang xem.
+            <div v-if="detailTasks.length" class="board__subfocus">
+              <button
+                type="button"
+                class="board__text-btn"
+                :class="{ 'board__text-btn--on': taskFocus === 'all' }"
+                @click="taskFocus = 'all'"
+              >
+                Tất cả
+                <span class="board__count">{{ taskFocusCounts.all }}</span>
+              </button>
+              <button
+                type="button"
+                class="board__text-btn"
+                :class="{ 'board__text-btn--on': taskFocus === 'overdue' }"
+                @click="taskFocus = 'overdue'"
+              >
+                Quá hạn
+                <span class="board__count">{{ taskFocusCounts.overdue }}</span>
+              </button>
+              <button
+                type="button"
+                class="board__text-btn"
+                :class="{ 'board__text-btn--on': taskFocus === 'open' }"
+                @click="taskFocus = 'open'"
+              >
+                Chưa xong
+                <span class="board__count">{{ taskFocusCounts.open }}</span>
+              </button>
+            </div>
+
+            <p v-if="visibleTasks.length === 0" class="board__state board__state--sm">
+              <span v-if="detailTasks.length === 0">
+                Nhân sự này không có công việc nào thuộc kỳ đang xem.
+              </span>
+              <span v-else>Không có công việc nào trong nhóm đang lọc.</span>
             </p>
 
-            <ul v-else class="eval__tasks">
-              <li v-for="task in detailTasks" :key="task.task_id" class="eval__task">
-                <p class="eval__task-title">{{ task.title }}</p>
-                <p class="eval__task-meta">
-                  <span class="eval__state-line">
+            <ul v-else class="board__cards">
+              <li v-for="task in visibleTasks" :key="task.task_id" class="board__card">
+                <p class="board__card-title">{{ task.title }}</p>
+                <p class="board__card-meta">
+                  <span class="board__flag">
                     <span
-                      class="eval__dot"
-                      :class="`eval__dot--${TIMELINESS_TONES[task.on_time_state]}`"
+                      class="board__mark"
+                      :class="`board__mark--${TIMELINESS_TONES[task.on_time_state]}`"
                     />
                     {{ TASK_STATUS_LABELS[task.status] ?? task.status }},
                     {{ TIMELINESS_LABELS[task.on_time_state] }}
                   </span>
-                  <span v-if="task.project_name">· {{ task.project_name }}</span>
+                  <span v-if="task.project_name">{{ task.project_name }}</span>
                 </p>
-                <p class="eval__task-meta">
-                  <span>Hạn: {{ task.end_date ? formatDate(task.end_date) : 'chưa đặt' }}</span>
-                  <span>
-                    Hoàn thành:
+                <div class="board__row">
+                  <span class="board__row-label">Hạn</span>
+                  <span class="board__row-value">
+                    {{ task.end_date ? formatDate(task.end_date) : 'chưa đặt' }}
+                  </span>
+                </div>
+                <div class="board__row">
+                  <span class="board__row-label">Hoàn thành</span>
+                  <span class="board__row-value">
                     {{ task.actual_end_date ? formatDate(task.actual_end_date) : 'chưa xong' }}
                   </span>
-                  <span>Điểm việc: {{ formatNumber(task.contribution) }}</span>
-                </p>
-                <button type="button" class="eval__link" @click="recordForTask(task)">
+                </div>
+                <div class="board__row">
+                  <span class="board__row-label">Điểm việc</span>
+                  <span class="board__row-value">{{ formatNumber(task.contribution) }}</span>
+                </div>
+                <div v-if="task.standard_score != null" class="board__row">
+                  <span class="board__row-label">Chuẩn / thực</span>
+                  <span class="board__row-value">
+                    {{ formatNumber(task.standard_score) }} / {{ formatNumber(task.actual_score) }}
+                  </span>
+                </div>
+                <button type="button" class="board__link" @click="recordForTask(task)">
                   Chấm điểm cho việc này
                 </button>
               </li>
             </ul>
           </template>
 
-          <!-- Các lần đã ghi nhận -->
           <template v-else-if="detailTab === 'events'">
-            <p v-if="detailEvents.length === 0" class="eval__state eval__state--sm">
+            <p v-if="detailEvents.length === 0" class="board__state board__state--sm">
               Chưa ghi nhận đánh giá nào cho nhân sự này trong kỳ.
             </p>
 
-            <ul v-else class="eval__events">
-              <li v-for="event in detailEvents" :key="event.event_id" class="eval__event">
-                <div class="eval__event-head">
-                  <span class="eval__event-name">{{ event.criterion_name }}</span>
+            <ul v-else class="board__cards">
+              <li v-for="event in detailEvents" :key="event.event_id" class="board__card">
+                <div class="board__event-head">
+                  <span class="board__card-title">{{ event.criterion_name }}</span>
                   <span
-                    class="eval__event-score"
-                    :class="event.score >= 0 ? 'eval__plus' : 'eval__minus'"
+                    class="board__event-score"
+                    :class="event.score >= 0 ? 'board__plus' : 'board__minus'"
                   >
                     {{ signedText(event.score) }}
                   </span>
                 </div>
-                <p class="eval__event-meta">
+                <p class="board__card-meta">
                   {{ event.level_label }} · {{ formatDate(event.occurred_at) }}
                   <span v-if="taskTitleOf(event.task_id)">
                     · việc: {{ taskTitleOf(event.task_id) }}
                   </span>
                 </p>
-                <p v-if="event.reason" class="eval__event-reason">{{ event.reason }}</p>
-
-                <div v-if="confirmRemoveId === event.event_id" class="eval__confirm">
-                  <span>Xoá ghi nhận này?</span>
-                  <button
-                    type="button"
-                    class="eval__link eval__link--danger"
-                    :disabled="removingId === event.event_id"
-                    @click="removeEvent(event)"
-                  >
-                    {{ removingId === event.event_id ? 'Đang xoá…' : 'Xoá' }}
-                  </button>
-                  <button type="button" class="eval__link" @click="confirmRemoveId = null">
-                    Giữ lại
-                  </button>
-                </div>
+                <p v-if="event.reason" class="board__reason">{{ event.reason }}</p>
                 <button
-                  v-else
                   type="button"
-                  class="eval__link eval__link--danger"
+                  class="board__link board__link--danger"
                   @click="confirmRemoveId = event.event_id"
                 >
                   Xoá ghi nhận
@@ -935,103 +1178,122 @@ watch(activeQuickKey, (value) => {
             </ul>
           </template>
 
-          <!-- Chấm điểm: một form duy nhất, đọc từ trên xuống là xong -->
           <template v-else>
-            <p v-if="criteria.length === 0" class="eval__state eval__state--sm">
+            <p v-if="criteria.length === 0" class="board__state board__state--sm">
               Phòng ban chưa có tiêu chí cộng / trừ điểm nào đang bật, nên chưa chấm được.
             </p>
 
-            <form v-else class="eval__form" @submit.prevent="record">
-              <div class="eval__field">
-                <label class="eval__label" for="eval-criterion">Tiêu chí đánh giá</label>
-                <select
-                  id="eval-criterion"
-                  ref="criterionField"
-                  v-model="draft.criterion_id"
-                  class="eval__input"
-                  :disabled="saving"
-                  @change="onCriterionChange"
-                >
-                  <option value="">Chọn tiêu chí</option>
-                  <option v-for="item in criteria" :key="item.id" :value="item.id">
-                    {{ item.name }}
-                  </option>
-                </select>
+            <form v-else class="board__form" @submit.prevent="record">
+              <div class="board__form-grid">
+                <div class="board__field">
+                  <label class="board__label" for="board-criterion">Tiêu chí đánh giá</label>
+                  <select
+                    id="board-criterion"
+                    ref="criterionField"
+                    v-model="draft.criterion_id"
+                    class="board__input"
+                    :disabled="saving"
+                    @change="onCriterionChange"
+                  >
+                    <option value="">Chọn tiêu chí</option>
+                    <template v-if="criteriaGroups.length > 1">
+                      <optgroup
+                        v-for="group in criteriaGroups"
+                        :key="group.label"
+                        :label="group.label"
+                      >
+                        <option v-for="item in group.items" :key="item.id" :value="item.id">
+                          {{ item.name }}
+                        </option>
+                      </optgroup>
+                    </template>
+                    <template v-else>
+                      <option v-for="item in criteria" :key="item.id" :value="item.id">
+                        {{ item.name }}
+                      </option>
+                    </template>
+                  </select>
+                </div>
+
+                <div class="board__field">
+                  <label class="board__label" for="board-occurred">Ngày ghi nhận</label>
+                  <input
+                    id="board-occurred"
+                    v-model="draft.occurred_at"
+                    type="date"
+                    class="board__input"
+                    :min="period?.from"
+                    :max="period?.to"
+                    :disabled="saving"
+                  />
+                </div>
+
+                <div class="board__field">
+                  <label class="board__label" for="board-task">Gắn với công việc</label>
+                  <select
+                    id="board-task"
+                    v-model="draft.task_id"
+                    class="board__input"
+                    :disabled="saving || detailTasks.length === 0"
+                  >
+                    <option value="">Không gắn công việc nào</option>
+                    <option
+                      v-for="task in detailTasks"
+                      :key="task.task_id"
+                      :value="task.task_id"
+                    >
+                      {{ task.title }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="board__field">
+                  <label class="board__label" for="board-reason">Lý do</label>
+                  <textarea
+                    id="board-reason"
+                    v-model="draft.reason"
+                    class="board__input board__textarea"
+                    rows="2"
+                    maxlength="500"
+                    :disabled="saving"
+                  />
+                </div>
               </div>
 
-              <div v-if="draftLevels.length" class="eval__field">
-                <span class="eval__label">Mức đánh giá</span>
-                <div class="eval__levels">
+              <div v-if="draftLevels.length" class="board__field">
+                <span class="board__label">Mức đánh giá</span>
+                <div class="board__levels">
                   <label
                     v-for="level in draftLevels"
                     :key="level.code"
-                    class="eval__level"
-                    :class="{ 'eval__level--on': draft.level_code === level.code }"
+                    class="board__level"
+                    :class="{ 'board__level--on': draft.level_code === level.code }"
                   >
                     <input
                       v-model="draft.level_code"
                       type="radio"
                       :value="level.code"
-                      class="eval__sr"
+                      class="board__sr"
                       :disabled="saving"
                     />
-                    <span class="eval__level-label">{{ level.label }}</span>
-                    <span
-                      class="eval__level-score"
-                      :class="level.score >= 0 ? 'eval__plus' : 'eval__minus'"
-                    >
+                    <span>{{ level.label }}</span>
+                    <span :class="level.score >= 0 ? 'board__plus' : 'board__minus'">
                       {{ signedText(level.score) }}
                     </span>
                   </label>
                 </div>
               </div>
 
-              <div class="eval__field">
-                <label class="eval__label" for="eval-task">Gắn với công việc</label>
-                <select
-                  id="eval-task"
-                  v-model="draft.task_id"
-                  class="eval__input"
-                  :disabled="saving || detailTasks.length === 0"
-                >
-                  <option value="">Không gắn công việc nào</option>
-                  <option v-for="task in detailTasks" :key="task.task_id" :value="task.task_id">
-                    {{ task.title }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="eval__field">
-                <label class="eval__label" for="eval-reason">Lý do</label>
-                <textarea
-                  id="eval-reason"
-                  v-model="draft.reason"
-                  class="eval__input eval__textarea"
-                  rows="2"
-                  maxlength="500"
-                  :disabled="saving"
-                />
-              </div>
-
-              <p v-if="draftLevel" class="eval__preview">
-                Sẽ ghi nhận <strong>{{ selectedCriterion.name }}</strong> mức
-                <strong>{{ draftLevel.label }}</strong>, thay đổi điểm
-                <strong :class="draftLevel.score >= 0 ? 'eval__plus' : 'eval__minus'">
-                  {{ signedText(draftLevel.score) }}
-                </strong>
-                cho {{ selected.user_name }}.
+              <p v-if="draftLevel" class="board__preview">
+                Sẽ ghi nhận {{ selectedCriterion.name }} mức {{ draftLevel.label }}, thay đổi điểm
+                {{ signedText(draftLevel.score) }} cho {{ selected.user_name }}.
               </p>
 
-              <div class="eval__form-actions">
-                <button type="submit" class="eval__btn" :disabled="!canRecord">
+              <div class="board__form-actions">
+                <button type="submit" class="board__submit" :disabled="!canRecord">
                   {{ saving ? 'Đang lưu…' : 'Ghi nhận đánh giá' }}
                 </button>
-                <button
-                  type="button"
-                  class="eval__ghost-btn"
-                  :disabled="saving"
-                  @click="resetDraft"
-                >
+                <button type="button" class="board__ghost" :disabled="saving" @click="resetDraft">
                   Xoá nội dung đang nhập
                 </button>
               </div>
@@ -1040,19 +1302,34 @@ watch(activeQuickKey, (value) => {
         </div>
       </aside>
     </div>
+
+    <ConfirmDialog
+      :open="Boolean(confirmRemoveId)"
+      title="Xoá ghi nhận này?"
+      description="Điểm cuối của nhân sự sẽ được tính lại ngay sau khi xoá."
+      confirm-label="Xoá ghi nhận"
+      danger
+      :loading="Boolean(removingId)"
+      @update:open="onConfirmOpen"
+      @confirm="confirmRemove"
+    />
   </section>
 </template>
 
 <style scoped>
-.eval {
+.board {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  --board-accent: var(--color-secondary);
+  --board-accent-hover: var(--color-secondary-hover);
+  --board-accent-surface: var(--color-secondary-surface);
+  --board-accent-ink: var(--color-secondary-800);
 }
 
-.eval__sr {
+.board__sr {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1063,254 +1340,348 @@ watch(activeQuickKey, (value) => {
   white-space: nowrap;
 }
 
-/* ---------- Chọn kỳ ---------- */
-
-.eval__period {
-  flex-shrink: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-}
-
-.eval__quick {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.eval__quick-btn {
+.board__header-btn {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.4375rem 0.875rem;
+  gap: var(--space-2);
+  height: 2rem;
+  padding: 0 0.75rem;
   border: none;
-  border-radius: var(--radius-full);
+  border-radius: 0;
   background: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-family-base);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 500;
   box-shadow: inset 0 0 0 1px var(--color-border);
   cursor: pointer;
 }
 
-.eval__quick-btn:hover {
+.board__header-btn:hover:not(:disabled) {
   background: var(--color-surface-muted);
 }
 
-.eval__quick-btn--on {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  box-shadow: none;
+.board__header-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-.eval__quick-btn--on:hover {
-  background: var(--color-primary-hover);
+.board__spin {
+  animation: board-spin 0.8s linear infinite;
 }
 
-.eval__period-now {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
+@keyframes board-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.eval__period-now strong {
-  color: var(--color-text);
-  font-weight: 600;
-}
-
-.eval__period-version {
-  margin-left: var(--space-3);
-}
-
-.eval__custom {
-  flex-shrink: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 14rem));
-  align-items: end;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-}
-
-.eval__custom-warn {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--color-danger);
-  font-size: 0.8125rem;
-}
-
-/* ---------- Số liệu tổng ---------- */
-
-.eval__overview {
-  flex-shrink: 0;
+.board__period {
   display: flex;
+  flex-shrink: 0;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-muted);
+  padding: var(--space-3) 0 var(--space-4);
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
-.eval__stats {
+.board__period-nav {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-5);
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
-.eval__stat {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
+.board__period-copy {
+  min-width: 0;
 }
 
-.eval__stat-label {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
-.eval__stat-value {
+.board__period-title {
+  margin: 0;
   color: var(--color-text);
-  font-size: 1.25rem;
+  font-size: 1.375rem;
   font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
-.eval__dist {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-  min-width: 16rem;
-  flex: 1;
-  max-width: 32rem;
+.board__period-range {
+  margin: 0.125rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
 }
 
-.eval__dist-bar {
-  display: flex;
-  height: 0.5rem;
-  overflow: hidden;
-  border-radius: var(--radius-full);
-  background: var(--color-border);
+.board__square {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
 }
 
-.eval__dist-seg--0 {
-  background: var(--color-secondary-500);
+.board__square:hover:not(:disabled) {
+  background: var(--color-surface-muted);
 }
 
-.eval__dist-seg--1 {
-  background: var(--color-tertiary-500);
+.board__square:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
-.eval__dist-seg--2 {
-  background: var(--color-gold-500);
+.board__square--sm {
+  width: 1.75rem;
+  height: 1.75rem;
 }
 
-.eval__dist-seg--3 {
-  background: var(--color-primary-400);
-}
-
-.eval__dist-seg--4 {
-  background: var(--color-umber-500);
-}
-
-.eval__dist-legend {
+.board__period-links,
+.board__focus,
+.board__subfocus {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem var(--space-3);
+  gap: var(--space-1) var(--space-3);
+}
+
+.board__text-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  padding: 0.25rem 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.board__text-btn:hover {
+  color: var(--color-text);
+}
+
+.board__text-btn--on {
+  color: var(--board-accent-ink);
+  box-shadow: 0 2px 0 var(--board-accent);
+}
+
+.board__count {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.board__custom {
+  display: grid;
+  flex-shrink: 0;
+  grid-template-columns: repeat(2, minmax(0, 14rem));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: 0;
+  background: var(--color-surface-muted);
+}
+
+.board__warn {
+  grid-column: 1 / -1;
   margin: 0;
-  padding: 0;
-  list-style: none;
+  color: var(--color-umber);
+  font-size: 0.8125rem;
+}
+
+.board__kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+  border-radius: 0;
+  background: var(--color-surface-muted);
+}
+
+.board__kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: var(--space-3) var(--space-4);
+  box-shadow: 1px 0 0 var(--color-border);
+}
+
+.board__kpi:last-child {
+  box-shadow: none;
+}
+
+.board__kpi-label {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.board__kpi-value {
+  color: var(--color-text);
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.board__ranks {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  border-radius: 0;
+  background: var(--color-surface-muted);
+}
+
+.board__rank {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 8rem;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.board__rank:hover {
+  background: var(--color-surface);
+}
+
+.board__rank--on {
+  background: var(--color-surface);
+  box-shadow: 0 2px 0 var(--board-accent);
+}
+
+.board__rank-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8125rem;
+}
+
+.board__rank-count {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.board__rank-pct {
   color: var(--color-text-muted);
   font-size: 0.75rem;
 }
 
-.eval__dist-legend li {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
+.board__mark {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 0;
+  background: var(--color-text-muted);
 }
 
-.eval__warn {
+.board__mark--ok {
+  background: var(--color-success);
+}
+
+.board__mark--cut,
+.board__mark--danger {
+  background: var(--color-umber);
+}
+
+.board__mark--muted {
+  background: var(--color-text-muted);
+}
+
+.board__mark--tone-0 {
+  background: var(--color-secondary-500);
+}
+
+.board__mark--tone-1 {
+  background: var(--color-tertiary-500);
+}
+
+.board__mark--tone-2 {
+  background: var(--color-gold-500);
+}
+
+.board__mark--tone-3 {
+  background: var(--color-info);
+}
+
+.board__mark--tone-4 {
+  background: var(--color-umber-500);
+}
+
+.board__note {
   flex-shrink: 0;
   margin: var(--space-2) 0 0;
   color: var(--color-warning-tint-fg);
   font-size: 0.8125rem;
 }
 
-/* ---------- Chấm màu trạng thái (quy tắc 14 — không badge) ---------- */
-
-.eval__dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  flex-shrink: 0;
-  border-radius: var(--radius-full);
-  background: var(--color-text-muted);
-}
-
-.eval__dot--ok {
-  background: var(--color-success);
-}
-
-.eval__dot--danger {
-  background: var(--color-danger);
-}
-
-.eval__dot--muted {
-  background: var(--color-text-muted);
-}
-
-.eval__dot--rank-0 {
-  background: var(--color-secondary-500);
-}
-
-.eval__dot--rank-1 {
-  background: var(--color-tertiary-500);
-}
-
-.eval__dot--rank-2 {
-  background: var(--color-gold-500);
-}
-
-.eval__dot--rank-3 {
-  background: var(--color-primary-400);
-}
-
-.eval__dot--rank-4 {
-  background: var(--color-umber-500);
-}
-
-/* ---------- Thanh lọc ---------- */
-
-.eval__toolbar {
-  flex-shrink: 0;
+.board__field {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
 }
 
-.eval__focus {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+.board__field--search {
+  width: 14rem;
+  max-width: 100%;
 }
 
-.eval__focus-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
+.board__label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.board__input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+}
+
+.board__input:focus-visible {
+  outline: 2px solid var(--board-accent);
+  outline-offset: 1px;
+}
+
+.board__input:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.board__textarea {
+  resize: vertical;
+}
+
+.board__ghost {
+  padding: 0.5rem 0.75rem;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: 0;
   background: transparent;
   color: var(--color-text-muted);
   font-family: var(--font-family-base);
@@ -1319,148 +1690,91 @@ watch(activeQuickKey, (value) => {
   cursor: pointer;
 }
 
-.eval__focus-btn:hover {
+.board__ghost:hover:not(:disabled) {
   background: var(--color-surface-muted);
   color: var(--color-text);
 }
 
-.eval__focus-btn--on {
-  background: var(--color-primary-surface);
-  color: var(--color-primary-900);
+.board__ghost:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
-.eval__focus-count {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.eval__focus-btn--on .eval__focus-count {
-  color: var(--color-primary-800);
-}
-
-.eval__toolbar-right {
+.board__workspace {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.eval__search {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.eval__search-icon {
-  position: absolute;
-  left: 0.625rem;
-  color: var(--color-text-muted);
-  pointer-events: none;
-}
-
-.eval__search-input {
-  width: 14rem;
-  max-width: 100%;
-  padding: 0.4375rem 0.75rem 0.4375rem 2rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-family-base);
-  font-size: 0.8125rem;
-}
-
-.eval__search-input:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 1px;
-}
-
-/* ---------- Khu chính: danh sách + ngăn chi tiết ---------- */
-
-.eval__main {
   flex: 1;
   min-height: 0;
-  display: flex;
-  gap: var(--space-4);
   overflow: hidden;
 }
 
-.eval__list-wrap {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
+/* Danh sách nhân sự — cột hẹp cố định, chỉ để chọn người. Mọi thứ cần đọc kỹ
+   nằm ở khu chấm điểm bên phải. */
+.board__roster {
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.eval__sortbar {
   flex-shrink: 0;
+  flex-direction: column;
+  width: 22rem;
+  min-height: 0;
+  overflow: hidden;
+  box-shadow: inset -1px 0 0 var(--color-border);
+}
+
+.board__roster-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-shrink: 0;
+  flex-direction: column;
   gap: var(--space-2);
-  padding-bottom: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3);
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.eval__sortbar-label {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
+.board__roster-sort {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.eval__sort-btn {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  font-family: var(--font-family-base);
-  font-size: 0.8125rem;
-  cursor: pointer;
+.board__roster-sort .board__label {
+  flex-shrink: 0;
 }
 
-.eval__sort-btn:hover {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
+.board__roster-sort .board__input {
+  flex: 1;
+  min-width: 0;
 }
 
-.eval__sort-btn--on {
-  color: var(--color-primary-900);
-  font-weight: 600;
-  box-shadow: 0 2px 0 var(--color-primary);
-}
-
-.eval__sort-dir {
-  color: var(--color-text-muted);
-  font-size: 0.6875rem;
-  font-weight: 400;
-}
-
-.eval__list {
+.board__list {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
   margin: 0;
   padding: 0;
+  overflow-y: auto;
   list-style: none;
 }
 
-.eval__person {
+.board__person {
+  position: relative;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.eval__person-btn {
+.board__person--on::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--board-accent);
+}
+
+.board__person-btn {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 7rem 8rem 9rem 1.25rem;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   width: 100%;
-  padding: var(--space-3) var(--space-2);
+  padding: var(--space-3);
   border: none;
   background: transparent;
   font-family: var(--font-family-base);
@@ -1468,22 +1782,29 @@ watch(activeQuickKey, (value) => {
   cursor: pointer;
 }
 
-.eval__person-btn:hover {
+.board__person-btn:hover {
   background: var(--color-surface-muted);
 }
 
-.eval__person--on .eval__person-btn {
-  background: var(--color-primary-surface);
+.board__person--on .board__person-btn {
+  background: var(--board-accent-surface);
 }
 
-.eval__person-main {
+.board__person-rank {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.board__person-main {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   min-width: 0;
 }
 
-.eval__person-name {
+.board__person-name {
   overflow: hidden;
   color: var(--color-text);
   font-size: 0.875rem;
@@ -1492,247 +1813,285 @@ watch(activeQuickKey, (value) => {
   white-space: nowrap;
 }
 
-.eval__person-sub {
+.board__person-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.375rem var(--space-2);
   color: var(--color-text-muted);
   font-size: 0.75rem;
 }
 
-.eval__flag {
+.board__flag {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.375rem;
 }
 
-.eval__meter {
+.board__meter {
   display: block;
   width: 100%;
-  max-width: 12rem;
   height: 0.25rem;
+  margin-top: var(--space-2);
   overflow: hidden;
-  border-radius: var(--radius-full);
+  border-radius: 0;
   background: var(--color-border);
 }
 
-.eval__meter-fill {
+.board__meter-fill {
   display: block;
   height: 100%;
-  border-radius: var(--radius-full);
-  background: var(--color-secondary-500);
+  border-radius: 0;
+  background: var(--board-accent);
 }
 
-.eval__meter--score {
-  max-width: 100%;
-}
-
-.eval__meter-fill--score {
-  background: var(--color-primary);
-}
-
-.eval__person-cap {
-  display: block;
-  color: var(--color-text-muted);
-  font-size: 0.6875rem;
-}
-
-.eval__person-events,
-.eval__person-score,
-.eval__person-rank {
+.board__person-score {
   display: flex;
   flex-direction: column;
-  gap: 0.1875rem;
+  gap: 0.125rem;
   min-width: 0;
+  text-align: right;
 }
 
-.eval__person-events-value {
-  display: flex;
-  gap: 0.375rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.eval__person-score-value {
+.board__person-score-value {
   color: var(--color-text);
-  font-size: 1.0625rem;
+  font-size: 1.125rem;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
   line-height: 1.1;
 }
 
-.eval__person-rank-value {
+.board__person-class {
   overflow: hidden;
-  color: var(--color-text);
-  font-size: 0.8125rem;
-  text-overflow: ellipsis;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 
-.eval__person-caret {
-  color: var(--color-text-muted);
-}
-
-.eval__plus {
+.board__plus {
   color: var(--color-success);
 }
 
-.eval__minus {
-  color: var(--color-danger);
+.board__minus {
+  color: var(--color-umber);
 }
 
-.eval__muted {
-  color: var(--color-text-muted);
-  font-weight: 400;
-}
-
-.eval__state {
+.board__state {
   margin: var(--space-6) 0;
   color: var(--color-text-muted);
   font-size: 0.875rem;
   text-align: center;
 }
 
-.eval__state--sm {
+.board__state--sm {
   margin: var(--space-4) 0;
   text-align: left;
 }
 
-.eval__state--error {
-  color: var(--color-danger);
+.board__state--error {
+  color: var(--color-umber);
 }
 
-/* ---------- Ngăn chi tiết ---------- */
-
-.eval__detail {
-  flex-shrink: 0;
-  width: 28rem;
+/* Khu chấm điểm — vùng làm việc chính, chiếm hết chỗ còn lại sau danh sách.
+   Chỉ hiện khi đã chọn một nhân sự. */
+.board__inspect {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  border-radius: 0;
+  background: var(--color-surface);
+}
+
+/* Chưa chọn ai — chỗ này hiện số tổng quan của cả phòng ban. */
+.board__intro {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-5);
+  overflow-y: auto;
+}
+
+.board__intro-body {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  gap: var(--space-4);
 }
 
-.eval__detail-head {
-  flex-shrink: 0;
+.board__intro-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.board__inspect-head {
   display: flex;
+  flex-shrink: 0;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-4);
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.eval__detail-title-wrap {
+.board__inspect-lead {
   min-width: 0;
 }
 
-.eval__detail-title {
+.board__inspect-kicker {
   margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.board__inspect-title {
+  margin: 0.125rem 0 0;
   overflow: hidden;
   color: var(--color-text);
-  font-size: 1rem;
+  font-size: 1.0625rem;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.eval__detail-sub {
-  margin: 0.125rem 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
+.board__inspect-score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0;
+  color: var(--color-text);
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
 }
 
-.eval__detail-nav {
+.board__inspect-score span {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.board__inspect-nav {
   display: flex;
   flex-shrink: 0;
   align-items: center;
   gap: 0.125rem;
 }
 
-.eval__detail-pos {
+.board__inspect-pos {
   color: var(--color-text-muted);
   font-size: 0.75rem;
 }
 
-.eval__icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.eval__icon-btn:hover:not(:disabled) {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-}
-
-.eval__icon-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.eval__breakdown {
+.board__inspect-lead-card,
+.board__criteria {
+  position: relative;
   flex-shrink: 0;
-  margin: 0;
-  padding: var(--space-2) var(--space-4);
+  margin: var(--space-3) var(--space-4) 0;
+  padding: var(--space-3);
+  padding-left: calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: 0;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
-.eval__breakdown-row {
+.board__inspect-lead-card::before,
+.board__criteria::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--board-accent);
+}
+
+.board__stack {
   display: flex;
-  align-items: center;
+  height: 0.375rem;
+  margin-bottom: var(--space-2);
+  overflow: hidden;
+  background: var(--color-border);
+}
+
+.board__stack-seg {
+  display: block;
+  height: 100%;
+}
+
+.board__stack-seg--gold {
+  background: var(--color-gold-500);
+}
+
+.board__stack-seg--teal {
+  background: var(--color-secondary-500);
+}
+
+.board__stack-seg--ok {
+  background: var(--color-success);
+}
+
+.board__stack-seg--cut {
+  background: var(--color-umber);
+}
+
+.board__row {
+  display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
   padding: 0.375rem 0;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.eval__breakdown-row--total {
+.board__row--total {
   box-shadow: none;
-  font-weight: 600;
 }
 
-.eval__breakdown-key {
-  margin: 0;
+.board__row-label {
+  flex-shrink: 0;
   color: var(--color-text-muted);
   font-size: 0.8125rem;
 }
 
-.eval__breakdown-val {
-  margin: 0;
+.board__row-label::after {
+  content: ':';
+}
+
+.board__row-value {
   color: var(--color-text);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-style: italic;
+  font-weight: 400;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
-.eval__breakdown-row--total .eval__breakdown-key {
-  color: var(--color-text);
-}
-
-.eval__breakdown-row--total .eval__breakdown-val {
-  font-size: 1.125rem;
-}
-
-.eval__tabs {
-  flex-shrink: 0;
+.board__tabs {
   display: flex;
-  gap: var(--space-1);
+  flex-shrink: 0;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
   padding: 0 var(--space-4);
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.eval__tab {
-  padding: 0.5rem 0.625rem;
+.board__tab {
+  padding: 0.5rem 0;
   border: none;
   background: transparent;
   color: var(--color-text-muted);
@@ -1742,27 +2101,23 @@ watch(activeQuickKey, (value) => {
   cursor: pointer;
 }
 
-.eval__tab:hover {
+.board__tab:hover {
   color: var(--color-text);
 }
 
-.eval__tab--on {
-  color: var(--color-primary-900);
-  font-weight: 600;
-  box-shadow: 0 -2px 0 var(--color-primary) inset;
+.board__tab--on {
+  color: var(--board-accent-ink);
+  box-shadow: 0 2px 0 var(--board-accent);
 }
 
-.eval__detail-body {
+.board__inspect-body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
   padding: var(--space-3) var(--space-4) var(--space-4);
+  overflow-y: auto;
 }
 
-/* ---------- Công việc ---------- */
-
-.eval__tasks,
-.eval__events {
+.board__cards {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1771,17 +2126,16 @@ watch(activeQuickKey, (value) => {
   list-style: none;
 }
 
-.eval__task,
-.eval__event {
+.board__card {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
+  gap: 0.125rem;
+  padding: var(--space-3);
+  border-radius: 0;
   background: var(--color-surface-muted);
 }
 
-.eval__task-title {
+.board__card-title {
   margin: 0;
   color: var(--color-text);
   font-size: 0.8125rem;
@@ -1789,316 +2143,207 @@ watch(activeQuickKey, (value) => {
   word-break: break-word;
 }
 
-.eval__task-meta {
+.board__card-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem var(--space-2);
-  margin: 0;
+  margin: 0 0 0.25rem;
   color: var(--color-text-muted);
   font-size: 0.75rem;
 }
 
-.eval__state-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
-.eval__link {
-  align-self: flex-start;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--color-primary);
-  font-family: var(--font-family-base);
-  font-size: 0.75rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.eval__link:hover {
-  text-decoration: underline;
-}
-
-.eval__link--danger {
-  color: var(--color-danger);
-}
-
-.eval__link:disabled {
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-}
-
-/* ---------- Ghi nhận đã có ---------- */
-
-.eval__event-head {
+.board__event-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: var(--space-2);
 }
 
-.eval__event-name {
-  color: var(--color-text);
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.eval__event-score {
+.board__event-score {
   font-size: 0.875rem;
   font-weight: 600;
 }
 
-.eval__event-meta {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
-.eval__event-reason {
+.board__reason {
   margin: 0;
   color: var(--color-text);
   font-size: 0.75rem;
   font-style: italic;
 }
 
-.eval__confirm {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--color-text);
+.board__link {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--board-accent);
+  font-family: var(--font-family-base);
   font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
 }
 
-/* ---------- Form chấm điểm ---------- */
+.board__link:hover {
+  text-decoration: underline;
+}
 
-.eval__form {
+.board__link--danger {
+  color: var(--color-umber);
+}
+
+.board__form {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
-.eval__field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-width: 0;
+.board__form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
 }
 
-.eval__label {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.eval__input {
-  width: 100%;
-  min-width: 0;
-  padding: 0.5rem 0.625rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-family-base);
-  font-size: 0.8125rem;
-}
-
-.eval__input:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 1px;
-}
-
-.eval__input:disabled {
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-}
-
-.eval__textarea {
-  resize: vertical;
-}
-
-.eval__levels {
+.board__levels {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.eval__level {
+.board__level {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: 0.4375rem 0.625rem;
-  border-radius: var(--radius-md);
+  padding: 0.5rem 0.625rem;
+  border-radius: 0;
   background: var(--color-surface);
   box-shadow: inset 0 0 0 1px var(--color-border);
   cursor: pointer;
 }
 
-.eval__level:hover {
+.board__level:hover {
   background: var(--color-surface-muted);
 }
 
-.eval__level--on {
-  background: var(--color-primary-surface);
-  box-shadow: inset 0 0 0 2px var(--color-primary);
+.board__level--on {
+  background: var(--board-accent-surface);
+  box-shadow: inset 0 0 0 2px var(--board-accent);
 }
 
-.eval__level-label {
-  color: var(--color-text);
-  font-size: 0.8125rem;
-}
-
-.eval__level-score {
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.eval__preview {
+.board__preview {
   margin: 0;
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   background: var(--color-surface-muted);
-  color: var(--color-text-muted);
+  color: var(--color-text);
   font-size: 0.75rem;
   line-height: 1.5;
 }
 
-.eval__preview strong {
-  color: var(--color-text);
-}
-
-.eval__form-actions {
+.board__form-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
 }
 
-.eval__btn {
+.board__submit {
   padding: 0.5rem 1rem;
   border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  border-radius: 0;
+  background: var(--board-accent);
+  color: var(--color-on-secondary);
   font-family: var(--font-family-base);
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
 }
 
-.eval__btn:hover:not(:disabled) {
-  background: var(--color-primary-hover);
+.board__submit:hover:not(:disabled) {
+  background: var(--board-accent-hover);
 }
 
-.eval__btn:disabled {
+.board__submit:disabled {
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
   cursor: not-allowed;
 }
-
-.eval__ghost-btn {
-  padding: 0.5rem 0.75rem;
-  border: none;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text-muted);
-  font-family: var(--font-family-base);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.eval__ghost-btn:hover:not(:disabled) {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-}
-
-.eval__ghost-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-/* ---------- Responsive ---------- */
 
 @media (max-width: 1280px) {
-  .eval__detail {
-    width: 24rem;
+  .board__roster {
+    width: 18rem;
   }
 
-  .eval__person-btn {
-    grid-template-columns: minmax(0, 1fr) 6rem 7rem 1.25rem;
+  .board__kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .eval__person-rank {
-    display: none;
+  .board__kpi:nth-child(2) {
+    box-shadow: none;
   }
 }
 
+/* Hẹp hơn nữa thì không đủ chỗ cho hai cột — khu chấm điểm phủ lên danh
+   sách, đóng lại là quay về danh sách. */
 @media (max-width: 900px) {
-  /* Hết chỗ cho hai cột — ngăn chi tiết chiếm cả khung, danh sách nhường chỗ. */
-  .eval__main {
+  .board__workspace {
     position: relative;
   }
 
-  .eval__detail {
+  .board__roster {
+    width: 100%;
+    box-shadow: none;
+  }
+
+  .board__inspect {
     position: absolute;
     inset: 0;
-    width: auto;
+    background: var(--color-surface);
+  }
+
+  .board__intro {
+    display: none;
   }
 }
 
 @media (max-width: 768px) {
-  .eval__overview {
+  .board__period {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .eval__stats {
-    gap: var(--space-4);
-  }
-
-  .eval__dist {
-    max-width: none;
-  }
-
-  .eval__person-btn {
-    grid-template-columns: minmax(0, 1fr) 6rem 1.25rem;
-  }
-
-  .eval__person-events {
-    display: none;
-  }
-
-  .eval__custom {
+  .board__custom,
+  .board__form-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 480px) {
-  .eval__toolbar,
-  .eval__period {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .eval__search-input {
+  .board__field--search {
     width: 100%;
   }
 
-  .eval__person-btn {
-    grid-template-columns: minmax(0, 1fr) 5rem;
-    gap: var(--space-2);
+  .board__kpis {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
-  .eval__person-caret {
-    display: none;
-  }
-
-  .eval__stat-value {
+  .board__period-title {
     font-size: 1.125rem;
+  }
+
+  .board__person-btn {
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+  }
+
+  .board__person-score-value {
+    font-size: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board__spin {
+    animation: none;
   }
 }
 </style>

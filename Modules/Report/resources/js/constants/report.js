@@ -7,9 +7,65 @@
  * kéo cột xong tải lại trang là mất hết.
  */
 
-export const REPORT_TYPE_LABELS = {
-  personnel_evaluation: 'Đánh giá nhân sự',
-};
+/**
+ * Sáu loại báo cáo của hệ thống.
+ *
+ * `available: false` = đã có tên và mô tả để người dùng biết sắp có gì, nhưng
+ * chưa dựng phần tính số liệu — trang danh sách vẫn liệt kê, chỉ không cho
+ * bấm tạo. Đồng bộ thủ công với `Report::TYPES` / `Report::TYPES_COMING_SOON`
+ * ở backend; backend mới là nơi chặn thật, đây chỉ là phần hiển thị.
+ */
+export const REPORT_TYPES = [
+  {
+    key: 'personnel_evaluation',
+    label: 'Đánh giá nhân sự',
+    description:
+      'Điểm của từng nhân sự trong kỳ: điểm khởi đầu, điểm từ công việc, điểm cộng trừ và xếp loại.',
+    icon: 'clipboardCheck',
+    routeName: 'manager.reports.personnel-evaluation.create',
+    available: true,
+  },
+  {
+    key: 'department_work',
+    label: 'Báo cáo công việc phòng ban',
+    description:
+      'Toàn bộ công việc của phòng ban trong kỳ: số lượng, tiến độ, đúng hạn và quá hạn.',
+    icon: 'listChecks',
+    available: false,
+  },
+  {
+    key: 'personal_work',
+    label: 'Báo cáo công việc cá nhân',
+    description: 'Công việc của một nhân sự trong kỳ, kèm tiến độ và thời gian hoàn thành.',
+    icon: 'user',
+    available: false,
+  },
+  {
+    key: 'project_monthly',
+    label: 'Chi tiết các dự án theo tháng',
+    description: 'Từng dự án trong tháng: công việc, người thực hiện và tiến độ thực tế.',
+    icon: 'layoutGrid',
+    available: false,
+  },
+  {
+    key: 'project_governance',
+    label: 'Quản trị dự án theo tháng',
+    description: 'Nhìn tổng thể nhiều dự án trong tháng để thấy dự án nào đang chậm.',
+    icon: 'layers',
+    available: false,
+  },
+  {
+    key: 'timesheet_detail',
+    label: 'Báo cáo chi tiết timesheet',
+    description: 'Giờ làm đã ghi nhận theo từng người, từng ngày và từng công việc.',
+    icon: 'clock',
+    available: false,
+  },
+];
+
+export const REPORT_TYPE_LABELS = Object.fromEntries(
+  REPORT_TYPES.map((item) => [item.key, item.label]),
+);
 
 export const REPORT_STATUS_LABELS = {
   draft: 'Bản nháp',

@@ -322,4 +322,21 @@ class PersonnelEvaluationReportTest extends TestCase
         $this->actingAs($member)->getJson('/api/report')->assertOk()->assertJsonCount(1, 'reports');
         $this->actingAs($outsider)->getJson('/api/report')->assertOk()->assertJsonCount(0, 'reports');
     }
+
+    /**
+     * Giám đốc điều hành giám sát toàn hệ thống nên thấy báo cáo của mọi phòng
+     * ban, kể cả phòng mình không thuộc về và không được chia sẻ đích danh.
+     */
+    public function test_director_officer_sees_reports_of_every_department(): void
+    {
+        ['director' => $director] = $this->setUpDepartment();
+        $otherDept = Department::query()->create(['code' => 'IT', 'name' => 'Công nghệ', 'is_active' => true]);
+        $officer = $this->makeUser(['department_id' => $otherDept->id], ['director_officer']);
+
+        $this->actingAs($director)
+            ->postJson('/api/report/personnel-evaluation', $this->payload())
+            ->assertCreated();
+
+        $this->actingAs($officer)->getJson('/api/report')->assertOk()->assertJsonCount(1, 'reports');
+    }
 }

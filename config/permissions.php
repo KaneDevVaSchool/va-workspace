@@ -90,6 +90,9 @@ return [
             'dashboard.view',
             'performance.view_department',
             'weekly_report.view',
+            // Báo cáo mọi phòng ban — giám đốc điều hành giám sát toàn hệ
+            // thống nên không giới hạn theo department_id như trưởng phòng.
+            'report.*',
             'my_work.*',
             'notification.*',
         ],

@@ -4,9 +4,10 @@
 > "Đánh giá nhân sự". Xem thêm `docs/modules/Evaluation.md` (nguồn cấu hình
 > chấm điểm) và `docs/VA_WORKSPACE_OVERVIEW.md` §7.
 >
-> Chưa làm ở đợt này: xuất Excel/PDF/CSV, 5 loại báo cáo còn lại (công việc
-> phòng ban, công việc cá nhân, dự án theo tháng, quản trị dự án, timesheet),
-> kéo thả đổi thứ tự cột.
+> Chưa làm ở đợt này: xuất Excel/PDF/CSV, kéo thả đổi thứ tự cột, và phần
+> tính số liệu của 5 loại báo cáo còn lại — 5 loại đó đã có tên/mô tả trong
+> danh mục (`Report::TYPES_COMING_SOON` + `REPORT_TYPES` ở frontend) và hiện
+> trong hộp thoại chọn loại dưới dạng "Sắp ra mắt", chưa bấm tạo được.
 
 ## 1. Vị trí trong hệ thống
 
@@ -61,7 +62,7 @@ cha nên gộp vào `ReportRepository` (`syncViewers`, `syncUserFilters`,
 |---|---|---|
 | `report.manage_department` | `department_director`, `deputy_department_director` (+ `admin`/`super_admin` qua `report.*`/`*`) | Tạo, sửa, xoá và xem mọi báo cáo của phòng ban mình. |
 | `report.view_assigned` | `section_head`, `team_lead`, `member`, `viewer` | Chỉ thấy báo cáo có tên mình trong `report_viewers` — lọc ở `ReportService::listVisible()`, không chỉ ẩn giao diện. |
-| `report.*` | `admin` | Toàn bộ báo cáo mọi phòng ban. |
+| `report.*` | `admin`, `director_officer` | Toàn bộ báo cáo mọi phòng ban. Giám đốc điều hành giám sát toàn hệ thống nên không giới hạn theo `department_id`; kèm theo đó là **sửa và xoá được** báo cáo của mọi phòng ban (`canManage()` chỉ xét `report.*`). Hồi quy: `PersonnelEvaluationReportTest::test_director_officer_sees_reports_of_every_department`. |
 
 Kiểm tra quyền nằm trong Controller qua `PermissionService::allows()` và
 `ReportService::canView()` / `canManage()`, đúng pattern
@@ -133,6 +134,12 @@ Cấu hình bảng dùng chung ở `Modules/Report/resources/js/constants/report
 `Evaluation` cũng import từ đây (`@modules/Report/...`) để hai trang cùng một
 cách nhớ cấu hình.
 
+- **Chọn loại báo cáo** (`ReportList.vue`): nút "Tạo báo cáo" mở hộp thoại
+  lưới 3 cột liệt kê đủ **6 loại** — loại tạo được xếp trước, loại chưa dựng
+  xếp sau và ghi "Sắp ra mắt" (chữ thường nghiêng, không phải badge). Danh
+  mục ở `REPORT_TYPES` (`constants/report.js`), đồng bộ thủ công với
+  `Report::TYPES` / `Report::TYPES_COMING_SOON`. Backend mới là nơi chặn
+  thật: loại chưa có trong `Report::TYPES` thì không có route tạo tương ứng.
 - **Danh sách báo cáo** (`ReportList.vue`): theo mẫu vàng `data-table`
   (`ActivityLog.vue`) — TablePagesBar trên/dưới với đủ 2 slot `#filters` /
   `#settings`, kéo cột, ẩn thanh cuộn, panel chi tiết đẩy ngang 28rem. Click

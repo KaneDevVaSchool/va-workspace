@@ -157,10 +157,16 @@ class EvaluationEventService
         ]);
     }
 
+    /**
+     * Gỡ một ghi nhận khỏi kỳ đang tính.
+     *
+     * Trưởng phòng ghi nhận là duyệt luôn, nên nếu chỉ cho xoá bản chờ duyệt
+     * thì nút xoá trên màn tổng hợp không bao giờ chạy được. Báo cáo đã lưu
+     * giữ số liệu chụp sẵn — gỡ ở đây chỉ đổi bảng đang xem, không sửa báo
+     * cáo cũ.
+     */
     public function delete(EvaluationEvent $event): void
     {
-        $this->assertPending($event, 'Chỉ xoá được sự kiện đang chờ duyệt.');
-
         $this->events->delete($event);
     }
 

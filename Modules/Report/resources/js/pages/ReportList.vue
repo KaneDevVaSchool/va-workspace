@@ -16,6 +16,7 @@ import {
   REPORT_LIST_WIDTH_KEY,
   REPORT_LIST_ZOOM_KEY,
   REPORT_STATUS_LABELS,
+  REPORT_TYPES,
   REPORT_TYPE_LABELS,
   loadColumnWidths,
   loadVisibility,
@@ -55,6 +56,29 @@ const resizing = ref(false);
 useDragScroll(tableWrap, { isBlocked: () => resizing.value });
 
 const canCreate = computed(() => auth.can('report.manage_department'));
+
+/* ---------- Chọn loại báo cáo khi tạo ---------- */
+
+const typePickerOpen = ref(false);
+
+/**
+ * Loại tạo được xếp lên trước, loại sắp ra mắt xuống dưới — người dùng thấy
+ * ngay thứ bấm được mà vẫn biết còn gì đang tới.
+ */
+const pickerTypes = computed(() => [
+  ...REPORT_TYPES.filter((item) => item.available),
+  ...REPORT_TYPES.filter((item) => !item.available),
+]);
+
+function openTypePicker() {
+  typePickerOpen.value = true;
+}
+
+function chooseType(item) {
+  if (!item.available || !item.routeName) return;
+  typePickerOpen.value = false;
+  router.push({ name: item.routeName });
+}
 
 const shownColumns = computed(() => REPORT_LIST_COLUMNS.filter((col) => visibleColumns[col.key]));
 const colSpan = computed(() => Math.max(shownColumns.value.length, 1));
@@ -293,6 +317,10 @@ function onFilterToggle(key, checked) {
 
 function handleDocumentKeydown(event) {
   if (event.key !== 'Escape') return;
+  if (typePickerOpen.value) {
+    typePickerOpen.value = false;
+    return;
+  }
   if (confirmTarget.value) {
     confirmTarget.value = null;
     return;
@@ -350,7 +378,7 @@ onBeforeUnmount(() => {
           v-if="canCreate"
           type="button"
           class="report-list__header-btn"
-          @click="router.push({ name: 'manager.reports.personnel-evaluation.create' })"
+          @click="openTypePicker"
         >
           <AppIcon name="plus" :size="16" />
           Tạo báo cáo
@@ -594,6 +622,52 @@ onBeforeUnmount(() => {
         </div>
       </aside>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="typePickerOpen"
+        class="report-picker"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="report-picker-title"
+      >
+        <div class="report-picker__backdrop" @click="typePickerOpen = false" />
+        <div class="report-picker__panel">
+          <header class="report-picker__head">
+            <div>
+              <h2 id="report-picker-title" class="report-picker__title">Tạo báo cáo mới</h2>
+              <p class="report-picker__lead">Chọn loại báo cáo bạn muốn lập cho phòng ban.</p>
+            </div>
+            <button
+              type="button"
+              class="report-list__icon-btn"
+              aria-label="Đóng"
+              @click="typePickerOpen = false"
+            >
+              <AppIcon name="close" :size="16" />
+            </button>
+          </header>
+
+          <div class="report-picker__grid">
+            <component
+              :is="item.available ? 'button' : 'div'"
+              v-for="item in pickerTypes"
+              :key="item.key"
+              :type="item.available ? 'button' : undefined"
+              class="report-picker__card"
+              :class="{ 'report-picker__card--soon': !item.available }"
+              :aria-disabled="item.available ? undefined : 'true'"
+              @click="chooseType(item)"
+            >
+              <AppIcon :name="item.icon" :size="20" class="report-picker__icon" />
+              <span class="report-picker__card-title">{{ item.label }}</span>
+              <span class="report-picker__card-text">{{ item.description }}</span>
+              <span v-if="!item.available" class="report-picker__soon">Sắp ra mắt</span>
+            </component>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div
@@ -958,6 +1032,129 @@ onBeforeUnmount(() => {
 
 .report-list__btn--ghost:hover {
   background: var(--color-surface-muted);
+}
+
+/* ---------- Chọn loại báo cáo ---------- */
+
+.report-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.report-picker__backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--color-text) 45%, transparent);
+}
+
+.report-picker__panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: min(64rem, 100%);
+  max-height: calc(100vh - var(--space-8));
+  padding: var(--space-5);
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.report-picker__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.report-picker__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.report-picker__lead {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.report-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.report-picker__card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+  padding: var(--space-4);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  text-align: left;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
+}
+
+.report-picker__card:hover:not(.report-picker__card--soon) {
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+
+.report-picker__card--soon {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.report-picker__icon {
+  color: var(--color-primary);
+}
+
+.report-picker__card--soon .report-picker__icon {
+  color: var(--color-text-muted);
+}
+
+.report-picker__card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.report-picker__card-text {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.report-picker__soon {
+  margin-top: 0.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+@media (max-width: 1024px) {
+  .report-picker__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .report-picker__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .report-confirm {
