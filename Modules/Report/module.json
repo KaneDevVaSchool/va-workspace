@@ -1,0 +1,11 @@
+{
+    "name": "Report",
+    "alias": "report",
+    "description": "Báo cáo vận hành theo phòng ban — cấu hình kỳ, phạm vi, cột hiển thị, tiêu chí và người xem, lưu lại để mở lại về sau. Đợt đầu hỗ trợ báo cáo đánh giá nhân sự, tính điểm theo phiên bản khung chấm điểm đã chốt.",
+    "keywords": ["report", "evaluation", "dashboard"],
+    "priority": 0,
+    "providers": [
+        "Modules\\Report\\App\\Providers\\ReportServiceProvider"
+    ],
+    "files": []
+}

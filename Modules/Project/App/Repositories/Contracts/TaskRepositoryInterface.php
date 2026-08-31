@@ -30,6 +30,22 @@ interface TaskRepositoryInterface
     public function forExport(array $filters, array $allowedProjectIds, \App\Models\User $viewer): Collection;
 
     /**
+     * Công việc dùng để chấm điểm nhân sự trong một kỳ đánh giá.
+     *
+     * Lấy theo người thực hiện, giới hạn ở công việc thật (`type = task`) và
+     * bỏ công việc đã huỷ. Một công việc thuộc kỳ khi ngày kết thúc thực tế —
+     * hoặc ngày hạn nếu chưa có ngày thực tế — nằm trong khoảng kỳ.
+     *
+     * $departmentId khác null thì chỉ lấy công việc THUỘC phòng ban đó —
+     * bắt buộc với báo cáo đánh giá, nếu không người làm liên phòng ban sẽ
+     * kéo việc của phòng khác vào điểm phòng mình.
+     *
+     * @param  list<int>  $userIds  rỗng = mọi người thực hiện
+     * @return Collection<int, Task>
+     */
+    public function forEvaluationPeriod(array $userIds, string $from, string $to, ?int $departmentId = null): Collection;
+
+    /**
      * Đếm số Task theo từng tab lọc nhanh (Tất cả / trạng thái / Bạn thực hiện).
      *
      * @param  list<int>  $allowedProjectIds

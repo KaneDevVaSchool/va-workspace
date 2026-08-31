@@ -23,4 +23,20 @@ export default [
       requiresPermission: 'evaluation.manage_department',
     },
   },
+  {
+    // Tổng hợp đánh giá — toàn bộ nhân sự phòng ban trong một kỳ, kèm công
+    // việc và điểm theo từng tiêu chí; ghi nhận đánh giá diễn ra ngay trên
+    // bảng này (trước đây là danh sách phẳng + modal).
+    //
+    // Giữ nguyên path và name cũ để sidebar, phân quyền và cấu hình sidebar
+    // theo phòng ban không phải đổi theo.
+    path: '/manager/evaluation-events',
+    name: 'manager.evaluation-events.index',
+    component: () => import('./pages/EvaluationSummary.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Tổng hợp đánh giá',
+      requiresPermission: 'evaluation.manage_department',
+    },
+  },
 ];

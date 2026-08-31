@@ -130,6 +130,29 @@ const MENU_SECTIONS = [
         configurableByDepartment: true,
       },
       {
+        // Tổng hợp đánh giá — bảng cả phòng ban theo kỳ, ghi nhận điểm hành vi
+        // ngay trên bảng; nguồn điểm thật cho báo cáo đánh giá nhân sự.
+        // configurableByDepartment: true — đồng bộ thủ công với
+        // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
+        name: 'manager.evaluation-events.index',
+        label: 'Tổng hợp đánh giá',
+        icon: 'clipboardCheck',
+        requiresPermission: 'evaluation.manage_department',
+        hideWhenSuperAdmin: true,
+        configurableByDepartment: true,
+      },
+      {
+        // Báo cáo — trưởng phòng tạo và cấu hình; người được chia sẻ chỉ xem
+        // (report.view_assigned), lọc thật ở backend theo report_viewers.
+        // configurableByDepartment: true — đồng bộ thủ công với
+        // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
+        name: 'manager.reports.index',
+        label: 'Báo cáo',
+        icon: 'barChart',
+        requiresAnyPermission: ['report.manage_department', 'report.view_assigned'],
+        configurableByDepartment: true,
+      },
+      {
         // Duyệt bài viết (toàn trường) — khác "social.moderate" (xoá bài
         // vi phạm theo phòng ban). Hiện với bất kỳ ai có social.review:
         // mặc định admin/super_admin (social.* / *), hoặc được cấp thêm

@@ -1,10 +1,13 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\Evaluation\App\Http\Controllers\EvaluationConfigVersionController;
 use Modules\Evaluation\App\Http\Controllers\EvaluationCriteriaController;
 use Modules\Evaluation\App\Http\Controllers\EvaluationCriterionTypeController;
+use Modules\Evaluation\App\Http\Controllers\EvaluationEventController;
 use Modules\Evaluation\App\Http\Controllers\EvaluationPositionController;
 use Modules\Evaluation\App\Http\Controllers\EvaluationScoreKitController;
+use Modules\Evaluation\App\Http\Controllers\EvaluationSummaryController;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +28,21 @@ Route::prefix('evaluation')->name('evaluation.')->group(function () {
 
     Route::put('/score-kit', [EvaluationScoreKitController::class, 'update'])
         ->name('score-kit.update');
+
+    // ── Phiên bản cấu hình đánh giá — bản chụp bất biến để báo cáo giữ đúng
+    // điểm cũ khi khung chấm điểm / tiêu chí được sửa về sau.
+    Route::get('/config-versions', [EvaluationConfigVersionController::class, 'index'])
+        ->name('config-versions.index');
+
+    Route::get('/config-versions/active', [EvaluationConfigVersionController::class, 'active'])
+        ->name('config-versions.active');
+
+    Route::post('/config-versions/publish', [EvaluationConfigVersionController::class, 'publish'])
+        ->name('config-versions.publish');
+
+    Route::get('/config-versions/{id}', [EvaluationConfigVersionController::class, 'show'])
+        ->whereNumber('id')
+        ->name('config-versions.show');
 
     Route::get('/criterion-types', [EvaluationCriterionTypeController::class, 'index'])
         ->name('criterion-types.index');
@@ -84,6 +102,36 @@ Route::prefix('evaluation')->name('evaluation.')->group(function () {
     // Xoá tiêu chí
     Route::delete('/criteria/{id}', [EvaluationCriteriaController::class, 'destroy'])
         ->name('criteria.destroy');
+
+    // ── Bảng tổng hợp đánh giá — toàn bộ nhân sự phòng ban trong một kỳ, kèm
+    // số liệu công việc và điểm theo từng tiêu chí. Là màn hình làm việc chính
+    // khi chấm điểm cuối kỳ.
+    Route::get('/summary', [EvaluationSummaryController::class, 'index'])
+        ->name('summary.index');
+
+    // ── Ghi nhận đánh giá nhân sự — áp mức tiêu chí hành vi (cộng / trừ điểm)
+    // cho từng nhân sự, là nguồn điểm thật cho báo cáo đánh giá.
+    Route::get('/events', [EvaluationEventController::class, 'index'])
+        ->name('events.index');
+
+    Route::post('/events', [EvaluationEventController::class, 'store'])
+        ->name('events.store');
+
+    Route::put('/events/{id}', [EvaluationEventController::class, 'update'])
+        ->whereNumber('id')
+        ->name('events.update');
+
+    Route::patch('/events/{id}/approve', [EvaluationEventController::class, 'approve'])
+        ->whereNumber('id')
+        ->name('events.approve');
+
+    Route::patch('/events/{id}/reject', [EvaluationEventController::class, 'reject'])
+        ->whereNumber('id')
+        ->name('events.reject');
+
+    Route::delete('/events/{id}', [EvaluationEventController::class, 'destroy'])
+        ->whereNumber('id')
+        ->name('events.destroy');
 
     // ── Vị trí đánh giá — danh mục dùng chung toàn hệ thống, CHỈ ĐỌC.
     // Không còn tạo/sửa/xoá tay ở đây — sẽ nối API VA-HRM sau này.

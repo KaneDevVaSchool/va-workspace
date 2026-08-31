@@ -45,6 +45,20 @@ class ActivityLogService
         'evaluation_criteria.update' => 'Cập nhật tiêu chí đánh giá',
         'evaluation_criteria.delete' => 'Xoá tiêu chí đánh giá',
         'evaluation_criterion_type.create' => 'Tạo loại tiêu chí đánh giá',
+        'evaluation_score_kit.create' => 'Thiết lập khung chấm điểm',
+        'evaluation_score_kit.update' => 'Cập nhật khung chấm điểm',
+        'evaluation_score_kit.mode_change' => 'Đổi cách tính điểm',
+        'evaluation_score_kit.reset' => 'Khôi phục khung chấm điểm',
+        'evaluation_config_version.publish' => 'Chốt phiên bản khung chấm điểm',
+        'evaluation_event.create' => 'Ghi nhận đánh giá nhân sự',
+        'evaluation_event.update' => 'Cập nhật ghi nhận đánh giá',
+        'evaluation_event.approve' => 'Duyệt ghi nhận đánh giá',
+        'evaluation_event.reject' => 'Từ chối ghi nhận đánh giá',
+        'evaluation_event.delete' => 'Xoá ghi nhận đánh giá',
+        'report.create' => 'Tạo báo cáo',
+        'report.update' => 'Cập nhật báo cáo',
+        'report.save' => 'Lưu báo cáo',
+        'report.delete' => 'Xoá báo cáo',
     ];
 
     /** @var array<string, string> */
@@ -59,6 +73,10 @@ class ActivityLogService
         'global_menu_visibility' => 'Menu ẩn toàn hệ thống',
         'evaluation_criteria' => 'Tiêu chí đánh giá',
         'evaluation_criterion_type' => 'Loại tiêu chí đánh giá',
+        'evaluation_score_kit' => 'Khung chấm điểm',
+        'evaluation_config_version' => 'Phiên bản khung chấm điểm',
+        'evaluation_event' => 'Ghi nhận đánh giá nhân sự',
+        'report' => 'Báo cáo',
     ];
 
     /** @var array<string, string> */
@@ -70,6 +88,10 @@ class ActivityLogService
         'scope_id' => 'Mã phạm vi',
         'path' => 'Đường dẫn',
         'title' => 'Tên',
+        'department_id' => 'Mã phòng ban',
+        'change_context' => 'Ngữ cảnh',
+        'changed_fields' => 'Trường thay đổi',
+        'changes' => 'Chi tiết trước / sau',
     ];
 
     public function __construct(

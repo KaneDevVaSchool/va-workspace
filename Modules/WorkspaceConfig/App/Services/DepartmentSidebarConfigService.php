@@ -38,6 +38,8 @@ class DepartmentSidebarConfigService
         'manager.evaluation-score-kit.index' => 'Khung chấm điểm',
         'manager.project.index' => 'Dự án',
         'manager.project.tasks' => 'Công việc',
+        'manager.evaluation-events.index' => 'Tổng hợp đánh giá',
+        'manager.reports.index' => 'Báo cáo',
     ];
 
     /** @var array<string, string> menu_key => section_key mặc định */
@@ -48,6 +50,8 @@ class DepartmentSidebarConfigService
         'manager.evaluation-score-kit.index' => 'manager',
         'manager.project.index' => 'manager',
         'manager.project.tasks' => 'manager',
+        'manager.evaluation-events.index' => 'manager',
+        'manager.reports.index' => 'manager',
     ];
 
     public function __construct(

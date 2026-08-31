@@ -4,5 +4,6 @@
     "WorkspaceConfig": true,
     "Evaluation": true,
     "Social": true,
-    "Project": true
+    "Project": true,
+    "Report": true
 }

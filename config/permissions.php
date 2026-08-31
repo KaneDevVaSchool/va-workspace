@@ -54,6 +54,7 @@ return [
             'knowledge_base.*',
             'ai_account.*',
             'weekly_report.*',
+            'report.*',
             'blocker.*',
             'test_case.*',
             'feedback.*',
@@ -121,6 +122,8 @@ return [
             'contract.manage_department',
             'knowledge_base.manage_department',
             'evaluation.manage_department',
+            // Báo cáo phòng ban — tạo, cấu hình và chia sẻ cho người xem
+            'report.manage_department',
             'blocker.manage',
             'test_case.manage',
             'feedback.view',
@@ -171,6 +174,8 @@ return [
             'contract.manage_department',
             'knowledge_base.manage_department',
             'evaluation.manage_department',
+            // Báo cáo phòng ban — tạo, cấu hình và chia sẻ cho người xem
+            'report.manage_department',
             'blocker.manage',
             'test_case.manage',
             'feedback.view',
@@ -211,6 +216,7 @@ return [
             'performance.view_department',
             'dashboard.view',
             'weekly_report.view',
+            'report.view_assigned',
             'my_work.*',
             'notification.*',
             'social.moderate',
@@ -239,6 +245,7 @@ return [
             'worklog.view',
             // Dashboard, My Work
             'dashboard.view',
+            'report.view_assigned',
             'my_work.*',
             'notification.*',
             'social.moderate',
@@ -260,6 +267,8 @@ return [
             'knowledge_base.create',
             'worklog.write',
             'blocker.create',
+            // Báo cáo được chia sẻ
+            'report.view_assigned',
             // My Work
             'my_work.*',
             'notification.*',
@@ -271,6 +280,7 @@ return [
             'kpi.view_own',
             'performance.view',
             'contract.view',
+            'report.view_assigned',
             'notification.*',
         ],
 
@@ -376,6 +386,11 @@ return [
         // ---------- Đánh giá (evaluation) ----------
         'evaluation.*' => ['label' => 'Toàn bộ đánh giá', 'module' => 'Đánh giá', 'description' => 'Toàn quyền quản lý đánh giá nhân sự'],
         'evaluation.manage_department' => ['label' => 'Quản lý đánh giá phòng ban', 'module' => 'Đánh giá', 'description' => 'Tự tạo và quản lý tiêu chí đánh giá nhân sự trong phòng ban mình', 'active' => true],
+
+        // ---------- Báo cáo (report) ----------
+        'report.*' => ['label' => 'Toàn bộ báo cáo', 'module' => 'Báo cáo', 'description' => 'Toàn quyền quản lý báo cáo mọi phòng ban'],
+        'report.manage_department' => ['label' => 'Quản lý báo cáo phòng ban', 'module' => 'Báo cáo', 'description' => 'Tạo, sửa, xoá và xem báo cáo trong phòng ban mình', 'active' => true],
+        'report.view_assigned' => ['label' => 'Xem báo cáo được chia sẻ', 'module' => 'Báo cáo', 'description' => 'Xem báo cáo mà người tạo đã thêm mình vào danh sách người xem', 'active' => true],
 
         // ---------- Hợp đồng (contract) ----------
         'contract.*' => ['label' => 'Toàn bộ hợp đồng', 'module' => 'Hợp đồng', 'description' => 'Toàn quyền quản lý hợp đồng'],

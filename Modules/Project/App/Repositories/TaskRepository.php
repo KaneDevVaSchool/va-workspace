@@ -55,6 +55,95 @@ class TaskRepository implements TaskRepositoryInterface
         return $query->get();
     }
 
+    public function forEvaluationPeriod(array $userIds, string $from, string $to, ?int $departmentId = null): Collection
+    {
+        $query = Task::query()
+            ->with(['taskScore', 'project', 'assignee'])
+            ->where('type', 'task')
+            ->where('status', '!=', 'cancelled')
+            ->where(function (Builder $period) use ($from, $to) {
+                $period
+                    ->whereBetween('actual_end_date', [$from, $to])
+                    ->orWhere(function (Builder $fallback) use ($from, $to) {
+                        $fallback
+                            ->whereNull('actual_end_date')
+                            ->whereBetween('end_date', [$from, $to]);
+                    });
+            });
+
+        if ($userIds !== []) {
+            $query->whereIn('assignee_id', $userIds);
+        } else {
+            $query->whereNotNull('assignee_id');
+        }
+
+        if ($departmentId !== null) {
+            $this->scopeEvaluationDepartment($query, $departmentId);
+        }
+
+        return $query->orderBy('assignee_id')->orderBy('end_date')->get();
+    }
+
+    /**
+     * Giới hạn công việc về đúng một phòng ban khi chấm điểm.
+     *
+     * Không có điều kiện này thì nhân viên làm việc cho dự án phòng khác sẽ
+     * mang việc đó vào điểm phòng mình. Phòng ban của một công việc xác định
+     * theo thứ tự:
+     *
+     *   1. Đã chuyển giao và người nhận chưa từ chối → phòng NHẬN.
+     *   2. Việc thuộc dự án → phòng sở hữu, hoặc phòng thực hiện chính của dự án.
+     *   3. Việc đứng riêng → origin_department_id, không có thì theo phòng
+     *      ban hiện tại của người thực hiện.
+     */
+    private function scopeEvaluationDepartment(Builder $query, int $departmentId): void
+    {
+        $query->where(function (Builder $scope) use ($departmentId) {
+            // (1) Việc đã chuyển giao — tính cho phòng nhận.
+            $scope->where(function (Builder $delegated) use ($departmentId) {
+                $delegated
+                    ->where('delegated_to_department_id', $departmentId)
+                    ->where(function (Builder $status) {
+                        $status->whereNull('delegation_status')
+                            ->orWhere('delegation_status', '!=', 'rejected');
+                    });
+            });
+
+            // Các nhánh còn lại chỉ áp dụng khi việc KHÔNG được tính cho phòng
+            // nhận nào khác — nếu không một việc chuyển đi sẽ vẫn còn nằm ở
+            // phòng giao và bị đếm hai lần.
+            $scope->orWhere(function (Builder $notDelegated) use ($departmentId) {
+                $notDelegated->where(function (Builder $free) {
+                    $free->whereNull('delegated_to_department_id')
+                        ->orWhere('delegation_status', 'rejected');
+                });
+
+                $notDelegated->where(function (Builder $owner) use ($departmentId) {
+                    // (2) Việc thuộc dự án.
+                    $owner->whereHas('project', function (Builder $project) use ($departmentId) {
+                        $project->where('owner_department_id', $departmentId)
+                            ->orWhere('executing_department_id', $departmentId);
+                    });
+
+                    // (3) Việc đứng riêng.
+                    $owner->orWhere(function (Builder $standalone) use ($departmentId) {
+                        $standalone->whereNull('project_id')
+                            ->where(function (Builder $source) use ($departmentId) {
+                                $source->where('origin_department_id', $departmentId)
+                                    ->orWhere(function (Builder $byAssignee) use ($departmentId) {
+                                        $byAssignee->whereNull('origin_department_id')
+                                            ->whereHas(
+                                                'assignee',
+                                                fn (Builder $user) => $user->where('department_id', $departmentId),
+                                            );
+                                    });
+                            });
+                    });
+                });
+            });
+        });
+    }
+
     private function applySort(Builder $query, ?string $sortBy, ?string $sortDir): void
     {
         $column = $sortBy !== null ? (self::SORTABLE_COLUMNS[$sortBy] ?? null) : null;

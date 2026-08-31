@@ -4,12 +4,16 @@ namespace Modules\Evaluation\App\Providers;
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Modules\Evaluation\App\Repositories\Contracts\EvaluationConfigVersionRepositoryInterface;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriteriaRepositoryInterface;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriterionTypeRepositoryInterface;
+use Modules\Evaluation\App\Repositories\Contracts\EvaluationEventRepositoryInterface;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationPositionRepositoryInterface;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationScoreKitRepositoryInterface;
+use Modules\Evaluation\App\Repositories\EvaluationConfigVersionRepository;
 use Modules\Evaluation\App\Repositories\EvaluationCriteriaRepository;
 use Modules\Evaluation\App\Repositories\EvaluationCriterionTypeRepository;
+use Modules\Evaluation\App\Repositories\EvaluationEventRepository;
 use Modules\Evaluation\App\Repositories\EvaluationPositionRepository;
 use Modules\Evaluation\App\Repositories\EvaluationScoreKitRepository;
 
@@ -32,6 +36,14 @@ class EvaluationServiceProvider extends ServiceProvider
         $this->app->bind(
             EvaluationScoreKitRepositoryInterface::class,
             EvaluationScoreKitRepository::class,
+        );
+        $this->app->bind(
+            EvaluationConfigVersionRepositoryInterface::class,
+            EvaluationConfigVersionRepository::class,
+        );
+        $this->app->bind(
+            EvaluationEventRepositoryInterface::class,
+            EvaluationEventRepository::class,
         );
     }
 

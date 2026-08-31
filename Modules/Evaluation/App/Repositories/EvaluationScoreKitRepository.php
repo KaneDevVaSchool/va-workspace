@@ -10,7 +10,7 @@ class EvaluationScoreKitRepository implements EvaluationScoreKitRepositoryInterf
     public function findByDepartment(int $departmentId): ?EvaluationScoreKit
     {
         return EvaluationScoreKit::query()
-            ->with(['classificationCriterion'])
+            ->with($this->criterionRelations())
             ->where('department_id', $departmentId)
             ->first();
     }
@@ -19,13 +19,24 @@ class EvaluationScoreKitRepository implements EvaluationScoreKitRepositoryInterf
     {
         $kit = EvaluationScoreKit::query()->create($data);
 
-        return $kit->fresh(['classificationCriterion']);
+        return $kit->fresh($this->criterionRelations());
     }
 
     public function update(EvaluationScoreKit $kit, array $data): EvaluationScoreKit
     {
         $kit->update($data);
 
-        return $kit->fresh(['classificationCriterion']);
+        return $kit->fresh($this->criterionRelations());
+    }
+
+    /** @return list<string> */
+    private function criterionRelations(): array
+    {
+        return [
+            'classificationCriterion',
+            'difficultyCriterion',
+            'progressCriterion',
+            'qualityCriterion',
+        ];
     }
 }
