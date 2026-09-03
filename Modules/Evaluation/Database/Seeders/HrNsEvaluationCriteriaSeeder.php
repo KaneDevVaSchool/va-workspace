@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
 use Modules\Evaluation\App\Models\EvaluationCriterionType;
+use Modules\Evaluation\App\Models\EvaluationEvent;
 use Modules\Identity\App\Models\Department;
 
 /**
@@ -46,6 +47,8 @@ class HrNsEvaluationCriteriaSeeder extends Seeder
             ->where('department_id', $departmentId)
             ->whereIn('name', self::DEMO_CRITERION_NAMES)
             ->update(['is_active' => false]);
+
+        $this->purgeDemoBehaviorEvents($departmentId);
 
         $types = [];
         foreach ($this->types() as $index => $type) {
@@ -89,6 +92,46 @@ class HrNsEvaluationCriteriaSeeder extends Seeder
             $department->name,
             $departmentId,
         ));
+    }
+
+    /**
+     * Xoá ghi nhận cộng/trừ demo trên phòng NS (tiêu chí cũ hoặc do user demo trưởng phòng ghi).
+     */
+    private function purgeDemoBehaviorEvents(int $departmentId): void
+    {
+        $demoCriterionIds = EvaluationCriteria::query()
+            ->where('department_id', $departmentId)
+            ->whereIn('name', self::DEMO_CRITERION_NAMES)
+            ->pluck('id');
+
+        $demoDirectorId = User::query()
+            ->where('email', 'truong-phong.ns@example.com')
+            ->value('id');
+
+        if ($demoCriterionIds->isEmpty() && $demoDirectorId === null) {
+            return;
+        }
+
+        $query = EvaluationEvent::query()->where('department_id', $departmentId);
+
+        $query->where(function ($inner) use ($demoCriterionIds, $demoDirectorId) {
+            if ($demoCriterionIds->isNotEmpty()) {
+                $inner->whereIn('criterion_id', $demoCriterionIds);
+            }
+            if ($demoDirectorId !== null) {
+                if ($demoCriterionIds->isNotEmpty()) {
+                    $inner->orWhere('recorded_by', $demoDirectorId);
+                } else {
+                    $inner->where('recorded_by', $demoDirectorId);
+                }
+            }
+        });
+
+        $removed = $query->delete();
+
+        if ($removed > 0) {
+            $this->command?->info(sprintf('Đã xoá %d ghi nhận demo trên phòng NS.', $removed));
+        }
     }
 
     /** @return list<array{code: string, name: string, description: string}> */

@@ -27,13 +27,11 @@ const MODES = [
         id: "base_adjust",
         icon: "hash",
         title: "Đếm số việc",
-        lead: "Theo công việc · mỗi việc tính giống nhau",
     },
     {
         id: "weighted_task",
         icon: "layers",
         title: "Hiệu suất việc",
-        lead: "Chuẩn theo độ khó · thực theo hạn và chất lượng",
     },
 ];
 
@@ -99,7 +97,6 @@ const WEIGHT_CASES = [
     {
         id: "on_time",
         task: "Việc khó, đúng hạn, đạt",
-        note: "Chuẩn 120 · thực 120 · hiệu suất 100%",
         weightIndex: 1,
         progressIndex: 2,
         qualityIndex: 1,
@@ -107,10 +104,25 @@ const WEIGHT_CASES = [
     {
         id: "late_fix",
         task: "Việc khó, trễ 4 ngày, phải sửa",
-        note: "Chuẩn 120 · thực 72 · hiệu suất 60%",
         weightIndex: 1,
         progressIndex: 4,
         qualityIndex: 2,
+    },
+    {
+        id: "incomplete",
+        task: "Việc khó, chưa hoàn thành",
+        weightIndex: 1,
+        progressIndex: 5,
+        qualityIndex: 1,
+        incomplete: true,
+    },
+    {
+        id: "missing",
+        task: "Việc đã xong nhưng chưa chấm chất lượng",
+        weightIndex: 1,
+        progressIndex: 2,
+        qualityIndex: 1,
+        missingQuality: true,
     },
 ];
 
@@ -315,11 +327,20 @@ const demoStandard = computed(() =>
     round2(demoTaskBase.value * demoWeightFactor.value),
 );
 
-const demoActual = computed(() =>
-    round2(
-        demoStandard.value * demoProgressFactor.value * demoQualityFactor.value,
-    ),
+const demoCase = computed(
+    () => WEIGHT_CASES.find((item) => item.id === demoCaseId.value) ?? null,
 );
+
+const demoZeroed = computed(
+    () => Boolean(demoCase.value?.incomplete || demoCase.value?.missingQuality),
+);
+
+const demoActual = computed(() => {
+    if (demoZeroed.value) return 0;
+    return round2(
+        demoStandard.value * demoProgressFactor.value * demoQualityFactor.value,
+    );
+});
 
 const demoTaskPercent = computed(() => {
     if (demoStandard.value <= 0) return 0;
@@ -327,9 +348,10 @@ const demoTaskPercent = computed(() => {
 });
 
 const demoQualityBonus = computed(() => {
-    if (kit.formula.quality !== "on") return 0;
+    if (kit.formula.quality !== "on" || demoZeroed.value) return 0;
     const code = String(demoQuality.value?.code ?? "").toUpperCase();
-    if (code !== "XS" && demoQualityIndex.value !== 0) return 0;
+    const label = String(demoQuality.value?.label ?? "").toLowerCase();
+    if (code !== "XS" && !label.includes("xuất sắc")) return 0;
     return Math.max(0, Number(kit.quality_bonus_percent) || 0);
 });
 
@@ -348,7 +370,6 @@ const activeScale = computed(() => {
         return {
             key: "progress",
             title: "Thang tiến độ",
-            lead: "Các mức lấy từ tiêu chí tiến độ của phòng ban.",
             levels: kit.progress_levels,
             scoreMin: 0.01,
             scoreMax: 9.99,
@@ -362,7 +383,6 @@ const activeScale = computed(() => {
         return {
             key: "quality",
             title: "Thang chất lượng",
-            lead: "Các mức lấy từ tiêu chí chất lượng của phòng ban.",
             levels: kit.quality_levels,
             scoreMin: 0.01,
             scoreMax: 9.99,
@@ -375,7 +395,6 @@ const activeScale = computed(() => {
     return {
         key: "weight",
         title: "Thang độ khó",
-        lead: "Các mức lấy từ tiêu chí độ khó của phòng ban.",
         levels: kit.weighted_task_levels,
         scoreMin: 0.01,
         scoreMax: 9.99,
@@ -412,38 +431,9 @@ const baseFormulaMethod = computed(() => {
         );
     }
     if (!parts.length) {
-        return "Chưa chọn hạng mục nào. Bấm dòng chữ trên từng ô bên dưới để đưa vào công thức.";
+        return "Tổng điểm = —";
     }
     return `Tổng điểm = ${parts.join(" ")}`;
-});
-
-const baseFormulaApplied = computed(() => {
-    const parts = [];
-    if (kit.formula.base === "on") {
-        parts.push(`${formatPlain(kit.base_score)} (điểm khởi đầu)`);
-    }
-    if (kit.formula.done !== "off") {
-        appendNamedPart(
-            parts,
-            kit.formula.done,
-            `${doneCount.value} việc đã xong × ${formatSigned(donePts.value)} điểm = ${formatSigned(demoDoneDelta.value)}`,
-        );
-    }
-    if (kit.formula.undone !== "off") {
-        appendNamedPart(
-            parts,
-            kit.formula.undone,
-            `${undoneCount.value} việc chưa xong × ${formatSigned(undonePts.value)} điểm = ${formatSigned(demoUndoneDelta.value)}`,
-        );
-    }
-    if (!parts.length) {
-        return "";
-    }
-    const rank = demoRank.value;
-    const rankText = rank
-        ? `xếp loại ${rank.label} (từ ${formatPlain(rank.score)} điểm)`
-        : "chưa đạt mức nào trên thang của phòng";
-    return `Áp dụng số đang set: ${parts.join(" ")} = ${formatPlain(demoTotal.value)} điểm → ${rankText}`;
 });
 
 const weightFormulaMethod = computed(() => {
@@ -458,22 +448,97 @@ const weightFormulaMethod = computed(() => {
     if (kit.formula.quality === "on") {
         actualBits.push("× chất lượng");
     }
-    return `Điểm chuẩn = ${standardBits.join(" ")}. Điểm thực = ${actualBits.join(" ")}. Hiệu suất = Σ điểm thực / Σ điểm chuẩn × 100%. Độ khó là trọng số khối lượng. Xuất sắc cộng bonus riêng, không nhân vào chuẩn.`;
+    return `Điểm chuẩn = ${standardBits.join(" ")} · Điểm thực = việc chưa xong hoặc thiếu dữ liệu = 0 · Hiệu suất = Σ thực / Σ chuẩn × 100% · Điểm hành vi = điểm phần trăm`;
 });
 
-const weightFormulaApplied = computed(() => {
-    const stdLabel = demoWeight.value?.label
-        ? demoWeight.value.label.toLowerCase()
-        : "độ khó";
-    const bonusText = demoQualityBonus.value
-        ? ` + ${formatPlain(demoQualityBonus.value)}% bonus xuất sắc = ${formatPlain(demoRatedPercent.value)}%`
-        : "";
-    const rank = demoTaskRank.value;
-    const rankText = rank
-        ? `xếp loại ${rank.label.toLowerCase()} (từ ${formatPlain(rank.score)}%)`
-        : "chưa đạt mức nào trên thang hiệu suất";
-    return `Một việc: chuẩn ${formatPlain(demoStandard.value)} (${formatPlain(demoTaskBase.value)} × ${formatPlain(demoWeightFactor.value)} ${stdLabel}) → thực ${formatPlain(demoActual.value)} → ${formatPlain(demoTaskPercent.value)}%${bonusText} → ${rankText}`;
+const kitWarnings = computed(() => {
+    const items = [];
+    if (viewMode.value !== "weighted_task") return items;
+    if (!(Number(kit.task_base_score) > 0)) {
+        items.push({
+            id: "base-zero",
+            severity: "error",
+            text: "Điểm cơ bản mỗi việc đang là 0 — hiệu suất sẽ luôn 0%.",
+        });
+    }
+    if (
+        kit.formula.weight === "off" &&
+        kit.formula.progress === "off" &&
+        kit.formula.quality === "off"
+    ) {
+        items.push({
+            id: "all-off",
+            severity: "error",
+            text: "Đã tắt độ khó, tiến độ và chất lượng — mọi việc đủ dữ liệu sẽ ra 100%.",
+        });
+    }
+    const floors = kit.performance_levels.map((level) => Number(level.score));
+    if (floors.length && Math.min(...floors) > 0) {
+        items.push({
+            id: "no-floor",
+            severity: "error",
+            text: "Thang xếp loại chưa có mức sàn 0% — hiệu suất thấp sẽ bị gán nhầm mức đáy.",
+        });
+    }
+    const dup = scaleDuplicate(kit.progress_levels)
+        || scaleDuplicate(kit.quality_levels)
+        || scaleDuplicate(kit.weighted_task_levels)
+        || scaleDuplicate(kit.performance_levels);
+    if (dup) {
+        items.push({
+            id: "dup-code",
+            severity: "error",
+            text: `Thang đang trùng mã hoặc tên mức «${dup}».`,
+        });
+    }
+    const progressScores = kit.progress_levels.map((level) => Number(level.score));
+    const progressDesc = progressScores.every(
+        (score, index) => index === 0 || score <= progressScores[index - 1] + 0.0001,
+    );
+    if (progressScores.length > 1 && !progressDesc) {
+        items.push({
+            id: "progress-order",
+            severity: "error",
+            text: "Thang tiến độ phải xếp từ tốt đến kém (hệ số giảm dần).",
+        });
+    }
+    const outlier = [...kit.progress_levels, ...kit.quality_levels].some(
+        (level) => Number(level.score) > 2 || Number(level.score) < 0.2,
+    );
+    if (outlier) {
+        items.push({
+            id: "factor-outlier",
+            severity: "warn",
+            text: "Có hệ số tiến độ/chất lượng ngoài dải 0,2–2 — kiểm tra lại trước khi chốt.",
+        });
+    }
+    const topRank = Math.max(...floors, 0);
+    if (100 + Number(kit.quality_bonus_percent || 0) > topRank && topRank > 0) {
+        items.push({
+            id: "bonus-overflow",
+            severity: "warn",
+            text: "Bonus xuất sắc có thể đẩy hiệu suất vượt mức cao nhất của thang xếp loại.",
+        });
+    }
+    return items;
 });
+
+const hasBlockingWarning = computed(() =>
+    kitWarnings.value.some((item) => item.severity === "error"),
+);
+
+function scaleDuplicate(levels) {
+    const seen = new Set();
+    for (const level of levels) {
+        for (const raw of [level.code, level.label]) {
+            const key = String(raw ?? "").trim().toLowerCase();
+            if (!key) continue;
+            if (seen.has(key)) return String(raw);
+            seen.add(key);
+        }
+    }
+    return "";
+}
 
 watch(
     () => kit.mode,
@@ -598,27 +663,16 @@ function levelsFromCriterion(criterion, withSort = false) {
     });
 }
 
-function applyClassificationCriterion(value) {
+async function applyClassificationCriterion(value) {
     const criterion = criterionById(value);
     kit.classification_criterion_id = criterion ? Number(criterion.id) : null;
-    kit.classification_use_default = false;
-    if (criterion) {
-        const levels = levelsFromCriterion(criterion, true);
-        kit.base_adjust_levels = cloneClassificationLevels(levels);
-        kit.performance_levels = cloneLevels(
-            levels,
-            DEFAULT_PERFORMANCE_LEVELS,
-        );
-    } else {
-        kit.base_adjust_levels = cloneClassificationLevels(
-            levelsFromCriterion(
-                criterionById(kit.classification_criterion_id),
-                true,
-            ),
-        );
+    kit.classification_use_default = !criterion;
+    if (!criterion) {
+        kit.base_adjust_levels = cloneClassificationLevels(null);
         kit.performance_levels = cloneLevels(null, DEFAULT_PERFORMANCE_LEVELS);
     }
     scheduleSaveKit();
+    await saveKit({ context: "manual" });
 }
 
 function restoreClassificationDefaults() {
@@ -630,36 +684,22 @@ function restoreClassificationDefaults() {
     scheduleSaveKit();
 }
 
-function applyActiveScaleCriterion(value) {
+async function applyActiveScaleCriterion(value) {
     const criterion = criterionById(value);
     const config = activeScale.value;
     kit[config.criterionIdKey] = criterion ? Number(criterion.id) : null;
-    kit[config.useDefaultKey] = false;
-    const levels = criterion ? levelsFromCriterion(criterion) : null;
-
-    if (config.key === "progress") {
-        kit.progress_levels = cloneLevels(levels, DEFAULT_PROGRESS_LEVELS);
-        demoProgressIndex.value = Math.min(
-            demoProgressIndex.value,
-            kit.progress_levels.length - 1,
-        );
-    } else if (config.key === "quality") {
-        kit.quality_levels = cloneLevels(levels, DEFAULT_QUALITY_LEVELS);
-        demoQualityIndex.value = Math.min(
-            demoQualityIndex.value,
-            kit.quality_levels.length - 1,
-        );
-    } else {
-        kit.weighted_task_levels = cloneLevels(
-            levels,
-            DEFAULT_WEIGHT_LEVELS,
-        );
-        demoWeightIndex.value = Math.min(
-            demoWeightIndex.value,
-            kit.weighted_task_levels.length - 1,
-        );
+    kit[config.useDefaultKey] = !criterion;
+    if (!criterion) {
+        if (config.key === "progress") {
+            kit.progress_levels = cloneLevels(null, DEFAULT_PROGRESS_LEVELS);
+        } else if (config.key === "quality") {
+            kit.quality_levels = cloneLevels(null, DEFAULT_QUALITY_LEVELS);
+        } else {
+            kit.weighted_task_levels = cloneLevels(null, DEFAULT_WEIGHT_LEVELS);
+        }
     }
     scheduleSaveKit();
+    await saveKit({ context: "manual" });
 }
 
 function restoreActiveScaleDefaults() {
@@ -919,7 +959,6 @@ function formatSigned(score) {
     const abs = Number.isInteger(n)
         ? String(Math.abs(n))
         : String(Math.abs(round2(n)));
-    if (n > 0) return `+${abs}`;
     if (n < 0) return `−${abs}`;
     return abs;
 }
@@ -1058,6 +1097,10 @@ function flashSaved() {
 
 async function saveKit({ context = "manual" } = {}) {
     if (!canManage.value || hydrating.value) return;
+    if (hasBlockingWarning.value) {
+        showClientToast("error", kitWarnings.value.find((item) => item.severity === "error")?.text || "Cấu hình còn lỗi, chưa lưu được.");
+        return false;
+    }
     if (savingKit.value) return false;
 
     const savingVersion = editVersion;
@@ -1277,7 +1320,6 @@ onBeforeRouteLeave(() => {
                 <AppIcon :name="mode.icon" :size="15" :stroke-width="1.75" />
                 <span class="kit-tab__copy">
                     <span class="kit-tab__title">{{ mode.title }}</span>
-                    <span class="kit-tab__lead">{{ mode.lead }}</span>
                 </span>
             </button>
         </nav>
@@ -1311,21 +1353,26 @@ onBeforeRouteLeave(() => {
                                     : weightFormulaMethod
                             }}
                         </p>
-                        <p
-                            v-if="
-                                viewMode === 'base_adjust'
-                                    ? baseFormulaApplied
-                                    : weightFormulaApplied
-                            "
-                            class="kit-formula__applied"
-                        >
-                            {{
-                                viewMode === "base_adjust"
-                                    ? baseFormulaApplied
-                                    : weightFormulaApplied
-                            }}
-                        </p>
                     </div>
+                </section>
+
+                <section
+                    v-if="viewMode === 'weighted_task' && kitWarnings.length"
+                    class="kit-alerts"
+                    aria-label="Cảnh báo cấu hình"
+                >
+                    <p
+                        v-for="item in kitWarnings"
+                        :key="item.id"
+                        class="kit-alert"
+                        :class="
+                            item.severity === 'error'
+                                ? 'kit-alert--error'
+                                : 'kit-alert--warn'
+                        "
+                    >
+                        {{ item.text }}
+                    </p>
                 </section>
 
                 <div v-if="viewMode === 'base_adjust'" class="kit-split">
@@ -1372,7 +1419,6 @@ onBeforeRouteLeave(() => {
                                         min="0"
                                         max="9999"
                                         step="1"
-                                        placeholder="VD: 100"
                                         class="kit-stepper__input"
                                         :disabled="!canManage"
                                         @input="scheduleSaveKit"
@@ -1441,7 +1487,6 @@ onBeforeRouteLeave(() => {
                                         min="-999"
                                         max="999"
                                         step="0.5"
-                                        placeholder="VD: 1"
                                         class="kit-stepper__input"
                                         :disabled="!canManage"
                                         @input="scheduleSaveKit"
@@ -1516,7 +1561,6 @@ onBeforeRouteLeave(() => {
                                         min="-999"
                                         max="999"
                                         step="0.5"
-                                        placeholder="VD: -1"
                                         class="kit-stepper__input"
                                         :disabled="!canManage"
                                         @input="scheduleSaveKit"
@@ -1548,9 +1592,6 @@ onBeforeRouteLeave(() => {
                         <div class="kit-panel kit-panel--story">
                             <div class="kit-panel__head">
                                 <h2 class="kit-panel__title">Xem thử</h2>
-                                <p class="kit-panel__lead">
-                                    Đổi số việc — tổng và xếp loại đổi theo
-                                </p>
                             </div>
                             <div class="kit-demo">
                                 <label
@@ -1580,7 +1621,6 @@ onBeforeRouteLeave(() => {
                                             min="0"
                                             max="999"
                                             step="1"
-                                            placeholder="VD: 8"
                                             class="kit-stepper__input"
                                         />
                                         <button
@@ -1624,7 +1664,6 @@ onBeforeRouteLeave(() => {
                                             min="0"
                                             max="999"
                                             step="1"
-                                            placeholder="VD: 2"
                                             class="kit-stepper__input"
                                         />
                                         <button
@@ -1739,7 +1778,7 @@ onBeforeRouteLeave(() => {
                                                 )
                                             "
                                         >
-                                            <option value="" disabled>
+                                            <option value="">
                                                 Mặc định hệ thống
                                             </option>
                                             <option
@@ -1820,7 +1859,6 @@ onBeforeRouteLeave(() => {
                                         v-model="level.code"
                                         type="text"
                                         maxlength="8"
-                                        placeholder="VD: XS"
                                         class="kit-field"
                                         :disabled="
                                             !canManage ||
@@ -1833,7 +1871,6 @@ onBeforeRouteLeave(() => {
                                         v-model="level.label"
                                         type="text"
                                         maxlength="80"
-                                        placeholder="VD: Xuất sắc"
                                         class="kit-field"
                                         :disabled="
                                             !canManage ||
@@ -1873,7 +1910,6 @@ onBeforeRouteLeave(() => {
                                             min="0"
                                             max="9999"
                                             step="1"
-                                            placeholder="VD: 100"
                                             class="kit-stepper__input"
                                             :disabled="
                                                 !canManage ||
@@ -1985,9 +2021,6 @@ onBeforeRouteLeave(() => {
                                     for="kit-task-base"
                                     >Điểm cơ bản</label
                                 >
-                                <p class="kit-tile__phrase">
-                                    Gốc để tính điểm chuẩn
-                                </p>
                                 <div class="kit-stepper">
                                     <button
                                         type="button"
@@ -2016,7 +2049,6 @@ onBeforeRouteLeave(() => {
                                         min="0"
                                         max="9999"
                                         step="1"
-                                        placeholder="VD: 100"
                                         class="kit-stepper__input"
                                         :disabled="!canManage"
                                         @input="scheduleSaveKit"
@@ -2067,13 +2099,6 @@ onBeforeRouteLeave(() => {
                                         id="kit-weight-label"
                                         >Độ khó → điểm chuẩn</span
                                     >
-                                    <span class="kit-tile__phrase">
-                                        {{
-                                            kit.formula.weight === "on"
-                                                ? "Chuẩn hóa khối lượng, không thưởng"
-                                                : "Không tính vào điểm chuẩn"
-                                        }}
-                                    </span>
                                 </span>
                                 <span
                                     class="kit-switch"
@@ -2110,13 +2135,6 @@ onBeforeRouteLeave(() => {
                                         id="kit-progress-label"
                                         >Tiến độ → điểm thực</span
                                     >
-                                    <span class="kit-tile__phrase">
-                                        {{
-                                            kit.formula.progress === "on"
-                                                ? "Mức hoàn thành đúng hạn / sớm / trễ"
-                                                : "Không tính vào điểm thực"
-                                        }}
-                                    </span>
                                 </span>
                                 <span
                                     class="kit-switch kit-switch--teal"
@@ -2153,13 +2171,6 @@ onBeforeRouteLeave(() => {
                                         id="kit-quality-label"
                                         >Chất lượng → điểm thực</span
                                     >
-                                    <span class="kit-tile__phrase">
-                                        {{
-                                            kit.formula.quality === "on"
-                                                ? "Xuất sắc = Đạt ×1, bonus cộng riêng"
-                                                : "Không tính vào điểm thực"
-                                        }}
-                                    </span>
                                 </span>
                                 <span
                                     class="kit-switch kit-switch--done"
@@ -2194,13 +2205,6 @@ onBeforeRouteLeave(() => {
                                 <span class="kit-contrib__name"
                                     >Khóa độ khó sau khi giao việc</span
                                 >
-                                <span class="kit-contrib__phrase">
-                                    {{
-                                        kit.formula.lock_difficulty === "on"
-                                            ? "Người giao đề xuất · quản lý xác nhận · không sửa sau khi việc xong"
-                                            : "Được sửa độ khó bất kỳ lúc nào — dễ đội điểm sau khi hoàn thành"
-                                    }}
-                                </span>
                             </span>
                             <span
                                 class="kit-switch kit-switch--teal"
@@ -2219,9 +2223,6 @@ onBeforeRouteLeave(() => {
                                 <h2 class="kit-panel__title">
                                     Case study · Một việc
                                 </h2>
-                                <p class="kit-panel__lead">
-                                    Chọn tình huống, rồi đổi mức để xem điểm
-                                </p>
                             </div>
 
                             <div
@@ -2247,9 +2248,6 @@ onBeforeRouteLeave(() => {
                                 >
                                     <span class="kit-case__task">{{
                                         item.task
-                                    }}</span>
-                                    <span class="kit-case__project">{{
-                                        item.note
                                     }}</span>
                                 </button>
                             </div>
@@ -2394,6 +2392,13 @@ onBeforeRouteLeave(() => {
                                 </div>
                             </div>
 
+                            <p v-if="demoZeroed" class="kit-eq-note">
+                                {{
+                                    demoCase?.incomplete
+                                        ? "Việc chưa hoàn thành: điểm thực = 0, điểm chuẩn vẫn nằm trong mẫu số."
+                                        : "Thiếu dữ liệu bắt buộc: điểm thực = 0 cho đến khi bổ sung."
+                                }}
+                            </p>
                             <div class="kit-eq" aria-live="polite">
                                 <span class="kit-eq__term kit-eq__term--gold">
                                     <span class="kit-eq__n">{{
@@ -2477,7 +2482,7 @@ onBeforeRouteLeave(() => {
                                                 )
                                             "
                                         >
-                                            <option value="" disabled>
+                                            <option value="">
                                                 Mặc định hệ thống
                                             </option>
                                             <option
@@ -2537,7 +2542,6 @@ onBeforeRouteLeave(() => {
                                         v-model="level.code"
                                         type="text"
                                         maxlength="8"
-                                        placeholder="VD: XS"
                                         class="kit-field"
                                         :disabled="
                                             !canManage ||
@@ -2550,7 +2554,6 @@ onBeforeRouteLeave(() => {
                                         v-model="level.label"
                                         type="text"
                                         maxlength="80"
-                                        placeholder="VD: Xuất sắc"
                                         class="kit-field"
                                         :disabled="
                                             !canManage ||
@@ -2590,7 +2593,6 @@ onBeforeRouteLeave(() => {
                                             min="0"
                                             max="9999"
                                             step="1"
-                                            placeholder="VD: 100"
                                             class="kit-stepper__input"
                                             :disabled="
                                                 !canManage ||
@@ -2675,7 +2677,7 @@ onBeforeRouteLeave(() => {
                                                 )
                                             "
                                         >
-                                            <option value="" disabled>
+                                            <option value="">
                                                 Mặc định hệ thống
                                             </option>
                                             <option
@@ -2755,7 +2757,6 @@ onBeforeRouteLeave(() => {
                                         min="0"
                                         max="100"
                                         step="1"
-                                        placeholder="VD: 5"
                                         class="kit-stepper__input"
                                         :disabled="!canManage"
                                         @input="scheduleSaveKit"
@@ -2801,7 +2802,6 @@ onBeforeRouteLeave(() => {
                                         v-model="level.code"
                                         type="text"
                                         maxlength="8"
-                                        placeholder="VD: KH"
                                         class="kit-field"
                                         :disabled="
                                             !canManage ||
@@ -2814,7 +2814,6 @@ onBeforeRouteLeave(() => {
                                         v-model="level.label"
                                         type="text"
                                         maxlength="80"
-                                        placeholder="VD: Khó"
                                         class="kit-field"
                                         :disabled="
                                             !canManage ||
@@ -2851,7 +2850,6 @@ onBeforeRouteLeave(() => {
                                             :min="activeScale.scoreMin"
                                             :max="activeScale.scoreMax"
                                             :step="activeScale.scoreStep"
-                                            placeholder="VD: 1.2"
                                             class="kit-stepper__input"
                                             :disabled="
                                                 !canManage ||
@@ -2897,18 +2895,7 @@ onBeforeRouteLeave(() => {
         >
             <div class="kit-save-state" aria-live="polite">
                 <template v-if="savingKit">Đang lưu…</template>
-                <template v-else-if="dirty">
-                    <span class="kit-save-state__lead"
-                        >Có thay đổi chưa lưu — bấm Lưu để áp dụng cho phòng
-                        ban</span
-                    >
-                    <span class="kit-save-state__detail">{{
-                        changeSummaryText
-                    }}</span>
-                    <span class="kit-save-state__note"
-                        >Rời trang khi chưa lưu sẽ hỏi xác nhận.</span
-                    >
-                </template>
+                <template v-else-if="dirty">Chưa lưu</template>
                 <template v-else-if="savedFlash">Đã lưu</template>
             </div>
             <button
@@ -2957,13 +2944,6 @@ onBeforeRouteLeave(() => {
                                         : "Lưu các thay đổi?"
                                 }}
                             </h2>
-                            <p class="kit-changes-dialog__lead">
-                                {{
-                                    changesDialogKind === "leave"
-                                        ? "Bản nháp sẽ mất nếu bạn rời mà không lưu."
-                                        : "Xác nhận trước khi áp dụng khung chấm điểm cho phòng ban."
-                                }}
-                            </p>
                         </header>
 
                         <div class="kit-changes-dialog__body hide-scrollbar">
@@ -3006,15 +2986,6 @@ onBeforeRouteLeave(() => {
                                         <span v-else>{{
                                             changeSummaryText
                                         }}</span>
-                                    </dd>
-                                </div>
-                                <div
-                                    class="kit-changes-dialog__field kit-changes-dialog__field--wide"
-                                >
-                                    <dt>Nhật ký hoạt động</dt>
-                                    <dd>
-                                        Hệ thống ghi chi tiết trước / sau cho
-                                        từng mục khi lưu.
                                     </dd>
                                 </div>
                             </dl>
@@ -3067,8 +3038,8 @@ onBeforeRouteLeave(() => {
             title="Đổi cách tính điểm?"
             :description="
                 dirty
-                    ? `Cách tính mới cùng bản nháp (${changeSummaryText}) sẽ được áp dụng cho phòng ban và ghi nhật ký chi tiết.`
-                    : 'Cách tính mới sẽ được áp dụng cho phòng ban và ghi vào nhật ký hoạt động.'
+                    ? 'Áp dụng cách tính mới cùng bản nháp hiện tại.'
+                    : 'Áp dụng cách tính mới cho phòng ban.'
             "
             confirm-label="Đổi cách tính"
             :loading="savingKit"
@@ -3159,18 +3130,9 @@ onBeforeRouteLeave(() => {
     background: var(--color-gold);
 }
 
-.kit-dock--dirty .kit-save-state__lead {
+.kit-dock--dirty .kit-save-state {
     color: var(--color-gold-800);
-    font-size: 0.875rem;
-}
-
-.kit-dock--dirty .kit-save-state__note {
-    display: block;
-    margin-top: 0.2rem;
-    color: var(--color-gold-800);
-    font-size: 0.75rem;
-    font-style: italic;
-    opacity: 0.9;
+    font-weight: 400;
 }
 
 .kit-save-state {
@@ -3180,18 +3142,6 @@ onBeforeRouteLeave(() => {
     color: var(--color-text-muted);
     font-size: 0.8125rem;
     font-weight: 400;
-}
-
-.kit-save-state__lead {
-    display: block;
-    color: var(--color-gold-800);
-}
-
-.kit-save-state__detail {
-    display: block;
-    margin-top: 0.15rem;
-    font-style: italic;
-    line-height: 1.35;
 }
 
 .kit-save-state--pending {
@@ -3256,12 +3206,6 @@ onBeforeRouteLeave(() => {
     font-weight: 400;
 }
 
-.kit-tab__lead {
-    font-size: 0.6875rem;
-    font-weight: 400;
-    opacity: 0.8;
-}
-
 .kit-page {
     flex: 1;
     min-height: 0;
@@ -3319,13 +3263,6 @@ onBeforeRouteLeave(() => {
     color: var(--color-text);
 }
 
-.kit-changes-dialog__lead {
-    margin: var(--space-2) 0 0;
-    color: var(--color-text-muted);
-    font-size: 0.8125rem;
-    font-weight: 400;
-    line-height: 1.45;
-}
 
 .kit-changes-dialog__body {
     flex: 1;
@@ -3495,22 +3432,43 @@ onBeforeRouteLeave(() => {
     gap: 0.2rem;
 }
 
-.kit-formula__method,
-.kit-formula__applied {
+.kit-alerts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.kit-alert {
+    margin: 0;
+    padding: 0.55rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.8125rem;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+}
+
+.kit-alert--error {
+    color: var(--color-danger);
+    box-shadow: inset 3px 0 0 var(--color-danger), var(--shadow-sm);
+}
+
+.kit-alert--warn {
+    color: var(--color-text);
+    box-shadow: inset 3px 0 0 var(--color-warning, #c48a00), var(--shadow-sm);
+}
+
+.kit-eq-note {
+    margin: 0 0 0.5rem;
+    color: var(--color-danger);
+    font-size: 0.75rem;
+}
+
+.kit-formula__method {
     margin: 0;
     font-size: 0.8125rem;
     font-weight: 400;
     line-height: 1.45;
-}
-
-.kit-formula__method {
     color: var(--color-text);
-}
-
-.kit-formula__applied {
-    color: var(--color-text-muted);
-    font-style: italic;
-    font-variant-numeric: tabular-nums;
 }
 
 .kit-split {
@@ -3834,12 +3792,6 @@ onBeforeRouteLeave(() => {
     font-weight: 400;
 }
 
-.kit-panel__lead {
-    margin: 0;
-    color: var(--color-text-muted);
-    font-size: 0.75rem;
-    font-weight: 400;
-}
 
 .kit-panel__head--scale .kit-panel__title {
     font-size: 0.875rem;
@@ -4136,12 +4088,6 @@ onBeforeRouteLeave(() => {
     line-height: 1.35;
 }
 
-.kit-case__project {
-    color: var(--color-text-muted);
-    font-size: 0.6875rem;
-    font-style: italic;
-    line-height: 1.3;
-}
 
 .kit-study {
     display: flex;
@@ -4229,12 +4175,6 @@ onBeforeRouteLeave(() => {
     font-weight: 400;
 }
 
-.kit-contrib__phrase {
-    color: var(--color-text-muted);
-    font-size: 0.75rem;
-    font-style: italic;
-    line-height: 1.35;
-}
 
 .kit-scale-tabs {
     display: flex;

@@ -61,22 +61,75 @@ class UpdateEvaluationScoreKitRequest extends FormRequest
             'base_adjust_levels.*.label' => ['required_with:base_adjust_levels', 'string', 'max:80'],
             'base_adjust_levels.*.score' => ['required_with:base_adjust_levels', 'numeric', 'min:0', 'max:9999'],
             'base_adjust_levels.*.sort_order' => ['sometimes', 'integer', 'min:0', 'max:99'],
-            'weighted_task_levels' => ['sometimes', 'array', 'min:1', 'max:'.EvaluationScoreKit::SCALE_LEVEL_MAX],
+            'weighted_task_levels' => [
+                'sometimes',
+                'array',
+                'min:1',
+                'max:'.EvaluationScoreKit::SCALE_LEVEL_MAX,
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $this->assertUniqueScaleKeys($value, $fail, 'Thang độ khó');
+                },
+            ],
             'weighted_task_levels.*.code' => ['nullable', 'string', 'max:8'],
             'weighted_task_levels.*.label' => ['required_with:weighted_task_levels', 'string', 'max:80'],
-            'weighted_task_levels.*.score' => ['required_with:weighted_task_levels', 'numeric', 'min:0.01', 'max:9999'],
-            'progress_levels' => ['sometimes', 'array', 'min:1', 'max:'.EvaluationScoreKit::SCALE_LEVEL_MAX],
+            'weighted_task_levels.*.score' => [
+                'required_with:weighted_task_levels',
+                'numeric',
+                'min:'.EvaluationScoreKit::DIFFICULTY_FACTOR_MIN,
+                'max:'.EvaluationScoreKit::DIFFICULTY_FACTOR_MAX,
+            ],
+            'progress_levels' => [
+                'sometimes',
+                'array',
+                'min:1',
+                'max:'.EvaluationScoreKit::SCALE_LEVEL_MAX,
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $this->assertUniqueScaleKeys($value, $fail, 'Thang tiến độ');
+                },
+            ],
             'progress_levels.*.code' => ['nullable', 'string', 'max:8'],
             'progress_levels.*.label' => ['required_with:progress_levels', 'string', 'max:80'],
-            'progress_levels.*.score' => ['required_with:progress_levels', 'numeric', 'min:0.01', 'max:9999'],
-            'quality_levels' => ['sometimes', 'array', 'min:1', 'max:'.EvaluationScoreKit::SCALE_LEVEL_MAX],
+            'progress_levels.*.score' => [
+                'required_with:progress_levels',
+                'numeric',
+                'min:0',
+                'max:20',
+            ],
+            'quality_levels' => [
+                'sometimes',
+                'array',
+                'min:1',
+                'max:'.EvaluationScoreKit::SCALE_LEVEL_MAX,
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $this->assertUniqueScaleKeys($value, $fail, 'Thang chất lượng');
+                },
+            ],
             'quality_levels.*.code' => ['nullable', 'string', 'max:8'],
             'quality_levels.*.label' => ['required_with:quality_levels', 'string', 'max:80'],
-            'quality_levels.*.score' => ['required_with:quality_levels', 'numeric', 'min:0.01', 'max:9999'],
-            'performance_levels' => ['sometimes', 'array', 'min:2', 'max:'.EvaluationScoreKit::CLASSIFICATION_LEVEL_MAX],
+            'quality_levels.*.score' => [
+                'required_with:quality_levels',
+                'numeric',
+                'min:0',
+                'max:20',
+            ],
+            'performance_levels' => [
+                'sometimes',
+                'array',
+                'min:2',
+                'max:'.EvaluationScoreKit::CLASSIFICATION_LEVEL_MAX,
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $this->assertUniqueScaleKeys($value, $fail, 'Thang xếp loại hiệu suất');
+                    $this->assertPerformanceHasFloor($value, $fail);
+                },
+            ],
             'performance_levels.*.code' => ['nullable', 'string', 'max:8'],
             'performance_levels.*.label' => ['required_with:performance_levels', 'string', 'max:80'],
-            'performance_levels.*.score' => ['required_with:performance_levels', 'numeric', 'min:0', 'max:9999'],
+            'performance_levels.*.score' => [
+                'required_with:performance_levels',
+                'numeric',
+                'min:0',
+                'max:'.EvaluationScoreKit::PERFORMANCE_PERCENT_MAX,
+            ],
             'formula' => ['sometimes', 'array'],
             'formula.base' => ['sometimes', 'string', Rule::in(['on', 'off'])],
             'formula.done' => ['sometimes', 'string', Rule::in(['add', 'sub', 'off'])],
@@ -87,7 +140,7 @@ class UpdateEvaluationScoreKitRequest extends FormRequest
             'formula.quality' => ['sometimes', 'string', Rule::in(['on', 'off'])],
             'formula.contrib' => ['sometimes', 'string', Rule::in(['on', 'off'])],
             'formula.lock_difficulty' => ['sometimes', 'string', Rule::in(['on', 'off'])],
-            'change_context' => ['sometimes', 'string', Rule::in(['manual', 'mode_change', 'reset'])],
+            'change_context' => ['sometimes', 'string', Rule::in(['manual', 'mode_change', 'reset', 'leave_save'])],
         ];
     }
 
@@ -176,5 +229,56 @@ class UpdateEvaluationScoreKitRequest extends FormRequest
                 }
             },
         ];
+    }
+
+    private function assertUniqueScaleKeys(mixed $value, \Closure $fail, string $label): void
+    {
+        if (! is_array($value)) {
+            return;
+        }
+
+        $seen = [];
+        foreach ($value as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            foreach (['code', 'label'] as $field) {
+                $raw = trim((string) ($row[$field] ?? ''));
+                if ($raw === '') {
+                    continue;
+                }
+                $key = $field.':'.mb_strtolower($raw);
+                if (isset($seen[$key])) {
+                    $fail($label.' không được trùng mã hoặc tên mức.');
+
+                    return;
+                }
+                $seen[$key] = true;
+            }
+        }
+    }
+
+    private function assertPerformanceHasFloor(mixed $value, \Closure $fail): void
+    {
+        if (! is_array($value) || $value === []) {
+            return;
+        }
+
+        $scores = [];
+        foreach ($value as $row) {
+            if (is_array($row) && isset($row['score'])) {
+                $scores[] = (float) $row['score'];
+            }
+        }
+
+        if ($scores === []) {
+            return;
+        }
+
+        // Thang 1–5 chưa quy đổi vẫn có mức 0 hoặc 1; thang % phải có sàn 0.
+        $max = max($scores);
+        if ($max > 20 && min($scores) > 0.0001) {
+            $fail('Thang xếp loại hiệu suất phải có mức sàn 0%.');
+        }
     }
 }

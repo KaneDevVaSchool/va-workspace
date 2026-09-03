@@ -225,12 +225,6 @@ export const SUMMARY_WIDTH_KEY = 'va-evaluation-summary-column-widths';
 export const SUMMARY_ZOOM_KEY = 'va-evaluation-summary-zoom';
 export const SUMMARY_PERIOD_KEY = 'va-evaluation-summary-period-type';
 
-/* ---------- Trang Xem báo cáo ---------- */
-
-export const REPORT_VIEW_WIDTH_KEY = 'va-report-view-column-widths';
-export const REPORT_VIEW_ZOOM_KEY = 'va-report-view-zoom';
-export const REPORT_VIEW_SORT_KEY = 'va-report-view-sort';
-
 /* ---------- Dùng chung ---------- */
 
 /**
@@ -302,28 +296,6 @@ export function loadZoom(storageKey) {
 export function saveZoom(storageKey, value) {
   try {
     localStorage.setItem(storageKey, String(value));
-  } catch {
-    // Bỏ qua.
-  }
-}
-
-/** Cách sắp xếp bảng xem báo cáo — nhớ để lần sau mở ra vẫn xếp như cũ. */
-export function loadSort(storageKey, fallback) {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    const parsed = raw ? JSON.parse(raw) : null;
-    if (parsed && typeof parsed === 'object' && typeof parsed.key === 'string') {
-      return { key: parsed.key, dir: parsed.dir === 'asc' ? 'asc' : 'desc' };
-    }
-  } catch {
-    // Bỏ qua.
-  }
-  return { ...fallback };
-}
-
-export function saveSort(storageKey, value) {
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(value));
   } catch {
     // Bỏ qua.
   }

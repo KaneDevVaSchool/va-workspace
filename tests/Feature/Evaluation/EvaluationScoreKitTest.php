@@ -4,7 +4,9 @@ namespace Tests\Feature\Evaluation;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Evaluation\App\Models\EvaluationConfigVersion;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
+use Modules\Evaluation\App\Models\EvaluationScoreKit;
 use Modules\Identity\App\Models\ActivityLog;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\Role;
@@ -82,29 +84,29 @@ class EvaluationScoreKitTest extends TestCase
             ->assertJsonPath('kit.formula.project', 'off');
     }
 
-    public function test_score_kit_loads_matching_scales_from_department_criteria(): void
+    public function test_score_kit_does_not_auto_match_department_scale_names(): void
     {
         $this->seed(RoleSeeder::class);
         $dept = Department::query()->create(['code' => 'IT', 'name' => 'CNTT', 'is_active' => true]);
         $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
 
-        $classification = $this->makeScale($dept, 'Thang xếp loại công việc');
-        $difficulty = $this->makeScale($dept, 'Mức độ quan trọng', true);
-        $progress = $this->makeScale($dept, 'Đúng hạn & tiến độ');
-        $quality = $this->makeScale($dept, 'Chất lượng công việc');
+        $this->makeScale($dept, 'Thang xếp loại công việc');
+        $this->makeScale($dept, 'Mức độ quan trọng', true);
+        $this->makeScale($dept, 'Đúng hạn & tiến độ');
+        $this->makeScale($dept, 'Chất lượng công việc');
 
         $this->actingAs($director)
             ->getJson('/api/evaluation/score-kit')
             ->assertOk()
-            ->assertJsonPath('kit.classification_criterion_id', $classification->id)
-            ->assertJsonPath('kit.difficulty_criterion_id', $difficulty->id)
-            ->assertJsonPath('kit.progress_criterion_id', $progress->id)
-            ->assertJsonPath('kit.quality_criterion_id', $quality->id)
-            ->assertJsonPath('kit.base_adjust_levels.0.label', 'Khá')
-            ->assertJsonPath('kit.performance_levels.1.label', 'Tốt')
-            ->assertJsonPath('kit.weighted_task_levels.0.code', 'M1')
-            ->assertJsonPath('kit.progress_levels.1.score', 90)
-            ->assertJsonPath('kit.quality_levels.0.label', 'Khá');
+            ->assertJsonPath('kit.classification_criterion_id', null)
+            ->assertJsonPath('kit.difficulty_criterion_id', null)
+            ->assertJsonPath('kit.progress_criterion_id', null)
+            ->assertJsonPath('kit.quality_criterion_id', null)
+            ->assertJsonPath('kit.base_adjust_levels.0.label', 'Xuất sắc')
+            ->assertJsonPath('kit.performance_levels.0.label', 'Vượt kỳ vọng')
+            ->assertJsonPath('kit.weighted_task_levels.0.label', 'Rất khó')
+            ->assertJsonPath('kit.progress_levels.0.label', 'Sớm ≥20%')
+            ->assertJsonPath('kit.quality_levels.0.label', 'Xuất sắc');
     }
 
     public function test_selected_scale_criterion_overrides_automatic_match(): void
@@ -122,7 +124,10 @@ class EvaluationScoreKitTest extends TestCase
             ->assertOk()
             ->assertJsonPath('kit.quality_criterion_id', $selected->id)
             ->assertJsonPath('kit.quality_criterion.name', 'Chuẩn nghiệm thu')
-            ->assertJsonPath('kit.quality_levels.1.label', 'Tốt');
+            ->assertJsonPath('kit.quality_levels.0.label', 'Tốt')
+            ->assertJsonPath('kit.quality_levels.0.score', 1)
+            ->assertJsonPath('kit.quality_levels.1.label', 'Khá')
+            ->assertJsonPath('kit.quality_levels.1.score', 0.5);
 
         $this->assertDatabaseHas('evaluation_score_kits', [
             'department_id' => $dept->id,
@@ -336,6 +341,61 @@ class EvaluationScoreKitTest extends TestCase
             ->assertJsonPath('kit.progress_levels.4.score', 0.75);
     }
 
+    public function test_changed_score_kit_is_published_for_the_summary_page(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $dept = Department::query()->create(['code' => 'IT', 'name' => 'CNTT', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+
+        $this->actingAs($director)
+            ->putJson('/api/evaluation/score-kit', ['mode' => 'base_adjust'])
+            ->assertOk();
+
+        $firstVersion = EvaluationConfigVersion::query()
+            ->where('department_id', $dept->id)
+            ->sole();
+
+        $this->assertSame(EvaluationConfigVersion::STATUS_ACTIVE, $firstVersion->status);
+        $this->assertSame('base_adjust', $firstVersion->kit_snapshot['mode']);
+
+        EvaluationScoreKit::query()
+            ->where('department_id', $dept->id)
+            ->update(['mode' => 'weighted_task']);
+
+        $this->actingAs($director)
+            ->putJson('/api/evaluation/score-kit', ['mode' => 'weighted_task'])
+            ->assertOk();
+
+        $activeVersion = EvaluationConfigVersion::query()
+            ->where('department_id', $dept->id)
+            ->where('status', EvaluationConfigVersion::STATUS_ACTIVE)
+            ->sole();
+
+        $this->assertSame(2, $activeVersion->version_no);
+        $this->assertSame('weighted_task', $activeVersion->kit_snapshot['mode']);
+        $this->assertSame(
+            EvaluationConfigVersion::STATUS_SUPERSEDED,
+            $firstVersion->fresh()->status,
+        );
+
+        $this->actingAs($director)
+            ->getJson('/api/evaluation/summary?from=2026-09-01&to=2026-09-30')
+            ->assertOk()
+            ->assertJsonPath('version_no', 2)
+            ->assertJsonPath('mode', 'weighted_task');
+
+        $this->actingAs($director)
+            ->putJson('/api/evaluation/score-kit', ['mode' => 'weighted_task'])
+            ->assertOk();
+
+        $this->assertSame(
+            2,
+            EvaluationConfigVersion::query()
+                ->where('department_id', $dept->id)
+                ->count(),
+        );
+    }
+
     public function test_score_kit_change_records_detailed_before_and_after_activity(): void
     {
         $this->seed(RoleSeeder::class);
@@ -463,6 +523,61 @@ class EvaluationScoreKitTest extends TestCase
         $this->actingAs($member)
             ->putJson('/api/evaluation/score-kit', ['mode' => 'base_adjust'])
             ->assertForbidden();
+    }
+
+    public function test_binding_ordinal_progress_scale_converts_to_safe_factors(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $dept = Department::query()->create(['code' => 'IT', 'name' => 'CNTT', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+        $progress = EvaluationCriteria::query()->create([
+            'department_id' => $dept->id,
+            'name' => 'Đúng hạn',
+            'type' => 'scale',
+            'levels' => [
+                ['code' => '1', 'label' => 'Xuất sắc', 'score' => 5],
+                ['code' => '2', 'label' => 'Tốt', 'score' => 4],
+                ['code' => '3', 'label' => 'Khá', 'score' => 3],
+                ['code' => '4', 'label' => 'Đạt', 'score' => 2],
+                ['code' => '5', 'label' => 'Kém', 'score' => 1],
+            ],
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+
+        $response = $this->actingAs($director)
+            ->putJson('/api/evaluation/score-kit', [
+                'progress_criterion_id' => $progress->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('kit.kit_schema_version', 2)
+            ->assertJsonPath('kit.progress_criterion_id', $progress->id);
+
+        $scores = collect($response->json('kit.progress_levels'))->pluck('score');
+        $this->assertGreaterThanOrEqual(0.5, $scores->min());
+        $this->assertLessThanOrEqual(1.1, $scores->max());
+        $this->assertNotContains(5, $scores->all());
+    }
+
+    public function test_repair_cach2_dry_run_does_not_write(): void
+    {
+        $dept = Department::query()->create(['code' => 'HR', 'name' => 'Nhân sự', 'is_active' => true]);
+        $kit = EvaluationScoreKit::query()->create([
+            'department_id' => $dept->id,
+            'mode' => EvaluationScoreKit::MODE_WEIGHTED_TASK,
+            'kit_schema_version' => 1,
+            'progress_levels' => [
+                ['code' => 'A', 'label' => 'Tốt', 'score' => 5],
+                ['code' => 'B', 'label' => 'Kém', 'score' => 1],
+            ],
+        ]);
+
+        $this->artisan('evaluation:repair-cach2', ['--dry-run' => true])
+            ->assertSuccessful();
+
+        $kit->refresh();
+        $this->assertSame(1, $kit->kit_schema_version);
+        $this->assertSame(5, $kit->progress_levels[0]['score']);
     }
 
     public function test_show_includes_assigned_task_type_criterion(): void

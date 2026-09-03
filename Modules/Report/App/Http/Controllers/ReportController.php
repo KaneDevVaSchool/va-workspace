@@ -9,7 +9,6 @@ use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Report\App\Http\Requests\PreviewPersonnelEvaluationReportRequest;
 use Modules\Report\App\Http\Requests\StorePersonnelEvaluationReportRequest;
-use Modules\Report\App\Http\Requests\UpdateReportRequest;
 use Modules\Report\App\Models\Report;
 use Modules\Report\App\Services\ReportService;
 
@@ -17,10 +16,6 @@ use Modules\Report\App\Services\ReportService;
  * Manager JSON:
  *   GET    /api/report                          — danh sách báo cáo xem được
  *   POST   /api/report/personnel-evaluation     — tạo báo cáo đánh giá nhân sự
- *   GET    /api/report/{id}                     — kết quả báo cáo (tổng hợp + bảng)
- *   PUT    /api/report/{id}                     — sửa cấu hình
- *   PATCH  /api/report/{id}/save                — chốt lưu
- *   GET    /api/report/{id}/employees/{userId}  — chi tiết điểm một nhân sự
  *   DELETE /api/report/{id}                     — xoá
  */
 class ReportController extends Controller
@@ -104,76 +99,6 @@ class ReportController extends Controller
         return response()->json(
             $this->service->previewPersonnelEvaluation($departmentId, $request->validated()),
         );
-    }
-
-    public function show(Request $request, int $id): JsonResponse
-    {
-        $report = $this->service->find($id);
-        if ($report === null) {
-            return response()->json(['message' => 'Không tìm thấy báo cáo.'], 404);
-        }
-
-        if (! $this->service->canView($report, $request->user())) {
-            return response()->json(['message' => 'Bạn không có quyền xem báo cáo này.'], 403);
-        }
-
-        return response()->json($this->service->present($report));
-    }
-
-    public function employeeDetail(Request $request, int $id, int $userId): JsonResponse
-    {
-        $report = $this->service->find($id);
-        if ($report === null) {
-            return response()->json(['message' => 'Không tìm thấy báo cáo.'], 404);
-        }
-
-        if (! $this->service->canView($report, $request->user())) {
-            return response()->json(['message' => 'Bạn không có quyền xem báo cáo này.'], 403);
-        }
-
-        return response()->json($this->service->presentEmployeeDetail($report, $userId));
-    }
-
-    public function update(UpdateReportRequest $request, int $id): JsonResponse
-    {
-        $report = $this->manageableOrFail($request, $id);
-        if ($report instanceof JsonResponse) {
-            return $report;
-        }
-
-        $updated = $this->service->update($report, $request->user(), $request->validated());
-
-        $this->activityLogs->record(
-            'report.update',
-            'Cập nhật báo cáo "'.$updated->title.'"',
-            $request->user(),
-            'report',
-            (int) $updated->id,
-            ['department_id' => $updated->department_id],
-        );
-
-        return response()->json(['report' => $this->service->presentDetail($updated)]);
-    }
-
-    public function save(Request $request, int $id): JsonResponse
-    {
-        $report = $this->manageableOrFail($request, $id);
-        if ($report instanceof JsonResponse) {
-            return $report;
-        }
-
-        $saved = $this->service->save($report, $request->user());
-
-        $this->activityLogs->record(
-            'report.save',
-            'Lưu báo cáo "'.$saved->title.'"',
-            $request->user(),
-            'report',
-            (int) $saved->id,
-            ['department_id' => $saved->department_id],
-        );
-
-        return response()->json(['report' => $this->service->presentDetail($saved)]);
     }
 
     public function destroy(Request $request, int $id): JsonResponse

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
@@ -43,6 +43,19 @@ const viewerQuery = ref('');
 const preview = ref(null);
 const previewLoading = ref(false);
 const previewError = ref('');
+const acknowledgedMissing = ref(false);
+
+const hasMissingPreview = computed(() => Number(preview.value?.summary?.missing_total) > 0);
+const canCreate = computed(
+  () =>
+    !saving.value &&
+    !previewLoading.value &&
+    (!hasMissingPreview.value || acknowledgedMissing.value),
+);
+
+watch(preview, () => {
+  acknowledgedMissing.value = false;
+});
 
 const today = new Date();
 const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -234,10 +247,10 @@ async function submit() {
   saving.value = true;
   formErrors.value = {};
   try {
-    const { data } = await window.axios.post('/api/report/personnel-evaluation', { ...form });
+    await window.axios.post('/api/report/personnel-evaluation', { ...form });
     submitted.value = true;
     showClientToast('success', 'Đã tạo báo cáo.');
-    router.push({ name: 'manager.reports.show', params: { id: data.report.id } });
+    router.push({ name: 'manager.reports.index' });
   } catch (error) {
     formErrors.value = error?.response?.data?.errors ?? {};
     showClientToast('error', error?.response?.data?.message ?? 'Không tạo được báo cáo.');
@@ -532,10 +545,16 @@ onMounted(loadOptions);
               <span>Thấp nhất: {{ preview.summary.lowest_score }}</span>
             </div>
 
-            <p v-if="preview.summary.missing_total > 0" class="report-create__preview-warning">
-              Có {{ preview.summary.missing_total }} công việc chưa đủ dữ liệu nên được tính như
-              mức trung bình.
-            </p>
+            <div v-if="hasMissingPreview" class="report-create__preview-warning">
+              <p>
+                Có {{ preview.summary.missing_total }} công việc chưa đủ dữ liệu nên điểm thực = 0.
+                Những việc này vẫn nằm trong mẫu số hiệu suất.
+              </p>
+              <label class="report-create__check">
+                <input v-model="acknowledgedMissing" type="checkbox" />
+                Tôi đã hiểu và vẫn muốn tạo báo cáo với số liệu này.
+              </label>
+            </div>
 
             <div v-if="preview.rows.length" class="report-create__rows">
               <div
@@ -578,7 +597,7 @@ onMounted(loadOptions);
       >
         Tiếp tục
       </button>
-      <button v-else type="button" class="report-create__btn" :disabled="saving" @click="submit">
+      <button v-else type="button" class="report-create__btn" :disabled="!canCreate" @click="submit">
         {{ saving ? 'Đang tạo…' : 'Tạo báo cáo' }}
       </button>
     </div>
@@ -882,6 +901,8 @@ onMounted(loadOptions);
 }
 
 .report-create__preview-warning {
+  display: grid;
+  gap: var(--space-2);
   margin: 0;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-warning-tint-border);
@@ -889,6 +910,10 @@ onMounted(loadOptions);
   background: var(--color-warning-tint-bg);
   color: var(--color-warning-tint-fg);
   font-size: 0.8125rem;
+}
+
+.report-create__preview-warning p {
+  margin: 0;
 }
 
 .report-create__confirm {

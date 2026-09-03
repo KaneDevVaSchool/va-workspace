@@ -13,6 +13,7 @@ use Modules\Identity\App\Models\Department;
  * @property int $id
  * @property int $department_id
  * @property string|null $mode Scoring method: base_adjust (cách 1 đếm số việc) | weighted_task (cách 2 hiệu suất)
+ * @property int $kit_schema_version
  * @property float $base_score
  * @property float $task_base_score
  * @property float $quality_bonus_percent
@@ -47,17 +48,38 @@ class EvaluationScoreKit extends Model
         self::MODE_WEIGHTED_TASK,
     ];
 
+    /** Snapshot / kit cũ — giữ công thức legacy để báo cáo đã lưu không đổi số. */
+    public const KIT_SCHEMA_VERSION_LEGACY = 1;
+
+    /** Công thức Cách 2 hiện hành: việc chưa xong / thiếu dữ liệu = 0 điểm thực. */
+    public const KIT_SCHEMA_VERSION = 2;
+
     public const CLASSIFICATION_LEVEL_MIN = 2;
 
     public const CLASSIFICATION_LEVEL_MAX = 12;
 
     public const SCALE_LEVEL_MAX = 20;
 
+    public const DIFFICULTY_FACTOR_MIN = 0.01;
+
+    public const DIFFICULTY_FACTOR_MAX = 10.0;
+
+    public const PROGRESS_FACTOR_MIN = 0.5;
+
+    public const PROGRESS_FACTOR_MAX = 1.1;
+
+    public const QUALITY_FACTOR_MIN = 0.5;
+
+    public const QUALITY_FACTOR_MAX = 1.0;
+
+    public const PERFORMANCE_PERCENT_MAX = 200.0;
+
     protected $table = 'evaluation_score_kits';
 
     protected $fillable = [
         'department_id',
         'mode',
+        'kit_schema_version',
         'base_score',
         'task_base_score',
         'quality_bonus_percent',
@@ -83,6 +105,7 @@ class EvaluationScoreKit extends Model
     ];
 
     protected $casts = [
+        'kit_schema_version' => 'integer',
         'base_score' => 'decimal:2',
         'task_base_score' => 'decimal:2',
         'quality_bonus_percent' => 'decimal:2',
@@ -254,11 +277,25 @@ class EvaluationScoreKit extends Model
         $rows = is_array($levels) ? array_values($levels) : [];
         $firstCode = (string) ($rows[0]['code'] ?? '');
         $firstLabel = (string) ($rows[0]['label'] ?? '');
-        if (count($rows) === 4 && ($firstCode === 'DH' || $firstLabel === 'Đúng hạn')) {
+        $scores = array_map(
+            static fn (array $row) => (float) ($row['score'] ?? 0),
+            array_filter($rows, 'is_array'),
+        );
+        $looksLikeFactors = $scores !== []
+            && max($scores) <= self::PROGRESS_FACTOR_MAX + 0.2
+            && min($scores) >= self::PROGRESS_FACTOR_MIN - 0.2;
+
+        // Chỉ vá thang hệ số 4 mức cũ (Đúng hạn → …), không pad tiêu chí ordinal 1–5.
+        if ($looksLikeFactors
+            && count($rows) === 4
+            && ($firstCode === 'DH' || $firstLabel === 'Đúng hạn')
+        ) {
             $rows = array_merge(array_slice(self::defaultProgressLevels(), 0, 2), $rows);
         }
 
-        return self::normalizeLevels($rows, self::defaultProgressLevels());
+        $normalized = self::normalizeLevels($rows, self::defaultProgressLevels());
+
+        return self::sortLevelsBestFirst($normalized);
     }
 
     /**
@@ -327,6 +364,356 @@ class EvaluationScoreKit extends Model
         }
 
         return $out !== [] ? $out : $fallback;
+    }
+
+    /**
+     * Snapshot/kit đang dùng công thức Cách 2 v2?
+     *
+     * @param  array<string, mixed>|null  $kit
+     */
+    public static function isSchemaV2(?array $kit): bool
+    {
+        $version = (int) ($kit['kit_schema_version'] ?? self::KIT_SCHEMA_VERSION_LEGACY);
+
+        return $version >= self::KIT_SCHEMA_VERSION;
+    }
+
+    /**
+     * Điểm mức tiêu chí (thường 1–5) → hệ số nhân theo hạng.
+     *
+     * Không scale thô theo giá trị tuyệt đối: thang ordinal 0–5 và 1–5 phải
+     * cùng ra dải hệ số an toàn. Đã nằm trong dải đích thì giữ nguyên (idempotent).
+     *
+     * @param  list<array<string, mixed>>|null  $levels
+     * @param  'progress'|'quality'|'difficulty'  $kind
+     * @return list<array{code: string, label: string, score: float}>
+     */
+    public static function convertCriterionLevelsToFactors(?array $levels, string $kind): array
+    {
+        [$min, $max, $fallback] = match ($kind) {
+            'quality' => [
+                self::QUALITY_FACTOR_MIN,
+                self::QUALITY_FACTOR_MAX,
+                self::defaultQualityLevels(),
+            ],
+            'difficulty' => [
+                self::DIFFICULTY_FACTOR_MIN,
+                self::DIFFICULTY_FACTOR_MAX,
+                self::defaultWeightedTaskLevels(),
+            ],
+            default => [
+                self::PROGRESS_FACTOR_MIN,
+                self::PROGRESS_FACTOR_MAX,
+                self::defaultProgressLevels(),
+            ],
+        };
+
+        $normalized = self::normalizeLevels($levels, $fallback);
+
+        // Độ khó là trọng số khối lượng: giữ điểm dương của phòng (×1…×5).
+        if ($kind === 'difficulty') {
+            return array_map(static function (array $row): array {
+                $score = (float) ($row['score'] ?? 1);
+                $score = max(self::DIFFICULTY_FACTOR_MIN, min(self::DIFFICULTY_FACTOR_MAX, $score));
+
+                return [
+                    'code' => (string) ($row['code'] ?? ''),
+                    'label' => (string) ($row['label'] ?? ''),
+                    'score' => round($score, 2),
+                ];
+            }, $normalized);
+        }
+
+        if (self::levelsAlreadyInBand($normalized, $min, $max)) {
+            return self::sortLevelsBestFirst($normalized);
+        }
+
+        return self::mapLevelsByRank($normalized, $min, $max, bestFirst: true);
+    }
+
+    /**
+     * Điểm mức tiêu chí → ngưỡng phần trăm xếp loại (Cách 2) / điểm (Cách 1).
+     *
+     * @param  list<array<string, mixed>>|null  $levels
+     * @return list<array{code: string, label: string, score: float, sort_order?: int}>
+     */
+    public static function convertCriterionLevelsToPercent(?array $levels, bool $withSort = false): array
+    {
+        $fallback = $withSort
+            ? self::defaultBaseAdjustLevels()
+            : self::defaultPerformanceLevels();
+        $rows = is_array($levels) ? array_values($levels) : [];
+        if ($rows === []) {
+            return $fallback;
+        }
+
+        $prepared = [];
+        foreach ($rows as $index => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $prepared[] = [
+                'code' => mb_substr(trim((string) ($row['code'] ?? '')), 0, 8),
+                'label' => mb_substr(trim((string) ($row['label'] ?? '')), 0, 80) ?: ('Mức '.($index + 1)),
+                'score' => (float) ($row['score'] ?? 0),
+                'sort_order' => isset($row['sort_order']) ? (int) $row['sort_order'] : $index,
+            ];
+        }
+
+        if ($prepared === []) {
+            return $fallback;
+        }
+
+        $scores = array_map(static fn (array $row) => (float) $row['score'], $prepared);
+        $maxScore = max($scores);
+        // Đã là thang % / điểm tuyệt đối quanh 70–110 thì giữ.
+        if ($maxScore > 20 || self::levelsAlreadyInBand($prepared, 0, self::PERFORMANCE_PERCENT_MAX) && $maxScore >= 70) {
+            $out = self::sortLevelsBestFirst($prepared);
+            if ($withSort) {
+                foreach ($out as $index => $row) {
+                    $out[$index]['sort_order'] = $index;
+                }
+            } else {
+                $out = array_map(static fn (array $row) => [
+                    'code' => $row['code'],
+                    'label' => $row['label'],
+                    'score' => round((float) $row['score'], 2),
+                ], $out);
+            }
+
+            return $out;
+        }
+
+        $n = count($prepared);
+        // Hạng theo điểm tiêu chí tăng dần: điểm thấp = tệ.
+        usort($prepared, static function (array $a, array $b): int {
+            $cmp = $a['score'] <=> $b['score'];
+
+            return $cmp !== 0 ? $cmp : $a['sort_order'] <=> $b['sort_order'];
+        });
+
+        $anchors = [110.0, 100.0, 90.0, 80.0, 70.0];
+        $out = [];
+        for ($i = 0; $i < $n; $i++) {
+            $row = $prepared[$i];
+            if ($i === 0) {
+                $percent = 0.0;
+            } elseif ($n === 2) {
+                $percent = 100.0;
+            } else {
+                // Các mức từ kém → tốt: bỏ mức sàn 0, nội suy 70…110.
+                $rankFromWorst = $i; // 1 … n-1
+                $topSlots = $n - 1;
+                $t = ($rankFromWorst - 1) / max(1, $topSlots - 1);
+                $percent = 70.0 + (110.0 - 70.0) * $t;
+                if ($topSlots <= count($anchors)) {
+                    // Ưu tiên neo mặc định khi số mức khớp.
+                    $anchorIndex = $topSlots - $rankFromWorst;
+                    if (isset($anchors[$anchorIndex]) && $topSlots === 5) {
+                        $percent = $anchors[$anchorIndex];
+                    }
+                }
+            }
+
+            $item = [
+                'code' => $row['code'],
+                'label' => $row['label'],
+                'score' => round($percent, 2),
+            ];
+            if ($withSort) {
+                $item['sort_order'] = 0;
+            }
+            $out[] = $item;
+        }
+
+        // Xuất tốt → xấu (điểm % giảm dần).
+        usort($out, static fn (array $a, array $b) => $b['score'] <=> $a['score']);
+        if ($withSort) {
+            foreach ($out as $index => $row) {
+                $out[$index]['sort_order'] = $index;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<array{code: string, label: string, score: float}>  $levels
+     * @return list<array{max_variance_days: int|null, factor: float}>
+     */
+    public static function buildProgressBands(array $levels): array
+    {
+        $factors = [];
+        foreach ($levels as $level) {
+            if (is_array($level)) {
+                $factors[] = (float) ($level['score'] ?? 1);
+            }
+        }
+        $n = count($factors);
+        if ($n === 0) {
+            return [];
+        }
+        if ($n === 1) {
+            return [['max_variance_days' => null, 'factor' => $factors[0]]];
+        }
+
+        $lateCount = (int) floor($n / 2);
+        $earlyCount = max(0, $n - $lateCount - 1);
+        $onTimeIndex = $earlyCount;
+        $bands = [];
+
+        for ($i = 0; $i < $earlyCount; $i++) {
+            $daysEarly = $earlyCount - $i;
+            $bands[] = [
+                'max_variance_days' => -$daysEarly,
+                'factor' => $factors[$i],
+            ];
+        }
+
+        $bands[] = [
+            'max_variance_days' => 0,
+            'factor' => $factors[$onTimeIndex],
+        ];
+
+        $lateFactors = array_slice($factors, $onTimeIndex + 1);
+        $lateCaps = self::lateDayCaps(count($lateFactors));
+        foreach ($lateFactors as $i => $factor) {
+            $bands[] = [
+                'max_variance_days' => $lateCaps[$i],
+                'factor' => $factor,
+            ];
+        }
+
+        return $bands;
+    }
+
+    /**
+     * Một hệ số / mức theo đúng thứ tự cấu hình (không nhân đôi code+label).
+     *
+     * @param  list<array<string, mixed>>|null  $levels
+     * @return list<float>
+     */
+    public static function orderedFactors(?array $levels): array
+    {
+        $out = [];
+        foreach (is_array($levels) ? $levels : [] as $level) {
+            if (! is_array($level)) {
+                continue;
+            }
+            $out[] = (float) ($level['score'] ?? 1);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<array{code: string, label: string, score: float}>  $levels
+     */
+    public static function levelsAlreadyInBand(array $levels, float $min, float $max): bool
+    {
+        if ($levels === []) {
+            return false;
+        }
+
+        foreach ($levels as $level) {
+            $score = (float) ($level['score'] ?? 0);
+            if ($score < $min - 0.001 || $score > $max + 0.001) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  list<array{code: string, label: string, score: float}>  $levels
+     * @return list<array{code: string, label: string, score: float}>
+     */
+    private static function mapLevelsByRank(array $levels, float $min, float $max, bool $bestFirst): array
+    {
+        $n = count($levels);
+        if ($n === 0) {
+            return [];
+        }
+
+        $indexed = [];
+        foreach ($levels as $index => $row) {
+            $indexed[] = [
+                'code' => (string) ($row['code'] ?? ''),
+                'label' => (string) ($row['label'] ?? ''),
+                'score' => (float) ($row['score'] ?? 0),
+                'order' => $index,
+            ];
+        }
+
+        usort($indexed, static function (array $a, array $b): int {
+            $cmp = $a['score'] <=> $b['score'];
+
+            return $cmp !== 0 ? $cmp : $a['order'] <=> $b['order'];
+        });
+
+        $out = [];
+        foreach ($indexed as $rank => $row) {
+            $t = $n === 1 ? 0.5 : $rank / ($n - 1);
+            $factor = $min + ($max - $min) * $t;
+            $out[] = [
+                'code' => $row['code'],
+                'label' => $row['label'],
+                'score' => round($factor, 2),
+                '_rank' => $rank,
+            ];
+        }
+
+        if ($bestFirst) {
+            usort($out, static fn (array $a, array $b) => $b['score'] <=> $a['score']);
+        }
+
+        return array_map(static fn (array $row) => [
+            'code' => $row['code'],
+            'label' => $row['label'],
+            'score' => $row['score'],
+        ], $out);
+    }
+
+    /**
+     * @param  list<array{code: string, label: string, score: float}>  $levels
+     * @return list<array{code: string, label: string, score: float}>
+     */
+    private static function sortLevelsBestFirst(array $levels): array
+    {
+        $out = array_values($levels);
+        usort($out, static fn (array $a, array $b) => ((float) $b['score']) <=> ((float) $a['score']));
+
+        return array_map(static fn (array $row) => [
+            'code' => (string) ($row['code'] ?? ''),
+            'label' => (string) ($row['label'] ?? ''),
+            'score' => round((float) ($row['score'] ?? 0), 2),
+        ], $out);
+    }
+
+    /** @return list<int|null> */
+    private static function lateDayCaps(int $count): array
+    {
+        if ($count <= 0) {
+            return [];
+        }
+        if ($count === 1) {
+            return [null];
+        }
+        if ($count === 2) {
+            return [2, null];
+        }
+        if ($count === 3) {
+            return [2, 5, null];
+        }
+
+        $caps = [];
+        for ($i = 0; $i < $count - 1; $i++) {
+            $caps[] = $i + 1;
+        }
+        $caps[] = null;
+
+        return $caps;
     }
 
     public function department(): BelongsTo

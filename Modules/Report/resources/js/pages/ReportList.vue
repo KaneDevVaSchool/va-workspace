@@ -173,10 +173,6 @@ function clearFilters() {
   loadReports(1);
 }
 
-function openReport(row) {
-  router.push({ name: 'manager.reports.show', params: { id: row.id } });
-}
-
 async function removeReport() {
   if (!confirmTarget.value) return;
 
@@ -524,7 +520,6 @@ onBeforeUnmount(() => {
                 :key="row.id"
                 :class="{ 'report-list__row--active': selected?.id === row.id }"
                 @click="selected = row"
-                @dblclick="openReport(row)"
               >
                 <td v-for="col in shownColumns" :key="col.key">
                   <span v-if="col.key === 'status'" class="report-list__status">
@@ -608,9 +603,6 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="report-list__side-actions">
-          <button type="button" class="report-list__btn" @click="openReport(selected)">
-            Mở báo cáo
-          </button>
           <button
             v-if="canCreate"
             type="button"

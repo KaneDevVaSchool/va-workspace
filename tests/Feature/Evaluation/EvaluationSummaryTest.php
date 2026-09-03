@@ -445,6 +445,59 @@ class EvaluationSummaryTest extends TestCase
         $this->assertSame(2, EvaluationEvent::query()->count());
     }
 
+    /* ---------- Khoá kỳ đã lưu báo cáo ---------- */
+
+    public function test_summary_exposes_unlocked_period_lock_by_default(): void
+    {
+        ['dept' => $dept, 'director' => $director] = $this->setUpDepartment();
+        $this->version($dept);
+
+        $this->actingAs($director)
+            ->getJson('/api/evaluation/summary?from='.self::FROM.'&to='.self::TO)
+            ->assertOk()
+            ->assertJsonPath('period_lock.locked', false)
+            ->assertJsonPath('period_lock.reports', []);
+    }
+
+    public function test_draft_report_does_not_lock_recording(): void
+    {
+        ['dept' => $dept, 'director' => $director, 'member' => $member] = $this->setUpDepartment();
+
+        $criterion = EvaluationCriteria::query()->create([
+            'department_id' => $dept->id,
+            'name' => 'Chủ động',
+            'type' => 'behavior',
+            'levels' => [['code' => 'A1', 'label' => 'Chủ động', 'score' => 6]],
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+
+        $this->version($dept);
+
+        $this->actingAs($director)
+            ->postJson('/api/report/personnel-evaluation', [
+                'title' => 'Đánh giá tháng 08',
+                'period_type' => 'month',
+                'period_from' => self::FROM,
+                'period_to' => self::TO,
+            ])
+            ->assertCreated();
+
+        $this->actingAs($director)
+            ->getJson('/api/evaluation/summary?from='.self::FROM.'&to='.self::TO)
+            ->assertOk()
+            ->assertJsonPath('period_lock.locked', false);
+
+        $this->actingAs($director)
+            ->postJson('/api/evaluation/events', [
+                'user_id' => $member->id,
+                'criterion_id' => $criterion->id,
+                'level_code' => 'A1',
+                'occurred_at' => '2026-08-10',
+            ])
+            ->assertCreated();
+    }
+
     /* ---------- Quyền ---------- */
 
     public function test_member_cannot_view_summary(): void

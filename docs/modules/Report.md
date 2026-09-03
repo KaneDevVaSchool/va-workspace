@@ -15,7 +15,7 @@
   `ReportServiceProvider` với middleware `web` + prefix `/api`
   (`name('api.report.')`), giống `Evaluation` / `WorkspaceConfig` — **không**
   dùng `routes/api.php` stateless.
-- Route Vue: `Modules/Report/resources/js/router.js` — 3 trang, mục
+- Route Vue: `Modules/Report/resources/js/router.js` — 2 trang, mục
   **sidebar riêng** "Báo cáo" trong `resources/js/components/AppSidebar.vue`
   (nhóm "Quản lý", `configurableByDepartment`).
 
@@ -23,7 +23,13 @@
 |---|---|---|
 | `/manager/reports` | `ReportList.vue` | `report.manage_department` hoặc `report.view_assigned` |
 | `/manager/reports/personnel-evaluation/new` | `ReportCreatePersonnelEvaluation.vue` | `report.manage_department` |
-| `/manager/reports/:id` | `ReportView.vue` | như trang danh sách, lọc thật ở backend |
+
+> Đã bỏ trang xem chi tiết báo cáo (`ReportView.vue`, route
+> `manager.reports.show`) cùng các endpoint chỉ phục vụ nó (`GET
+> /api/report/{id}`, `GET /api/report/{id}/employees/{userId}`, `PUT
+> /api/report/{id}`, `PATCH /api/report/{id}/save`) — báo cáo tạo xong chỉ
+> còn xem được trong danh sách, không xem chi tiết theo từng nhân sự và
+> không còn cách chuyển từ `draft` sang `saved`.
 
 ## 2. Kiến trúc — Controller → Service → Repository
 
@@ -49,23 +55,23 @@ cha nên gộp vào `ReportRepository` (`syncViewers`, `syncUserFilters`,
 
 | Bảng | Model | Ghi chú |
 |---|---|---|
-| `reports` | `Report` | Cấu hình 1 báo cáo. `evaluation_config_version_id` chốt ngay lúc tạo và **không đổi** — đây là thứ giữ cho điểm báo cáo cũ không chạy theo khung chấm điểm mới. `status`: `draft` (còn sửa được kỳ) → `saved` (khoá kỳ, chỉ đổi được tên). |
+| `reports` | `Report` | Cấu hình 1 báo cáo. `evaluation_config_version_id` chốt ngay lúc tạo và **không đổi** — đây là thứ giữ cho điểm báo cáo cũ không chạy theo khung chấm điểm mới. `status` luôn là `draft` từ khi đã bỏ trang Xem báo cáo — không còn thao tác nào chuyển sang `saved`. |
 | `report_viewers` | `ReportViewer` | Người được chia sẻ quyền xem. Người quản lý phòng ban luôn xem được, không cần có mặt ở đây. |
 | `report_filters` | `ReportFilter` | Thu hẹp phạm vi; đợt đầu chỉ dùng khoá `user_id`. Không có dòng nào = tính cho toàn phòng ban. |
 | `report_columns` | `ReportColumn` | Cột được bật trong bảng. `sort_order` theo thứ tự cố định do `ReportService::EVALUATION_COLUMNS` định nghĩa (đợt đầu không cho kéo thả). |
 | `report_criteria` | `ReportCriterion` | Tiêu chí hành vi được hiện ở phần chi tiết nhân sự. Không chọn dòng nào = hiện toàn bộ. |
-| `report_people_snapshots` | `ReportPersonSnapshot` | Danh sách nhân sự đã chụp lúc báo cáo chuyển sang `saved`. **Không** có khoá ngoại tới `users` và lưu sẵn tên: bản chụp phải sống sót cả khi tài khoản bị xoá. Báo cáo `draft` vẫn lấy nhân sự động; `saved` đọc từ bảng này. |
+| `report_people_snapshots` | `ReportPersonSnapshot` | Còn bảng và model nhưng không còn đường ghi dữ liệu mới (chụp lúc `save()`, đã bỏ cùng trang Xem báo cáo). |
 
 ## 4. Quyền
 
 | Quyền | Ai có | Ghi chú |
 |---|---|---|
-| `report.manage_department` | `department_director`, `deputy_department_director` (+ `admin`/`super_admin` qua `report.*`/`*`) | Tạo, sửa, xoá và xem mọi báo cáo của phòng ban mình. |
+| `report.manage_department` | `department_director`, `deputy_department_director` (+ `admin`/`super_admin` qua `report.*`/`*`) | Tạo và xoá báo cáo của phòng ban mình. |
 | `report.view_assigned` | `section_head`, `team_lead`, `member`, `viewer` | Chỉ thấy báo cáo có tên mình trong `report_viewers` — lọc ở `ReportService::listVisible()`, không chỉ ẩn giao diện. |
-| `report.*` | `admin`, `director_officer` | Toàn bộ báo cáo mọi phòng ban. Giám đốc điều hành giám sát toàn hệ thống nên không giới hạn theo `department_id`; kèm theo đó là **sửa và xoá được** báo cáo của mọi phòng ban (`canManage()` chỉ xét `report.*`). Hồi quy: `PersonnelEvaluationReportTest::test_director_officer_sees_reports_of_every_department`. |
+| `report.*` | `admin`, `director_officer` | Toàn bộ báo cáo mọi phòng ban. Giám đốc điều hành giám sát toàn hệ thống nên không giới hạn theo `department_id`; kèm theo đó là **xoá được** báo cáo của mọi phòng ban (`canManage()` chỉ xét `report.*`). Hồi quy: `PersonnelEvaluationReportTest::test_director_officer_sees_reports_of_every_department`. |
 
 Kiểm tra quyền nằm trong Controller qua `PermissionService::allows()` và
-`ReportService::canView()` / `canManage()`, đúng pattern
+`ReportService::canManage()`, đúng pattern
 `EvaluationScoreKitController`.
 
 ## 5. Cách tính điểm báo cáo đánh giá nhân sự
@@ -117,8 +123,13 @@ rơi về thang độ khó như trước để báo cáo cũ vẫn mở được
 
 Việc thiếu dữ liệu không còn âm thầm nhận hệ số 1.0. `computeForUser()` trả
 thêm `missing` (`difficulty` / `progress` / `quality`) và `missing_total`;
-`summarize()` cộng dồn cho cả phòng ban. `ReportView.vue` hiện một dòng cảnh
-báo khi có — không có dòng này thì người xem tưởng mọi thứ đã tính đủ.
+`summarize()` cộng dồn cho cả phòng ban.
+
+Trên **Cách 2 schema 2**, việc chưa hoàn thành hoặc thiếu trường bắt buộc
+có `actual_score = 0` (vẫn cộng điểm chuẩn vào mẫu số). Snapshot schema 1
+giữ công thức cũ nên báo cáo đã lưu không đổi số. Màn tạo báo cáo cảnh báo
+số việc bị zero và yêu cầu xác nhận trước khi tạo; vẫn cho lưu sau khi
+xác nhận.
 
 Kết quả chấm chất lượng (`TaskScore.rating_result`) là ô nhập tay nên engine
 khớp hai vòng: đúng nguyên văn trước, không được mới khớp lỏng (bỏ dấu, bỏ
@@ -129,10 +140,9 @@ hoa thường, gom khoảng trắng). Gõ hẳn chữ khác thang thì đếm v�
 Cấu hình bảng dùng chung ở `Modules/Report/resources/js/constants/report.js`
 (theo mẫu `Modules/Identity/resources/js/constants/activity.js`):
 `loadVisibility` / `saveVisibility` cho bật-tắt cột và bộ lọc,
-`loadColumnWidths` cho độ rộng đã kéo, `loadZoom` / `saveZoom` cho cỡ chữ,
-`loadSort` / `saveSort` cho cách sắp xếp. Trang Ghi nhận đánh giá của module
-`Evaluation` cũng import từ đây (`@modules/Report/...`) để hai trang cùng một
-cách nhớ cấu hình.
+`loadColumnWidths` cho độ rộng đã kéo, `loadZoom` / `saveZoom` cho cỡ chữ.
+Trang Ghi nhận đánh giá của module `Evaluation` cũng import từ đây
+(`@modules/Report/...`) để hai trang cùng một cách nhớ cấu hình.
 
 - **Chọn loại báo cáo** (`ReportList.vue`): nút "Tạo báo cáo" mở hộp thoại
   lưới 3 cột liệt kê đủ **6 loại** — loại tạo được xếp trước, loại chưa dựng
@@ -142,9 +152,11 @@ cách nhớ cấu hình.
   thật: loại chưa có trong `Report::TYPES` thì không có route tạo tương ứng.
 - **Danh sách báo cáo** (`ReportList.vue`): theo mẫu vàng `data-table`
   (`ActivityLog.vue`) — TablePagesBar trên/dưới với đủ 2 slot `#filters` /
-  `#settings`, kéo cột, ẩn thanh cuộn, panel chi tiết đẩy ngang 28rem. Click
-  1 lần chỉ xem, mở báo cáo bằng double-click hoặc nút trong panel. Phân
-  trang ở **máy chủ** (`GET /api/report?page=&per_page=`, trả `meta`).
+  `#settings`, kéo cột, ẩn thanh cuộn, panel chi tiết đẩy ngang 28rem. Phân
+  trang ở **máy chủ** (`GET /api/report?page=&per_page=`, trả `meta`). Không
+  còn thao tác mở xem chi tiết một báo cáo — panel chi tiết chỉ hiện lại
+  đúng các trường đã có trong bản ghi (tên, loại, kỳ, phòng ban, người được
+  xem, tình trạng, người tạo).
 - **Tạo báo cáo** (`ReportCreatePersonnelEvaluation.vue`): trang riêng 5
   bước, **không** dùng skill `form-modal` — các bước phụ thuộc dữ liệu tuần
   tự (chọn phòng ban xong mới có danh sách nhân sự / tiêu chí), không hợp
@@ -152,11 +164,5 @@ cách nhớ cấu hình.
   (`onBeforeRouteLeave`); danh sách nhân sự có ô tìm (bỏ dấu) và nút chọn
   tất cả / bỏ chọn tất cả; bước cuối gọi
   `POST /api/report/personnel-evaluation/preview` để xem trước số liệu thật
-  — endpoint này **không ghi gì** và không chốt phiên bản mới.
-- **Xem báo cáo** (`ReportView.vue`): số tổng hợp + phân bổ xếp loại dạng
-  chữ thường kèm chấm màu nhỏ (không dùng badge/pill), bảng theo nhân sự,
-  panel chi tiết tách rõ "đóng góp từ công việc" và "ghi nhận theo hành vi".
-  Bấm tiêu đề cột để đổi cách xếp (mặc định điểm cuối giảm dần, nhớ qua
-  localStorage). Mỗi mức xếp loại một màu chấm riêng, gán theo **thứ tự
-  trong thang** chứ không theo tên mức. Có `@media print` để in được trước
-  khi có xuất file — phần ẩn vỏ ứng dụng nằm ở khối `<style>` không scoped.
+  — endpoint này **không ghi gì** và không chốt phiên bản mới. Tạo xong quay
+  về trang danh sách.

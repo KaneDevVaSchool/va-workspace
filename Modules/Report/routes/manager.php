@@ -27,23 +27,6 @@ Route::prefix('report')->name('report.')->group(function () {
     Route::post('/personnel-evaluation/preview', [ReportController::class, 'previewPersonnelEvaluation'])
         ->name('personnel-evaluation.preview');
 
-    Route::get('/{id}', [ReportController::class, 'show'])
-        ->whereNumber('id')
-        ->name('show');
-
-    Route::put('/{id}', [ReportController::class, 'update'])
-        ->whereNumber('id')
-        ->name('update');
-
-    Route::patch('/{id}/save', [ReportController::class, 'save'])
-        ->whereNumber('id')
-        ->name('save');
-
-    Route::get('/{id}/employees/{userId}', [ReportController::class, 'employeeDetail'])
-        ->whereNumber('id')
-        ->whereNumber('userId')
-        ->name('employee-detail');
-
     Route::delete('/{id}', [ReportController::class, 'destroy'])
         ->whereNumber('id')
         ->name('destroy');

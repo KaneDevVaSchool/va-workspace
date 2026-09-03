@@ -59,7 +59,7 @@ Binding interface → implementation:
 | `evaluation_criterion_types` | `EvaluationCriterionType` | Loại tiêu chí, scoped theo `department_id` (VD "Thái độ", "Kỹ năng"). |
 | `evaluation_criteria` | `EvaluationCriteria` | Tiêu chí, scoped theo `department_id`. 2 kiểu (`type`): `scale` (thang điểm nhiều mức) / `behavior` (cộng-trừ theo hành vi). `levels` JSON. `use_in_evaluation` (hiện trên trang ĐGNL cá nhân). |
 | `evaluation_positions` | `EvaluationPosition` | "Vị trí đánh giá" — danh mục chức danh **dùng chung toàn hệ thống** (không scoped phòng ban). `hrm_position_uuid` chỉ đối chiếu, không phải nguồn sự thật. CHỈ ĐỌC — chờ nối API VA-HRM. |
-| `evaluation_score_kits` | `EvaluationScoreKit` | Engine chấm điểm theo phòng ban. **Cách 1** (`base_adjust`, đếm số việc): điểm gốc ± (số việc × điểm mỗi việc). Thang xếp loại do phòng tự đặt (`code` + `label` + `min_score` + `sort_order`, 2–12 mức). **Cách 2** (`weighted_task`): điểm chuẩn = cơ bản × độ khó; điểm thực = chuẩn × tiến độ × chất lượng; hiệu suất = Σ thực / Σ chuẩn × 100%. Các phương pháp khác (sự kiện/hành vi, KPI, kết hợp) dùng chung engine, chưa mở UI. |
+| `evaluation_score_kits` | `EvaluationScoreKit` | Engine chấm điểm theo phòng ban. **Cách 1** (`base_adjust`, đếm số việc): điểm gốc ± (số việc × điểm mỗi việc). Thang xếp loại do phòng tự đặt (`code` + `label` + `min_score` + `sort_order`, 2–12 mức). **Cách 2** (`weighted_task`, `kit_schema_version` 2): điểm chuẩn = cơ bản × độ khó; việc chưa xong hoặc thiếu dữ liệu bắt buộc = 0 điểm thực (vẫn nằm trong mẫu số); hiệu suất = Σ thực / Σ chuẩn × 100%; mỗi điểm hành vi = 1 điểm phần trăm. Snapshot schema 1 giữ công thức cũ để báo cáo đã chốt không đổi số. Không tự khớp thang theo tên tiêu chí — chỉ khi phòng chọn ID. Các phương pháp khác (sự kiện/hành vi, KPI, kết hợp) dùng chung engine, chưa mở UI. |
 
 | `evaluation_config_versions` | `EvaluationConfigVersion` | Bản chụp **bất biến** của toàn bộ cấu hình đánh giá 1 phòng ban tại thời điểm chốt (`kit_snapshot` + `criteria_snapshot`). Gộp chung 1 bảng thay vì tách khung chấm điểm / tiêu chí, vì công thức luôn đọc hai thứ cùng nhau. Mỗi phòng tối đa 1 phiên bản `active`; chốt phiên bản mới đẩy phiên bản cũ sang `superseded`. Báo cáo trỏ tới đúng phiên bản dùng lúc tạo nên điểm cũ không đổi khi cấu hình đổi. |
 | `evaluation_events` | `EvaluationEvent` | Ghi nhận áp dụng 1 mức tiêu chí **hành vi** cho 1 nhân sự: ai, mức nào, ngày nào, lý do. `score` mang dấu (dương = cộng, âm = trừ). Tên tiêu chí / tên mức / điểm đều chụp lại lúc ghi nhận nên vẫn hiển thị đúng dù danh mục sửa hoặc xoá sau. Người có `evaluation.manage_department` ghi nhận là duyệt luôn; sự kiện đã duyệt bất biến (muốn sửa phải xoá và ghi lại) để không làm lệch báo cáo đã lưu. |
@@ -86,8 +86,9 @@ interface, không gọi Eloquent trực tiếp).
 - **Khung chấm điểm** (`EvaluationScoreKit.vue`): engine nhiều phương pháp.
   Cách 1 đếm số việc (mọi việc tính giống nhau); thang xếp loại thêm/bớt/sắp
   xếp, không khóa 5 mức. Cách 2 hiệu suất việc = điểm thực / điểm chuẩn; độ
-  khó tạo chuẩn, tiến độ và chất lượng tạo điểm thực; case study một việc
-  và thang xếp loại theo %.
+  khó tạo chuẩn, tiến độ và chất lượng tạo điểm thực. Preview cảnh báo việc
+  chưa xong / thiếu dữ liệu = 0 điểm thực; thang 1–5 được chuẩn hoá thành
+  hệ số 0.5–1.1 (tiến độ) / 0.5–1.0 (chất lượng) trước khi lưu.
 - **Tổng hợp đánh giá** (`EvaluationSummary.vue`): màn hình làm việc chính khi
   chấm điểm cuối kỳ, **chỉ trưởng phòng thấy nhân sự phòng mình** —
   `EvaluationEventController` / `EvaluationSummaryController` lấy
@@ -96,29 +97,30 @@ interface, không gọi Eloquent trực tiếp).
   `/manager/evaluation-events` (giữ nguyên path và route name cũ để sidebar /
   phân quyền / cấu hình sidebar phòng ban không phải đổi theo).
 
-  Bố cục **hai vùng, chọn nhân sự mới hiện**: cột trái là danh sách hẹp
-  (22rem) chỉ để chọn người — hạng, tên, số việc, điểm cuối và xếp loại; toàn
-  bộ chỗ còn lại là **khu chấm điểm của đúng người đang chọn**. Chưa chọn ai
-  thì khu đó hiện số tổng quan phòng ban (nhân sự / trung bình / cao nhất /
-  thấp nhất + phân bổ xếp loại bấm được để lọc). Đây **không** theo mẫu vàng
-  `data-table`: trang này không phải danh sách tra cứu mà là bàn làm việc cho
-  từng người, nên không có kéo cột / TablePagesBar / phân trang.
+  Bố cục **ma trận kín khung nhìn**: mỗi nhân sự một hàng, tiêu chí là cột.
+  Thead hai hàng gộp nhóm (`Điểm việc` / từng loại tiêu chí / `Kết quả`).
+  Nút **Tiêu chí** chọn cột nào hiện. Bấm tên hoặc ô tiêu chí mở dialog gần
+  full màn (Tổng quan / Công việc / Ghi nhận / Chấm điểm). Tab Chấm điểm chọn
+  tiêu chí bằng `OptionPicker` (tên + nhóm), rồi chọn mức, ngày, việc, lý do.
+  Hàng chân bảng là trung bình phòng.
 
-  Khu chấm điểm gồm: thẻ phân rã điểm (khởi đầu → công việc → cộng → trừ →
-  điểm cuối, kèm so với trung bình phòng và thanh tiến độ hoàn thành việc),
-  điểm theo từng tiêu chí, rồi 3 thẻ **Công việc / Ghi nhận / Chấm điểm**.
-  Ghi nhận đánh giá làm ngay ở thẻ "Chấm điểm", có thể gắn với một công việc
-  cụ thể (từ nút "Chấm điểm cho việc này" ở thẻ Công việc) hoặc không gắn
-  việc nào (`task_id = null`). Chuyển nhanh giữa các nhân sự bằng phím mũi
-  tên lên/xuống, `Esc` để đóng.
-
-  Màn hình hẹp (≤900px) không đủ chỗ cho hai vùng: khu chấm điểm phủ lên
-  danh sách, đóng lại là quay về danh sách.
+  Ghi nhận gắn việc (`task_id`) hoặc không gắn việc (`task_id = null`).
+  Mũi tên lên/xuống khi đang mở chi tiết, `Esc` đóng.
 
   `GET /api/evaluation/summary?from=&to=` trả `rows` (mỗi nhân sự một dòng,
   kèm `task_status_counts`, `criterion_totals`, `task_breakdown`,
-  `event_breakdown`), `summary`, `criteria` và `version_no`. **Không phân
-  trang** — bảng cần tổng của cả phòng ban nên lọc / sắp xếp ở client.
+  `event_breakdown`, `missing_total`, `has_task_basis`), `summary`,
+  `criteria`, `version_no` và `period_lock`. Máy chủ trả cả phòng; giao diện
+  tìm / lọc phía client. **Không** dùng mẫu danh sách ActivityLog /
+  `TablePagesBar` — đây là ma trận kín khung, không phân trang. Cách 2 hiện
+  hiệu suất bằng `%` (không dấu `+`); việc thiếu dữ liệu gắn badge và ghi chú
+  «điểm thực 0».
+
+  `period_lock.locked` = cả khoảng đang xem nằm trong một báo cáo đánh giá
+  nhân sự **đã lưu**. `period_lock.reports` liệt kê báo cáo giao với kỳ
+  (kể cả khi chỉ khoá một phần). Ghi nhận / xoá / sửa sự kiện có
+  `occurred_at` thuộc kỳ đã lưu bị máy chủ từ chối (422). Báo cáo còn nháp
+  không khoá.
 
   **Không tự cộng điểm ở trình duyệt**: khi ghi nhận / xoá, request gửi kèm
   `period_from` / `period_to`, máy chủ tính lại đúng dòng của nhân sự đó và
@@ -135,3 +137,8 @@ interface, không gọi Eloquent trực tiếp).
 báo cáo, `EvaluationScoreComputeService` tính lại từ công việc và các ghi
 nhận hành vi trong kỳ, nhưng dùng đúng phiên bản cấu hình mà báo cáo đã chốt
 lúc tạo. Chi tiết công thức: `docs/modules/Report.md` §5.
+
+Khi báo cáo đánh giá nhân sự chuyển sang `saved`, kỳ đó khoá ghi nhận trên
+bảng tổng hợp (`ReportService::periodLock` / `assertDateWritable`) để số
+liệu không lệch với báo cáo đã chốt. Evaluation gọi `ReportService`, không
+query bảng `reports` trực tiếp.

@@ -52,6 +52,12 @@ class EvaluationServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(module_path('Evaluation', 'Database/migrations'));
         $this->loadViewsFrom(module_path('Evaluation', 'resources/views'), 'evaluation');
         $this->registerRoutes();
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                \Modules\Evaluation\App\Console\RepairCach2Command::class,
+            ]);
+        }
     }
 
     /**

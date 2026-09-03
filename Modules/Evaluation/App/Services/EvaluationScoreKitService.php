@@ -3,7 +3,6 @@
 namespace Modules\Evaluation\App\Services;
 
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 use Modules\Evaluation\App\Models\EvaluationScoreKit;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationScoreKitRepositoryInterface;
 
@@ -128,35 +127,36 @@ class EvaluationScoreKitService
         }
 
         if (array_key_exists('base_adjust_levels', $data)) {
-            $payload['base_adjust_levels'] = EvaluationScoreKit::normalizeClassificationLevels(
+            $payload['base_adjust_levels'] = EvaluationScoreKit::convertCriterionLevelsToPercent(
                 is_array($data['base_adjust_levels']) ? $data['base_adjust_levels'] : null,
+                true,
             );
         }
 
         if (array_key_exists('weighted_task_levels', $data)) {
-            $payload['weighted_task_levels'] = EvaluationScoreKit::normalizeLevels(
+            $payload['weighted_task_levels'] = EvaluationScoreKit::convertCriterionLevelsToFactors(
                 is_array($data['weighted_task_levels']) ? $data['weighted_task_levels'] : null,
-                EvaluationScoreKit::defaultWeightedTaskLevels(),
+                'difficulty',
             );
         }
 
         if (array_key_exists('progress_levels', $data)) {
-            $payload['progress_levels'] = EvaluationScoreKit::normalizeProgressLevels(
+            $payload['progress_levels'] = EvaluationScoreKit::convertCriterionLevelsToFactors(
                 is_array($data['progress_levels']) ? $data['progress_levels'] : null,
+                'progress',
             );
         }
 
         if (array_key_exists('quality_levels', $data)) {
-            $payload['quality_levels'] = EvaluationScoreKit::normalizeLevels(
+            $payload['quality_levels'] = EvaluationScoreKit::convertCriterionLevelsToFactors(
                 is_array($data['quality_levels']) ? $data['quality_levels'] : null,
-                EvaluationScoreKit::defaultQualityLevels(),
+                'quality',
             );
         }
 
         if (array_key_exists('performance_levels', $data)) {
-            $payload['performance_levels'] = EvaluationScoreKit::normalizeLevels(
+            $payload['performance_levels'] = EvaluationScoreKit::convertCriterionLevelsToPercent(
                 is_array($data['performance_levels']) ? $data['performance_levels'] : null,
-                EvaluationScoreKit::defaultPerformanceLevels(),
             );
         }
 
@@ -167,6 +167,8 @@ class EvaluationScoreKitService
             $payload['formula'] = $formula;
             $payload['use_project_importance'] = $formula['project'] === 'on';
         }
+
+        $payload['kit_schema_version'] = EvaluationScoreKit::KIT_SCHEMA_VERSION;
 
         return $payload;
     }
@@ -191,35 +193,16 @@ class EvaluationScoreKitService
         $qualityUsesDefault = (bool) ($kit?->quality_use_default ?? false);
         $classification = $classificationUsesDefault
             ? null
-            : $this->resolveScaleCriterion(
-                $scaleRows,
-                $kit?->classification_criterion_id,
-                ['xep loai', 'phan loai', 'muc do hoan thanh'],
-                2,
-            );
+            : $this->resolveSelectedScale($scaleRows, $kit?->classification_criterion_id, 2);
         $difficulty = $difficultyUsesDefault
             ? null
-            : $this->resolveScaleCriterion(
-                $scaleRows,
-                $kit?->difficulty_criterion_id,
-                ['do kho', 'muc do quan trong', 'trong so'],
-                1,
-                fn (array $criterion) => ! empty($criterion['use_for_task_type']),
-            );
+            : $this->resolveSelectedScale($scaleRows, $kit?->difficulty_criterion_id);
         $progress = $progressUsesDefault
             ? null
-            : $this->resolveScaleCriterion(
-                $scaleRows,
-                $kit?->progress_criterion_id,
-                ['tien do', 'dung han', 'deadline'],
-            );
+            : $this->resolveSelectedScale($scaleRows, $kit?->progress_criterion_id);
         $quality = $qualityUsesDefault
             ? null
-            : $this->resolveScaleCriterion(
-                $scaleRows,
-                $kit?->quality_criterion_id,
-                ['chat luong'],
-            );
+            : $this->resolveSelectedScale($scaleRows, $kit?->quality_criterion_id);
 
         $classificationLevels = $this->criterionLevels($classification, true);
         $difficultyLevels = $this->criterionLevels($difficulty);
@@ -231,10 +214,30 @@ class EvaluationScoreKitService
             $formula['project'] = $kit->use_project_importance ? 'on' : 'off';
         }
 
+        $baseAdjustLevels = $classificationLevels !== null
+            ? EvaluationScoreKit::convertCriterionLevelsToPercent($classificationLevels, true)
+            : EvaluationScoreKit::normalizeClassificationLevels($kit?->base_adjust_levels);
+        $performanceLevels = $classificationLevels !== null
+            ? EvaluationScoreKit::convertCriterionLevelsToPercent($classificationLevels)
+            : EvaluationScoreKit::convertCriterionLevelsToPercent($kit?->performance_levels);
+        $weightedLevels = $difficultyLevels !== null
+            ? EvaluationScoreKit::convertCriterionLevelsToFactors($difficultyLevels, 'difficulty')
+            : EvaluationScoreKit::convertCriterionLevelsToFactors(
+                $kit?->weighted_task_levels,
+                'difficulty',
+            );
+        $progressOut = $progressLevels !== null
+            ? EvaluationScoreKit::convertCriterionLevelsToFactors($progressLevels, 'progress')
+            : EvaluationScoreKit::convertCriterionLevelsToFactors($kit?->progress_levels, 'progress');
+        $qualityOut = $qualityLevels !== null
+            ? EvaluationScoreKit::convertCriterionLevelsToFactors($qualityLevels, 'quality')
+            : EvaluationScoreKit::convertCriterionLevelsToFactors($kit?->quality_levels, 'quality');
+
         return [
             'id' => $kit?->id,
             'department_id' => $departmentId,
             'mode' => $kit?->mode,
+            'kit_schema_version' => EvaluationScoreKit::KIT_SCHEMA_VERSION,
             'base_score' => $kit !== null ? (float) $kit->base_score : 100.0,
             'task_base_score' => $kit !== null && $kit->task_base_score !== null
                 ? (float) $kit->task_base_score
@@ -260,24 +263,12 @@ class EvaluationScoreKitService
             'quality_use_default' => $qualityUsesDefault,
             'task_type_criterion_id' => is_array($taskType) ? ($taskType['id'] ?? null) : null,
             'task_type_criterion' => $taskType,
-            'base_adjust_levels' => EvaluationScoreKit::normalizeClassificationLevels(
-                $classificationLevels ?? $kit?->base_adjust_levels,
-            ),
-            'weighted_task_levels' => EvaluationScoreKit::normalizeLevels(
-                $difficultyLevels ?? $kit?->weighted_task_levels,
-                EvaluationScoreKit::defaultWeightedTaskLevels(),
-            ),
-            'progress_levels' => EvaluationScoreKit::normalizeProgressLevels(
-                $progressLevels ?? $kit?->progress_levels,
-            ),
-            'quality_levels' => EvaluationScoreKit::normalizeLevels(
-                $qualityLevels ?? $kit?->quality_levels,
-                EvaluationScoreKit::defaultQualityLevels(),
-            ),
-            'performance_levels' => EvaluationScoreKit::normalizeLevels(
-                $classificationLevels ?? $kit?->performance_levels,
-                EvaluationScoreKit::defaultPerformanceLevels(),
-            ),
+            'base_adjust_levels' => $baseAdjustLevels,
+            'weighted_task_levels' => $weightedLevels,
+            'progress_levels' => $progressOut,
+            'quality_levels' => $qualityOut,
+            'performance_levels' => $performanceLevels,
+            'progress_bands' => EvaluationScoreKit::buildProgressBands($progressOut),
         ];
     }
 
@@ -290,49 +281,26 @@ class EvaluationScoreKitService
     }
 
     /**
+     * Chỉ lấy tiêu chí người dùng đã chọn. Không tự gán theo tên — thang 1–5
+     * của tiêu chí hành vi/chất lượng không được lặng lẽ trở thành hệ số nhân.
+     *
      * @param  Collection<int, array<string, mixed>>  $criteria
-     * @param  list<string>  $nameNeedles
      */
-    private function resolveScaleCriterion(
+    private function resolveSelectedScale(
         Collection $criteria,
         mixed $criterionId,
-        array $nameNeedles,
         int $minimumLevels = 1,
-        ?callable $preferred = null,
     ): ?array {
-        $eligible = $criteria->filter(
-            fn (array $criterion) => count($criterion['levels'] ?? []) >= $minimumLevels,
+        if ($criterionId === null || $criterionId === '') {
+            return null;
+        }
+
+        $selected = $criteria->first(
+            fn (array $criterion) => (int) ($criterion['id'] ?? 0) === (int) $criterionId
+                && count($criterion['levels'] ?? []) >= $minimumLevels,
         );
 
-        if ($criterionId !== null) {
-            $selected = $eligible->first(
-                fn (array $criterion) => (int) ($criterion['id'] ?? 0) === (int) $criterionId,
-            );
-            if (is_array($selected)) {
-                return $selected;
-            }
-        }
-
-        if ($preferred !== null) {
-            $selected = $eligible->first($preferred);
-            if (is_array($selected)) {
-                return $selected;
-            }
-        }
-
-        foreach ($nameNeedles as $needle) {
-            $selected = $eligible->first(
-                fn (array $criterion) => str_contains(
-                    $this->searchableName((string) ($criterion['name'] ?? '')),
-                    $needle,
-                ),
-            );
-            if (is_array($selected)) {
-                return $selected;
-            }
-        }
-
-        return null;
+        return is_array($selected) ? $selected : null;
     }
 
     /** @return list<array{code: string, label: string, score: float, sort_order?: int}>|null */
@@ -360,10 +328,5 @@ class EvaluationScoreKitService
         }
 
         return $levels !== [] ? $levels : null;
-    }
-
-    private function searchableName(string $name): string
-    {
-        return mb_strtolower(Str::ascii(trim($name)));
     }
 }

@@ -168,14 +168,23 @@ class EvaluationScoreComputeService
         }
 
         $startScore = $taskResult['start_score'];
+        $eventAdjustment = $bonus - $penalty;
+        $hasTaskBasis = (bool) ($taskResult['has_task_basis'] ?? $tasks->isNotEmpty());
+        $taskPerformance = (float) ($taskResult['task_performance_percent'] ?? $taskResult['adjustment']);
         $finalScore = round($startScore + $taskResult['adjustment'] + $bonus - $penalty, 2);
-        $classification = $this->classify($finalScore, $version);
+        $classification = $this->classify($finalScore, $version, $hasTaskBasis);
 
         return [
             'user_id' => $userId,
             'user_name' => $userName,
             'start_score' => round($startScore, 2),
             'task_adjustment' => round($taskResult['adjustment'], 2),
+            'task_performance_percent' => round($taskPerformance, 2),
+            'event_adjustment_points' => round($eventAdjustment, 2),
+            'final_performance_percent' => $mode === EvaluationScoreKit::MODE_WEIGHTED_TASK
+                ? $finalScore
+                : null,
+            'has_task_basis' => $hasTaskBasis,
             'bonus' => round($bonus, 2),
             'penalty' => round($penalty, 2),
             'final_score' => $finalScore,
@@ -332,6 +341,22 @@ class EvaluationScoreComputeService
      */
     private function computeWeightedTask(Collection $tasks, array $kit, string $asOf): array
     {
+        if (EvaluationScoreKit::isSchemaV2($kit)) {
+            return $this->computeWeightedTaskV2($tasks, $kit, $asOf);
+        }
+
+        return $this->computeWeightedTaskLegacy($tasks, $kit, $asOf);
+    }
+
+    /**
+     * Cách 2 schema 1 — giữ nguyên để báo cáo đã chốt không đổi số.
+     *
+     * @param  Collection<int, Task>  $tasks
+     * @param  array<string, mixed>  $kit
+     * @return array{start_score: float, adjustment: float, breakdown: list<array<string, mixed>>, missing: array{difficulty: int, progress: int, quality: int}, has_task_basis: bool, task_performance_percent: float}
+     */
+    private function computeWeightedTaskLegacy(Collection $tasks, array $kit, string $asOf): array
+    {
         $formula = EvaluationScoreKit::normalizeFormula($kit['formula'] ?? null);
         $taskBase = (float) ($kit['task_base_score'] ?? 100);
         $difficultyLevels = $this->difficultyMap($kit);
@@ -378,7 +403,7 @@ class EvaluationScoreComputeService
 
             $actual = $standard * $progressFactor * $qualityFactor;
 
-            if ($formula['quality'] === 'on' && $this->isExcellentQuality($task)) {
+            if ($formula['quality'] === 'on' && $this->isExcellentQuality($task, $kit)) {
                 $excellentCount++;
             }
 
@@ -393,6 +418,8 @@ class EvaluationScoreComputeService
                 'progress_factor' => round($progressFactor, 2),
                 'quality_factor' => round($qualityFactor, 2),
                 'contribution' => round($actual, 2),
+                'zeroed_reason' => null,
+                'missing_fields' => [],
             ]);
         }
 
@@ -402,6 +429,8 @@ class EvaluationScoreComputeService
                 'adjustment' => 0.0,
                 'breakdown' => $breakdown,
                 'missing' => $missing,
+                'has_task_basis' => $tasks->isNotEmpty(),
+                'task_performance_percent' => 0.0,
             ];
         }
 
@@ -416,6 +445,144 @@ class EvaluationScoreComputeService
             'adjustment' => $performance,
             'breakdown' => $breakdown,
             'missing' => $missing,
+            'has_task_basis' => true,
+            'task_performance_percent' => $performance,
+        ];
+    }
+
+    /**
+     * Cách 2 schema 2 — việc chưa xong / thiếu dữ liệu = 0 điểm thực.
+     *
+     * @param  Collection<int, Task>  $tasks
+     * @param  array<string, mixed>  $kit
+     * @return array{start_score: float, adjustment: float, breakdown: list<array<string, mixed>>, missing: array{difficulty: int, progress: int, quality: int}, has_task_basis: bool, task_performance_percent: float}
+     */
+    private function computeWeightedTaskV2(Collection $tasks, array $kit, string $asOf): array
+    {
+        $formula = EvaluationScoreKit::normalizeFormula($kit['formula'] ?? null);
+        $taskBase = (float) ($kit['task_base_score'] ?? 100);
+        $difficultyLevels = $this->difficultyMap($kit);
+        $qualityLevels = $this->levelMap($kit['quality_levels'] ?? []);
+        $progressBands = is_array($kit['progress_bands'] ?? null) && $kit['progress_bands'] !== []
+            ? $kit['progress_bands']
+            : EvaluationScoreKit::buildProgressBands(
+                is_array($kit['progress_levels'] ?? null) ? $kit['progress_levels'] : [],
+            );
+        $qualityBonusPercent = (float) ($kit['quality_bonus_percent'] ?? 0);
+
+        $totalStandard = 0.0;
+        $totalActual = 0.0;
+        $excellentCount = 0;
+        $eligibleForBonus = 0;
+        $breakdown = [];
+        $missing = $this->emptyMissing();
+
+        foreach ($tasks as $task) {
+            $completed = $task->status === 'completed';
+            $missingFields = [];
+            $zeroedReason = null;
+
+            $difficulty = 1.0;
+            if ($formula['weight'] === 'on') {
+                $matched = $this->difficultyFactor($task, $difficultyLevels);
+                if ($matched === null) {
+                    $missing['difficulty']++;
+                    $missingFields[] = 'difficulty';
+                } else {
+                    $difficulty = $matched;
+                }
+            }
+            $standard = $taskBase * $difficulty;
+
+            $progressFactor = 0.0;
+            $qualityFactor = 0.0;
+
+            if (! $completed) {
+                $zeroedReason = 'incomplete';
+                $actual = 0.0;
+            } else {
+                $progressOk = true;
+                $qualityOk = true;
+
+                if ($formula['progress'] === 'on') {
+                    if ($task->end_date === null || $task->actual_end_date === null) {
+                        $missing['progress']++;
+                        $missingFields[] = 'progress';
+                        $progressOk = false;
+                    } else {
+                        $progressFactor = $this->progressFactorFromBands($task, $progressBands);
+                    }
+                } else {
+                    $progressFactor = 1.0;
+                }
+
+                if ($formula['quality'] === 'on') {
+                    $matched = $this->qualityFactor($task, $qualityLevels);
+                    if ($matched === null) {
+                        $missing['quality']++;
+                        $missingFields[] = 'quality';
+                        $qualityOk = false;
+                    } else {
+                        $qualityFactor = $matched;
+                    }
+                } else {
+                    $qualityFactor = 1.0;
+                }
+
+                if ($missingFields !== []) {
+                    $zeroedReason = 'missing_data';
+                    $actual = 0.0;
+                    $progressFactor = $progressOk ? $progressFactor : 0.0;
+                    $qualityFactor = $qualityOk ? $qualityFactor : 0.0;
+                } else {
+                    $actual = $standard * $progressFactor * $qualityFactor;
+                    $eligibleForBonus++;
+                    if ($formula['quality'] === 'on' && $this->isExcellentQuality($task, $kit)) {
+                        $excellentCount++;
+                    }
+                }
+            }
+
+            $totalStandard += $standard;
+            $totalActual += $actual;
+
+            $breakdown[] = $this->taskEntry($task, $asOf, [
+                'is_completed' => $completed,
+                'standard_score' => round($standard, 2),
+                'actual_score' => round($actual, 2),
+                'difficulty_factor' => round($difficulty, 2),
+                'progress_factor' => round($progressFactor, 2),
+                'quality_factor' => round($qualityFactor, 2),
+                'contribution' => round($actual, 2),
+                'zeroed_reason' => $zeroedReason,
+                'missing_fields' => $missingFields,
+            ]);
+        }
+
+        if ($tasks->isEmpty() || $totalStandard <= 0) {
+            return [
+                'start_score' => 0.0,
+                'adjustment' => 0.0,
+                'breakdown' => $breakdown,
+                'missing' => $missing,
+                'has_task_basis' => false,
+                'task_performance_percent' => 0.0,
+            ];
+        }
+
+        $performance = $totalActual / $totalStandard * 100;
+
+        if ($excellentCount > 0 && $qualityBonusPercent > 0 && $eligibleForBonus > 0) {
+            $performance += $qualityBonusPercent * ($excellentCount / $eligibleForBonus);
+        }
+
+        return [
+            'start_score' => 0.0,
+            'adjustment' => $performance,
+            'breakdown' => $breakdown,
+            'missing' => $missing,
+            'has_task_basis' => true,
+            'task_performance_percent' => $performance,
         ];
     }
 
@@ -633,11 +800,59 @@ class EvaluationScoreComputeService
         return $this->matchLevel((string) $result, $levels);
     }
 
-    private function isExcellentQuality(Task $task): bool
+    /**
+     * @param  array<string, mixed>  $kit
+     */
+    private function isExcellentQuality(Task $task, array $kit = []): bool
     {
         $result = mb_strtolower(trim((string) ($task->taskScore?->rating_result ?? '')));
+        if ($result === '') {
+            return false;
+        }
 
-        return $result !== '' && (str_contains($result, 'xuất sắc') || $result === 'xs');
+        if (str_contains($result, 'xuất sắc') || $result === 'xs') {
+            return true;
+        }
+
+        $levels = is_array($kit['quality_levels'] ?? null) ? $kit['quality_levels'] : [];
+        $top = $levels[0] ?? null;
+        if (! is_array($top)) {
+            return false;
+        }
+
+        $code = mb_strtolower(trim((string) ($top['code'] ?? '')));
+        $label = mb_strtolower(trim((string) ($top['label'] ?? '')));
+
+        return ($code !== '' && $result === $code)
+            || ($label !== '' && $result === $label);
+    }
+
+    /**
+     * @param  list<array{max_variance_days: int|null, factor: float}>  $bands
+     */
+    private function progressFactorFromBands(Task $task, array $bands): float
+    {
+        if ($bands === [] || $task->end_date === null || $task->actual_end_date === null) {
+            return 1.0;
+        }
+
+        $varianceDays = (int) $task->end_date->diffInDays($task->actual_end_date, false);
+        $last = 1.0;
+        foreach ($bands as $band) {
+            if (! is_array($band)) {
+                continue;
+            }
+            $last = (float) ($band['factor'] ?? 1);
+            $cap = $band['max_variance_days'] ?? null;
+            if ($cap === null) {
+                return $last;
+            }
+            if ($varianceDays <= (int) $cap) {
+                return $last;
+            }
+        }
+
+        return $last;
     }
 
     /**
@@ -719,8 +934,12 @@ class EvaluationScoreComputeService
      *
      * @return array{code: string|null, label: string|null}
      */
-    private function classify(float $finalScore, EvaluationConfigVersion $version): array
+    private function classify(float $finalScore, EvaluationConfigVersion $version, bool $hasTaskBasis = true): array
     {
+        if (! $hasTaskBasis && ($version->kit_snapshot['mode'] ?? null) === EvaluationScoreKit::MODE_WEIGHTED_TASK) {
+            return ['code' => null, 'label' => 'Chưa đủ cơ sở'];
+        }
+
         $levels = $version->classificationLevels();
         if ($levels === []) {
             return ['code' => null, 'label' => null];

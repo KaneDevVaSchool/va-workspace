@@ -12,6 +12,10 @@ Skill: `.cursor/skills/data-table/SKILL.md`
 
 Khi làm/sửa trang danh sách (nhật ký, nhân sự, nhóm…): **copy cấu trúc trang này**, không bịa layout khác.
 
+## Ngoại lệ — không áp
+
+- **Tổng hợp đánh giá** (`Modules/Evaluation/resources/js/pages/EvaluationSummary.vue`, `/manager/evaluation-events`): ma trận chấm điểm (nhân sự × tiêu chí), không phải danh sách. Không `TablePagesBar`, không phân trang, không panel chi tiết 28rem, không dropdown thao tác dòng. Click tên/ô tiêu chí mở modal form ngang.
+
 ## Bố cục
 
 ```

@@ -97,17 +97,16 @@ class ReportRepository implements ReportRepositoryInterface
         }
     }
 
-    public function syncPeopleSnapshot(Report $report, array $people): void
+    public function savedPersonnelOverlapping(int $departmentId, string $from, string $to): Collection
     {
-        $report->peopleSnapshot()->delete();
-
-        foreach (array_values($people) as $index => $person) {
-            $report->peopleSnapshot()->create([
-                'user_id' => (int) $person['id'],
-                'user_name' => mb_substr((string) $person['name'], 0, 255),
-                'sort_order' => $index,
-            ]);
-        }
+        return Report::query()
+            ->where('department_id', $departmentId)
+            ->where('report_type', Report::TYPE_PERSONNEL_EVALUATION)
+            ->where('status', Report::STATUS_SAVED)
+            ->whereDate('period_from', '<=', $to)
+            ->whereDate('period_to', '>=', $from)
+            ->orderBy('period_from')
+            ->get(['id', 'title', 'period_from', 'period_to', 'status', 'department_id']);
     }
 
     public function paginateVisible(

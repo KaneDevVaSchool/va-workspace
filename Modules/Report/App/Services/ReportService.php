@@ -141,55 +141,6 @@ class ReportService
         ];
     }
 
-    /**
-     * Sửa cấu hình báo cáo. Kỳ báo cáo và phiên bản khung chấm điểm chỉ đổi
-     * được khi còn nháp — đã lưu thì giữ nguyên để số liệu không đổi về sau.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    public function update(Report $report, User $actor, array $data): Report
-    {
-        return DB::transaction(function () use ($report, $actor, $data) {
-            $payload = ['updated_by' => (int) $actor->id];
-
-            if (array_key_exists('title', $data)) {
-                $payload['title'] = trim((string) $data['title']);
-            }
-
-            if ($report->status === Report::STATUS_DRAFT) {
-                foreach (['period_type', 'period_from', 'period_to'] as $field) {
-                    if (array_key_exists($field, $data)) {
-                        $payload[$field] = $data[$field];
-                    }
-                }
-            }
-
-            $updated = $this->reports->update($report, $payload);
-            $this->syncRelations($updated, $data);
-
-            return $this->reports->find((int) $updated->id) ?? $updated;
-        });
-    }
-
-    /**
-     * Chốt lưu — từ đây kỳ báo cáo và phiên bản không đổi được nữa.
-     *
-     * Chụp luôn danh sách nhân sự trong phạm vi: nếu vẫn lấy động theo phòng
-     * ban thì người nghỉ việc sau kỳ sẽ biến mất khỏi báo cáo cũ, còn người
-     * mới chuyển đến lại hiện ra trong kỳ họ chưa làm ở đó.
-     */
-    public function save(Report $report, User $actor): Report
-    {
-        return DB::transaction(function () use ($report, $actor) {
-            $this->reports->syncPeopleSnapshot($report, $this->livePeopleFor($report));
-
-            return $this->reports->update($report, [
-                'status' => Report::STATUS_SAVED,
-                'updated_by' => (int) $actor->id,
-            ]);
-        });
-    }
-
     public function delete(Report $report): void
     {
         $this->reports->delete($report);
@@ -198,6 +149,61 @@ class ReportService
     public function find(int $id): ?Report
     {
         return $this->reports->find($id);
+    }
+
+    /**
+     * Kỳ đang xem có bị khoá ghi nhận vì đã lưu báo cáo đánh giá nhân sự không.
+     *
+     * `locked` = cả khoảng đang xem nằm trong ít nhất một báo cáo đã lưu
+     * (trường hợp chọn đúng một tháng đã chốt). `reports` liệt kê mọi báo cáo
+     * giao với khoảng — để cảnh báo khi chỉ một phần kỳ bị khoá.
+     *
+     * @return array{locked: bool, reports: list<array{id: int, title: string, period_from: string, period_to: string}>}
+     */
+    public function periodLock(int $departmentId, string $from, string $to): array
+    {
+        $reports = $this->reports
+            ->savedPersonnelOverlapping($departmentId, $from, $to)
+            ->map(static fn (Report $report) => [
+                'id' => (int) $report->id,
+                'title' => (string) $report->title,
+                'period_from' => $report->period_from?->toDateString() ?? '',
+                'period_to' => $report->period_to?->toDateString() ?? '',
+            ])
+            ->values()
+            ->all();
+
+        $locked = false;
+        foreach ($reports as $report) {
+            if ($report['period_from'] <= $from && $report['period_to'] >= $to) {
+                $locked = true;
+                break;
+            }
+        }
+
+        return [
+            'locked' => $locked,
+            'reports' => $reports,
+        ];
+    }
+
+    /**
+     * Chặn ghi nhận / xoá khi ngày phát sinh thuộc kỳ báo cáo đã lưu.
+     */
+    public function assertDateWritable(int $departmentId, string $date): void
+    {
+        $lock = $this->periodLock($departmentId, $date, $date);
+
+        if (! $lock['locked']) {
+            return;
+        }
+
+        $report = $lock['reports'][0];
+
+        throw ValidationException::withMessages([
+            'occurred_at' => 'Kỳ '.$report['period_from'].' – '.$report['period_to']
+                .' đã lưu báo cáo "'.$report['title'].'", không ghi nhận hay xoá thêm được.',
+        ]);
     }
 
     /**
@@ -261,25 +267,6 @@ class ReportService
         ];
     }
 
-    /**
-     * Người dùng có được xem báo cáo này không — người quản lý phòng ban sở
-     * hữu báo cáo, hoặc người có tên trong danh sách được chia sẻ.
-     */
-    public function canView(Report $report, User $user): bool
-    {
-        if ($user->isSuperAdmin() || $user->allows('report.*')) {
-            return true;
-        }
-
-        if ($user->allowsScoped('report.manage_department', 'department', (int) $report->department_id)) {
-            return true;
-        }
-
-        return $report->viewers->contains(
-            fn ($viewer) => (int) $viewer->user_id === (int) $user->id,
-        );
-    }
-
     public function canManage(Report $report, User $user): bool
     {
         if ($user->isSuperAdmin() || $user->allows('report.*')) {
@@ -287,180 +274,6 @@ class ReportService
         }
 
         return $user->allowsScoped('report.manage_department', 'department', (int) $report->department_id);
-    }
-
-    /**
-     * Kết quả đầy đủ của báo cáo: tổng hợp và bảng theo từng nhân sự.
-     *
-     * @return array<string, mixed>
-     */
-    public function present(Report $report): array
-    {
-        $version = $report->evaluationConfigVersion;
-
-        if ($version === null) {
-            throw ValidationException::withMessages([
-                'report' => 'Báo cáo này thiếu phiên bản khung chấm điểm nên không tính được điểm.',
-            ]);
-        }
-
-        $people = $this->peopleFor($report);
-        $result = $this->compute->computeForPeople(
-            $people,
-            $version,
-            $report->period_from->toDateString(),
-            $report->period_to->toDateString(),
-        );
-
-        return [
-            'report' => $this->presentDetail($report),
-            'summary' => $result['summary'],
-            'rows' => array_map(
-                fn (array $row) => $this->applyColumns($row, $report),
-                $result['rows'],
-            ),
-        ];
-    }
-
-    /**
-     * Chi tiết điểm của một nhân sự trong báo cáo — kèm đóng góp của từng công
-     * việc và từng lần ghi nhận hành vi.
-     *
-     * @return array<string, mixed>
-     */
-    public function presentEmployeeDetail(Report $report, int $userId): array
-    {
-        $version = $report->evaluationConfigVersion;
-
-        if ($version === null) {
-            throw ValidationException::withMessages([
-                'report' => 'Báo cáo này thiếu phiên bản khung chấm điểm nên không tính được điểm.',
-            ]);
-        }
-
-        $people = $this->peopleFor($report);
-        $person = collect($people)->firstWhere('id', $userId);
-
-        if ($person === null) {
-            throw ValidationException::withMessages([
-                'user_id' => 'Nhân sự này không nằm trong phạm vi báo cáo.',
-            ]);
-        }
-
-        $row = $this->compute->computeForUser(
-            $userId,
-            (string) $person['name'],
-            $version,
-            $report->period_from->toDateString(),
-            $report->period_to->toDateString(),
-        );
-
-        return ['detail' => $this->filterCriteria($row, $report)];
-    }
-
-    /**
-     * Nhân sự thuộc phạm vi báo cáo.
-     *
-     * Báo cáo đã lưu đọc từ bản chụp lúc lưu — đó là điều giữ cho báo cáo cũ
-     * mở lại ra đúng số cũ dù nhân sự đã nghỉ hoặc chuyển phòng. Còn nháp thì
-     * lấy động để người tạo thấy ngay thay đổi.
-     *
-     * @return list<array{id: int, name: string}>
-     */
-    private function peopleFor(Report $report): array
-    {
-        if ($report->status === Report::STATUS_SAVED) {
-            $snapshot = $report->peopleSnapshot
-                ->map(fn ($row) => ['id' => (int) $row->user_id, 'name' => (string) $row->user_name])
-                ->values()
-                ->all();
-
-            // Báo cáo lưu từ trước khi có bản chụp thì vẫn phải mở được, đành
-            // lấy động như cũ.
-            if ($snapshot !== []) {
-                return $snapshot;
-            }
-        }
-
-        return $this->livePeopleFor($report);
-    }
-
-    /**
-     * Nhân sự đang hoạt động của phòng ban, thu hẹp theo bộ lọc đã chọn.
-     *
-     * @return list<array{id: int, name: string}>
-     */
-    private function livePeopleFor(Report $report): array
-    {
-        $members = $this->users->allActiveByDepartment((int) $report->department_id);
-        $selected = $report->filteredUserIds();
-
-        return $members
-            ->when(
-                $selected !== [],
-                fn (Collection $rows) => $rows->filter(
-                    fn ($user) => in_array((int) $user->id, $selected, true),
-                ),
-            )
-            ->map(fn ($user) => ['id' => (int) $user->id, 'name' => (string) $user->name])
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Bỏ bớt các cột người tạo báo cáo không chọn hiển thị.
-     *
-     * @param  array<string, mixed>  $row
-     * @return array<string, mixed>
-     */
-    private function applyColumns(array $row, Report $report): array
-    {
-        $enabled = $this->enabledColumns($report);
-
-        foreach (array_keys(self::EVALUATION_COLUMNS) as $key) {
-            if (in_array($key, $enabled, true)) {
-                continue;
-            }
-
-            if ($key === 'classification') {
-                unset($row['classification_code'], $row['classification_label']);
-
-                continue;
-            }
-
-            unset($row[$key]);
-        }
-
-        // Bảng chỉ cần số tổng — chi tiết nằm ở màn hình từng nhân sự.
-        unset($row['task_breakdown'], $row['event_breakdown']);
-
-        return $row;
-    }
-
-    /**
-     * Giữ lại phần ghi nhận hành vi thuộc các tiêu chí báo cáo có chọn.
-     *
-     * @param  array<string, mixed>  $row
-     * @return array<string, mixed>
-     */
-    private function filterCriteria(array $row, Report $report): array
-    {
-        $criterionIds = $report->criteria
-            ->pluck('criterion_id')
-            ->filter()
-            ->map(static fn ($id) => (int) $id)
-            ->all();
-
-        if ($criterionIds === []) {
-            return $row;
-        }
-
-        $row['event_breakdown'] = array_values(array_filter(
-            $row['event_breakdown'],
-            static fn (array $event) => in_array((int) ($event['criterion_id'] ?? 0), $criterionIds, true),
-        ));
-
-        return $row;
     }
 
     /** @return list<string> */

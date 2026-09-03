@@ -26,14 +26,4 @@ export default [
       requiresPermission: 'report.manage_department',
     },
   },
-  {
-    path: '/manager/reports/:id',
-    name: 'manager.reports.show',
-    component: () => import('./pages/ReportView.vue'),
-    meta: {
-      requiresAuth: true,
-      title: 'Xem báo cáo',
-      requiresAnyPermission: ['report.manage_department', 'report.view_assigned'],
-    },
-  },
 ];

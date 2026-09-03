@@ -66,12 +66,14 @@ interface ReportRepositoryInterface
     public function syncCriteria(Report $report, array $criterionIds): void;
 
     /**
-     * Chụp lại danh sách nhân sự trong phạm vi báo cáo, theo đúng thứ tự
-     * truyền vào. Gọi khi báo cáo chuyển sang trạng thái đã lưu.
+     * Báo cáo đánh giá nhân sự đã lưu có kỳ giao với khoảng ngày.
      *
-     * @param  list<array{id: int, name: string}>  $people
+     * Dùng để khoá ghi nhận / xoá điểm trên bảng tổng hợp khi tháng đó đã
+     * chốt báo cáo — không tải viewers hay snapshot, chỉ cần kỳ và tiêu đề.
+     *
+     * @return Collection<int, Report>
      */
-    public function syncPeopleSnapshot(Report $report, array $people): void;
+    public function savedPersonnelOverlapping(int $departmentId, string $from, string $to): Collection;
 
     /**
      * Cùng phạm vi với allByDepartment / allSharedWithUser / allAcrossDepartments

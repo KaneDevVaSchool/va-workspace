@@ -5,8 +5,10 @@ namespace Modules\Evaluation\App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Modules\Evaluation\App\Http\Requests\UpdateEvaluationScoreKitRequest;
 use Modules\Evaluation\App\Models\EvaluationScoreKit;
+use Modules\Evaluation\App\Services\EvaluationConfigVersionService;
 use Modules\Evaluation\App\Services\EvaluationScoreKitService;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
@@ -60,6 +62,7 @@ class EvaluationScoreKitController extends Controller
 
     public function __construct(
         private readonly EvaluationScoreKitService $service,
+        private readonly EvaluationConfigVersionService $configVersions,
         private readonly PermissionService $permissions,
         private readonly ActivityLogService $activityLogs,
     ) {}
@@ -89,37 +92,58 @@ class EvaluationScoreKitController extends Controller
             return response()->json(['message' => 'Bạn không có quyền cập nhật khung chấm điểm.'], 403);
         }
 
-        $before = $this->service->showForDepartment($departmentId)['kit'];
         $data = $request->validated();
         $context = (string) ($data['change_context'] ?? 'manual');
         unset($data['change_context']);
 
-        $kit = $this->service->upsert(
-            $departmentId,
-            (int) $request->user()->id,
-            $data,
-        );
-
-        $created = $before['id'] === null;
-        $changes = $this->activityChanges($before, $kit);
-        if ($created || $changes !== []) {
-            $this->activityLogs->record(
-                $this->activityAction($created, $changes, $context),
-                $this->activityDescription($kit, $changes, $context, $created),
-                $request->user(),
-                'evaluation_score_kit',
-                $kit['id'] !== null ? (int) $kit['id'] : null,
-                [
-                    'department_id' => $departmentId,
-                    'change_context' => $this->contextLabel($context),
-                    'changed_fields' => array_values(array_map(
-                        fn (array $change) => $change['label'],
-                        $changes,
-                    )),
-                    'changes' => $changes,
-                ],
+        $kit = DB::transaction(function () use ($request, $departmentId, $data, $context): array {
+            $before = $this->service->showForDepartment($departmentId)['kit'];
+            $kit = $this->service->upsert(
+                $departmentId,
+                (int) $request->user()->id,
+                $data,
             );
-        }
+
+            $created = $before['id'] === null;
+            $changes = $this->activityChanges($before, $kit);
+            $activeVersion = $this->configVersions->activeForDepartment($departmentId);
+            $activeKit = is_array($activeVersion?->kit_snapshot)
+                ? $activeVersion->kit_snapshot
+                : null;
+            if ($activeKit !== null) {
+                unset($activeKit['difficulty_lookup']);
+            }
+            $versionDrifted = $activeKit === null || ! $this->sameSnapshotValue($activeKit, $kit);
+
+            if ($created || $changes !== []) {
+                $this->activityLogs->record(
+                    $this->activityAction($created, $changes, $context),
+                    $this->activityDescription($kit, $changes, $context, $created),
+                    $request->user(),
+                    'evaluation_score_kit',
+                    $kit['id'] !== null ? (int) $kit['id'] : null,
+                    [
+                        'department_id' => $departmentId,
+                        'change_context' => $this->contextLabel($context),
+                        'changed_fields' => array_values(array_map(
+                            fn (array $change) => $change['label'],
+                            $changes,
+                        )),
+                        'changes' => $changes,
+                    ],
+                );
+            }
+
+            if ($created || $changes !== [] || $versionDrifted) {
+                $this->configVersions->publish(
+                    $departmentId,
+                    (int) $request->user()->id,
+                    'Tự động chốt khi cập nhật khung chấm điểm',
+                );
+            }
+
+            return $kit;
+        });
 
         return response()->json(['kit' => $kit]);
     }
@@ -256,6 +280,37 @@ class EvaluationScoreKitController extends Controller
             === json_encode($after, JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
     }
 
+    private function sameSnapshotValue(mixed $before, mixed $after): bool
+    {
+        if (is_numeric($before) && is_numeric($after)) {
+            return abs((float) $before - (float) $after) < 0.00001;
+        }
+
+        if (! is_array($before) || ! is_array($after)) {
+            return $before === $after;
+        }
+
+        if (count($before) !== count($after)) {
+            return false;
+        }
+
+        $beforeKeys = array_keys($before);
+        $afterKeys = array_keys($after);
+        sort($beforeKeys);
+        sort($afterKeys);
+        if ($beforeKeys !== $afterKeys) {
+            return false;
+        }
+
+        foreach ($before as $key => $value) {
+            if (! $this->sameSnapshotValue($value, $after[$key])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /** @param  array<string, array{label: string, before: mixed, after: mixed}>  $changes */
     private function activityAction(bool $created, array $changes, string $context): string
     {
@@ -375,6 +430,7 @@ class EvaluationScoreKitController extends Controller
         return match ($context) {
             'mode_change' => 'Đổi cách tính',
             'reset' => 'Khôi phục mặc định',
+            'leave_save' => 'Lưu trước khi rời trang',
             default => 'Chỉnh sửa thủ công',
         };
     }

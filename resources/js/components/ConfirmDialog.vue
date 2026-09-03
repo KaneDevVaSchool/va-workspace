@@ -95,7 +95,7 @@ onBeforeUnmount(() => {
 .confirm-dialog {
   position: fixed;
   inset: 0;
-  z-index: 300;
+  z-index: 400;
   display: flex;
   align-items: center;
   justify-content: center;

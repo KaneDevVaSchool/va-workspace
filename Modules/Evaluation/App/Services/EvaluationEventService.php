@@ -11,6 +11,7 @@ use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriteriaRepositoryIn
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationEventRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Services\PermissionService;
+use Modules\Report\App\Services\ReportService;
 
 /**
  * Ghi nhận điểm cộng / trừ theo hành vi cho từng nhân sự.
@@ -27,6 +28,7 @@ class EvaluationEventService
         private readonly EvaluationCriteriaRepositoryInterface $criteria,
         private readonly PermissionService $permissions,
         private readonly UserRepositoryInterface $users,
+        private readonly ReportService $reports,
     ) {}
 
     /**
@@ -60,6 +62,8 @@ class EvaluationEventService
      */
     public function create(int $departmentId, array $data, User $actor): EvaluationEvent
     {
+        $this->reports->assertDateWritable($departmentId, (string) $data['occurred_at']);
+
         $criterion = $this->behaviorCriterionOrFail((int) $data['criterion_id'], $departmentId);
         $level = $this->levelOrFail($criterion, (string) $data['level_code']);
         $selfApproved = $this->canManage($actor, $departmentId);
@@ -92,6 +96,15 @@ class EvaluationEventService
      */
     public function update(EvaluationEvent $event, array $data): EvaluationEvent
     {
+        $currentDate = $event->occurred_at?->toDateString();
+        if ($currentDate) {
+            $this->reports->assertDateWritable((int) $event->department_id, $currentDate);
+        }
+
+        if (array_key_exists('occurred_at', $data) && $data['occurred_at']) {
+            $this->reports->assertDateWritable((int) $event->department_id, (string) $data['occurred_at']);
+        }
+
         $this->assertPending($event, 'Chỉ sửa được sự kiện đang chờ duyệt.');
 
         $payload = [];
@@ -161,12 +174,16 @@ class EvaluationEventService
      * Gỡ một ghi nhận khỏi kỳ đang tính.
      *
      * Trưởng phòng ghi nhận là duyệt luôn, nên nếu chỉ cho xoá bản chờ duyệt
-     * thì nút xoá trên màn tổng hợp không bao giờ chạy được. Báo cáo đã lưu
-     * giữ số liệu chụp sẵn — gỡ ở đây chỉ đổi bảng đang xem, không sửa báo
-     * cáo cũ.
+     * thì nút xoá trên màn tổng hợp không bao giờ chạy được. Kỳ đã lưu báo cáo
+     * thì không gỡ được — số liệu trên bảng phải khớp báo cáo đã chốt.
      */
     public function delete(EvaluationEvent $event): void
     {
+        $date = $event->occurred_at?->toDateString();
+        if ($date) {
+            $this->reports->assertDateWritable((int) $event->department_id, $date);
+        }
+
         $this->events->delete($event);
     }
 

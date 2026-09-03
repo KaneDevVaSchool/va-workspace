@@ -70,7 +70,6 @@ class Report extends Model
         'filters',
         'columns',
         'criteria',
-        'peopleSnapshot',
         'creator',
         'updater',
     ];

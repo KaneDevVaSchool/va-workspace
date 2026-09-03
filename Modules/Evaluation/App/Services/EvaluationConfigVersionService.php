@@ -41,7 +41,12 @@ class EvaluationConfigVersionService
             ->values()
             ->all();
 
+        $kitSnapshot['kit_schema_version'] = \Modules\Evaluation\App\Models\EvaluationScoreKit::KIT_SCHEMA_VERSION;
         $kitSnapshot['difficulty_lookup'] = $this->difficultyLookup($kitSnapshot, $allCriteria);
+        $progressLevels = is_array($kitSnapshot['progress_levels'] ?? null)
+            ? $kitSnapshot['progress_levels']
+            : [];
+        $kitSnapshot['progress_bands'] = \Modules\Evaluation\App\Models\EvaluationScoreKit::buildProgressBands($progressLevels);
 
         return DB::transaction(function () use (
             $departmentId,

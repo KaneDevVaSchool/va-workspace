@@ -6,6 +6,7 @@ use Illuminate\Validation\ValidationException;
 use Modules\Evaluation\App\Models\EvaluationConfigVersion;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
+use Modules\Report\App\Services\ReportService;
 
 /**
  * Bảng tổng hợp đánh giá của cả phòng ban trong một kỳ.
@@ -25,6 +26,7 @@ class EvaluationSummaryService
         private readonly EvaluationScoreComputeService $compute,
         private readonly EvaluationEventService $events,
         private readonly UserRepositoryInterface $users,
+        private readonly ReportService $reports,
     ) {}
 
     /**
@@ -44,11 +46,13 @@ class EvaluationSummaryService
         $result = $this->compute->computeForPeople($people, $version, $from, $to, $to);
 
         return [
-            'rows' => $result['rows'],
+            'rows' => $this->withEmails($result['rows'], $people),
             'summary' => $result['summary'],
             'criteria' => $this->criteriaFor($version, $departmentId),
             'period' => ['from' => $from, 'to' => $to],
             'version_no' => $version->version_no,
+            'mode' => $version->kit_snapshot['mode'] ?? null,
+            'period_lock' => $this->reports->periodLock($departmentId, $from, $to),
         ];
     }
 
@@ -74,7 +78,7 @@ class EvaluationSummaryService
             return null;
         }
 
-        return $this->compute->computeForUser(
+        $row = $this->compute->computeForUser(
             $userId,
             (string) $person['name'],
             $version,
@@ -82,6 +86,9 @@ class EvaluationSummaryService
             $to,
             $to,
         );
+        $row['user_email'] = (string) ($person['email'] ?? '');
+
+        return $row;
     }
 
     /**
@@ -156,15 +163,41 @@ class EvaluationSummaryService
     /**
      * Nhân sự đang hoạt động của phòng ban.
      *
-     * @return list<array{id: int, name: string}>
+     * @return list<array{id: int, name: string, email: string}>
      */
     private function people(int $departmentId): array
     {
         return $this->users
             ->allActiveByDepartment($departmentId)
-            ->map(fn ($user) => ['id' => (int) $user->id, 'name' => (string) $user->name])
+            ->map(fn ($user) => [
+                'id' => (int) $user->id,
+                'name' => (string) $user->name,
+                'email' => (string) ($user->email ?? ''),
+            ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Gắn email vào từng dòng tổng hợp — compute service không cần biết email.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @param  list<array{id: int, name: string, email: string}>  $people
+     * @return list<array<string, mixed>>
+     */
+    private function withEmails(array $rows, array $people): array
+    {
+        $emailById = [];
+        foreach ($people as $person) {
+            $emailById[(int) $person['id']] = (string) ($person['email'] ?? '');
+        }
+
+        foreach ($rows as &$row) {
+            $row['user_email'] = $emailById[(int) ($row['user_id'] ?? 0)] ?? '';
+        }
+        unset($row);
+
+        return $rows;
     }
 
     private function versionOrFail(int $departmentId): EvaluationConfigVersion

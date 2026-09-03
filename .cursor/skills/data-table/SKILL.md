@@ -25,6 +25,10 @@ Chi tiết CSS / props / đo cột: [reference.md](reference.md)
 
 **Luôn tái dùng cấu trúc trên.** Port sang trang khác: đổi API, key cột, nhãn; giữ layout, `TablePagesBar`, kéo cột, panel đẩy ngang.
 
+## Ngoại lệ — không áp
+
+- **Tổng hợp đánh giá** (`EvaluationSummary.vue`, `/manager/evaluation-events`): ma trận chấm điểm kín khung (nhân sự × tiêu chí), không phải danh sách phẳng. Không `TablePagesBar`, không phân trang, không panel 28rem, không dropdown thao tác dòng. Chi tiết / chấm điểm = modal form ngang.
+
 ---
 
 ## Cấu trúc trang
