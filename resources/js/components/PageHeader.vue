@@ -17,6 +17,7 @@ const DEFAULT_EXPORT_ICONS = {
   xls: 'fileSpreadsheet',
   xlsx: 'fileSpreadsheet',
   csv: 'fileText',
+  pdf: 'fileText',
   import: 'fileUp',
   template: 'download',
   sample: 'download',

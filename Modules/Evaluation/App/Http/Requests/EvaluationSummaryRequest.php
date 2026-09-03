@@ -27,6 +27,9 @@ class EvaluationSummaryRequest extends FormRequest
         return [
             'from' => ['required', 'date_format:Y-m-d'],
             'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'report' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'criterion_ids' => ['sometimes', 'array'],
+            'criterion_ids.*' => ['integer', 'min:1'],
         ];
     }
 

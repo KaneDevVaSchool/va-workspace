@@ -67,6 +67,7 @@ class EvaluationEventService
         $criterion = $this->behaviorCriterionOrFail((int) $data['criterion_id'], $departmentId);
         $level = $this->levelOrFail($criterion, (string) $data['level_code']);
         $selfApproved = $this->canManage($actor, $departmentId);
+
         return $this->events->create([
             'department_id' => $departmentId,
             'user_id' => (int) $data['user_id'],
@@ -256,16 +257,21 @@ class EvaluationEventService
     }
 
     /**
-     * Nhân sự đang hoạt động của phòng ban — để chọn người được ghi nhận mà
-     * không phải phụ thuộc API của module khác.
+     * Nhân sự đang hoạt động của phòng ban — để chọn người được ghi nhận /
+     * phạm vi báo cáo mà không phải phụ thuộc API của module khác.
      *
-     * @return list<array{id: int, name: string}>
+     * @return list<array{id: int, name: string, email: string, avatar_url: ?string}>
      */
     public function departmentMembers(int $departmentId): array
     {
         return $this->users
             ->allActiveByDepartment($departmentId)
-            ->map(fn ($user) => ['id' => (int) $user->id, 'name' => (string) $user->name])
+            ->map(fn ($user) => [
+                'id' => (int) $user->id,
+                'name' => (string) $user->name,
+                'email' => (string) ($user->email ?? ''),
+                'avatar_url' => $user->avatar_url ? (string) $user->avatar_url : null,
+            ])
             ->values()
             ->all();
     }

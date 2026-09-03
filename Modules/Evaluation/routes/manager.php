@@ -109,6 +109,9 @@ Route::prefix('evaluation')->name('evaluation.')->group(function () {
     Route::get('/summary', [EvaluationSummaryController::class, 'index'])
         ->name('summary.index');
 
+    Route::get('/summary/export-pdf', [EvaluationSummaryController::class, 'exportPdf'])
+        ->name('summary.export-pdf');
+
     // ── Ghi nhận đánh giá nhân sự — áp mức tiêu chí hành vi (cộng / trừ điểm)
     // cho từng nhân sự, là nguồn điểm thật cho báo cáo đánh giá.
     Route::get('/events', [EvaluationEventController::class, 'index'])

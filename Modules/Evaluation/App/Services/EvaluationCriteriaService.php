@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriteriaRepositoryInterface;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationCriterionTypeRepositoryInterface;
+use Modules\Evaluation\App\Support\PdfWatermark;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class EvaluationCriteriaService
@@ -18,6 +19,7 @@ class EvaluationCriteriaService
         private readonly EvaluationCriterionTypeRepositoryInterface $types,
         private readonly EvaluationCriteriaExcelExporter $exporter,
         private readonly EvaluationCriteriaExcelImporter $importer,
+        private readonly PdfWatermark $watermark,
     ) {}
 
     /** Danh sách tiêu chí của phòng ban, đã present sẵn cho API response. */
@@ -75,14 +77,7 @@ class EvaluationCriteriaService
             'generatedAt' => now(),
         ])->setPaper('a4', 'landscape');
 
-        $watermarkPath = $this->makePdfWatermarkPng();
-        try {
-            $this->stampPdfWatermark($pdf, $watermarkPath);
-        } finally {
-            if ($watermarkPath !== null && is_file($watermarkPath)) {
-                @unlink($watermarkPath);
-            }
-        }
+        $this->watermark->stamp($pdf);
 
         return $pdf->download($filename);
     }
@@ -103,7 +98,7 @@ class EvaluationCriteriaService
      * Tạo được dòng nào lưu dòng đó — 1 dòng lỗi không làm rollback các dòng khác.
      *
      * @param  list<array<string, mixed>>  $validatedRows  Dữ liệu đã đúng định dạng từ bước preview
-     *         (chỉ những dòng frontend gửi lên là đã chọn xác nhận).
+     *                                                     (chỉ những dòng frontend gửi lên là đã chọn xác nhận).
      * @return array{created: list<array<string, mixed>>, errors: list<array{row: int, message: string}>}
      */
     public function confirmImport(int $departmentId, int $importedBy, array $validatedRows): array
@@ -123,99 +118,6 @@ class EvaluationCriteriaService
         usort($errors, fn ($a, $b) => $a['row'] <=> $b['row']);
 
         return ['created' => $created, 'errors' => $errors];
-    }
-
-    /**
-     * Nhuộm mark trắng (nền trong suốt) sang màu brand để hiện được trên giấy trắng.
-     * Trả về đường dẫn PNG tạm — caller phải xoá file sau khi render PDF.
-     */
-    private function makePdfWatermarkPng(): ?string
-    {
-        $srcPath = public_path('images/congnghe/brand/vas-white-mark@2x.png');
-        if (! is_file($srcPath)) {
-            $srcPath = public_path('images/congnghe/brand/vas-white-mark.png');
-        }
-        if (! is_file($srcPath) || ! function_exists('imagecreatefrompng')) {
-            return null;
-        }
-
-        $src = @imagecreatefrompng($srcPath);
-        if ($src === false) {
-            return null;
-        }
-
-        $width = imagesx($src);
-        $height = imagesy($src);
-        $dst = imagecreatetruecolor($width, $height);
-        imagealphablending($dst, false);
-        imagesavealpha($dst, true);
-        $clear = imagecolorallocatealpha($dst, 0, 0, 0, 127);
-        imagefilledrectangle($dst, 0, 0, $width, $height, $clear);
-
-        // Header PDF / primary-900. Alpha nướng sẵn (~10%) — không phụ thuộc
-        // set_opacity của DomPDF (không luôn áp được lên ảnh).
-        $brandR = 0x9A;
-        $brandG = 0x00;
-        $brandB = 0x36;
-        $fade = 0.10;
-
-        for ($y = 0; $y < $height; $y++) {
-            for ($x = 0; $x < $width; $x++) {
-                $rgba = imagecolorat($src, $x, $y);
-                $alpha = ($rgba >> 24) & 0x7F;
-                if ($alpha >= 126) {
-                    continue;
-                }
-                $srcOpacity = 1 - ($alpha / 127);
-                $newAlpha = (int) round(127 * (1 - ($srcOpacity * $fade)));
-                $newAlpha = max(0, min(127, $newAlpha));
-                $color = imagecolorallocatealpha($dst, $brandR, $brandG, $brandB, $newAlpha);
-                imagesetpixel($dst, $x, $y, $color);
-            }
-        }
-
-        imagedestroy($src);
-
-        $tmp = tempnam(sys_get_temp_dir(), 'vas-wm-');
-        if ($tmp === false) {
-            imagedestroy($dst);
-
-            return null;
-        }
-        $pngPath = $tmp.'.png';
-        @unlink($tmp);
-        $ok = imagepng($dst, $pngPath);
-        imagedestroy($dst);
-
-        if (! $ok || ! is_file($pngPath)) {
-            return null;
-        }
-
-        return $pngPath;
-    }
-
-    /**
-     * Đóng dấu mark mờ lên mọi trang, vẽ sau nội dung để hiện xuyên qua bảng.
-     *
-     * @param  \Barryvdh\DomPDF\PDF  $pdf
-     */
-    private function stampPdfWatermark($pdf, ?string $watermarkPath): void
-    {
-        if ($watermarkPath === null) {
-            return;
-        }
-
-        $pdf->render();
-        $canvas = $pdf->getCanvas();
-        $pageW = $canvas->get_width();
-        $pageH = $canvas->get_height();
-        $size = min($pageW, $pageH) * 0.58;
-        $x = ($pageW - $size) / 2;
-        $y = ($pageH - $size) / 2;
-
-        $canvas->page_script(function ($pageNumber, $pageCount, $canvas) use ($watermarkPath, $x, $y, $size) {
-            $canvas->image($watermarkPath, $x, $y, $size, $size);
-        });
     }
 
     private function matchesFilters(EvaluationCriteria $criterion, array $filters): bool
@@ -287,20 +189,20 @@ class EvaluationCriteriaService
         $normalized = $this->normalizeLevels($data['type'], $data['levels'] ?? [], $allowHalf);
 
         $criterion = $this->criteria->create([
-            'department_id'     => $departmentId,
+            'department_id' => $departmentId,
             'criterion_type_id' => $this->resolveTypeId($departmentId, $data['criterion_type_id'] ?? null),
-            'name'              => trim($data['name']),
-            'type'              => $data['type'],
-            'description'       => isset($data['description']) ? trim($data['description']) : null,
-            'levels'            => $normalized,
-            'is_active'           => $data['is_active'] ?? true,
-            'allow_half'          => $allowHalf,
-            'use_in_evaluation'   => $data['use_in_evaluation'] ?? true,
-            'use_for_task_type'   => false,
+            'name' => trim($data['name']),
+            'type' => $data['type'],
+            'description' => isset($data['description']) ? trim($data['description']) : null,
+            'levels' => $normalized,
+            'is_active' => $data['is_active'] ?? true,
+            'allow_half' => $allowHalf,
+            'use_in_evaluation' => $data['use_in_evaluation'] ?? true,
+            'use_for_task_type' => false,
             'task_score_level_codes' => [],
-            'sort_order'          => $data['sort_order'] ?? 0,
-            'created_by'          => $createdBy,
-            'updated_by'          => $createdBy,
+            'sort_order' => $data['sort_order'] ?? 0,
+            'created_by' => $createdBy,
+            'updated_by' => $createdBy,
         ]);
 
         if (! empty($data['use_for_task_type'])) {
@@ -326,22 +228,22 @@ class EvaluationCriteriaService
         );
 
         $payload = [
-            'name'        => trim($data['name'] ?? $criterion->name),
-            'type'        => $type,
+            'name' => trim($data['name'] ?? $criterion->name),
+            'type' => $type,
             'description' => array_key_exists('description', $data)
                 ? (isset($data['description']) ? trim($data['description']) : null)
                 : $criterion->description,
-            'levels'             => $normalized,
-            'is_active'          => $data['is_active'] ?? $criterion->is_active,
-            'allow_half'         => $allowHalf,
-            'use_in_evaluation'  => array_key_exists('use_in_evaluation', $data)
+            'levels' => $normalized,
+            'is_active' => $data['is_active'] ?? $criterion->is_active,
+            'allow_half' => $allowHalf,
+            'use_in_evaluation' => array_key_exists('use_in_evaluation', $data)
                 ? (bool) $data['use_in_evaluation']
                 : (bool) $criterion->use_in_evaluation,
             'task_score_level_codes' => $this->pruneTaskScoreLevelCodes(
                 $criterion->task_score_level_codes ?? [],
                 $normalized,
             ),
-            'sort_order'         => $data['sort_order'] ?? $criterion->sort_order,
+            'sort_order' => $data['sort_order'] ?? $criterion->sort_order,
         ];
 
         if ($updatedBy !== null) {
@@ -443,38 +345,38 @@ class EvaluationCriteriaService
         $type = $criterion->criterionType;
 
         return [
-            'id'                 => $criterion->id,
-            'criterion_type_id'  => $criterion->criterion_type_id,
-            'criterion_type'     => $type ? [
-                'id'          => $type->id,
-                'name'        => $type->name,
-                'code'        => $type->code,
+            'id' => $criterion->id,
+            'criterion_type_id' => $criterion->criterion_type_id,
+            'criterion_type' => $type ? [
+                'id' => $type->id,
+                'name' => $type->name,
+                'code' => $type->code,
                 'description' => $type->description,
             ] : null,
-            'name'        => $criterion->name,
-            'type'        => $criterion->type,
+            'name' => $criterion->name,
+            'type' => $criterion->type,
             'description' => $criterion->description,
-            'levels'      => $levels,
+            'levels' => $levels,
             'level_count' => count($levels),
-            'max_score'          => $criterion->max_score,
+            'max_score' => $criterion->max_score,
             // Phòng ban nguồn của tiêu chí — cần khi picker mẫu đánh giá gộp
             // tiêu chí nhiều phòng ban (mẫu is_global) để phân biệt rõ nguồn.
             'department' => $criterion->department ? [
-                'id'   => $criterion->department->id,
+                'id' => $criterion->department->id,
                 'name' => $criterion->department->name,
             ] : null,
-            'is_active'          => $criterion->is_active,
-            'allow_half'         => (bool) $criterion->allow_half,
-            'use_in_evaluation'  => (bool) $criterion->use_in_evaluation,
-            'use_for_task_type'  => (bool) $criterion->use_for_task_type,
+            'is_active' => $criterion->is_active,
+            'allow_half' => (bool) $criterion->allow_half,
+            'use_in_evaluation' => (bool) $criterion->use_in_evaluation,
+            'use_for_task_type' => (bool) $criterion->use_for_task_type,
             'task_score_level_codes' => array_values($criterion->task_score_level_codes ?? []),
-            'sort_order'         => $criterion->sort_order,
-            'created_by'         => $criterion->created_by,
-            'updated_by'         => $criterion->updated_by,
-            'creator'            => $this->presentUser($criterion->creator),
-            'updater'            => $this->presentUser($criterion->updater),
-            'created_at'         => $criterion->created_at?->toIso8601String(),
-            'updated_at'         => $criterion->updated_at?->toIso8601String(),
+            'sort_order' => $criterion->sort_order,
+            'created_by' => $criterion->created_by,
+            'updated_by' => $criterion->updated_by,
+            'creator' => $this->presentUser($criterion->creator),
+            'updater' => $this->presentUser($criterion->updater),
+            'created_at' => $criterion->created_at?->toIso8601String(),
+            'updated_at' => $criterion->updated_at?->toIso8601String(),
         ];
     }
 
@@ -488,12 +390,12 @@ class EvaluationCriteriaService
         $department = $user->department;
 
         return [
-            'id'         => $user->id,
-            'name'       => $user->name,
-            'email'      => $user->email,
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
             'avatar_url' => $user->avatar_url,
             'department' => $department ? [
-                'id'   => $department->id,
+                'id' => $department->id,
                 'name' => $department->name,
             ] : null,
         ];
@@ -545,10 +447,10 @@ class EvaluationCriteriaService
             }
 
             $result[] = [
-                'code'        => strtoupper(trim((string) ($level['code'] ?? ''))),
-                'label'       => $label,
+                'code' => strtoupper(trim((string) ($level['code'] ?? ''))),
+                'label' => $label,
                 'description' => trim((string) ($level['description'] ?? '')),
-                'score'       => $score,
+                'score' => $score,
             ];
         }
 

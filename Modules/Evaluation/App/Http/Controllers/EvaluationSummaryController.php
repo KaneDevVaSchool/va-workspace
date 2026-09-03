@@ -7,11 +7,12 @@ use Illuminate\Http\JsonResponse;
 use Modules\Evaluation\App\Http\Requests\EvaluationSummaryRequest;
 use Modules\Evaluation\App\Services\EvaluationSummaryService;
 use Modules\Identity\App\Services\PermissionService;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Manager JSON:
- *   GET /api/evaluation/summary?from=&to=  — bảng tổng hợp đánh giá cả phòng
- *                                            ban trong kỳ
+ *   GET /api/evaluation/summary?from=&to=              — bảng tổng hợp đánh giá cả phòng
+ *   GET /api/evaluation/summary/export-pdf?from=&to=  — cùng số liệu, form PDF ngang có dấu chìm
  */
 class EvaluationSummaryController extends Controller
 {
@@ -45,6 +46,42 @@ class EvaluationSummaryController extends Controller
             $departmentId,
             (string) $validated['from'],
             (string) $validated['to'],
+            isset($validated['report']) ? (int) $validated['report'] : null,
         ));
+    }
+
+    public function exportPdf(EvaluationSummaryRequest $request): JsonResponse|Response
+    {
+        $departmentId = $request->user()?->department_id;
+
+        if (! $departmentId) {
+            return response()->json(['message' => 'Tài khoản chưa gắn với phòng ban nào.'], 422);
+        }
+
+        $departmentId = (int) $departmentId;
+
+        if (! $this->permissions->allows(
+            $request->user(),
+            'evaluation.manage_department',
+            'department',
+            $departmentId,
+        )) {
+            return response()->json(['message' => 'Bạn không có quyền xem tổng hợp đánh giá.'], 403);
+        }
+
+        $validated = $request->validated();
+        $criterionIds = [];
+        foreach ($validated['criterion_ids'] ?? [] as $id) {
+            $criterionIds[] = (int) $id;
+        }
+
+        return $this->service->exportPdf(
+            $departmentId,
+            (string) $validated['from'],
+            (string) $validated['to'],
+            isset($validated['report']) ? (int) $validated['report'] : null,
+            $request->user(),
+            $criterionIds,
+        );
     }
 }

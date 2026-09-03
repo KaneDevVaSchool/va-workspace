@@ -546,4 +546,32 @@ class EvaluationSummaryTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors('to');
     }
+
+    public function test_director_can_export_summary_pdf(): void
+    {
+        ['dept' => $dept, 'director' => $director, 'member' => $member] = $this->setUpDepartment();
+        $this->version($dept);
+        $this->task($member);
+
+        $response = $this->actingAs($director)
+            ->get('/api/evaluation/summary/export-pdf?'.http_build_query([
+                'from' => self::FROM,
+                'to' => self::TO,
+            ]));
+
+        $response->assertOk();
+        $this->assertSame('application/pdf', $response->headers->get('content-type'));
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+        $this->assertStringContainsString('Danh_gia_nhan_su', (string) $response->headers->get('content-disposition'));
+    }
+
+    public function test_member_cannot_export_summary_pdf(): void
+    {
+        ['dept' => $dept, 'member' => $member] = $this->setUpDepartment();
+        $this->version($dept);
+
+        $this->actingAs($member)
+            ->getJson('/api/evaluation/summary/export-pdf?from='.self::FROM.'&to='.self::TO)
+            ->assertForbidden();
+    }
 }

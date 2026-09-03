@@ -164,6 +164,8 @@ class EvaluationScoreComputeService
                 'occurred_at' => $event->occurred_at?->toDateString(),
                 'reason' => $event->reason,
                 'task_id' => $event->task_id ? (int) $event->task_id : null,
+                'recorded_by' => $event->recorded_by ? (int) $event->recorded_by : null,
+                'recorded_by_name' => $event->recorder?->name,
             ];
         }
 
@@ -903,7 +905,6 @@ class EvaluationScoreComputeService
     /**
      * Thang mức thành map "mã / tên" => hệ số, giữ nguyên thứ tự đã cấu hình.
      *
-     * @param  mixed  $levels
      * @return array<string, float>
      */
     private function levelMap(mixed $levels): array
