@@ -27,6 +27,14 @@ Route::prefix('report')->name('report.')->group(function () {
     Route::post('/personnel-evaluation/preview', [ReportController::class, 'previewPersonnelEvaluation'])
         ->name('personnel-evaluation.preview');
 
+    Route::patch('/{id}/display', [ReportController::class, 'updateDisplay'])
+        ->whereNumber('id')
+        ->name('display.update');
+
+    Route::patch('/{id}/save', [ReportController::class, 'save'])
+        ->whereNumber('id')
+        ->name('save');
+
     Route::delete('/{id}', [ReportController::class, 'destroy'])
         ->whereNumber('id')
         ->name('destroy');

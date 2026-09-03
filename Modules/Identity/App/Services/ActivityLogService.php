@@ -88,7 +88,7 @@ class ActivityLogService
         'scope_id' => 'Mã phạm vi',
         'path' => 'Đường dẫn',
         'title' => 'Tên',
-        'department_id' => 'Mã phòng ban',
+        'revision' => 'Phiên bản',
         'change_context' => 'Ngữ cảnh',
         'changed_fields' => 'Trường thay đổi',
         'changes' => 'Chi tiết trước / sau',

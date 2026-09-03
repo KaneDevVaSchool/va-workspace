@@ -10,6 +10,7 @@ use Modules\Evaluation\App\Services\EvaluationConfigVersionService;
 use Modules\Evaluation\App\Services\EvaluationScoreComputeService;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Report\App\Models\Report;
+use Modules\Report\App\Models\ReportDisplayRevision;
 use Modules\Report\App\Repositories\Contracts\ReportRepositoryInterface;
 
 /**
@@ -23,16 +24,19 @@ class ReportService
 {
     /** Cột của báo cáo đánh giá nhân sự, theo thứ tự hiển thị cố định. */
     public const EVALUATION_COLUMNS = [
-        'start_score' => 'Điểm khởi đầu',
-        'task_adjustment' => 'Điểm công việc',
-        'bonus' => 'Điểm cộng',
-        'penalty' => 'Điểm trừ',
-        'final_score' => 'Điểm cuối',
+        'tasks' => 'Việc',
+        'start_score' => 'Khởi đầu',
+        'task_adjustment' => 'Từ việc',
+        'bonus' => 'Cộng',
+        'penalty' => 'Trừ',
+        'final_score' => 'Cuối',
         'classification' => 'Xếp loại',
     ];
 
     public const DEFAULT_COLUMNS = [
+        'tasks',
         'start_score',
+        'task_adjustment',
         'bonus',
         'penalty',
         'final_score',
@@ -67,11 +71,21 @@ class ReportService
                 'period_to' => $data['period_to'],
                 'evaluation_config_version_id' => $version->id,
                 'status' => Report::STATUS_DRAFT,
+                'display_revision' => ReportDisplayRevision::FIRST,
                 'created_by' => (int) $actor->id,
                 'updated_by' => (int) $actor->id,
             ]);
 
             $this->syncRelations($report, $data);
+            $this->recordDisplayRevision(
+                $report,
+                ReportDisplayRevision::FIRST,
+                ReportDisplayRevision::KIND_ORIGINAL,
+                $this->intList($data['criterion_ids'] ?? []),
+                $this->columnKeysFromData($data),
+                (int) $actor->id,
+                'Bản gốc lúc tạo',
+            );
 
             return $this->reports->find((int) $report->id) ?? $report;
         });
@@ -143,12 +157,111 @@ class ReportService
 
     public function delete(Report $report): void
     {
+        if ($report->status === Report::STATUS_SAVED) {
+            throw ValidationException::withMessages([
+                'report' => 'Báo cáo đã lưu, không xoá được.',
+            ]);
+        }
+
         $this->reports->delete($report);
     }
 
     public function find(int $id): ?Report
     {
         return $this->reports->find($id);
+    }
+
+    /**
+     * Cột điểm / cột tiêu chí đang áp dụng của báo cáo, để bảng chấm điểm
+     * hiện đúng những gì đã chọn lúc tạo (hoặc phụ lục sau này).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function displayFor(int $reportId, int $departmentId): ?array
+    {
+        $report = $this->reports->find($reportId);
+
+        if (
+            $report === null
+            || (int) $report->department_id !== $departmentId
+            || $report->report_type !== Report::TYPE_PERSONNEL_EVALUATION
+        ) {
+            return null;
+        }
+
+        return $this->presentDisplay($report);
+    }
+
+    /**
+     * Đổi cột tiêu chí trên bảng chấm điểm — không ghi đè bản 1.0, lưu phụ lục
+     * 1.1 / 1.2… Kỳ, phạm vi nhân sự và phiên bản khung chấm điểm giữ nguyên.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function saveDisplayAppendix(Report $report, User $actor, array $data): Report
+    {
+        if ($report->status === Report::STATUS_SAVED) {
+            throw ValidationException::withMessages([
+                'report' => 'Báo cáo đã lưu, không đổi cột tiêu chí được nữa.',
+            ]);
+        }
+
+        $criterionIds = $this->intList($data['criterion_ids'] ?? []);
+        $columnKeys = array_key_exists('column_keys', $data)
+            ? $this->columnKeysFromData($data)
+            : $this->enabledColumns($report);
+
+        if ($this->sameDisplay($report, $criterionIds, $columnKeys)) {
+            return $this->reports->find((int) $report->id) ?? $report;
+        }
+
+        return DB::transaction(function () use ($report, $actor, $criterionIds, $columnKeys) {
+            $this->ensureOriginalRevision($report, (int) $actor->id);
+
+            $next = $this->nextAppendixRevision($report);
+            $this->reports->syncCriteria($report, $criterionIds);
+            $this->reports->syncColumns($report, $columnKeys);
+            $this->recordDisplayRevision(
+                $report,
+                $next,
+                ReportDisplayRevision::KIND_APPENDIX,
+                $criterionIds,
+                $columnKeys,
+                (int) $actor->id,
+                'Phụ lục — đổi cột tiêu chí',
+            );
+            $this->reports->update($report, [
+                'display_revision' => $next,
+                'updated_by' => (int) $actor->id,
+            ]);
+
+            return $this->reports->find((int) $report->id) ?? $report;
+        });
+    }
+
+    /**
+     * Chốt lưu — từ đây kỳ báo cáo không ghi nhận / xoá điểm thêm được nữa.
+     *
+     * Chụp luôn danh sách nhân sự trong phạm vi: nếu vẫn lấy động theo phòng
+     * ban thì người nghỉ việc sau kỳ sẽ biến mất khỏi báo cáo cũ, còn người
+     * mới chuyển đến lại hiện ra trong kỳ họ chưa làm ở đó.
+     */
+    public function save(Report $report, User $actor): Report
+    {
+        if ($report->status === Report::STATUS_SAVED) {
+            throw ValidationException::withMessages([
+                'report' => 'Báo cáo đã được lưu trước đó.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($report, $actor) {
+            $this->reports->syncPeopleSnapshot($report, $this->livePeopleFor($report));
+
+            return $this->reports->update($report, [
+                'status' => Report::STATUS_SAVED,
+                'updated_by' => (int) $actor->id,
+            ]);
+        });
     }
 
     /**
@@ -288,6 +401,125 @@ class ReportService
     }
 
     /** @param  array<string, mixed>  $data */
+    private function columnKeysFromData(array $data): array
+    {
+        $keys = array_values(array_filter(
+            (array) ($data['column_keys'] ?? []),
+            static fn ($key) => array_key_exists($key, self::EVALUATION_COLUMNS),
+        ));
+
+        return $keys !== [] ? $keys : self::DEFAULT_COLUMNS;
+    }
+
+    /**
+     * @param  list<int>  $criterionIds
+     * @param  list<string>  $columnKeys
+     */
+    private function recordDisplayRevision(
+        Report $report,
+        string $revision,
+        string $kind,
+        array $criterionIds,
+        array $columnKeys,
+        int $actorId,
+        string $note,
+    ): void {
+        $this->reports->addDisplayRevision($report, [
+            'revision' => $revision,
+            'kind' => $kind,
+            'criterion_ids' => array_values($criterionIds),
+            'column_keys' => array_values($columnKeys),
+            'note' => $note,
+            'created_by' => $actorId,
+        ]);
+    }
+
+    /**
+     * Báo cáo tạo trước khi có bảng lịch sử: chụp trạng thái hiện tại thành 1.0
+     * trước khi ghi phụ lục, để bản gốc không mất.
+     */
+    private function ensureOriginalRevision(Report $report, int $actorId): void
+    {
+        if ($report->displayRevisions->isNotEmpty()) {
+            return;
+        }
+
+        $this->recordDisplayRevision(
+            $report,
+            ReportDisplayRevision::FIRST,
+            ReportDisplayRevision::KIND_ORIGINAL,
+            $this->intList($report->criteria->pluck('criterion_id')->all()),
+            $this->enabledColumns($report),
+            $actorId,
+            'Bản gốc lúc tạo',
+        );
+        $report->load('displayRevisions.creator');
+    }
+
+    private function nextAppendixRevision(Report $report): string
+    {
+        $latest = $report->displayRevisions
+            ->sortByDesc('id')
+            ->first()
+            ?->revision ?? $report->display_revision ?? ReportDisplayRevision::FIRST;
+
+        $parts = explode('.', (string) $latest, 2);
+        $major = ctype_digit($parts[0] ?? '') ? (int) $parts[0] : 1;
+        $minor = ctype_digit($parts[1] ?? '') ? (int) $parts[1] : 0;
+
+        return $major.'.'.($minor + 1);
+    }
+
+    /**
+     * @param  list<int>  $criterionIds
+     * @param  list<string>  $columnKeys
+     */
+    private function sameDisplay(Report $report, array $criterionIds, array $columnKeys): bool
+    {
+        $currentIds = $this->intList($report->criteria->pluck('criterion_id')->all());
+        $currentCols = $this->enabledColumns($report);
+        sort($currentIds);
+        $nextIds = $criterionIds;
+        sort($nextIds);
+        $currentColsSorted = $currentCols;
+        $nextCols = $columnKeys;
+        sort($currentColsSorted);
+        sort($nextCols);
+
+        return $currentIds === $nextIds && $currentColsSorted === $nextCols;
+    }
+
+    /** @return array<string, mixed> */
+    public function presentDisplay(Report $report): array
+    {
+        $latest = $report->displayRevisions->sortByDesc('id')->first();
+
+        return [
+            'id' => (int) $report->id,
+            'title' => (string) $report->title,
+            'status' => (string) $report->status,
+            'period_from' => $report->period_from?->toDateString() ?? '',
+            'period_to' => $report->period_to?->toDateString() ?? '',
+            'revision' => (string) ($report->display_revision ?: ReportDisplayRevision::FIRST),
+            'kind' => $latest?->kind ?? ReportDisplayRevision::KIND_ORIGINAL,
+            'criterion_ids' => $this->intList($report->criteria->pluck('criterion_id')->all()),
+            'column_keys' => $this->enabledColumns($report),
+            'revisions' => $report->displayRevisions
+                ->map(fn (ReportDisplayRevision $item) => [
+                    'revision' => $item->revision,
+                    'kind' => $item->kind,
+                    'note' => $item->note,
+                    'criterion_ids' => $this->intList($item->criterion_ids ?? []),
+                    'column_keys' => array_values((array) ($item->column_keys ?? [])),
+                    'created_by_name' => $item->creator?->name,
+                    'created_at' => $item->created_at?->toIso8601String(),
+                ])
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /** @param  array<string, mixed>  $data */
     private function syncRelations(Report $report, array $data): void
     {
         if (array_key_exists('viewer_user_ids', $data)) {
@@ -320,6 +552,28 @@ class ReportService
         )));
     }
 
+    /**
+     * Nhân sự đang hoạt động của phòng ban, thu hẹp theo bộ lọc đã chọn.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    private function livePeopleFor(Report $report): array
+    {
+        $members = $this->users->allActiveByDepartment((int) $report->department_id);
+        $selected = $report->filteredUserIds();
+
+        return $members
+            ->when(
+                $selected !== [],
+                fn (Collection $rows) => $rows->filter(
+                    fn ($user) => in_array((int) $user->id, $selected, true),
+                ),
+            )
+            ->map(fn ($user) => ['id' => (int) $user->id, 'name' => (string) $user->name])
+            ->values()
+            ->all();
+    }
+
     /** @return array<string, mixed> */
     public function presentSummary(Report $report): array
     {
@@ -333,8 +587,25 @@ class ReportService
             'period_from' => $report->period_from?->toDateString(),
             'period_to' => $report->period_to?->toDateString(),
             'status' => $report->status,
+            'revision' => (string) ($report->display_revision ?: ReportDisplayRevision::FIRST),
+            'revision_kind' => $report->displayRevisions->sortByDesc('id')->first()?->kind
+                ?? ReportDisplayRevision::KIND_ORIGINAL,
             'viewer_count' => $report->viewers->count(),
+            'viewer_names' => $report->viewers
+                ->map(static fn ($viewer) => $viewer->user?->name)
+                ->filter()
+                ->values()
+                ->all(),
+            'filter_user_count' => count($report->filteredUserIds()),
+            'column_count' => count($this->enabledColumns($report)),
+            'criterion_count' => $report->criteria->count(),
+            'created_by' => $report->created_by,
             'created_by_name' => $report->creator?->name,
+            'created_by_email' => $report->creator?->email,
+            'created_by_avatar_url' => $report->creator?->avatar_url,
+            'created_by_department' => $report->creator?->department?->name,
+            'updated_by_name' => $report->updater?->name,
+            'updated_by_email' => $report->updater?->email,
             'created_at' => $report->created_at?->toIso8601String(),
             'updated_at' => $report->updated_at?->toIso8601String(),
         ];
@@ -354,6 +625,7 @@ class ReportService
             'column_labels' => self::EVALUATION_COLUMNS,
             'criterion_ids' => $report->criteria->pluck('criterion_id')->filter()->values()->all(),
             'filter_user_ids' => $report->filteredUserIds(),
+            'display' => $this->presentDisplay($report),
             'viewers' => $report->viewers
                 ->map(fn ($viewer) => [
                     'user_id' => (int) $viewer->user_id,

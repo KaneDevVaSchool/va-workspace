@@ -12,15 +12,16 @@ use Modules\Identity\App\Models\Department;
 /**
  * Báo cáo đã cấu hình của một phòng ban.
  *
- * @property int         $id
- * @property int         $department_id
- * @property string      $report_type
- * @property string      $title
- * @property string      $period_type  month | quarter | custom
+ * @property int $id
+ * @property int $department_id
+ * @property string $report_type
+ * @property string $title
+ * @property string $period_type month | quarter | custom
  * @property \Illuminate\Support\Carbon $period_from
  * @property \Illuminate\Support\Carbon $period_to
- * @property int|null    $evaluation_config_version_id
- * @property string      $status  draft | saved
+ * @property int|null $evaluation_config_version_id
+ * @property string $status draft | saved
+ * @property string $display_revision 1.0 | 1.1 | …
  */
 class Report extends Model
 {
@@ -70,7 +71,8 @@ class Report extends Model
         'filters',
         'columns',
         'criteria',
-        'creator',
+        'displayRevisions.creator',
+        'creator.department',
         'updater',
     ];
 
@@ -85,6 +87,7 @@ class Report extends Model
         'period_to',
         'evaluation_config_version_id',
         'status',
+        'display_revision',
         'created_by',
         'updated_by',
     ];
@@ -122,6 +125,11 @@ class Report extends Model
     public function criteria(): HasMany
     {
         return $this->hasMany(ReportCriterion::class);
+    }
+
+    public function displayRevisions(): HasMany
+    {
+        return $this->hasMany(ReportDisplayRevision::class)->orderBy('id');
     }
 
     public function peopleSnapshot(): HasMany

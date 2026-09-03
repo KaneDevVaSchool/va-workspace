@@ -66,6 +66,20 @@ interface ReportRepositoryInterface
     public function syncCriteria(Report $report, array $criterionIds): void;
 
     /**
+     * Thêm một bản chụp cột điểm / cột tiêu chí (1.0 lúc tạo, 1.1+ khi đổi).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function addDisplayRevision(Report $report, array $data): void;
+
+    /**
+     * Chụp danh sách nhân sự trong phạm vi lúc chốt lưu báo cáo.
+     *
+     * @param  list<array{id: int, name: string}>  $people
+     */
+    public function syncPeopleSnapshot(Report $report, array $people): void;
+
+    /**
      * Báo cáo đánh giá nhân sự đã lưu có kỳ giao với khoảng ngày.
      *
      * Dùng để khoá ghi nhận / xoá điểm trên bảng tổng hợp khi tháng đó đã

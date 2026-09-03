@@ -9,6 +9,7 @@ use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Report\App\Http\Requests\PreviewPersonnelEvaluationReportRequest;
 use Modules\Report\App\Http\Requests\StorePersonnelEvaluationReportRequest;
+use Modules\Report\App\Http\Requests\UpdatePersonnelEvaluationDisplayRequest;
 use Modules\Report\App\Models\Report;
 use Modules\Report\App\Services\ReportService;
 
@@ -16,7 +17,9 @@ use Modules\Report\App\Services\ReportService;
  * Manager JSON:
  *   GET    /api/report                          — danh sách báo cáo xem được
  *   POST   /api/report/personnel-evaluation     — tạo báo cáo đánh giá nhân sự
- *   DELETE /api/report/{id}                     — xoá
+ *   PATCH  /api/report/{id}/display             — lưu phụ lục cột tiêu chí (1.1+)
+ *   PATCH  /api/report/{id}/save                — chốt lưu (draft → saved)
+ *   DELETE /api/report/{id}                     — xoá bản nháp (đã lưu thì 422)
  */
 class ReportController extends Controller
 {
@@ -99,6 +102,71 @@ class ReportController extends Controller
         return response()->json(
             $this->service->previewPersonnelEvaluation($departmentId, $request->validated()),
         );
+    }
+
+    /**
+     * Đổi cột tiêu chí trên bảng chấm điểm — lưu phụ lục, không ghi đè bản 1.0.
+     */
+    public function updateDisplay(
+        UpdatePersonnelEvaluationDisplayRequest $request,
+        int $id,
+    ): JsonResponse {
+        $report = $this->manageableOrFail($request, $id);
+        if ($report instanceof JsonResponse) {
+            return $report;
+        }
+
+        if ($report->report_type !== Report::TYPE_PERSONNEL_EVALUATION) {
+            return response()->json(['message' => 'Chỉ báo cáo đánh giá nhân sự mới đổi được cột tiêu chí.'], 422);
+        }
+
+        $updated = $this->service->saveDisplayAppendix(
+            $report,
+            $request->user(),
+            $request->validated(),
+        );
+
+        $this->activityLogs->record(
+            'report.update',
+            'Lưu phụ lục '.$updated->display_revision.' cho báo cáo "'.$updated->title.'"',
+            $request->user(),
+            'report',
+            (int) $updated->id,
+            [
+                'department_id' => $updated->department_id,
+                'revision' => $updated->display_revision,
+            ],
+        );
+
+        return response()->json(['report' => $this->service->presentDetail($updated)]);
+    }
+
+    /**
+     * Chốt lưu báo cáo — khoá ghi nhận trong kỳ và chụp phạm vi nhân sự.
+     */
+    public function save(Request $request, int $id): JsonResponse
+    {
+        $report = $this->manageableOrFail($request, $id);
+        if ($report instanceof JsonResponse) {
+            return $report;
+        }
+
+        if ($report->report_type !== Report::TYPE_PERSONNEL_EVALUATION) {
+            return response()->json(['message' => 'Chỉ báo cáo đánh giá nhân sự mới lưu được tại đây.'], 422);
+        }
+
+        $saved = $this->service->save($report, $request->user());
+
+        $this->activityLogs->record(
+            'report.save',
+            'Lưu báo cáo "'.$saved->title.'"',
+            $request->user(),
+            'report',
+            (int) $saved->id,
+            ['department_id' => $saved->department_id],
+        );
+
+        return response()->json(['report' => $this->service->presentDetail($saved)]);
     }
 
     public function destroy(Request $request, int $id): JsonResponse

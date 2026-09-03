@@ -97,6 +97,24 @@ class ReportRepository implements ReportRepositoryInterface
         }
     }
 
+    public function addDisplayRevision(Report $report, array $data): void
+    {
+        $report->displayRevisions()->create($data);
+    }
+
+    public function syncPeopleSnapshot(Report $report, array $people): void
+    {
+        $report->peopleSnapshot()->delete();
+
+        foreach (array_values($people) as $index => $person) {
+            $report->peopleSnapshot()->create([
+                'user_id' => (int) $person['id'],
+                'user_name' => mb_substr((string) $person['name'], 0, 255),
+                'sort_order' => $index,
+            ]);
+        }
+    }
+
     public function savedPersonnelOverlapping(int $departmentId, string $from, string $to): Collection
     {
         return Report::query()
