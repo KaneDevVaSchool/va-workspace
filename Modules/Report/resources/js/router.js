@@ -17,6 +17,16 @@ export default [
     },
   },
   {
+    path: '/manager/reports/list',
+    name: 'manager.reports.list',
+    component: () => import('./pages/ReportList.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Báo cáo đã lưu',
+      requiresAnyPermission: ['report.manage_department', 'report.view_assigned'],
+    },
+  },
+  {
     path: '/manager/reports/personnel-evaluation/new',
     name: 'manager.reports.personnel-evaluation.create',
     component: () => import('./pages/ReportCreatePersonnelEvaluation.vue'),

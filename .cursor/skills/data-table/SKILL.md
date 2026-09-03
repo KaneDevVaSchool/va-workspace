@@ -27,7 +27,9 @@ Chi tiết CSS / props / đo cột: [reference.md](reference.md)
 
 ## Ngoại lệ — không áp
 
-- **Tổng hợp đánh giá** (`EvaluationSummary.vue`, `/manager/evaluation-events`): ma trận chấm điểm kín khung (nhân sự × tiêu chí), không phải danh sách phẳng. Không `TablePagesBar`, không phân trang, không panel 28rem, không dropdown thao tác dòng. Chi tiết / chấm điểm = modal form ngang.
+- **Đánh giá nhân sự** (`EvaluationSummary.vue`, `/manager/evaluation-events`): ma trận chấm điểm kín khung (nhân sự × tiêu chí), không phải danh sách phẳng. Không phải mục sidebar riêng — chỉ vào được từ luồng tạo/sửa báo cáo "Đánh giá nhân sự" (`ReportCreatePersonnelEvaluation.vue`, `ReportList.vue`). Không `TablePagesBar`, không phân trang, không panel 28rem, không dropdown thao tác dòng. Chi tiết / chấm điểm = modal form ngang.
+- **Chọn loại báo cáo** (modal `report-picker` trong `ReportList.vue`, mở bằng nút "Tạo báo cáo" ở header): lưới thẻ chọn 1 trong 6 loại báo cáo, không phải danh sách bản ghi. Không `TablePagesBar`, không phân trang, không panel 28rem, không dropdown thao tác dòng. `/manager/reports` và `/manager/reports/list` đều là danh sách báo cáo đã lưu (mẫu vàng đầy đủ, `ReportList.vue`).
+- **Picker nhân sự khi tạo báo cáo** (`ReportCreatePersonnelEvaluation.vue`, bước Phạm vi nhân sự / Người được xem): bảng chọn người trong wizard (checkbox + tên/email). Không `TablePagesBar`, không phân trang, không panel 28rem, không dropdown thao tác dòng. Click dòng để tick.
 
 ---
 

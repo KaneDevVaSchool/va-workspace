@@ -1,13 +1,17 @@
 <script setup>
 /**
- * Tổng hợp đánh giá — ma trận chấm điểm cả phòng ban trong một kỳ.
+ * Đánh giá nhân sự — ma trận chấm điểm cả phòng ban trong kỳ của báo cáo.
  *
  * Không dùng mẫu danh sách ActivityLog / TablePagesBar: đây là bảng kín khung
- * nhìn (nhân sự × tiêu chí), không danh sách phẳng. Click tên hoặc ô tiêu chí
- * mở modal form ngang (Công việc / Ghi nhận / Chấm điểm).
+ * nhìn (nhân sự × tiêu chí), không danh sách phẳng. Click tên mở modal nhân sự
+ * (Công việc / Ghi nhận). Click ô tiêu chí: bản nháp mở modal chấm điểm; báo
+ * cáo đã lưu mở chi tiết nhân sự (chỉ xem).
+ *
+ * Kỳ lấy từ URL (`?from=&to=`) khi mở từ tạo/sửa báo cáo hoặc nút Chi tiết —
+ * không chọn lại khoảng ngày trên trang này.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { RouterLink } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -16,16 +20,23 @@ import { showClientToast } from '@/lib/clientToast';
 import { useDragScroll } from '@/composables/useDragScroll';
 import OptionPicker from '@modules/Project/resources/js/components/OptionPicker.vue';
 import {
-  SUMMARY_PERIOD_KEY,
+  REPORT_STATUS_LABELS,
   TASK_STATUS_LABELS,
   TIMELINESS_LABELS,
 } from '@modules/Report/resources/js/constants/report.js';
 
 const CRITERIA_VIS_KEY = 'va-evaluation-matrix-criteria-v1';
 
+const route = useRoute();
+const router = useRouter();
+
+function goBack() {
+  router.push({ name: 'manager.reports.index' });
+}
+
 const MIN_COL = {
   user: 220,
-  tasks: 88,
+  tasks: 152,
   start: 104,
   task_adj: 104,
   criterion: 120,
@@ -37,27 +48,13 @@ const MIN_COL = {
 
 const rows = ref([]);
 const criteria = ref([]);
-const summary = ref(null);
-const versionNo = ref(null);
 const scoreMode = ref(null);
 const periodLock = ref({ locked: false, reports: [] });
 const loading = ref(false);
 const loadError = ref('');
+const exportingPdf = ref(false);
 
 const isWeightedTaskMode = computed(() => scoreMode.value === 'weighted_task');
-const scoreModeInfo = computed(() =>
-  isWeightedTaskMode.value
-    ? {
-        title: 'Cách 2 · Hiệu suất việc',
-        formula:
-          'Việc chưa xong hoặc thiếu dữ liệu = 0 điểm thực; hiệu suất = Σ thực / Σ chuẩn × 100; mỗi điểm hành vi = 1 điểm phần trăm.',
-      }
-    : {
-        title: 'Cách 1 · Đếm số việc',
-        formula:
-          'Điểm cuối = điểm khởi đầu ± điểm theo số việc hoàn thành/chưa hoàn thành + điểm ghi nhận.',
-      },
-);
 
 function todayISO() {
   const now = new Date();
@@ -65,120 +62,50 @@ function todayISO() {
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
 
-function isoOf(date) {
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
-}
-
-function lastDayOfMonth(month) {
-  const [year, mon] = month.split('-').map(Number);
-  return new Date(year, mon, 0).getDate();
-}
-
-function monthRange(month) {
-  return {
-    from: `${month}-01`,
-    to: `${month}-${String(lastDayOfMonth(month)).padStart(2, '0')}`,
-  };
-}
-
-function monthTitle(month) {
-  const [year, mon] = month.split('-').map(Number);
-  return `Tháng ${mon} năm ${year}`;
-}
-
 const periodFrom = ref('');
 const periodTo = ref('');
-const periodName = ref('');
-const periodMenuOpen = ref(false);
-const periodMenuRoot = ref(null);
 
-const quickPeriods = computed(() => {
-  const today = todayISO();
-  const now = new Date();
-  const thisMonth = today.slice(0, 7);
-
-  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
-
-  const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
-  const quarterFrom = isoOf(new Date(now.getFullYear(), quarterStartMonth, 1));
-  const quarterTo = isoOf(new Date(now.getFullYear(), quarterStartMonth + 3, 0));
-
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-
-  return [
-    { key: 'this_month', label: 'Tháng này', ...monthRange(thisMonth) },
-    { key: 'prev_month', label: 'Tháng trước', ...monthRange(prevMonth) },
-    { key: 'this_week', label: 'Tuần này', from: isoOf(weekStart), to: isoOf(weekEnd) },
-    { key: 'this_quarter', label: 'Quý này', from: quarterFrom, to: quarterTo },
-  ];
-});
-
-function applyQuickPeriod(item) {
-  periodFrom.value = item.from;
-  periodTo.value = item.to;
-  periodName.value = item.label;
-  periodMenuOpen.value = false;
+function isIsoDate(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-function applyMonth(month) {
-  const range = monthRange(month);
-  periodFrom.value = range.from;
-  periodTo.value = range.to;
-  periodName.value = monthTitle(month);
-  periodMenuOpen.value = false;
+function queryDate(value) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
-function isFullMonthRange(from, to) {
-  if (!from || !to) return false;
-  const range = monthRange(from.slice(0, 7));
-  return range.from === from && range.to === to;
+function queryId(value) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-function shiftPeriod(delta) {
-  if (!periodFrom.value || !periodTo.value) return;
-
-  if (isFullMonthRange(periodFrom.value, periodTo.value)) {
-    const [year, month] = periodFrom.value.slice(0, 7).split('-').map(Number);
-    const next = new Date(year, month - 1 + delta, 1);
-    applyMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`);
-    return;
-  }
-
-  const fromDate = new Date(`${periodFrom.value}T00:00:00`);
-  const toDate = new Date(`${periodTo.value}T00:00:00`);
-  const span = Math.round((toDate - fromDate) / 86400000) + 1;
-  fromDate.setDate(fromDate.getDate() + delta * span);
-  toDate.setDate(toDate.getDate() + delta * span);
-  periodFrom.value = isoOf(fromDate);
-  periodTo.value = isoOf(toDate);
-  periodName.value = '';
-  periodMenuOpen.value = false;
+/** Kỳ từ URL (?from=&to=) khi mở từ báo cáo vừa tạo hoặc Chấm điểm. */
+function applyPeriodFromRoute() {
+  const from = queryDate(route.query.from);
+  const to = queryDate(route.query.to);
+  periodFrom.value = isIsoDate(from) ? from : '';
+  periodTo.value = isIsoDate(to) ? to : '';
+  return Boolean(periodFrom.value && periodTo.value && periodFrom.value <= periodTo.value);
 }
 
-const activeQuickKey = computed(
-  () =>
-    quickPeriods.value.find(
-      (item) => item.from === periodFrom.value && item.to === periodTo.value,
-    )?.key ?? '',
-);
+function applyReportFromRoute() {
+  reportId.value = queryId(route.query.report);
+}
+
+const reportId = ref(null);
+const boundDisplay = ref(null);
+const appendixConfirmOpen = ref(false);
+const saveConfirmOpen = ref(false);
+const savingDisplay = ref(false);
+const savingReport = ref(false);
+
+applyPeriodFromRoute();
+applyReportFromRoute();
 
 const period = computed(() => {
   if (!periodFrom.value || !periodTo.value) return null;
   if (periodFrom.value > periodTo.value) return null;
   return { from: periodFrom.value, to: periodTo.value };
-});
-
-const periodHeadline = computed(() => {
-  if (!period.value) return 'Chưa chọn kỳ';
-  if (isFullMonthRange(period.value.from, period.value.to)) {
-    return monthTitle(period.value.from.slice(0, 7));
-  }
-  return periodName.value || 'Khoảng ngày';
 });
 
 const periodInvalid = computed(
@@ -212,6 +139,18 @@ function scoreClass(value) {
   if (num > 0) return 'matrix__plus';
   if (num < 0) return 'matrix__minus';
   return '';
+}
+
+function stripTone(row) {
+  if (!row) return '';
+  if (overdueOf(row) > 0 || rowGapCount(row) > 0) return 'danger';
+  if (deltaVsAvg(row) < 0) return 'info';
+  return 'success';
+}
+
+function stripClass(row) {
+  const tone = stripTone(row);
+  return tone ? `matrix__person-strip--${tone}` : '';
 }
 
 function scoreChipClass(value) {
@@ -279,9 +218,6 @@ function scoreOf(row) {
   return visibleScoresByUser.value.get(row.user_id) ?? visibleScore(row);
 }
 
-const query = ref('');
-const onlyMissing = ref(false);
-
 const sheetRows = computed(() =>
   [...rows.value].sort((a, b) => {
     const score = scoreOf(b).final - scoreOf(a).final;
@@ -289,18 +225,6 @@ const sheetRows = computed(() =>
     return String(a.user_name ?? '').localeCompare(String(b.user_name ?? ''), 'vi');
   }),
 );
-
-const filteredRows = computed(() => {
-  const needle = foldSearch(query.value).trim();
-  return sheetRows.value.filter((row) => {
-    if (onlyMissing.value && rowGapCount(row) <= 0) return false;
-    if (!needle) return true;
-    return (
-      foldSearch(row.user_name).includes(needle) ||
-      foldSearch(row.user_email).includes(needle)
-    );
-  });
-});
 
 const visibleSummary = computed(() => {
   const list = sheetRows.value;
@@ -318,6 +242,7 @@ const visibleSummary = computed(() => {
 const visibleCriteriaMap = reactive(loadCriteriaVisibility());
 
 function loadCriteriaVisibility() {
+  if (reportId.value) return {};
   try {
     const raw = localStorage.getItem(CRITERIA_VIS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
@@ -329,6 +254,7 @@ function loadCriteriaVisibility() {
 }
 
 function persistCriteriaVisibility() {
+  if (boundDisplay.value) return;
   try {
     localStorage.setItem(CRITERIA_VIS_KEY, JSON.stringify(visibleCriteriaMap));
   } catch {
@@ -336,7 +262,24 @@ function persistCriteriaVisibility() {
   }
 }
 
+function isOriginalAllCriteria(display) {
+  const ids = (display?.criterion_ids ?? []).map(Number).filter((id) => id > 0);
+  return (!display?.kind || display.kind === 'original') && ids.length === 0;
+}
+
+function applyCriteriaFromDisplay(list, display) {
+  const ids = new Set((display?.criterion_ids ?? []).map((id) => String(id)));
+  const showAll = !display || isOriginalAllCriteria(display);
+  for (const item of list) {
+    visibleCriteriaMap[String(item.id)] = showAll ? true : ids.has(String(item.id));
+  }
+}
+
 watch(criteria, (list) => {
+  if (boundDisplay.value) {
+    applyCriteriaFromDisplay(list, boundDisplay.value);
+    return;
+  }
   for (const item of list) {
     const key = String(item.id);
     if (typeof visibleCriteriaMap[key] !== 'boolean') {
@@ -430,16 +373,120 @@ function toggleGroupCriteria(items) {
   setGroupCriteria(items, groupShownCount(items) < items.length);
 }
 
-const colSpan = computed(() => 2 + 2 + shownCriteria.value.length + 4);
+function currentCriterionIds() {
+  return criteria.value.filter((item) => isCriterionOn(item.id)).map((item) => Number(item.id));
+}
+
+function criteriaDirty() {
+  if (!boundDisplay.value) return false;
+  const current = currentCriterionIds();
+  if (isOriginalAllCriteria(boundDisplay.value)) {
+    return current.length !== criteria.value.length;
+  }
+  const saved = (boundDisplay.value.criterion_ids ?? []).map(Number).filter((id) => id > 0);
+  if (current.length !== saved.length) return true;
+  const left = [...current].sort((a, b) => a - b);
+  const right = [...saved].sort((a, b) => a - b);
+  return left.some((id, index) => id !== right[index]);
+}
+
+function nextAppendixLabel() {
+  const current = String(boundDisplay.value?.revision || '1.0');
+  const parts = current.split('.');
+  const major = Number.parseInt(parts[0], 10);
+  const minor = Number.parseInt(parts[1] ?? '0', 10);
+  const nextMajor = Number.isInteger(major) ? major : 1;
+  const nextMinor = Number.isInteger(minor) ? minor + 1 : 1;
+  return `${nextMajor}.${nextMinor}`;
+}
+
+const revisionHeadline = computed(() => {
+  const display = boundDisplay.value;
+  if (!display?.revision) return '';
+  if (display.kind === 'appendix') return `${display.revision} · Phụ lục`;
+  return display.revision;
+});
+
+const reportIsDraft = computed(
+  () => Boolean(reportId.value && boundDisplay.value?.status === 'draft'),
+);
+
+const reportIsSaved = computed(
+  () => Boolean(reportId.value && boundDisplay.value?.status === 'saved'),
+);
+
+const pageTitle = computed(() =>
+  reportIsSaved.value ? 'Chi tiết đánh giá nhân sự' : 'Đánh giá nhân sự',
+);
+
+const reportPeriodHint = computed(() => {
+  if (!boundDisplay.value) return '';
+  const statusLabel =
+    REPORT_STATUS_LABELS[boundDisplay.value.status] ?? boundDisplay.value.status ?? '';
+  const parts = ['Cột tiêu chí theo báo cáo'];
+  if (statusLabel) parts.push(statusLabel);
+  return parts.join(' · ');
+});
+
+function scoreColOn(key) {
+  const keys = boundDisplay.value?.column_keys;
+  if (!Array.isArray(keys) || keys.length === 0) return true;
+  return keys.includes(key);
+}
+
+function groupScoringTone(items) {
+  let pos = false;
+  let neg = false;
+  for (const item of items) {
+    for (const level of item.levels ?? []) {
+      const score = Number(level.score) || 0;
+      if (score > 0) pos = true;
+      if (score < 0) neg = true;
+      if (pos && neg) return 'mixed';
+    }
+  }
+  if (pos) return 'ok';
+  if (neg) return 'cut';
+  return '';
+}
+
+function pickerGroupClass(group) {
+  const tone = groupScoringTone(group.items);
+  const allOn = group.items.length > 0 && groupShownCount(group.items) === group.items.length;
+  return {
+    [`matrix__dialog-group--${tone}`]: Boolean(tone),
+    'matrix__dialog-group--all': allOn,
+  };
+}
+
+const workGroupSpan = computed(
+  () => Number(scoreColOn('start_score')) + Number(scoreColOn('task_adjustment')),
+);
+
+const resultGroupSpan = computed(
+  () =>
+    Number(scoreColOn('bonus')) +
+    Number(scoreColOn('penalty')) +
+    Number(scoreColOn('final_score')) +
+    Number(scoreColOn('classification')),
+);
+
+const colSpan = computed(() => {
+  let count = 1;
+  if (scoreColOn('tasks')) count += 1;
+  count += workGroupSpan.value;
+  count += shownCriteria.value.length;
+  count += resultGroupSpan.value;
+  return count;
+});
 
 const tableWrap = ref(null);
 const wrapWidth = ref(0);
 let wrapObserver = null;
+const personTableWrap = ref(null);
 
 useDragScroll(tableWrap);
-
-const gapSummary = computed(() => summary.value?.missing ?? { difficulty: 0, progress: 0, quality: 0 });
-const gapTotal = computed(() => Number(summary.value?.missing_total) || 0);
+useDragScroll(personTableWrap);
 
 function rowGapCount(row) {
   return Number(row.missing_total) || 0;
@@ -471,14 +518,14 @@ function defaultWidth(key) {
 
 const leafKeys = computed(() => [
   'user',
-  'tasks',
-  'start',
-  'task_adj',
+  ...(scoreColOn('tasks') ? ['tasks'] : []),
+  ...(scoreColOn('start_score') ? ['start'] : []),
+  ...(scoreColOn('task_adjustment') ? ['task_adj'] : []),
   ...shownCriteria.value.map((item) => criterionColKey(item.id)),
-  'bonus',
-  'penalty',
-  'final',
-  'klass',
+  ...(scoreColOn('bonus') ? ['bonus'] : []),
+  ...(scoreColOn('penalty') ? ['penalty'] : []),
+  ...(scoreColOn('final_score') ? ['final'] : []),
+  ...(scoreColOn('classification') ? ['klass'] : []),
 ]);
 
 const colWidths = computed(() => {
@@ -513,8 +560,6 @@ async function loadSummary() {
       ? 'Ngày bắt đầu đang sau ngày kết thúc, chưa xem được.'
       : 'Chưa chọn kỳ đánh giá.';
     rows.value = [];
-    summary.value = null;
-    versionNo.value = null;
     scoreMode.value = null;
     return;
   }
@@ -523,14 +568,20 @@ async function loadSummary() {
   loadError.value = '';
   try {
     const { data } = await window.axios.get('/api/evaluation/summary', {
-      params: { from: period.value.from, to: period.value.to },
+      params: {
+        from: period.value.from,
+        to: period.value.to,
+        ...(reportId.value ? { report: reportId.value } : {}),
+      },
     });
     rows.value = data.rows ?? [];
+    boundDisplay.value = data.report ?? null;
     criteria.value = data.criteria ?? [];
-    summary.value = data.summary ?? null;
-    versionNo.value = data.version_no ?? null;
     scoreMode.value = data.mode ?? null;
     periodLock.value = data.period_lock ?? { locked: false, reports: [] };
+    if (boundDisplay.value) {
+      applyCriteriaFromDisplay(criteria.value, boundDisplay.value);
+    }
 
     if (selectedId.value && !rows.value.some((row) => row.user_id === selectedId.value)) {
       selectedId.value = null;
@@ -539,19 +590,21 @@ async function loadSummary() {
     loadError.value =
       error?.response?.data?.errors?.version?.[0] ??
       error?.response?.data?.message ??
-      'Không tải được bảng tổng hợp.';
+      'Không tải được bảng đánh giá.';
     rows.value = [];
     criteria.value = [];
-    summary.value = null;
-    versionNo.value = null;
     scoreMode.value = null;
     periodLock.value = { locked: false, reports: [] };
+    boundDisplay.value = null;
   } finally {
     loading.value = false;
   }
 }
 
 const selectedId = ref(null);
+const scoreModalOpen = ref(false);
+const scoreFromPerson = ref(false);
+const scoreModalTab = ref('record');
 
 const selected = computed(
   () => rows.value.find((row) => row.user_id === selectedId.value) ?? null,
@@ -569,10 +622,11 @@ function resetDraft(row, extras = {}) {
 function openPerson(row, tab = 'tasks', extras = {}) {
   if (!row) return;
   criteriaDialogOpen.value = false;
-  periodMenuOpen.value = false;
+  scoreModalOpen.value = false;
+  scoreFromPerson.value = false;
   const switched = selectedId.value !== row.user_id;
   selectedId.value = row.user_id;
-  detailTab.value = tab;
+  detailTab.value = tab === 'score' ? 'events' : tab;
   if (switched || extras.forceDraft) {
     resetDraft(row, extras);
   } else {
@@ -594,18 +648,23 @@ function select(row) {
 
 function closeDetail() {
   if (saving.value) return;
+  if (scoreModalOpen.value) {
+    closeScoreModal();
+    return;
+  }
   selectedId.value = null;
+  scoreFromPerson.value = false;
 }
 
 function step(offset) {
-  const list = filteredRows.value;
+  const list = sheetRows.value;
   const index = list.findIndex((row) => row.user_id === selectedId.value);
   const next = list[index + offset];
   if (next) openPerson(next, detailTab.value, { forceDraft: true });
 }
 
 const stepInfo = computed(() => {
-  const list = filteredRows.value;
+  const list = sheetRows.value;
   const index = list.findIndex((row) => row.user_id === selectedId.value);
   return {
     index,
@@ -620,7 +679,6 @@ const detailTab = ref('tasks');
 const PERSON_TABS = [
   { id: 'tasks', label: 'Công việc', icon: 'listChecks' },
   { id: 'events', label: 'Ghi nhận', icon: 'clipboardCheck' },
-  { id: 'score', label: 'Chấm điểm', icon: 'pencil' },
 ];
 
 function personTabCount(tabId) {
@@ -696,7 +754,9 @@ const scoreExisting = computed(() => {
   const row = selected.value;
   const criterionId = Number(draft.criterion_id);
   if (!row || !criterionId) return [];
-  return (row.event_breakdown ?? []).filter((event) => Number(event.criterion_id) === criterionId);
+  return (row.event_breakdown ?? [])
+    .filter((event) => Number(event.criterion_id) === criterionId)
+    .sort((a, b) => String(b.occurred_at ?? '').localeCompare(String(a.occurred_at ?? '')));
 });
 
 const lockReports = computed(() => periodLock.value?.reports ?? []);
@@ -797,7 +857,27 @@ const canRecord = computed(
 
 function openScore(row, criterion, event) {
   event.stopPropagation();
-  openPerson(row, 'score', { criterion_id: criterion.id, forceDraft: true });
+  if (reportIsSaved.value || isPeriodLocked.value) {
+    openPerson(row, 'events', { criterion_id: criterion.id });
+    return;
+  }
+  criteriaDialogOpen.value = false;
+  scoreFromPerson.value = false;
+  selectedId.value = row.user_id;
+  resetDraft(row, { criterion_id: criterion.id });
+  scoreModalTab.value = 'record';
+  scoreModalOpen.value = true;
+}
+
+function closeScoreModal() {
+  if (saving.value) return;
+  scoreModalOpen.value = false;
+  if (scoreFromPerson.value) {
+    scoreFromPerson.value = false;
+    if (detailTab.value === 'score') detailTab.value = 'events';
+    return;
+  }
+  selectedId.value = null;
 }
 
 function onCriterionChange() {
@@ -809,11 +889,12 @@ function goToScoreTab() {
     showClientToast('warning', 'Phòng ban chưa có tiêu chí để ghi nhận.');
     return;
   }
-  detailTab.value = 'score';
-  if (selected.value) {
-    draft.user_id = selected.value.user_id;
-    if (!draft.occurred_at) draft.occurred_at = period.value?.to ?? '';
-  }
+  if (!selected.value) return;
+  scoreFromPerson.value = true;
+  draft.user_id = selected.value.user_id;
+  if (!draft.occurred_at) draft.occurred_at = period.value?.to ?? '';
+  scoreModalTab.value = 'record';
+  scoreModalOpen.value = true;
 }
 
 async function record() {
@@ -835,7 +916,6 @@ async function record() {
     if (data.row) applyRow(data.row);
     draft.level_code = '';
     draft.reason = '';
-    detailTab.value = 'events';
 
     if (data.duplicate_warning) {
       showClientToast(
@@ -887,7 +967,10 @@ async function removeEvent(event) {
 }
 
 function confirmRemove() {
-  const event = detailEvents.value.find((item) => item.event_id === confirmRemoveId.value);
+  const id = confirmRemoveId.value;
+  const event =
+    detailEvents.value.find((item) => item.event_id === id) ??
+    scoreExisting.value.find((item) => item.event_id === id);
   if (event) removeEvent(event);
 }
 
@@ -898,18 +981,97 @@ function onConfirmOpen(open) {
 const criteriaDialogOpen = ref(false);
 
 function openCriteriaDialog() {
-  periodMenuOpen.value = false;
+  if (reportIsSaved.value) {
+    showClientToast('warning', 'Báo cáo đã lưu, không đổi cột tiêu chí được nữa.');
+    return;
+  }
   criteriaDialogOpen.value = true;
 }
 
 function closeCriteriaDialog() {
+  if (boundDisplay.value && criteriaDirty()) {
+    appendixConfirmOpen.value = true;
+    return;
+  }
   criteriaDialogOpen.value = false;
   criteriaPickerQuery.value = '';
 }
 
-function togglePeriodMenu() {
+async function confirmAppendix() {
+  if (!reportId.value || savingDisplay.value) return;
+  savingDisplay.value = true;
+  try {
+    const { data } = await window.axios.patch(`/api/report/${reportId.value}/display`, {
+      criterion_ids: currentCriterionIds(),
+      column_keys: boundDisplay.value?.column_keys,
+    });
+    boundDisplay.value = data.report?.display ?? data.report ?? boundDisplay.value;
+    if (boundDisplay.value) {
+      applyCriteriaFromDisplay(criteria.value, boundDisplay.value);
+    }
+    showClientToast('success', `Đã lưu phụ lục ${boundDisplay.value?.revision ?? nextAppendixLabel()}.`);
+    appendixConfirmOpen.value = false;
+    criteriaDialogOpen.value = false;
+    criteriaPickerQuery.value = '';
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message ?? 'Không lưu được phụ lục.');
+  } finally {
+    savingDisplay.value = false;
+  }
+}
+
+function onAppendixOpen(open) {
+  if (open) {
+    appendixConfirmOpen.value = true;
+    return;
+  }
+  if (savingDisplay.value) return;
+  if (criteriaDirty()) {
+    applyCriteriaFromDisplay(criteria.value, boundDisplay.value);
+  }
+  appendixConfirmOpen.value = false;
   criteriaDialogOpen.value = false;
-  periodMenuOpen.value = !periodMenuOpen.value;
+  criteriaPickerQuery.value = '';
+}
+
+function applyBoundReportDetail(detail) {
+  if (!detail?.display) return;
+  boundDisplay.value = {
+    ...detail.display,
+    status: detail.status,
+    title: detail.title,
+    period_from: detail.period_from,
+    period_to: detail.period_to,
+  };
+  if (boundDisplay.value) {
+    applyCriteriaFromDisplay(criteria.value, boundDisplay.value);
+  }
+}
+
+function openSaveConfirm() {
+  if (!reportIsDraft.value || savingReport.value) return;
+  saveConfirmOpen.value = true;
+}
+
+function onSaveConfirmOpen(open) {
+  if (savingReport.value) return;
+  saveConfirmOpen.value = open;
+}
+
+async function confirmSaveReport() {
+  if (!reportId.value || savingReport.value || !reportIsDraft.value) return;
+  savingReport.value = true;
+  try {
+    const { data } = await window.axios.patch(`/api/report/${reportId.value}/save`);
+    applyBoundReportDetail(data.report);
+    await loadSummary();
+    saveConfirmOpen.value = false;
+    showClientToast('success', 'Đã lưu báo cáo. Kỳ này không ghi nhận hay xoá điểm thêm được nữa.');
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message ?? 'Không lưu được báo cáo.');
+  } finally {
+    savingReport.value = false;
+  }
 }
 
 function footAvg(getter) {
@@ -929,6 +1091,13 @@ function csvCell(value) {
 }
 
 const exportOptions = computed(() => [
+  {
+    key: 'pdf',
+    label: 'Xuất PDF',
+    description: 'Form ngang A3, bảng tổng hợp + phiếu chi tiết từng người, có dấu chìm VA.',
+    icon: 'fileText',
+    onSelect: exportPdf,
+  },
   {
     key: 'csv',
     label: 'Xuất bảng CSV',
@@ -982,9 +1151,76 @@ function exportCsv() {
   const link = document.createElement('a');
   const stamp = period.value ? `${period.value.from}_${period.value.to}` : todayISO();
   link.href = url;
-  link.download = `tong-hop-danh-gia_${stamp}.csv`;
+  link.download = `danh-gia-nhan-su_${stamp}.csv`;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+async function downloadBlob(url, params, busyRef, defaultFilename, okMsg, failMsg) {
+  busyRef.value = true;
+  try {
+    const response = await window.axios.get(url, {
+      params,
+      responseType: 'blob',
+      timeout: 180000,
+    });
+    const blob = response.data;
+    if (blob.type && blob.type.includes('json')) {
+      const json = JSON.parse(await blob.text());
+      throw new Error(json.message || 'Không xuất được file.');
+    }
+
+    const disposition = response.headers['content-disposition'] || '';
+    const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const plainMatch = disposition.match(/filename="?([^"]+)"?/i);
+    const filename = decodeURIComponent(utfMatch?.[1] || plainMatch?.[1] || defaultFilename);
+
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+    showClientToast('success', okMsg);
+  } catch (err) {
+    let message = err?.message;
+    if (err?.response?.data instanceof Blob) {
+      try {
+        const json = JSON.parse(await err.response.data.text());
+        message = json.message || Object.values(json.errors || {})[0]?.[0];
+      } catch {
+        message = failMsg;
+      }
+    } else {
+      message = err?.response?.data?.message || message;
+    }
+    showClientToast('error', message || failMsg);
+  } finally {
+    busyRef.value = false;
+  }
+}
+
+async function exportPdf() {
+  if (!period.value) {
+    showClientToast('error', 'Chưa chọn kỳ đánh giá.');
+    return;
+  }
+  const stamp = `${period.value.from}_${period.value.to}`;
+  await downloadBlob(
+    '/api/evaluation/summary/export-pdf',
+    {
+      from: period.value.from,
+      to: period.value.to,
+      ...(reportId.value ? { report: reportId.value } : {}),
+      criterion_ids: shownCriteria.value.map((item) => item.id),
+    },
+    exportingPdf,
+    `Danh_gia_nhan_su_${stamp}.pdf`,
+    'Đã tải file PDF.',
+    'Không xuất được file PDF.',
+  );
 }
 
 function isTypingTarget(el) {
@@ -992,21 +1228,11 @@ function isTypingTarget(el) {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable;
 }
 
-function onDocumentClick(event) {
-  if (periodMenuOpen.value && periodMenuRoot.value && !periodMenuRoot.value.contains(event.target)) {
-    periodMenuOpen.value = false;
-  }
-}
-
 function onKeydown(event) {
-  if (confirmRemoveId.value) return;
+  if (confirmRemoveId.value || appendixConfirmOpen.value || saveConfirmOpen.value) return;
   if (event.key === 'Escape') {
     if (criteriaDialogOpen.value) {
       closeCriteriaDialog();
-      return;
-    }
-    if (periodMenuOpen.value) {
-      periodMenuOpen.value = false;
       return;
     }
     if (selectedId.value && !isTypingTarget(event.target)) {
@@ -1014,7 +1240,7 @@ function onKeydown(event) {
     }
     return;
   }
-  if (isTypingTarget(event.target) || !selectedId.value) return;
+  if (isTypingTarget(event.target) || !selectedId.value || scoreModalOpen.value) return;
   if (event.key === 'ArrowDown') {
     event.preventDefault();
     step(1);
@@ -1032,29 +1258,22 @@ watch(selectedId, (id) => {
 watch(period, () => {
   if (period.value) draft.occurred_at = period.value.to;
   loadSummary();
+}, { immediate: true });
+
+watch(reportId, () => {
+  loadSummary();
 });
 
 watch(
-  () => [periodFrom.value, periodTo.value],
+  () => [route.query.from, route.query.to, route.query.report],
   () => {
-    if (!activeQuickKey.value) periodName.value = '';
+    applyPeriodFromRoute();
+    applyReportFromRoute();
   },
 );
 
-watch(activeQuickKey, (value) => {
-  try {
-    if (value) localStorage.setItem(SUMMARY_PERIOD_KEY, value);
-  } catch {
-    // Trình duyệt chặn localStorage thì bỏ qua.
-  }
-});
-
 onMounted(() => {
-  const saved = localStorage.getItem(SUMMARY_PERIOD_KEY);
-  const match = quickPeriods.value.find((item) => item.key === saved);
-  applyQuickPeriod(match ?? quickPeriods.value[0]);
   document.addEventListener('keydown', onKeydown);
-  document.addEventListener('mousedown', onDocumentClick);
   nextTick(() => {
     if (!tableWrap.value) return;
     wrapWidth.value = tableWrap.value.clientWidth;
@@ -1068,74 +1287,60 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown);
-  document.removeEventListener('mousedown', onDocumentClick);
   wrapObserver?.disconnect();
   document.body.style.overflow = '';
 });
 </script>
 
 <template>
-  <section class="matrix">
+  <section class="matrix" :class="{ 'matrix--view': reportIsSaved }">
     <PageHeader
-      title="Tổng hợp đánh giá"
+      :title="pageTitle"
       icon="clipboardCheck"
       export-label="Xuất bảng"
       :export-options="exportOptions"
+      :export-busy-key="exportingPdf ? 'pdf' : undefined"
+      :period="revisionHeadline"
+      :period-hint="boundDisplay ? reportPeriodHint : ''"
     >
       <template #actions>
-        <div class="matrix__period">
-          <button type="button" class="matrix__icon-btn" aria-label="Kỳ trước" @click="shiftPeriod(-1)">
-            <AppIcon name="chevronLeft" :size="16" />
-          </button>
-          <div ref="periodMenuRoot" class="matrix__picker">
-            <button
-              type="button"
-              class="matrix__header-btn"
-              :class="{ 'matrix__header-btn--on': periodMenuOpen }"
-              aria-haspopup="menu"
-              :aria-expanded="periodMenuOpen"
-              @click="togglePeriodMenu"
-            >
-              <AppIcon name="calendar" :size="16" />
-              {{ periodHeadline }}
-              <AppIcon
-                name="chevronDown"
-                :size="14"
-                class="matrix__header-caret"
-                :class="{ 'matrix__header-caret--open': periodMenuOpen }"
-              />
-            </button>
-            <div v-if="periodMenuOpen" class="matrix__picker-menu matrix__picker-menu--period" role="menu">
-              <button
-                v-for="item in quickPeriods"
-                :key="item.key"
-                type="button"
-                role="menuitem"
-                class="matrix__picker-item"
-                :class="{ 'matrix__picker-item--on': activeQuickKey === item.key }"
-                @click="applyQuickPeriod(item)"
-              >
-                {{ item.label }}
-              </button>
-              <div class="matrix__picker-dates">
-                <div class="matrix__field">
-                  <label class="matrix__label" for="matrix-from">Từ ngày</label>
-                  <input id="matrix-from" v-model="periodFrom" type="date" class="matrix__input" />
-                </div>
-                <div class="matrix__field">
-                  <label class="matrix__label" for="matrix-to">Đến ngày</label>
-                  <input id="matrix-to" v-model="periodTo" type="date" class="matrix__input" />
-                </div>
-                <p v-if="periodInvalid" class="matrix__warn">Ngày bắt đầu đang sau ngày kết thúc.</p>
-              </div>
-            </div>
-          </div>
-          <button type="button" class="matrix__icon-btn" aria-label="Kỳ sau" @click="shiftPeriod(1)">
-            <AppIcon name="chevronRight" :size="16" />
-          </button>
-        </div>
+        <button type="button" class="matrix__header-btn" @click="goBack">
+          <AppIcon name="chevronLeft" :size="16" />
+          Về danh sách báo cáo
+        </button>
 
         <button
+          v-if="reportIsDraft"
+          type="button"
+          class="matrix__header-btn matrix__header-btn--primary"
+          :disabled="loading || savingReport"
+          @click="openSaveConfirm"
+        >
+          <AppIcon name="check" :size="16" />
+          {{ savingReport ? 'Đang lưu…' : 'Lưu báo cáo' }}
+        </button>
+
+        <span
+          v-else-if="reportIsSaved"
+          class="matrix__status matrix__status--saved"
+          role="status"
+        >
+          {{ REPORT_STATUS_LABELS.saved }}
+        </span>
+
+        <button
+          v-if="reportIsSaved"
+          type="button"
+          class="matrix__header-btn"
+          :disabled="exportingPdf || loading"
+          @click="exportPdf"
+        >
+          <AppIcon name="fileText" :size="16" />
+          {{ exportingPdf ? 'Đang xuất PDF…' : 'Xuất PDF' }}
+        </button>
+
+        <button
+          v-if="!reportIsSaved"
           type="button"
           class="matrix__header-btn"
           :class="{ 'matrix__header-btn--on': criteriaDialogOpen }"
@@ -1155,32 +1360,6 @@ onBeforeUnmount(() => {
       </template>
     </PageHeader>
 
-    <div v-if="scoreMode && !loadError" class="matrix__mode">
-      <span class="matrix__mode-badge">{{ scoreModeInfo.title }}</span>
-      <span class="matrix__mode-formula">{{ scoreModeInfo.formula }}</span>
-      <span v-if="versionNo" class="matrix__mode-version">Phiên bản {{ versionNo }}</span>
-      <span
-        v-if="shownCriteriaCount < criteria.length"
-        class="matrix__mode-note"
-        role="status"
-      >
-        Đang ẩn {{ criteria.length - shownCriteriaCount }}/{{ criteria.length }} cột tiêu chí — điểm cuối vẫn tính đủ.
-      </span>
-    </div>
-
-    <div v-if="gapTotal > 0 && !loadError" class="matrix__gap" role="status">
-      <AppIcon name="alertTriangle" :size="16" />
-      <div class="matrix__gap-copy">
-        <p>
-          {{ gapTotal }} việc chưa đủ dữ liệu nên điểm thực = 0.
-          Độ khó {{ gapSummary.difficulty }} · tiến độ {{ gapSummary.progress }} · chất lượng {{ gapSummary.quality }}.
-        </p>
-        <button type="button" class="matrix__gap-btn" @click="onlyMissing = !onlyMissing">
-          {{ onlyMissing ? 'Hiện tất cả' : 'Chỉ người thiếu dữ liệu' }}
-        </button>
-      </div>
-    </div>
-
     <div v-if="lockReports.length && !loadError" class="matrix__lock" role="status">
       <AppIcon name="lock" :size="16" />
       <div class="matrix__lock-copy">
@@ -1195,41 +1374,29 @@ onBeforeUnmount(() => {
 
     <div class="matrix__body">
       <div class="matrix__main">
-        <div class="matrix__toolbar">
-          <div class="matrix__field">
-            <label class="matrix__label" for="matrix-search">Tìm nhân sự</label>
-            <input
-              id="matrix-search"
-              v-model="query"
-              type="search"
-              class="matrix__input"
-              placeholder="Tìm tên hoặc email…"
-            />
-          </div>
-        </div>
         <div ref="tableWrap" class="matrix__wrap hide-scrollbar">
           <table class="matrix__table" :style="{ width: tableWidthPx }">
             <colgroup>
               <col :style="{ width: colWidthStyle('user') }" />
-              <col :style="{ width: colWidthStyle('tasks') }" />
-              <col :style="{ width: colWidthStyle('start') }" />
-              <col :style="{ width: colWidthStyle('task_adj') }" />
+              <col v-if="scoreColOn('tasks')" :style="{ width: colWidthStyle('tasks') }" />
+              <col v-if="scoreColOn('start_score')" :style="{ width: colWidthStyle('start') }" />
+              <col v-if="scoreColOn('task_adjustment')" :style="{ width: colWidthStyle('task_adj') }" />
               <col
                 v-for="item in shownCriteria"
                 :key="item.id"
                 :style="{ width: colWidthStyle(criterionColKey(item.id)) }"
               />
-              <col :style="{ width: colWidthStyle('bonus') }" />
-              <col :style="{ width: colWidthStyle('penalty') }" />
-              <col :style="{ width: colWidthStyle('final') }" />
-              <col :style="{ width: colWidthStyle('klass') }" />
+              <col v-if="scoreColOn('bonus')" :style="{ width: colWidthStyle('bonus') }" />
+              <col v-if="scoreColOn('penalty')" :style="{ width: colWidthStyle('penalty') }" />
+              <col v-if="scoreColOn('final_score')" :style="{ width: colWidthStyle('final') }" />
+              <col v-if="scoreColOn('classification')" :style="{ width: colWidthStyle('klass') }" />
             </colgroup>
 
             <thead>
               <tr class="matrix__groups">
                 <th class="matrix__pin" rowspan="2">Nhân sự</th>
-                <th rowspan="2">Việc</th>
-                <th colspan="2" class="matrix__th-block">
+                <th v-if="scoreColOn('tasks')" rowspan="2">Việc</th>
+                <th v-if="workGroupSpan" :colspan="workGroupSpan" class="matrix__th-block">
                   {{ isWeightedTaskMode ? 'Hiệu suất việc' : 'Điểm việc' }}
                 </th>
                 <th
@@ -1240,18 +1407,18 @@ onBeforeUnmount(() => {
                 >
                   {{ group.label }}
                 </th>
-                <th colspan="4" class="matrix__th-block">Kết quả</th>
+                <th v-if="resultGroupSpan" :colspan="resultGroupSpan" class="matrix__th-block">Kết quả</th>
               </tr>
               <tr class="matrix__leaves">
-                <th>{{ isWeightedTaskMode ? 'Điểm chuẩn' : 'Khởi đầu' }}</th>
-                <th>{{ isWeightedTaskMode ? 'Hiệu suất (%)' : 'Từ việc' }}</th>
+                <th v-if="scoreColOn('start_score')">{{ isWeightedTaskMode ? 'Điểm chuẩn' : 'Khởi đầu' }}</th>
+                <th v-if="scoreColOn('task_adjustment')">{{ isWeightedTaskMode ? 'Hiệu suất (%)' : 'Từ việc' }}</th>
                 <th v-for="item in shownCriteria" :key="item.id" class="matrix__th-score">
                   {{ item.name }}
                 </th>
-                <th>Cộng</th>
-                <th>Trừ</th>
-                <th>{{ isWeightedTaskMode ? 'Hiệu suất cuối' : 'Cuối' }}</th>
-                <th>Xếp loại</th>
+                <th v-if="scoreColOn('bonus')">Cộng</th>
+                <th v-if="scoreColOn('penalty')">Trừ</th>
+                <th v-if="scoreColOn('final_score')">{{ isWeightedTaskMode ? 'Hiệu suất cuối' : 'Cuối' }}</th>
+                <th v-if="scoreColOn('classification')">Xếp loại</th>
               </tr>
             </thead>
 
@@ -1265,11 +1432,8 @@ onBeforeUnmount(() => {
               <tr v-else-if="sheetRows.length === 0">
                 <td :colspan="colSpan" class="matrix__empty">Kỳ này chưa có nhân sự nào để tổng hợp.</td>
               </tr>
-              <tr v-else-if="filteredRows.length === 0">
-                <td :colspan="colSpan" class="matrix__empty">Không có nhân sự nào khớp bộ lọc đang chọn.</td>
-              </tr>
               <tr
-                v-for="row in filteredRows"
+                v-for="row in sheetRows"
                 v-else
                 :key="row.user_id"
                 :class="{ 'matrix__row--on': selectedId === row.user_id }"
@@ -1281,15 +1445,23 @@ onBeforeUnmount(() => {
                     <span v-if="row.user_email" class="matrix__email">{{ row.user_email }}</span>
                   </button>
                 </td>
-                <td>
-                  <span class="matrix__tasks">{{ doneOf(row) }}/{{ totalTasksOf(row) }}</span>
-                  <span v-if="overdueOf(row) > 0" class="matrix__overdue">{{ overdueOf(row) }} trễ</span>
-                  <span v-if="rowGapCount(row) > 0" class="matrix__gap-chip">{{ rowGapCount(row) }} thiếu</span>
+                <td v-if="scoreColOn('tasks')" class="matrix__td-tasks">
+                  <span class="matrix__tasks-cell">
+                    <span class="matrix__tasks">{{ doneOf(row) }}/{{ totalTasksOf(row) }} việc xong</span>
+                    <span v-if="overdueOf(row) > 0 || rowGapCount(row) > 0" class="matrix__tasks-warn">
+                      <span v-if="overdueOf(row) > 0" class="matrix__warn-item matrix__warn-item--danger">
+                        <span class="matrix__warn-dot" />{{ overdueOf(row) }} trễ
+                      </span>
+                      <span v-if="rowGapCount(row) > 0" class="matrix__warn-item matrix__warn-item--gap">
+                        <span class="matrix__warn-dot" />{{ rowGapCount(row) }} thiếu điểm
+                      </span>
+                    </span>
+                  </span>
                 </td>
-                <td>
+                <td v-if="scoreColOn('start_score')">
                   <span class="matrix__chip">{{ formatNumber(taskBasisOf(row)) }}</span>
                 </td>
-                <td>
+                <td v-if="scoreColOn('task_adjustment')">
                   <span
                     v-if="isWeightedTaskMode"
                     :class="percentChipClass(row.task_adjustment)"
@@ -1309,39 +1481,49 @@ onBeforeUnmount(() => {
                     class="matrix__cell-btn"
                     :class="{
                       'matrix__cell-btn--on':
+                        scoreModalOpen &&
                         selectedId === row.user_id &&
-                        detailTab === 'score' &&
                         String(draft.criterion_id) === String(item.id),
                       'matrix__cell-btn--multi': (criterionTotal(row, item.id)?.count ?? 0) > 1,
+                      'matrix__cell-btn--view': reportIsSaved,
                     }"
-                    :aria-label="`Ghi nhận ${item.name} cho ${row.user_name}`"
+                    :aria-label="
+                      reportIsSaved
+                        ? `Chi tiết ${item.name} của ${row.user_name}`
+                        : `Ghi nhận ${item.name} cho ${row.user_name}`
+                    "
                     @click="openScore(row, item, $event)"
                   >
                     <template v-if="criterionTotal(row, item.id)">
                       <span :class="scoreChipClass(criterionTotal(row, item.id).score)">
                         {{ signedText(criterionTotal(row, item.id).score) }}
                       </span>
-                      <span v-if="criterionTotal(row, item.id).count > 1" class="matrix__times">
+                      <span
+                        v-if="criterionTotal(row, item.id).count > 1"
+                        class="matrix__times"
+                        aria-hidden="true"
+                      >×{{ criterionTotal(row, item.id).count }}</span>
+                      <span v-if="criterionTotal(row, item.id).count > 1" class="matrix__sr">
                         {{ criterionTotal(row, item.id).count }} lần
                       </span>
                     </template>
                     <span v-else class="matrix__dash">—</span>
                   </button>
                 </td>
-                <td>
+                <td v-if="scoreColOn('bonus')">
                   <span :class="scoreChipClass(scoreOf(row).bonus)">{{ signedText(scoreOf(row).bonus) }}</span>
                 </td>
-                <td>
+                <td v-if="scoreColOn('penalty')">
                   <span :class="scoreChipClass(scoreOf(row).penalty ? -scoreOf(row).penalty : 0)">
                     {{ scoreOf(row).penalty ? `-${formatNumber(scoreOf(row).penalty)}` : '0' }}
                   </span>
                 </td>
-                <td>
+                <td v-if="scoreColOn('final_score')">
                   <span class="matrix__chip matrix__chip--final">
                     {{ isWeightedTaskMode ? formatPercent(scoreOf(row).final) : formatNumber(scoreOf(row).final) }}
                   </span>
                 </td>
-                <td>
+                <td v-if="scoreColOn('classification')">
                   <span class="matrix__badge">{{ row.classification_label ?? '—' }}</span>
                 </td>
               </tr>
@@ -1350,11 +1532,11 @@ onBeforeUnmount(() => {
             <tfoot v-if="!loading && !loadError && sheetRows.length">
               <tr>
                 <th class="matrix__pin">Phòng ban</th>
-                <td>{{ footSum(doneOf) }}/{{ footSum(totalTasksOf) }}</td>
-                <td>
+                <td v-if="scoreColOn('tasks')" class="matrix__td-tasks">{{ footSum(doneOf) }}/{{ footSum(totalTasksOf) }}</td>
+                <td v-if="scoreColOn('start_score')">
                   <span class="matrix__chip">{{ formatNumber(footAvg(taskBasisOf)) }}</span>
                 </td>
-                <td>
+                <td v-if="scoreColOn('task_adjustment')">
                   <span
                     v-if="isWeightedTaskMode"
                     :class="percentChipClass(footAvg((row) => row.task_adjustment))"
@@ -1370,22 +1552,22 @@ onBeforeUnmount(() => {
                     {{ signedText(footAvg((row) => criterionTotal(row, item.id)?.score ?? 0)) }}
                   </span>
                 </td>
-                <td>
+                <td v-if="scoreColOn('bonus')">
                   <span :class="scoreChipClass(footAvg((row) => scoreOf(row).bonus))">
                     {{ signedText(footAvg((row) => scoreOf(row).bonus)) }}
                   </span>
                 </td>
-                <td>
+                <td v-if="scoreColOn('penalty')">
                   <span :class="scoreChipClass(footAvg((row) => (scoreOf(row).penalty ? -scoreOf(row).penalty : 0)))">
                     {{ signedText(footAvg((row) => (scoreOf(row).penalty ? -scoreOf(row).penalty : 0))) }}
                   </span>
                 </td>
-                <td>
+                <td v-if="scoreColOn('final_score')">
                   <span class="matrix__chip matrix__chip--final">
                     {{ isWeightedTaskMode ? formatPercent(footAvg((row) => scoreOf(row).final)) : formatNumber(footAvg((row) => scoreOf(row).final)) }}
                   </span>
                 </td>
-                <td>
+                <td v-if="scoreColOn('classification')">
                   <span class="matrix__chip">
                     {{ isWeightedTaskMode ? formatPercent(visibleSummary.average) : formatNumber(visibleSummary.average) }}
                   </span>
@@ -1400,7 +1582,7 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <Transition name="matrix-dialog-fade">
         <div
-          v-if="selected"
+          v-if="selected && !scoreModalOpen"
           class="matrix__dialog"
           role="presentation"
           @mousedown.self="closeDetail"
@@ -1449,7 +1631,11 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div class="matrix__person-strip" aria-label="Tóm tắt điểm trong kỳ">
+            <div
+              class="matrix__person-strip"
+              :class="stripClass(selected)"
+              aria-label="Tóm tắt điểm trong kỳ"
+            >
               <div class="matrix__person-strip-main">
                 <div class="matrix__person-strip-score">
                   <span class="matrix__person-strip-label">
@@ -1459,25 +1645,30 @@ onBeforeUnmount(() => {
                     {{ isWeightedTaskMode ? formatPercent(scoreOf(selected).final) : formatNumber(scoreOf(selected).final) }}
                   </span>
                 </div>
-                <span class="matrix__person-strip-divider" aria-hidden="true" />
                 <div class="matrix__person-strip-class">
                   <span class="matrix__person-strip-label">Xếp loại</span>
-                  <span class="matrix__person-strip-value matrix__person-strip-value--soft">
+                  <span class="matrix__person-strip-value">
                     {{ selected.classification_label ?? 'Chưa xếp loại' }}
                   </span>
                 </div>
-                <span class="matrix__person-strip-divider" aria-hidden="true" />
                 <div class="matrix__person-strip-meta">
-                  <span>Việc {{ doneOf(selected) }}/{{ totalTasksOf(selected) }}</span>
+                  <span>
+                    <span class="matrix__person-strip-label">Việc</span>
+                    <span class="matrix__person-strip-value">{{ doneOf(selected) }}/{{ totalTasksOf(selected) }}</span>
+                  </span>
                   <span v-if="overdueOf(selected) > 0" class="matrix__person-strip-warn">
-                    {{ overdueOf(selected) }} trễ
+                    <span class="matrix__person-strip-label">Trễ hạn</span>
+                    <span class="matrix__person-strip-value">{{ overdueOf(selected) }}</span>
                   </span>
                   <span v-if="rowGapCount(selected) > 0" class="matrix__person-strip-warn">
-                    {{ rowGapCount(selected) }} thiếu dữ liệu
+                    <span class="matrix__person-strip-label">Thiếu dữ liệu</span>
+                    <span class="matrix__person-strip-value">{{ rowGapCount(selected) }}</span>
                   </span>
                   <span>
-                    TB phòng
-                    <span :class="scoreClass(deltaVsAvg(selected))">{{ signedText(deltaVsAvg(selected)) }}</span>
+                    <span class="matrix__person-strip-label">So với TB phòng</span>
+                    <span class="matrix__person-strip-value" :class="scoreClass(deltaVsAvg(selected))">
+                      {{ signedText(deltaVsAvg(selected)) }}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -1514,73 +1705,78 @@ onBeforeUnmount(() => {
 
             <div
               class="matrix__dialog-body matrix__dialog-body--person hide-scrollbar"
-              :class="{ 'matrix__dialog-body--score': detailTab === 'score' }"
             >
               <template v-if="detailTab === 'tasks'">
                 <div v-if="detailTasks.length === 0" class="matrix__empty-card">
                   <AppIcon name="listChecks" :size="22" :stroke-width="1.75" />
                   <p>Không có việc nào trong kỳ này.</p>
                 </div>
-                <div v-else class="matrix__person-table-wrap hide-scrollbar">
-                  <table class="matrix__person-table">
-                    <thead>
-                      <tr>
-                        <th>Việc</th>
-                        <th>Trạng thái</th>
-                        <th>Tiến độ</th>
-                        <th>Hạn nộp</th>
-                        <th>Ngày xong</th>
-                        <template v-if="isWeightedTaskMode">
-                          <th class="matrix__person-table-num">Độ khó</th>
-                          <th class="matrix__person-table-num">Hệ số tiến độ</th>
-                          <th class="matrix__person-table-num">Chất lượng</th>
-                          <th class="matrix__person-table-num">Điểm chuẩn</th>
-                          <th class="matrix__person-table-num">Điểm thực</th>
-                          <th>Ghi chú</th>
-                        </template>
-                        <th v-else class="matrix__person-table-num">Điểm việc</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr
-                        v-for="task in detailTasks"
-                        :key="task.task_id"
-                        :class="{
-                          'matrix__person-table-row--danger': task.on_time_state === 'overdue',
-                          'matrix__person-table-row--gap': Boolean(taskZeroReason(task)),
-                        }"
-                      >
-                        <td class="matrix__person-table-title">
-                          {{ task.title }}
-                          <span v-if="task.project_name" class="matrix__person-table-sub">{{ task.project_name }}</span>
-                        </td>
-                        <td>
-                          <span class="matrix__pill matrix__pill--sm" :class="`matrix__pill--${taskStatusTone(task)}`">
-                            {{ TASK_STATUS_LABELS[task.status] ?? task.status }}
-                          </span>
-                        </td>
-                        <td>
-                          <span
-                            class="matrix__pill matrix__pill--sm"
-                            :class="task.on_time_state === 'overdue' ? 'matrix__pill--danger' : 'matrix__pill--ok'"
-                          >
-                            {{ TIMELINESS_LABELS[task.on_time_state] ?? 'Chưa xác định hạn' }}
-                          </span>
-                        </td>
-                        <td>{{ task.end_date ? formatDate(task.end_date) : 'chưa đặt' }}</td>
-                        <td>{{ task.actual_end_date ? formatDate(task.actual_end_date) : 'chưa xong' }}</td>
-                        <template v-if="isWeightedTaskMode">
-                          <td class="matrix__person-table-num">{{ factorText(task.difficulty_factor) }}</td>
-                          <td class="matrix__person-table-num">{{ factorText(task.progress_factor) }}</td>
-                          <td class="matrix__person-table-num">{{ factorText(task.quality_factor) }}</td>
-                          <td class="matrix__person-table-num">{{ formatNumber(task.standard_score) }}</td>
-                          <td class="matrix__person-table-num">{{ formatNumber(task.actual_score) }}</td>
-                          <td class="matrix__person-table-reason">{{ taskZeroReason(task) || '—' }}</td>
-                        </template>
-                        <td v-else class="matrix__person-table-num">{{ signedText(task.contribution) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <div v-else class="matrix__person-sheet">
+                  <div class="matrix__person-sheet-head">
+                    <span class="matrix__person-sheet-title">Công việc trong kỳ</span>
+                    <span class="matrix__person-sheet-count">{{ detailTasks.length }} việc</span>
+                  </div>
+                  <div ref="personTableWrap" class="matrix__person-table-wrap hide-scrollbar">
+                    <table class="matrix__person-table">
+                      <thead>
+                        <tr>
+                          <th>Việc</th>
+                          <th>Trạng thái</th>
+                          <th>Tiến độ</th>
+                          <th>Hạn nộp</th>
+                          <th>Ngày xong</th>
+                          <template v-if="isWeightedTaskMode">
+                            <th class="matrix__person-table-num">Độ khó</th>
+                            <th class="matrix__person-table-num">Hệ số tiến độ</th>
+                            <th class="matrix__person-table-num">Chất lượng</th>
+                            <th class="matrix__person-table-num">Điểm chuẩn</th>
+                            <th class="matrix__person-table-num">Điểm thực</th>
+                            <th>Ghi chú</th>
+                          </template>
+                          <th v-else class="matrix__person-table-num">Điểm việc</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="task in detailTasks"
+                          :key="task.task_id"
+                          :class="{
+                            'matrix__person-table-row--danger': task.on_time_state === 'overdue',
+                            'matrix__person-table-row--gap': Boolean(taskZeroReason(task)),
+                          }"
+                        >
+                          <td class="matrix__person-table-title">
+                            {{ task.title }}
+                            <span v-if="task.project_name" class="matrix__person-table-sub">{{ task.project_name }}</span>
+                          </td>
+                          <td>
+                            <span class="matrix__pill matrix__pill--sm" :class="`matrix__pill--${taskStatusTone(task)}`">
+                              {{ TASK_STATUS_LABELS[task.status] ?? task.status }}
+                            </span>
+                          </td>
+                          <td>
+                            <span
+                              class="matrix__pill matrix__pill--sm"
+                              :class="task.on_time_state === 'overdue' ? 'matrix__pill--danger' : 'matrix__pill--ok'"
+                            >
+                              {{ TIMELINESS_LABELS[task.on_time_state] ?? 'Chưa xác định hạn' }}
+                            </span>
+                          </td>
+                          <td class="matrix__person-table-date">{{ task.end_date ? formatDate(task.end_date) : 'chưa đặt' }}</td>
+                          <td class="matrix__person-table-date">{{ task.actual_end_date ? formatDate(task.actual_end_date) : 'chưa xong' }}</td>
+                          <template v-if="isWeightedTaskMode">
+                            <td class="matrix__person-table-num">{{ factorText(task.difficulty_factor) }}</td>
+                            <td class="matrix__person-table-num">{{ factorText(task.progress_factor) }}</td>
+                            <td class="matrix__person-table-num">{{ factorText(task.quality_factor) }}</td>
+                            <td class="matrix__person-table-num">{{ formatNumber(task.standard_score) }}</td>
+                            <td class="matrix__person-table-num">{{ formatNumber(task.actual_score) }}</td>
+                            <td class="matrix__person-table-reason">{{ taskZeroReason(task) || '—' }}</td>
+                          </template>
+                          <td v-else class="matrix__person-table-num">{{ signedText(task.contribution) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </template>
 
@@ -1589,193 +1785,66 @@ onBeforeUnmount(() => {
                   <AppIcon name="clipboardCheck" :size="22" :stroke-width="1.75" />
                   <p>Chưa ghi nhận lần nào trong kỳ này.</p>
                   <button
+                    v-if="!isPeriodLocked"
                     type="button"
                     class="matrix__dialog-btn matrix__dialog-btn--primary"
-                    :disabled="isPeriodLocked"
                     @click="goToScoreTab"
                   >
                     Chấm điểm
                   </button>
                 </div>
-                <div v-else class="matrix__person-table-wrap hide-scrollbar">
-                  <table class="matrix__person-table">
-                    <thead>
-                      <tr>
-                        <th>Ngày</th>
-                        <th>Tiêu chí</th>
-                        <th>Mức</th>
-                        <th class="matrix__person-table-num">Điểm</th>
-                        <th>Việc gắn</th>
-                        <th>Lý do</th>
-                        <th class="matrix__person-table-act" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr
-                        v-for="event in detailEvents"
-                        :key="event.event_id"
-                        :class="`matrix__person-table-row--${eventTone(event.score)}`"
-                      >
-                        <td>{{ formatDate(event.occurred_at) }}</td>
-                        <td class="matrix__person-table-title">{{ event.criterion_name }}</td>
-                        <td>{{ event.level_label }}</td>
-                        <td class="matrix__person-table-num">
-                          <span :class="scoreChipClass(event.score)">{{ signedText(event.score) }}</span>
-                        </td>
-                        <td>{{ taskTitleOf(event.task_id) || '—' }}</td>
-                        <td class="matrix__person-table-reason">{{ event.reason || '—' }}</td>
-                        <td class="matrix__person-table-act">
-                          <button
-                            v-if="!isDateLocked(event.occurred_at)"
-                            type="button"
-                            class="matrix__remove-btn matrix__remove-btn--icon"
-                            aria-label="Xoá ghi nhận"
-                            @click="confirmRemoveId = event.event_id"
-                          >
-                            <AppIcon name="trash2" :size="15" :stroke-width="1.75" />
-                          </button>
-                          <span v-else class="matrix__person-table-lock">Đã chốt</span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </template>
-
-              <form
-                v-else
-                id="matrix-score-form"
-                class="matrix__person-form"
-                @submit.prevent="record"
-              >
-                <div v-if="formLocked" class="matrix__lock matrix__lock--in" role="status">
-                  <AppIcon name="lock" :size="16" />
-                  <div class="matrix__lock-copy">
-                    <p>{{ lockHeadline }}</p>
-                    <p v-if="lockReports.length" class="matrix__lock-links">
-                      <span v-for="report in lockReports" :key="report.id" class="matrix__lock-link">
-                        {{ report.title }}
-                      </span>
-                    </p>
+                <div v-else class="matrix__person-sheet">
+                  <div class="matrix__person-sheet-head">
+                    <span class="matrix__person-sheet-title">Ghi nhận trong kỳ</span>
+                    <span class="matrix__person-sheet-count">{{ detailEvents.length }} lần</span>
                   </div>
-                </div>
-                <p v-else-if="criteria.length === 0" class="matrix__person-empty">
-                  Phòng ban chưa có tiêu chí để ghi nhận.
-                </p>
-                <template v-else>
-                  <div class="matrix__person-score">
-                    <div class="matrix__score-grid">
-                      <div class="matrix__field">
-                        <label id="matrix-criterion-label" class="matrix__label">Tiêu chí</label>
-                        <OptionPicker
-                          v-model="draft.criterion_id"
-                          :options="criterionOptions"
-                          :disabled="saving || formLocked"
-                          autocomplete
-                          placeholder="Gõ tên tiêu chí…"
-                          labelled-by="matrix-criterion-label"
-                          @update:modelValue="onCriterionChange"
-                        />
-                      </div>
-                      <div class="matrix__field">
-                        <label id="matrix-level-label" class="matrix__label">Mức điểm</label>
-                        <OptionPicker
-                          :key="String(draft.criterion_id || 'none')"
-                          v-model="draft.level_code"
-                          :options="levelOptions"
-                          :disabled="saving || formLocked || !draft.criterion_id || levelOptions.length === 0"
-                          :placeholder="
-                            !draft.criterion_id
-                              ? 'Chọn tiêu chí trước'
-                              : levelOptions.length === 0
-                                ? 'Chưa có mức điểm'
-                                : 'Chọn mức điểm…'
-                          "
-                          labelled-by="matrix-level-label"
-                        />
-                      </div>
-                      <div class="matrix__field">
-                        <label id="matrix-occurred-label" class="matrix__label">Ngày xảy ra</label>
-                        <OptionPicker
-                          v-model="draft.occurred_at"
-                          :options="occurredDateOptions"
-                          :disabled="saving || formLocked || occurredDateOptions.length === 0"
-                          searchable
-                          placeholder="Chọn ngày…"
-                          labelled-by="matrix-occurred-label"
-                        />
-                      </div>
-                      <div class="matrix__field">
-                        <label id="matrix-task-label" class="matrix__label">Gắn việc</label>
-                        <OptionPicker
-                          v-model="draft.task_id"
-                          :options="taskOptions"
-                          :disabled="saving || formLocked || scoreTasks.length === 0"
-                          autocomplete
-                          clearable
-                          :placeholder="scoreTasks.length === 0 ? 'Không có việc trong kỳ' : 'Gõ tên việc…'"
-                          labelled-by="matrix-task-label"
-                        />
-                      </div>
-                      <div class="matrix__field matrix__field--full">
-                        <label class="matrix__label" for="matrix-reason">Lý do</label>
-                        <div class="matrix__search-field">
-                          <AppIcon name="search" :size="16" :stroke-width="2" aria-hidden="true" />
-                          <input
-                            id="matrix-reason"
-                            v-model="draft.reason"
-                            type="search"
-                            class="matrix__search-field-input"
-                            maxlength="500"
-                            placeholder="Gõ lý do (tuỳ chọn)…"
-                            :disabled="saving || formLocked"
-                            autocomplete="off"
-                            spellcheck="false"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <aside class="matrix__person-score-side hide-scrollbar" aria-label="Các lần đã ghi">
-                      <p class="matrix__person-score-side-title">
-                        Đã ghi tiêu chí này
-                        <template v-if="scoreExisting.length"> ({{ scoreExisting.length }})</template>
-                      </p>
-                      <p v-if="!draft.criterion_id" class="matrix__person-placeholder">
-                        Chọn tiêu chí để xem các lần đã ghi.
-                      </p>
-                      <p v-else-if="scoreExisting.length === 0" class="matrix__person-placeholder">
-                        Chưa ghi nhận tiêu chí này trong kỳ.
-                      </p>
-                      <ul v-else class="matrix__person-score-list">
-                        <li v-for="event in scoreExisting" :key="event.event_id" class="matrix__person-score-item">
-                          <div class="matrix__person-score-item-head">
-                            <div class="matrix__event-head">
-                              <span class="matrix__card-title">{{ event.level_label }}</span>
-                              <span :class="scoreClass(event.score)">{{ signedText(event.score) }}</span>
-                            </div>
+                  <div ref="personTableWrap" class="matrix__person-table-wrap hide-scrollbar">
+                    <table class="matrix__person-table">
+                      <thead>
+                        <tr>
+                          <th>Ngày</th>
+                          <th>Tiêu chí</th>
+                          <th>Mức</th>
+                          <th class="matrix__person-table-num">Điểm</th>
+                          <th>Việc gắn</th>
+                          <th>Người ghi nhận</th>
+                          <th>Lý do</th>
+                          <th v-if="!isPeriodLocked" class="matrix__person-table-act" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="event in detailEvents"
+                          :key="event.event_id"
+                          :class="`matrix__person-table-row--${eventTone(event.score)}`"
+                        >
+                          <td class="matrix__person-table-date">{{ formatDate(event.occurred_at) }}</td>
+                          <td class="matrix__person-table-title">{{ event.criterion_name }}</td>
+                          <td>{{ event.level_label }}</td>
+                          <td class="matrix__person-table-num">
+                            <span :class="scoreChipClass(event.score)">{{ signedText(event.score) }}</span>
+                          </td>
+                          <td>{{ taskTitleOf(event.task_id) || '—' }}</td>
+                          <td>{{ event.recorded_by_name || '—' }}</td>
+                          <td class="matrix__person-table-reason">{{ event.reason || '—' }}</td>
+                          <td v-if="!isPeriodLocked" class="matrix__person-table-act">
                             <button
                               v-if="!isDateLocked(event.occurred_at)"
                               type="button"
-                              class="matrix__remove-btn"
+                              class="matrix__remove-btn matrix__remove-btn--icon"
                               aria-label="Xoá ghi nhận"
                               @click="confirmRemoveId = event.event_id"
                             >
-                              <AppIcon name="trash2" :size="14" :stroke-width="1.75" />
-                              <span>Xoá ghi nhận</span>
+                              <AppIcon name="trash2" :size="15" :stroke-width="1.75" />
                             </button>
-                          </div>
-                          <p class="matrix__card-meta">
-                            {{ formatDate(event.occurred_at) }}
-                            <span v-if="taskTitleOf(event.task_id)"> · {{ taskTitleOf(event.task_id) }}</span>
-                          </p>
-                          <p v-if="event.reason" class="matrix__reason">{{ event.reason }}</p>
-                        </li>
-                      </ul>
-                    </aside>
+                            <span v-else class="matrix__person-table-lock">Đã chốt</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
-                </template>
-              </form>
+                </div>
+              </template>
             </div>
 
             <div class="matrix__dialog-actions">
@@ -1785,10 +1854,10 @@ onBeforeUnmount(() => {
                 :disabled="saving"
                 @click="closeDetail"
               >
-                {{ detailTab === 'score' && !formLocked ? 'Huỷ' : 'Đóng' }}
+                Đóng
               </button>
               <button
-                v-if="detailTab !== 'score' && !isPeriodLocked"
+                v-if="!isPeriodLocked"
                 type="button"
                 class="matrix__dialog-btn matrix__dialog-btn--primary"
                 :disabled="saving"
@@ -1796,8 +1865,237 @@ onBeforeUnmount(() => {
               >
                 Ghi nhận đánh giá
               </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <Teleport to="body">
+      <Transition name="matrix-dialog-fade">
+        <div
+          v-if="scoreModalOpen && selected"
+          class="matrix__dialog matrix__dialog--score"
+          role="presentation"
+          @mousedown.self="closeScoreModal"
+        >
+          <div
+            class="matrix__dialog-panel matrix__dialog-panel--score"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="matrix-score-title"
+            @mousedown.stop
+          >
+            <div class="matrix__dialog-head">
+              <span class="matrix__dialog-icon" aria-hidden="true">
+                <AppIcon
+                  :name="scoreModalTab === 'history' ? 'clipboardCheck' : 'pencil'"
+                  :size="22"
+                  :stroke-width="1.75"
+                />
+              </span>
+              <div class="matrix__dialog-head-copy">
+                <h2 id="matrix-score-title" class="matrix__dialog-title">Chấm điểm</h2>
+                <div class="matrix__dialog-head-meta">
+                  <p class="matrix__dialog-head-person">{{ selected.user_name }}</p>
+                  <span v-if="scoreCriterion" class="matrix__dialog-head-criterion">
+                    {{ scoreCriterion.name }}
+                  </span>
+                </div>
+              </div>
               <button
-                v-else-if="detailTab === 'score' && !formLocked"
+                type="button"
+                class="matrix__dialog-close"
+                aria-label="Đóng"
+                :disabled="saving"
+                @click="closeScoreModal"
+              >
+                <AppIcon name="close" :size="16" />
+              </button>
+            </div>
+
+            <div
+              class="matrix__dialog-tabs"
+              role="tablist"
+              aria-label="Ghi nhận hoặc các lần đã ghi"
+            >
+              <button
+                type="button"
+                class="matrix__dialog-tab"
+                :class="{ 'matrix__dialog-tab--active': scoreModalTab === 'record' }"
+                role="tab"
+                :aria-selected="scoreModalTab === 'record' ? 'true' : 'false'"
+                :disabled="saving"
+                @click="scoreModalTab = 'record'"
+              >
+                Ghi nhận mới
+              </button>
+              <button
+                type="button"
+                class="matrix__dialog-tab"
+                :class="{ 'matrix__dialog-tab--active': scoreModalTab === 'history' }"
+                role="tab"
+                :aria-selected="scoreModalTab === 'history' ? 'true' : 'false'"
+                :disabled="saving"
+                @click="scoreModalTab = 'history'"
+              >
+                Đã ghi tiêu chí này
+                <span v-if="scoreExisting.length" class="matrix__dialog-tab-badge">
+                  {{ scoreExisting.length }}
+                </span>
+              </button>
+            </div>
+
+            <form
+              id="matrix-score-form"
+              class="matrix__dialog-body matrix__dialog-body--score-modal hide-scrollbar"
+              @submit.prevent="record"
+            >
+              <div v-if="formLocked && scoreModalTab === 'record'" class="matrix__lock matrix__lock--in" role="status">
+                <AppIcon name="lock" :size="16" />
+                <div class="matrix__lock-copy">
+                  <p>{{ lockHeadline }}</p>
+                  <p v-if="lockReports.length" class="matrix__lock-links">
+                    <span v-for="report in lockReports" :key="report.id" class="matrix__lock-link">
+                      {{ report.title }}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <p v-else-if="criteria.length === 0 && scoreModalTab === 'record'" class="matrix__person-empty">
+                Phòng ban chưa có tiêu chí để ghi nhận.
+              </p>
+              <template v-else-if="scoreModalTab === 'record'">
+                <div class="matrix__score-grid">
+                  <div class="matrix__field matrix__field--wide">
+                    <label id="matrix-criterion-label" class="matrix__label">Tiêu chí</label>
+                    <OptionPicker
+                      v-model="draft.criterion_id"
+                      :options="criterionOptions"
+                      :disabled="saving || formLocked"
+                      autocomplete
+                      placeholder="Gõ tên tiêu chí…"
+                      labelled-by="matrix-criterion-label"
+                      @update:modelValue="onCriterionChange"
+                    />
+                  </div>
+                  <div class="matrix__field">
+                    <label id="matrix-level-label" class="matrix__label">Mức điểm</label>
+                    <OptionPicker
+                      :key="String(draft.criterion_id || 'none')"
+                      v-model="draft.level_code"
+                      :options="levelOptions"
+                      :disabled="saving || formLocked || !draft.criterion_id || levelOptions.length === 0"
+                      :placeholder="
+                        !draft.criterion_id
+                          ? 'Chọn tiêu chí trước'
+                          : levelOptions.length === 0
+                            ? 'Chưa có mức điểm'
+                            : 'Chọn mức điểm…'
+                      "
+                      labelled-by="matrix-level-label"
+                    />
+                  </div>
+                  <div class="matrix__field">
+                    <label id="matrix-occurred-label" class="matrix__label">Ngày xảy ra</label>
+                    <OptionPicker
+                      v-model="draft.occurred_at"
+                      :options="occurredDateOptions"
+                      :disabled="saving || formLocked || occurredDateOptions.length === 0"
+                      searchable
+                      placeholder="Chọn ngày…"
+                      labelled-by="matrix-occurred-label"
+                    />
+                  </div>
+                  <div class="matrix__field matrix__field--wide">
+                    <label id="matrix-task-label" class="matrix__label">Gắn việc</label>
+                    <OptionPicker
+                      v-model="draft.task_id"
+                      :options="taskOptions"
+                      :disabled="saving || formLocked || scoreTasks.length === 0"
+                      autocomplete
+                      clearable
+                      :placeholder="scoreTasks.length === 0 ? 'Không có việc trong kỳ' : 'Gõ tên việc…'"
+                      labelled-by="matrix-task-label"
+                    />
+                  </div>
+                  <div class="matrix__field matrix__field--full">
+                    <label class="matrix__label" for="matrix-reason">Lý do</label>
+                    <textarea
+                      id="matrix-reason"
+                      v-model="draft.reason"
+                      class="matrix__input matrix__reason-input"
+                      rows="3"
+                      maxlength="500"
+                      placeholder="Gõ lý do (tuỳ chọn)…"
+                      :disabled="saving || formLocked"
+                      spellcheck="false"
+                    />
+                  </div>
+                </div>
+              </template>
+              <div v-else class="matrix__person-score-side-body hide-scrollbar">
+                <div v-if="!draft.criterion_id" class="matrix__person-score-empty">
+                  <AppIcon name="clipboardCheck" :size="22" :stroke-width="1.75" />
+                  <p>Chọn tiêu chí ở tab Ghi nhận mới để xem các lần đã ghi.</p>
+                </div>
+                <div v-else-if="scoreExisting.length === 0" class="matrix__person-score-empty">
+                  <AppIcon name="clipboardCheck" :size="22" :stroke-width="1.75" />
+                  <p>Chưa ghi nhận tiêu chí này trong kỳ.</p>
+                </div>
+                <ul v-else class="matrix__person-score-list">
+                  <li
+                    v-for="event in scoreExisting"
+                    :key="event.event_id"
+                    class="matrix__person-score-item"
+                    :class="`matrix__person-score-item--${eventTone(event.score)}`"
+                  >
+                    <div class="matrix__person-score-item-head">
+                      <div class="matrix__event-head">
+                        <span class="matrix__card-title">{{ event.level_label }}</span>
+                        <span :class="scoreChipClass(event.score)">{{ signedText(event.score) }}</span>
+                      </div>
+                      <button
+                        v-if="!isDateLocked(event.occurred_at)"
+                        type="button"
+                        class="matrix__remove-btn"
+                        aria-label="Xoá ghi nhận"
+                        @click="confirmRemoveId = event.event_id"
+                      >
+                        <AppIcon name="trash2" :size="14" :stroke-width="1.75" />
+                        <span>Xoá</span>
+                      </button>
+                    </div>
+                    <p class="matrix__card-meta">
+                      {{ formatDate(event.occurred_at) }}
+                      <span v-if="taskTitleOf(event.task_id)"> · {{ taskTitleOf(event.task_id) }}</span>
+                    </p>
+                    <dl class="matrix__person-score-details">
+                      <div v-if="event.recorded_by_name" class="matrix__person-score-detail">
+                        <dt>Người ghi nhận</dt>
+                        <dd>{{ event.recorded_by_name }}</dd>
+                      </div>
+                      <div v-if="event.reason" class="matrix__person-score-detail matrix__person-score-detail--wide">
+                        <dt>Lý do</dt>
+                        <dd>{{ event.reason }}</dd>
+                      </div>
+                    </dl>
+                  </li>
+                </ul>
+              </div>
+            </form>
+
+            <div class="matrix__dialog-actions">
+              <button
+                type="button"
+                class="matrix__dialog-btn matrix__dialog-btn--ghost"
+                :disabled="saving"
+                @click="closeScoreModal"
+              >
+                Huỷ
+              </button>
+              <button
+                v-if="!formLocked && scoreModalTab === 'record'"
                 type="submit"
                 form="matrix-score-form"
                 class="matrix__dialog-btn matrix__dialog-btn--primary"
@@ -1820,10 +2118,11 @@ onBeforeUnmount(() => {
           @mousedown.self="closeCriteriaDialog"
         >
           <div
-            class="matrix__dialog-panel"
+            class="matrix__dialog-panel matrix__dialog-panel--criteria"
             role="dialog"
             aria-modal="true"
             aria-labelledby="matrix-criteria-title"
+            aria-describedby="matrix-criteria-sub"
             @mousedown.stop
           >
             <div class="matrix__dialog-head">
@@ -1832,74 +2131,103 @@ onBeforeUnmount(() => {
               </span>
               <div class="matrix__dialog-head-copy">
                 <h2 id="matrix-criteria-title" class="matrix__dialog-title">Cột tiêu chí</h2>
+                <p id="matrix-criteria-sub" class="matrix__dialog-sub">
+                  {{
+                    boundDisplay
+                      ? `Đang theo báo cáo ${revisionHeadline || '1.0'}. Đổi cột rồi đóng hộp thoại sẽ lưu thành phụ lục ${nextAppendixLabel()}.`
+                      : 'Hiện hoặc ẩn cột trên bảng. Bấm tên nhóm để chọn cả nhóm.'
+                  }}
+                </p>
               </div>
               <button type="button" class="matrix__dialog-close" aria-label="Đóng" @click="closeCriteriaDialog">
                 <AppIcon name="close" :size="16" />
               </button>
             </div>
 
+            <div v-if="criteria.length > 0" class="matrix__criteria-toolbar">
+              <div class="matrix__criteria-search">
+                <label class="matrix__sr" for="matrix-criteria-search">Tìm tiêu chí</label>
+                <div class="matrix__criteria-search-field">
+                  <AppIcon name="search" :size="16" :stroke-width="2" aria-hidden="true" />
+                  <input
+                    id="matrix-criteria-search"
+                    v-model="criteriaPickerQuery"
+                    type="search"
+                    class="matrix__criteria-search-input"
+                    placeholder="Gõ tên hoặc loại tiêu chí…"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <button
+                    v-if="criteriaPickerQuery"
+                    type="button"
+                    class="matrix__criteria-search-clear"
+                    aria-label="Xoá tìm kiếm"
+                    @click="criteriaPickerQuery = ''"
+                  >
+                    <AppIcon name="close" :size="14" />
+                  </button>
+                </div>
+              </div>
+              <p class="matrix__criteria-meta">
+                Đang hiện {{ shownCriteriaCount }}/{{ criteria.length }}
+              </p>
+            </div>
+            <p v-if="boundDisplay?.revisions?.length" class="matrix__criteria-history">
+              Lịch sử:
+              <span
+                v-for="item in boundDisplay.revisions"
+                :key="item.revision"
+                class="matrix__criteria-rev"
+              >
+                {{ item.revision }}{{ item.kind === 'appendix' ? ' · phụ lục' : '' }}
+              </span>
+            </p>
+
             <div class="matrix__dialog-body hide-scrollbar">
               <p v-if="criteria.length === 0" class="matrix__dialog-empty">
                 Phòng ban chưa có tiêu chí cộng / trừ điểm nào.
               </p>
-              <template v-else>
-                <div class="matrix__criteria-search">
-                  <label class="matrix__sr" for="matrix-criteria-search">Tìm tiêu chí</label>
-                  <div class="matrix__criteria-search-field">
-                    <AppIcon name="search" :size="16" :stroke-width="2" aria-hidden="true" />
-                    <input
-                      id="matrix-criteria-search"
-                      v-model="criteriaPickerQuery"
-                      type="search"
-                      class="matrix__criteria-search-input"
-                      placeholder="Gõ tên hoặc loại tiêu chí…"
-                      autocomplete="off"
-                      spellcheck="false"
-                    />
-                    <button
-                      v-if="criteriaPickerQuery"
-                      type="button"
-                      class="matrix__criteria-search-clear"
-                      aria-label="Xoá tìm kiếm"
-                      @click="criteriaPickerQuery = ''"
-                    >
-                      <AppIcon name="close" :size="14" />
-                    </button>
-                  </div>
-                </div>
-                <p v-if="filteredPickerGroups.length === 0" class="matrix__dialog-empty">
-                  Không có tiêu chí khớp «{{ criteriaPickerQuery }}».
-                </p>
-                <div v-else class="matrix__dialog-grid">
-                <section v-for="group in filteredPickerGroups" :key="group.label" class="matrix__dialog-group">
+              <p v-else-if="filteredPickerGroups.length === 0" class="matrix__dialog-empty">
+                Không có tiêu chí khớp «{{ criteriaPickerQuery }}».
+              </p>
+              <div v-else class="matrix__dialog-grid">
+                <section
+                  v-for="group in filteredPickerGroups"
+                  :key="group.label"
+                  class="matrix__dialog-group"
+                  :class="pickerGroupClass(group)"
+                >
                   <button
                     type="button"
                     class="matrix__dialog-group-head"
+                    :aria-label="`Hiện hoặc ẩn cả nhóm ${group.label}`"
                     @click="toggleGroupCriteria(group.items)"
                   >
-                    <span>{{ group.label }}</span>
+                    <span class="matrix__dialog-group-title">{{ group.label }}</span>
                     <span class="matrix__dialog-group-count">
                       {{ groupShownCount(group.items) }}/{{ group.items.length }}
                     </span>
                   </button>
-                  <label
-                    v-for="item in group.items"
-                    :key="item.id"
-                    class="matrix__dialog-item"
-                    :class="{ 'matrix__dialog-item--on': isCriterionOn(item.id) }"
-                  >
-                    <input
-                      type="checkbox"
-                      class="matrix__sr"
-                      :checked="isCriterionOn(item.id)"
-                      @change="toggleCriterion(item.id, $event.target.checked)"
-                    />
-                    <span class="matrix__dialog-tick" aria-hidden="true" />
-                    <span class="matrix__dialog-item-name">{{ item.name }}</span>
-                  </label>
+                  <div class="matrix__dialog-group-list hide-scrollbar">
+                    <label
+                      v-for="item in group.items"
+                      :key="item.id"
+                      class="matrix__dialog-item"
+                      :class="{ 'matrix__dialog-item--on': isCriterionOn(item.id) }"
+                    >
+                      <input
+                        type="checkbox"
+                        class="matrix__sr"
+                        :checked="isCriterionOn(item.id)"
+                        @change="toggleCriterion(item.id, $event.target.checked)"
+                      />
+                      <span class="matrix__dialog-tick" aria-hidden="true" />
+                      <span class="matrix__dialog-item-name">{{ item.name }}</span>
+                    </label>
+                  </div>
                 </section>
               </div>
-              </template>
             </div>
 
             <div class="matrix__dialog-actions">
@@ -1918,6 +2246,24 @@ onBeforeUnmount(() => {
       </Transition>
     </Teleport>
 
+    <ConfirmDialog
+      :open="appendixConfirmOpen"
+      :title="`Lưu thành phụ lục ${nextAppendixLabel()}?`"
+      description="Bản gốc giữ nguyên cột tiêu chí lúc tạo. Phụ lục chỉ đổi những cột đang hiện trên bảng."
+      confirm-label="Lưu phụ lục"
+      :loading="savingDisplay"
+      @update:open="onAppendixOpen"
+      @confirm="confirmAppendix"
+    />
+    <ConfirmDialog
+      :open="saveConfirmOpen"
+      title="Lưu báo cáo?"
+      description="Sau khi lưu, kỳ báo cáo sẽ bị khoá — không ghi nhận hay xoá điểm trong kỳ này nữa. Danh sách nhân sự trong phạm vi được chụp lại đúng lúc lưu."
+      confirm-label="Lưu báo cáo"
+      :loading="savingReport"
+      @update:open="onSaveConfirmOpen"
+      @confirm="confirmSaveReport"
+    />
     <ConfirmDialog
       :open="Boolean(confirmRemoveId)"
       title="Xoá ghi nhận này?"
@@ -1994,18 +2340,36 @@ onBeforeUnmount(() => {
     0 0 0 1px color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
+.matrix__header-btn--primary {
+  background: var(--color-secondary);
+  color: var(--color-on-secondary);
+  box-shadow: none;
+}
+
+.matrix__header-btn--primary:hover:not(:disabled) {
+  background: var(--color-secondary-hover);
+}
+
+.matrix__status {
+  display: inline-flex;
+  align-items: center;
+  height: 2rem;
+  padding: 0 0.625rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.matrix__status--saved {
+  background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface));
+  color: var(--color-success);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-success) 35%, var(--color-border));
+}
+
 .matrix__header-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-.matrix__header-caret {
-  opacity: 0.7;
-  transition: transform 160ms ease;
-}
-
-.matrix__header-caret--open {
-  transform: rotate(180deg);
 }
 
 .matrix__icon-btn {
@@ -2035,77 +2399,10 @@ onBeforeUnmount(() => {
   }
 }
 
-.matrix__period {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
 .matrix__picker-count {
   color: var(--color-text-muted);
   font-size: 0.75rem;
   font-weight: 600;
-}
-
-.matrix__picker {
-  position: relative;
-}
-
-.matrix__picker-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  width: 18rem;
-  max-height: min(24rem, calc(100vh - 8rem));
-  overflow: auto;
-  padding: var(--space-3);
-  background: var(--color-surface);
-  box-shadow:
-    inset 0 0 0 1px var(--color-border),
-    var(--shadow-lg);
-}
-
-.matrix__picker-menu--period {
-  left: 0;
-  right: auto;
-  width: 16.5rem;
-  padding: 0.375rem 0;
-}
-
-.matrix__picker-item {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  padding: 0.5rem 0.875rem;
-  border: none;
-  background: transparent;
-  color: var(--color-text);
-  font-family: var(--font-family-base);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-}
-
-.matrix__picker-item:hover {
-  background: var(--color-surface-muted);
-}
-
-.matrix__picker-item--on {
-  color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-}
-
-.matrix__picker-dates {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
-  margin-top: 0.25rem;
-  padding: var(--space-3) 0.875rem 0.5rem;
-  box-shadow: 0 -1px 0 var(--color-border);
 }
 
 .matrix__field {
@@ -2139,102 +2436,6 @@ onBeforeUnmount(() => {
 
 .matrix__textarea {
   resize: vertical;
-}
-
-.matrix__warn {
-  flex-shrink: 0;
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--color-danger);
-  font-size: 0.8125rem;
-}
-
-.matrix__mode {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: var(--space-3);
-  margin: 0 0 var(--space-2);
-  padding: 0.625rem 0.75rem;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface));
-  color: var(--color-text);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, var(--color-border));
-}
-
-.matrix__mode-badge {
-  flex-shrink: 0;
-  padding: 0.25rem 0.5rem;
-  border-radius: 999px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.matrix__mode-formula {
-  min-width: 0;
-  flex: 1;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-  line-height: 1.4;
-}
-
-.matrix__mode-version {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.matrix__mode-note {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
-.matrix__gap {
-  display: flex;
-  flex-shrink: 0;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-2);
-  padding: 0.75rem 1rem;
-  border-radius: var(--radius-md);
-  background: var(--color-warning-tint-bg);
-  color: var(--color-warning-tint-fg);
-  box-shadow: var(--shadow-sm);
-}
-
-.matrix__gap-copy {
-  min-width: 0;
-  flex: 1;
-}
-
-.matrix__gap-copy p {
-  margin: 0;
-  font-size: 0.8125rem;
-  line-height: 1.45;
-}
-
-.matrix__gap-btn {
-  margin-top: 0.375rem;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--color-warning-tint-fg);
-  font: inherit;
-  font-weight: 600;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.matrix__toolbar {
-  display: grid;
-  flex-shrink: 0;
-  grid-template-columns: minmax(12rem, 20rem);
-  gap: var(--space-2);
-  margin: 0 0 var(--space-2);
 }
 
 .matrix__lock {
@@ -2458,26 +2659,67 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
+.matrix__td-tasks {
+  padding-inline: 0.5rem;
+}
+
+.matrix__tasks-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  max-width: 100%;
+}
+
 .matrix__tasks {
   font-weight: 600;
+  white-space: nowrap;
 }
 
-.matrix__overdue {
-  display: block;
+.matrix__tasks-warn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.matrix__warn-item {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.matrix__warn-dot {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+}
+
+.matrix__warn-item--danger {
   color: var(--color-danger);
-  font-size: 0.6875rem;
-  font-weight: 500;
 }
 
-.matrix__gap-chip {
-  display: block;
+.matrix__warn-item--danger .matrix__warn-dot {
+  background: var(--color-danger);
+}
+
+.matrix__warn-item--gap {
   color: var(--color-warning-tint-fg);
-  font-size: 0.6875rem;
-  font-weight: 500;
+}
+
+.matrix__warn-item--gap .matrix__warn-dot {
+  background: var(--color-warning);
 }
 
 .matrix__chip {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
@@ -2489,6 +2731,7 @@ onBeforeUnmount(() => {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.25;
+  white-space: nowrap;
 }
 
 .matrix__chip--plus {
@@ -2519,17 +2762,21 @@ onBeforeUnmount(() => {
 
 .matrix__times {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  min-width: 2.25rem;
-  padding: 0.0625rem 0.375rem;
+  min-width: 1.375rem;
+  height: 1.125rem;
+  padding: 0 0.3125rem;
   border-radius: 999px;
   background: var(--color-gold-100);
-  color: var(--color-umber-800);
-  font-size: 0.6875rem;
-  font-weight: 700;
+  color: var(--color-gold-800);
+  font-size: 0.625rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
-  line-height: 1.2;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .matrix__badge {
@@ -2568,24 +2815,39 @@ onBeforeUnmount(() => {
 }
 
 .matrix__cell-btn {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  gap: 0.125rem;
+  gap: 0.25rem;
   width: 100%;
   height: var(--matrix-leaf-h);
-  padding: 0;
+  padding: 0 0.25rem;
   border: none;
   background: transparent;
   color: inherit;
   font: inherit;
+  white-space: nowrap;
   cursor: pointer;
+}
+
+.matrix__cell-btn--multi {
+  gap: 0.1875rem;
 }
 
 .matrix__cell-btn:hover,
 .matrix__cell-btn--on {
   background: color-mix(in srgb, var(--color-secondary) 10%, transparent);
+}
+
+.matrix--view .matrix__cell-btn {
+  cursor: default;
+}
+
+.matrix--view .matrix__cell-btn:hover,
+.matrix--view .matrix__cell-btn--on {
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
 
 .matrix__dash {
@@ -2750,9 +3012,9 @@ onBeforeUnmount(() => {
 .matrix__stack {
   display: flex;
   flex-shrink: 0;
-  height: 0.375rem;
+  height: 0.25rem;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--color-border);
 }
 
@@ -2836,22 +3098,58 @@ onBeforeUnmount(() => {
   font-size: 0.8125rem;
 }
 
-.matrix__person-table-wrap {
+.matrix__person-sheet {
+  display: flex;
   min-width: 0;
-  overflow: auto;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
 }
 
+.matrix__person-sheet-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0.75rem 1rem 0.625rem;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.matrix__person-sheet-title {
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.matrix__person-sheet-count {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.matrix__person-table-wrap {
+  min-width: 0;
+  flex: 1;
+  overflow: auto;
+}
+
 .matrix__person-table {
   width: 100%;
+  min-width: max-content;
   border-collapse: collapse;
   font-size: 0.8125rem;
 }
 
 .matrix__person-table th {
-  padding: 0.5rem 0.75rem;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.5625rem 0.875rem;
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
   font-size: 0.6875rem;
@@ -2864,10 +3162,15 @@ onBeforeUnmount(() => {
 }
 
 .matrix__person-table td {
-  padding: 0.5625rem 0.75rem;
+  position: relative;
+  padding: 0.6875rem 0.875rem;
   color: var(--color-text);
   vertical-align: top;
   box-shadow: 0 1px 0 var(--color-border);
+}
+
+.matrix__person-table tbody tr:hover td {
+  background: var(--color-surface-muted);
 }
 
 .matrix__person-table tbody tr:last-child td {
@@ -2891,8 +3194,8 @@ onBeforeUnmount(() => {
 }
 
 .matrix__person-table-title {
-  min-width: 10rem;
-  max-width: 18rem;
+  min-width: 11rem;
+  max-width: 20rem;
   font-weight: 600;
 }
 
@@ -2904,8 +3207,14 @@ onBeforeUnmount(() => {
   font-weight: 400;
 }
 
+.matrix__person-table-date {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .matrix__person-table-reason {
-  max-width: 14rem;
+  max-width: 16rem;
   color: var(--color-text-muted);
   font-size: 0.75rem;
   font-style: italic;
@@ -2918,16 +3227,34 @@ onBeforeUnmount(() => {
   font-style: italic;
 }
 
-.matrix__person-table-row--danger td:first-child {
-  box-shadow: inset 3px 0 0 var(--color-danger);
-}
-
-.matrix__person-table-row--gap td:first-child {
-  box-shadow: inset 3px 0 0 var(--color-warning);
-}
-
+.matrix__person-table-row--danger td:first-child,
+.matrix__person-table-row--gap td:first-child,
 .matrix__person-table-row--ok td:first-child {
-  box-shadow: inset 3px 0 0 var(--color-success);
+  padding-left: calc(0.875rem + 3px + var(--space-2));
+}
+
+.matrix__person-table-row--danger td:first-child::before,
+.matrix__person-table-row--gap td:first-child::before,
+.matrix__person-table-row--ok td:first-child::before {
+  content: '';
+  position: absolute;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+}
+
+.matrix__person-table-row--danger td:first-child::before {
+  background: var(--color-danger);
+}
+
+.matrix__person-table-row--gap td:first-child::before {
+  background: var(--color-warning);
+}
+
+.matrix__person-table-row--ok td:first-child::before {
+  background: var(--color-success);
 }
 
 .matrix__eq {
@@ -3163,26 +3490,26 @@ onBeforeUnmount(() => {
 }
 
 .matrix__person-score {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem);
-  gap: var(--space-3);
-  align-items: start;
+  display: flex;
   min-height: 0;
   flex: 1;
-  overflow: auto;
-  padding-bottom: var(--space-2);
+  flex-direction: column;
 }
 
 .matrix__score-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
   align-content: start;
   min-width: 0;
 }
 
 .matrix__score-grid .matrix__field {
   min-width: 0;
+}
+
+.matrix__score-grid .matrix__field--wide {
+  grid-column: span 2;
 }
 
 .matrix__score-grid .matrix__field--full {
@@ -3193,54 +3520,65 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.matrix__search-field {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  min-height: 2.5rem;
+.matrix__reason-input {
+  min-height: 5.25rem;
   padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  color: var(--color-text-muted);
-}
-
-.matrix__search-field:focus-within {
-  box-shadow: inset 0 0 0 1.5px var(--color-primary);
-  color: var(--color-text);
-}
-
-.matrix__search-field-input {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
   border: none;
-  background: transparent;
-  color: var(--color-text);
-  font-family: var(--font-family-base);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px var(--color-border);
   font-size: 0.875rem;
-  font-weight: 600;
-  outline: none;
-}
-
-.matrix__search-field-input::placeholder {
-  color: var(--color-text-muted);
   font-weight: 500;
+  line-height: 1.45;
+  resize: none;
 }
 
-.matrix__search-field-input:disabled {
+.matrix__reason-input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--color-primary);
+}
+
+.matrix__reason-input:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
-.matrix__person-score-side {
-  min-width: 0;
-  max-height: min(28rem, calc(100vh - 18rem));
+.matrix__person-score-side-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
   overflow: auto;
+}
+
+.matrix__dialog-panel--score .matrix__person-score-side-body:has(.matrix__person-score-list) {
   padding: var(--space-3);
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.matrix__person-score-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.matrix__dialog-panel--score .matrix__person-score-empty {
+  min-height: 9rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.matrix__person-score-empty p {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
 }
 
 .matrix__person-fields {
@@ -3263,13 +3601,6 @@ onBeforeUnmount(() => {
   gap: var(--space-2);
 }
 
-.matrix__person-score-side-title {
-  margin: 0 0 var(--space-2);
-  color: var(--color-text);
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
 .matrix__person-score-list {
   display: flex;
   flex-direction: column;
@@ -3280,13 +3611,58 @@ onBeforeUnmount(() => {
 }
 
 .matrix__person-score-item {
-  padding: var(--space-2) 0;
-  box-shadow: 0 1px 0 var(--color-border);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-3));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-sm);
+  transition:
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.matrix__person-score-item--ok {
+  background: color-mix(in srgb, var(--color-success) 5%, var(--color-surface));
+}
+
+.matrix__person-score-item--danger {
+  background: color-mix(in srgb, var(--color-danger) 5%, var(--color-surface));
+}
+
+.matrix__person-score-item:hover {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-border) 55%, var(--color-text-muted)),
+    var(--shadow-md);
+}
+
+.matrix__person-score-item::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.matrix__person-score-item--ok::before {
+  background: var(--color-success);
+}
+
+.matrix__person-score-item--danger::before {
+  background: var(--color-danger);
 }
 
 .matrix__person-score-item-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
 }
@@ -3294,6 +3670,25 @@ onBeforeUnmount(() => {
 .matrix__person-score-item-head .matrix__event-head {
   flex: 1;
   min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.matrix__person-score-item .matrix__card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.matrix__person-score-item .matrix__chip {
+  font-size: 0.8125rem;
 }
 
 .matrix__remove-btn {
@@ -3343,17 +3738,54 @@ onBeforeUnmount(() => {
   padding: 0;
 }
 
-.matrix__person-score-item:first-child {
-  padding-top: 0;
+.matrix__person-score-item .matrix__card-meta {
+  margin: 0;
+  padding-top: var(--space-2);
+  box-shadow: 0 -1px 0 color-mix(in srgb, var(--color-border) 65%, transparent);
+  font-size: 0.6875rem;
+  letter-spacing: 0.01em;
 }
 
-.matrix__person-score-item:last-child {
-  box-shadow: none;
-  padding-bottom: 0;
+.matrix__person-score-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
 }
 
-.matrix__person-score-side .matrix__card-meta {
-  margin-bottom: 0.25rem;
+.matrix__person-score-detail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin: 0;
+}
+
+.matrix__person-score-detail--wide {
+  grid-column: 1 / -1;
+}
+
+.matrix__person-score-detail dt {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+
+.matrix__person-score-detail dt::after {
+  content: ':';
+}
+
+.matrix__person-score-detail dd {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .matrix__level {
@@ -3512,11 +3944,134 @@ onBeforeUnmount(() => {
   box-shadow: var(--shadow-lg);
 }
 
+.matrix__dialog-panel--criteria {
+  width: min(72rem, calc(100vw - 2.5rem));
+  height: calc(100vh - 2.5rem);
+  max-height: calc(100vh - 2.5rem);
+  padding: 1.25rem 1.5rem 1rem;
+}
+
+.matrix__dialog-panel--criteria .matrix__dialog-head {
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.matrix__dialog-panel--criteria .matrix__dialog-icon {
+  margin-top: 0.125rem;
+}
+
+.matrix__dialog-panel--criteria .matrix__dialog-close {
+  margin-top: 0.125rem;
+}
+
+.matrix__dialog-panel--criteria .matrix__dialog-title {
+  letter-spacing: -0.02em;
+}
+
+.matrix__dialog-sub {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.matrix__criteria-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.matrix__dialog-panel--criteria .matrix__dialog-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.matrix__dialog-panel--criteria .matrix__dialog-actions {
+  padding-top: var(--space-3);
+  box-shadow: 0 -1px 0 var(--color-border);
+}
+
+.matrix__dialog-panel--criteria .hide-scrollbar {
+  cursor: default;
+}
+
 .matrix__dialog-panel--person {
   width: min(72rem, calc(100vw - 2.5rem));
   height: calc(100vh - 2.5rem);
   max-height: calc(100vh - 2.5rem);
   padding: 1.25rem 1.5rem 1rem;
+}
+
+.matrix__dialog--score {
+  z-index: 310;
+}
+
+.matrix__dialog-panel--score {
+  width: min(46rem, calc(100vw - 2.5rem));
+  height: auto;
+  max-height: calc(100vh - 2.5rem);
+  padding: 1.25rem 1.5rem 1rem;
+  overflow: hidden;
+}
+
+.matrix__dialog-panel--score .matrix__dialog-head {
+  align-items: flex-start;
+  padding-bottom: var(--space-2);
+  box-shadow: none;
+}
+
+.matrix__dialog-panel--score .matrix__dialog-icon {
+  margin-top: 0.125rem;
+}
+
+.matrix__dialog-panel--score .matrix__dialog-close {
+  margin-top: 0.5rem;
+}
+
+.matrix__dialog-panel--score .matrix__dialog-title {
+  letter-spacing: -0.02em;
+}
+
+.matrix__dialog-panel--score .matrix__dialog-body {
+  display: flex;
+  flex: 0 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+  overflow: hidden;
+}
+
+.matrix__dialog-panel--score .matrix__score-grid,
+.matrix__dialog-panel--score .matrix__person-score-side-body {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+.matrix__dialog-panel--score .matrix__person-score-side-body {
+  max-height: min(26rem, calc(100vh - 20rem));
+  overflow-y: auto;
+}
+
+.matrix__dialog-panel--score .matrix__person-score-list {
+  gap: var(--space-3);
+}
+
+.matrix__dialog-panel--score .matrix__dialog-actions {
+  padding-top: var(--space-3);
+  box-shadow: 0 -1px 0 var(--color-border);
 }
 
 .matrix__dialog-panel--person .matrix__dialog-body {
@@ -3537,127 +4092,114 @@ onBeforeUnmount(() => {
 }
 
 .matrix__person-strip {
+  position: relative;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+  gap: var(--space-3);
   margin-top: var(--space-3);
-  padding: 0.625rem;
-  border-radius: var(--radius-lg);
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--color-primary) 4%, var(--color-surface)) 0%,
-      var(--color-surface) 58%,
-      color-mix(in srgb, var(--color-secondary) 4%, var(--color-surface)) 100%
-    );
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-3));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 12%, var(--color-border)),
+    inset 0 0 0 1px var(--color-border),
     var(--shadow-sm);
+}
+
+.matrix__person-strip::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.matrix__person-strip--success::before {
+  background: var(--color-success);
+}
+
+.matrix__person-strip--danger::before {
+  background: var(--color-danger);
+}
+
+.matrix__person-strip--info::before {
+  background: var(--color-info);
 }
 
 .matrix__person-strip-main {
   display: grid;
-  grid-template-columns: minmax(8rem, 0.7fr) minmax(9rem, 0.8fr) minmax(18rem, 2fr);
+  grid-template-columns: minmax(7.5rem, auto) minmax(8.5rem, auto) minmax(0, 1fr);
   align-items: stretch;
-  gap: 0.625rem;
+  min-width: 0;
 }
 
 .matrix__person-strip-score,
-.matrix__person-strip-class {
+.matrix__person-strip-class,
+.matrix__person-strip-meta > span {
   display: flex;
   min-width: 0;
   flex-direction: column;
   justify-content: center;
-  padding: 0.625rem 0.75rem;
-  border-radius: var(--radius-md);
+  gap: 0.125rem;
 }
 
-.matrix__person-strip-score {
-  background: var(--color-primary-surface);
-  box-shadow: inset 0 0 0 1px var(--color-primary-100);
-}
-
-.matrix__person-strip-class {
-  background: var(--color-secondary-surface);
-  box-shadow: inset 0 0 0 1px var(--color-secondary-100);
+.matrix__person-strip-class,
+.matrix__person-strip-meta {
+  padding-left: var(--space-4);
+  box-shadow: -1px 0 0 var(--color-border);
 }
 
 .matrix__person-strip-score .matrix__person-strip-value {
-  color: var(--color-primary);
-  font-size: 1.75rem;
-  font-weight: 750;
+  font-size: 1.5rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.04em;
-  line-height: 1;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
 }
 
 .matrix__person-strip-label {
-  display: block;
-  margin-bottom: 0.25rem;
   color: var(--color-text-muted);
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .matrix__person-strip-value {
   color: var(--color-text);
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.matrix__person-strip-value--soft {
-  align-self: flex-start;
-  padding: 0.1875rem 0.5rem;
-  border-radius: var(--radius-full);
-  background: var(--color-secondary);
-  color: var(--color-on-secondary);
-  font-size: 0.8125rem;
-  font-style: normal;
-  line-height: 1.35;
-}
-
-.matrix__person-strip-divider {
-  display: none;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
 }
 
 .matrix__person-strip-meta {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
-  gap: 0.5rem;
   min-width: 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
 }
 
 .matrix__person-strip-meta > span {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  padding: 0.5rem 0.625rem;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-  font-weight: 600;
-  line-height: 1.35;
-  text-align: center;
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  padding: 0 var(--space-4);
 }
 
-.matrix__person-strip-meta > .matrix__person-strip-warn {
-  background: var(--color-danger-tint-bg);
-  color: var(--color-danger-tint-fg);
-  font-weight: 700;
-  box-shadow: inset 0 0 0 1px var(--color-danger-tint-border);
+.matrix__person-strip-meta > span:first-child {
+  padding-left: 0;
+}
+
+.matrix__person-strip-meta > span + span {
+  box-shadow: -1px 0 0 var(--color-border);
+}
+
+.matrix__person-strip-warn .matrix__person-strip-label,
+.matrix__person-strip-warn .matrix__person-strip-value {
+  color: var(--color-danger);
 }
 
 .matrix__stack--strip {
-  height: 0.5rem;
-  box-shadow: 0 0 0 2px var(--color-surface);
+  height: 0.25rem;
 }
 
 .matrix__person-tabs {
@@ -3749,9 +4291,45 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.matrix__dialog-head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.625rem;
+  min-width: 0;
+  margin-top: 0.25rem;
+}
+
+.matrix__dialog-head-person {
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-style: italic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matrix__dialog-head-criterion {
+  display: inline-flex;
+  max-width: min(100%, 28rem);
+  overflow: hidden;
+  padding: 0.125rem 0.5625rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .matrix__dialog-head,
 .matrix__person-strip,
 .matrix__person-tabs,
+.matrix__dialog-tabs,
+.matrix__criteria-toolbar,
 .matrix__dialog-actions {
   flex-shrink: 0;
 }
@@ -3791,6 +4369,9 @@ onBeforeUnmount(() => {
 }
 
 .matrix__dialog-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   padding: var(--space-2) var(--space-3);
   border: none;
   background: transparent;
@@ -3812,10 +4393,32 @@ onBeforeUnmount(() => {
   opacity: 0.6;
 }
 
+.matrix__dialog-tab-badge {
+  display: inline-flex;
+  min-width: 1.125rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3125rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  color: var(--color-primary);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.matrix__dialog-tab--active .matrix__dialog-tab-badge {
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+
 .matrix__dialog-body--person {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.matrix__dialog-body--person .matrix__person-sheet {
+  flex: 1;
+  min-height: 0;
 }
 
 .matrix__dialog-body--person .matrix__tab-section {
@@ -3828,21 +4431,24 @@ onBeforeUnmount(() => {
 }
 
 .matrix__criteria-search {
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .matrix__criteria-search-field {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-height: 2.5rem;
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 1px var(--color-border);
   color: var(--color-text-muted);
 }
 
 .matrix__criteria-search-field:focus-within {
+  background: var(--color-surface);
   box-shadow: inset 0 0 0 1.5px var(--color-primary);
   color: var(--color-text);
 }
@@ -3879,8 +4485,33 @@ onBeforeUnmount(() => {
 }
 
 .matrix__criteria-search-clear:hover {
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
   color: var(--color-text);
+}
+
+.matrix__criteria-meta {
+  flex-shrink: 0;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.matrix__criteria-history {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.75rem;
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-3);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.matrix__criteria-rev {
+  color: var(--color-text);
+  font-weight: 600;
 }
 
 .matrix__dialog-icon {
@@ -3945,90 +4576,165 @@ onBeforeUnmount(() => {
 }
 
 .matrix__dialog-empty {
-  margin: 0;
+  margin: auto;
+  padding: var(--space-5) var(--space-3);
   color: var(--color-text-muted);
   font-size: 0.875rem;
+  font-style: italic;
+  text-align: center;
 }
 
 .matrix__dialog-grid {
   display: grid;
+  flex: 1;
+  min-height: 0;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-4);
-  align-content: start;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: var(--space-3);
+  align-content: stretch;
 }
 
 .matrix__dialog-group {
+  position: relative;
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex-direction: column;
   overflow: hidden;
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.matrix__dialog-group::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  z-index: 1;
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.matrix__dialog-group--ok::before {
+  background: var(--color-secondary);
+}
+
+.matrix__dialog-group--cut::before {
+  background: var(--color-danger);
+}
+
+.matrix__dialog-group--mixed::before {
+  background: var(--color-gold);
 }
 
 .matrix__dialog-group-head {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
   width: 100%;
-  padding: 0.625rem 0.75rem;
+  padding: 0.75rem 0.75rem 0.75rem calc(var(--space-2) + 3px + var(--space-3));
   border: none;
-  background: var(--color-surface-muted);
+  background: transparent;
   color: var(--color-text);
   font-family: var(--font-family-base);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  line-height: 1.3;
   text-align: left;
-  text-transform: uppercase;
   cursor: pointer;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
 .matrix__dialog-group-head:hover {
-  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface-muted));
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface));
+}
+
+.matrix__dialog-group-head:focus-visible {
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface));
+  box-shadow: 0 1px 0 var(--color-border), inset 0 0 0 1.5px var(--color-primary);
+}
+
+.matrix__dialog-group-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .matrix__dialog-group-count {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
   color: var(--color-text-muted);
+  font-size: 0.6875rem;
   font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.matrix__dialog-group--all .matrix__dialog-group-count {
+  background: color-mix(in srgb, var(--color-secondary) 12%, var(--color-surface));
+  color: var(--color-secondary);
+}
+
+.matrix__dialog-group-list {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-1);
+  overflow: auto;
 }
 
 .matrix__dialog-item {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
-  padding: 0.5rem 0.75rem;
-  color: var(--color-text);
+  padding: 0.5rem 0.625rem 0.5rem calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: calc(var(--radius-md) - 2px);
+  color: var(--color-text-muted);
   font-size: 0.8125rem;
+  line-height: 1.4;
   cursor: pointer;
-  box-shadow: 0 1px 0 var(--color-border);
-}
-
-.matrix__dialog-item:last-child {
-  box-shadow: none;
 }
 
 .matrix__dialog-item:hover {
   background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.matrix__dialog-item:has(:focus-visible) {
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1.5px var(--color-primary);
 }
 
 .matrix__dialog-item--on {
   background: color-mix(in srgb, var(--color-secondary) 8%, var(--color-surface));
+  color: var(--color-text);
+}
+
+.matrix__dialog-item--on:hover {
+  background: color-mix(in srgb, var(--color-secondary) 12%, var(--color-surface));
 }
 
 .matrix__dialog-tick {
   flex-shrink: 0;
-  width: 1rem;
-  height: 1rem;
-  margin-top: 0.125rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.0625rem;
   border-radius: 0.25rem;
   background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  box-shadow: inset 0 0 0 1.5px var(--color-border);
 }
 
 .matrix__dialog-item--on .matrix__dialog-tick {
@@ -4041,7 +4747,7 @@ onBeforeUnmount(() => {
   display: block;
   width: 0.3125rem;
   height: 0.5625rem;
-  margin: 0.0625rem auto 0;
+  margin: 0.125rem auto 0;
   border: solid var(--color-on-secondary);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
@@ -4104,18 +4810,22 @@ onBeforeUnmount(() => {
 @media (max-width: 900px) {
   .matrix__person-strip-main {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3) 0;
   }
 
   .matrix__person-strip-meta {
     grid-column: 1 / -1;
+    padding-left: 0;
+    padding-top: var(--space-3);
+    box-shadow: 0 -1px 0 var(--color-border);
   }
 
-  .matrix__person-score {
-    grid-template-columns: minmax(0, 1fr);
+  .matrix__score-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .matrix__person-score-side {
-    max-height: 16rem;
+  .matrix__score-grid .matrix__field--wide {
+    grid-column: 1 / -1;
   }
 
   .matrix__eq {
@@ -4141,30 +4851,20 @@ onBeforeUnmount(() => {
 
   .matrix__dialog-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(12rem, 1fr);
   }
 }
 
 @media (max-width: 640px) {
-  .matrix__person-strip {
-    padding: 0.5rem;
-  }
-
   .matrix__person-strip-main {
-    gap: 0.5rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3) 0;
   }
 
-  .matrix__person-strip-score,
   .matrix__person-strip-class {
-    padding: 0.5rem 0.625rem;
-  }
-
-  .matrix__person-strip-meta {
-    gap: 0.375rem;
-  }
-
-  .matrix__person-strip-meta > span {
-    padding: 0.4375rem 0.375rem;
-    font-size: 0.6875rem;
+    padding-left: 0;
+    padding-top: var(--space-3);
+    box-shadow: 0 -1px 0 var(--color-border);
   }
 
   .matrix__person-stats,
@@ -4178,13 +4878,45 @@ onBeforeUnmount(() => {
   .matrix__score-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .matrix__dialog-panel--criteria .matrix__dialog-body {
+    overflow: auto;
+  }
+
+  .matrix__dialog-grid {
+    flex: none;
+    grid-auto-rows: auto;
+    align-content: start;
+  }
+
+  .matrix__dialog-group {
+    max-height: 20rem;
+  }
+
+  .matrix__criteria-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .matrix__criteria-meta {
+    text-align: right;
+  }
+
+  .matrix__dialog-panel--criteria {
+    width: calc(100vw - 2.5rem);
+    height: calc(100vh - 2.5rem);
+  }
+
+  .matrix__score-grid .matrix__field--wide {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .matrix-dialog-fade-enter-active,
   .matrix-dialog-fade-leave-active,
-  .matrix__spin,
-  .matrix__header-caret {
+  .matrix__spin {
     transition: none;
     animation: none;
   }

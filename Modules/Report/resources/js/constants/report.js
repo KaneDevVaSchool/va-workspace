@@ -72,6 +72,12 @@ export const REPORT_STATUS_LABELS = {
   saved: 'Đã lưu',
 };
 
+export const REPORT_PERIOD_TYPE_LABELS = {
+  month: 'Theo tháng',
+  quarter: 'Theo quý',
+  custom: 'Khoảng ngày',
+};
+
 export const EVENT_STATUS_LABELS = {
   pending: 'Chờ duyệt',
   approved: 'Đã duyệt',
@@ -83,24 +89,52 @@ export const EVENT_STATUS_LABELS = {
 export const REPORT_LIST_COLUMNS = [
   { key: 'title', label: 'Tên báo cáo', defaultOn: true },
   { key: 'report_type', label: 'Loại báo cáo', defaultOn: true },
-  { key: 'period', label: 'Kỳ báo cáo', defaultOn: true },
-  { key: 'department_name', label: 'Phòng ban', defaultOn: false },
-  { key: 'viewer_count', label: 'Người được xem', defaultOn: false },
+  { key: 'period_type', label: 'Kiểu kỳ', defaultOn: true },
+  { key: 'department_name', label: 'Phòng ban', defaultOn: true },
+  { key: 'scope', label: 'Phạm vi nhân sự', defaultOn: true },
+  { key: 'viewer_count', label: 'Người được xem', defaultOn: true },
+  { key: 'revision', label: 'Số bản sửa', defaultOn: true },
   { key: 'status', label: 'Tình trạng', defaultOn: true },
-  { key: 'created_by_name', label: 'Người tạo', defaultOn: true },
-  { key: 'created_at', label: 'Tạo lúc', defaultOn: false },
+  { key: 'created_by', label: 'Người tạo', defaultOn: true },
+  { key: 'updated_at', label: 'Cập nhật lúc', defaultOn: false },
+  { key: 'updated_by', label: 'Người cập nhật', defaultOn: false },
 ];
 
 export const REPORT_LIST_FILTERS = [
   { key: 'q', label: 'Tìm kiếm', defaultOn: true },
   { key: 'report_type', label: 'Loại báo cáo', defaultOn: true },
   { key: 'status', label: 'Tình trạng', defaultOn: true },
+  { key: 'department_name', label: 'Phòng ban', defaultOn: false },
+  { key: 'created_by_name', label: 'Người tạo', defaultOn: false },
 ];
 
-export const REPORT_LIST_COLUMN_KEY = 'va-report-list-columns';
+export const REPORT_LIST_COLUMN_KEY = 'va-report-list-columns-v3';
 export const REPORT_LIST_FILTER_KEY = 'va-report-list-filters';
-export const REPORT_LIST_WIDTH_KEY = 'va-report-list-column-widths';
+export const REPORT_LIST_WIDTH_KEY = 'va-report-list-column-widths-v3';
 export const REPORT_LIST_ZOOM_KEY = 'va-report-list-zoom';
+export const REPORT_LIST_GROUP_KEY = 'va-report-list-collapsed-groups';
+export const REPORT_LIST_GROUP_MODE_KEY = 'va-report-list-group-mode';
+
+/**
+ * Mở bảng Đánh giá nhân sự đúng kỳ và đúng báo cáo vừa tạo hoặc Chấm điểm.
+ */
+export function personnelEvaluationScoringRoute(periodFrom, periodTo, reportId) {
+  const from = typeof periodFrom === 'string' ? periodFrom.slice(0, 10) : '';
+  const to = typeof periodTo === 'string' ? periodTo.slice(0, 10) : '';
+  const query = {};
+  if (from && to) {
+    query.from = from;
+    query.to = to;
+  }
+  const id = Number(reportId);
+  if (Number.isInteger(id) && id > 0) {
+    query.report = String(id);
+  }
+  return {
+    name: 'manager.evaluation-events.index',
+    query,
+  };
+}
 
 /* ---------- Trang Ghi nhận đánh giá ---------- */
 
@@ -131,7 +165,7 @@ export const EVENT_FILTER_KEY = 'va-evaluation-event-filters';
 export const EVENT_WIDTH_KEY = 'va-evaluation-event-column-widths';
 export const EVENT_ZOOM_KEY = 'va-evaluation-event-zoom';
 
-/* ---------- Trang Tổng hợp đánh giá ---------- */
+/* ---------- Trang Đánh giá nhân sự ---------- */
 
 /**
  * Nhóm cột của bảng tổng hợp — mỗi nhóm là một ô ở hàng tiêu đề trên, các
@@ -192,13 +226,6 @@ export const SUMMARY_GROUP_TOGGLES = [
   { key: 'scores', label: 'Điểm đánh giá', defaultOn: true },
 ];
 
-export const SUMMARY_PERIOD_TYPES = [
-  { value: 'month', label: 'Tháng' },
-  { value: 'week', label: 'Tuần' },
-  { value: 'day', label: 'Ngày' },
-  { value: 'range', label: 'Khoảng ngày' },
-];
-
 /** Trạng thái đúng hạn — chữ hiển thị và tông màu chấm đứng trước. */
 export const TIMELINESS_LABELS = {
   on_time: 'Đúng hạn',
@@ -223,7 +250,6 @@ export const TASK_STATUS_LABELS = {
 export const SUMMARY_GROUP_KEY = 'va-evaluation-summary-groups';
 export const SUMMARY_WIDTH_KEY = 'va-evaluation-summary-column-widths';
 export const SUMMARY_ZOOM_KEY = 'va-evaluation-summary-zoom';
-export const SUMMARY_PERIOD_KEY = 'va-evaluation-summary-period-type';
 
 /* ---------- Dùng chung ---------- */
 

@@ -24,18 +24,19 @@ export default [
     },
   },
   {
-    // Tổng hợp đánh giá — toàn bộ nhân sự phòng ban trong một kỳ, kèm công
-    // việc và điểm theo từng tiêu chí; ghi nhận đánh giá diễn ra ngay trên
-    // bảng này (trước đây là danh sách phẳng + modal).
+    // Đánh giá nhân sự — ma trận chấm điểm cả phòng ban trong kỳ của báo cáo,
+    // kèm công việc và điểm theo từng tiêu chí; ghi nhận diễn ra ngay trên
+    // bảng này.
     //
     // Giữ nguyên path và name cũ để sidebar, phân quyền và cấu hình sidebar
-    // theo phòng ban không phải đổi theo.
+    // theo phòng ban không phải đổi theo. Không phải mục sidebar riêng —
+    // chỉ vào từ tạo/sửa báo cáo Đánh giá nhân sự, kèm ?from=&to=.
     path: '/manager/evaluation-events',
     name: 'manager.evaluation-events.index',
     component: () => import('./pages/EvaluationSummary.vue'),
     meta: {
       requiresAuth: true,
-      title: 'Tổng hợp đánh giá',
+      title: 'Đánh giá nhân sự',
       requiresPermission: 'evaluation.manage_department',
     },
   },
