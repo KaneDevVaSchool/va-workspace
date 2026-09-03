@@ -42,7 +42,6 @@ const ZOOM_KEY   = 'va-eval-view-zoom';
 
 const CELL_PAD_X = 32;
 const COL_EXTRA  = 24;
-const STATUS_DOT_EXTRA = 14;
 const DESC_MAX_CHARS = 20;
 let measureCtx   = null;
 
@@ -72,6 +71,7 @@ const visibleFilters = reactive(loadVisibility(FILTER_KEY, FILTERS));
 
 const tableWrap  = ref(null);
 const resizing   = ref(false);
+let wrapObserver = null;
 
 useDragScroll(tableWrap, { isBlocked: () => resizing.value });
 const MIN_COL_PX = 80;
@@ -141,6 +141,68 @@ const hasVisibleFilterFields = computed(() =>
   filterDefinitions.value.some((item) => visibleFilters[item.key]),
 );
 
+const insightStats = computed(() => {
+  const list = allCriteria.value.filter((item) => item.use_in_evaluation !== false);
+  let scale = 0;
+  let behavior = 0;
+  for (const item of list) {
+    if (item.type === 'scale') scale += 1;
+    else if (item.type === 'behavior') behavior += 1;
+  }
+  return {
+    total: list.length,
+    scale,
+    behavior,
+    groups: buildCriteriaGroups(list).length,
+  };
+});
+
+const showInsights = computed(
+  () => canLoadCriteria.value && !loading.value && allCriteria.value.length > 0,
+);
+
+const emptyState = computed(() => {
+  if (canViewAll.value && !departmentFilter.value) {
+    return {
+      icon: 'building',
+      title: 'Chọn phòng ban',
+      text: 'Chọn phòng ban ở bộ lọc phía trên để xem tiêu chí đánh giá.',
+    };
+  }
+  if (!canViewAll.value && !hasDepartment.value) {
+    return {
+      icon: 'building',
+      title: 'Chưa gắn phòng ban',
+      text: 'Tài khoản chưa gắn với phòng ban nào.',
+    };
+  }
+  if (loading.value) {
+    return {
+      icon: 'refresh',
+      title: 'Đang tải',
+      text: 'Đang tải danh sách tiêu chí…',
+      spin: true,
+    };
+  }
+  if (allCriteria.value.length === 0) {
+    return {
+      icon: 'clipboardCheck',
+      title: 'Chưa có tiêu chí',
+      text: 'Phòng ban chưa có tiêu chí đánh giá nào.',
+    };
+  }
+  if (filtered.value.length === 0) {
+    return {
+      icon: 'search',
+      title: 'Không tìm thấy',
+      text: hasActiveFilters.value
+        ? 'Không tìm thấy tiêu chí phù hợp với bộ lọc hiện tại.'
+        : 'Không có tiêu chí nào đang dùng trong đánh giá năng lực.',
+    };
+  }
+  return null;
+});
+
 const hiddenActiveFilterLabels = computed(() =>
   filterDefinitions.value
     .filter((item) => !visibleFilters[item.key] && filterHasValue(item.key))
@@ -200,6 +262,13 @@ function groupScoringKinds(criteria) {
   );
 }
 
+function groupScoringAccent(criteria) {
+  const kinds = groupScoringKinds(criteria);
+  if (kinds.length === 1) return kinds[0];
+  if (kinds.length > 1) return 'mixed';
+  return '';
+}
+
 function isTypeGroupCollapsed(store, key) {
   return Boolean(store[key]);
 }
@@ -224,6 +293,7 @@ const tableBodyRows = computed(() => {
       code: group.type?.code ?? '',
       count: group.criteria.length,
       collapsed: isTypeGroupCollapsed(typeGroupCollapsed, group.key),
+      scoringAccent: groupScoringAccent(group.criteria),
       scoringKinds: groupScoringKinds(group.criteria),
     });
     if (!isTypeGroupCollapsed(typeGroupCollapsed, group.key)) {
@@ -352,8 +422,12 @@ function columnContentWidth(key, fonts) {
       : text;
     const font = key === 'name' ? fonts.name : fonts.cell;
     maxW = Math.max(maxW, measureText(sample, font));
+    if (key === 'name') {
+      const typeLabel = TYPE_LABELS[row.type] ?? row.type ?? '';
+      maxW = Math.max(maxW, measureText(typeLabel, fonts.cell));
+    }
   }
-  const extra = key === 'status' ? STATUS_DOT_EXTRA : 0;
+  const extra = key === 'status' ? 36 : 0;
   return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
 }
 
@@ -560,12 +634,58 @@ function formatScore(score) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function handleKeydown(e) {
-  if (e.key === 'Escape' && selected.value) closePanel();
+function formatSignedScore(score) {
+  const n = Number(score);
+  if (!Number.isFinite(n)) return '0';
+  const text = formatScore(score);
+  return n > 0 ? `+${text}` : text;
 }
 
+function toggleTypeFilter(type) {
+  typeFilter.value = typeFilter.value === type ? '' : type;
+  page.value = 1;
+}
+
+function levelBarWidth(score, levels) {
+  const max = Math.max(
+    1,
+    ...(levels || []).map((level) => Math.abs(Number(level.score) || 0)),
+  );
+  return `${Math.round((Math.abs(Number(score) || 0) / max) * 100)}%`;
+}
+
+function selectAdjacent(delta) {
+  const list = tableBodyRows.value
+    .filter((row) => row.kind === 'criterion')
+    .map((row) => row.criterion);
+  const index = list.findIndex((item) => item.id === selected.value?.id);
+  if (index < 0) return;
+  const next = list[index + delta];
+  if (next) selected.value = next;
+}
+
+function handleKeydown(event) {
+  if (event.key === 'Escape' && selected.value) {
+    closePanel();
+    return;
+  }
+  if (!selected.value) return;
+  const tag = event.target?.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    selectAdjacent(1);
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    selectAdjacent(-1);
+  }
+}
+
+watch(visibleColumns, (value) => saveVisibility(COL_KEY, value), { deep: true });
+watch(visibleFilters, (value) => saveVisibility(FILTER_KEY, value), { deep: true });
 watch(shownColumns, () => nextTick(fitColumnsToContent));
 watch(tableZoom, () => nextTick(fitColumnsToContent));
+watch(selected, () => nextTick(fitColumnsToContent));
 watch(departmentFilter, () => {
   page.value = 1;
   kindFilter.value = '';
@@ -580,32 +700,95 @@ onMounted(async () => {
   }
   await loadDepartments();
   await load();
+  await nextTick();
+  if (tableWrap.value) {
+    let lastWrapWidth = tableWrap.value.clientWidth;
+    wrapObserver = new ResizeObserver((entries) => {
+      const width = Math.round(entries[0]?.contentRect?.width || 0);
+      if (!width || width === lastWrapWidth || resizing.value) return;
+      lastWrapWidth = width;
+      fitColumnsToContent();
+    });
+    wrapObserver.observe(tableWrap.value);
+  }
   document.fonts?.ready?.then(() => nextTick(fitColumnsToContent));
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown);
+  wrapObserver?.disconnect();
 });
 </script>
 
 <template>
-  <div class="eval-view" :class="{ 'eval-view--with-panel': selected }">
+  <section class="eval-view">
     <PageHeader
       title="Tiêu chí đánh giá"
       icon="clipboardCheck"
       :description="
         canViewAll
           ? (selectedDepartmentName
-            ? `Tiêu chí đánh giá đang áp dụng — ${selectedDepartmentName}.`
+            ? `Tiêu chí đang áp dụng — ${selectedDepartmentName}.`
             : 'Chọn phòng ban để xem tiêu chí đánh giá.')
-          : 'Tiêu chí đánh giá đang áp dụng cho phòng ban của bạn.'
+          : 'Tiêu chí đang áp dụng cho phòng ban của bạn. Bấm một dòng để xem thang điểm và hành vi.'
       "
       export-label="Dữ liệu"
       :export-options="canLoadCriteria ? exportOptions : []"
       :export-busy-key="exporting ? 'excel' : exportingPdf ? 'pdf' : undefined"
-    />
+    >
+      <template #actions>
+        <button
+          type="button"
+          class="eval-view__header-btn"
+          :class="{ 'eval-view__header-btn--busy': loading }"
+          :disabled="loading || !canLoadCriteria"
+          @click="load"
+        >
+          <AppIcon name="refresh" :size="16" />
+          Làm mới
+        </button>
+      </template>
+    </PageHeader>
 
+    <div class="eval-view__body">
     <div class="eval-view__main">
+      <div v-if="showInsights" class="eval-view__insights" role="group" aria-label="Tóm tắt tiêu chí">
+        <button
+          type="button"
+          class="eval-view__stat eval-view__stat--total"
+          :class="{ 'eval-view__stat--on': !typeFilter }"
+          :aria-pressed="!typeFilter ? 'true' : 'false'"
+          @click="typeFilter = ''"
+        >
+          <span class="eval-view__stat-value">{{ insightStats.total }}</span>
+          <span class="eval-view__stat-label">Tiêu chí</span>
+        </button>
+        <button
+          type="button"
+          class="eval-view__stat eval-view__stat--scale"
+          :class="{ 'eval-view__stat--on': typeFilter === 'scale' }"
+          :aria-pressed="typeFilter === 'scale' ? 'true' : 'false'"
+          @click="toggleTypeFilter('scale')"
+        >
+          <span class="eval-view__stat-value">{{ insightStats.scale }}</span>
+          <span class="eval-view__stat-label">Thang điểm</span>
+        </button>
+        <button
+          type="button"
+          class="eval-view__stat eval-view__stat--behavior"
+          :class="{ 'eval-view__stat--on': typeFilter === 'behavior' }"
+          :aria-pressed="typeFilter === 'behavior' ? 'true' : 'false'"
+          @click="toggleTypeFilter('behavior')"
+        >
+          <span class="eval-view__stat-value">{{ insightStats.behavior }}</span>
+          <span class="eval-view__stat-label">Cộng / trừ</span>
+        </button>
+        <div class="eval-view__stat eval-view__stat--groups">
+          <span class="eval-view__stat-value">{{ insightStats.groups }}</span>
+          <span class="eval-view__stat-label">Nhóm loại</span>
+        </div>
+      </div>
+
       <div v-if="hasVisibleFilterFields" class="eval-view__toolbar">
         <div class="eval-view__filters">
           <div v-if="visibleFilters.q" class="eval-view__field">
@@ -698,23 +881,13 @@ onBeforeUnmount(() => {
         :class="{ 'eval-view__table-wrap--resizing': resizing }"
         :style="{ '--table-zoom': tableZoom }"
       >
-        <p v-if="canViewAll && !departmentFilter" class="eval-view__empty">
-          Chọn phòng ban ở bộ lọc phía trên để xem tiêu chí.
-        </p>
-
-        <p v-else-if="!canViewAll && !hasDepartment" class="eval-view__empty">
-          Tài khoản chưa gắn với phòng ban nào.
-        </p>
-
-        <p v-else-if="loading" class="eval-view__empty">Đang tải…</p>
-
-        <p v-else-if="allCriteria.length === 0" class="eval-view__empty">
-          Phòng ban chưa có tiêu chí đánh giá nào.
-        </p>
-
-        <p v-else-if="filtered.length === 0" class="eval-view__empty">
-          {{ hasActiveFilters ? 'Không tìm thấy tiêu chí phù hợp.' : 'Không có tiêu chí nào đang dùng trong ĐGNL.' }}
-        </p>
+        <div v-if="emptyState" class="eval-view__empty">
+          <span class="eval-view__empty-icon" :class="{ 'eval-view__spin': emptyState.spin }" aria-hidden="true">
+            <AppIcon :name="emptyState.icon" :size="28" :stroke-width="1.75" />
+          </span>
+          <strong class="eval-view__empty-title">{{ emptyState.title }}</strong>
+          <span class="eval-view__empty-text">{{ emptyState.text }}</span>
+        </div>
 
         <table v-else class="eval-view__table" :style="{ minWidth: tableWidthPx }">
           <colgroup>
@@ -752,7 +925,10 @@ onBeforeUnmount(() => {
                 @click.stop="toggleTypeGroup(entry.groupKey)"
               >
                 <td :colspan="tableColspan" class="eval-view__td eval-view__td--group">
-                  <div class="eval-view__group-inner">
+                  <div
+                    class="eval-view__group-inner"
+                    :class="entry.scoringAccent ? `eval-view__group-inner--${entry.scoringAccent}` : ''"
+                  >
                     <span class="eval-view__group-toggle" aria-hidden="true">
                       <AppIcon
                         :name="entry.collapsed ? 'chevronRight' : 'chevronDown'"
@@ -763,6 +939,16 @@ onBeforeUnmount(() => {
                     <span class="eval-view__group-copy">
                       <span class="eval-view__group-title">{{ entry.title }}</span>
                       <span v-if="entry.code" class="eval-view__group-code">{{ entry.code }}</span>
+                    </span>
+                    <span v-if="entry.scoringKinds.length" class="eval-view__group-badges">
+                      <span
+                        v-for="kind in entry.scoringKinds"
+                        :key="kind"
+                        class="eval-view__badge eval-view__badge--group"
+                        :class="'eval-view__badge--' + kind"
+                      >
+                        {{ TYPE_LABELS[kind] ?? kind }}
+                      </span>
                     </span>
                     <span class="eval-view__group-count">{{ entry.count }} tiêu chí</span>
                   </div>
@@ -775,20 +961,29 @@ onBeforeUnmount(() => {
                 @click="openView(entry.criterion)"
               >
                 <td v-if="visibleColumns.name" class="eval-view__td">
-                  <span class="eval-view__name">{{ entry.criterion.name }}</span>
+                  <span class="eval-view__name-block">
+                    <span class="eval-view__name">{{ entry.criterion.name }}</span>
+                    <span class="eval-view__name-meta">
+                      {{ TYPE_LABELS[entry.criterion.type] ?? entry.criterion.type }}
+                    </span>
+                  </span>
                 </td>
                 <td v-if="visibleColumns.level_count" class="eval-view__td eval-view__td--center">
-                  {{ entry.criterion.level_count }}
+                  <span class="eval-view__count-pill">{{ entry.criterion.level_count }}</span>
                 </td>
                 <td v-if="visibleColumns.max_score" class="eval-view__td eval-view__td--center">
-                  {{ formatScore(entry.criterion.max_score) }}
+                  <span
+                    class="eval-view__score-pill"
+                    :class="entry.criterion.type === 'behavior' ? 'eval-view__score-pill--behavior' : ''"
+                  >
+                    {{ formatScore(entry.criterion.max_score) }}
+                  </span>
                 </td>
                 <td v-if="visibleColumns.status" class="eval-view__td eval-view__td--center">
-                  <span class="eval-view__status">
-                    <span
-                      class="eval-view__dot"
-                      :class="entry.criterion.is_active ? 'eval-view__dot--on' : 'eval-view__dot--off'"
-                    />
+                  <span
+                    class="eval-view__badge eval-view__badge--cell"
+                    :class="entry.criterion.is_active ? 'eval-view__badge--active' : 'eval-view__badge--inactive'"
+                  >
                     {{ entry.criterion.is_active ? 'Đang áp dụng' : 'Ngừng áp dụng' }}
                   </span>
                 </td>
@@ -823,20 +1018,41 @@ onBeforeUnmount(() => {
       aria-label="Chi tiết tiêu chí"
     >
       <div class="eval-view__panel-head">
-        <span class="eval-view__panel-title">Chi tiết</span>
-        <button type="button" class="eval-view__panel-btn" @click="closePanel">
-          <AppIcon name="close" :size="14" />
+        <h2 class="eval-view__panel-title">Chi tiết tiêu chí</h2>
+        <button type="button" class="eval-view__panel-btn" aria-label="Đóng" @click="closePanel">
+          <AppIcon name="close" :size="16" />
         </button>
       </div>
 
       <div class="eval-view__panel-body hide-scrollbar">
-        <div class="eval-view__row">
-          <span class="eval-view__row-label">Tên tiêu chí</span>
-          <span class="eval-view__row-value">{{ selected.name }}</span>
+        <div
+          class="eval-view__lead"
+          :class="selected.type ? `eval-view__lead--${selected.type}` : ''"
+        >
+          <span class="eval-view__lead-kicker">
+            {{ selected.criterion_type?.name || 'Chưa phân loại' }}
+          </span>
+          <p class="eval-view__lead-name">{{ selected.name }}</p>
+          <div class="eval-view__lead-tags">
+            <span class="eval-view__badge" :class="'eval-view__badge--' + selected.type">
+              {{ TYPE_LABELS[selected.type] ?? selected.type }}
+            </span>
+            <span
+              class="eval-view__badge"
+              :class="selected.is_active ? 'eval-view__badge--active' : 'eval-view__badge--inactive'"
+            >
+              {{ selected.is_active ? 'Đang áp dụng' : 'Ngừng áp dụng' }}
+            </span>
+          </div>
         </div>
+
         <div class="eval-view__row">
           <span class="eval-view__row-label">Loại tiêu chí</span>
           <span class="eval-view__row-value">{{ selected.criterion_type?.name || '—' }}</span>
+        </div>
+        <div v-if="selected.criterion_type?.code" class="eval-view__row">
+          <span class="eval-view__row-label">Mã loại</span>
+          <span class="eval-view__row-value">{{ selected.criterion_type.code }}</span>
         </div>
         <div v-if="selected.criterion_type?.description" class="eval-view__row">
           <span class="eval-view__row-label">Mô tả loại</span>
@@ -853,10 +1069,6 @@ onBeforeUnmount(() => {
         <div class="eval-view__row">
           <span class="eval-view__row-label">Trạng thái</span>
           <span class="eval-view__row-value">
-            <span
-              class="eval-view__dot"
-              :class="selected.is_active ? 'eval-view__dot--on' : 'eval-view__dot--off'"
-            />
             {{ selected.is_active ? 'Đang áp dụng' : 'Ngừng áp dụng' }}
           </span>
         </div>
@@ -869,36 +1081,63 @@ onBeforeUnmount(() => {
           <span class="eval-view__row-value">{{ formatScore(selected.max_score) }}</span>
         </div>
 
-        <h2 class="eval-view__levels-title">
-          {{ selected.type === 'scale' ? 'Thang điểm đánh giá' : 'Hành vi & điểm' }}
-        </h2>
-        <ul class="eval-view__levels-list">
-          <li v-for="(lv, idx) in (selected.levels ?? [])" :key="idx" class="eval-view__level-item">
+        <h3 class="eval-view__levels-title">
+          {{ selected.type === 'scale' ? 'Thang điểm đánh giá' : 'Hành vi và điểm' }}
+        </h3>
+        <ul v-if="(selected.levels ?? []).length" class="eval-view__levels-list">
+          <li
+            v-for="(lv, idx) in selected.levels"
+            :key="idx"
+            class="eval-view__level-item"
+            :class="{
+              'eval-view__level-item--neg': Number(lv.score) < 0,
+              'eval-view__level-item--pos': Number(lv.score) > 0,
+            }"
+          >
+            <span class="eval-view__level-index">{{ idx + 1 }}</span>
             <span class="eval-view__level-copy">
               <span class="eval-view__level-label">
                 <span v-if="lv.code" class="eval-view__level-code">{{ lv.code }}</span>
                 {{ lv.label }}
               </span>
               <span v-if="lv.description" class="eval-view__level-note">{{ lv.description }}</span>
+              <span class="eval-view__level-bar" aria-hidden="true">
+                <span
+                  class="eval-view__level-bar-fill"
+                  :style="{ width: levelBarWidth(lv.score, selected.levels) }"
+                />
+              </span>
             </span>
-            <span class="eval-view__level-score" :class="lv.score < 0 ? 'eval-view__level-score--neg' : ''">
-              {{ lv.score > 0 ? '+' : '' }}{{ formatScore(lv.score) }}
+            <span
+              class="eval-view__level-score"
+              :class="Number(lv.score) < 0 ? 'eval-view__level-score--neg' : ''"
+            >
+              {{ formatSignedScore(lv.score) }}
             </span>
           </li>
         </ul>
+        <p v-else class="eval-view__levels-empty">Chưa có mức điểm cho tiêu chí này.</p>
       </div>
     </aside>
-  </div>
+    </div>
+  </section>
 </template>
 
 <style scoped>
-/* ─── layout ──────────────────────────────────────────────────────────────── */
 .eval-view {
   height: 100%;
   display: flex;
+  flex-direction: column;
+  padding: var(--space-5);
   overflow: hidden;
-  padding: var(--space-4);
-  gap: var(--space-3);
+}
+
+.eval-view__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: var(--space-4);
+  overflow: hidden;
 }
 
 .eval-view__main {
@@ -909,6 +1148,124 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.eval-view__header-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2rem;
+  padding: 0 0.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+  cursor: pointer;
+}
+
+.eval-view__header-btn:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.eval-view__header-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.eval-view__header-btn--busy svg {
+  animation: eval-view-spin 0.8s linear infinite;
+}
+
+@keyframes eval-view-spin {
+  to { transform: rotate(360deg); }
+}
+
+.eval-view__insights {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  flex-shrink: 0;
+  margin: 0 0 var(--space-3);
+}
+
+.eval-view__stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  min-width: 0;
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-3));
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.eval-view__stat::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.eval-view__stat--total::before { background: var(--color-tertiary); }
+.eval-view__stat--scale::before { background: var(--color-primary); }
+.eval-view__stat--behavior::before { background: var(--color-gold); }
+.eval-view__stat--groups::before { background: var(--color-secondary); }
+
+.eval-view__stat--groups {
+  cursor: default;
+}
+
+.eval-view__stat:hover:not(.eval-view__stat--groups):not(.eval-view__stat--on) {
+  background: var(--color-surface-muted);
+}
+
+.eval-view__stat--on {
+  background: var(--color-surface-muted);
+}
+
+.eval-view__stat--total.eval-view__stat--on {
+  background: var(--color-tertiary-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-tertiary) 35%, var(--color-border)), var(--shadow-sm);
+}
+
+.eval-view__stat--scale.eval-view__stat--on {
+  background: var(--color-primary-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, var(--color-border)), var(--shadow-sm);
+}
+
+.eval-view__stat--behavior.eval-view__stat--on {
+  background: var(--color-gold-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-gold) 40%, var(--color-border)), var(--shadow-sm);
+}
+
+.eval-view__stat-value {
+  color: var(--color-text);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.eval-view__stat-label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 .eval-view__panel {
   flex: 0 0 28rem;
   width: 28rem;
@@ -916,12 +1273,12 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-surface-muted);
 }
 
-/* ─── filters ─────────────────────────────────────────────────────────────── */
 .eval-view__toolbar {
   position: relative;
   z-index: 6;
@@ -956,7 +1313,7 @@ onBeforeUnmount(() => {
 .eval-view__input {
   width: 100%;
   min-width: 0;
-  padding: 0.4375rem 0.625rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -970,13 +1327,13 @@ onBeforeUnmount(() => {
   outline-offset: -1px;
 }
 
-/* ─── table ───────────────────────────────────────────────────────────────── */
 .eval-view__table-wrap {
   flex: 1;
   min-height: 0;
   overflow: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .eval-view__table-wrap--resizing {
@@ -986,6 +1343,7 @@ onBeforeUnmount(() => {
 
 .eval-view__table {
   width: 100%;
+  min-width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: calc(0.875rem * var(--table-zoom, 1));
@@ -1018,7 +1376,8 @@ onBeforeUnmount(() => {
 
 .eval-view__resize {
   position: absolute;
-  top: 0; right: 0;
+  top: 0;
+  right: 0;
   z-index: 2;
   width: 0.5rem;
   height: 100%;
@@ -1031,25 +1390,30 @@ onBeforeUnmount(() => {
 .eval-view__resize::after {
   content: '';
   position: absolute;
-  top: 25%; right: 2px;
-  width: 1px;
+  top: 25%;
+  right: 2px;
+  width: 2px;
   height: 50%;
+  border-radius: var(--radius-full);
   background: var(--color-border);
-  opacity: 0;
-  transition: opacity 0.15s;
 }
 
-.eval-view__th:hover .eval-view__resize::after { opacity: 1; }
+.eval-view__resize:hover::after,
+.eval-view__table-wrap--resizing .eval-view__resize:hover::after {
+  background: var(--color-primary);
+}
 
 .eval-view__tr { cursor: pointer; }
 .eval-view__tr:hover td { background: var(--color-surface-muted); }
 
 .eval-view__tr--active td {
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
 }
 
 .eval-view__tr--group { cursor: pointer; }
-.eval-view__tr--group:hover .eval-view__group-inner { background: var(--color-surface-muted); }
+.eval-view__tr--group:hover .eval-view__group-inner {
+  background: var(--color-surface-muted);
+}
 
 .eval-view__td--group {
   padding: 0;
@@ -1059,15 +1423,49 @@ onBeforeUnmount(() => {
 }
 
 .eval-view__group-inner {
+  position: relative;
   display: flex;
+  box-sizing: border-box;
+  width: 100%;
   align-items: center;
   gap: 0.625rem;
   padding: 0.5rem var(--space-4);
+  padding-left: calc(var(--space-4) + var(--space-2) + 3px);
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-text);
   background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface));
   box-shadow: 0 1px 0 var(--color-border);
+}
+
+.eval-view__group-inner::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-4);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.eval-view__group-inner--scale::before { background: var(--color-primary); }
+.eval-view__group-inner--behavior::before { background: var(--color-gold); }
+.eval-view__group-inner--mixed::before {
+  background: linear-gradient(
+    to bottom,
+    var(--color-primary) 0%,
+    var(--color-primary) 50%,
+    var(--color-gold) 50%,
+    var(--color-gold) 100%
+  );
+}
+
+.eval-view__group-badges {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
 }
 
 .eval-view__group-toggle {
@@ -1122,30 +1520,139 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
-.eval-view__name { font-weight: 600; }
+.eval-view__name-block {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+}
 
-.eval-view__status {
+.eval-view__name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.eval-view__name-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.eval-view__count-pill,
+.eval-view__score-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  color: var(--color-text);
-}
-
-.eval-view__dot {
-  width: 0.5rem;
-  height: 0.5rem;
+  justify-content: center;
+  min-width: 1.75rem;
+  padding: 0.125rem 0.5rem;
   border-radius: var(--radius-full);
-  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
-.eval-view__dot--on  { background: var(--color-success); }
-.eval-view__dot--off { background: var(--color-text-muted); }
+.eval-view__count-pill {
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
+}
+
+.eval-view__score-pill {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
+.eval-view__score-pill--behavior {
+  background: var(--color-gold-surface);
+  color: var(--color-gold-700);
+}
+
+.eval-view__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.eval-view__badge--cell {
+  box-sizing: border-box;
+  width: 9rem;
+  max-width: 100%;
+}
+
+.eval-view__badge--group {
+  padding: 0.0625rem 0.4375rem;
+  font-size: 0.6875rem;
+}
+
+.eval-view__badge--scale {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
+.eval-view__badge--behavior {
+  background: var(--color-gold-surface);
+  color: var(--color-gold-700);
+}
+
+.eval-view__badge--active {
+  background: var(--color-success-tint-bg);
+  color: var(--color-success-tint-fg);
+}
+
+.eval-view__badge--inactive {
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+  color: var(--color-text-muted);
+}
 
 .eval-view__empty {
-  margin: 2rem auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 16rem;
+  margin: 0 auto;
+  padding: var(--space-5);
   text-align: center;
   color: var(--color-text-muted);
-  font-size: 0.875rem;
+}
+
+.eval-view__empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
+.eval-view__empty-title {
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.eval-view__empty-text {
+  max-width: 22rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.eval-view__spin {
+  animation: eval-view-spin 0.8s linear infinite;
 }
 
 .eval-view__check {
@@ -1165,20 +1672,19 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
 }
 
-/* ─── panel ───────────────────────────────────────────────────────────────── */
 .eval-view__panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  box-shadow: 0 1px 0 var(--color-border);
   flex-shrink: 0;
 }
 
 .eval-view__panel-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.0625rem;
   font-weight: 700;
-  font-size: 0.9375rem;
 }
 
 .eval-view__panel-btn {
@@ -1189,18 +1695,67 @@ onBeforeUnmount(() => {
   height: 1.75rem;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
+  background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
 }
 
-.eval-view__panel-btn:hover { background: var(--color-surface); color: var(--color-text); }
+.eval-view__panel-btn:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
 
 .eval-view__panel-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.eval-view__lead {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-3));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.eval-view__lead::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.eval-view__lead--scale::before { background: var(--color-primary); }
+.eval-view__lead--behavior::before { background: var(--color-gold); }
+
+.eval-view__lead-kicker {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.eval-view__lead-name {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.eval-view__lead-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
 }
 
 .eval-view__row {
@@ -1210,7 +1765,7 @@ onBeforeUnmount(() => {
   gap: var(--space-3);
   padding: var(--space-2) 0;
   box-shadow: 0 1px 0 var(--color-border);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 .eval-view__row:last-of-type { box-shadow: none; }
@@ -1225,12 +1780,11 @@ onBeforeUnmount(() => {
 }
 
 .eval-view__row-value {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
   color: var(--color-text);
   font-style: italic;
+  font-weight: 400;
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .eval-view__levels-title {
@@ -1240,30 +1794,67 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
+.eval-view__levels-empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
 .eval-view__levels-list {
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
 }
 
 .eval-view__level-item {
+  position: relative;
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-2) 0;
-  box-shadow: 0 1px 0 var(--color-border);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-3));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
-.eval-view__level-item:last-child { box-shadow: none; }
+.eval-view__level-item::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.eval-view__level-item--neg::before { background: var(--color-danger); }
+.eval-view__level-item--pos::before { background: var(--color-success); }
+
+.eval-view__level-index {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  margin-top: 0.0625rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
 
 .eval-view__level-copy {
   display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
+  flex: 1;
   min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .eval-view__level-label {
@@ -1280,32 +1871,82 @@ onBeforeUnmount(() => {
 
 .eval-view__level-note {
   color: var(--color-text-muted);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.eval-view__level-bar {
+  display: block;
+  height: 0.25rem;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+}
+
+.eval-view__level-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary);
+}
+
+.eval-view__level-item--pos .eval-view__level-bar-fill {
+  background: var(--color-success);
+}
+
+.eval-view__level-item--neg .eval-view__level-bar-fill {
+  background: var(--color-danger);
 }
 
 .eval-view__level-score {
   flex-shrink: 0;
   color: var(--color-success);
+  font-size: 0.9375rem;
   font-weight: 700;
 }
 
 .eval-view__level-score--neg { color: var(--color-danger); }
 
-/* ─── responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
+  .eval-view__insights,
   .eval-view__filters {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 768px) {
-  .eval-view { flex-direction: column; padding: var(--space-3); }
-  .eval-view__filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .eval-view__panel { width: 100%; flex: 1 1 auto; }
+  .eval-view {
+    padding: var(--space-3);
+  }
+
+  .eval-view__body {
+    flex-direction: column;
+  }
+
+  .eval-view__filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .eval-view__panel {
+    width: 100%;
+    flex: 0 0 auto;
+    max-height: 42%;
+  }
 }
 
 @media (max-width: 480px) {
-  .eval-view__filters { grid-template-columns: minmax(0, 1fr); }
+  .eval-view__insights,
+  .eval-view__filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eval-view__spin,
+  .eval-view__header-btn--busy svg {
+    animation: none;
+  }
 }
 
 </style>
