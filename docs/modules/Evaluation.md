@@ -1,6 +1,6 @@
 # Module `Evaluation` — Tiêu chí đánh giá
 
-> Cập nhật: 2026-08-31. Module **đã dựng và chạy** — Tiêu chí đánh giá và
+> Cập nhật: 2026-09-03. Module **đã dựng và chạy** — Tiêu chí đánh giá và
 > Khung chấm điểm. Xem `docs/VA_WORKSPACE_OVERVIEW.md` §7, §21.
 >
 > Tính năng "Mẫu đánh giá" (gộp nhiều tiêu chí thành 1 bộ có trọng số, mục
@@ -40,7 +40,7 @@ Theo đúng pattern bắt buộc (§5 CLAUDE.md), không có ngoại lệ:
 | Vị trí đánh giá | `EvaluationPositionController` | `EvaluationPositionService` | `EvaluationPositionRepositoryInterface` |
 | Phiên bản cấu hình | `EvaluationConfigVersionController` | `EvaluationConfigVersionService` | `EvaluationConfigVersionRepositoryInterface` |
 | Ghi nhận đánh giá | `EvaluationEventController` | `EvaluationEventService` | `EvaluationEventRepositoryInterface` |
-| Tổng hợp đánh giá | `EvaluationSummaryController` | `EvaluationSummaryService` | *(không có repository riêng — chỉ điều phối)* |
+| Đánh giá nhân sự | `EvaluationSummaryController` | `EvaluationSummaryService` | *(không có repository riêng — chỉ điều phối)* |
 
 Service không có Controller riêng: `EvaluationScoreComputeService` — chạy
 công thức khung chấm điểm trên dữ liệu công việc thật để ra điểm nhân sự,
@@ -89,32 +89,49 @@ interface, không gọi Eloquent trực tiếp).
   khó tạo chuẩn, tiến độ và chất lượng tạo điểm thực. Preview cảnh báo việc
   chưa xong / thiếu dữ liệu = 0 điểm thực; thang 1–5 được chuẩn hoá thành
   hệ số 0.5–1.1 (tiến độ) / 0.5–1.0 (chất lượng) trước khi lưu.
-- **Tổng hợp đánh giá** (`EvaluationSummary.vue`): màn hình làm việc chính khi
+- **Đánh giá nhân sự** (`EvaluationSummary.vue`): màn hình làm việc chính khi
   chấm điểm cuối kỳ, **chỉ trưởng phòng thấy nhân sự phòng mình** —
   `EvaluationEventController` / `EvaluationSummaryController` lấy
   `department_id` từ chính tài khoản đăng nhập, không nhận tham số từ trình
   duyệt, nên không có cách nào xem phòng khác. Route
-  `/manager/evaluation-events` (giữ nguyên path và route name cũ để sidebar /
-  phân quyền / cấu hình sidebar phòng ban không phải đổi theo).
+  `/manager/evaluation-events` (giữ nguyên path và route name cũ). **Không
+  phải mục sidebar riêng** — chỉ vào được từ luồng báo cáo module Report:
+  tạo báo cáo "Đánh giá nhân sự" (`ReportCreatePersonnelEvaluation.vue`) xong
+  chuyển thẳng tới đây, hoặc bấm **Chấm điểm** (bản nháp) / **Chi tiết**
+  (đã lưu) trên `ReportList.vue` — cả hai đều kèm `?from=&to=&report=` đúng kỳ
+  và đúng báo cáo. Kỳ **không** chọn lại trên trang này (đã chọn lúc tạo báo cáo).
+  Cột điểm và cột tiêu chí lấy từ báo cáo (bản 1.0). Đổi cột tiêu chí rồi đóng
+  hộp thoại **Cột tiêu chí** thì xác nhận lưu **phụ lục 1.1**. Tiêu đề trang là
+  **Đánh giá nhân sự**; báo cáo đã lưu đổi thành **Chi tiết đánh giá nhân sự**.
 
   Bố cục **ma trận kín khung nhìn**: mỗi nhân sự một hàng, tiêu chí là cột.
   Thead hai hàng gộp nhóm (`Điểm việc` / từng loại tiêu chí / `Kết quả`).
-  Nút **Tiêu chí** chọn cột nào hiện. Bấm tên hoặc ô tiêu chí mở dialog gần
-  full màn (Tổng quan / Công việc / Ghi nhận / Chấm điểm). Tab Chấm điểm chọn
+  Nút **Tiêu chí** chọn cột nào hiện (ẩn khi báo cáo đã lưu). Bấm tên mở dialog
+  chi tiết nhân sự (Công việc / Ghi nhận). Bấm ô tiêu chí: bản nháp mở modal
+  chấm điểm; đã lưu mở chi tiết nhân sự. Tab Chấm điểm chọn
   tiêu chí bằng `OptionPicker` (tên + nhóm), rồi chọn mức, ngày, việc, lý do.
   Hàng chân bảng là trung bình phòng.
 
   Ghi nhận gắn việc (`task_id`) hoặc không gắn việc (`task_id = null`).
   Mũi tên lên/xuống khi đang mở chi tiết, `Esc` đóng.
 
-  `GET /api/evaluation/summary?from=&to=` trả `rows` (mỗi nhân sự một dòng,
+  `GET /api/evaluation/summary?from=&to=&report=` trả `rows` (mỗi nhân sự một dòng,
   kèm `task_status_counts`, `criterion_totals`, `task_breakdown`,
   `event_breakdown`, `missing_total`, `has_task_basis`), `summary`,
-  `criteria`, `version_no` và `period_lock`. Máy chủ trả cả phòng; giao diện
-  tìm / lọc phía client. **Không** dùng mẫu danh sách ActivityLog /
-  `TablePagesBar` — đây là ma trận kín khung, không phân trang. Cách 2 hiện
-  hiệu suất bằng `%` (không dấu `+`); việc thiếu dữ liệu gắn badge và ghi chú
-  «điểm thực 0».
+  `criteria`, `version_no`, `period_lock` và `report` (cột điểm / cột tiêu chí
+  đang áp dụng, kèm lịch sử 1.0 / phụ lục 1.1). Máy chủ trả cả phòng.
+
+  `GET /api/evaluation/summary/export-pdf?from=&to=&report=&criterion_ids[]=`
+  xuất **PDF ngang A3** cùng số liệu: form tổng hợp (meta 2 hàng × 6 cột, ma trận
+  nhóm tiêu chí, chỗ ký duyệt) rồi **phiếu chi tiết từng nhân sự**
+  (KPI ngang, điểm theo tiêu chí, việc, ghi nhận). Dấu chìm họa tiết
+  `background-logo.png` trên mọi trang — cùng `PdfWatermark` với xuất PDF tiêu chí.
+  Nút **Xuất bảng → Xuất PDF** trên `EvaluationSummary.vue`; báo cáo đã lưu
+  thêm nút **Xuất PDF** trên header và trên danh sách báo cáo. CSV vẫn còn. **Không**
+  dùng mẫu danh sách ActivityLog / `TablePagesBar` — đây là ma trận kín khung,
+  không phân trang, không thanh tìm/lọc phía trên bảng. Cách 2 hiện hiệu suất
+  bằng `%` (không dấu `+`); việc thiếu dữ liệu gắn badge trên dòng và ghi chú
+  «điểm thực 0» trong modal.
 
   `period_lock.locked` = cả khoảng đang xem nằm trong một báo cáo đánh giá
   nhân sự **đã lưu**. `period_lock.reports` liệt kê báo cáo giao với kỳ
