@@ -47,7 +47,8 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
             ->assertJsonCount(13, 'menus')
             ->assertJsonFragment(['menu_key' => 'manager.project.index', 'default_label' => 'Dự án'])
             ->assertJsonFragment(['menu_key' => 'manager.project.tasks', 'default_label' => 'Công việc'])
-            ->assertJsonFragment(['menu_key' => 'manager.evaluation-score-kit.index', 'default_label' => 'Khung chấm điểm']);
+            ->assertJsonFragment(['menu_key' => 'manager.evaluation-score-kit.index', 'default_label' => 'Khung chấm điểm'])
+            ->assertJsonFragment(['menu_key' => 'manager.reports.index', 'default_label' => 'Báo cáo']);
 
         $this->actingAs($superAdmin)
             ->putJson('/api/workspace-config/global-menu', [

@@ -40,6 +40,12 @@ export const SIDEBAR_MENU_CATALOG = {
     sectionLabel: 'Quản lý',
     description: 'Tất cả công việc xuyên dự án. Superadmin và mọi tài khoản có quyền xem công việc đều thấy mục này.',
   },
+  'manager.reports.index': {
+    icon: 'barChart',
+    section: 'manager',
+    sectionLabel: 'Quản lý',
+    description: 'Tạo và xem báo cáo phòng ban. Loại đánh giá nhân sự mở sang bảng chấm điểm sau khi tạo.',
+  },
 };
 
 export const SIDEBAR_SECTIONS = {

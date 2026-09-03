@@ -54,6 +54,12 @@ class GlobalMenuVisibilityService
             'icon' => 'layoutList',
             'audience' => 'Super Admin và mọi tài khoản có quyền xem công việc (kể cả nhân viên chỉ xem việc được giao) đều thấy mục này.',
         ],
+        'manager.reports.index' => [
+            'label' => 'Báo cáo',
+            'section' => 'manager',
+            'icon' => 'barChart',
+            'audience' => 'Trưởng phòng tạo báo cáo; người được chia sẻ chỉ xem các báo cáo có tên mình.',
+        ],
         'manager.social.moderation' => [
             'label' => 'Duyệt bài viết',
             'section' => 'manager',

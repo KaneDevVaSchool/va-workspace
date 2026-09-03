@@ -38,7 +38,6 @@ class DepartmentSidebarConfigService
         'manager.evaluation-score-kit.index' => 'Khung chấm điểm',
         'manager.project.index' => 'Dự án',
         'manager.project.tasks' => 'Công việc',
-        'manager.evaluation-events.index' => 'Tổng hợp đánh giá',
         'manager.reports.index' => 'Báo cáo',
     ];
 
@@ -50,7 +49,6 @@ class DepartmentSidebarConfigService
         'manager.evaluation-score-kit.index' => 'manager',
         'manager.project.index' => 'manager',
         'manager.project.tasks' => 'manager',
-        'manager.evaluation-events.index' => 'manager',
         'manager.reports.index' => 'manager',
     ];
 
@@ -173,13 +171,13 @@ class DepartmentSidebarConfigService
 
                 return $row;
             })->sortBy(function (array $item) {
-            $sectionOrder = array_search($item['section'], array_keys(self::SECTIONS), true);
-            if ($sectionOrder === false) {
-                $sectionOrder = 99;
-            }
+                $sectionOrder = array_search($item['section'], array_keys(self::SECTIONS), true);
+                if ($sectionOrder === false) {
+                    $sectionOrder = 99;
+                }
 
-            return sprintf('%02d-%05d-%s', $sectionOrder, $item['sort_order'], $item['menu_key']);
-        })->values();
+                return sprintf('%02d-%05d-%s', $sectionOrder, $item['sort_order'], $item['menu_key']);
+            })->values();
     }
 
     /**

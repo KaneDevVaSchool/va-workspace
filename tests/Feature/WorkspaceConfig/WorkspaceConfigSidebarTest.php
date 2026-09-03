@@ -45,7 +45,8 @@ class WorkspaceConfigSidebarTest extends TestCase
             ->assertJsonPath('sections.0.id', 'general')
             ->assertJsonPath('sections.0.label', 'Điều hướng')
             ->assertJsonPath('sections.1.id', 'manager')
-            ->assertJsonPath('sections.1.label', 'Quản lý');
+            ->assertJsonPath('sections.1.label', 'Quản lý')
+            ->assertJsonFragment(['menu_key' => 'manager.evaluation-score-kit.index', 'default_label' => 'Khung chấm điểm']);
 
         $this->actingAs($director)
             ->putJson('/api/workspace-config/sidebar', [
@@ -169,6 +170,9 @@ class WorkspaceConfigSidebarTest extends TestCase
                     ['menu_key' => 'home', 'section' => 'general'],
                     ['menu_key' => 'social.feed', 'section' => 'general'],
                     ['menu_key' => 'manager.evaluation.view', 'section' => 'general'],
+                    ['menu_key' => 'manager.project.index', 'section' => 'manager'],
+                    ['menu_key' => 'manager.project.tasks', 'section' => 'manager'],
+                    ['menu_key' => 'manager.reports.index', 'section' => 'manager'],
                 ],
             ])
             ->assertOk()
