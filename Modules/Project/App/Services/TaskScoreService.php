@@ -55,7 +55,7 @@ class TaskScoreService
             NotificationService::TYPE_TASK_SCORED,
             "Công việc \"{$task->title}\" đã được đánh giá",
             "{$actor->name} vừa chấm điểm công việc của bạn.",
-            "/manager/project/tasks?task={$task->id}",
+            "/manager/project/tasks/{$task->id}",
             ['task_id' => $task->id],
         );
     }

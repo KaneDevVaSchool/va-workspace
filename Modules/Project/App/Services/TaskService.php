@@ -434,6 +434,12 @@ class TaskService
             }
         }
 
+        $hasWatchers = array_key_exists('watcher_ids', $data);
+        $hasCollaborators = array_key_exists('collaborator_ids', $data);
+        $watcherIds = $hasWatchers ? array_map('intval', $data['watcher_ids'] ?? []) : null;
+        $collaboratorIds = $hasCollaborators ? array_map('intval', $data['collaborator_ids'] ?? []) : null;
+        unset($data['watcher_ids'], $data['collaborator_ids']);
+
         $data = $this->applyQuantityProgress($data, $task);
         if (array_key_exists('priority', $data)) {
             $data['priority'] = TaskEnums::normalizePriority($data['priority'] ?? null);
@@ -442,7 +448,22 @@ class TaskService
 
         $data['updated_by'] = $editor->id;
 
-        return $this->tasks->update($task, $data);
+        return DB::transaction(function () use ($task, $data, $hasWatchers, $hasCollaborators, $watcherIds, $collaboratorIds) {
+            $updated = $this->tasks->update($task, $data);
+
+            if (! $hasWatchers && ! $hasCollaborators) {
+                return $updated;
+            }
+
+            $watchers = $hasWatchers
+                ? $watcherIds
+                : $updated->watchers->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $collaborators = $hasCollaborators
+                ? $collaboratorIds
+                : $updated->collaborators->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+            return $this->tasks->syncPeople($updated, $watchers, $collaborators);
+        });
     }
 
     /**
@@ -774,6 +795,7 @@ class TaskService
             'rating_result' => $score->rating_result,
             'rating_desc' => $score->rating_desc,
             'scored_by' => $score->scored_by,
+            'scorer' => $this->presentUser($score->relationLoaded('scorer') ? $score->scorer : null),
             'scored_at' => $score->scored_at?->toIso8601String(),
         ];
     }

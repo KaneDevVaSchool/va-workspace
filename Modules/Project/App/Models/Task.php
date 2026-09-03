@@ -68,7 +68,7 @@ class Task extends Model
         'updater',
         'watchers.department',
         'collaborators.department',
-        'taskScore',
+        'taskScore.scorer',
         'originDepartment',
         'delegatedToDepartment',
         'delegatedToEmployee',

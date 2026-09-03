@@ -3,8 +3,8 @@
 // "Tất cả công việc" — cùng chrome với ProjectList: tìm trên PageHeader,
 // hàng tab (Danh sách / Kanban / Lịch + lọc nhanh có đếm), bảng nhóm theo
 // (dự án / trạng thái / hạn / …),
-// pill/progress, kéo cột, panel chi tiết 28rem. Dấu + cạnh tiêu đề mở trang
-// tạo công việc riêng.
+// pill/progress, kéo cột. Bấm tên công việc mở trang chi tiết riêng.
+// Dấu + cạnh tiêu đề mở trang tạo công việc.
 //
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -33,12 +33,9 @@ import {
   LIST_GROUP_MODES,
   LIST_GROUP_OPTIONS,
   TASK_COLUMNS,
-  TASK_DELEGATION_STATUS_LABELS,
-  TASK_DELEGATION_STATUS_TONES,
   TASK_PRIORITY_LABELS,
   TASK_PRIORITY_TONES,
   TASK_PROGRESS_TYPE_LABELS,
-  TASK_SCORE_RESULT_SUGGESTIONS,
   TASK_STATUS_LABELS,
   TASK_STATUS_TAB_KEYS,
   TASK_STATUS_TONES,
@@ -93,23 +90,8 @@ const tasks = ref([]);
 const meta = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0, per_page: 20 });
 const loading = ref(false);
 const selected = ref(null);
-const editing = ref(false);
-const saving = ref(false);
 const deleting = ref(false);
 const confirmingDelete = ref(false);
-
-const taskAttachments = ref([]);
-const attachmentUploading = ref(false);
-const attachmentInput = ref(null);
-
-const taskWorklogs = ref([]);
-const worklogFormOpen = ref(false);
-const worklogSaving = ref(false);
-const worklogForm = reactive({ work_date: '', hours: '', note: '' });
-const confirmingDeleteWorklog = ref(null);
-
-const scoreSaving = ref(false);
-const scoreForm = reactive({ rating_score: '', rating_result: '', rating_desc: '' });
 
 const query = ref('');
 const perPage = ref(20);
@@ -189,38 +171,6 @@ const tableZoom = ref(loadZoom());
 useDragScroll(tableWrap, { isBlocked: () => resizing.value, axis: 'x' });
 useDragScroll(kanbanWrap, { axis: 'x', isBlocked: () => kanbanDrag.active });
 
-const editForm = reactive({
-  title: '',
-  status: 'not_started',
-  priority: '',
-  start_date: '',
-  start_time: '',
-  end_date: '',
-  due_time: '',
-  actual_start_date: '',
-  actual_end_date: '',
-  assignee_id: '',
-  progress_percent: '',
-  description: '',
-  parent_id: '',
-  manager_id: '',
-  estimated_hours: '',
-  progress_type: 'percent',
-  progress_number: '',
-  progress_total: '',
-  unit: '',
-  weight: '',
-});
-
-/** Ước tính progress_percent phía client khi progress_type=quantity — chỉ
- *  hiển thị tham khảo trước khi lưu, server luôn là nguồn thật (present()). */
-const editFormEstimatedPercent = computed(() => {
-  const number = Number(editForm.progress_number);
-  const total = Number(editForm.progress_total);
-  if (!editForm.progress_number || !total || total <= 0) return null;
-  return Math.round((number / total) * 100);
-});
-
 const viewMode = ref(loadViewMode());
 const listGroupBy = ref(loadListGroup());
 const kanbanGroupBy = ref(loadKanbanGroup());
@@ -250,7 +200,6 @@ const isCalendar = computed(() => viewMode.value === 'calendar');
 const calendarMode = ref(loadCalendarMode());
 const calendarRange = ref(calendarOverlapRange(loadCalendarMode(), new Date()));
 const canEdit = computed(() => auth.can('task.create'));
-const canApprove = computed(() => auth.can('task.approve'));
 const canDelegate = computed(() => auth.can('task.delegate'));
 
 /** Xem lịch công việc của toàn bộ mọi người — super_admin / admin / người có quyền rộng. */
@@ -707,7 +656,6 @@ async function loadTasks(page = 1) {
     if (selected.value) {
       const fresh = tasks.value.find((t) => t.id === selected.value.id);
       selected.value = fresh || null;
-      if (!fresh) editing.value = false;
     }
     nextTick(fitColumnsToContent);
   } catch (error) {
@@ -765,12 +713,11 @@ function onCalendarMode(next) {
 }
 
 function editFromCalendar(task) {
-  inspect(task);
-  startEdit();
+  openTaskDetail(task);
 }
 
 function deleteFromCalendar(task) {
-  inspect(task);
+  selected.value = task;
   askDelete();
 }
 
@@ -834,275 +781,15 @@ function clearFilters() {
   loadTasks(1);
 }
 
-function inspect(task) {
-  if (selected.value?.id === task.id) return;
-  selected.value = task;
-  editing.value = false;
-  loadAttachments(task.id);
-  loadWorklogs(task.id);
-  worklogFormOpen.value = false;
-  hydrateScoreForm(task);
-}
-
-function hydrateScoreForm(task) {
-  scoreForm.rating_score = task.task_score?.rating_score ?? '';
-  scoreForm.rating_result = task.task_score?.rating_result || '';
-  scoreForm.rating_desc = task.task_score?.rating_desc || '';
-}
-
-function closePanel() {
-  selected.value = null;
-  editing.value = false;
-  taskAttachments.value = [];
-  taskWorklogs.value = [];
-  worklogFormOpen.value = false;
-}
-
-async function loadAttachments(taskId) {
-  taskAttachments.value = [];
-  try {
-    const { data } = await window.axios.get(`/api/project/tasks/${taskId}/attachments`);
-    taskAttachments.value = data.attachments ?? [];
-  } catch {
-    // Bỏ qua — panel vẫn hiển thị, chỉ danh sách đính kèm rỗng.
-  }
-}
-
-function triggerAttachmentInput() {
-  attachmentInput.value?.click();
-}
-
-async function onAttachmentChange(event) {
-  const file = event.target.files?.[0];
-  event.target.value = '';
-  if (!file || !selected.value) return;
-
-  attachmentUploading.value = true;
-  try {
-    const fd = new FormData();
-    fd.append('file', file);
-    const { data } = await window.axios.post(`/api/project/tasks/${selected.value.id}/attachments`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    taskAttachments.value = [data.attachment, ...taskAttachments.value];
-    bumpAttachmentsCount(1);
-    showClientToast('success', 'Đã tải lên tệp đính kèm.');
-  } catch (error) {
-    const message = error?.response?.data?.message;
-    showClientToast('error', message || 'Không tải lên được tệp đính kèm.');
-  } finally {
-    attachmentUploading.value = false;
-  }
-}
-
-async function removeAttachment(attachment) {
-  try {
-    await window.axios.delete(`/api/project/tasks/attachments/${attachment.id}`);
-    taskAttachments.value = taskAttachments.value.filter((a) => a.id !== attachment.id);
-    bumpAttachmentsCount(-1);
-    showClientToast('success', 'Đã xoá tệp đính kèm.');
-  } catch (error) {
-    const message = error?.response?.data?.message;
-    showClientToast('error', message || 'Không xoá được tệp đính kèm.');
-  }
-}
-
-/** Cập nhật attachments_count tại chỗ trên selected + dòng trong bảng list —
- *  tránh gọi lại toàn bộ danh sách chỉ để phản ánh 1 thay đổi nhỏ (CLAUDE.md §14). */
-function bumpAttachmentsCount(delta) {
-  if (!selected.value) return;
-  const nextCount = Math.max(0, (selected.value.attachments_count || 0) + delta);
-  selected.value = { ...selected.value, attachments_count: nextCount };
-  const index = tasks.value.findIndex((t) => t.id === selected.value.id);
-  if (index !== -1) tasks.value[index] = { ...tasks.value[index], attachments_count: nextCount };
-}
-
-function formatFileSize(bytes) {
-  if (!bytes) return '';
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(0)} KB`;
-  return `${(kb / 1024).toFixed(1)} MB`;
-}
-
-async function loadWorklogs(taskId) {
-  taskWorklogs.value = [];
-  try {
-    const { data } = await window.axios.get(`/api/project/tasks/${taskId}/worklogs`);
-    taskWorklogs.value = data.worklogs ?? [];
-  } catch {
-    // Bỏ qua — panel vẫn hiển thị, chỉ danh sách nhật ký giờ làm rỗng.
-  }
-}
-
-function openWorklogForm() {
-  worklogForm.work_date = new Date().toISOString().slice(0, 10);
-  worklogForm.hours = '';
-  worklogForm.note = '';
-  worklogFormOpen.value = true;
-}
-
-function cancelWorklogForm() {
-  worklogFormOpen.value = false;
-}
-
-async function saveWorklog() {
-  if (!selected.value) return;
-  worklogSaving.value = true;
-  try {
-    const payload = {
-      work_date: worklogForm.work_date,
-      hours: Number(worklogForm.hours),
-      note: worklogForm.note || null,
-    };
-    const { data } = await window.axios.post(`/api/project/tasks/${selected.value.id}/worklogs`, payload);
-    taskWorklogs.value = [data.worklog, ...taskWorklogs.value];
-    bumpWorklogHours(payload.hours);
-    worklogFormOpen.value = false;
-    showClientToast('success', 'Đã thêm giờ làm.');
-  } catch (error) {
-    const message = error?.response?.data?.message;
-    showClientToast('error', message || 'Không thêm được giờ làm.');
-  } finally {
-    worklogSaving.value = false;
-  }
-}
-
-function canEditWorklog(log) {
-  return log.user_id === auth.user?.id || auth.can('task.approve');
-}
-
-function askDeleteWorklog(log) {
-  confirmingDeleteWorklog.value = log;
-}
-
-async function confirmDeleteWorklog() {
-  const log = confirmingDeleteWorklog.value;
-  if (!log) return;
-  try {
-    await window.axios.delete(`/api/project/tasks/worklogs/${log.id}`);
-    taskWorklogs.value = taskWorklogs.value.filter((l) => l.id !== log.id);
-    bumpWorklogHours(-Number(log.hours));
-    showClientToast('success', 'Đã xoá nhật ký giờ làm.');
-  } catch (error) {
-    const message = error?.response?.data?.message;
-    showClientToast('error', message || 'Không xoá được nhật ký giờ làm.');
-  } finally {
-    confirmingDeleteWorklog.value = null;
-  }
-}
-
-/** Cộng/trừ worklog_hours tại chỗ trên selected + dòng trong bảng list —
- *  tránh gọi lại toàn bộ danh sách chỉ để phản ánh 1 thay đổi nhỏ (CLAUDE.md §14). */
-function bumpWorklogHours(delta) {
-  if (!selected.value) return;
-  const nextHours = Math.max(0, Number(selected.value.worklog_hours || 0) + delta);
-  selected.value = { ...selected.value, worklog_hours: nextHours };
-  const index = tasks.value.findIndex((t) => t.id === selected.value.id);
-  if (index !== -1) tasks.value[index] = { ...tasks.value[index], worklog_hours: nextHours };
-}
-
-async function saveScore() {
-  if (!selected.value) return;
-  scoreSaving.value = true;
-  try {
-    const payload = {
-      rating_score: scoreForm.rating_score === '' ? null : Number(scoreForm.rating_score),
-      rating_result: scoreForm.rating_result || null,
-      rating_desc: scoreForm.rating_desc || null,
-    };
-    const { data } = await window.axios.put(`/api/project/tasks/${selected.value.id}/score`, payload);
-    selected.value = { ...selected.value, task_score: data.task_score };
-    const index = tasks.value.findIndex((t) => t.id === selected.value.id);
-    if (index !== -1) tasks.value[index] = { ...tasks.value[index], task_score: data.task_score };
-    showClientToast('success', 'Đã lưu đánh giá.');
-  } catch (error) {
-    const message = error?.response?.data?.message;
-    showClientToast('error', message || 'Không lưu được đánh giá.');
-  } finally {
-    scoreSaving.value = false;
-  }
-}
-
-function startEdit() {
-  if (!selected.value) return;
-  editForm.title = selected.value.title || '';
-  editForm.status = selected.value.status || 'not_started';
-  editForm.priority = selected.value.priority || '';
-  editForm.start_date = selected.value.start_date || '';
-  editForm.start_time = selected.value.start_time || '';
-  editForm.end_date = selected.value.end_date || '';
-  editForm.due_time = selected.value.due_time || '';
-  editForm.actual_start_date = selected.value.actual_start_date || '';
-  editForm.actual_end_date = selected.value.actual_end_date || '';
-  editForm.assignee_id = selected.value.assignee_id || '';
-  editForm.progress_percent = selected.value.progress_percent ?? '';
-  editForm.description = selected.value.description || '';
-  editForm.parent_id = selected.value.parent_id || '';
-  editForm.manager_id = selected.value.manager_id || '';
-  editForm.estimated_hours = selected.value.estimated_hours ?? '';
-  editForm.progress_type = selected.value.progress_type || 'percent';
-  editForm.progress_number = selected.value.progress_number ?? '';
-  editForm.progress_total = selected.value.progress_total ?? '';
-  editForm.unit = selected.value.unit || '';
-  editForm.weight = selected.value.weight ?? '';
-  editing.value = true;
-}
-
-function cancelEdit() {
-  editing.value = false;
+function openTaskDetail(task) {
+  if (!task?.id) return;
+  router.push({ name: 'manager.project.tasks.detail', params: { id: task.id } });
 }
 
 function applyTaskUpdate(updated) {
   const index = tasks.value.findIndex((t) => t.id === updated.id);
   if (index !== -1) tasks.value[index] = updated;
   if (selected.value?.id === updated.id) selected.value = updated;
-}
-
-async function saveEdit() {
-  if (!selected.value) return;
-  saving.value = true;
-  try {
-    const isQuantity = editForm.progress_type === 'quantity';
-    const payload = {
-      title: editForm.title.trim(),
-      status: editForm.status,
-      priority: editForm.priority || null,
-      start_date: editForm.start_date || null,
-      start_time: editForm.start_time || null,
-      end_date: editForm.end_date || null,
-      due_time: editForm.due_time || null,
-      actual_start_date: editForm.actual_start_date || null,
-      actual_end_date: editForm.actual_end_date || null,
-      assignee_id: editForm.assignee_id || null,
-      description: editForm.description || null,
-      parent_id: editForm.parent_id || null,
-      manager_id: editForm.manager_id || null,
-      estimated_hours: editForm.estimated_hours === '' ? null : Number(editForm.estimated_hours),
-      progress_type: editForm.progress_type,
-      weight: editForm.weight === '' ? null : Number(editForm.weight),
-      // progress_percent chỉ gửi khi progress_type=percent (server prohibited
-      // khi quantity — hệ thống tự tính); progress_number/total/unit chỉ gửi
-      // khi quantity — đúng ràng buộc required_if/prohibited_if của Request.
-      ...(isQuantity
-        ? {
-            progress_number: editForm.progress_number === '' ? null : Number(editForm.progress_number),
-            progress_total: editForm.progress_total === '' ? null : Number(editForm.progress_total),
-            unit: editForm.unit || null,
-          }
-        : {
-            progress_percent: editForm.progress_percent === '' ? null : Number(editForm.progress_percent),
-          }),
-    };
-    const { data } = await window.axios.put(`/api/project/tasks/${selected.value.id}`, payload);
-    applyTaskUpdate(data.task);
-    editing.value = false;
-    showClientToast('success', 'Đã cập nhật công việc.');
-  } catch (error) {
-    const message = error?.response?.data?.message;
-    showClientToast('error', message || 'Không cập nhật được công việc.');
-  } finally {
-    saving.value = false;
-  }
 }
 
 function askDelete() {
@@ -1117,7 +804,7 @@ async function confirmDelete() {
     tasks.value = tasks.value.filter((t) => t.id !== selected.value.id);
     meta.value.total = Math.max(0, meta.value.total - 1);
     showClientToast('success', 'Đã xoá công việc.');
-    closePanel();
+    selected.value = null;
   } catch (error) {
     const message = error?.response?.data?.message;
     showClientToast('error', message || 'Không xoá được công việc — có thể còn công việc con.');
@@ -1137,17 +824,6 @@ function statusTone(value) {
 
 function typeLabel(value) {
   return TASK_TYPE_LABELS[value] || value || '—';
-}
-
-function departmentName(task) {
-  return (
-    task?.department?.name
-    || task?.delegated_to_department?.name
-    || task?.origin_department?.name
-    || task?.project?.executing_department?.name
-    || task?.project?.owner_department?.name
-    || '—'
-  );
 }
 
 function typeTone(value) {
@@ -1999,7 +1675,7 @@ async function onKanbanPointerUp() {
 
   if (!wasDragging) {
     kanbanPointer = null;
-    if (pointer?.task) inspect(pointer.task);
+    if (pointer?.task) openTaskDetail(pointer.task);
     return;
   }
 
@@ -2085,10 +1761,6 @@ function handleDocumentKeydown(event) {
     clearKanbanDrag();
     return;
   }
-  if (editing.value) {
-    cancelEdit();
-    return;
-  }
   if (viewModeOpen.value) {
     closeViewModeMenu();
     return;
@@ -2097,7 +1769,6 @@ function handleDocumentKeydown(event) {
     closeKanbanAssigneePicker();
     return;
   }
-  if (selected.value) closePanel();
 }
 
 function handleDocumentClickForPickers(event) {
@@ -2121,7 +1792,6 @@ watch(tableZoom, (value) => {
   }
   nextTick(fitColumnsToContent);
 });
-watch(selected, () => nextTick(fitColumnsToContent));
 watch(shownColumns, () => nextTick(fitColumnsToContent));
 watch(perPage, () => loadTasks(1));
 watch([sortBy, sortDir], () => loadTasks(1));
@@ -2393,7 +2063,7 @@ onBeforeUnmount(() => {
                     `task-page__data-row--${group.tone}`,
                     { 'task-page__row--active': selected?.id === task.id },
                   ]"
-                  @dblclick="inspect(task)"
+                  @dblclick="openTaskDetail(task)"
                 >
                   <td class="task-page__td-check" @click.stop>
                     <input
@@ -2431,7 +2101,7 @@ onBeforeUnmount(() => {
                             :class="{ 'task-page__tree-chevron--open': !isTaskCollapsed(task.id) }"
                           />
                         </button>
-                        <span class="task-page__name-title">{{ task.title }}</span>
+                        <button type="button" class="task-page__name-link" @click.stop="openTaskDetail(task)">{{ task.title }}</button>
                       </span>
                     </span>
                     <span
@@ -2567,7 +2237,7 @@ onBeforeUnmount(() => {
                 }"
                 data-no-drag-scroll
                 @pointerdown="onKanbanCardPointerDown($event, task)"
-                @click="!isKanbanDragGroup && inspect(task)"
+                @click="!isKanbanDragGroup && openTaskDetail(task)"
               >
                 <span v-if="task.is_overdue" class="task-kanban__overdue-dot" aria-hidden="true" />
                 <header class="task-kanban__card-head">
@@ -2643,7 +2313,7 @@ onBeforeUnmount(() => {
           :current-user-id="auth.user?.id ?? null"
           @range-change="onCalendarRange"
           @mode-change="onCalendarMode"
-          @inspect="inspect"
+          @inspect="openTaskDetail"
           @edit="editFromCalendar"
           @delete="deleteFromCalendar"
         >
@@ -2666,424 +2336,6 @@ onBeforeUnmount(() => {
         </TaskCalendarView>
       </div>
 
-      <aside v-if="selected" class="task-page__side" aria-label="Chi tiết công việc">
-        <div class="task-page__side-head">
-          <h2 class="task-page__side-title">Chi tiết công việc</h2>
-          <div class="task-page__side-actions">
-            <button
-              v-if="!editing && canEdit"
-              type="button"
-              class="task-page__icon-btn"
-              aria-label="Sửa công việc"
-              @click="startEdit"
-            >
-              <AppIcon name="pencil" :size="16" />
-            </button>
-            <button
-              v-if="!editing && canEdit"
-              type="button"
-              class="task-page__icon-btn"
-              aria-label="Xoá công việc"
-              @click="askDelete"
-            >
-              <AppIcon name="trash" :size="16" />
-            </button>
-            <button type="button" class="task-page__icon-btn" aria-label="Đóng" @click="closePanel">
-              <AppIcon name="close" :size="16" />
-            </button>
-          </div>
-        </div>
-
-        <div class="task-page__side-lead" :class="`task-page__side-lead--${statusTone(selected.status)}`">
-          <span class="task-page__dot task-page__dot--lg" :class="`task-page__dot--${statusTone(selected.status)}`" />
-          <div>
-            <span class="task-page__side-lead-project">{{ selected.project?.name || 'Công việc thường xuyên' }}</span>
-            <p class="task-page__side-lead-desc">{{ selected.title }}</p>
-          </div>
-        </div>
-
-        <form v-if="editing" class="task-page__form" @submit.prevent="saveEdit">
-          <label class="task-page__field">
-            <span class="task-page__label">Tên công việc</span>
-            <input v-model="editForm.title" type="text" class="task-page__input" required maxlength="255" />
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Trạng thái</span>
-            <select v-model="editForm.status" class="task-page__input">
-              <option v-for="item in TASK_STATUSES.filter((s) => s.value)" :key="item.value" :value="item.value">
-                {{ item.label }}
-              </option>
-            </select>
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Người thực hiện</span>
-            <select v-model="editForm.assignee_id" class="task-page__input">
-              <option value="">Chưa gán</option>
-              <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
-            </select>
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Mức độ quan trọng</span>
-            <select v-model="editForm.priority" class="task-page__input">
-              <option value="">Chưa đặt</option>
-              <option
-                v-for="opt in (importanceOptions.length ? importanceOptions : Object.entries(TASK_PRIORITY_LABELS).map(([value, label]) => ({ value, label })))"
-                :key="opt.value"
-                :value="opt.value"
-              >
-                {{ opt.label }}
-              </option>
-            </select>
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Cách tính tiến độ</span>
-            <select v-model="editForm.progress_type" class="task-page__input">
-              <option v-for="(label, value) in TASK_PROGRESS_TYPE_LABELS" :key="value" :value="value">{{ label }}</option>
-            </select>
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Tiến độ (%)</span>
-            <input
-              v-model="editForm.progress_percent"
-              type="number"
-              min="0"
-              max="100"
-              class="task-page__input"
-              :disabled="editForm.progress_type === 'quantity'"
-            />
-          </label>
-          <template v-if="editForm.progress_type === 'quantity'">
-            <label class="task-page__field">
-              <span class="task-page__label">Khối lượng đã hoàn thành</span>
-              <input v-model="editForm.progress_number" type="number" min="0" step="0.01" class="task-page__input" />
-            </label>
-            <label class="task-page__field">
-              <span class="task-page__label">Khối lượng cần hoàn thành</span>
-              <input v-model="editForm.progress_total" type="number" min="0.01" step="0.01" class="task-page__input" />
-            </label>
-            <label class="task-page__field">
-              <span class="task-page__label">Đơn vị</span>
-              <input v-model="editForm.unit" type="text" maxlength="50" class="task-page__input" />
-            </label>
-            <p v-if="editFormEstimatedPercent != null" class="task-page__hint">
-              Ước tính: {{ editFormEstimatedPercent }}% (hệ thống tự tính khi lưu)
-            </p>
-          </template>
-          <label class="task-page__field">
-            <span class="task-page__label">Ngày bắt đầu</span>
-            <input v-model="editForm.start_date" type="date" class="task-page__input" />
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Giờ bắt đầu</span>
-            <input v-model="editForm.start_time" type="time" class="task-page__input" />
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Ngày kết thúc</span>
-            <input v-model="editForm.end_date" type="date" class="task-page__input" />
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Giờ hạn</span>
-            <input v-model="editForm.due_time" type="time" class="task-page__input" />
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Bắt đầu thực tế</span>
-            <input v-model="editForm.actual_start_date" type="date" class="task-page__input" />
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Kết thúc thực tế</span>
-            <input v-model="editForm.actual_end_date" type="date" class="task-page__input" />
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Người quản lý</span>
-            <select v-model="editForm.manager_id" class="task-page__input">
-              <option value="">Chưa gán</option>
-              <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
-            </select>
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Thời gian dự kiến (giờ)</span>
-            <input v-model="editForm.estimated_hours" type="number" min="0" step="0.5" class="task-page__input" />
-          </label>
-          <label class="task-page__field">
-            <span class="task-page__label">Tỷ trọng (%)</span>
-            <input v-model="editForm.weight" type="number" min="0" max="100" step="0.1" class="task-page__input" />
-          </label>
-          <label class="task-page__field task-page__field--full">
-            <span class="task-page__label">Mô tả</span>
-            <textarea v-model="editForm.description" class="task-page__input task-page__textarea" rows="3" />
-          </label>
-          <div class="task-page__form-actions">
-            <button type="button" class="task-page__btn task-page__btn--ghost" :disabled="saving" @click="cancelEdit">
-              Huỷ
-            </button>
-            <button type="submit" class="task-page__btn" :disabled="saving">
-              {{ saving ? 'Đang lưu…' : 'Lưu thay đổi' }}
-            </button>
-          </div>
-        </form>
-
-        <div v-else class="task-page__rows">
-          <div class="task-page__row">
-            <span class="task-page__row-label">Dự án</span>
-            <span class="task-page__row-value">{{ selected.project?.name || 'Công việc thường xuyên' }}</span>
-          </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Phòng ban</span>
-            <span class="task-page__row-value">{{ departmentName(selected) }}</span>
-          </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Mã công việc</span>
-            <span class="task-page__row-value">{{ selected.code || selected.id }}</span>
-          </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Loại</span>
-            <span class="task-page__row-value">{{ typeLabel(selected.type) }}</span>
-          </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Trạng thái</span>
-            <span class="task-page__row-value task-page__row-value--status">
-              <span class="task-page__dot" :class="`task-page__dot--${statusTone(selected.status)}`" />
-              {{ statusLabel(selected.status) }}
-            </span>
-          </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Mức độ quan trọng</span>
-            <span class="task-page__row-value">{{ priorityLabel(selected.priority) }}</span>
-          </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Người thực hiện</span>
-            <span class="task-page__row-value task-page__row-person">
-              <UserAvatarTip :user="selected.assignee" label="Người thực hiện" />
-              <span>{{ selected.assignee?.name || 'Chưa gán' }}</span>
-            </span>
-          </div>
-          <div v-if="selected.progress_percent != null" class="task-page__row task-page__row--progress">
-            <span class="task-page__row-label">Tiến độ</span>
-            <DualProgressBar
-              :actual="selected.progress_percent"
-              :expected="computeExpectedProgress(selected.start_date, selected.end_date)"
-              size="md"
-            />
-          </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Ngày bắt đầu</span>
-            <span class="task-page__row-value">{{ formatDate(selected.start_date) }}</span>
-          </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Ngày kết thúc</span>
-            <span class="task-page__row-value">{{ formatDate(selected.end_date) }}</span>
-          </div>
-          <div v-if="selected.actual_start_date" class="task-page__row">
-            <span class="task-page__row-label">Bắt đầu thực tế</span>
-            <span class="task-page__row-value">{{ formatDate(selected.actual_start_date) }}</span>
-          </div>
-          <div v-if="selected.actual_end_date" class="task-page__row">
-            <span class="task-page__row-label">Kết thúc thực tế</span>
-            <span class="task-page__row-value">{{ formatDate(selected.actual_end_date) }}</span>
-          </div>
-          <div v-if="selected.description" class="task-page__row">
-            <span class="task-page__row-label">Mô tả</span>
-            <span class="task-page__row-value">{{ selected.description }}</span>
-          </div>
-
-          <div v-if="selected.parent" class="task-page__row">
-            <span class="task-page__row-label">Công việc cha</span>
-            <span class="task-page__row-value">{{ selected.parent.code ? `${selected.parent.code} — ` : '' }}{{ selected.parent.title }}</span>
-          </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Tình trạng hạn</span>
-            <span class="task-page__row-value task-page__row-value--status">
-              <span class="task-page__dot" :class="`task-page__dot--${selected.is_overdue ? 'danger' : 'success'}`" />
-              {{ selected.is_overdue ? 'Quá hạn' : 'Đúng hạn' }}
-            </span>
-          </div>
-          <div v-if="selected.variance_days != null" class="task-page__row">
-            <span class="task-page__row-label">Chênh lệch</span>
-            <span class="task-page__row-value">{{ formatVarianceDays(selected.variance_days) }}</span>
-          </div>
-          <div v-if="selected.estimated_hours != null" class="task-page__row">
-            <span class="task-page__row-label">Thời gian dự kiến</span>
-            <span class="task-page__row-value">{{ selected.estimated_hours }} giờ</span>
-          </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Thời gian thực hiện</span>
-            <span class="task-page__row-value">{{ selected.worklog_hours || 0 }} giờ</span>
-          </div>
-          <div v-if="selected.manager" class="task-page__row">
-            <span class="task-page__row-label">Người quản lý</span>
-            <span class="task-page__row-value task-page__row-person">
-              <UserAvatarTip :user="selected.manager" label="Người quản lý" />
-              <span>{{ selected.manager.name }}</span>
-            </span>
-          </div>
-          <div v-if="selected.accepted_by_user" class="task-page__row">
-            <span class="task-page__row-label">Người đã nhận</span>
-            <span class="task-page__row-value">{{ selected.accepted_by_user.name }} — {{ formatDateTime(selected.accepted_at) }}</span>
-          </div>
-          <div v-if="selected.delegation_status" class="task-page__row">
-            <span class="task-page__row-label">Chuyển giao</span>
-            <span class="task-page__row-value task-page__row-value--status">
-              <span class="task-page__dot" :class="`task-page__dot--${TASK_DELEGATION_STATUS_TONES[selected.delegation_status] || 'muted'}`" />
-              {{ TASK_DELEGATION_STATUS_LABELS[selected.delegation_status] || selected.delegation_status }}
-            </span>
-          </div>
-          <div v-if="selected.delegated_to_employee" class="task-page__row">
-            <span class="task-page__row-label">Chuyển giao cho</span>
-            <span class="task-page__row-value">{{ selected.delegated_to_employee.name }}</span>
-          </div>
-          <div v-if="selected.progress_type === 'quantity'" class="task-page__row">
-            <span class="task-page__row-label">Khối lượng</span>
-            <span class="task-page__row-value">{{ selected.progress_number }} / {{ selected.progress_total }} {{ selected.unit }}</span>
-          </div>
-          <div v-if="selected.weight != null" class="task-page__row">
-            <span class="task-page__row-label">Tỷ trọng</span>
-            <span class="task-page__row-value">{{ selected.weight }}%</span>
-          </div>
-          <div v-if="selected.task_score" class="task-page__row">
-            <span class="task-page__row-label">Điểm đánh giá</span>
-            <span class="task-page__row-value">{{ selected.task_score.rating_score ?? '—' }}</span>
-          </div>
-          <div v-if="selected.task_score?.rating_result" class="task-page__row">
-            <span class="task-page__row-label">Kết quả đánh giá</span>
-            <span class="task-page__row-value">{{ selected.task_score.rating_result }}</span>
-          </div>
-          <div v-if="selected.task_score?.rating_desc" class="task-page__row">
-            <span class="task-page__row-label">Ý kiến đánh giá</span>
-            <span class="task-page__row-value">{{ selected.task_score.rating_desc }}</span>
-          </div>
-
-          <div class="task-page__row">
-            <span class="task-page__row-label">Người tạo</span>
-            <span class="task-page__row-value">{{ selected.creator?.name || '—' }}</span>
-          </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Ngày tạo</span>
-            <span class="task-page__row-value">{{ formatDateTime(selected.created_at) }}</span>
-          </div>
-          <div class="task-page__row">
-            <span class="task-page__row-label">Cập nhật lần cuối</span>
-            <span class="task-page__row-value">{{ formatDateTime(selected.updated_at) }}</span>
-          </div>
-        </div>
-
-        <section v-if="!editing" class="task-page__subsection">
-          <h3 class="task-page__subsection-title">Tệp đính kèm</h3>
-          <div v-if="taskAttachments.length" class="task-page__attachment-list">
-            <div v-for="att in taskAttachments" :key="att.id" class="task-page__attachment">
-              <AppIcon name="fileText" :size="16" />
-              <a :href="att.file_url" target="_blank" rel="noopener" class="task-page__attachment-name">
-                {{ att.file_name }}
-              </a>
-              <span v-if="att.file_size" class="task-page__attachment-size">{{ formatFileSize(att.file_size) }}</span>
-              <button
-                v-if="canEdit"
-                type="button"
-                class="task-page__icon-btn"
-                aria-label="Xoá tệp đính kèm"
-                @click="removeAttachment(att)"
-              >
-                <AppIcon name="trash" :size="14" />
-              </button>
-            </div>
-          </div>
-          <button
-            v-if="canEdit"
-            type="button"
-            class="task-page__btn task-page__btn--ghost"
-            :disabled="attachmentUploading"
-            @click="triggerAttachmentInput"
-          >
-            {{ attachmentUploading ? 'Đang tải lên…' : 'Tải file lên' }}
-          </button>
-          <input ref="attachmentInput" type="file" class="task-page__hidden-input" @change="onAttachmentChange" />
-        </section>
-
-        <section v-if="!editing" class="task-page__subsection">
-          <h3 class="task-page__subsection-title">Nhật ký giờ làm</h3>
-          <ul v-if="taskWorklogs.length" class="task-page__worklog-list">
-            <li v-for="log in taskWorklogs" :key="log.id" class="task-page__worklog-item">
-              <span class="task-page__worklog-main">
-                <span class="task-page__worklog-user">{{ log.user?.name || '—' }}</span>
-                <span class="task-page__worklog-date">{{ formatDate(log.work_date) }}</span>
-                <span class="task-page__worklog-hours">{{ log.hours }} giờ</span>
-              </span>
-              <span v-if="log.note" class="task-page__worklog-note">{{ log.note }}</span>
-              <button
-                v-if="canEditWorklog(log)"
-                type="button"
-                class="task-page__icon-btn"
-                aria-label="Xoá nhật ký giờ làm"
-                @click="askDeleteWorklog(log)"
-              >
-                <AppIcon name="trash" :size="14" />
-              </button>
-            </li>
-          </ul>
-
-          <form v-if="worklogFormOpen" class="task-page__form task-page__form--compact" @submit.prevent="saveWorklog">
-            <label class="task-page__field">
-              <span class="task-page__label">Ngày làm</span>
-              <input v-model="worklogForm.work_date" type="date" class="task-page__input" required />
-            </label>
-            <label class="task-page__field">
-              <span class="task-page__label">Số giờ</span>
-              <input v-model="worklogForm.hours" type="number" min="0.25" max="24" step="0.25" class="task-page__input" required />
-            </label>
-            <label class="task-page__field task-page__field--full">
-              <span class="task-page__label">Ghi chú</span>
-              <textarea v-model="worklogForm.note" class="task-page__input task-page__textarea" rows="2" />
-            </label>
-            <div class="task-page__form-actions">
-              <button type="button" class="task-page__btn task-page__btn--ghost" :disabled="worklogSaving" @click="cancelWorklogForm">
-                Huỷ
-              </button>
-              <button type="submit" class="task-page__btn" :disabled="worklogSaving">
-                {{ worklogSaving ? 'Đang lưu…' : 'Lưu' }}
-              </button>
-            </div>
-          </form>
-          <button
-            v-else-if="canEdit"
-            type="button"
-            class="task-page__btn task-page__btn--ghost"
-            @click="openWorklogForm"
-          >
-            + Thêm giờ làm
-          </button>
-        </section>
-
-        <section v-if="!editing && canApprove" class="task-page__subsection">
-          <h3 class="task-page__subsection-title">Đánh giá công việc</h3>
-          <form class="task-page__form" @submit.prevent="saveScore">
-            <label class="task-page__field">
-              <span class="task-page__label">Điểm số</span>
-              <input v-model="scoreForm.rating_score" type="number" min="0" step="0.1" class="task-page__input" />
-            </label>
-            <label class="task-page__field">
-              <span class="task-page__label">Kết quả</span>
-              <input
-                v-model="scoreForm.rating_result"
-                type="text"
-                maxlength="100"
-                list="task-score-suggestions"
-                class="task-page__input"
-              />
-              <datalist id="task-score-suggestions">
-                <option v-for="s in TASK_SCORE_RESULT_SUGGESTIONS" :key="s" :value="s" />
-              </datalist>
-            </label>
-            <label class="task-page__field task-page__field--full">
-              <span class="task-page__label">Ý kiến đánh giá</span>
-              <textarea v-model="scoreForm.rating_desc" class="task-page__input task-page__textarea" rows="3" />
-            </label>
-            <div class="task-page__form-actions">
-              <button type="submit" class="task-page__btn" :disabled="scoreSaving">
-                {{ scoreSaving ? 'Đang lưu…' : 'Lưu đánh giá' }}
-              </button>
-            </div>
-          </form>
-        </section>
-      </aside>
     </div>
 
     <ConfirmDialog
@@ -3095,16 +2347,6 @@ onBeforeUnmount(() => {
       danger
       @confirm="confirmDelete"
       @update:open="confirmingDelete = $event"
-    />
-
-    <ConfirmDialog
-      :open="Boolean(confirmingDeleteWorklog)"
-      title="Xoá nhật ký giờ làm"
-      description="Bạn có chắc muốn xoá dòng nhật ký giờ làm này? Thao tác này không thể hoàn tác."
-      confirm-label="Xoá"
-      danger
-      @confirm="confirmDeleteWorklog"
-      @update:open="confirmingDeleteWorklog = $event ? confirmingDeleteWorklog : null"
     />
 
     <Teleport to="body">
@@ -4065,130 +3307,6 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
-.task-page__field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-  width: 100%;
-}
-
-.task-page__field--full {
-  grid-column: 1 / -1;
-}
-
-.task-page__hint {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
-.task-page__hidden-input {
-  display: none;
-}
-
-.task-page__subsection {
-  margin-top: var(--space-4);
-  padding-top: var(--space-4);
-  box-shadow: 0 -1px 0 var(--color-border);
-}
-
-.task-page__subsection-title {
-  margin: 0 0 var(--space-2);
-  color: var(--color-text);
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.task-page__attachment-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin-bottom: var(--space-2);
-}
-
-.task-page__attachment {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-  box-shadow: 0 1px 0 var(--color-border);
-  font-size: 0.8125rem;
-}
-
-.task-page__attachment-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-text);
-}
-
-.task-page__attachment-size {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
-.task-page__worklog-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: 0 0 var(--space-2);
-  padding: 0;
-  list-style: none;
-}
-
-.task-page__worklog-item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-  box-shadow: 0 1px 0 var(--color-border);
-  font-size: 0.8125rem;
-}
-
-.task-page__worklog-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 1;
-  min-width: 0;
-}
-
-.task-page__worklog-user {
-  color: var(--color-text);
-  font-weight: 600;
-}
-
-.task-page__worklog-date,
-.task-page__worklog-hours {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
-.task-page__worklog-note {
-  flex-basis: 100%;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-style: italic;
-  overflow-wrap: anywhere;
-}
-
-.task-page__form--compact {
-  margin-bottom: var(--space-2);
-}
-
-.task-page__label {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
 .task-page__input {
   width: 100%;
   min-width: 0;
@@ -4199,11 +3317,6 @@ onBeforeUnmount(() => {
   color: var(--color-text);
   font-family: var(--font-family-base);
   font-size: 0.875rem;
-}
-
-.task-page__textarea {
-  resize: vertical;
-  min-height: 4.5rem;
 }
 
 .task-page__check {
@@ -4363,6 +3476,20 @@ onBeforeUnmount(() => {
   font-weight: 400;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.task-page__name-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-page__name-link:hover {
+  color: var(--color-primary);
 }
 
 .task-page__name-title-row {
@@ -4703,203 +3830,6 @@ onBeforeUnmount(() => {
   text-align: center;
   color: var(--color-text-muted);
   white-space: normal;
-}
-
-.task-page__side {
-  flex-shrink: 0;
-  width: 28rem;
-  overflow-y: auto;
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-muted);
-}
-
-.task-page__side-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.task-page__side-title {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 1.0625rem;
-  font-weight: 700;
-}
-
-.task-page__side-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.task-page__icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.task-page__icon-btn:hover {
-  background: var(--color-surface);
-}
-
-.task-page__side-lead {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: var(--space-3) 0 var(--space-4);
-  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.task-page__side-lead::before {
-  content: '';
-  position: absolute;
-  top: var(--space-2);
-  bottom: var(--space-2);
-  left: var(--space-2);
-  width: 3px;
-  border-radius: 0;
-  background: var(--color-text-muted);
-}
-
-.task-page__side-lead--primary::before,
-.task-page__side-lead--info::before {
-  background: var(--color-primary);
-}
-.task-page__side-lead--gold::before,
-.task-page__side-lead--warning::before {
-  background: var(--color-gold);
-}
-.task-page__side-lead--success::before {
-  background: var(--color-success);
-}
-.task-page__side-lead--umber::before,
-.task-page__side-lead--danger::before {
-  background: var(--color-danger);
-}
-.task-page__side-lead--tertiary::before {
-  background: var(--color-tertiary);
-}
-
-.task-page__side-lead-project {
-  display: block;
-  margin-bottom: var(--space-1);
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.task-page__side-lead-desc {
-  margin: 0;
-  color: var(--color-text);
-  font-weight: 400;
-  font-size: 0.9375rem;
-  line-height: 1.45;
-}
-
-.task-page__rows {
-  display: flex;
-  flex-direction: column;
-}
-
-.task-page__row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  box-shadow: 0 1px 0 var(--color-border);
-  font-size: 0.8125rem;
-}
-
-.task-page__row:last-child {
-  box-shadow: none;
-}
-
-.task-page__row-label {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-}
-
-.task-page__row-label::after {
-  content: ':';
-}
-
-.task-page__row-value {
-  color: var(--color-text);
-  font-style: italic;
-  font-weight: 400;
-  text-align: right;
-  overflow-wrap: anywhere;
-}
-
-.task-page__row-value--status {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.375rem;
-}
-
-.task-page__row-person {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-.task-page__form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.task-page__form-actions {
-  grid-column: 1 / -1;
-  margin-top: var(--space-2);
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-}
-
-.task-page__btn {
-  height: 2.375rem;
-  padding: 0 1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-family: var(--font-family-base);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.task-page__btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.task-page__btn--ghost {
-  background: var(--color-surface);
-  color: var(--color-text);
-  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .task-kanban {
@@ -5468,17 +4398,8 @@ onBeforeUnmount(() => {
     flex-direction: column;
   }
 
-  .task-page__side {
-    width: 100%;
-    max-height: 42%;
-  }
-
   .task-page__table-wrap {
     min-height: 16rem;
-  }
-
-  .task-page__form {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 

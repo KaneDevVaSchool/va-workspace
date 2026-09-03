@@ -277,6 +277,9 @@ function isActive(routeName) {
   if (routeName === 'manager.reports.index') {
     return route.path === '/manager/reports' || route.path.startsWith('/manager/reports/');
   }
+  if (routeName === 'manager.project.tasks') {
+    return route.path === '/manager/project/tasks' || route.path.startsWith('/manager/project/tasks/');
+  }
   return false;
 }
 

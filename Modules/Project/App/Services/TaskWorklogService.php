@@ -62,7 +62,7 @@ class TaskWorklogService
             NotificationService::TYPE_TASK_WORKLOG_ADDED,
             "Có giờ làm mới trên công việc \"{$task->title}\"",
             "{$actor->name} đã ghi {$log->hours} giờ làm.",
-            "/manager/project/tasks?task={$task->id}",
+            "/manager/project/tasks/{$task->id}",
             ['task_id' => $task->id, 'worklog_id' => $log->id],
         );
     }

@@ -59,6 +59,16 @@ export default [
     },
   },
   {
+    path: '/manager/project/tasks/:id',
+    name: 'manager.project.tasks.detail',
+    component: () => import('./pages/TaskDetail.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Chi tiết công việc',
+      requiresAnyPermission: ['task.view', 'task.view_assigned'],
+    },
+  },
+  {
     // "Tất cả công việc" (Project Giai đoạn 2 — Task thật) — mục sidebar
     // riêng cạnh "Dự án". requiresAnyPermission vì role member chỉ có
     // task.view_assigned (không có task.view) — xem AppSidebar.vue.
