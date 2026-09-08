@@ -1,4 +1,13 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npx vue-tsc *)",
+      "Bash(grep -nE \"#[0-9a-fA-F]{3,8}|rgb\\\\\\(|rgba\\\\\\(\" Modules/Project/resources/js/pages/ProjectEdit.vue)",
+      "Bash(grep -n \"function attachments\\\\|class Task\\\\|use Illuminate\\\\\\\\\\\\\\\\Database\\\\\\\\\\\\\\\\Eloquent\\\\\\\\\\\\\\\\Relations\")",
+      "Bash(grep -n \"function attachments\\\\|class Project\\\\|use Illuminate\\\\\\\\\\\\\\\\Database\\\\\\\\\\\\\\\\Eloquent\\\\\\\\\\\\\\\\Relations\")",
+      "Bash(grep -n \"task-detail__card--umber\\\\|worklogSection\\\\|</section>\\\\|</div>\\\\s*$\" \"Modules/Project/resources/js/pages/TaskDetail.vue\")"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {

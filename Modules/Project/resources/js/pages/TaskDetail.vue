@@ -2086,8 +2086,10 @@ onBeforeUnmount(() => {
 .task-detail__col--discuss {
   display: flex;
   flex-direction: column;
-  align-content: stretch;
-  overflow: hidden;
+  height: 100%;
+  min-height: 0;
+  z-index: 1;
+  overflow: visible;
 }
 
 .task-detail__toolbar {
@@ -3392,6 +3394,7 @@ onBeforeUnmount(() => {
   .task-detail__col,
   .task-detail__col--discuss {
     overflow: visible;
+    height: auto;
   }
 
   .task-detail__card--discuss {

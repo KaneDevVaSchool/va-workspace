@@ -99,6 +99,11 @@ const PATHS = {
   stamp: 'M5 10H3v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10h-2M8 10V5a4 4 0 1 1 8 0v5',
   tag: 'M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2zM7 7h.01',
   moreVertical: 'M12 6.5A1.5 1.5 0 1 1 12 3.5 1.5 1.5 0 0 1 12 6.5Zm0 7A1.5 1.5 0 1 1 12 10.5 1.5 1.5 0 0 1 12 13.5Zm0 7A1.5 1.5 0 1 1 12 17.5 1.5 1.5 0 0 1 12 20.5Z',
+  folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z',
+  folderPlus: 'M12 10v6M9 13h6M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z',
+  // Ghim (khác "bookmark" = lưu bài đăng — SocialPostCard.vue, HeaderShortcuts.vue).
+  pin: 'M12 17v5M8 3h8l-1 6 3 3v2H6v-2l3-3-1-6Z',
+  gantt: 'M3 5h18M3 9h18M8 5v14M11 12h8v2h-8zM11 16h5v3h-5z',
 };
 
 const STROKE_ICONS = [
@@ -127,6 +132,7 @@ const STROKE_ICONS = [
   'minimize',
   'star',
   'bookmark',
+  'pin',
   'pencil',
   'trash',
   'clock',
@@ -184,6 +190,9 @@ const STROKE_ICONS = [
   'copy',
   'stamp',
   'tag',
+  'folder',
+  'folderPlus',
+  'gantt',
 ];
 
 defineProps({

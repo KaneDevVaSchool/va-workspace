@@ -20,6 +20,19 @@ Route::get('/', function () {
     return view('app');
 });
 
+Route::get('/pdfjs-worker.mjs', function () {
+    $path = public_path('vendor/pdfjs/pdf.worker.min.mjs');
+    if (! is_file($path)) {
+        $path = base_path('node_modules/pdfjs-dist/build/pdf.worker.min.mjs');
+    }
+    abort_unless(is_file($path), 404);
+
+    return response((string) file_get_contents($path), 200, [
+        'Content-Type' => 'text/javascript; charset=UTF-8',
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
+});
+
 Route::get('/sw.js', function () {
     $path = public_path('sw.js');
     abort_unless(is_file($path), 404);

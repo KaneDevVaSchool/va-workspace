@@ -104,6 +104,10 @@ báo cáo, chính sách tương tác sau hoàn thành, yêu cầu mô tả/đín
 cáo). `StoreTaskRequest`/`UpdateTaskRequest`/`TaskService::present()` đã
 đọc/ghi/trả các cột này, nhưng chưa rà soát toàn bộ nơi các cờ này cần được
 **thực thi** (ví dụ: `hide_from_parent_followers` có thực sự lọc bớt dữ
-liệu trả về ở `TaskRepository`/`TaskList.vue` chưa; `auto_complete_on_report`
-có tự đổi `status='completed'` khi tạo báo cáo chưa). Cần kiểm tra từng cờ
+liệu trả về ở `TaskRepository`/`TaskList.vue` chưa). Cần kiểm tra từng cờ
 trước khi công bố tính năng "hoàn chỉnh" cho người dùng cuối.
+
+`auto_complete_on_report` (boolean) đã được thay bằng `report_complete_action`
+(none/completed/under_review) và **đã enforce runtime** qua nút "Báo cáo
+hoàn thành" (assignee-only) → `TaskService::reportComplete()` — xem
+migration `2026_09_04_100001_add_report_review_fields_to_tasks_table`.
