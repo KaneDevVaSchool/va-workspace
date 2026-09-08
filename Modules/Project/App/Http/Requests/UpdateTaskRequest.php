@@ -43,6 +43,12 @@ class UpdateTaskRequest extends FormRequest
             'watcher_ids.*' => ['integer', 'distinct', 'exists:users,id'],
             'collaborator_ids' => ['sometimes', 'array'],
             'collaborator_ids.*' => ['integer', 'distinct', 'exists:users,id'],
+            'constrain_child_dates' => ['sometimes', 'nullable', 'boolean'],
+            'hide_cross_tasks_from_assignees' => ['sometimes', 'nullable', 'boolean'],
+            'hide_from_parent_assignees' => ['sometimes', 'nullable', 'boolean'],
+            'hide_from_parent_followers' => ['sometimes', 'nullable', 'boolean'],
+            'hide_child_tasks_from_followers' => ['sometimes', 'nullable', 'boolean'],
+            'allow_child_people_view_parent' => ['sometimes', 'nullable', 'boolean'],
             'progress_percent' => [
                 'sometimes', 'nullable', 'integer', 'min:0', 'max:100',
                 Rule::prohibitedIf($isQuantity),
@@ -61,6 +67,18 @@ class UpdateTaskRequest extends FormRequest
             'unit' => [
                 'sometimes', 'nullable', 'string', 'max:50',
                 Rule::prohibitedIf(! $isQuantity),
+            ],
+            'report_complete_action' => [
+                'sometimes', 'nullable', 'string', Rule::in(TaskEnums::REPORT_COMPLETE_ACTIONS),
+            ],
+            'completed_interaction_policy' => [
+                'sometimes', 'nullable', 'string', Rule::in(TaskEnums::COMPLETED_INTERACTION_POLICIES),
+            ],
+            'report_description_requirement' => [
+                'sometimes', 'nullable', 'string', Rule::in(TaskEnums::REPORT_REQUIREMENTS),
+            ],
+            'report_attachment_requirement' => [
+                'sometimes', 'nullable', 'string', Rule::in(TaskEnums::REPORT_REQUIREMENTS),
             ],
             'estimated_hours' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999.99'],
             'weight' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
@@ -100,6 +118,10 @@ class UpdateTaskRequest extends FormRequest
             'progress_total.prohibited' => 'Chỉ nhập khối lượng khi tính tiến độ theo khối lượng.',
             'progress_total.gt' => 'Khối lượng cần hoàn thành phải lớn hơn 0.',
             'unit.prohibited' => 'Chỉ nhập đơn vị khi tính tiến độ theo khối lượng.',
+            'report_complete_action.in' => 'Lựa chọn sau khi báo cáo hoàn thành không hợp lệ.',
+            'completed_interaction_policy.in' => 'Cài đặt thảo luận sau hoàn thành không hợp lệ.',
+            'report_description_requirement.in' => 'Yêu cầu mô tả báo cáo không hợp lệ.',
+            'report_attachment_requirement.in' => 'Yêu cầu file báo cáo không hợp lệ.',
             'estimated_hours.min' => 'Thời gian dự kiến không được âm.',
             'weight.min' => 'Tỷ trọng tối thiểu là 0%.',
             'weight.max' => 'Tỷ trọng tối đa là 100%.',

@@ -9,6 +9,7 @@ use Illuminate\Support\Collection;
 use Modules\Identity\App\Models\Department;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\ProjectAttachment;
+use Modules\Project\App\Models\ProjectFolder;
 use Modules\Project\App\Models\ProjectLabel;
 use Modules\Project\App\Models\ProjectQuickItem;
 use Modules\Project\App\Models\ProjectSetting;
@@ -62,7 +63,34 @@ interface ProjectRepositoryInterface
 
     public function findAttachment(int $projectId, int $attachmentId): ?ProjectAttachment;
 
+    public function updateAttachment(ProjectAttachment $attachment, array $data): ProjectAttachment;
+
     public function deleteAttachment(ProjectAttachment $attachment): bool;
+
+    /** @return Collection<int, ProjectFolder> */
+    public function listFolders(int $projectId, ?int $parentId): Collection;
+
+    public function findFolder(int $projectId, int $folderId): ?ProjectFolder;
+
+    /** @param  array<string, mixed>  $data */
+    public function createFolder(int $projectId, array $data): ProjectFolder;
+
+    /** @param  array<string, mixed>  $data */
+    public function updateFolder(ProjectFolder $folder, array $data): ProjectFolder;
+
+    public function deleteFolder(ProjectFolder $folder): bool;
+
+    /** @return Collection<int, ProjectAttachment> */
+    public function listAttachmentsInFolder(int $projectId, ?int $folderId): Collection;
+
+    /** @param  list<int>  $folderIds */
+    public function listAttachmentsInFolders(int $projectId, array $folderIds): Collection;
+
+    /** @param  list<int>  $folderIds */
+    public function sumAttachmentSizeInFolders(int $projectId, array $folderIds): int;
+
+    /** @return list<int> */
+    public function descendantFolderIds(int $projectId, int $folderId): array;
 
     /** Mã dự án tiếp theo sinh theo mẫu trong project_settings — xem ProjectSetting. */
     public function nextCode(): string;

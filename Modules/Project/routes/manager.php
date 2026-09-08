@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\Project\App\Http\Controllers\CommentController;
 use Modules\Project\App\Http\Controllers\ProjectController;
 use Modules\Project\App\Http\Controllers\TaskAttachmentController;
 use Modules\Project\App\Http\Controllers\TaskController;
@@ -38,6 +39,12 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
 
     Route::middleware('permission:task.create')->group(function () {
         Route::post('/tasks', [TaskController::class, 'storeStandalone'])->name('tasks.store-standalone');
+        // Route tĩnh /tasks/bulk và /structure/{type} PHẢI trước wildcard {project}/tasks
+        // nếu cùng prefix — nhưng bulk gắn {project} nên đăng ký cạnh store.
+        Route::post('/{project}/tasks/bulk', [TaskController::class, 'storeBulk'])->name('tasks.store-bulk');
+        Route::put('/{project}/structure/{type}', [TaskController::class, 'syncStructure'])
+            ->whereIn('type', ['category', 'phase'])
+            ->name('structure.sync');
         Route::post('/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
         Route::post('/tasks/import/preview', [TaskController::class, 'importPreview'])->name('tasks.import-preview');
         Route::post('/tasks/import/resolve-row', [TaskController::class, 'importResolveRow'])->name('tasks.import-resolve-row');
@@ -54,8 +61,32 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
         ->name('tasks.attachments.index');
     Route::middleware('permission:task.create')->group(function () {
         Route::post('/tasks/{task}/attachments', [TaskAttachmentController::class, 'store'])->name('tasks.attachments.store');
+        Route::put('/tasks/attachments/{attachment}', [TaskAttachmentController::class, 'update'])->name('tasks.attachments.update');
+        Route::post('/tasks/attachments/{attachment}/replace', [TaskAttachmentController::class, 'replace'])->name('tasks.attachments.replace');
         Route::delete('/tasks/attachments/{attachment}', [TaskAttachmentController::class, 'destroy'])->name('tasks.attachments.destroy');
     });
+
+    // ---------- Thảo luận công việc (Comment — polymorphic Task/Project) ----------
+    // Đọc dùng task.view (đã có), tạo dùng task.create (đã có) — đúng
+    // permission hiện hữu, không thêm permission mới. Route tĩnh
+    // /comments/mentions PHẢI đăng ký TRƯỚC bất kỳ route GET /comments/{...}
+    // wildcard nào (không có ở đây nhưng giữ thói quen của file này).
+    Route::middleware('permission:task.view')->group(function () {
+        Route::get('/comments/mentions', [CommentController::class, 'mentions'])->name('comments.mentions');
+        Route::get('/tasks/{task}/comments', [CommentController::class, 'taskIndex'])->name('tasks.comments.index');
+    });
+    Route::middleware('permission:task.create')
+        ->post('/tasks/{task}/comments', [CommentController::class, 'taskStore'])
+        ->name('tasks.comments.store');
+
+    // Xoá/reaction/ghim không phân theo Task/Project — chỉ cần đăng nhập,
+    // quyền thật (xoá: chỉ tác giả; ghim: quyền sửa dự án) kiểm tra trong
+    // CommentService::canDelete()/canPin().
+    Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
+    Route::post('/comments/{comment}/reactions', [CommentController::class, 'setReaction'])->name('comments.reactions.set');
+    Route::get('/comments/{comment}/reactions', [CommentController::class, 'reactions'])->name('comments.reactions.index');
+    Route::post('/comments/{comment}/pin', [CommentController::class, 'pin'])->name('comments.pin');
+    Route::delete('/comments/{comment}/pin', [CommentController::class, 'unpin'])->name('comments.unpin');
 
     // ---------- Worklog chấm công giờ thực tế (Nhóm E) ----------
     // PUT/DELETE /tasks/worklogs/{worklog} cùng lý do PHẢI đăng ký TRƯỚC
@@ -79,6 +110,14 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     Route::middleware('permission:task.approve')
         ->put('/tasks/{task}/score', [TaskScoreController::class, 'upsert'])
         ->name('tasks.score.upsert');
+
+    // ---------- Báo cáo hoàn thành (assignee-only) ----------
+    // Quan hệ "chỉ assignee của task" kiểm tra trong TaskService::reportComplete(),
+    // không phải permission tĩnh — route chỉ cần task.view (giống pattern
+    // score.show ở trên, không cần task.create).
+    Route::middleware('permission:task.view')
+        ->post('/tasks/{task}/report-complete', [TaskController::class, 'reportComplete'])
+        ->name('tasks.report-complete');
 
     // ---------- Bulk actions (PR7) ----------
     // PATCH /tasks/bulk là route tĩnh khác method (PATCH) với PUT/DELETE
@@ -136,6 +175,22 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     Route::post('/import/preview', [ProjectController::class, 'importPreview'])->name('import-preview');
     Route::post('/import/resolve-row', [ProjectController::class, 'importResolveRow'])->name('import-resolve-row');
     Route::post('/import/confirm', [ProjectController::class, 'importConfirm'])->name('import-confirm');
+
+    // ---------- Thảo luận dự án ----------
+    // Đọc dùng project.view; TẠO chỉ cần đăng nhập + xem được project (đã
+    // chốt — không permission tạo riêng). Đặt TRƯỚC GET /{project} (wildcard,
+    // dòng dưới) vì cùng có tiền tố "/{project}/..." — nếu không "comments"
+    // không xung đột thật (khác param count) nhưng giữ nhất quán thói quen.
+    Route::middleware('permission:project.view')
+        ->get('/{project}/comments', [CommentController::class, 'projectIndex'])
+        ->name('comments.project-index');
+    Route::post('/{project}/comments', [CommentController::class, 'projectStore'])->name('comments.project-store');
+    Route::middleware('permission:project.view')
+        ->post('/{project}/comments/mark-read', [CommentController::class, 'markThreadRead'])
+        ->name('comments.mark-read');
+
+    Route::middleware('permission:project.view')->get('/{project}/documents', [ProjectController::class, 'documents'])->name('documents');
+    Route::middleware('permission:project.view')->get('/{project}/task-attachments', [ProjectController::class, 'taskAttachments'])->name('task-attachments');
     Route::middleware('permission:project.view')->get('/{project}', [ProjectController::class, 'show'])->name('show');
 
     // store: middleware permission cứng đã bỏ — quyền tạo (role sẵn có HOẶC
@@ -159,7 +214,11 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
         Route::post('/{project}/avatar', [ProjectController::class, 'uploadAvatar'])->name('avatar');
         Route::delete('/{project}/avatar', [ProjectController::class, 'destroyAvatar'])->name('avatar.destroy');
         Route::post('/{project}/attachments', [ProjectController::class, 'uploadAttachment'])->name('attachments.store');
+        Route::put('/{project}/attachments/{attachment}', [ProjectController::class, 'updateAttachment'])->name('attachments.update');
         Route::delete('/{project}/attachments/{attachment}', [ProjectController::class, 'destroyAttachment'])->name('attachments.destroy');
+        Route::post('/{project}/folders', [ProjectController::class, 'storeFolder'])->name('folders.store');
+        Route::put('/{project}/folders/{folder}', [ProjectController::class, 'updateFolder'])->name('folders.update');
+        Route::delete('/{project}/folders/{folder}', [ProjectController::class, 'destroyFolder'])->name('folders.destroy');
         Route::post('/{project}/quick-items', [ProjectController::class, 'quickItemsStore'])->name('quick-items.store');
     });
 });

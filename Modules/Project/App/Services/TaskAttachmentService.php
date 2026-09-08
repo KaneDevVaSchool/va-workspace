@@ -39,6 +39,50 @@ class TaskAttachmentService
         ]);
     }
 
+    /** @return TaskAttachment|array{error: string} */
+    public function rename(int $attachmentId, string $fileName): TaskAttachment|array
+    {
+        $attachment = $this->attachments->find($attachmentId);
+        if ($attachment === null) {
+            return ['error' => 'Không tìm thấy tệp đính kèm.'];
+        }
+
+        $fileName = trim($fileName);
+        if ($fileName === '') {
+            return ['error' => 'Tên tệp không được để trống.'];
+        }
+
+        $originalExt = pathinfo((string) $attachment->file_name, PATHINFO_EXTENSION);
+        $newExt = pathinfo($fileName, PATHINFO_EXTENSION);
+        if ($originalExt !== '' && $newExt === '') {
+            $fileName .= '.'.$originalExt;
+        }
+
+        return $this->attachments->update($attachment, ['file_name' => $fileName]);
+    }
+
+    /** @return TaskAttachment|array{error: string} */
+    public function replace(int $attachmentId, UploadedFile $file, User $uploader): TaskAttachment|array
+    {
+        $attachment = $this->attachments->find($attachmentId);
+        if ($attachment === null) {
+            return ['error' => 'Không tìm thấy tệp đính kèm.'];
+        }
+
+        if ($attachment->file_path) {
+            Storage::disk('public')->delete($attachment->file_path);
+        }
+
+        $path = $file->store('task/'.$attachment->task_id, 'public');
+
+        return $this->attachments->update($attachment, [
+            'file_path' => $path,
+            'file_name' => $file->getClientOriginalName(),
+            'file_size' => $file->getSize(),
+            'uploaded_by' => $uploader->id,
+        ]);
+    }
+
     /** @return array{error: string}|null */
     public function delete(int $attachmentId): ?array
     {

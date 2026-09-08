@@ -20,6 +20,15 @@ class TaskAttachmentRepository implements TaskAttachmentRepositoryInterface
             ->get();
     }
 
+    public function listForProject(int $projectId): Collection
+    {
+        return TaskAttachment::query()
+            ->with(['uploader', 'task'])
+            ->whereHas('task', fn ($q) => $q->where('project_id', $projectId))
+            ->orderByDesc('created_at')
+            ->get();
+    }
+
     public function find(int $id): ?TaskAttachment
     {
         return TaskAttachment::query()->with('uploader')->find($id);
@@ -28,6 +37,14 @@ class TaskAttachmentRepository implements TaskAttachmentRepositoryInterface
     public function create(array $data): TaskAttachment
     {
         $attachment = TaskAttachment::query()->create($data);
+
+        return $attachment->fresh('uploader');
+    }
+
+    public function update(TaskAttachment $attachment, array $data): TaskAttachment
+    {
+        $attachment->fill($data);
+        $attachment->save();
 
         return $attachment->fresh('uploader');
     }

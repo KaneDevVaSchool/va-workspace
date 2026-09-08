@@ -11,10 +11,13 @@ use Modules\Project\App\Http\Requests\ConfirmImportProjectRequest;
 use Modules\Project\App\Http\Requests\ExportProjectRequest;
 use Modules\Project\App\Http\Requests\ImportProjectRequest;
 use Modules\Project\App\Http\Requests\ResolveImportProjectRowRequest;
+use Modules\Project\App\Http\Requests\StoreProjectFolderRequest;
 use Modules\Project\App\Http\Requests\StoreProjectLabelRequest;
 use Modules\Project\App\Http\Requests\StoreProjectQuickItemRequest;
 use Modules\Project\App\Http\Requests\StoreProjectRequest;
 use Modules\Project\App\Http\Requests\StoreProjectTypeRequest;
+use Modules\Project\App\Http\Requests\UpdateProjectAttachmentRequest;
+use Modules\Project\App\Http\Requests\UpdateProjectFolderRequest;
 use Modules\Project\App\Http\Requests\UpdateProjectRequest;
 use Modules\Project\App\Http\Requests\UpdateProjectSettingsRequest;
 use Modules\Project\App\Http\Requests\UploadProjectAttachmentRequest;
@@ -213,6 +216,7 @@ class ProjectController extends Controller
             $request->file('file'),
             $request->input('url'),
             $request->user()->id,
+            $request->filled('folder_id') ? (int) $request->input('folder_id') : null,
         );
 
         if (is_array($result)) {
@@ -235,6 +239,98 @@ class ProjectController extends Controller
         }
 
         return response()->json(['message' => 'Đã xoá tệp đính kèm.']);
+    }
+
+    public function documents(int $project)
+    {
+        $model = $this->service->find($project);
+        if ($model === null) {
+            return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+        }
+
+        $folderId = request()->filled('folder_id') ? (int) request()->input('folder_id') : null;
+        $result = $this->service->listDocuments($model, $folderId);
+        if (isset($result['error'])) {
+            return response()->json(['message' => $result['error']], 404);
+        }
+
+        return response()->json($result);
+    }
+
+    public function storeFolder(StoreProjectFolderRequest $request, int $project)
+    {
+        $model = $this->service->find($project);
+        if ($model === null) {
+            return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+        }
+
+        $result = $this->service->createFolder(
+            $model,
+            $request->validated()['name'],
+            isset($request->validated()['parent_id']) ? (int) $request->validated()['parent_id'] : null,
+            $request->user()->id,
+        );
+
+        if (is_array($result)) {
+            return response()->json(['message' => $result['error']], 422);
+        }
+
+        return response()->json(['folder' => $this->service->presentFolder($result, true)], 201);
+    }
+
+    public function updateFolder(UpdateProjectFolderRequest $request, int $project, int $folder)
+    {
+        $model = $this->service->find($project);
+        if ($model === null) {
+            return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+        }
+
+        $result = $this->service->renameFolder($model, $folder, $request->validated()['name']);
+        if (is_array($result)) {
+            return response()->json(['message' => $result['error']], $result['error'] === 'Không tìm thấy thư mục.' ? 404 : 422);
+        }
+
+        return response()->json(['folder' => $this->service->presentFolder($result, true)]);
+    }
+
+    public function destroyFolder(int $project, int $folder)
+    {
+        $model = $this->service->find($project);
+        if ($model === null) {
+            return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+        }
+
+        $error = $this->service->destroyFolder($model, $folder);
+        if ($error !== null) {
+            return response()->json(['message' => $error['error']], 404);
+        }
+
+        return response()->json(['message' => 'Đã xoá thư mục.']);
+    }
+
+    public function updateAttachment(UpdateProjectAttachmentRequest $request, int $project, int $attachment)
+    {
+        $model = $this->service->find($project);
+        if ($model === null) {
+            return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+        }
+
+        $result = $this->service->renameAttachment($model, $attachment, $request->validated()['original_name']);
+        if (is_array($result)) {
+            return response()->json(['message' => $result['error']], 404);
+        }
+
+        return response()->json(['attachment' => $this->service->presentAttachment($result)]);
+    }
+
+    public function taskAttachments(int $project)
+    {
+        $model = $this->service->find($project);
+        if ($model === null) {
+            return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+        }
+
+        return response()->json(['attachments' => $this->service->listTaskAttachments($model)]);
     }
 
     public function uploadAvatar(UploadProjectAvatarRequest $request, int $project)

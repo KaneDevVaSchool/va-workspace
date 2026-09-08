@@ -13,14 +13,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * (unique task_id trong migration) — update ghi đè, không lưu lịch sử.
  *
  * rating_result là text tự do (KHÔNG enum) — kết quả đánh giá tuỳ cấu hình
- * evaluation tương lai, không mặc định "Đạt/Không đạt".
+ * evaluation tương lai. is_passed là field riêng, tường minh Đạt/Không đạt
+ * (không suy luận từ text rating_result) — is_passed = false sẽ tăng
+ * tasks.failed_review_count (xem TaskScoreService::upsert()).
  *
- * @property int         $id
- * @property int         $task_id
- * @property float|null  $rating_score
+ * @property int $id
+ * @property int $task_id
+ * @property float|null $rating_score
  * @property string|null $rating_result
+ * @property bool|null $is_passed
  * @property string|null $rating_desc
- * @property int|null    $scored_by
+ * @property int|null $scored_by
  * @property string|null $scored_at
  */
 class TaskScore extends Model
@@ -31,6 +34,7 @@ class TaskScore extends Model
         'task_id',
         'rating_score',
         'rating_result',
+        'is_passed',
         'rating_desc',
         'scored_by',
         'scored_at',
@@ -38,6 +42,7 @@ class TaskScore extends Model
 
     protected $casts = [
         'rating_score' => 'decimal:2',
+        'is_passed' => 'boolean',
         'scored_at' => 'datetime',
     ];
 

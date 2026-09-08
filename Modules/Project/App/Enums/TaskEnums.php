@@ -26,15 +26,19 @@ class TaskEnums
     ];
 
     /** Trạng thái công việc — cố ý khác bộ giá trị ProjectEnums::STATUSES. */
-    public const STATUSES = ['not_started', 'in_progress', 'on_hold', 'completed', 'cancelled'];
+    public const STATUSES = ['not_started', 'in_progress', 'under_review', 'on_hold', 'completed', 'cancelled'];
 
     public const STATUS_LABELS = [
         'not_started' => 'Chưa bắt đầu',
         'in_progress' => 'Đang thực hiện',
+        'under_review' => 'Đang đánh giá',
         'on_hold' => 'Tạm dừng',
         'completed' => 'Hoàn thành',
         'cancelled' => 'Đã huỷ',
     ];
+
+    /** report_complete_action — hành động tự động khi assignee báo cáo hoàn thành. */
+    public const REPORT_COMPLETE_ACTIONS = ['none', 'completed', 'under_review'];
 
     /**
      * Mức độ quan trọng — cùng 5 bậc với ProjectEnums / tiêu chí B1.

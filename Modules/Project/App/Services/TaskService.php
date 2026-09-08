@@ -269,7 +269,7 @@ class TaskService
 
     /**
      * @param  array<string, mixed>  $data
-     * @return Task|array{error: string}
+     * @return Task|array{tasks: list<Task>}|array{error: string}
      */
     public function create(?Project $project, array $data, User $creator): Task|array
     {
@@ -279,18 +279,160 @@ class TaskService
 
         $titles = $data['titles'] ?? null;
         if (is_array($titles) && $titles !== []) {
-            $last = null;
-            foreach ($titles as $title) {
-                $last = $this->createSingle($project, array_merge($data, ['title' => $title]), $creator);
-                if (is_array($last)) {
-                    return $last;
-                }
-            }
+            try {
+                return DB::transaction(function () use ($project, $data, $creator, $titles) {
+                    $created = [];
+                    foreach ($titles as $title) {
+                        $row = $this->createSingle($project, array_merge($data, ['title' => $title]), $creator);
+                        if (is_array($row)) {
+                            throw new \RuntimeException($row['error'] ?? 'Không tạo được công việc.');
+                        }
+                        $created[] = $row;
+                    }
 
-            return $last;
+                    return ['tasks' => $created];
+                });
+            } catch (\RuntimeException $e) {
+                return ['error' => $e->getMessage()];
+            }
         }
 
         return $this->createSingle($project, $data, $creator);
+    }
+
+    /**
+     * Tạo nhiều công việc với field riêng từng dòng (1 transaction).
+     *
+     * @param  list<array<string, mixed>>  $items
+     * @return list<Task>|array{error: string}
+     */
+    public function createMany(Project $project, array $items, User $creator): array
+    {
+        if (! $this->projects->viewerCanAssignTo($creator, $project)) {
+            return ['error' => 'Bạn không thể tạo công việc trong dự án này.'];
+        }
+
+        try {
+            return DB::transaction(function () use ($project, $items, $creator) {
+                $created = [];
+                foreach ($items as $index => $item) {
+                    $payload = array_merge($item, [
+                        'type' => 'task',
+                        'sort_order' => $item['sort_order'] ?? $index,
+                    ]);
+                    $row = $this->createSingle($project, $payload, $creator);
+                    if (is_array($row)) {
+                        throw new \RuntimeException($row['error'] ?? 'Không tạo được công việc.');
+                    }
+                    $created[] = $row;
+                }
+
+                return $created;
+            });
+        } catch (\RuntimeException $e) {
+            return ['error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Đồng bộ danh mục hoặc phase của dự án (tạo/sửa/xoá/đổi thứ tự) trong 1 transaction.
+     *
+     * @param  'category'|'phase'  $type
+     * @param  list<array<string, mixed>>  $items
+     * @param  list<int>  $deletedIds
+     * @return list<Task>|array{error: string}
+     */
+    public function syncStructure(Project $project, string $type, array $items, array $deletedIds, User $actor): array
+    {
+        if (! in_array($type, ['category', 'phase'], true)) {
+            return ['error' => 'Loại cấu trúc không hợp lệ.'];
+        }
+
+        if (! $this->projects->viewerCanAssignTo($actor, $project)) {
+            return ['error' => 'Bạn không thể cập nhật cấu trúc dự án này.'];
+        }
+
+        try {
+            return DB::transaction(function () use ($project, $type, $items, $deletedIds, $actor) {
+                foreach ($deletedIds as $deletedId) {
+                    $node = $this->tasks->find((int) $deletedId);
+                    if ($node === null) {
+                        continue;
+                    }
+                    if ($node->project_id !== $project->id || $node->type !== $type) {
+                        throw new \RuntimeException('Mục cần xoá không thuộc dự án này.');
+                    }
+                    $deleted = $this->delete($node);
+                    if (is_array($deleted)) {
+                        throw new \RuntimeException($deleted['error']);
+                    }
+                }
+
+                $saved = [];
+                foreach (array_values($items) as $index => $item) {
+                    $sortOrder = $item['sort_order'] ?? $index;
+                    $payload = [
+                        'type' => $type,
+                        'title' => $item['title'],
+                        'description' => $item['description'] ?? null,
+                        'progress_type' => $item['progress_type'] ?? 'average',
+                        'sort_order' => $sortOrder,
+                        'updated_by' => $actor->id,
+                    ];
+
+                    if ($type === 'phase') {
+                        $payload['start_date'] = $item['start_date'] ?? null;
+                        $payload['end_date'] = $item['end_date'] ?? null;
+                        $projectDateError = $this->validateAgainstProjectDates($project, $payload);
+                        if ($projectDateError !== null) {
+                            throw new \RuntimeException($projectDateError);
+                        }
+                    }
+
+                    $id = isset($item['id']) ? (int) $item['id'] : null;
+                    if ($id) {
+                        $node = $this->tasks->find($id);
+                        if ($node === null || $node->project_id !== $project->id || $node->type !== $type) {
+                            throw new \RuntimeException('Mục cần sửa không thuộc dự án này.');
+                        }
+                        $saved[] = $this->tasks->update($node, $payload);
+                    } else {
+                        $row = $this->createSingle($project, array_merge($payload, [
+                            'status' => 'not_started',
+                            'created_by' => $actor->id,
+                        ]), $actor);
+                        if (is_array($row)) {
+                            throw new \RuntimeException($row['error'] ?? 'Không tạo được mục.');
+                        }
+                        $saved[] = $row;
+                    }
+                }
+
+                return $saved;
+            });
+        } catch (\RuntimeException $e) {
+            return ['error' => $e->getMessage()];
+        }
+    }
+
+    /** Khi dự án bật ràng buộc ngày — task/phase phải nằm trong khoảng dự án. */
+    private function validateAgainstProjectDates(Project $project, array $data): ?string
+    {
+        if (! $project->constrain_task_dates_to_project) {
+            return null;
+        }
+
+        $start = ! empty($data['start_date']) ? Carbon::parse($data['start_date'])->startOfDay() : null;
+        $end = ! empty($data['end_date']) ? Carbon::parse($data['end_date'])->startOfDay() : null;
+
+        if ($start !== null && $project->start_date !== null && $start->lt($project->start_date)) {
+            return 'Ngày bắt đầu phải nằm trong thời gian dự án.';
+        }
+        if ($end !== null && $project->end_date !== null && $end->gt($project->end_date)) {
+            return 'Ngày kết thúc phải nằm trong thời gian dự án.';
+        }
+
+        return null;
     }
 
     /**
@@ -330,6 +472,7 @@ class TaskService
      */
     private function createSingle(?Project $project, array $data, User $creator): Task|array
     {
+        $type = $data['type'] ?? 'task';
         $parentId = $data['parent_id'] ?? null;
         $parent = null;
         if ($parentId !== null) {
@@ -342,10 +485,26 @@ class TaskService
                     ? ['error' => 'Công việc cha của công việc thường xuyên không được thuộc một dự án.']
                     : ['error' => 'Công việc cha không thuộc dự án này.'];
             }
+            if ($type === 'task' && ! in_array($parent->type, ['task', 'phase', 'category'], true)) {
+                return ['error' => 'Công việc cha không hợp lệ.'];
+            }
+            if ($type === 'category' && $parent->type !== 'category') {
+                return ['error' => 'Danh mục chỉ được nằm dưới danh mục khác.'];
+            }
+            if ($type === 'phase' && $parent->type !== 'phase') {
+                return ['error' => 'Phase chỉ được nằm dưới phase khác.'];
+            }
 
             $dateError = $this->validateChildDateRange($parent, $data);
             if ($dateError !== null) {
                 return ['error' => $dateError];
+            }
+        }
+
+        if ($project !== null) {
+            $projectDateError = $this->validateAgainstProjectDates($project, $data);
+            if ($projectDateError !== null) {
+                return ['error' => $projectDateError];
             }
         }
 
@@ -360,7 +519,7 @@ class TaskService
 
         $payload = array_merge($data, [
             'project_id' => $project?->id,
-            'type' => $data['type'] ?? 'task',
+            'type' => $type,
             'status' => $data['status'] ?? 'not_started',
             'origin_department_id' => $project?->owner_department_id ?? $creator->department_id,
             'created_by' => $creator->id,
@@ -513,6 +672,44 @@ class TaskService
         }
 
         return $data;
+    }
+
+    /**
+     * Người thực hiện báo cáo hoàn thành — chỉ assignee của task mới gọi
+     * được (kiểm tra quan hệ dữ liệu ở đây, route chỉ cần permission:task.view).
+     * Áp dụng `report_complete_action`: 'completed' → chuyển status
+     * 'completed', 'under_review' → chuyển status 'under_review', 'none' →
+     * không đổi status (chỉ ghi actual_end_date nếu chưa có).
+     *
+     * @return Task|array{error: string}
+     */
+    public function reportComplete(Task $task, User $actor): Task|array
+    {
+        if ($task->assignee_id === null || (int) $task->assignee_id !== $actor->id) {
+            return ['error' => 'Chỉ người thực hiện mới được báo cáo hoàn thành.'];
+        }
+
+        if (in_array($task->status, ['completed', 'cancelled'], true)) {
+            return ['error' => 'Công việc đã đóng, không thể báo cáo hoàn thành.'];
+        }
+
+        $data = [];
+        if ($task->actual_end_date === null) {
+            $data['actual_end_date'] = now()->toDateString();
+        }
+
+        if (in_array($task->report_complete_action, ['completed', 'under_review'], true)) {
+            $data['status'] = $task->report_complete_action;
+        }
+
+        if ($data === []) {
+            return $task;
+        }
+
+        $data = $this->applyAcceptedTracking($task, $data);
+        $data['updated_by'] = $actor->id;
+
+        return $this->tasks->update($task, $data);
     }
 
     /** @return array{error: string}|true */
@@ -704,6 +901,13 @@ class TaskService
             'actual_end_date' => $task->actual_end_date?->toDateString(),
             'assignee_id' => $task->assignee_id,
             'assignee' => $this->presentUser($task->relationLoaded('assignee') ? $task->assignee : null),
+            // Phòng ban CỦA NGƯỜI ĐƯỢC GIAO (khác 'department' ở trên — field đó
+            // ưu tiên phòng nhận chuyển giao/phòng gốc của TASK). Dùng để form
+            // chấm điểm (TaskDetail.vue) tra đúng khung chấm điểm "Cách 2" của
+            // phòng ban assignee qua GET /api/evaluation/score-kit/quality-levels.
+            'assignee_department_id' => $task->relationLoaded('assignee')
+                ? $task->assignee?->department_id
+                : null,
             'progress_percent' => $task->progress_percent,
             'progress_type' => $task->progress_type,
             'progress_number' => $task->progress_number,
@@ -725,10 +929,11 @@ class TaskService
             'hide_from_parent_followers' => (bool) $task->hide_from_parent_followers,
             'hide_child_tasks_from_followers' => (bool) $task->hide_child_tasks_from_followers,
             'allow_child_people_view_parent' => (bool) $task->allow_child_people_view_parent,
-            'auto_complete_on_report' => (bool) $task->auto_complete_on_report,
-            'completed_interaction_policy' => $task->completed_interaction_policy,
-            'report_description_requirement' => $task->report_description_requirement,
-            'report_attachment_requirement' => $task->report_attachment_requirement,
+            'report_complete_action' => $this->presentReportCompleteAction($task),
+            'failed_review_count' => (int) ($task->failed_review_count ?? 0),
+            'completed_interaction_policy' => $task->completed_interaction_policy ?: 'inherit',
+            'report_description_requirement' => $task->report_description_requirement ?: 'none',
+            'report_attachment_requirement' => $task->report_attachment_requirement ?: 'none',
             'accepted_by' => $task->accepted_by,
             'accepted_by_user' => $this->presentUser($task->relationLoaded('acceptedBy') ? $task->acceptedBy : null),
             'accepted_at' => $task->accepted_at?->toIso8601String(),
@@ -745,6 +950,7 @@ class TaskService
             'variance_days' => $overdue['variance_days'],
             'task_score' => $this->presentTaskScore($task->relationLoaded('taskScore') ? $task->taskScore : null),
             'creator' => $this->presentUser($task->relationLoaded('creator') ? $task->creator : null),
+            'updater' => $this->presentUser($task->relationLoaded('updater') ? $task->updater : null),
             'created_by' => $task->created_by,
             'updated_by' => $task->updated_by,
             'created_at' => $task->created_at?->toIso8601String(),
@@ -784,6 +990,16 @@ class TaskService
         return ['is_overdue' => $isOverdue, 'overdue_days' => $overdueDays, 'variance_days' => $varianceDays];
     }
 
+    private function presentReportCompleteAction(Task $task): string
+    {
+        $action = $task->report_complete_action;
+        if (in_array($action, ['none', 'completed', 'under_review'], true)) {
+            return $action;
+        }
+
+        return (bool) $task->getAttribute('auto_complete_on_report') ? 'completed' : 'none';
+    }
+
     private function presentTaskScore(?TaskScore $score): ?array
     {
         if ($score === null) {
@@ -793,6 +1009,7 @@ class TaskService
         return [
             'rating_score' => $score->rating_score,
             'rating_result' => $score->rating_result,
+            'is_passed' => $score->is_passed,
             'rating_desc' => $score->rating_desc,
             'scored_by' => $score->scored_by,
             'scorer' => $this->presentUser($score->relationLoaded('scorer') ? $score->scorer : null),

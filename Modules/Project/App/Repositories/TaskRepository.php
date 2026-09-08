@@ -159,7 +159,7 @@ class TaskRepository implements TaskRepositoryInterface
 
     public function tabCounts(array $allowedProjectIds, ?int $forceAssigneeId, User $viewer): array
     {
-        $tabs = ['all', 'not_started', 'in_progress', 'on_hold', 'completed', 'cancelled', 'my_tasks', 'overdue'];
+        $tabs = ['all', 'not_started', 'in_progress', 'under_review', 'on_hold', 'completed', 'cancelled', 'my_tasks', 'overdue'];
         $counts = [];
 
         foreach ($tabs as $tab) {
@@ -303,6 +303,7 @@ class TaskRepository implements TaskRepositoryInterface
         'delegation_status',
         'accepted_by', // derived — TaskService::applyAcceptedTracking() set
         'accepted_at', // derived — TaskService::applyAcceptedTracking() set
+        'failed_review_count', // derived — TaskScoreService::upsert() increment() trực tiếp, không qua update() này
     ];
 
     public function create(array $data): Task

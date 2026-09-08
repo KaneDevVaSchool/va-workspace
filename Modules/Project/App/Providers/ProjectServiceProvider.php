@@ -3,9 +3,14 @@
 namespace Modules\Project\App\Providers;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Modules\Project\App\Console\Commands\AutoStartProjectsCommand;
+use Modules\Project\App\Models\Project;
+use Modules\Project\App\Models\Task;
+use Modules\Project\App\Repositories\CommentRepository;
+use Modules\Project\App\Repositories\Contracts\CommentRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\TaskAttachmentRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
@@ -45,12 +50,25 @@ class ProjectServiceProvider extends ServiceProvider
             TaskScoreRepositoryInterface::class,
             TaskScoreRepository::class,
         );
+
+        $this->app->bind(
+            CommentRepositoryInterface::class,
+            CommentRepository::class,
+        );
     }
 
     public function boot(): void
     {
         $this->loadMigrationsFrom(module_path('Project', 'Database/migrations'));
         $this->registerRoutes();
+
+        // Morph map cho Comment (Thảo luận, polymorphic) — lưu string ngắn
+        // 'task'/'project' vào cột commentable_type thay vì full class name,
+        // an toàn hơn nếu sau này đổi namespace model.
+        Relation::enforceMorphMap([
+            'task' => Task::class,
+            'project' => Project::class,
+        ]);
 
         if ($this->app->runningInConsole()) {
             $this->commands([

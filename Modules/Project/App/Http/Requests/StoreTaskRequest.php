@@ -48,7 +48,9 @@ class StoreTaskRequest extends FormRequest
             'hide_from_parent_followers' => ['nullable', 'boolean'],
             'hide_child_tasks_from_followers' => ['nullable', 'boolean'],
             'allow_child_people_view_parent' => ['nullable', 'boolean'],
-            'auto_complete_on_report' => ['nullable', 'boolean'],
+            'report_complete_action' => [
+                'nullable', 'string', Rule::in(TaskEnums::REPORT_COMPLETE_ACTIONS),
+            ],
             'completed_interaction_policy' => [
                 'nullable', 'string', Rule::in(TaskEnums::COMPLETED_INTERACTION_POLICIES),
             ],
@@ -110,6 +112,7 @@ class StoreTaskRequest extends FormRequest
             'manager_id.exists' => 'Người quản lý không tồn tại.',
             'watcher_ids.*.exists' => 'Có người theo dõi không tồn tại.',
             'collaborator_ids.*.exists' => 'Có người phối hợp không tồn tại.',
+            'report_complete_action.in' => 'Lựa chọn sau khi báo cáo hoàn thành không hợp lệ.',
             'completed_interaction_policy.in' => 'Cài đặt thảo luận sau hoàn thành không hợp lệ.',
             'report_description_requirement.in' => 'Yêu cầu mô tả báo cáo không hợp lệ.',
             'report_attachment_requirement.in' => 'Yêu cầu file báo cáo không hợp lệ.',

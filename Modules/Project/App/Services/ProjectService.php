@@ -14,12 +14,14 @@ use Modules\Project\App\Enums\ProjectEnums;
 use Modules\Project\App\Exceptions\ProjectOwnerDepartmentMissing;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\ProjectAttachment;
+use Modules\Project\App\Models\ProjectFolder;
 use Modules\Project\App\Models\ProjectLabel;
 use Modules\Project\App\Models\ProjectQuickItem;
 use Modules\Project\App\Models\ProjectScope;
 use Modules\Project\App\Models\ProjectSetting;
 use Modules\Project\App\Models\ProjectType;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
+use Modules\Project\App\Repositories\Contracts\TaskAttachmentRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -39,6 +41,8 @@ class ProjectService
         private readonly ProjectExcelExporter $exporter,
         private readonly ProjectExcelImporter $importer,
         private readonly TaskRepositoryInterface $tasks,
+        private readonly TaskAttachmentRepositoryInterface $taskAttachments,
+        private readonly TaskAttachmentService $taskAttachmentService,
     ) {}
 
     /** @param  array<string, mixed>  $filters */
@@ -369,9 +373,17 @@ class ProjectService
         ?UploadedFile $file,
         ?string $url,
         int $uploadedBy,
+        ?int $folderId = null,
     ): ProjectAttachment|array {
         if (! $file && ! $url) {
             return ['error' => 'Cần chọn file hoặc nhập link Google Drive.'];
+        }
+
+        if ($folderId !== null) {
+            $folder = $this->projects->findFolder($project->id, $folderId);
+            if ($folder === null) {
+                return ['error' => 'Không tìm thấy thư mục.'];
+            }
         }
 
         if ($file) {
@@ -379,6 +391,7 @@ class ProjectService
             $isImage = in_array($file->getMimeType(), self::IMAGE_MIMES, true);
 
             return $this->projects->addAttachment($project->id, [
+                'folder_id' => $folderId,
                 'kind' => $isImage ? 'image' : 'file',
                 'file_path' => $path,
                 'original_name' => $file->getClientOriginalName(),
@@ -389,10 +402,152 @@ class ProjectService
         }
 
         return $this->projects->addAttachment($project->id, [
+            'folder_id' => $folderId,
             'kind' => 'drive_link',
             'url' => $url,
             'uploaded_by' => $uploadedBy,
         ]);
+    }
+
+    /**
+     * @return array{folder: ?array<string, mixed>, ancestors: list<array<string, mixed>>, folders: list<array<string, mixed>>, files: list<array<string, mixed>>}|array{error: string}
+     */
+    public function listDocuments(Project $project, ?int $folderId): array
+    {
+        $current = null;
+        if ($folderId !== null) {
+            $current = $this->projects->findFolder($project->id, $folderId);
+            if ($current === null) {
+                return ['error' => 'Không tìm thấy thư mục.'];
+            }
+        }
+
+        $folders = $this->projects->listFolders($project->id, $folderId);
+        $files = $this->projects->listAttachmentsInFolder($project->id, $folderId);
+
+        return [
+            'folder' => $current ? $this->presentFolder($current) : null,
+            'ancestors' => $current ? $this->folderAncestors($project->id, $current) : [],
+            'folders' => $folders->map(fn (ProjectFolder $f) => $this->presentFolder($f, true))->values()->all(),
+            'files' => $files->map(fn (ProjectAttachment $a) => $this->presentAttachment($a))->values()->all(),
+        ];
+    }
+
+    /**
+     * @return ProjectFolder|array{error: string}
+     */
+    public function createFolder(Project $project, string $name, ?int $parentId, int $createdBy): ProjectFolder|array
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return ['error' => 'Tên thư mục không được để trống.'];
+        }
+
+        if ($parentId !== null && $this->projects->findFolder($project->id, $parentId) === null) {
+            return ['error' => 'Không tìm thấy thư mục cha.'];
+        }
+
+        $exists = $this->projects->listFolders($project->id, $parentId)
+            ->contains(fn (ProjectFolder $f) => mb_strtolower($f->name) === mb_strtolower($name));
+        if ($exists) {
+            return ['error' => 'Thư mục cùng tên đã tồn tại ở đây.'];
+        }
+
+        return $this->projects->createFolder($project->id, [
+            'parent_id' => $parentId,
+            'name' => $name,
+            'created_by' => $createdBy,
+        ]);
+    }
+
+    /**
+     * @return ProjectFolder|array{error: string}
+     */
+    public function renameFolder(Project $project, int $folderId, string $name): ProjectFolder|array
+    {
+        $folder = $this->projects->findFolder($project->id, $folderId);
+        if ($folder === null) {
+            return ['error' => 'Không tìm thấy thư mục.'];
+        }
+
+        $name = trim($name);
+        if ($name === '') {
+            return ['error' => 'Tên thư mục không được để trống.'];
+        }
+
+        $exists = $this->projects->listFolders($project->id, $folder->parent_id)
+            ->contains(fn (ProjectFolder $f) => $f->id !== $folder->id && mb_strtolower($f->name) === mb_strtolower($name));
+        if ($exists) {
+            return ['error' => 'Thư mục cùng tên đã tồn tại ở đây.'];
+        }
+
+        return $this->projects->updateFolder($folder, ['name' => $name]);
+    }
+
+    /** @return array{error: string}|null */
+    public function destroyFolder(Project $project, int $folderId): ?array
+    {
+        $folder = $this->projects->findFolder($project->id, $folderId);
+        if ($folder === null) {
+            return ['error' => 'Không tìm thấy thư mục.'];
+        }
+
+        $ids = $this->projects->descendantFolderIds($project->id, $folder->id);
+        $files = $this->projects->listAttachmentsInFolders($project->id, $ids);
+
+        foreach ($files as $file) {
+            $this->deletePhysicalFile($file);
+            $this->projects->deleteAttachment($file);
+        }
+
+        $this->projects->deleteFolder($folder);
+
+        return null;
+    }
+
+    /**
+     * @return ProjectAttachment|array{error: string}
+     */
+    public function renameAttachment(Project $project, int $attachmentId, string $originalName): ProjectAttachment|array
+    {
+        $attachment = $this->projects->findAttachment($project->id, $attachmentId);
+        if ($attachment === null) {
+            return ['error' => 'Không tìm thấy tệp đính kèm.'];
+        }
+
+        $originalName = trim($originalName);
+        if ($originalName === '') {
+            return ['error' => 'Tên tệp không được để trống.'];
+        }
+
+        if ($attachment->kind !== 'drive_link') {
+            $originalExt = pathinfo((string) $attachment->original_name, PATHINFO_EXTENSION);
+            $newExt = pathinfo($originalName, PATHINFO_EXTENSION);
+            if ($originalExt !== '' && $newExt === '') {
+                $originalName .= '.'.$originalExt;
+            }
+        }
+
+        return $this->projects->updateAttachment($attachment, ['original_name' => $originalName]);
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function listTaskAttachments(Project $project): array
+    {
+        return $this->taskAttachments->listForProject($project->id)
+            ->map(function ($attachment) {
+                $row = $this->taskAttachmentService->present($attachment);
+                $task = $attachment->relationLoaded('task') ? $attachment->task : null;
+                $row['task'] = $task ? [
+                    'id' => $task->id,
+                    'title' => $task->title,
+                    'type' => $task->type,
+                ] : null;
+
+                return $row;
+            })
+            ->values()
+            ->all();
     }
 
     /** @return array{error: string}|null */
@@ -815,6 +970,10 @@ class ProjectService
             ])->values()->all(),
             'attachments' => $project->attachments->map(fn (ProjectAttachment $a) => $this->presentAttachment($a))->values()->all(),
             'is_following' => $viewer ? $this->isFollowing($project, $viewer) : false,
+            // Quyền theo scope phòng ban (owner) — UI dùng các cờ này thay vì
+            // auth.can() phẳng (không biết department scope).
+            'can_edit' => $viewer ? $this->userCanManageDepartment($viewer, $project) : false,
+            'can_manage_members' => $viewer ? $this->userCanManageDepartment($viewer, $project) : false,
             'created_by' => $project->created_by,
             'updated_by' => $project->updated_by,
             'creator' => $this->presentUser($project->creator),
@@ -856,6 +1015,7 @@ class ProjectService
     {
         return [
             'id' => $attachment->id,
+            'folder_id' => $attachment->folder_id,
             'kind' => $attachment->kind,
             'file_path' => $attachment->file_path,
             'file_url' => $attachment->file_path ? Storage::disk('public')->url($attachment->file_path) : null,
@@ -867,6 +1027,46 @@ class ProjectService
             'uploader' => $this->presentUser($attachment->uploader),
             'created_at' => $attachment->created_at?->toIso8601String(),
         ];
+    }
+
+    /** @return array<string, mixed> */
+    public function presentFolder(ProjectFolder $folder, bool $withSize = false): array
+    {
+        $row = [
+            'id' => $folder->id,
+            'parent_id' => $folder->parent_id,
+            'name' => $folder->name,
+            'created_by' => $folder->created_by,
+            'creator' => $this->presentUser($folder->relationLoaded('creator') ? $folder->creator : null),
+            'created_at' => $folder->created_at?->toIso8601String(),
+        ];
+
+        if ($withSize) {
+            $ids = $this->projects->descendantFolderIds($folder->project_id, $folder->id);
+            $row['size_bytes'] = $this->projects->sumAttachmentSizeInFolders($folder->project_id, $ids);
+        }
+
+        return $row;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function folderAncestors(int $projectId, ProjectFolder $folder): array
+    {
+        $chain = [];
+        $current = $folder;
+        $guard = 0;
+
+        while ($current->parent_id && $guard < 32) {
+            $parent = $this->projects->findFolder($projectId, (int) $current->parent_id);
+            if ($parent === null) {
+                break;
+            }
+            array_unshift($chain, $this->presentFolder($parent));
+            $current = $parent;
+            $guard++;
+        }
+
+        return $chain;
     }
 
     private function durationBetween($start, $end): ?int

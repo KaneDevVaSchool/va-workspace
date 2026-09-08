@@ -4,6 +4,7 @@ namespace Modules\Project\App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Modules\Project\App\Http\Requests\StoreTaskAttachmentRequest;
+use Modules\Project\App\Http\Requests\UpdateTaskAttachmentRequest;
 use Modules\Project\App\Models\Task;
 use Modules\Project\App\Models\TaskAttachment;
 use Modules\Project\App\Services\TaskAttachmentService;
@@ -31,6 +32,28 @@ class TaskAttachmentController extends Controller
         $attachment = $this->service->upload($task, $request->file('file'), $request->user());
 
         return response()->json(['attachment' => $this->service->present($attachment)], 201);
+    }
+
+    /** PUT /api/project/tasks/attachments/{attachment} */
+    public function update(UpdateTaskAttachmentRequest $request, int $attachment)
+    {
+        $result = $this->service->rename($attachment, $request->validated()['file_name']);
+        if (is_array($result)) {
+            return response()->json(['message' => $result['error']], 404);
+        }
+
+        return response()->json(['attachment' => $this->service->present($result)]);
+    }
+
+    /** POST /api/project/tasks/attachments/{attachment}/replace */
+    public function replace(StoreTaskAttachmentRequest $request, int $attachment)
+    {
+        $result = $this->service->replace($attachment, $request->file('file'), $request->user());
+        if (is_array($result)) {
+            return response()->json(['message' => $result['error']], 404);
+        }
+
+        return response()->json(['attachment' => $this->service->present($result)]);
     }
 
     /** DELETE /api/project/tasks/attachments/{attachment} */

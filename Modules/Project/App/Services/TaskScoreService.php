@@ -34,6 +34,14 @@ class TaskScoreService
             'scored_at' => now(),
         ]));
 
+        // is_passed = false → tăng đếm số lần đánh giá không đạt, hiển thị
+        // ở TaskDetail.vue "Số lần đánh giá không hoàn thành công việc".
+        // increment() trực tiếp trên Model (không qua TaskRepository::update())
+        // vì đây là derived field — cùng lý do accepted_by dùng forceFill.
+        if (($data['is_passed'] ?? null) === false) {
+            $task->increment('failed_review_count');
+        }
+
         $this->notifyScored($task, $scorer);
 
         return $score;
@@ -67,6 +75,7 @@ class TaskScoreService
             'task_id' => $score->task_id,
             'rating_score' => $score->rating_score,
             'rating_result' => $score->rating_result,
+            'is_passed' => $score->is_passed,
             'rating_desc' => $score->rating_desc,
             'scored_by' => $score->scored_by,
             'scored_at' => $score->scored_at?->toIso8601String(),

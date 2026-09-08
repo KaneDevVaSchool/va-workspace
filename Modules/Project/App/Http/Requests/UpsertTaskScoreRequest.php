@@ -18,6 +18,9 @@ class UpsertTaskScoreRequest extends FormRequest
             // rating_result là text tự do, KHÔNG enum DB cứng — kết quả
             // đánh giá tuỳ cấu hình evaluation tương lai (chưa dựng).
             'rating_result' => ['nullable', 'string', 'max:100'],
+            // is_passed là field riêng, tường minh Đạt/Không đạt — false sẽ
+            // tăng tasks.failed_review_count (TaskScoreService::upsert()).
+            'is_passed' => ['nullable', 'boolean'],
             'rating_desc' => ['nullable', 'string', 'max:5000'],
         ];
     }

@@ -13,10 +13,16 @@ interface TaskAttachmentRepositoryInterface
 {
     public function listForTask(int $taskId): Collection;
 
+    /** @return Collection<int, TaskAttachment> */
+    public function listForProject(int $projectId): Collection;
+
     public function find(int $id): ?TaskAttachment;
 
     /** @param  array<string, mixed>  $data */
     public function create(array $data): TaskAttachment;
+
+    /** @param  array<string, mixed>  $data */
+    public function update(TaskAttachment $attachment, array $data): TaskAttachment;
 
     public function delete(TaskAttachment $attachment): bool;
 }

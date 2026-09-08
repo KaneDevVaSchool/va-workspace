@@ -20,6 +20,7 @@ class UploadProjectAttachmentRequest extends FormRequest
                 'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,ppt,pptx,zip,rar,txt,csv',
             ],
             'url' => ['nullable', 'url', 'max:2048'],
+            'folder_id' => ['nullable', 'integer', 'exists:project_folders,id'],
         ];
     }
 

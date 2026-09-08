@@ -95,7 +95,7 @@ class Task extends Model
         'hide_from_parent_followers',
         'hide_child_tasks_from_followers',
         'allow_child_people_view_parent',
-        'auto_complete_on_report',
+        'report_complete_action',
         'completed_interaction_policy',
         'report_description_requirement',
         'report_attachment_requirement',
@@ -121,6 +121,10 @@ class Task extends Model
         // accepted_by / accepted_at KHÔNG fillable — derived field, chỉ
         // TaskService::applyAcceptedTracking() set qua forceFill trong
         // Repository, giống pattern origin_department_id ở trên.
+        //
+        // failed_review_count KHÔNG fillable — derived field, chỉ
+        // TaskScoreService::upsert() tăng qua increment() khi lưu đánh giá
+        // "Không đạt" (is_passed = false), cùng pattern accepted_by ở trên.
     ];
 
     protected $casts = [
@@ -141,7 +145,7 @@ class Task extends Model
         'hide_from_parent_followers' => 'boolean',
         'hide_child_tasks_from_followers' => 'boolean',
         'allow_child_people_view_parent' => 'boolean',
-        'auto_complete_on_report' => 'boolean',
+        'failed_review_count' => 'integer',
     ];
 
     public function project(): BelongsTo
@@ -201,6 +205,14 @@ class Task extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(TaskAttachment::class);
+    }
+
+    /** Bình luận gốc (Thảo luận) — polymorphic, xem Comment::commentable(). */
+    public function comments(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(Comment::class, 'commentable')
+            ->whereNull('parent_comment_id')
+            ->orderBy('created_at');
     }
 
     public function originDepartment(): BelongsTo

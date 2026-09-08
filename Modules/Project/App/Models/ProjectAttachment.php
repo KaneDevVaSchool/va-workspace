@@ -9,15 +9,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Đính kèm của dự án — file upload, ảnh (thư viện ảnh riêng), hoặc link Drive.
  *
- * @property int         $id
- * @property int         $project_id
- * @property string      $kind             file | drive_link | image
+ * @property int $id
+ * @property int $project_id
+ * @property int|null $folder_id
+ * @property string $kind file | drive_link | image
  * @property string|null $file_path
  * @property string|null $original_name
  * @property string|null $mime_type
- * @property int|null    $size_bytes
+ * @property int|null $size_bytes
  * @property string|null $url
- * @property int|null    $uploaded_by
+ * @property int|null $uploaded_by
  */
 class ProjectAttachment extends Model
 {
@@ -25,6 +26,7 @@ class ProjectAttachment extends Model
 
     protected $fillable = [
         'project_id',
+        'folder_id',
         'kind',
         'file_path',
         'original_name',
@@ -37,6 +39,11 @@ class ProjectAttachment extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function folder(): BelongsTo
+    {
+        return $this->belongsTo(ProjectFolder::class, 'folder_id');
     }
 
     public function uploader(): BelongsTo

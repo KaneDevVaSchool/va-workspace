@@ -13,6 +13,7 @@ use Modules\Identity\App\Services\PermissionService;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\ProjectAttachment;
 use Modules\Project\App\Models\ProjectCreatorAllowlist;
+use Modules\Project\App\Models\ProjectFolder;
 use Modules\Project\App\Models\ProjectFollower;
 use Modules\Project\App\Models\ProjectLabel;
 use Modules\Project\App\Models\ProjectQuickItem;
@@ -241,9 +242,107 @@ class ProjectRepository implements ProjectRepositoryInterface
             ->first();
     }
 
+    public function updateAttachment(ProjectAttachment $attachment, array $data): ProjectAttachment
+    {
+        $attachment->fill($data);
+        $attachment->save();
+
+        return $attachment->fresh('uploader');
+    }
+
     public function deleteAttachment(ProjectAttachment $attachment): bool
     {
         return (bool) $attachment->delete();
+    }
+
+    public function listFolders(int $projectId, ?int $parentId): Collection
+    {
+        return ProjectFolder::query()
+            ->with('creator')
+            ->where('project_id', $projectId)
+            ->where(fn ($q) => $parentId === null ? $q->whereNull('parent_id') : $q->where('parent_id', $parentId))
+            ->orderBy('name')
+            ->get();
+    }
+
+    public function findFolder(int $projectId, int $folderId): ?ProjectFolder
+    {
+        return ProjectFolder::query()
+            ->where('project_id', $projectId)
+            ->where('id', $folderId)
+            ->first();
+    }
+
+    public function createFolder(int $projectId, array $data): ProjectFolder
+    {
+        return ProjectFolder::query()->create(array_merge($data, ['project_id' => $projectId]));
+    }
+
+    public function updateFolder(ProjectFolder $folder, array $data): ProjectFolder
+    {
+        $folder->fill($data);
+        $folder->save();
+
+        return $folder->fresh('creator');
+    }
+
+    public function deleteFolder(ProjectFolder $folder): bool
+    {
+        return (bool) $folder->delete();
+    }
+
+    public function listAttachmentsInFolder(int $projectId, ?int $folderId): Collection
+    {
+        return ProjectAttachment::query()
+            ->with('uploader')
+            ->where('project_id', $projectId)
+            ->where(fn ($q) => $folderId === null ? $q->whereNull('folder_id') : $q->where('folder_id', $folderId))
+            ->orderByDesc('created_at')
+            ->get();
+    }
+
+    public function listAttachmentsInFolders(int $projectId, array $folderIds): Collection
+    {
+        if ($folderIds === []) {
+            return collect();
+        }
+
+        return ProjectAttachment::query()
+            ->where('project_id', $projectId)
+            ->whereIn('folder_id', $folderIds)
+            ->get();
+    }
+
+    public function sumAttachmentSizeInFolders(int $projectId, array $folderIds): int
+    {
+        if ($folderIds === []) {
+            return 0;
+        }
+
+        return (int) ProjectAttachment::query()
+            ->where('project_id', $projectId)
+            ->whereIn('folder_id', $folderIds)
+            ->sum('size_bytes');
+    }
+
+    public function descendantFolderIds(int $projectId, int $folderId): array
+    {
+        $ids = [$folderId];
+        $frontier = [$folderId];
+
+        while ($frontier !== []) {
+            $children = ProjectFolder::query()
+                ->where('project_id', $projectId)
+                ->whereIn('parent_id', $frontier)
+                ->pluck('id')
+                ->all();
+            $frontier = array_values(array_diff($children, $ids));
+            foreach ($frontier as $id) {
+                $ids[] = $id;
+            }
+        }
+
+        return $ids;
     }
 
     public function nextCode(): string

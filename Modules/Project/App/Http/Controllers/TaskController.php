@@ -11,7 +11,9 @@ use Modules\Project\App\Http\Requests\ConfirmImportTaskRequest;
 use Modules\Project\App\Http\Requests\ExportTaskRequest;
 use Modules\Project\App\Http\Requests\ImportTaskRequest;
 use Modules\Project\App\Http\Requests\ResolveImportTaskRowRequest;
+use Modules\Project\App\Http\Requests\StoreBulkTasksRequest;
 use Modules\Project\App\Http\Requests\StoreTaskRequest;
+use Modules\Project\App\Http\Requests\SyncProjectStructureRequest;
 use Modules\Project\App\Http\Requests\UpdateTaskRequest;
 use Modules\Project\App\Models\Task;
 use Modules\Project\App\Services\ProjectService;
@@ -90,11 +92,72 @@ class TaskController extends Controller
 
         $result = $this->service->create($model, $request->validated(), $request->user());
 
-        if (is_array($result)) {
+        if (is_array($result) && isset($result['error'])) {
             return response()->json(['message' => $result['error']], 422);
         }
 
+        if (is_array($result) && isset($result['tasks'])) {
+            $presented = collect($result['tasks'])->map(fn ($t) => $this->service->present($t))->values();
+
+            return response()->json([
+                'tasks' => $presented,
+                'task' => $presented->last(),
+            ], 201);
+        }
+
         return response()->json(['task' => $this->service->present($result)], 201);
+    }
+
+    /** POST /api/project/{project}/tasks/bulk — tạo nhiều công việc, mỗi dòng field riêng. */
+    public function storeBulk(StoreBulkTasksRequest $request, int $project)
+    {
+        $model = $this->projects->find($project);
+        if ($model === null) {
+            return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+        }
+
+        $result = $this->service->createMany($model, $request->validated()['items'], $request->user());
+
+        if (isset($result['error'])) {
+            return response()->json(['message' => $result['error']], 422);
+        }
+
+        return response()->json([
+            'tasks' => collect($result)->map(fn ($t) => $this->service->present($t))->values(),
+        ], 201);
+    }
+
+    /**
+     * PUT /api/project/{project}/structure/{type} — type = category|phase.
+     * Đồng bộ danh sách cấu trúc (tạo/sửa/xoá/đổi thứ tự) trong 1 transaction.
+     */
+    public function syncStructure(SyncProjectStructureRequest $request, int $project, string $type)
+    {
+        if (! in_array($type, ['category', 'phase'], true)) {
+            return response()->json(['message' => 'Loại cấu trúc không hợp lệ.'], 404);
+        }
+
+        $model = $this->projects->find($project);
+        if ($model === null) {
+            return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+        }
+
+        $validated = $request->validated();
+        $result = $this->service->syncStructure(
+            $model,
+            $type,
+            $validated['items'] ?? [],
+            $validated['deleted_ids'] ?? [],
+            $request->user(),
+        );
+
+        if (isset($result['error'])) {
+            return response()->json(['message' => $result['error']], 422);
+        }
+
+        return response()->json([
+            'tasks' => collect($result)->map(fn ($t) => $this->service->present($t))->values(),
+        ]);
     }
 
     /** POST /api/project/tasks — tạo công việc, project_id tuỳ chọn (trống = thường xuyên). */
@@ -111,8 +174,17 @@ class TaskController extends Controller
 
         $result = $this->service->create($project, $request->validated(), $request->user());
 
-        if (is_array($result)) {
+        if (is_array($result) && isset($result['error'])) {
             return response()->json(['message' => $result['error']], 422);
+        }
+
+        if (is_array($result) && isset($result['tasks'])) {
+            $presented = collect($result['tasks'])->map(fn ($t) => $this->service->present($t))->values();
+
+            return response()->json([
+                'tasks' => $presented,
+                'task' => $presented->last(),
+            ], 201);
         }
 
         return response()->json(['task' => $this->service->present($result)], 201);
@@ -138,6 +210,22 @@ class TaskController extends Controller
     public function update(UpdateTaskRequest $request, Task $task)
     {
         $result = $this->service->update($task, $request->validated(), $request->user());
+
+        if (is_array($result)) {
+            return response()->json(['message' => $result['error']], 422);
+        }
+
+        return response()->json(['task' => $this->service->present($result)]);
+    }
+
+    /**
+     * POST /api/project/tasks/{task}/report-complete — chỉ assignee của
+     * task gọi được (kiểm tra ở Service, route chỉ cần permission:task.view
+     * vì đây là quan hệ dữ liệu chứ không phải quyền tĩnh).
+     */
+    public function reportComplete(Request $request, Task $task)
+    {
+        $result = $this->service->reportComplete($task, $request->user());
 
         if (is_array($result)) {
             return response()->json(['message' => $result['error']], 422);

@@ -13,30 +13,30 @@ use Modules\Identity\App\Models\Department;
  * Dự án (Project module — giai đoạn 1: CRUD, mở rộng phân quyền/nhãn/theo dõi
  * ở giai đoạn 2).
  *
- * @property int         $id
- * @property string      $code               mã tự sinh, ví dụ PRJ0001
- * @property string      $type
- * @property string      $name
- * @property int|null    $lead_user_id
- * @property int|null    $lead_department_id       phòng ban phụ trách
- * @property int|null    $owner_department_id      phòng ban sở hữu — set 1 lần lúc tạo, không sửa được
- * @property int|null    $executing_department_id  phòng ban thực hiện chính (đồng bộ từ pivot, tương thích cũ)
+ * @property int $id
+ * @property string $code mã tự sinh, ví dụ PRJ0001
+ * @property string $type
+ * @property string $name
+ * @property int|null $lead_user_id
+ * @property int|null $lead_department_id phòng ban phụ trách
+ * @property int|null $owner_department_id phòng ban sở hữu — set 1 lần lúc tạo, không sửa được
+ * @property int|null $executing_department_id phòng ban thực hiện chính (đồng bộ từ pivot, tương thích cũ)
  * @property string|null $start_date
  * @property string|null $end_date
  * @property string|null $actual_start_date
  * @property string|null $actual_end_date
- * @property string      $progress_method
- * @property string      $status
- * @property string      $importance
- * @property bool        $shift_task_dates_with_project
- * @property bool        $hide_cross_tasks_from_assignees
- * @property bool        $hide_child_tasks_from_followers
- * @property bool        $constrain_task_dates_to_project
+ * @property string $progress_method
+ * @property string $status
+ * @property string $importance
+ * @property bool $shift_task_dates_with_project
+ * @property bool $hide_cross_tasks_from_assignees
+ * @property bool $hide_child_tasks_from_followers
+ * @property bool $constrain_task_dates_to_project
  * @property string|null $description
  * @property string|null $avatar_path
- * @property float|null  $evaluation_score   để trống — tổng hợp từ Task tương lai
- * @property int|null    $created_by
- * @property int|null    $updated_by
+ * @property float|null $evaluation_score để trống — tổng hợp từ Task tương lai
+ * @property int|null $created_by
+ * @property int|null $updated_by
  */
 class Project extends Model
 {
@@ -124,6 +124,26 @@ class Project extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(ProjectAttachment::class);
+    }
+
+    public function folders(): HasMany
+    {
+        return $this->hasMany(ProjectFolder::class);
+    }
+
+    /**
+     * Bình luận gốc (Thảo luận) — polymorphic, xem Comment::commentable().
+     * Ghim (is_pinned) lên đầu, nhiều ghim thì ghim gần nhất trước, còn lại
+     * theo thời gian tạo (mục 14 CLAUDE.md — ghim là hành động ghi/hiển thị
+     * mới, không phải tính lại toàn bộ danh sách).
+     */
+    public function comments(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(Comment::class, 'commentable')
+            ->whereNull('parent_comment_id')
+            ->orderByDesc('is_pinned')
+            ->orderByDesc('pinned_at')
+            ->orderBy('created_at');
     }
 
     public function quickItems(): HasMany
