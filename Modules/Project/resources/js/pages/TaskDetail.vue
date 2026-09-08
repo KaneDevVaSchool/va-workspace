@@ -1,24 +1,71 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
-import DualProgressBar from '@/components/DualProgressBar.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import { showClientToast } from '@/lib/clientToast';
-import { computeExpectedProgress } from '@/lib/progress';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
+import CommentList from '../components/CommentList.vue';
 import ProjectMemberPicker from '../components/ProjectMemberPicker.vue';
 import ProjectUserPicker from '../components/ProjectUserPicker.vue';
 import {
+  TASK_DELEGATION_STATUS_LABELS,
   TASK_PRIORITY_LABELS,
+  TASK_PRIORITY_TONES,
   TASK_PROGRESS_TYPE_LABELS,
+  TASK_SCORE_RESULT_SUGGESTIONS,
   TASK_STATUS_LABELS,
   TASK_STATUS_TONES,
   TASK_STATUSES,
   TASK_TYPE_LABELS,
 } from '../constants/task.js';
+
+const REPORT_COMPLETE_ACTION_LABELS = {
+  none: 'Không tự chuyển trạng thái',
+  completed: 'Chuyển sang Hoàn thành',
+  under_review: 'Chuyển sang Đang đánh giá',
+};
+const INTERACTION_POLICY_LABELS = {
+  allow: 'Cho phép',
+  deny: 'Không cho phép',
+  inherit: 'Biến động theo cài đặt',
+};
+const REPORT_REQUIREMENT_LABELS = {
+  none: 'Không yêu cầu',
+  on_report: 'Yêu cầu khi báo cáo',
+  on_completion: 'Yêu cầu khi báo cáo hoàn thành',
+};
+const RULE_DEFS = [
+  { key: 'hide_cross_tasks_from_assignees', label: 'Ẩn việc chéo' },
+  { key: 'hide_from_parent_assignees', label: 'Ẩn với người làm việc cha' },
+  { key: 'hide_from_parent_followers', label: 'Ẩn với người theo dõi việc cha' },
+  { key: 'hide_child_tasks_from_followers', label: 'Ẩn việc con' },
+  { key: 'allow_child_people_view_parent', label: 'Xem việc cha' },
+];
+const PERMISSION_RULE_VALUES = {
+  hide_cross_tasks_from_assignees: {
+    on: 'Người thực hiện không xem được việc chéo cùng việc cha',
+    off: 'Người thực hiện được xem việc chéo',
+  },
+  hide_from_parent_assignees: {
+    on: 'Người làm việc cha không xem được việc này',
+    off: 'Người làm việc cha được xem việc này',
+  },
+  hide_from_parent_followers: {
+    on: 'Người theo dõi việc cha không xem được việc này',
+    off: 'Người theo dõi việc cha được xem việc này',
+  },
+  hide_child_tasks_from_followers: {
+    on: 'Người theo dõi không xem được việc con',
+    off: 'Người theo dõi được xem việc con',
+  },
+  allow_child_people_view_parent: {
+    on: 'Người ở việc con được xem việc cha',
+    off: 'Người ở việc con không xem việc cha',
+  },
+};
 
 const route = useRoute();
 const router = useRouter();
@@ -32,76 +79,153 @@ const worklogs = ref([]);
 const users = ref([]);
 const importanceOptions = ref([]);
 
-const editing = ref(false);
-const saving = ref(false);
 const deleting = ref(false);
 const confirmingDelete = ref(false);
 const attachmentUploading = ref(false);
 const attachmentInput = ref(null);
+const selectedAttachmentIds = ref([]);
+const confirmingDeleteAttachments = ref(false);
+const deletingAttachments = ref(false);
+const fileMenuOpen = ref(false);
+const fileMenuRoot = ref(null);
+const fileMenuPos = reactive({ x: 0, y: 0 });
+const fileMenuAttachment = ref(null);
+const replaceInput = ref(null);
+const replaceTargetId = ref(null);
+const replacingAttachment = ref(false);
+const renaming = ref(false);
+const renameTarget = ref(null);
+const savingRename = ref(false);
+const renameForm = reactive({ file_name: '' });
+const renameInput = ref(null);
 const worklogFormOpen = ref(false);
 const worklogSaving = ref(false);
 const confirmingDeleteWorklog = ref(null);
 const statusSaving = ref(false);
+const reportCompleteSaving = ref(false);
 const statusMenuOpen = ref(false);
 const statusMenuRoot = ref(null);
+const statusMenuEl = ref(null);
+const statusMenuPos = reactive({ top: 0, left: 0 });
 const peopleOpen = ref(false);
 const peopleSaving = ref(false);
+const worklogSection = ref(null);
+const scoreFormOpen = ref(false);
+const scoreSaving = ref(false);
+// Thang chất lượng của khung chấm điểm "Cách 2 — Hiệu suất việc" (phòng ban
+// của assignee) — nạp khi mở form chấm điểm, để ô "Kết quả đánh giá" cho
+// CHỌN đúng theo thang thay vì gõ text tự do, khớp với cách
+// EvaluationScoreComputeService::qualityFactor() tính điểm hiệu suất.
+// Rỗng (phòng ban chưa cấu hình / đang dùng "Cách 1") → fallback ô text tự do.
+const scoreQualityLevels = ref([]);
+const scoreQualityLevelsLoading = ref(false);
+const infoTab = ref('general');
+const infoTabMeta = computed(() => (
+  infoTab.value === 'general'
+    ? { title: 'Thông tin chung', icon: 'clipboardCheck' }
+    : { title: 'Tiến độ và quyền', icon: 'sliders' }
+));
 
 const worklogForm = reactive({ work_date: '', hours: '', note: '' });
+const scoreForm = reactive({ rating_score: '', rating_result: '', is_passed: null, rating_desc: '' });
 const peopleForm = reactive({
   assignee_id: '',
   manager_id: '',
   watcher_ids: [],
   collaborator_ids: [],
 });
-const editForm = reactive({
-  title: '',
-  status: 'not_started',
-  priority: '',
-  start_date: '',
-  start_time: '',
-  end_date: '',
-  due_time: '',
-  actual_start_date: '',
-  actual_end_date: '',
-  assignee_id: '',
-  manager_id: '',
-  progress_percent: '',
-  description: '',
-  estimated_hours: '',
-  progress_type: 'percent',
-  progress_number: '',
-  progress_total: '',
-  unit: '',
-  weight: '',
-});
-
-const openSections = reactive({
-  info: true,
-  progress: true,
-  score: true,
-  worklog: true,
-  files: true,
-});
-
 const taskId = computed(() => Number(route.params.id || 0));
 const canEdit = computed(() => auth.can('task.create'));
-const statusTone = computed(() => TASK_STATUS_TONES[task.value?.status] || 'tertiary');
+const commentsCount = ref(0);
+const canApprove = computed(() => auth.can('task.approve'));
+const isAssignee = computed(() => Boolean(auth.user?.id) && task.value?.assignee_id === auth.user?.id);
+const canReportComplete = computed(
+  () => isAssignee.value && task.value && !['completed', 'cancelled'].includes(task.value.status),
+);
 const statusChoices = computed(() => TASK_STATUSES.filter((item) => item.value));
 const hasScore = computed(() => Boolean(task.value?.task_score));
-const followers = computed(() => {
-  const seen = new Map();
-  for (const person of [...(task.value?.watchers || []), ...(task.value?.collaborators || [])]) {
-    if (person?.id && !seen.has(person.id)) seen.set(person.id, person);
-  }
-  return Array.from(seen.values());
+const worklogTotalHours = computed(() => {
+  const total = worklogs.value.reduce((sum, log) => sum + Number(log.hours || 0), 0);
+  return Number.isInteger(total) ? total : Math.round(total * 100) / 100;
 });
-const headerPeople = computed(() => {
-  const seen = new Map();
-  for (const person of [task.value?.assignee, task.value?.manager, ...followers.value]) {
-    if (person?.id && !seen.has(person.id)) seen.set(person.id, person);
-  }
-  return Array.from(seen.values());
+const evalProgressPercent = computed(() => {
+  if (task.value?.progress_percent == null) return null;
+  const n = Number(task.value.progress_percent);
+  if (Number.isNaN(n)) return null;
+  return Math.max(0, Math.min(100, Math.round(n)));
+});
+const evalStars = computed(() => {
+  const raw = task.value?.task_score?.rating_score;
+  if (raw == null || raw === '') return 0;
+  const n = Number(raw);
+  if (Number.isNaN(n) || n <= 0) return 0;
+  if (n <= 5) return Math.max(0, Math.min(5, Math.round(n)));
+  return Math.max(0, Math.min(5, Math.round(n / 20)));
+});
+const evalStarCaption = computed(() => {
+  const captions = { 1: 'Kém', 2: 'Yếu', 3: 'Trung bình', 4: 'Tốt', 5: 'Xuất sắc' };
+  return captions[evalStars.value] || '';
+});
+const permissionLines = computed(() => {
+  if (!task.value) return [];
+  const reportAction = task.value.report_complete_action
+    || (task.value.auto_complete_on_report ? 'completed' : 'none');
+  const interaction = task.value.completed_interaction_policy || 'inherit';
+  const descReq = task.value.report_description_requirement || 'none';
+  const fileReq = task.value.report_attachment_requirement || 'none';
+
+  return [
+    ...RULE_DEFS.map((rule) => {
+      const on = Boolean(task.value[rule.key]);
+      return {
+        key: rule.key,
+        label: rule.label,
+        value: PERMISSION_RULE_VALUES[rule.key][on ? 'on' : 'off'],
+        on,
+      };
+    }),
+    {
+      key: 'constrain_child_dates',
+      label: 'Khóa thời gian việc con',
+      value: task.value.constrain_child_dates
+        ? 'Công việc con không được vượt khoảng thời gian này'
+        : 'Không khóa',
+      on: Boolean(task.value.constrain_child_dates),
+    },
+    {
+      key: 'report_complete_action',
+      label: 'Sau khi báo cáo hoàn thành',
+      value: REPORT_COMPLETE_ACTION_LABELS[reportAction] || REPORT_COMPLETE_ACTION_LABELS.none,
+      on: reportAction === 'completed' || reportAction === 'under_review',
+    },
+    {
+      key: 'completed_interaction_policy',
+      label: 'Thảo luận và file sau hoàn thành',
+      value: INTERACTION_POLICY_LABELS[interaction] || INTERACTION_POLICY_LABELS.inherit,
+      on: interaction !== 'inherit',
+    },
+    {
+      key: 'report_description_requirement',
+      label: 'Mô tả khi báo cáo',
+      value: REPORT_REQUIREMENT_LABELS[descReq] || REPORT_REQUIREMENT_LABELS.none,
+      on: descReq !== 'none',
+    },
+    {
+      key: 'report_attachment_requirement',
+      label: 'File khi báo cáo',
+      value: REPORT_REQUIREMENT_LABELS[fileReq] || REPORT_REQUIREMENT_LABELS.none,
+      on: fileReq !== 'none',
+    },
+  ];
+});
+const plannedTimeLabel = computed(() => {
+  if (!task.value) return '--';
+  return formatDateRange(
+    task.value.start_date,
+    task.value.start_time,
+    task.value.end_date,
+    task.value.due_time,
+  );
 });
 const actualTimeLabel = computed(() => {
   if (!task.value) return '--';
@@ -110,19 +234,18 @@ const actualTimeLabel = computed(() => {
   }
   return formatDate(task.value.actual_start_date || task.value.actual_end_date);
 });
-const editFormEstimatedPercent = computed(() => {
-  const number = Number(editForm.progress_number);
-  const total = Number(editForm.progress_total);
-  if (!editForm.progress_number || !total || total <= 0) return null;
-  return Math.round((number / total) * 100);
+const hasDelegation = computed(() => Boolean(task.value?.delegation_status));
+const peopleStory = computed(() => {
+  const nameOf = (id) => users.value.find((user) => String(user.id) === String(id))?.name || '';
+  const assignee = nameOf(peopleForm.assignee_id) || 'Chưa chọn người thực hiện';
+  const manager = nameOf(peopleForm.manager_id) || 'chưa chọn người giao việc';
+  return `${assignee} làm việc, ${manager} giao.`;
 });
-const priorityChoices = computed(() =>
-  importanceOptions.value.length
-    ? importanceOptions.value
-    : Object.entries(TASK_PRIORITY_LABELS).map(([value, label]) => ({ value, label })),
+const selectedAttachments = computed(() =>
+  attachments.value.filter((item) => selectedAttachmentIds.value.includes(item.id)),
 );
-const expectedProgress = computed(() =>
-  task.value ? computeExpectedProgress(task.value.start_date, task.value.end_date) : null,
+const allAttachmentsSelected = computed(
+  () => attachments.value.length > 0 && selectedAttachmentIds.value.length === attachments.value.length,
 );
 
 function formatDate(value) {
@@ -132,6 +255,57 @@ function formatDate(value) {
   return date.toLocaleDateString('vi-VN');
 }
 
+function formatClock(value) {
+  if (!value) return '';
+  return String(value).slice(0, 5);
+}
+
+function formatDateWithTime(date, time) {
+  const day = formatDate(date);
+  const clock = formatClock(time);
+  if (day === '--') return clock || '--';
+  return clock ? `${day} ${clock}` : day;
+}
+
+function formatDateRange(start, startTime, end, endTime) {
+  const left = formatDateWithTime(start, startTime);
+  const right = formatDateWithTime(end, endTime);
+  if (left === '--' && right === '--') return '--';
+  return `${left} - ${right}`;
+}
+
+function formatHours(value) {
+  if (value == null || value === '') return '--';
+  const n = Number(value);
+  if (Number.isNaN(n)) return '--';
+  return Number.isInteger(n) ? `${n} giờ` : `${n} giờ`;
+}
+
+function formatWeight(value) {
+  if (value == null || value === '') return '--';
+  const n = Number(value);
+  if (Number.isNaN(n)) return '--';
+  return `${n}%`;
+}
+
+function formatVariance(value) {
+  if (value == null || value === '') return '--';
+  const n = Number(value);
+  if (Number.isNaN(n)) return '--';
+  if (n === 0) return 'Đúng hạn';
+  return n > 0 ? `Trễ ${n} ngày` : `Sớm ${Math.abs(n)} ngày`;
+}
+
+function passedLabel(value) {
+  if (value === true) return 'Đạt';
+  if (value === false) return 'Không đạt';
+  return '--';
+}
+
+function delegationLabel(value) {
+  return TASK_DELEGATION_STATUS_LABELS[value] || value || '--';
+}
+
 function formatDateTime(value) {
   if (!value) return '--';
   const date = new Date(value);
@@ -139,11 +313,42 @@ function formatDateTime(value) {
   return date.toLocaleString('vi-VN');
 }
 
+function formatScoreDateTime(value) {
+  if (!value) return '--';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())} ${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
+function ratingResultTone(text) {
+  const value = String(text || '').toLowerCase();
+  if (/không|kém|yếu|fail|chưa/.test(value)) return 'danger';
+  if (/xuất sắc|tốt|đạt|hoàn thành/.test(value)) return 'success';
+  return 'gold';
+}
+
 function formatFileSize(bytes) {
   if (!bytes) return '';
   const kb = bytes / 1024;
   if (kb < 1024) return `${kb.toFixed(0)} KB`;
   return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+function fileExt(name) {
+  const match = String(name || '').match(/\.([a-z0-9]+)$/i);
+  return match ? match[1].toUpperCase() : 'FILE';
+}
+
+function fileExtTone(name) {
+  const ext = fileExt(name).toLowerCase();
+  if (['zip', 'rar', '7z'].includes(ext)) return 'gold';
+  if (['pdf'].includes(ext)) return 'danger';
+  if (['doc', 'docx'].includes(ext)) return 'info';
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return 'success';
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return 'tertiary';
+  if (['dwg', 'dxf'].includes(ext)) return 'primary';
+  return 'neutral';
 }
 
 function statusLabel(value) {
@@ -164,13 +369,12 @@ function progressTypeLabel(value) {
   return TASK_PROGRESS_TYPE_LABELS[value] || value || '--';
 }
 
-function toggleSection(key) {
-  openSections[key] = !openSections[key];
+function priorityTone(value) {
+  return TASK_PRIORITY_TONES[value] || 'neutral';
 }
 
 function applyTask(next) {
   task.value = next;
-  if (next?.task_score) openSections.score = true;
 }
 
 async function loadOptions() {
@@ -190,6 +394,7 @@ async function loadTask() {
   if (!taskId.value) return;
   loading.value = true;
   notFound.value = false;
+  infoTab.value = 'general';
   try {
     const [{ data: detail }, { data: files }, { data: logs }] = await Promise.all([
       window.axios.get(`/api/project/tasks/${taskId.value}`),
@@ -198,10 +403,8 @@ async function loadTask() {
     ]);
     applyTask(detail.task || null);
     attachments.value = files.attachments || [];
+    selectedAttachmentIds.value = [];
     worklogs.value = logs.worklogs || [];
-    openSections.score = Boolean(detail.task?.task_score);
-    openSections.worklog = (logs.worklogs || []).length > 0;
-    openSections.files = (files.attachments || []).length > 0;
   } catch (error) {
     task.value = null;
     notFound.value = error?.response?.status === 404;
@@ -215,74 +418,9 @@ function goBack() {
   router.push({ name: 'manager.project.tasks' });
 }
 
-function startEdit() {
+function goEdit() {
   if (!task.value) return;
-  editForm.title = task.value.title || '';
-  editForm.status = task.value.status || 'not_started';
-  editForm.priority = task.value.priority || '';
-  editForm.start_date = task.value.start_date || '';
-  editForm.start_time = task.value.start_time || '';
-  editForm.end_date = task.value.end_date || '';
-  editForm.due_time = task.value.due_time || '';
-  editForm.actual_start_date = task.value.actual_start_date || '';
-  editForm.actual_end_date = task.value.actual_end_date || '';
-  editForm.assignee_id = task.value.assignee_id || '';
-  editForm.manager_id = task.value.manager_id || '';
-  editForm.progress_percent = task.value.progress_percent ?? '';
-  editForm.description = task.value.description || '';
-  editForm.estimated_hours = task.value.estimated_hours ?? '';
-  editForm.progress_type = task.value.progress_type || 'percent';
-  editForm.progress_number = task.value.progress_number ?? '';
-  editForm.progress_total = task.value.progress_total ?? '';
-  editForm.unit = task.value.unit || '';
-  editForm.weight = task.value.weight ?? '';
-  editing.value = true;
-}
-
-function cancelEdit() {
-  if (!saving.value) editing.value = false;
-}
-
-async function saveEdit() {
-  if (!task.value) return;
-  saving.value = true;
-  try {
-    const isQuantity = editForm.progress_type === 'quantity';
-    const payload = {
-      title: editForm.title.trim(),
-      status: editForm.status,
-      priority: editForm.priority || null,
-      start_date: editForm.start_date || null,
-      start_time: editForm.start_time || null,
-      end_date: editForm.end_date || null,
-      due_time: editForm.due_time || null,
-      actual_start_date: editForm.actual_start_date || null,
-      actual_end_date: editForm.actual_end_date || null,
-      assignee_id: editForm.assignee_id || null,
-      manager_id: editForm.manager_id || null,
-      description: editForm.description || null,
-      estimated_hours: editForm.estimated_hours === '' ? null : Number(editForm.estimated_hours),
-      progress_type: editForm.progress_type,
-      weight: editForm.weight === '' ? null : Number(editForm.weight),
-      ...(isQuantity
-        ? {
-            progress_number: editForm.progress_number === '' ? null : Number(editForm.progress_number),
-            progress_total: editForm.progress_total === '' ? null : Number(editForm.progress_total),
-            unit: editForm.unit || null,
-          }
-        : {
-            progress_percent: editForm.progress_percent === '' ? null : Number(editForm.progress_percent),
-          }),
-    };
-    const { data } = await window.axios.put(`/api/project/tasks/${task.value.id}`, payload);
-    applyTask(data.task);
-    editing.value = false;
-    showClientToast('success', 'Đã cập nhật công việc.');
-  } catch (error) {
-    showClientToast('error', error?.response?.data?.message || 'Không cập nhật được công việc.');
-  } finally {
-    saving.value = false;
-  }
+  router.push({ name: 'manager.project.tasks.edit', params: { id: task.value.id } });
 }
 
 async function changeStatus(nextStatus) {
@@ -301,8 +439,52 @@ async function changeStatus(nextStatus) {
   }
 }
 
+function positionStatusMenu() {
+  const trigger = statusMenuRoot.value?.querySelector('button') || statusMenuRoot.value;
+  const menu = statusMenuEl.value;
+  if (!trigger || !menu) return;
+  const rect = trigger.getBoundingClientRect();
+  const pad = 8;
+  const width = menu.offsetWidth;
+  const height = menu.offsetHeight;
+  let left = rect.right - width;
+  let top = rect.bottom + 6;
+  if (top + height > window.innerHeight - pad) {
+    top = Math.max(pad, rect.top - height - 6);
+  }
+  left = Math.min(Math.max(pad, left), window.innerWidth - width - pad);
+  statusMenuPos.top = top;
+  statusMenuPos.left = left;
+}
+
+async function toggleStatusMenu() {
+  if (!canEdit.value) return;
+  if (statusMenuOpen.value) {
+    statusMenuOpen.value = false;
+    return;
+  }
+  const trigger = statusMenuRoot.value?.querySelector('button') || statusMenuRoot.value;
+  if (trigger) {
+    const rect = trigger.getBoundingClientRect();
+    statusMenuPos.top = rect.bottom + 6;
+    statusMenuPos.left = Math.max(8, rect.right - 224);
+  }
+  statusMenuOpen.value = true;
+  await nextTick();
+  positionStatusMenu();
+}
+
+function focusWorklog() {
+  worklogSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeWorklogForm() {
+  if (!worklogSaving.value) worklogFormOpen.value = false;
+}
+
 function openPeopleModal() {
   if (!task.value) return;
+  statusMenuOpen.value = false;
   peopleForm.assignee_id = task.value.assignee_id || '';
   peopleForm.manager_id = task.value.manager_id || '';
   peopleForm.watcher_ids = (task.value.watchers || []).map((person) => person.id);
@@ -353,6 +535,193 @@ function triggerAttachmentInput() {
   attachmentInput.value?.click();
 }
 
+function isAttachmentSelected(id) {
+  return selectedAttachmentIds.value.includes(id);
+}
+
+function toggleAttachment(id) {
+  if (selectedAttachmentIds.value.includes(id)) {
+    selectedAttachmentIds.value = selectedAttachmentIds.value.filter((item) => item !== id);
+    return;
+  }
+  selectedAttachmentIds.value = [...selectedAttachmentIds.value, id];
+}
+
+function toggleAllAttachments() {
+  selectedAttachmentIds.value = allAttachmentsSelected.value ? [] : attachments.value.map((item) => item.id);
+}
+
+function downloadAttachment(att) {
+  if (!att?.file_url) return;
+  const link = document.createElement('a');
+  link.href = att.file_url;
+  link.download = att.file_name || 'file';
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function downloadSelectedAttachments() {
+  const items = selectedAttachments.value.filter((item) => item.file_url);
+  if (!items.length) return;
+  items.forEach((att, index) => {
+    window.setTimeout(() => downloadAttachment(att), index * 250);
+  });
+}
+
+function closeFileMenu() {
+  fileMenuOpen.value = false;
+  fileMenuAttachment.value = null;
+}
+
+function detachFileMenuListeners() {
+  document.removeEventListener('pointerdown', onFileMenuPointerDown, true);
+  document.removeEventListener('keydown', onFileMenuKeydown);
+}
+
+function onFileMenuPointerDown(event) {
+  if (!fileMenuOpen.value) return;
+  if (fileMenuRoot.value?.contains(event.target)) return;
+  closeFileMenu();
+}
+
+function onFileMenuKeydown(event) {
+  if (event.key === 'Escape' && fileMenuOpen.value) {
+    event.preventDefault();
+    closeFileMenu();
+  }
+}
+
+async function openFileMenu(event, att) {
+  event.preventDefault();
+  event.stopPropagation();
+  statusMenuOpen.value = false;
+  fileMenuAttachment.value = att;
+  fileMenuOpen.value = true;
+  fileMenuPos.x = event.clientX;
+  fileMenuPos.y = event.clientY;
+  await nextTick();
+  const el = fileMenuRoot.value;
+  const w = el?.offsetWidth || 220;
+  const h = el?.offsetHeight || 220;
+  const pad = 8;
+  fileMenuPos.x = Math.min(Math.max(pad, event.clientX), Math.max(pad, window.innerWidth - w - pad));
+  fileMenuPos.y = Math.min(Math.max(pad, event.clientY), Math.max(pad, window.innerHeight - h - pad));
+  el?.focus?.();
+}
+
+function viewAttachment(att) {
+  if (!att?.file_url) return;
+  window.open(att.file_url, '_blank', 'noopener');
+}
+
+function triggerReplaceInput() {
+  const att = fileMenuAttachment.value;
+  if (!att) return;
+  replaceTargetId.value = att.id;
+  closeFileMenu();
+  window.setTimeout(() => replaceInput.value?.click(), 0);
+}
+
+async function onReplaceChange(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  const current = attachments.value.find((item) => item.id === replaceTargetId.value);
+  replaceTargetId.value = null;
+  if (!file || !current) return;
+  replacingAttachment.value = true;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const { data } = await window.axios.post(`/api/project/tasks/attachments/${current.id}/replace`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    attachments.value = attachments.value.map((item) => (item.id === current.id ? data.attachment : item));
+    showClientToast('success', 'Đã cập nhật tệp đính kèm.');
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không cập nhật được tệp đính kèm.');
+  } finally {
+    replacingAttachment.value = false;
+  }
+}
+
+function startRenameAttachment(att) {
+  if (!att) return;
+  closeFileMenu();
+  renameTarget.value = att;
+  renameForm.file_name = att.file_name || '';
+  renaming.value = true;
+}
+
+function startDeleteAttachment(att) {
+  if (!att) return;
+  closeFileMenu();
+  selectedAttachmentIds.value = [att.id];
+  confirmingDeleteAttachments.value = true;
+}
+
+function openRenameDialog() {
+  startRenameAttachment(fileMenuAttachment.value);
+}
+
+function cancelRename() {
+  if (savingRename.value) return;
+  renaming.value = false;
+  renameTarget.value = null;
+}
+
+async function saveRename() {
+  const att = renameTarget.value;
+  const name = renameForm.file_name.trim();
+  if (!att || !name) return;
+  savingRename.value = true;
+  try {
+    const { data } = await window.axios.put(`/api/project/tasks/attachments/${att.id}`, { file_name: name });
+    attachments.value = attachments.value.map((item) => (item.id === att.id ? data.attachment : item));
+    renaming.value = false;
+    renameTarget.value = null;
+    showClientToast('success', 'Đã đổi tên tệp.');
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không đổi được tên tệp.');
+  } finally {
+    savingRename.value = false;
+  }
+}
+
+function downloadFromMenu() {
+  const att = fileMenuAttachment.value;
+  closeFileMenu();
+  if (att) downloadAttachment(att);
+}
+
+function viewFromMenu() {
+  const att = fileMenuAttachment.value;
+  closeFileMenu();
+  if (att) viewAttachment(att);
+}
+
+function deleteFromMenu() {
+  startDeleteAttachment(fileMenuAttachment.value);
+}
+
+async function confirmDeleteAttachments() {
+  const ids = [...selectedAttachmentIds.value];
+  if (!ids.length) return;
+  deletingAttachments.value = true;
+  try {
+    await Promise.all(ids.map((id) => window.axios.delete(`/api/project/tasks/attachments/${id}`)));
+    attachments.value = attachments.value.filter((item) => !ids.includes(item.id));
+    selectedAttachmentIds.value = [];
+    showClientToast('success', ids.length === 1 ? 'Đã xoá tệp đính kèm.' : `Đã xoá ${ids.length} tệp đính kèm.`);
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không xoá được một số tệp đính kèm.');
+  } finally {
+    deletingAttachments.value = false;
+    confirmingDeleteAttachments.value = false;
+  }
+}
+
 async function onAttachmentChange(event) {
   const file = event.target.files?.[0];
   event.target.value = '';
@@ -365,7 +734,6 @@ async function onAttachmentChange(event) {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     attachments.value = [data.attachment, ...attachments.value];
-    openSections.files = true;
     showClientToast('success', 'Đã tải lên tệp đính kèm.');
   } catch (error) {
     showClientToast('error', error?.response?.data?.message || 'Không tải lên được tệp đính kèm.');
@@ -374,22 +742,12 @@ async function onAttachmentChange(event) {
   }
 }
 
-async function removeAttachment(attachment) {
-  try {
-    await window.axios.delete(`/api/project/tasks/attachments/${attachment.id}`);
-    attachments.value = attachments.value.filter((item) => item.id !== attachment.id);
-    showClientToast('success', 'Đã xoá tệp đính kèm.');
-  } catch (error) {
-    showClientToast('error', error?.response?.data?.message || 'Không xoá được tệp đính kèm.');
-  }
-}
-
 function openWorklogForm() {
+  statusMenuOpen.value = false;
   worklogForm.work_date = new Date().toISOString().slice(0, 10);
   worklogForm.hours = '';
   worklogForm.note = '';
   worklogFormOpen.value = true;
-  openSections.worklog = true;
 }
 
 async function saveWorklog() {
@@ -410,6 +768,81 @@ async function saveWorklog() {
     showClientToast('error', error?.response?.data?.message || 'Không thêm được giờ làm.');
   } finally {
     worklogSaving.value = false;
+  }
+}
+
+async function reportComplete() {
+  if (!task.value || !canReportComplete.value) return;
+  reportCompleteSaving.value = true;
+  try {
+    const { data } = await window.axios.post(`/api/project/tasks/${task.value.id}/report-complete`);
+    task.value = { ...task.value, ...data.task };
+    showClientToast('success', 'Đã báo cáo hoàn thành công việc.');
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không báo cáo được hoàn thành.');
+  } finally {
+    reportCompleteSaving.value = false;
+  }
+}
+
+function openScoreForm() {
+  if (!task.value) return;
+  const score = task.value.task_score;
+  scoreForm.rating_score = score?.rating_score ?? '';
+  scoreForm.rating_result = score?.rating_result ?? '';
+  scoreForm.is_passed = typeof score?.is_passed === 'boolean' ? score.is_passed : null;
+  scoreForm.rating_desc = score?.rating_desc ?? '';
+  scoreFormOpen.value = true;
+  loadScoreQualityLevels();
+}
+
+async function loadScoreQualityLevels() {
+  scoreQualityLevels.value = [];
+  const departmentId = task.value?.assignee_department_id;
+  if (!departmentId) return;
+  scoreQualityLevelsLoading.value = true;
+  try {
+    const { data } = await window.axios.get('/api/evaluation/score-kit/quality-levels', {
+      params: { department_id: departmentId },
+    });
+    scoreQualityLevels.value = Array.isArray(data?.quality_levels) ? data.quality_levels : [];
+  } catch {
+    // Không lấy được thang chấm điểm (chưa cấu hình, lỗi mạng…) → fallback ô
+    // text tự do như trước, không chặn luồng chấm điểm.
+    scoreQualityLevels.value = [];
+  } finally {
+    scoreQualityLevelsLoading.value = false;
+  }
+}
+
+function closeScoreForm() {
+  if (!scoreSaving.value) scoreFormOpen.value = false;
+}
+
+async function saveScore() {
+  if (!task.value) return;
+  scoreSaving.value = true;
+  try {
+    const payload = {
+      rating_score: scoreForm.rating_score === '' ? null : Number(scoreForm.rating_score),
+      rating_result: scoreForm.rating_result || null,
+      is_passed: scoreForm.is_passed,
+      rating_desc: scoreForm.rating_desc || null,
+    };
+    const { data } = await window.axios.put(`/api/project/tasks/${task.value.id}/score`, payload);
+    task.value = {
+      ...task.value,
+      task_score: data.task_score,
+      failed_review_count: payload.is_passed === false
+        ? Number(task.value.failed_review_count || 0) + 1
+        : task.value.failed_review_count,
+    };
+    scoreFormOpen.value = false;
+    showClientToast('success', 'Đã lưu đánh giá.');
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không lưu được đánh giá.');
+  } finally {
+    scoreSaving.value = false;
   }
 }
 
@@ -435,14 +868,45 @@ async function confirmDeleteWorklog() {
 }
 
 function handleDocumentClick(event) {
-  if (statusMenuOpen.value && statusMenuRoot.value && !statusMenuRoot.value.contains(event.target)) {
-    statusMenuOpen.value = false;
-  }
+  if (!statusMenuOpen.value) return;
+  const inTrigger = statusMenuRoot.value?.contains(event.target);
+  const inMenu = statusMenuEl.value?.contains(event.target);
+  if (!inTrigger && !inMenu) statusMenuOpen.value = false;
 }
 
 function handleDocumentKeydown(event) {
-  if (event.key === 'Escape') statusMenuOpen.value = false;
+  if (event.key === 'Escape') {
+    statusMenuOpen.value = false;
+    if (renaming.value && !savingRename.value) cancelRename();
+    if (worklogFormOpen.value) closeWorklogForm();
+    if (scoreFormOpen.value) closeScoreForm();
+  }
 }
+
+watch(fileMenuOpen, (open) => {
+  detachFileMenuListeners();
+  if (open) {
+    document.addEventListener('pointerdown', onFileMenuPointerDown, true);
+    document.addEventListener('keydown', onFileMenuKeydown);
+  }
+});
+
+watch(renaming, async (open) => {
+  if (!open) return;
+  await nextTick();
+  renameInput.value?.focus();
+  renameInput.value?.select();
+});
+
+watch(statusMenuOpen, (open) => {
+  if (open) {
+    window.addEventListener('resize', positionStatusMenu);
+    window.addEventListener('scroll', positionStatusMenu, true);
+    return;
+  }
+  window.removeEventListener('resize', positionStatusMenu);
+  window.removeEventListener('scroll', positionStatusMenu, true);
+});
 
 watch(() => route.params.id, loadTask);
 onMounted(() => {
@@ -454,11 +918,26 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleDocumentClick);
   document.removeEventListener('keydown', handleDocumentKeydown);
+  window.removeEventListener('resize', positionStatusMenu);
+  window.removeEventListener('scroll', positionStatusMenu, true);
+  detachFileMenuListeners();
 });
 </script>
 
 <template>
   <section class="task-detail">
+    <svg class="task-detail__wm-defs" aria-hidden="true" focusable="false">
+      <filter id="task-detail-page-tint" color-interpolation-filters="sRGB">
+        <feColorMatrix type="matrix" values="0 0 0 0 0.090  0 0 0 0 0.314  0 0 0 0 0.710  0 0 0 20 0" />
+      </filter>
+    </svg>
+    <img
+      src="/images/background/background-logo.png"
+      alt=""
+      class="task-detail__page-watermark"
+      aria-hidden="true"
+      :style="{ filter: 'url(#task-detail-page-tint)' }"
+    />
     <PageHeader
       :title="task?.title || 'Chi tiết công việc'"
       icon="layoutList"
@@ -469,64 +948,9 @@ onBeforeUnmount(() => {
       ]"
     >
       <template #actions>
-        <div v-if="task" ref="statusMenuRoot" class="task-detail__status-wrap">
-          <button
-            type="button"
-            class="task-detail__status"
-            :class="[`task-detail__status--${statusTone}`, { 'task-detail__status--open': statusMenuOpen }]"
-            :disabled="!canEdit || statusSaving"
-            :aria-expanded="statusMenuOpen"
-            aria-haspopup="menu"
-            aria-controls="task-detail-status-menu"
-            @click="statusMenuOpen = !statusMenuOpen"
-          >
-            <span class="task-detail__status-dot" />
-            <span>{{ statusSaving ? 'Đang đổi…' : statusLabel(task.status) }}</span>
-            <AppIcon name="chevronDown" :size="14" :stroke-width="1.75" />
-          </button>
-          <div
-            v-if="statusMenuOpen && canEdit"
-            id="task-detail-status-menu"
-            role="menu"
-            class="task-detail__menu"
-          >
-            <button
-              v-for="item in statusChoices"
-              :key="item.value"
-              type="button"
-              role="menuitem"
-              class="task-detail__menu-item"
-              :class="{ 'task-detail__menu-item--current': item.value === task.status }"
-              @click="changeStatus(item.value)"
-            >
-              <span class="task-detail__status-dot" :class="`task-detail__status-dot--${TASK_STATUS_TONES[item.value]}`" />
-              <span>{{ item.label }}</span>
-              <AppIcon v-if="item.value === task.status" name="check" :size="14" :stroke-width="2" />
-            </button>
-          </div>
-        </div>
-        <button
-          v-if="canEdit && task"
-          type="button"
-          class="task-detail__btn task-detail__btn--ghost"
-          @click="openPeopleModal"
-        >
-          <AppIcon name="userPlus" :size="15" :stroke-width="1.75" />
-          Thêm người
-        </button>
-        <button type="button" class="task-detail__btn task-detail__btn--ghost" @click="goBack">
+        <button type="button" class="task-detail__header-btn" @click="goBack">
+          <AppIcon name="chevronLeft" :size="16" />
           Quay lại
-        </button>
-        <button v-if="canEdit && task" type="button" class="task-detail__btn task-detail__btn--ghost" @click="startEdit">
-          Chỉnh sửa
-        </button>
-        <button
-          v-if="canEdit && task"
-          type="button"
-          class="task-detail__btn task-detail__btn--danger"
-          @click="confirmingDelete = true"
-        >
-          Xoá
         </button>
       </template>
     </PageHeader>
@@ -535,384 +959,834 @@ onBeforeUnmount(() => {
     <p v-else-if="notFound" class="task-detail__empty">Không tìm thấy công việc.</p>
 
     <div v-else-if="task" class="task-detail__page">
-      <header class="task-detail__hero">
-        <div class="task-detail__hero-copy">
-          <p class="task-detail__kicker">
-            <span>{{ task.code || `CV-${task.id}` }}</span>
-            <span>{{ task.project?.name || 'Công việc thường xuyên' }}</span>
-            <span>{{ typeLabel(task.type) }}</span>
-          </p>
-          <h2 class="task-detail__heading">{{ task.title }}</h2>
-          <p v-if="task.description" class="task-detail__lead">{{ task.description }}</p>
+      <div class="task-detail__toolbar">
+        <div class="task-detail__tabs hide-scrollbar" role="tablist" aria-label="Nhóm thông tin công việc">
+          <button
+            type="button"
+            role="tab"
+            class="task-detail__tab"
+            :class="{ 'task-detail__tab--active': infoTab === 'general' }"
+            :aria-selected="infoTab === 'general'"
+            aria-controls="task-detail-info-panel"
+            @click="infoTab = 'general'"
+          >
+            Thông tin chung
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="task-detail__tab"
+            :class="{ 'task-detail__tab--active': infoTab === 'more' }"
+            :aria-selected="infoTab === 'more'"
+            aria-controls="task-detail-info-panel"
+            @click="infoTab = 'more'"
+          >
+            Tiến độ và quyền
+          </button>
         </div>
-
-        <div v-if="headerPeople.length" class="task-detail__avatars">
-          <UserAvatarTip
-            v-for="person in headerPeople.slice(0, 5)"
-            :key="person.id"
-            :user="person"
-            :label="person.name"
-          />
-          <span v-if="headerPeople.length > 5" class="task-detail__avatar-more">+{{ headerPeople.length - 5 }}</span>
+        <div class="task-detail__actions">
+          <template v-if="canReportComplete">
+            <button
+              type="button"
+              class="task-detail__action task-detail__action--success"
+              :disabled="reportCompleteSaving"
+              aria-label="Báo cáo hoàn thành công việc"
+              @click="reportComplete"
+            >
+              <span class="task-detail__action-icon">
+                <AppIcon name="check" :size="18" :stroke-width="1.75" />
+              </span>
+              <span class="task-detail__action-label">{{ reportCompleteSaving ? 'Đang gửi…' : 'Báo cáo hoàn thành' }}</span>
+            </button>
+            <span class="task-detail__action-sep" aria-hidden="true" />
+          </template>
+          <div ref="statusMenuRoot" class="task-detail__action-wrap">
+            <button
+              type="button"
+              class="task-detail__action"
+              :class="{ 'task-detail__action--open': statusMenuOpen }"
+              :disabled="!canEdit || statusSaving"
+              :aria-expanded="statusMenuOpen"
+              aria-haspopup="menu"
+              aria-controls="task-detail-status-menu"
+              aria-label="Cập nhật trạng thái"
+              @click="toggleStatusMenu"
+            >
+              <span class="task-detail__action-icon">
+                <AppIcon name="pauseCircle" :size="18" :stroke-width="1.75" />
+              </span>
+              <span class="task-detail__action-label">{{ statusSaving ? 'Đang đổi…' : 'Trạng thái' }}</span>
+            </button>
+          </div>
+          <span class="task-detail__action-sep" aria-hidden="true" />
+          <button
+            type="button"
+            class="task-detail__action"
+            aria-label="Thêm giờ làm"
+            @click="canEdit ? openWorklogForm() : focusWorklog()"
+          >
+            <span class="task-detail__action-icon">
+              <AppIcon name="clock" :size="18" :stroke-width="1.75" />
+            </span>
+            <span class="task-detail__action-label">Thêm giờ làm</span>
+          </button>
+          <span class="task-detail__action-sep" aria-hidden="true" />
+          <button
+            type="button"
+            class="task-detail__action"
+            :disabled="!canEdit"
+            aria-label="Thêm người thực hiện"
+            @click="openPeopleModal"
+          >
+            <span class="task-detail__action-icon">
+              <AppIcon name="userPlus" :size="18" :stroke-width="1.75" />
+            </span>
+            <span class="task-detail__action-label">Thực hiện</span>
+          </button>
+          <template v-if="canEdit">
+            <span class="task-detail__action-sep" aria-hidden="true" />
+            <button type="button" class="task-detail__action" aria-label="Chỉnh sửa công việc" @click="goEdit">
+              <span class="task-detail__action-icon">
+                <AppIcon name="pencil" :size="18" :stroke-width="1.75" />
+              </span>
+              <span class="task-detail__action-label">Chỉnh sửa</span>
+            </button>
+            <span class="task-detail__action-sep" aria-hidden="true" />
+            <button type="button" class="task-detail__action task-detail__action--danger" aria-label="Xoá công việc" @click="confirmingDelete = true">
+              <span class="task-detail__action-icon">
+                <AppIcon name="trash" :size="18" :stroke-width="1.75" />
+              </span>
+              <span class="task-detail__action-label">Xoá</span>
+            </button>
+          </template>
         </div>
-      </header>
+      </div>
 
-      <section class="task-detail__card">
-        <button
-          type="button"
-          class="task-detail__collapse"
-          :aria-expanded="openSections.info"
-          @click="toggleSection('info')"
-        >
-          <AppIcon
-            name="chevronRight"
-            :size="16"
-            :stroke-width="1.75"
-            class="task-detail__chevron"
-            :class="{ 'task-detail__chevron--open': openSections.info }"
-          />
-          <span class="task-detail__collapse-copy">
-            <span class="task-detail__title">Thông tin chung</span>
-            <span class="task-detail__hint">Thời gian, người phụ trách và mức độ quan trọng</span>
+      <div class="task-detail__layout">
+        <div class="task-detail__col">
+      <section class="task-detail__card task-detail__card--umber">
+        <header class="task-detail__section-head">
+          <span class="task-detail__section-icon task-detail__section-icon--umber" aria-hidden="true">
+            <AppIcon :name="infoTabMeta.icon" :size="16" :stroke-width="1.75" />
           </span>
-        </button>
-        <div class="task-detail__fold" :class="{ 'task-detail__fold--open': openSections.info }">
-          <div class="task-detail__fold-inner">
-            <div class="task-detail__grid">
-              <div class="task-detail__row">
-                <span>Dự án</span>
-                <strong>{{ task.project?.name || 'Công việc thường xuyên' }}</strong>
+          <h3 class="task-detail__section-title">{{ infoTabMeta.title }}</h3>
+        </header>
+        <dl id="task-detail-info-panel" class="task-detail__kv task-detail__kv--cols" role="tabpanel">
+          <template v-if="infoTab === 'general'">
+            <div class="task-detail__kv-row task-detail__kv-row--span">
+              <dt class="task-detail__label">Tên công việc</dt>
+              <dd class="task-detail__value">{{ task.title || '--' }}</dd>
+            </div>
+            <div class="task-detail__kv-row">
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Mã công việc</dt>
+                <dd class="task-detail__value">{{ task.code || '--' }}</dd>
               </div>
-              <div class="task-detail__row">
-                <span>Mã công việc</span>
-                <strong>{{ task.code || task.id }}</strong>
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Loại công việc</dt>
+                <dd class="task-detail__value">{{ typeLabel(task.type) }}</dd>
               </div>
-              <div class="task-detail__row">
-                <span>Loại công việc</span>
-                <strong>{{ typeLabel(task.type) }}</strong>
+            </div>
+            <div class="task-detail__kv-row">
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Dự án</dt>
+                <dd class="task-detail__value">
+                  <router-link
+                    v-if="task.project"
+                    class="task-detail__link"
+                    :to="{ name: 'manager.project.edit', params: { id: task.project.id } }"
+                  >
+                    {{ task.project.code ? `${task.project.code} - ${task.project.name}` : task.project.name }}
+                  </router-link>
+                  <template v-else>Công việc thường xuyên</template>
+                </dd>
               </div>
-              <div class="task-detail__row">
-                <span>Mức độ quan trọng</span>
-                <strong>{{ priorityLabel(task.priority) }}</strong>
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Trạng thái</dt>
+                <dd class="task-detail__value">
+                  <span class="task-detail__chip" :class="`task-detail__chip--${TASK_STATUS_TONES[task.status] || 'tertiary'}`">
+                    {{ statusLabel(task.status) }}
+                  </span>
+                </dd>
               </div>
-              <div class="task-detail__row">
-                <span>Thời gian dự kiến</span>
-                <strong>{{ formatDate(task.start_date) }} - {{ formatDate(task.end_date) }}</strong>
+            </div>
+            <div class="task-detail__kv-row">
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Thời gian dự kiến</dt>
+                <dd class="task-detail__value">{{ plannedTimeLabel }}</dd>
               </div>
-              <div class="task-detail__row">
-                <span>Thời gian thực tế</span>
-                <strong>{{ actualTimeLabel }}</strong>
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Thời gian thực tế</dt>
+                <dd class="task-detail__value">{{ actualTimeLabel }}</dd>
               </div>
-              <div class="task-detail__row">
-                <span>Người giao việc</span>
-                <strong class="task-detail__person">
-                  <UserAvatarTip v-if="task.manager" :user="task.manager" label="Người giao việc" />
-                  {{ task.manager?.name || '--' }}
-                </strong>
+            </div>
+            <div class="task-detail__kv-row">
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Người giao việc</dt>
+                <dd class="task-detail__value">
+                  <span v-if="task.manager" class="task-detail__user-chip">
+                    <UserAvatarTip :user="task.manager" label="Người giao việc" />
+                    {{ task.manager.name }}
+                  </span>
+                  <template v-else>--</template>
+                </dd>
               </div>
-              <div class="task-detail__row">
-                <span>Người thực hiện</span>
-                <strong class="task-detail__person">
-                  <UserAvatarTip v-if="task.assignee" :user="task.assignee" label="Người thực hiện" />
-                  {{ task.assignee?.name || '--' }}
-                </strong>
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Người thực hiện</dt>
+                <dd class="task-detail__value">
+                  <span v-if="task.assignee" class="task-detail__user-chip">
+                    <UserAvatarTip :user="task.assignee" label="Người thực hiện" />
+                    {{ task.assignee.name }}
+                  </span>
+                  <template v-else>--</template>
+                </dd>
               </div>
-              <div class="task-detail__row">
-                <span>Theo dõi</span>
-                <strong v-if="task.watchers?.length" class="task-detail__people">
-                  <span v-for="person in task.watchers" :key="`w-${person.id}`" class="task-detail__person">
+            </div>
+            <div class="task-detail__kv-row task-detail__kv-row--span">
+              <dt class="task-detail__label">Người theo dõi</dt>
+              <dd class="task-detail__value">
+                <span v-if="task.watchers?.length" class="task-detail__people">
+                  <span v-for="person in task.watchers" :key="`w-${person.id}`" class="task-detail__user-chip">
                     <UserAvatarTip :user="person" label="Người theo dõi" />
                     {{ person.name }}
                   </span>
-                </strong>
-                <strong v-else>--</strong>
-              </div>
-              <div class="task-detail__row">
-                <span>Phối hợp</span>
-                <strong v-if="task.collaborators?.length" class="task-detail__people">
-                  <span v-for="person in task.collaborators" :key="`c-${person.id}`" class="task-detail__person">
+                </span>
+                <template v-else>--</template>
+              </dd>
+            </div>
+            <div class="task-detail__kv-row task-detail__kv-row--span">
+              <dt class="task-detail__label">Người phối hợp</dt>
+              <dd class="task-detail__value">
+                <span v-if="task.collaborators?.length" class="task-detail__people">
+                  <span v-for="person in task.collaborators" :key="`c-${person.id}`" class="task-detail__user-chip">
                     <UserAvatarTip :user="person" label="Người phối hợp" />
                     {{ person.name }}
                   </span>
-                </strong>
-                <strong v-else>--</strong>
+                </span>
+                <template v-else>--</template>
+              </dd>
+            </div>
+            <div class="task-detail__kv-row">
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Phòng ban</dt>
+                <dd class="task-detail__value">{{ task.department?.name || '--' }}</dd>
               </div>
-              <div class="task-detail__row">
-                <span>Cách tính tiến độ</span>
-                <strong>{{ progressTypeLabel(task.progress_type) }}</strong>
-              </div>
-              <div v-if="task.progress_type === 'quantity'" class="task-detail__row">
-                <span>Khối lượng</span>
-                <strong>{{ task.progress_number }} / {{ task.progress_total }} {{ task.unit }}</strong>
-              </div>
-              <div class="task-detail__row">
-                <span>Số giờ dự kiến</span>
-                <strong>{{ task.estimated_hours != null ? `${task.estimated_hours} giờ` : '--' }}</strong>
-              </div>
-              <div class="task-detail__row">
-                <span>Thời gian đã làm</span>
-                <strong>{{ task.worklog_hours ? `${task.worklog_hours} giờ` : '--' }}</strong>
-              </div>
-              <div v-if="task.weight != null" class="task-detail__row">
-                <span>Tỷ trọng</span>
-                <strong>{{ task.weight }}%</strong>
-              </div>
-              <div class="task-detail__row task-detail__row--wide">
-                <span>Mô tả</span>
-                <strong>{{ task.description || '--' }}</strong>
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Ưu tiên</dt>
+                <dd class="task-detail__value">
+                  <span class="task-detail__priority">
+                    <AppIcon name="flag" :size="14" :class="`task-detail__flag--${priorityTone(task.priority)}`" />
+                    {{ priorityLabel(task.priority) }}
+                  </span>
+                </dd>
               </div>
             </div>
-          </div>
+            <div v-if="task.parent" class="task-detail__kv-row task-detail__kv-row--span">
+              <dt class="task-detail__label">Công việc cha</dt>
+              <dd class="task-detail__value">
+                <router-link
+                  class="task-detail__link"
+                  :to="{ name: 'manager.project.tasks.detail', params: { id: task.parent.id } }"
+                >
+                  {{ task.parent.code ? `${task.parent.code} - ${task.parent.title}` : task.parent.title }}
+                </router-link>
+              </dd>
+            </div>
+            <div class="task-detail__kv-row task-detail__kv-row--span">
+              <dt class="task-detail__label">Mô tả</dt>
+              <dd class="task-detail__value">{{ task.description || '--' }}</dd>
+            </div>
+          </template>
+          <template v-else>
+            <div class="task-detail__kv-row">
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Cách tính tiến độ công việc</dt>
+                <dd class="task-detail__value">{{ progressTypeLabel(task.progress_type) }}</dd>
+              </div>
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Tiến độ</dt>
+                <dd class="task-detail__value">
+                  <div v-if="evalProgressPercent != null" class="task-detail__eval-progress">
+                    <div class="task-detail__eval-track">
+                      <div class="task-detail__eval-bar" :style="{ width: `${evalProgressPercent}%` }" />
+                      <span class="task-detail__eval-knob" :style="{ left: `${evalProgressPercent}%` }">
+                        {{ evalProgressPercent }}
+                      </span>
+                    </div>
+                    <span class="task-detail__eval-clock" aria-hidden="true">
+                      <AppIcon name="clock" :size="14" :stroke-width="1.75" />
+                    </span>
+                  </div>
+                  <p v-if="task.progress_type === 'quantity'" class="task-detail__progress-qty">
+                    {{ task.progress_number }} / {{ task.progress_total }} {{ task.unit }}
+                  </p>
+                  <template v-if="evalProgressPercent == null">--</template>
+                </dd>
+              </div>
+            </div>
+            <div class="task-detail__kv-row">
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Số giờ dự kiến</dt>
+                <dd class="task-detail__value">{{ formatHours(task.estimated_hours) }}</dd>
+              </div>
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Tỷ trọng</dt>
+                <dd class="task-detail__value">{{ formatWeight(task.weight) }}</dd>
+              </div>
+            </div>
+            <div class="task-detail__kv-row">
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Người đã nhận</dt>
+                <dd class="task-detail__value">
+                  <span v-if="task.accepted_by_user" class="task-detail__user-chip">
+                    <UserAvatarTip :user="task.accepted_by_user" label="Người đã nhận" />
+                    {{ task.accepted_by_user.name }}
+                  </span>
+                  <template v-else>--</template>
+                </dd>
+              </div>
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Thời điểm nhận</dt>
+                <dd class="task-detail__value">{{ formatDateTime(task.accepted_at) }}</dd>
+              </div>
+            </div>
+            <div class="task-detail__kv-row">
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Quá hạn</dt>
+                <dd class="task-detail__value">
+                  <span v-if="task.is_overdue" class="task-detail__chip task-detail__chip--danger">Quá hạn</span>
+                  <template v-else>Không</template>
+                </dd>
+              </div>
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Chênh lệch ngày</dt>
+                <dd class="task-detail__value">{{ formatVariance(task.variance_days) }}</dd>
+              </div>
+            </div>
+            <template v-if="hasDelegation">
+              <div class="task-detail__kv-row">
+                <div class="task-detail__kv-cell">
+                  <dt class="task-detail__label">Chuyển giao</dt>
+                  <dd class="task-detail__value">{{ delegationLabel(task.delegation_status) }}</dd>
+                </div>
+                <div class="task-detail__kv-cell">
+                  <dt class="task-detail__label">Người tiếp nhận</dt>
+                  <dd class="task-detail__value">
+                    <span v-if="task.delegated_to_employee" class="task-detail__user-chip">
+                      <UserAvatarTip :user="task.delegated_to_employee" label="Người tiếp nhận" />
+                      {{ task.delegated_to_employee.name }}
+                    </span>
+                    <template v-else>--</template>
+                  </dd>
+                </div>
+              </div>
+              <div class="task-detail__kv-row">
+                <div class="task-detail__kv-cell">
+                  <dt class="task-detail__label">Phòng gốc</dt>
+                  <dd class="task-detail__value">{{ task.origin_department?.name || '--' }}</dd>
+                </div>
+                <div class="task-detail__kv-cell">
+                  <dt class="task-detail__label">Phòng tiếp nhận</dt>
+                  <dd class="task-detail__value">{{ task.delegated_to_department?.name || '--' }}</dd>
+                </div>
+              </div>
+            </template>
+            <div class="task-detail__kv-row">
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Người tạo</dt>
+                <dd class="task-detail__value">
+                  <span v-if="task.creator" class="task-detail__user-chip">
+                    <UserAvatarTip :user="task.creator" label="Người tạo" />
+                    {{ task.creator.name }}
+                  </span>
+                  <template v-else>--</template>
+                </dd>
+              </div>
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Ngày tạo</dt>
+                <dd class="task-detail__value">{{ formatDateTime(task.created_at) }}</dd>
+              </div>
+            </div>
+            <div class="task-detail__kv-row">
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Người cập nhật</dt>
+                <dd class="task-detail__value">
+                  <span v-if="task.updater" class="task-detail__user-chip">
+                    <UserAvatarTip :user="task.updater" label="Người cập nhật" />
+                    {{ task.updater.name }}
+                  </span>
+                  <template v-else>--</template>
+                </dd>
+              </div>
+              <div class="task-detail__kv-cell">
+                <dt class="task-detail__label">Ngày cập nhật</dt>
+                <dd class="task-detail__value">{{ formatDateTime(task.updated_at) }}</dd>
+              </div>
+            </div>
+            <div class="task-detail__kv-row task-detail__kv-row--span">
+              <dt class="task-detail__label">Quyền công việc</dt>
+              <dd class="task-detail__value">
+                <ul class="task-detail__rules">
+                  <li
+                    v-for="line in permissionLines"
+                    :key="line.key"
+                    :class="{ 'task-detail__rules-item--off': !line.on }"
+                  >
+                    <AppIcon
+                      :name="line.on ? 'check' : 'minus'"
+                      :size="14"
+                      class="task-detail__rule-icon"
+                      :class="{ 'task-detail__rule-icon--off': !line.on }"
+                    />
+                    <span>
+                      <span class="task-detail__rule-name">{{ line.label }}</span>
+                      {{ line.value }}
+                    </span>
+                  </li>
+                </ul>
+              </dd>
+            </div>
+          </template>
+        </dl>
+      </section>
+
+      <section ref="worklogSection" class="task-detail__card task-detail__card--worklog">
+        <svg class="task-detail__wm-defs" aria-hidden="true" focusable="false">
+          <filter id="task-detail-worklog-tint" color-interpolation-filters="sRGB">
+            <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0.565  0 0 0 0 0.510  0 0 0 20 0" />
+          </filter>
+        </svg>
+        <img
+          src="/images/background/background-logo.png"
+          alt=""
+          class="task-detail__worklog-watermark"
+          aria-hidden="true"
+          :style="{ filter: 'url(#task-detail-worklog-tint)' }"
+        />
+        <div class="task-detail__worklog-inner">
+          <header class="task-detail__section-head task-detail__section-head--worklog">
+            <div class="task-detail__worklog-heading">
+              <span class="task-detail__worklog-icon" aria-hidden="true">
+                <AppIcon name="clock" :size="16" :stroke-width="1.75" />
+              </span>
+              <div>
+                <h3 class="task-detail__section-title">Nhật ký giờ làm</h3>
+                <p v-if="worklogs.length" class="task-detail__worklog-total">
+                  Tổng {{ worklogTotalHours }} giờ đã ghi nhận
+                </p>
+              </div>
+            </div>
+          </header>
+
+          <ul v-if="worklogs.length" class="task-detail__worklog-list">
+            <li v-for="log in worklogs" :key="log.id" class="task-detail__worklog-row">
+              <span class="task-detail__worklog-hours">{{ log.hours }}<small>giờ</small></span>
+              <span class="task-detail__worklog-body">
+                <span class="task-detail__worklog-meta">
+                  <span class="task-detail__person">
+                    <UserAvatarTip v-if="log.user" :user="log.user" label="Người ghi giờ" />
+                    {{ log.user?.name || '--' }}
+                  </span>
+                  <span class="task-detail__worklog-date">
+                    <AppIcon name="calendar" :size="12" />
+                    {{ formatDate(log.work_date) }}
+                  </span>
+                </span>
+                <span class="task-detail__worklog-note">{{ log.note || 'Không có ghi chú' }}</span>
+              </span>
+              <button
+                v-if="canEditWorklog(log)"
+                type="button"
+                class="task-detail__icon-btn"
+                aria-label="Xoá nhật ký giờ làm"
+                @click="confirmingDeleteWorklog = log"
+              >
+                <AppIcon name="trash" :size="14" />
+              </button>
+            </li>
+          </ul>
+          <p v-else class="task-detail__empty">Chưa có nhật ký giờ làm.</p>
         </div>
       </section>
 
-      <section class="task-detail__card">
-        <button
-          type="button"
-          class="task-detail__collapse"
-          :aria-expanded="openSections.progress"
-          @click="toggleSection('progress')"
-        >
-          <AppIcon
-            name="chevronRight"
-            :size="16"
-            :stroke-width="1.75"
-            class="task-detail__chevron"
-            :class="{ 'task-detail__chevron--open': openSections.progress }"
-          />
-          <span class="task-detail__collapse-copy">
-            <span class="task-detail__title">Tiến độ</span>
-            <span class="task-detail__hint">
-              {{ task.progress_percent != null ? `Đã hoàn thành ${task.progress_percent}%` : 'Chưa cập nhật tiến độ' }}
-            </span>
-          </span>
-        </button>
-        <div class="task-detail__fold" :class="{ 'task-detail__fold--open': openSections.progress }">
-          <div class="task-detail__fold-inner">
-            <div v-if="task.progress_percent != null" class="task-detail__progress">
-              <div class="task-detail__progress-meta">
-                <span>Thực tế {{ task.progress_percent }}%</span>
-                <span v-if="expectedProgress != null">Kỳ vọng {{ expectedProgress }}%</span>
-              </div>
-              <DualProgressBar
-                :actual="task.progress_percent"
-                :expected="expectedProgress"
-                size="md"
-              />
-            </div>
-            <p v-else class="task-detail__empty">Chưa có số liệu tiến độ.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="task-detail__card">
-        <button
-          type="button"
-          class="task-detail__collapse"
-          :aria-expanded="openSections.score"
-          @click="toggleSection('score')"
-        >
-          <AppIcon
-            name="chevronRight"
-            :size="16"
-            :stroke-width="1.75"
-            class="task-detail__chevron"
-            :class="{ 'task-detail__chevron--open': openSections.score }"
-          />
-          <span class="task-detail__collapse-copy">
-            <span class="task-detail__title">Kết quả đánh giá</span>
-            <span class="task-detail__hint">
-              {{ hasScore ? 'Đã có kết quả từ lần chấm điểm' : 'Sẽ hiện khi công việc được đánh giá' }}
-            </span>
-          </span>
-        </button>
-        <div class="task-detail__fold" :class="{ 'task-detail__fold--open': openSections.score }">
-          <div class="task-detail__fold-inner">
-            <div v-if="hasScore" class="task-detail__grid">
-              <div class="task-detail__row">
-                <span>Điểm đánh giá</span>
-                <strong>{{ task.task_score.rating_score ?? '--' }}</strong>
-              </div>
-              <div class="task-detail__row">
-                <span>Kết quả</span>
-                <strong>{{ task.task_score.rating_result || '--' }}</strong>
-              </div>
-              <div class="task-detail__row">
-                <span>Người đánh giá</span>
-                <strong class="task-detail__person">
-                  <UserAvatarTip v-if="task.task_score.scorer" :user="task.task_score.scorer" label="Người đánh giá" />
-                  {{ task.task_score.scorer?.name || '--' }}
-                </strong>
-              </div>
-              <div class="task-detail__row">
-                <span>Thời gian đánh giá</span>
-                <strong>{{ formatDateTime(task.task_score.scored_at) }}</strong>
-              </div>
-              <div class="task-detail__row task-detail__row--wide">
-                <span>Ý kiến đánh giá</span>
-                <strong>{{ task.task_score.rating_desc || '--' }}</strong>
-              </div>
-            </div>
-            <p v-else class="task-detail__empty">
-              Chưa có kết quả. Phần này tự hiện khi công việc được chấm điểm, không điền tại đây.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section class="task-detail__card">
-        <div class="task-detail__collapse-row">
-          <button
-            type="button"
-            class="task-detail__collapse"
-            :aria-expanded="openSections.worklog"
-            @click="toggleSection('worklog')"
-          >
-            <AppIcon
-              name="chevronRight"
-              :size="16"
-              :stroke-width="1.75"
-              class="task-detail__chevron"
-              :class="{ 'task-detail__chevron--open': openSections.worklog }"
+          <section class="task-detail__card task-detail__card--tertiary">
+            <header class="task-detail__section-head">
+              <span class="task-detail__section-icon task-detail__section-icon--tertiary" aria-hidden="true">
+                <AppIcon name="paperclip" :size="16" :stroke-width="1.75" />
+              </span>
+              <h3 class="task-detail__section-title">Đính kèm ({{ attachments.length }})</h3>
+              <button
+                v-if="canEdit"
+                type="button"
+                class="task-detail__btn task-detail__btn--ghost"
+                :disabled="attachmentUploading"
+                @click="triggerAttachmentInput"
+              >
+                {{ attachmentUploading ? 'Đang tải…' : 'Tải file' }}
+              </button>
+            </header>
+            <input ref="attachmentInput" type="file" class="task-detail__hidden" @change="onAttachmentChange" />
+            <input
+              ref="replaceInput"
+              type="file"
+              class="task-detail__hidden"
+              :disabled="replacingAttachment"
+              @change="onReplaceChange"
             />
-            <span class="task-detail__collapse-copy">
-              <span class="task-detail__title">Nhật ký giờ làm</span>
-              <span class="task-detail__hint">{{ worklogs.length ? `${worklogs.length} dòng ghi nhận` : 'Chưa có giờ làm' }}</span>
-            </span>
-          </button>
-          <button
-            v-if="canEdit && !worklogFormOpen"
-            type="button"
-            class="task-detail__btn task-detail__btn--ghost"
-            @click="openWorklogForm"
-          >
-            Thêm giờ làm
-          </button>
+            <div
+              v-if="attachments.length"
+              class="task-detail__files"
+              :class="{ 'task-detail__files--picking': selectedAttachmentIds.length }"
+            >
+              <div class="task-detail__file-head">
+                <label class="task-detail__file-check">
+                  <input
+                    type="checkbox"
+                    :checked="allAttachmentsSelected"
+                    :indeterminate="selectedAttachmentIds.length > 0 && !allAttachmentsSelected"
+                    aria-label="Chọn tất cả tệp"
+                    @change="toggleAllAttachments"
+                  />
+                </label>
+                <span>Tệp tin</span>
+                <div v-if="selectedAttachmentIds.length" class="task-detail__file-bulk">
+                  <button type="button" class="task-detail__bulk-btn" @click="downloadSelectedAttachments">
+                    <AppIcon name="download" :size="14" :stroke-width="1.75" />
+                    Tải xuống
+                  </button>
+                  <button
+                    v-if="canEdit"
+                    type="button"
+                    class="task-detail__bulk-btn task-detail__bulk-btn--danger"
+                    @click="confirmingDeleteAttachments = true"
+                  >
+                    <AppIcon name="trash" :size="14" :stroke-width="1.75" />
+                    Xóa
+                  </button>
+                </div>
+              </div>
+              <article
+                v-for="att in attachments"
+                :key="att.id"
+                class="task-detail__file"
+                :class="{ 'task-detail__file--checked': isAttachmentSelected(att.id) }"
+                @click="toggleAttachment(att.id)"
+                @contextmenu="openFileMenu($event, att)"
+              >
+                <label class="task-detail__file-check" @click.stop>
+                  <input
+                    type="checkbox"
+                    :checked="isAttachmentSelected(att.id)"
+                    :aria-label="`Chọn ${att.file_name}`"
+                    @change="toggleAttachment(att.id)"
+                  />
+                </label>
+                <a :href="att.file_url" class="task-detail__file-main" target="_blank" rel="noopener" @click.stop>
+                  <span class="task-detail__file-thumb" :class="`task-detail__file-thumb--${fileExtTone(att.file_name)}`">
+                    {{ fileExt(att.file_name) }}
+                  </span>
+                  <span class="task-detail__file-copy">
+                    <span class="task-detail__file-name">{{ att.file_name }}</span>
+                    <span class="task-detail__file-sub">{{ task.title }}</span>
+                    <span class="task-detail__file-meta">
+                      <template v-if="formatFileSize(att.file_size)">{{ formatFileSize(att.file_size) }} · </template>{{ formatDateTime(att.created_at) }}
+                    </span>
+                  </span>
+                </a>
+                <UserAvatarTip v-if="att.uploader" :user="att.uploader" label="Người tạo" />
+              </article>
+            </div>
+            <p v-else class="task-detail__empty">Chưa có tệp đính kèm.</p>
+          </section>
+
+          <section class="task-detail__card task-detail__card--gold">
+            <header class="task-detail__section-head">
+              <span class="task-detail__section-icon task-detail__section-icon--gold" aria-hidden="true">
+                <AppIcon name="starFilled" :size="16" :stroke-width="1.75" />
+              </span>
+              <h3 class="task-detail__section-title">Kết quả đánh giá</h3>
+              <button
+                v-if="canApprove"
+                type="button"
+                class="task-detail__btn task-detail__btn--ghost"
+                @click="openScoreForm"
+              >
+                Chấm điểm
+              </button>
+            </header>
+            <dl v-if="hasScore || task.failed_review_count > 0" class="task-detail__kv">
+              <div v-if="task.failed_review_count > 0" class="task-detail__kv-row task-detail__kv-row--stack">
+                <dt class="task-detail__label">Số lần đánh giá không hoàn thành công việc</dt>
+                <dd class="task-detail__value">{{ task.failed_review_count }}</dd>
+              </div>
+              <template v-if="hasScore">
+                <div class="task-detail__kv-row">
+                  <dt class="task-detail__label">Người đánh giá</dt>
+                  <dd class="task-detail__value">
+                    <span v-if="task.task_score.scorer" class="task-detail__user-chip">
+                      <UserAvatarTip :user="task.task_score.scorer" label="Người đánh giá" />
+                      {{ task.task_score.scorer.name }}
+                    </span>
+                    <template v-else>--</template>
+                  </dd>
+                </div>
+                <div class="task-detail__kv-row">
+                  <dt class="task-detail__label">Thời gian đánh giá</dt>
+                  <dd class="task-detail__value">{{ formatScoreDateTime(task.task_score.scored_at) }}</dd>
+                </div>
+                <div class="task-detail__kv-row">
+                  <dt class="task-detail__label">Điểm số</dt>
+                  <dd class="task-detail__value">{{ task.task_score.rating_score ?? '--' }}</dd>
+                </div>
+                <div class="task-detail__kv-row">
+                  <dt class="task-detail__label">Đạt / Không đạt</dt>
+                  <dd class="task-detail__value">
+                    <span
+                      v-if="task.task_score.is_passed === true || task.task_score.is_passed === false"
+                      class="task-detail__chip"
+                      :class="task.task_score.is_passed ? 'task-detail__chip--success' : 'task-detail__chip--danger'"
+                    >
+                      {{ passedLabel(task.task_score.is_passed) }}
+                    </span>
+                    <template v-else>--</template>
+                  </dd>
+                </div>
+                <div class="task-detail__kv-row">
+                  <dt class="task-detail__label">Trạng thái đánh giá</dt>
+                  <dd class="task-detail__value">
+                    <span
+                      v-if="task.task_score.rating_result"
+                      class="task-detail__chip"
+                      :class="`task-detail__chip--${ratingResultTone(task.task_score.rating_result)}`"
+                    >
+                      {{ task.task_score.rating_result }}
+                    </span>
+                    <template v-else>--</template>
+                  </dd>
+                </div>
+                <div class="task-detail__kv-row">
+                  <dt class="task-detail__label">Tiến độ</dt>
+                  <dd class="task-detail__value">
+                    <div v-if="evalProgressPercent != null" class="task-detail__eval-progress">
+                      <div class="task-detail__eval-track">
+                        <div class="task-detail__eval-bar" :style="{ width: `${evalProgressPercent}%` }" />
+                        <span class="task-detail__eval-knob" :style="{ left: `${evalProgressPercent}%` }">
+                          {{ evalProgressPercent }}
+                        </span>
+                      </div>
+                      <span class="task-detail__eval-clock" aria-hidden="true">
+                        <AppIcon name="clock" :size="14" :stroke-width="1.75" />
+                      </span>
+                    </div>
+                    <template v-else>--</template>
+                  </dd>
+                </div>
+                <div class="task-detail__kv-row">
+                  <dt class="task-detail__label">Kết quả đánh giá</dt>
+                  <dd class="task-detail__value">
+                    <div class="task-detail__rating">
+                      <span
+                        v-for="n in 5"
+                        :key="n"
+                        class="task-detail__star"
+                        :class="{ 'task-detail__star--on': n <= evalStars }"
+                      >
+                        <AppIcon :name="n <= evalStars ? 'starFilled' : 'star'" :size="16" :stroke-width="1.75" />
+                      </span>
+                      <span v-if="evalStarCaption" class="task-detail__rating-caption">{{ evalStarCaption }}</span>
+                    </div>
+                  </dd>
+                </div>
+                <div class="task-detail__kv-row">
+                  <dt class="task-detail__label">Ý kiến đánh giá</dt>
+                  <dd class="task-detail__value">{{ task.task_score.rating_desc || '--' }}</dd>
+                </div>
+              </template>
+            </dl>
+            <p v-else class="task-detail__empty">Không tìm thấy kết quả nào</p>
+          </section>
         </div>
-        <div class="task-detail__fold" :class="{ 'task-detail__fold--open': openSections.worklog }">
-          <div class="task-detail__fold-inner">
-            <form v-if="worklogFormOpen" class="task-detail__form task-detail__form--compact" @submit.prevent="saveWorklog">
+        <div class="task-detail__col task-detail__col--discuss">
+          <section class="task-detail__card task-detail__card--discuss">
+            <header class="task-detail__section-head">
+              <span class="task-detail__section-icon task-detail__section-icon--tertiary" aria-hidden="true">
+                <AppIcon name="messageCircle" :size="16" :stroke-width="1.75" />
+              </span>
+              <h3 class="task-detail__section-title">Thảo luận ({{ commentsCount }})</h3>
+            </header>
+            <CommentList
+              endpoint-base="/api/project/tasks"
+              :commentable-id="task.id"
+              :can-create="canEdit"
+              layout="sidebar"
+              @count-changed="commentsCount = $event"
+            />
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <Teleport to="body">
+      <div v-if="worklogFormOpen" class="task-detail__dialog" role="presentation" @mousedown.self="closeWorklogForm">
+        <div
+          class="task-detail__dialog-panel task-detail__dialog-panel--compact"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="task-detail-worklog-title"
+        >
+          <div class="task-detail__dialog-head">
+            <span class="task-detail__dialog-icon task-detail__dialog-icon--secondary" aria-hidden="true">
+              <AppIcon name="clock" :size="22" :stroke-width="1.75" />
+            </span>
+            <div class="task-detail__dialog-head-copy">
+              <h2 id="task-detail-worklog-title" class="task-detail__dialog-title">Thêm giờ làm</h2>
+            </div>
+            <button type="button" class="task-detail__icon-btn" aria-label="Đóng" :disabled="worklogSaving" @click="closeWorklogForm">
+              <AppIcon name="close" :size="16" />
+            </button>
+          </div>
+          <form class="task-detail__dialog-body" @submit.prevent="saveWorklog">
+            <div class="task-detail__worklog-form">
               <label class="task-detail__field">
                 <span>Ngày làm</span>
                 <input v-model="worklogForm.work_date" type="date" required />
               </label>
               <label class="task-detail__field">
                 <span>Số giờ</span>
-                <input v-model="worklogForm.hours" type="number" min="0.25" max="24" step="0.25" required />
+                <input v-model="worklogForm.hours" type="number" min="0.25" max="24" step="0.25" required placeholder="Ví dụ: 2" />
               </label>
               <label class="task-detail__field task-detail__field--wide">
                 <span>Ghi chú</span>
-                <input v-model="worklogForm.note" type="text" />
+                <input v-model="worklogForm.note" type="text" placeholder="Đã làm gì trong khoảng thời gian này" />
               </label>
-              <div class="task-detail__form-actions">
-                <button type="button" class="task-detail__btn task-detail__btn--ghost" :disabled="worklogSaving" @click="worklogFormOpen = false">Huỷ</button>
-                <button type="submit" class="task-detail__btn" :disabled="worklogSaving">{{ worklogSaving ? 'Đang lưu…' : 'Lưu' }}</button>
-              </div>
-            </form>
-            <ul v-if="worklogs.length" class="task-detail__list">
-              <li v-for="log in worklogs" :key="log.id">
-                <span class="task-detail__person">
-                  <UserAvatarTip v-if="log.user" :user="log.user" label="Người ghi giờ" />
-                  {{ log.user?.name || '--' }}
-                </span>
-                <span>{{ formatDate(log.work_date) }} · {{ log.hours }} giờ</span>
-                <span>{{ log.note || '--' }}</span>
-                <button
-                  v-if="canEditWorklog(log)"
-                  type="button"
-                  class="task-detail__icon-btn"
-                  aria-label="Xoá nhật ký giờ làm"
-                  @click="confirmingDeleteWorklog = log"
-                >
-                  <AppIcon name="trash" :size="14" />
-                </button>
-              </li>
-            </ul>
-            <p v-else class="task-detail__empty">Chưa có nhật ký giờ làm.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="task-detail__card">
-        <div class="task-detail__collapse-row">
-          <button
-            type="button"
-            class="task-detail__collapse"
-            :aria-expanded="openSections.files"
-            @click="toggleSection('files')"
-          >
-            <AppIcon
-              name="chevronRight"
-              :size="16"
-              :stroke-width="1.75"
-              class="task-detail__chevron"
-              :class="{ 'task-detail__chevron--open': openSections.files }"
-            />
-            <span class="task-detail__collapse-copy">
-              <span class="task-detail__title">Tệp đính kèm</span>
-              <span class="task-detail__hint">{{ attachments.length ? `${attachments.length} tệp` : 'Chưa có tệp' }}</span>
-            </span>
-          </button>
-          <button
-            v-if="canEdit"
-            type="button"
-            class="task-detail__btn task-detail__btn--ghost"
-            :disabled="attachmentUploading"
-            @click="triggerAttachmentInput"
-          >
-            {{ attachmentUploading ? 'Đang tải…' : 'Tải file' }}
-          </button>
-        </div>
-        <input ref="attachmentInput" type="file" class="task-detail__hidden" @change="onAttachmentChange" />
-        <div class="task-detail__fold" :class="{ 'task-detail__fold--open': openSections.files }">
-          <div class="task-detail__fold-inner">
-            <div v-if="attachments.length" class="task-detail__files">
-              <div v-for="att in attachments" :key="att.id" class="task-detail__file">
-                <AppIcon name="fileText" :size="16" />
-                <a :href="att.file_url" target="_blank" rel="noopener">{{ att.file_name }}</a>
-                <span>{{ formatFileSize(att.file_size) }}</span>
-                <button
-                  v-if="canEdit"
-                  type="button"
-                  class="task-detail__icon-btn"
-                  aria-label="Xoá tệp đính kèm"
-                  @click="removeAttachment(att)"
-                >
-                  <AppIcon name="trash" :size="14" />
-                </button>
-              </div>
             </div>
-            <p v-else class="task-detail__empty">Chưa có tệp đính kèm.</p>
+          </form>
+          <div class="task-detail__dialog-actions">
+            <button type="button" class="task-detail__btn task-detail__btn--ghost" :disabled="worklogSaving" @click="closeWorklogForm">Huỷ</button>
+            <button type="button" class="task-detail__btn" :disabled="worklogSaving" @click="saveWorklog">
+              {{ worklogSaving ? 'Đang lưu…' : 'Lưu' }}
+            </button>
           </div>
         </div>
-      </section>
-    </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div v-if="scoreFormOpen" class="task-detail__dialog" role="presentation" @mousedown.self="closeScoreForm">
+        <div
+          class="task-detail__dialog-panel task-detail__dialog-panel--compact"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="task-detail-score-title"
+        >
+          <div class="task-detail__dialog-head">
+            <span class="task-detail__dialog-icon task-detail__dialog-icon--gold" aria-hidden="true">
+              <AppIcon name="starFilled" :size="22" :stroke-width="1.75" />
+            </span>
+            <div class="task-detail__dialog-head-copy">
+              <h2 id="task-detail-score-title" class="task-detail__dialog-title">Chấm điểm công việc</h2>
+            </div>
+            <button type="button" class="task-detail__icon-btn" aria-label="Đóng" :disabled="scoreSaving" @click="closeScoreForm">
+              <AppIcon name="close" :size="16" />
+            </button>
+          </div>
+          <form class="task-detail__dialog-body" @submit.prevent="saveScore">
+            <div class="task-detail__worklog-form">
+              <label class="task-detail__field">
+                <span>Kết quả</span>
+                <span class="task-detail__choice-list" role="radiogroup" aria-label="Kết quả đánh giá">
+                  <button
+                    type="button"
+                    class="task-detail__choice task-detail__choice--success"
+                    :class="{ 'task-detail__choice--on': scoreForm.is_passed === true }"
+                    role="radio"
+                    :aria-checked="scoreForm.is_passed === true ? 'true' : 'false'"
+                    @click="scoreForm.is_passed = true"
+                  >
+                    <span class="task-detail__choice-dot" aria-hidden="true" />
+                    Đạt
+                  </button>
+                  <button
+                    type="button"
+                    class="task-detail__choice task-detail__choice--danger"
+                    :class="{ 'task-detail__choice--on': scoreForm.is_passed === false }"
+                    role="radio"
+                    :aria-checked="scoreForm.is_passed === false ? 'true' : 'false'"
+                    @click="scoreForm.is_passed = false"
+                  >
+                    <span class="task-detail__choice-dot" aria-hidden="true" />
+                    Không đạt
+                  </button>
+                </span>
+              </label>
+              <label class="task-detail__field">
+                <span>Điểm số</span>
+                <input v-model="scoreForm.rating_score" type="number" min="0" step="0.1" placeholder="Ví dụ: 8.5" />
+              </label>
+              <label class="task-detail__field task-detail__field--wide">
+                <span>Kết quả đánh giá</span>
+                <select v-if="scoreQualityLevels.length" v-model="scoreForm.rating_result">
+                  <option value="">Chưa chọn mức</option>
+                  <option v-for="level in scoreQualityLevels" :key="level.code || level.label" :value="level.label || level.code">
+                    {{ level.label || level.code }}
+                  </option>
+                  <!-- Giá trị đã chấm trước đây (text tự do, chưa khớp thang hiện
+                       tại) — vẫn hiện để không mất/che dữ liệu cũ khi mở lại form. -->
+                  <option v-if="scoreForm.rating_result && !scoreQualityLevels.some((l) => (l.label || l.code) === scoreForm.rating_result)" :value="scoreForm.rating_result">
+                    {{ scoreForm.rating_result }} (giá trị cũ)
+                  </option>
+                </select>
+                <template v-else>
+                  <input v-model="scoreForm.rating_result" type="text" list="task-score-result-suggestions" maxlength="100" placeholder="Ví dụ: Đạt, Xuất sắc" />
+                  <datalist id="task-score-result-suggestions">
+                    <option v-for="item in TASK_SCORE_RESULT_SUGGESTIONS" :key="item" :value="item" />
+                  </datalist>
+                </template>
+              </label>
+              <label class="task-detail__field task-detail__field--wide">
+                <span>Ý kiến đánh giá</span>
+                <textarea v-model="scoreForm.rating_desc" rows="3" maxlength="5000" placeholder="Nhận xét ngắn về kết quả thực hiện…" />
+              </label>
+            </div>
+          </form>
+          <div class="task-detail__dialog-actions">
+            <button type="button" class="task-detail__btn task-detail__btn--ghost" :disabled="scoreSaving" @click="closeScoreForm">Huỷ</button>
+            <button type="button" class="task-detail__btn" :disabled="scoreSaving" @click="saveScore">
+              {{ scoreSaving ? 'Đang lưu…' : 'Lưu' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div v-if="peopleOpen" class="task-detail__dialog" role="presentation" @mousedown.self="closePeopleModal">
-        <div class="task-detail__dialog-panel" role="dialog" aria-modal="true" aria-labelledby="task-detail-people-title">
+        <div
+          class="task-detail__dialog-panel task-detail__dialog-panel--people"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="task-detail-people-title"
+        >
           <div class="task-detail__dialog-head">
             <span class="task-detail__dialog-icon" aria-hidden="true">
               <AppIcon name="userPlus" :size="22" :stroke-width="1.75" />
             </span>
             <div class="task-detail__dialog-head-copy">
-              <h2 id="task-detail-people-title" class="task-detail__dialog-title">Thêm người</h2>
+              <h2 id="task-detail-people-title" class="task-detail__dialog-title">Người thực hiện</h2>
             </div>
             <button type="button" class="task-detail__icon-btn" aria-label="Đóng" :disabled="peopleSaving" @click="closePeopleModal">
               <AppIcon name="close" :size="16" />
             </button>
           </div>
           <div class="task-detail__dialog-body hide-scrollbar">
+            <p class="task-detail__people-story">{{ peopleStory }}</p>
             <div class="task-detail__people-grid">
               <article class="task-detail__people-card">
                 <div class="task-detail__people-head">
                   <span class="task-detail__people-icon">
-                    <AppIcon name="user" :size="16" :stroke-width="1.75" />
+                    <AppIcon name="userPlus" :size="16" :stroke-width="1.75" />
                   </span>
-                  <div>
-                    <h3>Người thực hiện</h3>
-                    <p>Người chịu trách nhiệm hoàn thành việc này.</p>
-                  </div>
+                  <h3>Người thực hiện</h3>
                 </div>
                 <ProjectUserPicker
                   v-model="peopleForm.assignee_id"
@@ -923,15 +1797,12 @@ onBeforeUnmount(() => {
                   remove-aria-label="Bỏ người thực hiện"
                 />
               </article>
-              <article class="task-detail__people-card">
+              <article class="task-detail__people-card task-detail__people-card--gold">
                 <div class="task-detail__people-head">
                   <span class="task-detail__people-icon">
-                    <AppIcon name="eye" :size="16" :stroke-width="1.75" />
+                    <AppIcon name="user" :size="16" :stroke-width="1.75" />
                   </span>
-                  <div>
-                    <h3>Người giao việc</h3>
-                    <p>Ai giao và theo dõi việc này.</p>
-                  </div>
+                  <h3>Người giao việc</h3>
                 </div>
                 <ProjectUserPicker
                   v-model="peopleForm.manager_id"
@@ -942,15 +1813,12 @@ onBeforeUnmount(() => {
                   remove-aria-label="Bỏ người giao việc"
                 />
               </article>
-              <article class="task-detail__people-card">
+              <article class="task-detail__people-card task-detail__people-card--tertiary">
                 <div class="task-detail__people-head">
                   <span class="task-detail__people-icon">
                     <AppIcon name="eye" :size="16" :stroke-width="1.75" />
                   </span>
-                  <div>
-                    <h3>Người theo dõi</h3>
-                    <p>Ai được xem tiến độ, không phải người làm.</p>
-                  </div>
+                  <h3>Người theo dõi</h3>
                   <span class="task-detail__people-count">{{ peopleForm.watcher_ids.length }}</span>
                 </div>
                 <ProjectMemberPicker
@@ -963,15 +1831,12 @@ onBeforeUnmount(() => {
                   tone="tertiary"
                 />
               </article>
-              <article class="task-detail__people-card">
+              <article class="task-detail__people-card task-detail__people-card--gold">
                 <div class="task-detail__people-head">
                   <span class="task-detail__people-icon">
                     <AppIcon name="users" :size="16" :stroke-width="1.75" />
                   </span>
-                  <div>
-                    <h3>Người phối hợp</h3>
-                    <p>Ai hỗ trợ người thực hiện.</p>
-                  </div>
+                  <h3>Người phối hợp</h3>
                   <span class="task-detail__people-count">{{ peopleForm.collaborator_ids.length }}</span>
                 </div>
                 <ProjectMemberPicker
@@ -989,7 +1854,7 @@ onBeforeUnmount(() => {
           <div class="task-detail__dialog-actions">
             <button type="button" class="task-detail__btn task-detail__btn--ghost" :disabled="peopleSaving" @click="closePeopleModal">Huỷ</button>
             <button type="button" class="task-detail__btn" :disabled="peopleSaving" @click="savePeople">
-              {{ peopleSaving ? 'Đang lưu…' : 'Lưu người tham gia' }}
+              {{ peopleSaving ? 'Đang lưu…' : 'Lưu' }}
             </button>
           </div>
         </div>
@@ -997,110 +1862,108 @@ onBeforeUnmount(() => {
     </Teleport>
 
     <Teleport to="body">
-      <div v-if="editing" class="task-detail__dialog" role="presentation" @mousedown.self="cancelEdit">
-        <div class="task-detail__dialog-panel" role="dialog" aria-modal="true" aria-labelledby="task-detail-edit-title">
+      <div
+        v-if="statusMenuOpen && canEdit"
+        id="task-detail-status-menu"
+        ref="statusMenuEl"
+        role="menu"
+        class="task-detail__menu task-detail__menu--status"
+        :style="{ top: `${statusMenuPos.top}px`, left: `${statusMenuPos.left}px` }"
+        @mousedown.stop
+      >
+        <button
+          v-for="item in statusChoices"
+          :key="item.value"
+          type="button"
+          role="menuitem"
+          class="task-detail__menu-item"
+          :class="{ 'task-detail__menu-item--current': item.value === task.status }"
+          @click="changeStatus(item.value)"
+        >
+          <span class="task-detail__status-dot" :class="`task-detail__status-dot--${TASK_STATUS_TONES[item.value]}`" />
+          <span>{{ item.label }}</span>
+          <AppIcon v-if="item.value === task.status" name="check" :size="14" :stroke-width="2" />
+        </button>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="fileMenuOpen && fileMenuAttachment"
+        ref="fileMenuRoot"
+        class="task-detail__menu task-detail__menu--file"
+        role="menu"
+        tabindex="-1"
+        :style="{ left: `${fileMenuPos.x}px`, top: `${fileMenuPos.y}px` }"
+        @contextmenu.prevent
+        @mousedown.stop
+      >
+        <button type="button" role="menuitem" class="task-detail__menu-item" @click="downloadFromMenu">
+          <AppIcon name="download" :size="15" :stroke-width="1.75" />
+          Tải xuống
+        </button>
+        <button type="button" role="menuitem" class="task-detail__menu-item" @click="viewFromMenu">
+          <AppIcon name="eye" :size="15" :stroke-width="1.75" />
+          Xem
+        </button>
+        <button
+          v-if="canEdit"
+          type="button"
+          role="menuitem"
+          class="task-detail__menu-item"
+          :disabled="replacingAttachment"
+          @click="triggerReplaceInput"
+        >
+          <AppIcon name="fileUp" :size="15" :stroke-width="1.75" />
+          Cập nhật lại
+        </button>
+        <button v-if="canEdit" type="button" role="menuitem" class="task-detail__menu-item" @click="openRenameDialog">
+          <AppIcon name="pencil" :size="15" :stroke-width="1.75" />
+          Đổi tên
+        </button>
+        <button
+          v-if="canEdit"
+          type="button"
+          role="menuitem"
+          class="task-detail__menu-item task-detail__menu-item--danger"
+          @click="deleteFromMenu"
+        >
+          <AppIcon name="trash" :size="15" :stroke-width="1.75" />
+          Xóa
+        </button>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div v-if="renaming" class="task-detail__dialog" role="presentation" @mousedown.self="cancelRename">
+        <div
+          class="task-detail__dialog-panel task-detail__dialog-panel--compact"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="task-detail-rename-title"
+        >
           <div class="task-detail__dialog-head">
             <span class="task-detail__dialog-icon" aria-hidden="true">
               <AppIcon name="pencil" :size="22" :stroke-width="1.75" />
             </span>
             <div class="task-detail__dialog-head-copy">
-              <h2 id="task-detail-edit-title" class="task-detail__dialog-title">Sửa công việc</h2>
+              <h2 id="task-detail-rename-title" class="task-detail__dialog-title">Đổi tên tệp</h2>
             </div>
-            <button type="button" class="task-detail__icon-btn" aria-label="Đóng" :disabled="saving" @click="cancelEdit">
+            <button type="button" class="task-detail__icon-btn" aria-label="Đóng" :disabled="savingRename" @click="cancelRename">
               <AppIcon name="close" :size="16" />
             </button>
           </div>
-          <form class="task-detail__dialog-body hide-scrollbar" @submit.prevent="saveEdit">
-            <div class="task-detail__form">
-              <label class="task-detail__field task-detail__field--wide">
-                <span>Tên công việc</span>
-                <input v-model="editForm.title" type="text" required maxlength="255" />
-              </label>
-              <label class="task-detail__field">
-                <span>Trạng thái</span>
-                <select v-model="editForm.status">
-                  <option v-for="item in statusChoices" :key="item.value" :value="item.value">{{ item.label }}</option>
-                </select>
-              </label>
-              <label class="task-detail__field">
-                <span>Mức độ quan trọng</span>
-                <select v-model="editForm.priority">
-                  <option value="">Chưa đặt</option>
-                  <option v-for="opt in priorityChoices" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
-              </label>
-              <label class="task-detail__field">
-                <span>Người thực hiện</span>
-                <select v-model="editForm.assignee_id">
-                  <option value="">Chưa gán</option>
-                  <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
-                </select>
-              </label>
-              <label class="task-detail__field">
-                <span>Người giao việc</span>
-                <select v-model="editForm.manager_id">
-                  <option value="">Chưa gán</option>
-                  <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
-                </select>
-              </label>
-              <label class="task-detail__field">
-                <span>Cách tính tiến độ</span>
-                <select v-model="editForm.progress_type">
-                  <option v-for="(label, value) in TASK_PROGRESS_TYPE_LABELS" :key="value" :value="value">{{ label }}</option>
-                </select>
-              </label>
-              <label class="task-detail__field">
-                <span>Tiến độ (%)</span>
-                <input v-model="editForm.progress_percent" type="number" min="0" max="100" :disabled="editForm.progress_type === 'quantity'" />
-              </label>
-              <template v-if="editForm.progress_type === 'quantity'">
-                <label class="task-detail__field">
-                  <span>Khối lượng đã hoàn thành</span>
-                  <input v-model="editForm.progress_number" type="number" min="0" step="0.01" />
-                </label>
-                <label class="task-detail__field">
-                  <span>Khối lượng cần hoàn thành</span>
-                  <input v-model="editForm.progress_total" type="number" min="0.01" step="0.01" />
-                </label>
-                <label class="task-detail__field">
-                  <span>Đơn vị</span>
-                  <input v-model="editForm.unit" type="text" maxlength="50" />
-                </label>
-                <p v-if="editFormEstimatedPercent != null" class="task-detail__meta">Ước tính {{ editFormEstimatedPercent }}%</p>
-              </template>
-              <label class="task-detail__field">
-                <span>Ngày bắt đầu</span>
-                <input v-model="editForm.start_date" type="date" />
-              </label>
-              <label class="task-detail__field">
-                <span>Ngày kết thúc</span>
-                <input v-model="editForm.end_date" type="date" />
-              </label>
-              <label class="task-detail__field">
-                <span>Bắt đầu thực tế</span>
-                <input v-model="editForm.actual_start_date" type="date" />
-              </label>
-              <label class="task-detail__field">
-                <span>Kết thúc thực tế</span>
-                <input v-model="editForm.actual_end_date" type="date" />
-              </label>
-              <label class="task-detail__field">
-                <span>Thời gian dự kiến (giờ)</span>
-                <input v-model="editForm.estimated_hours" type="number" min="0" step="0.5" />
-              </label>
-              <label class="task-detail__field">
-                <span>Tỷ trọng (%)</span>
-                <input v-model="editForm.weight" type="number" min="0" max="100" step="0.1" />
-              </label>
-              <label class="task-detail__field task-detail__field--wide">
-                <span>Mô tả</span>
-                <textarea v-model="editForm.description" rows="3" />
-              </label>
-            </div>
+          <form class="task-detail__dialog-body" @submit.prevent="saveRename">
+            <label class="task-detail__field task-detail__field--wide">
+              <span>Tên tệp</span>
+              <input ref="renameInput" v-model="renameForm.file_name" type="text" required maxlength="255" />
+            </label>
           </form>
           <div class="task-detail__dialog-actions">
-            <button type="button" class="task-detail__btn task-detail__btn--ghost" :disabled="saving" @click="cancelEdit">Huỷ</button>
-            <button type="button" class="task-detail__btn" :disabled="saving" @click="saveEdit">{{ saving ? 'Đang lưu…' : 'Lưu thay đổi' }}</button>
+            <button type="button" class="task-detail__btn task-detail__btn--ghost" :disabled="savingRename" @click="cancelRename">Huỷ</button>
+            <button type="button" class="task-detail__btn" :disabled="savingRename || !renameForm.file_name.trim()" @click="saveRename">
+              {{ savingRename ? 'Đang lưu…' : 'Lưu' }}
+            </button>
           </div>
         </div>
       </div>
@@ -1117,6 +1980,16 @@ onBeforeUnmount(() => {
       @update:open="confirmingDelete = $event"
     />
     <ConfirmDialog
+      :open="confirmingDeleteAttachments"
+      title="Xoá tệp đính kèm"
+      :description="selectedAttachmentIds.length === 1 ? 'Bạn có chắc muốn xoá tệp đã chọn? Thao tác này không thể hoàn tác.' : `Bạn có chắc muốn xoá ${selectedAttachmentIds.length} tệp đã chọn? Thao tác này không thể hoàn tác.`"
+      confirm-label="Xóa"
+      :loading="deletingAttachments"
+      danger
+      @confirm="confirmDeleteAttachments"
+      @update:open="confirmingDeleteAttachments = $event"
+    />
+    <ConfirmDialog
       :open="Boolean(confirmingDeleteWorklog)"
       title="Xoá nhật ký giờ làm"
       description="Bạn có chắc muốn xoá dòng nhật ký giờ làm này? Thao tác này không thể hoàn tác."
@@ -1130,126 +2003,217 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .task-detail {
-  min-height: 100%;
-  padding: 0 var(--space-5) var(--space-4);
-}
-
-.task-detail__page {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.task-detail__hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-5);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.task-detail__hero-copy {
-  min-width: 0;
-  flex: 1;
-}
-
-.task-detail__kicker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem 0.75rem;
-  margin: 0 0 var(--space-2);
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.task-detail__heading {
-  margin: 0;
-  color: var(--color-text);
-  font-size: var(--text-h2);
-  font-weight: 700;
-  line-height: var(--text-h2-line-height);
-  letter-spacing: var(--text-h2-letter-spacing);
-}
-
-.task-detail__lead {
-  margin: var(--space-2) 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-.task-detail__hero-actions {
-  display: flex;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2);
-}
-
-.task-detail__status-wrap {
   position: relative;
+  isolation: isolate;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 var(--space-5) var(--space-4);
+  background: linear-gradient(180deg, var(--color-tertiary-50) 0%, var(--color-surface-muted) 22rem);
 }
 
-.task-detail__status {
+.task-detail__page-watermark {
+  position: absolute;
+  top: 0;
+  right: 1.5rem;
+  z-index: 0;
+  width: 22rem;
+  height: auto;
+  max-width: 32vw;
+  pointer-events: none;
+  opacity: 0.05;
+}
+
+.task-detail__header-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  min-height: 2rem;
+  gap: var(--space-2);
+  height: 2rem;
   padding: 0 0.75rem;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--color-tertiary-surface);
-  color: var(--color-tertiary);
+  background: var(--color-surface);
+  color: var(--color-text);
   font-family: var(--font-family-base);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+  cursor: pointer;
+}
+
+.task-detail__header-btn:hover {
+  background: var(--color-surface-muted);
+}
+
+.task-detail__page {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  overflow: hidden;
+}
+
+.task-detail__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(22rem, 1fr);
+  align-items: stretch;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+.task-detail__col {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.task-detail__col::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.task-detail__col--discuss {
+  display: flex;
+  flex-direction: column;
+  align-content: stretch;
+  overflow: hidden;
+}
+
+.task-detail__toolbar {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: 3.25rem;
+  margin: 0 calc(var(--space-5) * -1);
+  padding: 0 var(--space-5);
+  background: var(--color-surface);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-detail__tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-5);
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.task-detail__tab {
+  position: relative;
+  flex-shrink: 0;
+  padding: 0.875rem 0 0.7rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
 }
 
-.task-detail__status:disabled {
+.task-detail__tab:hover {
+  color: var(--color-text);
+}
+
+.task-detail__tab--active {
+  color: var(--color-text);
+}
+
+.task-detail__tab--active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--color-secondary);
+}
+
+.task-detail__actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  overflow-x: auto;
+}
+
+.task-detail__action-wrap {
+  position: relative;
+}
+
+.task-detail__action {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  min-width: 3.75rem;
+  min-height: 3.25rem;
+  padding: 0.25rem 0.625rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-base);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.task-detail__action:hover:not(:disabled),
+.task-detail__action--open {
+  color: var(--color-secondary-700);
+  background: color-mix(in srgb, var(--color-secondary) 8%, transparent);
+}
+
+.task-detail__action:disabled {
+  opacity: 0.45;
   cursor: default;
-  opacity: 0.85;
 }
 
-.task-detail__status--open,
-.task-detail__status:hover:not(:disabled) {
-  background: var(--color-tertiary-surface-strong);
+.task-detail__action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
-.task-detail__status--primary {
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
+.task-detail__action-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.2;
 }
 
-.task-detail__status--primary.task-detail__status--open,
-.task-detail__status--primary:hover:not(:disabled) {
-  background: var(--color-primary-surface-strong);
+.task-detail__action-sep {
+  width: 1px;
+  height: 1.5rem;
+  flex-shrink: 0;
+  background: var(--color-border);
 }
 
-.task-detail__status--gold {
-  background: var(--color-gold-surface);
-  color: var(--color-gold);
+.task-detail__action--danger:hover:not(:disabled) {
+  color: var(--color-danger-tint-fg);
+  background: var(--color-danger-tint-bg);
 }
 
-.task-detail__status--gold.task-detail__status--open,
-.task-detail__status--gold:hover:not(:disabled) {
-  background: var(--color-gold-surface-strong);
-}
-
-.task-detail__status--success {
-  background: var(--color-success-tint-bg);
+.task-detail__action--success {
   color: var(--color-success-tint-fg);
+  background: var(--color-success-tint-bg);
 }
 
-.task-detail__status--umber {
-  background: var(--color-umber-tint-bg);
-  color: var(--color-umber-tint-fg);
+.task-detail__action--success:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-success) 18%, var(--color-success-tint-bg));
 }
 
 .task-detail__status-dot,
@@ -1270,12 +2234,26 @@ onBeforeUnmount(() => {
   position: absolute;
   top: calc(100% + 0.375rem);
   right: 0;
-  z-index: 20;
+  z-index: 40;
   min-width: 14rem;
   padding: 0.375rem;
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  box-shadow: var(--shadow-lg);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-lg);
+}
+
+.task-detail__menu--status,
+.task-detail__menu--file {
+  position: fixed;
+  top: auto;
+  right: auto;
+  z-index: 1400;
+}
+
+.task-detail__menu--file {
+  min-width: 13.5rem;
 }
 
 .task-detail__menu-item {
@@ -1301,24 +2279,13 @@ onBeforeUnmount(() => {
   background: var(--color-surface-muted);
 }
 
-.task-detail__avatars {
-  display: flex;
-  align-items: center;
+.task-detail__menu-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
-.task-detail__avatars :deep(.user-avatar-tip) {
-  margin-left: -0.375rem;
-}
-
-.task-detail__avatars :deep(.user-avatar-tip:first-child) {
-  margin-left: 0;
-}
-
-.task-detail__avatar-more {
-  margin-left: 0.25rem;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
+.task-detail__menu-item--danger {
+  color: var(--color-danger-tint-fg);
 }
 
 .task-detail__card {
@@ -1326,105 +2293,555 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease;
 }
 
-.task-detail__collapse-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
+.task-detail__card:hover {
+  box-shadow: var(--shadow-md);
 }
 
-.task-detail__collapse {
-  display: flex;
+.task-detail__card--tertiary {
+  background: linear-gradient(165deg, var(--color-tertiary-50) 0%, var(--color-surface) 46%);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--color-tertiary-100);
+}
+
+.task-detail__card--gold {
+  background: linear-gradient(165deg, var(--color-gold-50) 0%, var(--color-surface) 46%);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--color-gold-100);
+}
+
+.task-detail__card--umber {
+  background: linear-gradient(165deg, var(--color-umber-50) 0%, var(--color-surface) 46%);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--color-umber-100);
+}
+
+.task-detail__card--discuss {
   flex: 1;
-  min-width: 0;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
 }
 
-.task-detail__chevron {
+.task-detail__card--discuss .task-detail__section-head {
   flex-shrink: 0;
-  margin-top: 0.2rem;
-  color: var(--color-text-muted);
-  transition: transform 200ms ease;
 }
 
-.task-detail__chevron--open {
-  transform: rotate(90deg);
+.task-detail__col--discuss .task-detail__card--discuss {
+  height: 100%;
 }
 
-.task-detail__collapse-copy {
-  display: grid;
-  gap: 0.125rem;
+.task-detail__section-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-md);
+}
+
+.task-detail__section-icon--tertiary {
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary-600);
+  box-shadow: inset 0 0 0 1px var(--color-tertiary-100);
+}
+
+.task-detail__section-icon--gold {
+  background: var(--color-gold-surface);
+  color: var(--color-gold-600);
+  box-shadow: inset 0 0 0 1px var(--color-gold-100);
+}
+
+.task-detail__section-icon--umber {
+  background: var(--color-umber-surface);
+  color: var(--color-umber-600);
+  box-shadow: inset 0 0 0 1px var(--color-umber-100);
+}
+
+.task-detail__card--worklog {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  background: linear-gradient(165deg, var(--color-secondary-50) 0%, var(--color-surface) 42%);
+  box-shadow: var(--shadow-md), inset 0 0 0 1px var(--color-secondary-100);
+}
+
+.task-detail__wm-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.task-detail__worklog-watermark {
+  position: absolute;
+  top: -10%;
+  right: -6%;
+  z-index: 0;
+  width: 15rem;
+  height: auto;
+  max-width: 42%;
+  pointer-events: none;
+  opacity: 0.07;
+  transform: rotate(-4deg);
+}
+
+.task-detail__worklog-inner {
+  position: relative;
+  z-index: 1;
+  padding: var(--space-4);
+}
+
+.task-detail__section-head--worklog {
+  align-items: flex-start;
+  padding-bottom: var(--space-3);
+  box-shadow: none;
+}
+
+.task-detail__worklog-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
   min-width: 0;
 }
 
-.task-detail__title {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 1rem;
-  font-weight: 700;
+.task-detail__worklog-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-md);
+  background: var(--color-secondary-surface);
+  color: var(--color-secondary-600);
+  box-shadow: inset 0 0 0 1px var(--color-secondary-100);
 }
 
-.task-detail__hint {
+.task-detail__worklog-total {
+  margin: 0.125rem 0 0;
   color: var(--color-text-muted);
   font-size: 0.75rem;
 }
 
-.task-detail__fold {
+.task-detail__worklog-form {
   display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 200ms ease;
-}
-
-.task-detail__fold--open {
-  grid-template-rows: 1fr;
-}
-
-.task-detail__fold-inner {
-  overflow: hidden;
-}
-
-.task-detail__fold--open .task-detail__fold-inner {
-  padding-top: var(--space-3);
-}
-
-.task-detail__grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-3);
 }
 
-.task-detail__row {
+.task-detail__choice-list {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.task-detail__choice {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  height: 2.25rem;
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.task-detail__choice-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  opacity: 0.4;
+}
+
+.task-detail__choice--on.task-detail__choice--success {
+  background: var(--color-success-tint-bg);
+  color: var(--color-success-tint-fg);
+}
+
+.task-detail__choice--on.task-detail__choice--danger {
+  background: var(--color-danger-tint-bg);
+  color: var(--color-danger-tint-fg);
+}
+
+.task-detail__choice--on .task-detail__choice-dot {
+  opacity: 1;
+}
+
+.task-detail__worklog-list {
+  display: grid;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-detail__worklog-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0.75rem var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.task-detail__worklog-row:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.task-detail__worklog-hours {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: var(--radius-md);
+  background: var(--color-secondary-surface);
+  color: var(--color-secondary-700);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.task-detail__worklog-hours small {
+  color: var(--color-secondary-600);
+  font-size: 0.625rem;
+  font-weight: 600;
+}
+
+.task-detail__worklog-body {
   display: grid;
   gap: 0.25rem;
   min-width: 0;
 }
 
-.task-detail__row--wide {
-  grid-column: 1 / -1;
+.task-detail__worklog-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem var(--space-3);
 }
 
-.task-detail__row > span {
+.task-detail__worklog-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
   color: var(--color-text-muted);
   font-size: 0.75rem;
 }
 
-.task-detail__row > span::after {
+.task-detail__worklog-note {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-detail__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-detail__section-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.task-detail__kv {
+  display: grid;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.task-detail__kv-row,
+.task-detail__kv-cell {
+  display: grid;
+  grid-template-columns: 10.5rem minmax(0, 1fr);
+  align-items: stretch;
+  min-width: 0;
+}
+
+.task-detail__kv--cols .task-detail__kv-row--span,
+.task-detail__kv--cols .task-detail__kv-cell {
+  grid-template-columns: 12rem minmax(0, 1fr);
+}
+
+.task-detail__kv-row {
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-detail__kv-row:last-child {
+  box-shadow: none;
+}
+
+.task-detail__kv-row--stack {
+  grid-template-columns: 1fr;
+}
+
+.task-detail__kv--cols .task-detail__kv-row:not(.task-detail__kv-row--span):not(.task-detail__kv-row--stack) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.task-detail__kv-cell + .task-detail__kv-cell {
+  box-shadow: -1px 0 0 var(--color-border);
+}
+
+.task-detail__kv-row--stack .task-detail__label {
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-detail__label {
+  display: flex;
+  align-items: center;
+  padding: 0.625rem 0.75rem;
+  background: var(--color-surface-muted);
+  box-shadow: 1px 0 0 var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.task-detail__label::after {
   content: ':';
 }
 
-.task-detail__row > strong {
-  font-weight: 400;
-  font-style: italic;
+.task-detail__value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
   color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.task-detail__value:has(.task-detail__eval-progress),
+.task-detail__value:has(.task-detail__rules) {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.task-detail__kv .task-detail__eval-progress,
+.task-detail__kv .task-detail__rules {
+  width: 100%;
+}
+
+.task-detail__kv .task-detail__eval-track {
+  margin: 0.375rem 0.625rem 0.375rem 0;
+}
+
+.task-detail__link {
+  color: var(--color-tertiary-600);
+  text-decoration: none;
+}
+
+.task-detail__link:hover {
+  text-decoration: underline;
+}
+
+.task-detail__chip {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 0.1875rem 0.625rem;
+  border-radius: var(--radius-full);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.task-detail__chip--primary {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
+.task-detail__chip--gold {
+  background: var(--color-gold-surface);
+  color: var(--color-gold-600);
+}
+
+.task-detail__chip--success {
+  background: var(--color-success-tint-bg);
+  color: var(--color-success-tint-fg);
+}
+
+.task-detail__chip--umber {
+  background: var(--color-umber-surface);
+  color: var(--color-umber);
+}
+
+.task-detail__chip--tertiary {
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
+}
+
+.task-detail__chip--danger {
+  background: var(--color-danger-tint-bg);
+  color: var(--color-danger-tint-fg);
+}
+
+.task-detail__user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.125rem 0.625rem 0.125rem 0.125rem;
+  border-radius: var(--radius-full);
+  background: var(--color-secondary-surface);
+  color: var(--color-secondary-700);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.task-detail__eval-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.task-detail__eval-track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 0.5rem;
+  margin: 0.5rem 0.75rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+}
+
+.task-detail__eval-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-gold-400), var(--color-gold-600));
+}
+
+.task-detail__eval-knob {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-gold-700);
+  font-size: 0.625rem;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+  transform: translate(-50%, -50%);
+}
+
+.task-detail__eval-clock {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.task-detail__rating {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.125rem 0.5rem;
+}
+
+.task-detail__star {
+  color: var(--color-gold-200);
+}
+
+.task-detail__star--on {
+  color: var(--color-gold);
+}
+
+.task-detail__rating-caption {
+  color: var(--color-gold-700);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.task-detail__priority {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.task-detail__flag--info { color: var(--color-info); }
+.task-detail__flag--gold { color: var(--color-gold); }
+.task-detail__flag--danger { color: var(--color-danger); }
+.task-detail__flag--tertiary { color: var(--color-tertiary); }
+.task-detail__flag--neutral { color: var(--color-text-muted); }
+
+.task-detail__rules {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-detail__rules li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.task-detail__rule-icon {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: var(--color-success);
+}
+
+.task-detail__rule-icon--off {
+  color: var(--color-text-muted);
+}
+
+.task-detail__rules-item--off {
+  color: var(--color-text-muted);
+}
+
+.task-detail__rule-name {
+  display: block;
+  color: var(--color-text);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .task-detail__person,
@@ -1440,6 +2857,12 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
 }
 
+.task-detail__progress-qty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
 .task-detail__progress-meta {
   display: flex;
   justify-content: space-between;
@@ -1448,8 +2871,7 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
 }
 
-.task-detail__list,
-.task-detail__files {
+.task-detail__list {
   display: grid;
   gap: var(--space-2);
   margin: 0;
@@ -1457,8 +2879,7 @@ onBeforeUnmount(() => {
   list-style: none;
 }
 
-.task-detail__list li,
-.task-detail__file {
+.task-detail__list li {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1fr) auto;
   gap: 0.5rem;
@@ -1467,16 +2888,159 @@ onBeforeUnmount(() => {
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.task-detail__file {
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+.task-detail__files {
+  display: grid;
+  margin: 0 calc(var(--space-4) * -1);
+  padding: 0;
 }
 
-.task-detail__file a {
+.task-detail__file-bulk {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.125rem;
+  margin-left: auto;
+}
+
+.task-detail__bulk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 2rem;
+  padding: 0 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.task-detail__bulk-btn:hover {
+  background: var(--color-surface-muted);
+}
+
+.task-detail__bulk-btn--danger {
+  color: var(--color-danger-tint-fg);
+}
+
+.task-detail__file-head {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.5rem;
+  padding: 0.25rem var(--space-4);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-detail__file-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.task-detail__files:hover .task-detail__file-check,
+.task-detail__files--picking .task-detail__file-check,
+.task-detail__file:focus-within .task-detail__file-check {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.task-detail__file-check input {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin: 0;
+  accent-color: var(--color-tertiary);
+  cursor: pointer;
+}
+
+.task-detail__file {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.75rem var(--space-4);
+  box-shadow: 0 1px 0 var(--color-border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.task-detail__file--checked {
+  background: color-mix(in srgb, var(--color-tertiary) 8%, transparent);
+}
+
+.task-detail__file:last-child {
+  box-shadow: none;
+}
+
+.task-detail__file-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  color: inherit;
   text-decoration: none;
+}
+
+.task-detail__file-thumb {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.task-detail__file-thumb--primary { color: var(--color-primary); background: var(--color-primary-surface); }
+.task-detail__file-thumb--gold { color: var(--color-gold-600); background: var(--color-gold-surface); }
+.task-detail__file-thumb--danger { color: var(--color-danger); background: var(--color-danger-tint-bg); }
+.task-detail__file-thumb--info { color: var(--color-info); background: var(--color-surface-muted); }
+.task-detail__file-thumb--success { color: var(--color-success); background: var(--color-success-tint-bg); }
+.task-detail__file-thumb--tertiary { color: var(--color-tertiary); background: var(--color-tertiary-surface); }
+
+.task-detail__file-copy {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.task-detail__file-name {
   overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.task-detail__file-sub {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-detail__file-meta {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
 }
 
 .task-detail__empty {
@@ -1485,32 +3049,22 @@ onBeforeUnmount(() => {
   font-size: 0.875rem;
 }
 
-.task-detail__form {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.task-detail__form--compact {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-bottom: var(--space-3);
-}
-
 .task-detail__field {
   display: grid;
   gap: 0.375rem;
   min-width: 0;
 }
 
-.task-detail__field--wide,
-.task-detail__form-actions {
+.task-detail__field--wide {
   grid-column: 1 / -1;
 }
 
 .task-detail__field span {
   color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .task-detail__field input,
@@ -1524,9 +3078,26 @@ onBeforeUnmount(() => {
   background: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-family-base);
+  font-size: 0.875rem;
 }
 
-.task-detail__form-actions,
+.task-detail__field input::placeholder,
+.task-detail__field textarea::placeholder {
+  color: var(--color-text-muted);
+}
+
+.task-detail__field input:focus,
+.task-detail__field textarea:focus {
+  border-color: var(--color-primary-300);
+  outline: 2px solid var(--color-primary-200);
+  outline-offset: 1px;
+}
+
+.task-detail__field input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .task-detail__dialog-actions {
   display: flex;
   justify-content: flex-end;
@@ -1542,7 +3113,7 @@ onBeforeUnmount(() => {
   padding: 0 0.75rem;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--color-primary);
+  background: var(--color-secondary);
   color: var(--color-on-primary);
   font-family: var(--font-family-base);
   font-size: 0.8125rem;
@@ -1618,6 +3189,31 @@ onBeforeUnmount(() => {
   box-shadow: var(--shadow-lg);
 }
 
+.task-detail__dialog-panel--compact {
+  width: min(28rem, calc(100vw - 2.5rem));
+  height: auto;
+  max-height: min(24rem, calc(100vh - 2.5rem));
+}
+
+.task-detail__dialog-panel--people {
+  width: min(40rem, calc(100vw - 2.5rem));
+  height: auto;
+  max-height: calc(100vh - 2.5rem);
+}
+
+.task-detail__dialog-panel--people .task-detail__dialog-head,
+.task-detail__dialog-panel--people .task-detail__dialog-actions {
+  padding: var(--space-3) var(--space-4);
+}
+
+.task-detail__dialog-panel--people .task-detail__dialog-body {
+  padding: var(--space-3) var(--space-4);
+}
+
+.task-detail__dialog-panel--people .task-detail__dialog-title {
+  font-size: 1.0625rem;
+}
+
 .task-detail__dialog-head,
 .task-detail__dialog-actions {
   flex-shrink: 0;
@@ -1639,8 +3235,18 @@ onBeforeUnmount(() => {
   width: 2.75rem;
   height: 2.75rem;
   border-radius: var(--radius-md);
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary-600);
+}
+
+.task-detail__dialog-icon--secondary {
+  background: var(--color-secondary-surface);
+  color: var(--color-secondary-600);
+}
+
+.task-detail__dialog-icon--gold {
+  background: var(--color-gold-surface);
+  color: var(--color-gold-600);
 }
 
 .task-detail__dialog-head-copy {
@@ -1666,25 +3272,63 @@ onBeforeUnmount(() => {
   box-shadow: 0 -1px 0 var(--color-border);
 }
 
+.task-detail__people-story {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-gold-surface);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
 .task-detail__people-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .task-detail__people-card {
+  --step-color: var(--color-secondary);
+  --step-surface: var(--color-secondary-surface);
+
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-4);
+  padding: var(--space-3);
+  padding-left: calc(var(--space-2) + 3px + var(--space-2));
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.task-detail__people-card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--step-color);
+}
+
+.task-detail__people-card--tertiary {
+  --step-color: var(--color-tertiary);
+  --step-surface: var(--color-tertiary-surface);
+}
+
+.task-detail__people-card--gold {
+  --step-color: var(--color-gold-600);
+  --step-surface: var(--color-gold-surface);
 }
 
 .task-detail__people-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-2);
 }
 
@@ -1692,54 +3336,105 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
   flex-shrink: 0;
   border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text-muted);
+  background: var(--step-surface);
+  color: var(--step-color);
 }
 
 .task-detail__people-head h3 {
   margin: 0;
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.task-detail__people-head p {
-  margin: 0.125rem 0 0;
-  color: var(--color-text-muted);
+  color: var(--step-color);
   font-size: 0.75rem;
-  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .task-detail__people-count {
   margin-left: auto;
-  min-width: 1.5rem;
-  padding: 0.125rem 0.5rem;
+  min-width: 1.25rem;
+  padding: 0.0625rem 0.375rem;
   border-radius: var(--radius-full);
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
+  background: var(--step-surface);
+  color: var(--step-color);
+  font-size: 0.6875rem;
   font-weight: 700;
   text-align: center;
 }
 
+.task-detail__field textarea {
+  resize: vertical;
+}
+
 @media (max-width: 1100px) {
-  .task-detail__hero,
-  .task-detail__grid,
-  .task-detail__form,
-  .task-detail__form--compact,
+  .task-detail {
+    height: auto;
+    overflow: visible;
+  }
+
+  .task-detail__page {
+    overflow: visible;
+    grid-template-rows: none;
+  }
+
+  .task-detail__layout,
   .task-detail__people-grid {
     grid-template-columns: 1fr;
   }
 
-  .task-detail__hero {
+  .task-detail__layout {
+    overflow: visible;
+  }
+
+  .task-detail__col,
+  .task-detail__col--discuss {
+    overflow: visible;
+  }
+
+  .task-detail__card--discuss {
+    height: auto;
+  }
+
+  .task-detail__card--discuss :deep(.comments--sidebar),
+  .task-detail__card--discuss :deep(.comments__list--scroll) {
+    flex: none;
+    overflow: visible;
+  }
+
+  .task-detail__field--span2 {
+    grid-column: auto;
+  }
+
+  .task-detail__toolbar {
     flex-direction: column;
   }
 
-  .task-detail__hero-actions {
-    justify-content: flex-start;
+  .task-detail__actions {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 720px) {
+  .task-detail__kv--cols .task-detail__kv-row:not(.task-detail__kv-row--span) {
+    grid-template-columns: 1fr;
+  }
+
+  .task-detail__kv-cell + .task-detail__kv-cell {
+    box-shadow: inset 0 1px 0 var(--color-border);
+  }
+}
+
+@media (max-width: 480px) {
+  .task-detail__worklog-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .task-detail__worklog-row .task-detail__icon-btn {
+    grid-column: 2;
+    justify-self: end;
   }
 }
 </style>

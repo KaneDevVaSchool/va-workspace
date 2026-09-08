@@ -4,6 +4,11 @@
 // Cùng bố cục với ProjectCreate.vue, dùng chung ProjectFormFields.vue.
 // Nạp dữ liệu dự án hiện tại theo :id trong route trước khi hiện form.
 //
+// Chia theo tab (mượn cơ chế `step`/STEP_SECTIONS đã có trong
+// ProjectFormFields.vue cho wizard Thêm dự án) thay vì hiện hết 1 lần và
+// cuộn dọc dài — 4 tab: Chung (thông tin + thời gian/mức độ) · Tổ chức ·
+// Thành viên · Cài đặt.
+//
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
@@ -11,8 +16,16 @@ import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import ProjectFormFields from '../components/ProjectFormFields.vue';
 
+const TABS = [
+  { key: 1, label: 'Chung' },
+  { key: 2, label: 'Tổ chức' },
+  { key: 3, label: 'Thành viên' },
+  { key: 4, label: 'Cài đặt' },
+];
+
 const route = useRoute();
 const router = useRouter();
+const activeTab = ref(1);
 
 const projectId = computed(() => Number(route.params.id));
 
@@ -259,6 +272,21 @@ onMounted(loadMeta);
     <div v-else-if="notFound" class="proj-edit__loading">Không tìm thấy dự án này.</div>
 
     <template v-else>
+      <div class="proj-edit__tabs hide-scrollbar" role="tablist" aria-label="Nhóm thông tin dự án">
+        <button
+          v-for="tab in TABS"
+          :key="tab.key"
+          type="button"
+          role="tab"
+          class="proj-edit__tab"
+          :class="{ 'proj-edit__tab--active': activeTab === tab.key }"
+          :aria-selected="activeTab === tab.key"
+          @click="activeTab = tab.key"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+
       <div class="proj-edit__body hide-scrollbar">
         <ProjectFormFields
           :form="form"
@@ -268,6 +296,7 @@ onMounted(loadMeta);
           :assignable-users="assignableUsers"
           :all-labels="allLabels"
           :disabled="saving || uploadingAvatar"
+          :step="activeTab"
           :duration-days="durationDays"
           :progress-method-description="progressMethodDescription"
           :avatar-preview-url="avatarPreviewUrl"
@@ -330,11 +359,54 @@ onMounted(loadMeta);
   color: var(--color-text-muted);
 }
 
+.proj-edit__tabs {
+  display: flex;
+  flex-shrink: 0;
+  align-items: flex-end;
+  gap: var(--space-5);
+  min-width: 0;
+  margin-top: var(--space-4);
+  overflow-x: auto;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.proj-edit__tab {
+  position: relative;
+  flex-shrink: 0;
+  padding: 0.625rem 0 0.7rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.proj-edit__tab:hover {
+  color: var(--color-text);
+}
+
+.proj-edit__tab--active {
+  color: var(--color-text);
+}
+
+.proj-edit__tab--active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--color-secondary);
+}
+
 .proj-edit__body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
   padding-bottom: var(--space-2);
 }
 

@@ -39,7 +39,6 @@ const TASK_VARIANTS = [
   { key: 'normal', label: 'Thêm công việc thường' },
   { key: 'bulk', label: 'Thêm nhiều công việc thường' },
   { key: 'by_category', label: 'Thêm công việc theo danh mục' },
-  { key: 'process', label: 'Thêm công việc quy trình' },
   { key: 'by_phase', label: 'Thêm công việc theo phase' },
 ];
 

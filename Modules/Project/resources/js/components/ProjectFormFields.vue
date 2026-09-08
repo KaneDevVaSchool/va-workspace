@@ -121,7 +121,7 @@ function fieldError(field) {
 }
 
 function showSection(key) {
-  if (!props.isCreate || !props.step) return true;
+  if (!props.step) return true;
   return (STEP_SECTIONS[props.step] || []).includes(key);
 }
 

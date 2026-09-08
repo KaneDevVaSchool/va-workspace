@@ -910,13 +910,6 @@ async function onProjectDuplicated() {
 // ---------- Group theo phòng ban thực hiện ----------
 const collapsedGroups = ref(new Set(loadCollapsedGroups()));
 
-const avatarInput = ref(null);
-const galleryInput = ref(null);
-const driveUrlInput = ref('');
-const attachmentInput = ref(null);
-const avatarUploading = ref(false);
-const attachmentUploading = ref(false);
-
 const canManageSettings = computed(() => auth.can('project.manage_settings'));
 const canCreate = ref(false);
 
@@ -1728,12 +1721,13 @@ function formatDate(value) {
   return d.toLocaleDateString('vi-VN');
 }
 
+// Click 1 dòng/thẻ dự án → chuyển hẳn sang trang chi tiết riêng
+// (manager.project.detail), không còn panel trượt tại chỗ (ProjectDetail.vue).
+// `selected` chỉ còn giữ id để tô sáng dòng vừa bấm trước khi router điều
+// hướng — không có state ảnh/tệp/theo dõi nào ở trang này nữa.
 function inspect(project) {
   selected.value = project;
-}
-
-function closePanel() {
-  selected.value = null;
+  router.push({ name: 'manager.project.detail', params: { id: project.id } });
 }
 
 function openCreatePage() {
@@ -1742,27 +1736,6 @@ function openCreatePage() {
 
 function openSettings() {
   router.push({ name: 'manager.project.settings' });
-}
-
-const followBusy = ref(false);
-
-async function toggleFollow() {
-  if (!selected.value || followBusy.value) return;
-  followBusy.value = true;
-  const project = selected.value;
-  try {
-    if (project.is_following) {
-      const { data } = await window.axios.delete(`/api/project/${project.id}/follow`);
-      project.is_following = data.is_following;
-    } else {
-      const { data } = await window.axios.post(`/api/project/${project.id}/follow`);
-      project.is_following = data.is_following;
-    }
-  } catch (err) {
-    showClientToast('error', err?.response?.data?.message || 'Không cập nhật được theo dõi dự án.');
-  } finally {
-    followBusy.value = false;
-  }
 }
 
 function openEditPage(project) {
@@ -1814,134 +1787,6 @@ async function setProjectLabels(project, labelIds) {
   }
 }
 
-function triggerAvatarInput() {
-  avatarInput.value?.click();
-}
-
-async function onAvatarChange(event) {
-  const file = event.target.files?.[0];
-  event.target.value = '';
-  if (!file || !selected.value) return;
-
-  avatarUploading.value = true;
-  const fd = new FormData();
-  fd.append('avatar', file);
-  try {
-    const { data } = await window.axios.post(`/api/project/${selected.value.id}/avatar`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    selected.value = data.project;
-    const index = projects.value.findIndex((p) => p.id === data.project.id);
-    if (index !== -1) projects.value.splice(index, 1, data.project);
-    showClientToast('success', 'Đã cập nhật ảnh đại diện.');
-  } catch (err) {
-    showClientToast('error', err?.response?.data?.message || 'Không tải lên được ảnh đại diện.');
-  } finally {
-    avatarUploading.value = false;
-  }
-}
-
-function triggerGalleryInput() {
-  galleryInput.value?.click();
-}
-
-async function onGalleryChange(event) {
-  const files = Array.from(event.target.files || []);
-  event.target.value = '';
-  if (!files.length || !selected.value) return;
-
-  attachmentUploading.value = true;
-  try {
-    for (const file of files) {
-      const fd = new FormData();
-      fd.append('file', file);
-      const { data } = await window.axios.post(`/api/project/${selected.value.id}/attachments`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      selected.value.attachments = [...(selected.value.attachments || []), data.attachment];
-    }
-    showClientToast('success', 'Đã thêm ảnh vào thư viện.');
-  } catch (err) {
-    showClientToast('error', err?.response?.data?.message || 'Không tải lên được ảnh.');
-  } finally {
-    attachmentUploading.value = false;
-  }
-}
-
-function triggerAttachmentInput() {
-  attachmentInput.value?.click();
-}
-
-async function onAttachmentChange(event) {
-  const file = event.target.files?.[0];
-  event.target.value = '';
-  if (!file || !selected.value) return;
-
-  attachmentUploading.value = true;
-  const fd = new FormData();
-  fd.append('file', file);
-  try {
-    const { data } = await window.axios.post(`/api/project/${selected.value.id}/attachments`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    selected.value.attachments = [...(selected.value.attachments || []), data.attachment];
-    showClientToast('success', 'Đã tải file lên.');
-  } catch (err) {
-    showClientToast('error', err?.response?.data?.message || 'Không tải lên được file.');
-  } finally {
-    attachmentUploading.value = false;
-  }
-}
-
-async function addDriveLink() {
-  const url = driveUrlInput.value.trim();
-  if (!url || !selected.value) return;
-  try {
-    new URL(url);
-  } catch {
-    showClientToast('error', 'Link Google Drive không hợp lệ.');
-    return;
-  }
-
-  attachmentUploading.value = true;
-  try {
-    const { data } = await window.axios.post(`/api/project/${selected.value.id}/attachments`, { url });
-    selected.value.attachments = [...(selected.value.attachments || []), data.attachment];
-    driveUrlInput.value = '';
-    showClientToast('success', 'Đã thêm link Google Drive.');
-  } catch (err) {
-    showClientToast('error', err?.response?.data?.message || 'Không thêm được link.');
-  } finally {
-    attachmentUploading.value = false;
-  }
-}
-
-async function removeAttachment(attachment) {
-  if (!selected.value) return;
-  if (!window.confirm('Xoá tệp đính kèm này?')) return;
-  try {
-    await window.axios.delete(`/api/project/${selected.value.id}/attachments/${attachment.id}`);
-    selected.value.attachments = (selected.value.attachments || []).filter((a) => a.id !== attachment.id);
-    showClientToast('success', 'Đã xoá tệp đính kèm.');
-  } catch (err) {
-    showClientToast('error', err?.response?.data?.message || 'Không xoá được tệp đính kèm.');
-  }
-}
-
-function openLightbox(url) {
-  window.open(url, '_blank', 'noopener');
-}
-
-function formatSize(bytes) {
-  if (!bytes) return '';
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(0)} KB`;
-  return `${(kb / 1024).toFixed(1)} MB`;
-}
-
-const galleryImages = computed(() => (selected.value?.attachments || []).filter((a) => a.kind === 'image'));
-const fileAttachments = computed(() => (selected.value?.attachments || []).filter((a) => a.kind !== 'image'));
-
 function handleDocumentKeydown(event) {
   if (event.key !== 'Escape') return;
   if (actionDialog.kind) return;
@@ -1961,7 +1806,6 @@ function handleDocumentKeydown(event) {
   else if (memberPickerProjectId.value) closeMemberList();
   else if (viewModeOpen.value) closeViewModeMenu();
   else if (kanbanMemberPickerOpen.value) closeKanbanMemberPicker();
-  else if (selected.value) closePanel();
 }
 
 function handleDocumentClickForPickers(event) {
@@ -1976,7 +1820,6 @@ function handleDocumentClickForPickers(event) {
 }
 
 watch(perPage, () => loadProjects(1));
-watch(selected, () => nextTick(fitColumnsToContent));
 watch(visibleColumns, () => nextTick(fitColumnsToContent));
 watch(columnWidths, saveColumnWidths, { deep: true });
 watch(tableZoom, (value) => {
@@ -2335,7 +2178,13 @@ onBeforeUnmount(() => {
                     <span v-if="col.key === 'code'" class="proj-page__pill proj-page__pill--code">{{ project.code }}</span>
 
                     <span v-else-if="col.key === 'name'" class="proj-page__name-cell">
-                      <span class="proj-page__name-title">{{ project.name }}</span>
+                      <button
+                        type="button"
+                        class="proj-page__name-title"
+                        @click.stop="inspect(project)"
+                      >
+                        {{ project.name }}
+                      </button>
                       <span class="proj-page__name-labels">
                         <span
                           v-for="label in project.labels || []"
@@ -2652,222 +2501,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-
-      <aside v-if="selected" class="proj-page__side" aria-label="Chi tiết dự án">
-        <div class="proj-page__side-head">
-          <h2 class="proj-page__side-title">Chi tiết dự án</h2>
-          <div class="proj-page__side-actions">
-            <button
-              type="button"
-              class="proj-page__btn proj-page__btn--ghost proj-page__follow-btn"
-              :class="{ 'proj-page__follow-btn--active': selected.is_following }"
-              :disabled="followBusy"
-              @click="toggleFollow"
-            >
-              <AppIcon name="bell" :size="14" />
-              {{ selected.is_following ? 'Đang theo dõi' : 'Theo dõi' }}
-            </button>
-            <button type="button" class="proj-page__icon-btn" aria-label="Sửa dự án" @click="openEditPage(selected)">
-              <AppIcon name="pencil" :size="16" />
-            </button>
-            <button type="button" class="proj-page__icon-btn" aria-label="Xoá dự án" @click="deleteProject(selected)">
-              <AppIcon name="trash" :size="16" />
-            </button>
-            <button type="button" class="proj-page__icon-btn" aria-label="Đóng" @click="closePanel">
-              <AppIcon name="close" :size="16" />
-            </button>
-          </div>
-        </div>
-
-        <div class="proj-page__avatar-block">
-          <div class="proj-page__avatar" @click="triggerAvatarInput">
-            <img v-if="selected.avatar_url" :src="selected.avatar_url" alt="" class="proj-page__avatar-img" />
-            <AppIcon v-else name="layers" :size="28" />
-          </div>
-          <button type="button" class="proj-page__btn proj-page__btn--ghost" :disabled="avatarUploading" @click="triggerAvatarInput">
-            {{ avatarUploading ? 'Đang tải…' : 'Đổi ảnh đại diện' }}
-          </button>
-          <input ref="avatarInput" type="file" accept="image/*" class="proj-page__hidden-input" @change="onAvatarChange" />
-        </div>
-
-        <div class="proj-page__rows">
-          <div class="proj-page__row">
-            <span class="proj-page__row-label">Mã dự án</span>
-            <span class="proj-page__row-value">{{ selected.code }}</span>
-          </div>
-          <div class="proj-page__row">
-            <span class="proj-page__row-label">Loại dự án</span>
-            <span class="proj-page__row-value">{{ typeLabel(selected.type) }}</span>
-          </div>
-          <div class="proj-page__row">
-            <span class="proj-page__row-label">Phòng ban sở hữu</span>
-            <span class="proj-page__row-value">{{ selected.owner_department?.name || '—' }}</span>
-          </div>
-          <div v-if="executingDepartments(selected).length" class="proj-page__row">
-            <span class="proj-page__row-label">Phòng ban thực hiện</span>
-            <span class="proj-page__row-value">{{ executingDepartments(selected).map((d) => d.name).join(', ') }}</span>
-          </div>
-          <div class="proj-page__row">
-            <span class="proj-page__row-label">Trạng thái</span>
-            <span class="proj-page__row-value proj-page__row-value--status">
-              <span class="proj-page__dot" :class="statusDotClass(selected.status)" />
-              {{ statusLabel(selected.status) }}
-            </span>
-          </div>
-          <div class="proj-page__row">
-            <span class="proj-page__row-label">Mức độ quan trọng</span>
-            <span class="proj-page__row-value proj-page__row-value--status">
-              <span class="proj-page__dot" :class="importanceDotClass(selected.importance)" />
-              {{ importanceLabel(selected.importance) }}
-            </span>
-          </div>
-          <div class="proj-page__row">
-            <span class="proj-page__row-label">Phụ trách chính</span>
-            <span class="proj-page__row-value">{{ selected.lead ? `${selected.lead.name}${selected.lead.department?.name ? ' — ' + selected.lead.department.name : ''}` : '—' }}</span>
-          </div>
-          <div class="proj-page__row">
-            <span class="proj-page__row-label">Phòng ban phụ trách</span>
-            <span class="proj-page__row-value">{{ selected.lead_department?.name || selected.lead?.department?.name || '—' }}</span>
-          </div>
-          <div class="proj-page__row">
-            <span class="proj-page__row-label">Ngày bắt đầu</span>
-            <span class="proj-page__row-value">{{ formatDate(selected.start_date) }}</span>
-          </div>
-          <div class="proj-page__row">
-            <span class="proj-page__row-label">Ngày kết thúc</span>
-            <span class="proj-page__row-value">{{ formatDate(selected.end_date) }}</span>
-          </div>
-          <div v-if="selected.duration_days" class="proj-page__row">
-            <span class="proj-page__row-label">Số ngày thực hiện</span>
-            <span class="proj-page__row-value">{{ selected.duration_days }} ngày</span>
-          </div>
-          <div v-if="selected.progress_percent != null" class="proj-page__row proj-page__row--progress">
-            <span class="proj-page__row-label">Tiến độ</span>
-            <DualProgressBar
-              :actual="selected.progress_percent"
-              :expected="computeExpectedProgress(selected.start_date, selected.end_date)"
-              size="md"
-            />
-          </div>
-          <div class="proj-page__row">
-            <span class="proj-page__row-label">Điểm đánh giá</span>
-            <span class="proj-page__row-value">{{ selected.evaluation_score != null ? selected.evaluation_score : '—' }}</span>
-          </div>
-          <div v-if="selected.description" class="proj-page__row">
-            <span class="proj-page__row-label">Mô tả</span>
-            <span class="proj-page__row-value">{{ selected.description }}</span>
-          </div>
-          <div class="proj-page__row">
-            <span class="proj-page__row-label">Người tạo</span>
-            <span class="proj-page__row-value">{{ selected.creator?.name || '—' }}</span>
-          </div>
-        </div>
-
-        <div v-if="(selected.scopes || []).length" class="proj-page__section">
-          <h3 class="proj-page__section-title">Phạm vi triển khai</h3>
-          <div class="proj-page__rows">
-            <div v-for="scope in selected.scopes" :key="scope.id" class="proj-page__row">
-              <span class="proj-page__row-label">
-                {{ scope.scope_type === 'department' ? scope.department?.name || 'Phòng ban' : (options.scope_type.find((o) => o.value === scope.scope_type)?.label || scope.scope_type) }}
-              </span>
-              <span class="proj-page__row-value">{{ scope.weight_percent }}%</span>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="(selected.members || []).length" class="proj-page__section">
-          <h3 class="proj-page__section-title">Người thực hiện</h3>
-          <div class="proj-page__member-list">
-            <span v-for="member in selected.members" :key="member.id" class="proj-page__member-chip">
-              <UserAvatarTip :user="member" label="Người thực hiện" />
-              <span>{{ member.name }}</span>
-            </span>
-          </div>
-        </div>
-
-        <div v-if="(selected.labels || []).length" class="proj-page__section">
-          <h3 class="proj-page__section-title">Nhãn</h3>
-          <div class="proj-page__member-list">
-            <span
-              v-for="label in selected.labels"
-              :key="label.id"
-              class="proj-label-picker__chip"
-              :class="`proj-label-picker__chip--${label.color}`"
-            >
-              <span class="proj-label-picker__dot" :class="`proj-label-picker__dot--${label.color}`" />
-              <span>{{ label.name }}</span>
-            </span>
-          </div>
-        </div>
-
-        <div v-if="galleryImages.length" class="proj-page__section">
-          <div class="proj-page__section-head">
-            <h3 class="proj-page__section-title">Thư viện ảnh</h3>
-            <button type="button" class="proj-page__link-btn" :disabled="attachmentUploading" @click="triggerGalleryInput">
-              + Thêm ảnh
-            </button>
-          </div>
-          <div class="proj-page__gallery">
-            <button
-              v-for="img in galleryImages"
-              :key="img.id"
-              type="button"
-              class="proj-page__gallery-item"
-              @click="openLightbox(img.file_url)"
-            >
-              <img :src="img.file_url" alt="" />
-              <span class="proj-page__gallery-remove" @click.stop="removeAttachment(img)">
-                <AppIcon name="close" :size="12" />
-              </span>
-            </button>
-          </div>
-        </div>
-        <div v-else class="proj-page__section">
-          <div class="proj-page__section-head">
-            <h3 class="proj-page__section-title">Thư viện ảnh</h3>
-            <button type="button" class="proj-page__link-btn" :disabled="attachmentUploading" @click="triggerGalleryInput">
-              + Thêm ảnh
-            </button>
-          </div>
-        </div>
-        <input ref="galleryInput" type="file" accept="image/*" multiple class="proj-page__hidden-input" @change="onGalleryChange" />
-
-        <div class="proj-page__section">
-          <h3 class="proj-page__section-title">Tệp đính kèm</h3>
-          <div v-if="fileAttachments.length" class="proj-page__attachment-list">
-            <div v-for="att in fileAttachments" :key="att.id" class="proj-page__attachment">
-              <AppIcon :name="att.kind === 'drive_link' ? 'link' : 'fileText'" :size="16" />
-              <a
-                v-if="att.kind === 'drive_link'"
-                :href="att.url"
-                target="_blank"
-                rel="noopener"
-                class="proj-page__attachment-name"
-              >
-                {{ att.url }}
-              </a>
-              <a v-else :href="att.file_url" target="_blank" rel="noopener" class="proj-page__attachment-name">
-                {{ att.original_name }}
-              </a>
-              <span v-if="att.size_bytes" class="proj-page__attachment-size">{{ formatSize(att.size_bytes) }}</span>
-              <button type="button" class="proj-page__icon-btn" aria-label="Xoá tệp đính kèm" @click="removeAttachment(att)">
-                <AppIcon name="trash" :size="14" />
-              </button>
-            </div>
-          </div>
-
-          <div class="proj-page__attachment-add">
-            <input v-model="driveUrlInput" type="text" class="proj-page__input" placeholder="https://drive.google.com/…" />
-            <button type="button" class="proj-page__btn proj-page__btn--ghost" :disabled="attachmentUploading" @click="addDriveLink">
-              Thêm link
-            </button>
-          </div>
-          <button type="button" class="proj-page__btn proj-page__btn--ghost" :disabled="attachmentUploading" @click="triggerAttachmentInput">
-            Tải file lên
-          </button>
-          <input ref="attachmentInput" type="file" class="proj-page__hidden-input" @change="onAttachmentChange" />
-        </div>
-      </aside>
     </div>
 
     <Teleport to="body">
@@ -3440,6 +3073,7 @@ onBeforeUnmount(() => {
       @close="closeActionDialog"
       @updated="applyProject"
       @duplicated="onProjectDuplicated"
+      @tasks-changed="closeActionDialog"
     />
   </section>
 </template>
@@ -4656,9 +4290,20 @@ onBeforeUnmount(() => {
 
 .proj-page__name-title {
   display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   font-weight: 600;
+  text-align: left;
   line-height: 1.35;
   overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.proj-page__name-title:hover {
+  color: var(--color-primary);
 }
 
 .proj-page__name-labels {
@@ -5968,241 +5613,6 @@ onBeforeUnmount(() => {
   background: var(--color-umber);
 }
 
-.proj-page__side {
-  flex-shrink: 0;
-  width: 28rem;
-  overflow-y: auto;
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-muted);
-}
-
-.proj-page__side-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.proj-page__side-title {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 1.0625rem;
-  font-weight: 700;
-}
-
-.proj-page__side-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.proj-page__icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.proj-page__icon-btn:hover {
-  background: var(--color-surface);
-}
-
-.proj-page__avatar-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  margin: var(--space-4) 0;
-}
-
-.proj-page__avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 5rem;
-  height: 5rem;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--color-primary-surface), var(--color-tertiary-surface));
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  color: var(--color-primary);
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.proj-page__avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.proj-page__hidden-input {
-  display: none;
-}
-
-.proj-page__rows {
-  display: flex;
-  flex-direction: column;
-}
-
-.proj-page__row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  box-shadow: 0 1px 0 var(--color-border);
-  font-size: 0.8125rem;
-}
-
-.proj-page__row:last-child {
-  box-shadow: none;
-}
-
-.proj-page__row-label {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-}
-
-.proj-page__row-label::after {
-  content: ':';
-}
-
-.proj-page__row-value {
-  color: var(--color-text);
-  font-style: italic;
-  text-align: right;
-  overflow-wrap: anywhere;
-}
-
-.proj-page__row-value--status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4375rem;
-}
-
-.proj-page__row--progress {
-  align-items: center;
-}
-
-.proj-page__section {
-  margin-top: var(--space-4);
-  padding-top: var(--space-4);
-  box-shadow: 0 -1px 0 var(--color-border);
-}
-
-.proj-page__section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.proj-page__section-title {
-  margin: 0 0 var(--space-2);
-  color: var(--color-text);
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.proj-page__member-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.proj-page__member-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.3125rem 0.625rem;
-  border-radius: var(--radius-full);
-  background: var(--color-surface);
-  font-size: 0.8125rem;
-  color: var(--color-text);
-}
-
-.proj-page__gallery {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-2);
-}
-
-.proj-page__gallery-item {
-  position: relative;
-  aspect-ratio: 1;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  cursor: pointer;
-  background: var(--color-surface);
-}
-
-.proj-page__gallery-item img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.proj-page__gallery-remove {
-  position: absolute;
-  top: 0.25rem;
-  right: 0.25rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, black 50%, transparent);
-  color: white;
-}
-
-.proj-page__attachment-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin-bottom: var(--space-2);
-}
-
-.proj-page__attachment {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-  box-shadow: 0 1px 0 var(--color-border);
-  font-size: 0.8125rem;
-}
-
-.proj-page__attachment-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-text);
-}
-
-.proj-page__attachment-size {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
-.proj-page__attachment-add {
-  display: flex;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-
 .proj-page__check {
   display: flex;
   align-items: center;
@@ -6221,15 +5631,6 @@ onBeforeUnmount(() => {
 /* ── responsive ─────────────────────────────────────────────────────── */
 
 @media (max-width: 1279px) {
-  .proj-page__body {
-    flex-direction: column;
-  }
-
-  .proj-page__side {
-    width: 100%;
-    max-height: 42%;
-  }
-
   .proj-page__table-wrap {
     min-height: 16rem;
   }
@@ -6297,10 +5698,6 @@ onBeforeUnmount(() => {
 
   .proj-page__header-search input {
     width: 8rem;
-  }
-
-  .proj-page__gallery {
-    grid-template-columns: repeat(2, 1fr);
   }
 
   .proj-kanban__col {

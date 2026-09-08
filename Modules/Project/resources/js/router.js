@@ -69,6 +69,16 @@ export default [
     },
   },
   {
+    path: '/manager/project/tasks/:id/edit',
+    name: 'manager.project.tasks.edit',
+    component: () => import('./pages/TaskEdit.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Sửa công việc',
+      requiresPermission: 'task.create',
+    },
+  },
+  {
     // "Tất cả công việc" (Project Giai đoạn 2 — Task thật) — mục sidebar
     // riêng cạnh "Dự án". requiresAnyPermission vì role member chỉ có
     // task.view_assigned (không có task.view) — xem AppSidebar.vue.
@@ -79,6 +89,20 @@ export default [
       requiresAuth: true,
       title: 'Tất cả công việc',
       requiresAnyPermission: ['task.view', 'task.view_assigned'],
+    },
+  },
+  {
+    // Trang chi tiết dự án độc lập (thay cho panel trượt trong ProjectList.vue
+    // trước đây) — giống pattern manager.project.tasks.detail ở trên. PHẢI
+    // đăng ký SAU CÙNG (route tĩnh /manager/project/create, /settings,
+    // /tasks* ở trên) — nếu không :id (wildcard) sẽ nuốt mất các path đó.
+    path: '/manager/project/:id',
+    name: 'manager.project.detail',
+    component: () => import('./pages/ProjectDetail.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Chi tiết dự án',
+      requiresPermission: 'project.view',
     },
   },
 ];

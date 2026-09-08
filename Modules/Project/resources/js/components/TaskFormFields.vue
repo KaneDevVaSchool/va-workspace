@@ -90,7 +90,20 @@ const REQUIREMENT_OPTIONS = [
   { value: 'on_completion', label: 'Yêu cầu khi báo cáo hoàn thành' },
 ];
 
+const REPORT_COMPLETE_ACTION_OPTIONS = [
+  { value: 'none', label: 'Không tự chuyển trạng thái' },
+  { value: 'completed', label: 'Chuyển sang Hoàn thành' },
+  { value: 'under_review', label: 'Chuyển sang Đang đánh giá' },
+];
+
 const POLICY_DEFS = [
+  {
+    key: 'report_complete_action',
+    icon: 'check',
+    tone: 'primary',
+    label: 'Sau khi báo cáo hoàn thành',
+    options: REPORT_COMPLETE_ACTION_OPTIONS,
+  },
   {
     key: 'completed_interaction_policy',
     icon: 'messageCircle',
@@ -646,10 +659,8 @@ const importanceRows = computed(() => {
 
       <p class="proj-rules__story proj-rules__story--primary">
         Sau báo cáo hoàn thành, công việc
-        <span :class="form.auto_complete_on_report ? 'proj-rules__story-val' : 'proj-rules__story-gap'">
-          {{ form.auto_complete_on_report ? 'tự chuyển' : 'không tự chuyển' }}
-        </span>
-        sang Hoàn thành. Thảo luận và file:
+        <span class="proj-rules__story-val">{{ policyLabel(REPORT_COMPLETE_ACTION_OPTIONS, form.report_complete_action) }}</span>.
+        Thảo luận và file:
         <span class="proj-rules__story-val">{{ policyLabel(INTERACTION_OPTIONS, form.completed_interaction_policy) }}</span>.
         Mô tả khi báo cáo:
         <span class="proj-rules__story-val">{{ policyLabel(REQUIREMENT_OPTIONS, form.report_description_requirement) }}</span>.
@@ -658,39 +669,6 @@ const importanceRows = computed(() => {
       </p>
 
       <div class="task-form__policy">
-        <article
-          class="proj-rules__card proj-rules__card--primary task-form__policy-complete"
-          :class="{
-            'proj-rules__card--on': form.auto_complete_on_report,
-            'proj-rules__card--disabled': disabled,
-          }"
-          @click="toggleRule('auto_complete_on_report')"
-        >
-          <div class="proj-rules__head">
-            <span class="proj-rules__icon">
-              <AppIcon name="check" :size="16" :stroke-width="1.75" />
-            </span>
-            <div class="proj-rules__head-text">
-              <h3 class="proj-rules__label">Hoàn thành công việc</h3>
-              <p id="task-form-rule-auto-complete" class="proj-rules__title">
-                Sau khi người thực hiện báo cáo hoàn thành, công việc sẽ chuyển trạng thái về Hoàn thành
-              </p>
-            </div>
-            <button
-              type="button"
-              class="proj-rules__switch"
-              :class="{ 'proj-rules__switch--on': form.auto_complete_on_report }"
-              role="switch"
-              :aria-checked="form.auto_complete_on_report ? 'true' : 'false'"
-              aria-labelledby="task-form-rule-auto-complete"
-              :disabled="disabled"
-              @click.stop="toggleRule('auto_complete_on_report')"
-            >
-              <span class="proj-rules__switch-thumb" aria-hidden="true" />
-            </button>
-          </div>
-        </article>
-
         <article
           v-for="policy in POLICY_DEFS"
           :key="policy.key"
@@ -1391,10 +1369,6 @@ const importanceRows = computed(() => {
   padding: var(--space-3);
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
-}
-
-.task-form__policy-complete {
-  grid-column: 1 / -1;
 }
 
 .task-form__policy-card {

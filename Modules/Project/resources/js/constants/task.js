@@ -2,6 +2,7 @@ export const TASK_STATUSES = [
   { value: '', label: 'Tất cả trạng thái' },
   { value: 'not_started', label: 'Chưa bắt đầu' },
   { value: 'in_progress', label: 'Đang thực hiện' },
+  { value: 'under_review', label: 'Đang đánh giá' },
   { value: 'on_hold', label: 'Tạm dừng' },
   { value: 'completed', label: 'Hoàn thành' },
   { value: 'cancelled', label: 'Đã huỷ' },
@@ -10,6 +11,7 @@ export const TASK_STATUSES = [
 export const TASK_STATUS_LABELS = {
   not_started: 'Chưa bắt đầu',
   in_progress: 'Đang thực hiện',
+  under_review: 'Đang đánh giá',
   on_hold: 'Tạm dừng',
   completed: 'Hoàn thành',
   cancelled: 'Đã huỷ',
@@ -19,6 +21,7 @@ export const TASK_STATUS_LABELS = {
 export const TASK_STATUS_TONES = {
   not_started: 'tertiary',
   in_progress: 'primary',
+  under_review: 'tertiary',
   on_hold: 'gold',
   completed: 'success',
   cancelled: 'umber',
@@ -79,6 +82,7 @@ export const TASK_DELEGATION_STATUS_TONES = {
 export const TASK_TABS = [
   { key: 'all', label: 'Tất cả', tone: 'primary' },
   { key: 'in_progress', label: 'Đang thực hiện', tone: 'info' },
+  { key: 'under_review', label: 'Đang đánh giá', tone: 'tertiary' },
   { key: 'completed', label: 'Hoàn thành', tone: 'success' },
   { key: 'on_hold', label: 'Tạm dừng', tone: 'gold' },
   { key: 'not_started', label: 'Chưa bắt đầu', tone: 'warning' },
@@ -123,7 +127,7 @@ export const TASK_PROGRESS_METHOD_OPTIONS = [
 /** Gợi ý datalist cho "Kết quả đánh giá" — tự do, KHÔNG ràng buộc enum. */
 export const TASK_SCORE_RESULT_SUGGESTIONS = ['Đạt', 'Không đạt', 'Xuất sắc', 'Cần cải thiện'];
 
-export const TASK_STATUS_TAB_KEYS = ['not_started', 'in_progress', 'on_hold', 'completed', 'cancelled'];
+export const TASK_STATUS_TAB_KEYS = ['not_started', 'in_progress', 'under_review', 'on_hold', 'completed', 'cancelled'];
 
 export const TASK_COLUMNS = [
   { key: 'code', label: 'Mã công việc', defaultOn: true },
@@ -156,6 +160,18 @@ export const COLUMN_STORAGE_KEY = 'va-task-columns-v2';
 export const COLUMN_WIDTH_KEY = 'va-task-column-widths-v2';
 export const ZOOM_STORAGE_KEY = 'va-task-zoom-v1';
 export const VIEW_MODE_KEY = 'va-task-view-mode';
+export const PROJECT_TASK_VIEW_KEY = 'va-project-task-view';
+export const PROJECT_TASK_COL_KEY = 'va-project-task-columns-v1';
+export const PROJECT_TASK_WIDTH_KEY = 'va-project-task-column-widths-v1';
+export const PROJECT_TASK_ZOOM_KEY = 'va-project-task-zoom-v1';
+export const PROJECT_TASK_KANBAN_GROUP_KEY = 'va-project-task-kanban-group';
+export const PROJECT_TASK_VIEWS = [
+  { key: 'all', label: 'Tất cả công việc', icon: 'layoutList' },
+  { key: 'parents', label: 'Công việc cha', icon: 'listNumbered' },
+  { key: 'kanban', label: 'Kanban', icon: 'layoutGrid' },
+  { key: 'gantt', label: 'Gantt', icon: 'gantt' },
+];
+export const PROJECT_TASK_COLUMNS = TASK_COLUMNS.filter((col) => col.key !== 'project');
 export const KANBAN_GROUP_KEY = 'va-task-kanban-group';
 export const KANBAN_ASSIGNEES_KEY = 'va-task-kanban-assignees';
 export const COLLAPSED_GROUPS_KEY = 'va-task-collapsed-groups';
@@ -254,4 +270,47 @@ export function saveVisibility(storageKey, value) {
   } catch {
     // Bỏ qua nếu trình duyệt chặn localStorage.
   }
+}
+
+/** Lọc nhanh từ thẻ thống kê trên chi tiết dự án — khớp matchesGanttFilter. */
+export function matchesProjectTaskFilter(task, filter) {
+  if (!filter || filter === 'all') return true;
+  if (filter === 'overdue') return Boolean(task.is_overdue);
+  return task.status === filter;
+}
+
+/**
+ * Phẳng cây WBS thành danh sách công việc (type=task).
+ * parentsOnly: chỉ việc không nằm dưới một công việc khác (việc cha / gốc).
+ */
+export function flattenProjectTasks(nodes, { parentsOnly = false, filter = 'all', query = '' } = {}) {
+  const q = String(query || '').trim().toLowerCase();
+  const out = [];
+
+  const walk = (list, depth, parent) => {
+    for (const node of list || []) {
+      const kids = node.children || [];
+      const parentIsTask = parent?.type === 'task';
+      if (node.type === 'task') {
+        const include = !parentsOnly || !parentIsTask;
+        if (include && matchesProjectTaskFilter(node, filter)) {
+          const hay = `${node.title || ''} ${node.code || ''}`.toLowerCase();
+          if (!q || hay.includes(q)) {
+            out.push({
+              ...node,
+              depth: parentsOnly ? 0 : depth,
+              hasChildren: kids.some((child) => child.type === 'task'),
+            });
+          }
+        }
+      }
+      const nextDepth = node.type === 'task' && !parentsOnly ? depth + 1 : depth;
+      if (!parentsOnly || node.type !== 'task') {
+        walk(kids, nextDepth, node);
+      }
+    }
+  };
+
+  walk(nodes, 0, null);
+  return out;
 }
