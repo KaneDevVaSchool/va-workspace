@@ -29,6 +29,13 @@ Route::prefix('evaluation')->name('evaluation.')->group(function () {
     Route::put('/score-kit', [EvaluationScoreKitController::class, 'update'])
         ->name('score-kit.update');
 
+    // Chỉ đọc mode + quality_levels của MỘT phòng ban bất kỳ (?department_id=)
+    // — dùng cho form chấm điểm việc ở module Project, không yêu cầu
+    // evaluation.manage_department. Đăng ký TRƯỚC middleware permission ở
+    // dưới (nếu có) vì route này chỉ cần auth.
+    Route::get('/score-kit/quality-levels', [EvaluationScoreKitController::class, 'qualityLevels'])
+        ->name('score-kit.quality-levels');
+
     // ── Phiên bản cấu hình đánh giá — bản chụp bất biến để báo cáo giữ đúng
     // điểm cũ khi khung chấm điểm / tiêu chí được sửa về sau.
     Route::get('/config-versions', [EvaluationConfigVersionController::class, 'index'])

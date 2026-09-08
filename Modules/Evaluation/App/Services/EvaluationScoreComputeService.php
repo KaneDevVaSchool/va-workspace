@@ -420,7 +420,10 @@ class EvaluationScoreComputeService
                 'progress_factor' => round($progressFactor, 2),
                 'quality_factor' => round($qualityFactor, 2),
                 'contribution' => round($actual, 2),
-                'zeroed_reason' => null,
+                // Chỉ set khi bị chấm "Không đạt" tường minh — chỉ để bảng chi
+                // tiết giải thích vì sao điểm chất lượng = 0, KHÔNG đổi cách
+                // tính điểm gốc của schema 1 (giữ nguyên số cho báo cáo đã chốt).
+                'zeroed_reason' => $task->taskScore?->is_passed === false ? 'not_passed' : null,
                 'missing_fields' => [],
             ]);
         }
@@ -541,6 +544,13 @@ class EvaluationScoreComputeService
                     $eligibleForBonus++;
                     if ($formula['quality'] === 'on' && $this->isExcellentQuality($task, $kit)) {
                         $excellentCount++;
+                    }
+                    // Đã chấm "Không đạt" tường minh (is_passed = false) → quality
+                    // factor bị qualityFactor() ép về 0.0 ở trên, actual = 0 dù
+                    // không thiếu dữ liệu nào — cần lý do riêng để bảng chi tiết
+                    // không hiện "điểm thực 0" mà bỏ trống cột lý do.
+                    if ($task->taskScore?->is_passed === false) {
+                        $zeroedReason = 'not_passed';
                     }
                 }
             }
@@ -780,11 +790,23 @@ class EvaluationScoreComputeService
     }
 
     /**
-     * Hệ số chất lượng — lấy theo kết quả chấm việc.
+     * Hệ số chất lượng — ưu tiên `is_passed` (Đạt/Không đạt tường minh, do
+     * người chấm chọn ở TaskDetail, xem TaskScore::$is_passed), vì đây là
+     * nguồn sự thật rõ ràng nhất, không phụ thuộc việc gõ đúng text.
      *
-     * Ô kết quả chấm là text nhập tay, người chấm gõ "cần sửa" hay "Cần Sửa"
-     * đều phải ra cùng một mức, nên khớp bỏ dấu và bỏ hoa thường. Không khớp
-     * mức nào (hoặc chưa chấm) thì trả null để đếm vào phần thiếu dữ liệu.
+     * - `is_passed === false` → 0 điểm chất lượng ngay, KHÔNG tra `rating_result`
+     *   nữa: việc đã bị chấm "Không đạt" (và đã cộng vào
+     *   tasks.failed_review_count) thì không thể vô tình được tính chất lượng
+     *   cao chỉ vì ô kết quả text khớp nhầm một mức tốt.
+     * - `is_passed === true` mà `rating_result` không khớp mức nào trong thang
+     *   (bỏ trống, hoặc ghi tự do không khớp cấu hình) → coi là mức thấp nhất
+     *   của thang "Đạt" (phần tử cuối `$levels`, vì mảng xếp từ tốt nhất tới
+     *   thấp nhất — xem chú thích isExcellentQuality()): đã xác nhận đạt thì
+     *   không được rơi vào "thiếu dữ liệu" chỉ vì thiếu mô tả chi tiết.
+     * - `is_passed === null` (chưa chấm dạng boolean — dữ liệu trước migration
+     *   2026_09_04_100002, hoặc chưa chấm điểm) → fallback về so khớp
+     *   `rating_result` như cũ, bỏ dấu + bỏ hoa thường. Không khớp mức nào
+     *   (hoặc chưa chấm gì) thì trả null để đếm vào phần thiếu dữ liệu.
      *
      * @param  array<string, float>  $levels
      */
@@ -792,6 +814,17 @@ class EvaluationScoreComputeService
     {
         if ($levels === []) {
             return null;
+        }
+
+        $isPassed = $task->taskScore?->is_passed;
+        if ($isPassed === false) {
+            return 0.0;
+        }
+        if ($isPassed === true) {
+            $result = (string) ($task->taskScore?->rating_result ?? '');
+            $matched = trim($result) === '' ? null : $this->matchLevel($result, $levels);
+
+            return $matched ?? end($levels);
         }
 
         $result = $task->taskScore?->rating_result;
@@ -803,10 +836,18 @@ class EvaluationScoreComputeService
     }
 
     /**
+     * Việc chấm "Không đạt" tường minh (`is_passed === false`) không bao giờ
+     * là chất lượng xuất sắc, bất kể `rating_result` ghi gì — kiểm tra trước,
+     * tách khỏi phần so khớp text để không lệ thuộc việc gõ đúng chữ.
+     *
      * @param  array<string, mixed>  $kit
      */
     private function isExcellentQuality(Task $task, array $kit = []): bool
     {
+        if ($task->taskScore?->is_passed === false) {
+            return false;
+        }
+
         $result = mb_strtolower(trim((string) ($task->taskScore?->rating_result ?? '')));
         if ($result === '') {
             return false;

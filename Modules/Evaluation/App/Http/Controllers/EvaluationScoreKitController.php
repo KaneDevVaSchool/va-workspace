@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Modules\Evaluation\App\Http\Requests\UpdateEvaluationScoreKitRequest;
 use Modules\Evaluation\App\Models\EvaluationScoreKit;
+use Modules\Evaluation\App\Repositories\Contracts\EvaluationScoreKitRepositoryInterface;
 use Modules\Evaluation\App\Services\EvaluationConfigVersionService;
 use Modules\Evaluation\App\Services\EvaluationScoreKitService;
 use Modules\Identity\App\Services\ActivityLogService;
@@ -15,8 +16,13 @@ use Modules\Identity\App\Services\PermissionService;
 
 /**
  * Manager JSON:
- *   GET  /api/evaluation/score-kit  — khung chấm điểm phòng ban user
- *   PUT  /api/evaluation/score-kit  — lưu cách tính (evaluation.manage_department)
+ *   GET  /api/evaluation/score-kit               — khung chấm điểm phòng ban user
+ *   PUT  /api/evaluation/score-kit                — lưu cách tính (evaluation.manage_department)
+ *   GET  /api/evaluation/score-kit/quality-levels — thang chất lượng CHỈ ĐỌC của
+ *        một phòng ban bất kỳ (?department_id=), dùng cho form chấm điểm việc ở
+ *        module Project — KHÔNG yêu cầu evaluation.manage_department vì đây không
+ *        phải màn hình quản lý khung chấm điểm, chỉ đọc tối thiểu mode + quality_levels
+ *        để đồng bộ với cách EvaluationScoreComputeService tính điểm.
  */
 class EvaluationScoreKitController extends Controller
 {
@@ -65,7 +71,42 @@ class EvaluationScoreKitController extends Controller
         private readonly EvaluationConfigVersionService $configVersions,
         private readonly PermissionService $permissions,
         private readonly ActivityLogService $activityLogs,
+        private readonly EvaluationScoreKitRepositoryInterface $kits,
     ) {}
+
+    /**
+     * Thang chất lượng CHỈ ĐỌC của một phòng ban — dùng cho form chấm điểm
+     * việc (Modules/Project) chọn đúng theo khung chấm điểm "Cách 2 — Hiệu
+     * suất việc" thay vì gõ text tự do, để khớp với cách
+     * EvaluationScoreComputeService::qualityFactor() tính điểm.
+     *
+     * Chỉ yêu cầu đăng nhập — không cần evaluation.manage_department, vì đây
+     * không phải màn hình quản lý (không đọc/ghi công thức, điểm cộng-trừ
+     * hay dữ liệu nhạy cảm khác của phòng ban, chỉ trả đúng mode + quality_levels).
+     * Không có "Cách 2" (chưa cấu hình, hoặc đang dùng "Cách 1") → trả
+     * quality_levels rỗng, để frontend tự fallback về ô text tự do.
+     */
+    public function qualityLevels(Request $request): JsonResponse
+    {
+        if (! $request->user()) {
+            return response()->json(['message' => 'Bạn cần đăng nhập.'], 401);
+        }
+
+        $departmentId = (int) $request->query('department_id');
+        if ($departmentId <= 0) {
+            return response()->json(['message' => 'Thiếu department_id.'], 422);
+        }
+
+        $kit = $this->kits->findByDepartment($departmentId);
+        $isWeightedTask = $kit?->mode === EvaluationScoreKit::MODE_WEIGHTED_TASK;
+        $levels = $isWeightedTask && is_array($kit->quality_levels) ? $kit->quality_levels : [];
+
+        return response()->json([
+            'department_id' => $departmentId,
+            'mode' => $kit?->mode,
+            'quality_levels' => array_values($levels),
+        ]);
+    }
 
     public function show(Request $request): JsonResponse
     {

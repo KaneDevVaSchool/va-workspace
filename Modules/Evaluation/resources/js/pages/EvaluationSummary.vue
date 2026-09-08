@@ -494,6 +494,7 @@ function rowGapCount(row) {
 
 function taskZeroReason(task) {
   if (task.zeroed_reason === 'incomplete') return 'Chưa hoàn thành · điểm thực 0';
+  if (task.zeroed_reason === 'not_passed') return 'Bị đánh giá không đạt · điểm thực 0';
   if (task.zeroed_reason === 'missing_data') {
     const map = { difficulty: 'thiếu độ khó', progress: 'thiếu hạn/ngày xong', quality: 'chưa chấm chất lượng' };
     const bits = (task.missing_fields ?? []).map((key) => map[key] ?? key);
