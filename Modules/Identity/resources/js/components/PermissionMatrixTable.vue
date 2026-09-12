@@ -1,8 +1,7 @@
 <script setup>
 //
-// Bảng ma trận role × permission. Ô đọc trực tiếp từ props.matrix
-// (PermissionService::matrixFor()), không tự suy luận lại ở frontend.
-// Chrome trang (filter, TablePagesBar, kéo cột, panel) nằm ở PermissionMatrix.vue.
+// Bảng ma trận role × permission, nhóm theo module. Ô đọc trực tiếp từ
+// props.matrix (PermissionService::matrixFor()). Click ô/dòng = mở chi tiết.
 //
 import { computed } from 'vue';
 import PermissionCell from './PermissionCell.vue';
@@ -21,9 +20,23 @@ const props = defineProps({
   tableWidthPx: { type: String, default: '100%' },
 });
 
-const emit = defineEmits(['toggle', 'inspect', 'inspect-row', 'resize-start']);
+const emit = defineEmits(['inspect', 'inspect-row', 'resize-start']);
 
 const colSpan = computed(() => Math.max(props.shownColumns.length, 1));
+
+const tableRows = computed(() => {
+  const rows = [];
+  let lastModule = null;
+  for (const perm of props.permissions) {
+    const moduleLabel = perm.module || 'Khác';
+    if (moduleLabel !== lastModule) {
+      rows.push({ type: 'group', key: `group:${moduleLabel}`, module: moduleLabel });
+      lastModule = moduleLabel;
+    }
+    rows.push({ type: 'perm', key: perm.key, perm });
+  }
+  return rows;
+});
 
 function colWidthStyle(key) {
   const width = props.columnWidths[key];
@@ -60,6 +73,10 @@ function payload(roleCode, perm) {
 function roleCodeOf(col) {
   return col.roleCode || roleCodeFromColumn(col.key);
 }
+
+function isStickyCol(col) {
+  return col.key === 'permission';
+}
 </script>
 
 <template>
@@ -76,7 +93,10 @@ function roleCodeOf(col) {
         <th
           v-for="col in shownColumns"
           :key="col.key"
-          :class="{ 'perm-table__th--role': Boolean(col.roleCode) }"
+          :class="{
+            'perm-table__th--role': Boolean(col.roleCode),
+            'perm-table__th--sticky': isStickyCol(col),
+          }"
         >
           <span>{{ col.label }}</span>
           <button
@@ -101,40 +121,40 @@ function roleCodeOf(col) {
           Không tìm thấy quyền nào phù hợp với bộ lọc hiện tại.
         </td>
       </tr>
-      <tr
-        v-for="perm in permissions"
-        v-else
-        :key="perm.key"
-        :class="{ 'perm-table__row--active': selectedKey === perm.key }"
-        @click="emit('inspect-row', perm)"
-      >
-        <td
-          v-for="col in shownColumns"
-          :key="col.key"
-          :class="{
-            'perm-table__td--role': Boolean(col.roleCode),
-            'perm-table__td--wrap': col.key === 'permission',
-          }"
-          @click="col.roleCode ? $event.stopPropagation() : undefined"
-        >
-          <template v-if="col.key === 'permission'">
-            <span class="perm-table__wrap-text">{{ perm.label }}</span>
-            <span v-if="perm.description || perm.key" class="perm-table__muted perm-table__wrap-text">
-              {{ perm.description || perm.key }}
-            </span>
+      <template v-else>
+        <tr v-for="row in tableRows" :key="row.key" :class="{
+          'perm-table__group': row.type === 'group',
+          'perm-table__row--active': row.type === 'perm' && selectedKey === row.perm.key,
+        }">
+          <td v-if="row.type === 'group'" :colspan="colSpan" class="perm-table__group-cell">
+            {{ row.module }}
+          </td>
+          <template v-else>
+            <td
+              v-for="col in shownColumns"
+              :key="col.key"
+              :class="{
+                'perm-table__td--role': Boolean(col.roleCode),
+                'perm-table__td--sticky': isStickyCol(col),
+              }"
+              @click="col.roleCode ? undefined : emit('inspect-row', row.perm)"
+            >
+              <template v-if="col.key === 'permission'">
+                <span class="perm-table__name">{{ row.perm.label }}</span>
+              </template>
+              <span v-else-if="col.key === 'module'">{{ row.perm.module || '—' }}</span>
+              <span v-else-if="col.key === 'key'">{{ row.perm.key }}</span>
+              <PermissionCell
+                v-else-if="roleCodeOf(col)"
+                :cell="cellFor(roleCodeOf(col), row.perm.key)"
+                :loading="isPending(roleCodeOf(col), row.perm.key)"
+                :active="isActive(roleCodeOf(col), row.perm.key)"
+                @inspect="emit('inspect', payload(roleCodeOf(col), row.perm))"
+              />
+            </td>
           </template>
-          <span v-else-if="col.key === 'module'">{{ perm.module || '—' }}</span>
-          <span v-else-if="col.key === 'key'">{{ perm.key }}</span>
-          <PermissionCell
-            v-else-if="roleCodeOf(col)"
-            :cell="cellFor(roleCodeOf(col), perm.key)"
-            :loading="isPending(roleCodeOf(col), perm.key)"
-            :active="isActive(roleCodeOf(col), perm.key)"
-            @toggle="emit('toggle', payload(roleCodeOf(col), perm))"
-            @inspect="emit('inspect', payload(roleCodeOf(col), perm))"
-          />
-        </td>
-      </tr>
+        </tr>
+      </template>
     </tbody>
   </table>
 </template>
@@ -150,7 +170,7 @@ function roleCodeOf(col) {
 .perm-table thead th {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   padding: var(--space-3) var(--space-4);
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
@@ -164,6 +184,11 @@ function roleCodeOf(col) {
 
 .perm-table__th--role {
   text-align: center;
+}
+
+.perm-table__th--sticky {
+  left: 0;
+  z-index: 3;
 }
 
 .perm-table__resize {
@@ -195,18 +220,18 @@ function roleCodeOf(col) {
 }
 
 .perm-table tbody td {
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-4);
   color: var(--color-text);
-  vertical-align: top;
+  vertical-align: middle;
   white-space: nowrap;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.perm-table tbody tr {
+.perm-table tbody tr:not(.perm-table__group) {
   cursor: pointer;
 }
 
-.perm-table tbody tr:hover td {
+.perm-table tbody tr:not(.perm-table__group):hover td {
   background: var(--color-surface-muted);
 }
 
@@ -214,26 +239,37 @@ function roleCodeOf(col) {
   background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
 }
 
-.perm-table tbody td span:not(.perm-table__wrap-text) {
+.perm-table tbody td span:not(.perm-table__name) {
   display: block;
   white-space: nowrap;
 }
 
-.perm-table__td--wrap {
+.perm-table__td--sticky {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--color-surface);
   white-space: normal;
 }
 
-.perm-table__wrap-text {
+.perm-table tbody tr:not(.perm-table__group):hover .perm-table__td--sticky {
+  background: var(--color-surface-muted);
+}
+
+.perm-table__row--active .perm-table__td--sticky {
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+}
+
+.perm-table__name {
   display: block;
-  white-space: normal;
-  overflow-wrap: break-word;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .perm-table__td--role {
   text-align: center;
-  vertical-align: middle;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-2);
 }
 
 .perm-table__empty {
@@ -243,9 +279,21 @@ function roleCodeOf(col) {
   white-space: normal;
 }
 
-.perm-table__muted {
-  margin-top: 0.125rem;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
+.perm-table__group-cell {
+  position: sticky;
+  top: 2.5rem;
+  z-index: 1;
+  padding: 0.4rem var(--space-4);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.perm-table__group {
+  cursor: default;
 }
 </style>

@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Project\App\Http\Controllers\CommentController;
 use Modules\Project\App\Http\Controllers\ProjectController;
+use Modules\Project\App\Http\Controllers\ProjectFeedbackController;
+use Modules\Project\App\Http\Controllers\ProjectTestCaseController;
 use Modules\Project\App\Http\Controllers\TaskAttachmentController;
 use Modules\Project\App\Http\Controllers\TaskController;
 use Modules\Project\App\Http\Controllers\TaskScoreController;
@@ -29,7 +31,7 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     // (wildcard, cùng method GET) — cùng lý do đã áp dụng cho attachments/
     // worklogs ở dưới (route tĩnh trước wildcard, tránh "export"/"options" bị
     // Laravel hiểu nhầm là giá trị {task}).
-    Route::middleware('permission:task.view')->group(function () {
+    Route::middleware('permission:task.view|task.view_assigned')->group(function () {
         Route::get('/tasks/options', [TaskController::class, 'options'])->name('tasks.options');
         Route::get('/tasks/export', [TaskController::class, 'export'])->name('tasks.export');
         Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
@@ -56,7 +58,7 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     // /tasks/{task} bên dưới — cùng method DELETE, nếu {task} (wildcard)
     // đăng ký trước thì "attachments" sẽ bị Laravel hiểu nhầm là giá trị
     // {task} và route attachments không bao giờ được match tới.
-    Route::middleware('permission:task.view')
+    Route::middleware('permission:task.view|task.view_assigned')
         ->get('/tasks/{task}/attachments', [TaskAttachmentController::class, 'index'])
         ->name('tasks.attachments.index');
     Route::middleware('permission:task.create')->group(function () {
@@ -71,7 +73,7 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     // permission hiện hữu, không thêm permission mới. Route tĩnh
     // /comments/mentions PHẢI đăng ký TRƯỚC bất kỳ route GET /comments/{...}
     // wildcard nào (không có ở đây nhưng giữ thói quen của file này).
-    Route::middleware('permission:task.view')->group(function () {
+    Route::middleware('permission:task.view|task.view_assigned')->group(function () {
         Route::get('/comments/mentions', [CommentController::class, 'mentions'])->name('comments.mentions');
         Route::get('/tasks/{task}/comments', [CommentController::class, 'taskIndex'])->name('tasks.comments.index');
     });
@@ -91,7 +93,7 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     // ---------- Worklog chấm công giờ thực tế (Nhóm E) ----------
     // PUT/DELETE /tasks/worklogs/{worklog} cùng lý do PHẢI đăng ký TRƯỚC
     // PUT/DELETE /tasks/{task} bên dưới (tránh "worklogs" bị nuốt làm {task}).
-    Route::middleware('permission:task.view')
+    Route::middleware('permission:task.view|task.view_assigned')
         ->get('/tasks/{task}/worklogs', [TaskWorklogController::class, 'index'])
         ->name('tasks.worklogs.index');
     Route::middleware('permission:task.create')->group(function () {
@@ -104,7 +106,7 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     // /tasks/{task}/score cùng cấu trúc /tasks/{task}/xxx như attachments/
     // worklogs ở trên — không xung đột route wildcard /tasks/{task} (khác
     // số lượng path segment), không cần lưu ý thứ tự đặc biệt.
-    Route::middleware('permission:task.view')
+    Route::middleware('permission:task.view|task.view_assigned')
         ->get('/tasks/{task}/score', [TaskScoreController::class, 'show'])
         ->name('tasks.score.show');
     Route::middleware('permission:task.approve')
@@ -113,9 +115,10 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
 
     // ---------- Báo cáo hoàn thành (assignee-only) ----------
     // Quan hệ "chỉ assignee của task" kiểm tra trong TaskService::reportComplete(),
-    // không phải permission tĩnh — route chỉ cần task.view (giống pattern
-    // score.show ở trên, không cần task.create).
-    Route::middleware('permission:task.view')
+    // không phải permission tĩnh — route cần xem được task (task.view hoặc
+    // task.view_assigned). Nhân viên chỉ có view_assigned vẫn báo hoàn thành
+    // được việc của mình.
+    Route::middleware('permission:task.view|task.view_assigned')
         ->post('/tasks/{task}/report-complete', [TaskController::class, 'reportComplete'])
         ->name('tasks.report-complete');
 
@@ -191,6 +194,43 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
 
     Route::middleware('permission:project.view')->get('/{project}/documents', [ProjectController::class, 'documents'])->name('documents');
     Route::middleware('permission:project.view')->get('/{project}/task-attachments', [ProjectController::class, 'taskAttachments'])->name('task-attachments');
+
+    // ---------- Testcase (tab tuỳ chọn) ----------
+    Route::middleware('permission:test_case.view')
+        ->get('/{project}/test-cases', [ProjectTestCaseController::class, 'index'])
+        ->name('test-cases.index');
+    Route::middleware('permission:test_case.create')
+        ->post('/{project}/test-cases', [ProjectTestCaseController::class, 'store'])
+        ->name('test-cases.store');
+    Route::middleware('permission:test_case.manage')->group(function () {
+        Route::put('/test-cases/{testCase}', [ProjectTestCaseController::class, 'update'])->name('test-cases.update');
+        Route::delete('/test-cases/{testCase}', [ProjectTestCaseController::class, 'destroy'])->name('test-cases.destroy');
+    });
+    // check1/check2/attachment: chỉ cần test_case.view — quyền thật (đúng
+    // người: assignee cho check1, người tạo cho check2) kiểm tra trong
+    // ProjectTestCaseService::canCheck1()/canCheck2(), không phải
+    // permission tĩnh (assignee có thể chỉ có test_case.create, chưa
+    // chắc có test_case.manage).
+    Route::middleware('permission:test_case.view')->group(function () {
+        Route::put('/test-cases/{testCase}/check1', [ProjectTestCaseController::class, 'updateCheck1'])->name('test-cases.check1');
+        Route::put('/test-cases/{testCase}/check2', [ProjectTestCaseController::class, 'updateCheck2'])->name('test-cases.check2');
+        Route::post('/test-cases/{testCase}/attachment', [ProjectTestCaseController::class, 'uploadAttachment'])->name('test-cases.attachment.store');
+        Route::delete('/test-cases/{testCase}/attachment', [ProjectTestCaseController::class, 'destroyAttachment'])->name('test-cases.attachment.destroy');
+    });
+
+    // ---------- Phản hồi/đánh giá dự án (tab tuỳ chọn) ----------
+    // Sửa/xoá không có middleware permission riêng — quyền thật (chỉ tác
+    // giả) kiểm tra trong ProjectFeedbackService::canEdit(), giống hệt
+    // pattern comments.destroy ở trên.
+    Route::middleware('permission:feedback.view')
+        ->get('/{project}/feedbacks', [ProjectFeedbackController::class, 'index'])
+        ->name('feedbacks.index');
+    Route::middleware('permission:feedback.create')
+        ->post('/{project}/feedbacks', [ProjectFeedbackController::class, 'store'])
+        ->name('feedbacks.store');
+    Route::put('/feedbacks/{feedback}', [ProjectFeedbackController::class, 'update'])->name('feedbacks.update');
+    Route::delete('/feedbacks/{feedback}', [ProjectFeedbackController::class, 'destroy'])->name('feedbacks.destroy');
+
     Route::middleware('permission:project.view')->get('/{project}', [ProjectController::class, 'show'])->name('show');
 
     // store: middleware permission cứng đã bỏ — quyền tạo (role sẵn có HOẶC
@@ -206,10 +246,11 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     // Sửa/xoá/đính kèm — dùng project.update_department: mọi role hiện có
     // sở hữu project.manage_department LUÔN đi kèm project.update_department
     // trong config/permissions.php (department_director, deputy_department_director),
-    // và admin/super_admin có project.*/'*' nên vẫn pass bình thường. Middleware
-    // permission: không hỗ trợ OR nhiều key nên chọn key hẹp hơn trong cặp là đủ.
+    // và admin/super_admin có project.*/'*' nên vẫn pass bình thường. OR nhiều
+    // key dùng dấu `|` (xem EnsureHasPermission).
     Route::middleware('permission:project.update_department')->group(function () {
         Route::put('/{project}', [ProjectController::class, 'update'])->name('update');
+        Route::put('/{project}/tab-config', [ProjectController::class, 'updateTabConfig'])->name('tab-config.update');
         Route::delete('/{project}', [ProjectController::class, 'destroy'])->name('destroy');
         Route::post('/{project}/avatar', [ProjectController::class, 'uploadAvatar'])->name('avatar');
         Route::delete('/{project}/avatar', [ProjectController::class, 'destroyAvatar'])->name('avatar.destroy');

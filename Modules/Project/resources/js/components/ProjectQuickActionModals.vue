@@ -35,7 +35,17 @@ const KIND_META = {
   dates: { title: 'Cập nhật thời gian dự án', icon: 'calendar', tone: 'info' },
   description: { title: 'Cập nhật mô tả dự án', icon: 'fileText', tone: 'violet' },
   duplicate: { title: 'Nhân bản dự án', icon: 'copy', tone: 'success' },
+  tabs_config: { title: 'Cấu hình tab hiển thị', icon: 'listChecks', tone: 'tertiary' },
 };
+
+// 5 tab tuỳ chọn bật/tắt riêng theo dự án — khớp ProjectService::OPTIONAL_TABS.
+const OPTIONAL_TAB_DEFS = [
+  { key: 'discussion', label: 'Thảo luận' },
+  { key: 'report', label: 'Báo cáo' },
+  { key: 'attachments', label: 'Đính kèm' },
+  { key: 'test_case', label: 'Testcase' },
+  { key: 'feedback', label: 'Phản hồi' },
+];
 
 const PROGRESS_OPTIONS = TASK_PROGRESS_METHOD_OPTIONS;
 
@@ -98,6 +108,9 @@ const taskForm = reactive({
 });
 const bulkRows = ref([]);
 const baselineForm = reactive({ title: '' });
+const tabsConfigForm = reactive(
+  Object.fromEntries(OPTIONAL_TAB_DEFS.map((tab) => [tab.key, true])),
+);
 
 const isOpen = computed(() => Boolean(props.kind && props.project && props.kind !== 'signature'));
 const taskVariant = computed(() => props.extra?.variant || 'normal');
@@ -181,7 +194,7 @@ const panelClass = computed(() => {
 });
 
 const primaryLabel = computed(() => {
-  if (props.kind === 'members' || props.kind === 'dates' || props.kind === 'description' || props.kind === 'baseline' || props.kind === 'category' || props.kind === 'phase') {
+  if (props.kind === 'members' || props.kind === 'dates' || props.kind === 'description' || props.kind === 'baseline' || props.kind === 'category' || props.kind === 'phase' || props.kind === 'tabs_config') {
     return 'Cập nhật';
   }
   return 'Thêm';
@@ -342,6 +355,10 @@ function resetForms(p) {
   taskForm.phase_id = '';
   bulkRows.value = [emptyBulkRow()];
   baselineForm.title = '';
+  const disabled = new Set(p.disabled_tabs || []);
+  for (const tab of OPTIONAL_TAB_DEFS) {
+    tabsConfigForm[tab.key] = !disabled.has(tab.key);
+  }
 }
 
 function focusFirst() {
@@ -497,6 +514,18 @@ async function submit() {
     }
     if (props.kind === 'description') {
       await patchProject({ description: descriptionForm.description || null }, 'Đã cập nhật mô tả dự án.');
+      return;
+    }
+    if (props.kind === 'tabs_config') {
+      const disabledTabs = OPTIONAL_TAB_DEFS
+        .filter((tab) => !tabsConfigForm[tab.key])
+        .map((tab) => tab.key);
+      const { data } = await window.axios.put(`/api/project/${props.project.id}/tab-config`, {
+        disabled_tabs: disabledTabs,
+      });
+      emit('updated', data.project);
+      showClientToast('success', 'Đã cập nhật tab hiển thị.');
+      emit('close');
       return;
     }
     if (props.kind === 'category' || props.kind === 'phase') {
@@ -1040,6 +1069,16 @@ watch(
                 maxlength="5000"
                 placeholder="Mô tả ngắn gọn mục tiêu, phạm vi công việc của dự án…"
               />
+            </label>
+          </div>
+
+          <div v-else-if="kind === 'tabs_config'" class="proj-qa__grid">
+            <p class="proj-qa__hint proj-qa__field--full">
+              Chọn các tab sẽ hiển thị cho riêng dự án này. Tab Chi tiết và Công việc luôn hiển thị.
+            </p>
+            <label v-for="tab in OPTIONAL_TAB_DEFS" :key="tab.key" class="proj-qa__check">
+              <input v-model="tabsConfigForm[tab.key]" type="checkbox">
+              <span>{{ tab.label }}</span>
             </label>
           </div>
         </form>

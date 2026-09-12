@@ -118,13 +118,20 @@ và mọi dạng tooltip-on-hover tương tự trên nút, icon, link — ở B�
 (Blade, `.vue`, component dùng chung). Ý nghĩa của một nút/icon phải luôn
 hiển thị sẵn (label chữ thật), không được giấu vào hint chỉ hiện khi hover.
 
-- Nút chỉ có icon (ví dụ icon-only trên desktop khi sidebar thu gọn) → vẫn
-  phải có `aria-label` cho accessibility, nhưng KHÔNG dùng `title` để hiện
-  tooltip trực quan. Nếu cần giải thích cho người dùng thấy được, hiện label
-  chữ thật cạnh icon hoặc trong dropdown/menu, không phụ thuộc hover.
+- Nút chỉ có icon (ví dụ icon-only trên desktop khi sidebar thu gọn, hoặc
+  icon-only đặt ngay cạnh tiêu đề trang trong `PageHeader` — ví dụ nút làm
+  mới cạnh chữ tiêu đề, xem `CredentialList.vue`) → vẫn phải có `aria-label`
+  cho accessibility, nhưng KHÔNG dùng `title` để hiện tooltip trực quan. Nếu
+  cần giải thích cho người dùng thấy được, hiện label chữ thật cạnh icon
+  hoặc trong dropdown/menu, không phụ thuộc hover.
 - Input/textarea: không dùng `placeholder` để truyền ý nghĩa chính của field
   (ý nghĩa phải nằm ở `<label>` hiển thị sẵn); placeholder chỉ được dùng cho
   ví dụ định dạng ngắn nếu thực sự cần, không thay thế label.
+- **Mọi input/textarea nên có `placeholder`** là ví dụ định dạng nhập thực tế
+  (vd. `placeholder="admin@vaschools.edu.vn"`, `placeholder="Vd. Canva Pro -
+  Marketing"`), giúp người dùng hình dung nên gõ gì — không để trống nếu có
+  thể đưa ra ví dụ hợp lý. Vẫn tuân thủ nguyên tắc trên: placeholder chỉ là
+  ví dụ bổ sung, không thay label.
 
 ## 14. UI đơn giản, dễ hiểu — không badge/pill, chữ phổ thông, field ngay hàng
 

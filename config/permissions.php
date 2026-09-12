@@ -129,6 +129,7 @@ return [
             'report.manage_department',
             'blocker.manage',
             'test_case.manage',
+            'test_case.view',
             'feedback.view',
             // Quy trình, Vật tư, Tài chính dự án
             'process.manage_department',
@@ -181,6 +182,7 @@ return [
             'report.manage_department',
             'blocker.manage',
             'test_case.manage',
+            'test_case.view',
             'feedback.view',
             'process.manage_department',
             'material_planning.manage_department',
@@ -215,6 +217,9 @@ return [
             'initiative.view',
             'blocker.manage',
             'test_case.manage',
+            'test_case.view',
+            'feedback.view',
+            'feedback.create',
             'worklog.view',
             'performance.view_department',
             'dashboard.view',
@@ -244,6 +249,9 @@ return [
             // Blocker, TestCase trong phạm vi nhóm
             'blocker.manage',
             'test_case.manage',
+            'test_case.view',
+            'feedback.view',
+            'feedback.create',
             // Worklog
             'worklog.view',
             // Dashboard, My Work
@@ -265,7 +273,9 @@ return [
             // Tổng quan (read-only cơ bản)
             'dashboard.view',
             // Đề xuất, TestCase, KB, Worklog
+            'feedback.view',
             'feedback.create',
+            'test_case.view',
             'test_case.create',
             'knowledge_base.create',
             'worklog.write',
@@ -344,11 +354,11 @@ return [
         'initiative.track_progress' => ['label' => 'Theo dõi tiến độ hạng mục', 'module' => 'Hạng mục', 'description' => 'Xem/cập nhật tiến độ thực hiện hạng mục'],
 
         // ---------- Dự án (project) ----------
-        'project.*' => ['label' => 'Toàn bộ dự án', 'module' => 'Dự án', 'description' => 'Toàn quyền quản lý dự án'],
-        'project.view' => ['label' => 'Xem dự án', 'module' => 'Dự án', 'description' => 'Xem danh sách và chi tiết dự án'],
-        'project.create' => ['label' => 'Tạo dự án', 'module' => 'Dự án', 'description' => 'Tạo mới dự án'],
-        'project.manage_department' => ['label' => 'Quản lý dự án phòng ban', 'module' => 'Dự án', 'description' => 'Quản lý toàn bộ dự án trong phòng ban'],
-        'project.update_department' => ['label' => 'Sửa dự án phòng ban', 'module' => 'Dự án', 'description' => 'Cập nhật thông tin dự án thuộc phòng ban'],
+        'project.*' => ['label' => 'Toàn bộ dự án', 'module' => 'Dự án', 'description' => 'Toàn quyền quản lý dự án', 'active' => true],
+        'project.view' => ['label' => 'Xem dự án', 'module' => 'Dự án', 'description' => 'Xem danh sách và chi tiết dự án', 'active' => true],
+        'project.create' => ['label' => 'Tạo dự án', 'module' => 'Dự án', 'description' => 'Tạo mới dự án', 'active' => true],
+        'project.manage_department' => ['label' => 'Quản lý dự án phòng ban', 'module' => 'Dự án', 'description' => 'Quản lý toàn bộ dự án trong phòng ban', 'active' => true],
+        'project.update_department' => ['label' => 'Sửa dự án phòng ban', 'module' => 'Dự án', 'description' => 'Cập nhật thông tin dự án thuộc phòng ban', 'active' => true],
         'project.manage_settings' => ['label' => 'Cấu hình dự án toàn hệ thống', 'module' => 'Dự án', 'description' => 'Cấu hình mã dự án, quy tắc hoạt động và danh sách nhân sự được phép tạo dự án (chỉ admin/super_admin — đã bao trùm qua project.*)', 'active' => true],
 
         // ---------- Công việc (task) ----------
@@ -382,16 +392,16 @@ return [
         'department.*' => ['label' => 'Toàn bộ phòng ban', 'module' => 'Phòng ban', 'description' => 'Toàn quyền quản lý phòng ban', 'active' => true],
 
         // ---------- Nhóm (team) ----------
-        'team.*' => ['label' => 'Toàn bộ nhóm', 'module' => 'Nhóm', 'description' => 'Toàn quyền quản lý nhóm'],
+        'team.*' => ['label' => 'Toàn bộ nhóm', 'module' => 'Nhóm', 'description' => 'Toàn quyền quản lý nhóm', 'active' => true],
         'team.view' => ['label' => 'Xem nhóm', 'module' => 'Nhóm', 'description' => 'Xem danh sách nhóm trong phòng ban', 'active' => true],
         'team.manage' => ['label' => 'Quản lý nhóm', 'module' => 'Nhóm', 'description' => 'Tạo/sửa/xoá nhóm, gán trưởng nhóm', 'active' => true],
 
         // ---------- Đánh giá (evaluation) ----------
-        'evaluation.*' => ['label' => 'Toàn bộ đánh giá', 'module' => 'Đánh giá', 'description' => 'Toàn quyền quản lý đánh giá nhân sự'],
+        'evaluation.*' => ['label' => 'Toàn bộ đánh giá', 'module' => 'Đánh giá', 'description' => 'Toàn quyền quản lý đánh giá nhân sự', 'active' => true],
         'evaluation.manage_department' => ['label' => 'Quản lý đánh giá phòng ban', 'module' => 'Đánh giá', 'description' => 'Tự tạo và quản lý tiêu chí đánh giá nhân sự trong phòng ban mình', 'active' => true],
 
         // ---------- Báo cáo (report) ----------
-        'report.*' => ['label' => 'Toàn bộ báo cáo', 'module' => 'Báo cáo', 'description' => 'Toàn quyền quản lý báo cáo mọi phòng ban'],
+        'report.*' => ['label' => 'Toàn bộ báo cáo', 'module' => 'Báo cáo', 'description' => 'Toàn quyền quản lý báo cáo mọi phòng ban', 'active' => true],
         'report.manage_department' => ['label' => 'Quản lý báo cáo phòng ban', 'module' => 'Báo cáo', 'description' => 'Tạo, sửa, xoá và xem báo cáo trong phòng ban mình', 'active' => true],
         'report.view_assigned' => ['label' => 'Xem báo cáo được chia sẻ', 'module' => 'Báo cáo', 'description' => 'Xem báo cáo mà người tạo đã thêm mình vào danh sách người xem', 'active' => true],
 
@@ -400,8 +410,10 @@ return [
         'contract.view' => ['label' => 'Xem hợp đồng', 'module' => 'Hợp đồng', 'description' => 'Xem danh sách và chi tiết hợp đồng'],
         'contract.manage_department' => ['label' => 'Quản lý hợp đồng phòng ban', 'module' => 'Hợp đồng', 'description' => 'Quản lý hợp đồng thuộc phòng ban'],
 
-        // ---------- Thông tin đăng nhập (credential) ----------
-        'credential.*' => ['label' => 'Toàn bộ thông tin đăng nhập', 'module' => 'Thông tin đăng nhập', 'description' => 'Toàn quyền quản lý credential hệ thống/dịch vụ'],
+        // ---------- Quản lý tài khoản (credential) ----------
+        'credential.*' => ['label' => 'Toàn bộ quản lý tài khoản', 'module' => 'Quản lý tài khoản', 'description' => 'Toàn quyền quản lý tài khoản dịch vụ (Google, Canva, Cursor, Claude, AWS, VPS, database, IAM, domain...)', 'active' => true],
+        'credential.view' => ['label' => 'Xem danh sách tài khoản', 'module' => 'Quản lý tài khoản', 'description' => 'Xem danh sách/chi tiết tài khoản dịch vụ (chỉ metadata — dữ liệu nhạy cảm chỉ người tạo/người được cấp mới xem được)', 'active' => true],
+        'credential.manage' => ['label' => 'Quản lý tài khoản', 'module' => 'Quản lý tài khoản', 'description' => 'Tạo/sửa/xoá tài khoản dịch vụ và quản lý danh mục nhà cung cấp', 'active' => true],
 
         // ---------- Kho tri thức (knowledge_base) ----------
         'knowledge_base.*' => ['label' => 'Toàn bộ kho tri thức', 'module' => 'Kho tri thức', 'description' => 'Toàn quyền quản lý kho tri thức'],
@@ -421,14 +433,15 @@ return [
         'blocker.manage' => ['label' => 'Quản lý vướng mắc', 'module' => 'Vướng mắc', 'description' => 'Xử lý, phân công, đóng vướng mắc'],
 
         // ---------- Test case ----------
-        'test_case.*' => ['label' => 'Toàn bộ test case', 'module' => 'Test case', 'description' => 'Toàn quyền quản lý test case'],
-        'test_case.create' => ['label' => 'Tạo test case', 'module' => 'Test case', 'description' => 'Tạo mới test case'],
-        'test_case.manage' => ['label' => 'Quản lý test case', 'module' => 'Test case', 'description' => 'Sửa/xoá/thực thi test case'],
+        'test_case.*' => ['label' => 'Toàn bộ test case', 'module' => 'Test case', 'description' => 'Toàn quyền quản lý test case', 'active' => true],
+        'test_case.view' => ['label' => 'Xem test case', 'module' => 'Test case', 'description' => 'Xem danh sách test case của dự án', 'active' => true],
+        'test_case.create' => ['label' => 'Tạo test case', 'module' => 'Test case', 'description' => 'Tạo mới test case', 'active' => true],
+        'test_case.manage' => ['label' => 'Quản lý test case', 'module' => 'Test case', 'description' => 'Sửa/xoá/thực thi test case', 'active' => true],
 
         // ---------- Đề xuất/phản hồi (feedback) ----------
-        'feedback.*' => ['label' => 'Toàn bộ đề xuất', 'module' => 'Đề xuất', 'description' => 'Toàn quyền quản lý đề xuất/phản hồi'],
-        'feedback.create' => ['label' => 'Tạo đề xuất', 'module' => 'Đề xuất', 'description' => 'Gửi đề xuất/phản hồi mới'],
-        'feedback.view' => ['label' => 'Xem đề xuất', 'module' => 'Đề xuất', 'description' => 'Xem danh sách đề xuất/phản hồi'],
+        'feedback.*' => ['label' => 'Toàn bộ đề xuất', 'module' => 'Đề xuất', 'description' => 'Toàn quyền quản lý đề xuất/phản hồi', 'active' => true],
+        'feedback.create' => ['label' => 'Tạo đề xuất', 'module' => 'Đề xuất', 'description' => 'Gửi đề xuất/phản hồi mới', 'active' => true],
+        'feedback.view' => ['label' => 'Xem đề xuất', 'module' => 'Đề xuất', 'description' => 'Xem danh sách đề xuất/phản hồi', 'active' => true],
 
         // ---------- Nhật ký công việc (worklog) ----------
         'worklog.*' => ['label' => 'Toàn bộ worklog', 'module' => 'Worklog', 'description' => 'Toàn quyền quản lý nhật ký công việc'],
@@ -479,7 +492,7 @@ return [
         'workspace_config.assign_role_department' => ['label' => 'Gán vai trò phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Gán vai trò (phó phòng, trưởng bộ phận, trưởng nhóm, nhân viên, người xem) cho thành viên phòng ban mình', 'active' => true],
 
         // ---------- Mạng nội bộ (social) ----------
-        'social.*' => ['label' => 'Toàn bộ bảng tin', 'module' => 'Mạng nội bộ', 'description' => 'Toàn quyền quản lý bảng tin nội bộ'],
+        'social.*' => ['label' => 'Toàn bộ bảng tin', 'module' => 'Mạng nội bộ', 'description' => 'Toàn quyền quản lý bảng tin nội bộ', 'active' => true],
         'social.moderate' => ['label' => 'Kiểm duyệt bảng tin', 'module' => 'Mạng nội bộ', 'description' => 'Xoá bài viết/bình luận của người khác trong phòng ban quản lý', 'active' => true],
         'social.pin' => ['label' => 'Ghim thông báo', 'module' => 'Mạng nội bộ', 'description' => 'Đưa bài viết lên bảng Thông báo công ty. Thông báo quan trọng do người quản trị đăng riêng.', 'active' => true],
         'social.review' => ['label' => 'Duyệt bài viết', 'module' => 'Mạng nội bộ', 'description' => 'Duyệt hoặc từ chối bài viết mới trước khi hiển thị công khai trên bảng tin, áp dụng toàn trường', 'active' => true],

@@ -53,7 +53,7 @@ const query = ref('');
 const moduleFilter = ref('all');
 const statusFilter = ref('');
 const page = ref(1);
-const perPage = ref(20);
+const perPage = ref(50);
 
 const tableWrap = ref(null);
 const resizing = ref(false);
@@ -109,7 +109,7 @@ const hiddenActiveFilterLabels = computed(() =>
 
 const filteredPermissions = computed(() => {
   const term = query.value.trim().toLowerCase();
-  return permissions.value.filter((perm) => {
+  const list = permissions.value.filter((perm) => {
     if (moduleFilter.value !== 'all' && perm.module !== moduleFilter.value) return false;
     if (!permissionMatchesStatus(perm)) return false;
     if (!term) return true;
@@ -119,6 +119,22 @@ const filteredPermissions = computed(() => {
       (perm.description ?? '').toLowerCase().includes(term)
     );
   });
+
+  return [...list].sort((a, b) => {
+    const mod = (a.module || '').localeCompare(b.module || '', 'vi');
+    if (mod !== 0) return mod;
+    return (a.label || '').localeCompare(b.label || '', 'vi');
+  });
+});
+
+const overrideCount = computed(() => {
+  let count = 0;
+  for (const perm of permissions.value) {
+    for (const role of roles.value) {
+      if (cellHasOverride(cellFor(role.code, perm.key))) count += 1;
+    }
+  }
+  return count;
 });
 
 const totalCount = computed(() => filteredPermissions.value.length);
@@ -173,14 +189,15 @@ function filterHasValue(key) {
   return false;
 }
 
-function sourceExplanation(cell) {
-  if (cell.effective_source === 'scoped') {
-    return `Do có thiết lập riêng cho ${scopeLabel.value}`;
-  }
-  if (cell.effective_source === 'global') {
-    return 'Do có thiết lập áp dụng cho toàn hệ thống';
-  }
-  return 'Theo thiết lập mặc định của hệ thống, chưa có thay đổi riêng';
+function sourceLabel(cell) {
+  if (cell.effective_source === 'scoped') return scopeLabel.value;
+  if (cell.effective_source === 'global') return 'Toàn hệ thống';
+  return 'Mặc định hệ thống';
+}
+
+function panelTone(cell) {
+  if (!cell || cell.reserved) return 'info';
+  return cell.effective ? 'success' : 'danger';
 }
 
 function cellHasOverride(cell) {
@@ -541,10 +558,6 @@ function columnContentWidth(key, fonts) {
   for (const perm of pagedPermissions.value) {
     if (key === 'permission') {
       maxW = Math.max(maxW, measureText(cellText(perm, 'permission'), fonts.cell));
-      const muted = perm.description || perm.key;
-      if (muted) {
-        maxW = Math.max(maxW, measureText(muted, fonts.muted));
-      }
     } else {
       maxW = Math.max(maxW, measureText(cellText(perm, key), fonts.cell));
     }
@@ -710,7 +723,6 @@ onBeforeUnmount(() => {
     <PageHeader
       title="Quản lý phân quyền"
       icon="shield"
-      description="Xem và chỉnh quyền theo vai trò trong từng phạm vi: toàn hệ thống, phòng ban hoặc nhóm."
       :breadcrumbs="[
         { label: 'Trang chủ', to: { name: 'home' } },
         { label: 'Quản lý phân quyền' },
@@ -726,8 +738,8 @@ onBeforeUnmount(() => {
 
     <div class="perm-page__body">
       <div class="perm-page__main">
-        <div v-if="hasVisibleFilterFields" class="perm-page__toolbar">
-          <div class="perm-page__filters">
+        <div class="perm-page__toolbar">
+          <div v-if="hasVisibleFilterFields" class="perm-page__filters">
             <PermissionScopeFilter
               v-if="visibleFilters.scope"
               :model-value="scope"
@@ -741,7 +753,7 @@ onBeforeUnmount(() => {
                 v-model="query"
                 type="search"
                 class="perm-page__input"
-                placeholder="Ví dụ: quản lý nhóm"
+                placeholder="Tên hoặc mã quyền"
                 @keydown.enter="applySearch"
               />
             </div>
@@ -762,6 +774,35 @@ onBeforeUnmount(() => {
                 </option>
               </select>
             </div>
+          </div>
+
+          <div class="perm-page__meta">
+            <ul class="perm-page__legend" aria-label="Chú thích ô">
+              <li class="perm-page__legend-item">
+                <span class="perm-page__swatch perm-page__swatch--granted" aria-hidden="true">
+                  <AppIcon name="check" :size="12" />
+                </span>
+                Cấp
+              </li>
+              <li class="perm-page__legend-item">
+                <span class="perm-page__swatch perm-page__swatch--denied" aria-hidden="true" />
+                Chưa cấp
+              </li>
+              <li class="perm-page__legend-item">
+                <span class="perm-page__swatch perm-page__swatch--reserved" aria-hidden="true">
+                  <AppIcon name="lock" :size="12" />
+                </span>
+                Hệ thống
+              </li>
+              <li class="perm-page__legend-item">
+                <span class="perm-page__swatch perm-page__swatch--override" aria-hidden="true" />
+                Sửa riêng
+              </li>
+            </ul>
+            <p v-if="!isLoading && permissions.length" class="perm-page__count">
+              {{ permissions.length }} quyền
+              <template v-if="overrideCount"> · {{ overrideCount }} ô đã sửa riêng</template>
+            </p>
           </div>
         </div>
 
@@ -826,7 +867,6 @@ onBeforeUnmount(() => {
             :blocked-message="blockedMessage"
             :column-widths="columnWidths"
             :table-width-px="tableWidthPx"
-            @toggle="requestToggle"
             @inspect="onInspect"
             @inspect-row="inspectPermission"
             @resize-start="startResize"
@@ -855,98 +895,106 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <p class="perm-page__side-lead">
-          {{ permissionByKey[inspectPanel.permissionKey]?.label ?? inspectPanel.permissionKey }}
-        </p>
-        <p v-if="permissionByKey[inspectPanel.permissionKey]?.description" class="perm-page__side-desc">
-          {{ permissionByKey[inspectPanel.permissionKey].description }}
-        </p>
+        <div class="perm-page__side-body hide-scrollbar">
+          <div class="perm-page__side-lead" :class="`perm-page__side-lead--${panelTone(inspectPanel.cell)}`">
+            <span class="perm-page__side-lead-kicker">
+              {{ inspectPanel.cell.reserved ? 'Quyền hệ thống' : inspectPanel.cell.effective ? 'Được cấp' : 'Chưa cấp' }}
+            </span>
+            <p class="perm-page__side-lead-title">
+              {{ permissionByKey[inspectPanel.permissionKey]?.label ?? inspectPanel.permissionKey }}
+            </p>
+            <p v-if="permissionByKey[inspectPanel.permissionKey]?.description" class="perm-page__side-lead-desc">
+              {{ permissionByKey[inspectPanel.permissionKey].description }}
+            </p>
+          </div>
 
-        <div class="perm-page__rows">
-          <div class="perm-page__row">
-            <span class="perm-page__row-label">Module</span>
-            <span class="perm-page__row-value">{{ permissionByKey[inspectPanel.permissionKey]?.module || '—' }}</span>
+          <div class="perm-page__rows">
+            <div class="perm-page__row">
+              <span class="perm-page__row-label">Module</span>
+              <span class="perm-page__row-value">{{ permissionByKey[inspectPanel.permissionKey]?.module || '—' }}</span>
+            </div>
+            <div class="perm-page__row">
+              <span class="perm-page__row-label">Mã quyền</span>
+              <span class="perm-page__row-value">{{ inspectPanel.permissionKey }}</span>
+            </div>
+            <div class="perm-page__row">
+              <span class="perm-page__row-label">Phạm vi</span>
+              <span class="perm-page__row-value">{{ scopeLabel }}</span>
+            </div>
+            <div class="perm-page__row">
+              <span class="perm-page__row-label">Vai trò</span>
+              <span class="perm-page__row-value">{{ roleByCode[inspectPanel.roleCode]?.label ?? inspectPanel.roleCode }}</span>
+            </div>
+            <div class="perm-page__row">
+              <span class="perm-page__row-label">Hiện tại</span>
+              <span class="perm-page__row-value">
+                <span
+                  class="perm-page__dot"
+                  :class="inspectPanel.cell.effective ? 'perm-page__dot--granted' : 'perm-page__dot--denied'"
+                />
+                {{ inspectPanel.cell.effective ? 'Được cấp' : 'Chưa cấp' }}
+              </span>
+            </div>
+            <div class="perm-page__row">
+              <span class="perm-page__row-label">Mặc định</span>
+              <span class="perm-page__row-value">
+                <span
+                  class="perm-page__dot"
+                  :class="inspectPanel.cell.default ? 'perm-page__dot--granted' : 'perm-page__dot--denied'"
+                />
+                {{ inspectPanel.cell.default ? 'Được cấp' : 'Chưa cấp' }}
+              </span>
+            </div>
+            <div class="perm-page__row">
+              <span class="perm-page__row-label">Nguồn</span>
+              <span class="perm-page__row-value">{{ sourceLabel(inspectPanel.cell) }}</span>
+            </div>
           </div>
-          <div class="perm-page__row">
-            <span class="perm-page__row-label">Mã quyền</span>
-            <span class="perm-page__row-value">{{ inspectPanel.permissionKey }}</span>
-          </div>
-          <div class="perm-page__row">
-            <span class="perm-page__row-label">Phạm vi đang xem</span>
-            <span class="perm-page__row-value">{{ scopeLabel }}</span>
-          </div>
-        </div>
 
-        <div class="perm-page__roles">
-          <button
-            v-for="role in roles"
-            :key="role.code"
-            type="button"
-            class="perm-page__role"
-            :class="{ 'perm-page__role--on': inspectPanel.roleCode === role.code }"
-            @click="inspectPermission(permissionByKey[inspectPanel.permissionKey], role.code)"
-          >
-            <span>{{ role.label }}</span>
-            <span
-              class="perm-page__dot"
-              :class="cellFor(role.code, inspectPanel.permissionKey).effective ? 'perm-page__dot--granted' : 'perm-page__dot--denied'"
-            />
-          </button>
-        </div>
-
-        <div class="perm-page__rows">
-          <div class="perm-page__row">
-            <span class="perm-page__row-label">Vai trò</span>
-            <span class="perm-page__row-value">{{ roleByCode[inspectPanel.roleCode]?.label ?? inspectPanel.roleCode }}</span>
-          </div>
-          <div class="perm-page__row">
-            <span class="perm-page__row-label">Hiện tại</span>
-            <span class="perm-page__row-value">
+          <div class="perm-page__roles" role="group" aria-label="Vai trò">
+            <button
+              v-for="role in roles"
+              :key="role.code"
+              type="button"
+              class="perm-page__role"
+              :class="{ 'perm-page__role--on': inspectPanel.roleCode === role.code }"
+              @click="inspectPermission(permissionByKey[inspectPanel.permissionKey], role.code)"
+            >
               <span
                 class="perm-page__dot"
-                :class="inspectPanel.cell.effective ? 'perm-page__dot--granted' : 'perm-page__dot--denied'"
+                :class="cellFor(role.code, inspectPanel.permissionKey).effective ? 'perm-page__dot--granted' : 'perm-page__dot--denied'"
               />
-              {{ inspectPanel.cell.effective ? 'Được cấp' : 'Không được cấp' }}
-            </span>
-          </div>
-          <div class="perm-page__row">
-            <span class="perm-page__row-label">Mặc định ban đầu</span>
-            <span class="perm-page__row-value">
-              <span
-                class="perm-page__dot"
-                :class="inspectPanel.cell.default ? 'perm-page__dot--granted' : 'perm-page__dot--denied'"
-              />
-              {{ inspectPanel.cell.default ? 'Được cấp' : 'Không được cấp' }}
-            </span>
+              {{ role.label }}
+            </button>
           </div>
         </div>
 
-        <p class="perm-page__explain">{{ sourceExplanation(inspectPanel.cell) }}</p>
-
-        <div v-if="inspectPanel.cell.reserved" class="perm-page__reserved">
-          <AppIcon name="lock" :size="16" />
-          Đây là quyền hệ thống, chỉ super_admin mới giữ được. Không thể đổi ở đây.
+        <div class="perm-page__side-actions">
+          <div v-if="inspectPanel.cell.reserved" class="perm-page__reserved">
+            <AppIcon name="lock" :size="16" />
+            Quyền hệ thống — không đổi được.
+          </div>
+          <template v-else>
+            <button
+              type="button"
+              class="perm-page__toggle-btn"
+              :class="{ 'perm-page__toggle-btn--danger': inspectPanel.cell.effective }"
+              :disabled="pendingCells[`${inspectPanel.roleCode}|${inspectPanel.permissionKey}`]"
+              @click="requestToggle({ roleCode: inspectPanel.roleCode, permissionKey: inspectPanel.permissionKey, cell: inspectPanel.cell })"
+            >
+              {{ inspectPanel.cell.effective ? 'Thu hồi quyền' : 'Cấp quyền' }}
+            </button>
+            <button
+              v-if="cellHasOverride(inspectPanel.cell)"
+              type="button"
+              class="perm-page__restore-btn"
+              :disabled="restoring"
+              @click="requestRestore"
+            >
+              {{ restoring ? 'Đang khôi phục…' : 'Khôi phục mặc định' }}
+            </button>
+          </template>
         </div>
-        <template v-else>
-          <button
-            type="button"
-            class="perm-page__toggle-btn"
-            :disabled="pendingCells[`${inspectPanel.roleCode}|${inspectPanel.permissionKey}`]"
-            @click="requestToggle({ roleCode: inspectPanel.roleCode, permissionKey: inspectPanel.permissionKey, cell: inspectPanel.cell })"
-          >
-            {{ inspectPanel.cell.effective ? 'Thu hồi quyền này' : 'Cấp quyền này' }}
-          </button>
-
-          <button
-            v-if="cellHasOverride(inspectPanel.cell)"
-            type="button"
-            class="perm-page__restore-btn"
-            :disabled="restoring"
-            @click="requestRestore"
-          >
-            {{ restoring ? 'Đang khôi phục…' : 'Bỏ thiết lập riêng, quay về mặc định' }}
-          </button>
-        </template>
       </aside>
     </div>
 
@@ -1036,9 +1084,71 @@ onBeforeUnmount(() => {
 
 .perm-page__filters {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
   gap: var(--space-3);
   width: 100%;
+}
+
+.perm-page__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.perm-page__legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.perm-page__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.perm-page__swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.perm-page__swatch--granted {
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+}
+
+.perm-page__swatch--denied {
+  box-shadow: inset 0 0 0 1.5px var(--color-border);
+}
+
+.perm-page__swatch--reserved {
+  color: var(--color-text-muted);
+}
+
+.perm-page__swatch--override {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--color-info);
+}
+
+.perm-page__count {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
 }
 
 .perm-page__field {
@@ -1100,11 +1210,13 @@ onBeforeUnmount(() => {
 .perm-page__side {
   flex-shrink: 0;
   width: 28rem;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-surface-muted);
 }
 
 .perm-page__side-head {
@@ -1112,6 +1224,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  flex-shrink: 0;
 }
 
 .perm-page__side-title {
@@ -1135,18 +1248,66 @@ onBeforeUnmount(() => {
 }
 
 .perm-page__icon-btn:hover {
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
+}
+
+.perm-page__side-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin-top: var(--space-3);
 }
 
 .perm-page__side-lead {
-  margin: var(--space-3) 0 0.25rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.perm-page__side-lead::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.perm-page__side-lead--success::before {
+  background: var(--color-success);
+}
+
+.perm-page__side-lead--danger::before {
+  background: var(--color-danger);
+}
+
+.perm-page__side-lead--info::before {
+  background: var(--color-info);
+}
+
+.perm-page__side-lead-kicker {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.perm-page__side-lead-title {
+  margin: 0;
   color: var(--color-text);
   font-weight: 700;
   font-size: 1rem;
 }
 
-.perm-page__side-desc {
-  margin: 0 0 var(--space-4);
+.perm-page__side-lead-desc {
+  margin: 0;
   color: var(--color-text-muted);
   font-size: 0.8125rem;
   line-height: 1.5;
@@ -1173,6 +1334,7 @@ onBeforeUnmount(() => {
 }
 
 .perm-page__row-label {
+  flex-shrink: 0;
   color: var(--color-text-muted);
 }
 
@@ -1186,34 +1348,30 @@ onBeforeUnmount(() => {
   gap: 0.375rem;
   color: var(--color-text);
   font-style: italic;
+  font-weight: 400;
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .perm-page__roles {
-  margin: 0 0 var(--space-3);
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
 }
 
 .perm-page__role {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  width: 100%;
-  padding: var(--space-2) 0;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
   border: none;
-  background: transparent;
-  box-shadow: 0 1px 0 var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
   color: var(--color-text);
   font-family: var(--font-family-base);
-  font-size: 0.8125rem;
-  text-align: left;
+  font-size: 0.75rem;
   cursor: pointer;
-}
-
-.perm-page__role:last-child {
-  box-shadow: none;
 }
 
 .perm-page__role:hover {
@@ -1221,8 +1379,9 @@ onBeforeUnmount(() => {
 }
 
 .perm-page__role--on {
-  font-weight: 700;
+  background: var(--color-primary-surface);
   color: var(--color-primary);
+  font-weight: 600;
 }
 
 .perm-page__dot {
@@ -1237,14 +1396,16 @@ onBeforeUnmount(() => {
 }
 
 .perm-page__dot--denied {
-  background: var(--color-danger);
+  background: var(--color-border);
 }
 
-.perm-page__explain {
-  margin: 0 0 var(--space-4);
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-  line-height: 1.5;
+.perm-page__side-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  box-shadow: 0 -1px 0 var(--color-border);
 }
 
 .perm-page__toggle-btn {
@@ -1264,6 +1425,16 @@ onBeforeUnmount(() => {
   background: var(--color-primary-hover);
 }
 
+.perm-page__toggle-btn--danger {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+}
+
+.perm-page__toggle-btn--danger:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
 .perm-page__toggle-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -1271,12 +1442,11 @@ onBeforeUnmount(() => {
 
 .perm-page__restore-btn {
   width: 100%;
-  margin-top: var(--space-2);
   padding: 0.5rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  color: var(--color-text-muted);
+  color: var(--color-text);
   font-family: var(--font-family-base);
   font-weight: 600;
   font-size: 0.8125rem;
@@ -1294,7 +1464,7 @@ onBeforeUnmount(() => {
 
 .perm-page__reserved {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-2);
   padding: var(--space-3);
   border-radius: var(--radius-md);
@@ -1317,29 +1487,17 @@ onBeforeUnmount(() => {
   .perm-page__table-wrap {
     min-height: 16rem;
   }
-
-  .perm-page__filters {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 768px) {
   .perm-page {
     padding: var(--space-4);
   }
-
-  .perm-page__filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 480px) {
   .perm-page {
     padding: var(--space-3);
-  }
-
-  .perm-page__filters {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 

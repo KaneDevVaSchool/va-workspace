@@ -32,6 +32,7 @@ use Modules\Identity\App\Models\Department;
  * @property bool $hide_cross_tasks_from_assignees
  * @property bool $hide_child_tasks_from_followers
  * @property bool $constrain_task_dates_to_project
+ * @property array|null $disabled_tabs key các tab tuỳ chọn bị tắt riêng cho dự án này
  * @property string|null $description
  * @property string|null $avatar_path
  * @property float|null $evaluation_score để trống — tổng hợp từ Task tương lai
@@ -77,6 +78,7 @@ class Project extends Model
         'hide_cross_tasks_from_assignees',
         'hide_child_tasks_from_followers',
         'constrain_task_dates_to_project',
+        'disabled_tabs',
         'avatar_path',
         'evaluation_score',
         'created_by',
@@ -93,6 +95,7 @@ class Project extends Model
         'hide_cross_tasks_from_assignees' => 'boolean',
         'hide_child_tasks_from_followers' => 'boolean',
         'constrain_task_dates_to_project' => 'boolean',
+        'disabled_tabs' => 'array',
     ];
 
     public function scopes(): HasMany
@@ -155,6 +158,18 @@ class Project extends Model
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class);
+    }
+
+    /** Testcase kiểm thử (tab "Testcase", tuỳ chọn theo dự án). */
+    public function testCases(): HasMany
+    {
+        return $this->hasMany(ProjectTestCase::class);
+    }
+
+    /** Phản hồi/đánh giá kết quả dự án (tab "Phản hồi", tuỳ chọn theo dự án). */
+    public function feedbacks(): HasMany
+    {
+        return $this->hasMany(ProjectFeedback::class);
     }
 
     public function lead(): BelongsTo

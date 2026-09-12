@@ -20,6 +20,7 @@ use Modules\Project\App\Http\Requests\UpdateProjectAttachmentRequest;
 use Modules\Project\App\Http\Requests\UpdateProjectFolderRequest;
 use Modules\Project\App\Http\Requests\UpdateProjectRequest;
 use Modules\Project\App\Http\Requests\UpdateProjectSettingsRequest;
+use Modules\Project\App\Http\Requests\UpdateProjectTabConfigRequest;
 use Modules\Project\App\Http\Requests\UploadProjectAttachmentRequest;
 use Modules\Project\App\Http\Requests\UploadProjectAvatarRequest;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
@@ -73,6 +74,19 @@ class ProjectController extends Controller
         }
 
         return response()->json(['project' => $this->service->present($model, $request->user())]);
+    }
+
+    /** Cấu hình bật/tắt tab tuỳ chọn riêng cho dự án (menu "Thao tác"). */
+    public function updateTabConfig(UpdateProjectTabConfigRequest $request, int $project): JsonResponse
+    {
+        $model = $this->service->find($project);
+        if ($model === null) {
+            return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
+        }
+
+        $updated = $this->service->updateTabConfig($model, $request->validated()['disabled_tabs']);
+
+        return response()->json(['project' => $this->service->present($updated, $request->user())]);
     }
 
     public function store(StoreProjectRequest $request)

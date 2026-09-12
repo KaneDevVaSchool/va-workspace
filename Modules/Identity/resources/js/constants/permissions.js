@@ -13,15 +13,26 @@ export const PERMISSION_FILTERS = [
 
 export const PERMISSION_STATUS_OPTIONS = [
   { value: '', label: 'Tất cả trạng thái' },
-  { value: 'granted', label: 'Được cấp' },
-  { value: 'denied', label: 'Không được cấp' },
+  { value: 'granted', label: 'Đang được cấp' },
+  { value: 'denied', label: 'Chưa được cấp' },
   { value: 'override', label: 'Có sửa riêng' },
   { value: 'reserved', label: 'Quyền hệ thống' },
 ];
 
-export const COLUMN_STORAGE_KEY = 'va-permissions-columns-v2';
+export const ROLE_COLUMN_LABELS = {
+  admin: 'Admin',
+  director_officer: 'GĐ ĐH',
+  department_director: 'Trưởng phòng',
+  deputy_department_director: 'Phó phòng',
+  section_head: 'Trưởng BP',
+  team_lead: 'Trưởng nhóm',
+  member: 'Nhân viên',
+  viewer: 'Người xem',
+};
+
+export const COLUMN_STORAGE_KEY = 'va-permissions-columns-v3';
 export const FILTER_STORAGE_KEY = 'va-permissions-filters';
-export const COLUMN_WIDTH_KEY = 'va-permissions-column-widths';
+export const COLUMN_WIDTH_KEY = 'va-permissions-column-widths-v3';
 export const ZOOM_STORAGE_KEY = 'va-permissions-zoom';
 
 export function roleColumnKey(code) {
@@ -37,7 +48,7 @@ export function permissionColumns(roles = []) {
     ...PERMISSION_META_COLUMNS,
     ...roles.map((role) => ({
       key: roleColumnKey(role.code),
-      label: role.label,
+      label: ROLE_COLUMN_LABELS[role.code] || role.label,
       defaultOn: true,
       roleCode: role.code,
     })),

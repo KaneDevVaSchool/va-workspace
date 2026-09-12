@@ -150,6 +150,18 @@ const MENU_SECTIONS = [
         icon: 'listChecks',
         requiresPermission: 'social.review',
       },
+      {
+        // Quản lý tài khoản (Credential module) — menu TOÀN HỆ THỐNG, không
+        // theo phòng ban (KHÔNG configurableByDepartment): chứa thông tin
+        // đăng nhập dịch vụ dùng chung công ty (Google, Canva, Cursor,
+        // Claude, AWS, VPS, database, IAM, domain...), không phải dữ liệu
+        // riêng của 1 phòng ban. Service tự ẩn password/username thật với
+        // ai không phải người tạo/được cấp quyền xem — xem CredentialService::present().
+        name: 'manager.credential.index',
+        label: 'Quản lý tài khoản',
+        icon: 'lock',
+        requiresPermission: 'credential.view',
+      },
     ],
   },
   {

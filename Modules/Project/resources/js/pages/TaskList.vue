@@ -20,6 +20,8 @@ import { useDragScroll } from '@/composables/useDragScroll';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import ProjectUserPicker from '../components/ProjectUserPicker.vue';
 import TaskCalendarView from '../components/TaskCalendarView.vue';
+import TaskQuickActionModals from '../components/TaskQuickActionModals.vue';
+import TaskRowContextMenu from '../components/TaskRowContextMenu.vue';
 import TaskViewModeMenu from '../components/TaskViewModeMenu.vue';
 import {
   CALENDAR_MODE_KEY,
@@ -200,7 +202,11 @@ const isCalendar = computed(() => viewMode.value === 'calendar');
 const calendarMode = ref(loadCalendarMode());
 const calendarRange = ref(calendarOverlapRange(loadCalendarMode(), new Date()));
 const canEdit = computed(() => auth.can('task.create'));
+const canApprove = computed(() => auth.can('task.approve'));
 const canDelegate = computed(() => auth.can('task.delegate'));
+
+const ctxMenu = reactive({ open: false, x: 0, y: 0, task: null });
+const actionDialog = reactive({ kind: null, task: null, extra: {} });
 
 /** Xem lịch công việc của toàn bộ mọi người — super_admin / admin / người có quyền rộng. */
 const canViewAllTasks = computed(() => auth.canViewAs || auth.canViewActivityLog);
@@ -781,15 +787,75 @@ function clearFilters() {
   loadTasks(1);
 }
 
-function openTaskDetail(task) {
+function openTaskDetail(task, options = {}) {
   if (!task?.id) return;
-  router.push({ name: 'manager.project.tasks.detail', params: { id: task.id } });
+  const loc = router.resolve({ name: 'manager.project.tasks.detail', params: { id: task.id } });
+  if (options.blank) {
+    window.open(loc.href, '_blank', 'noopener');
+    return;
+  }
+  router.push(loc);
+}
+
+function openTaskEdit(task) {
+  if (!task?.id) return;
+  router.push({ name: 'manager.project.tasks.edit', params: { id: task.id } });
 }
 
 function applyTaskUpdate(updated) {
+  if (!updated?.id) return;
   const index = tasks.value.findIndex((t) => t.id === updated.id);
-  if (index !== -1) tasks.value[index] = updated;
-  if (selected.value?.id === updated.id) selected.value = updated;
+  if (index !== -1) tasks.value[index] = { ...tasks.value[index], ...updated };
+  if (selected.value?.id === updated.id) selected.value = { ...selected.value, ...updated };
+  if (ctxMenu.task?.id === updated.id) ctxMenu.task = { ...ctxMenu.task, ...updated };
+  if (actionDialog.task?.id === updated.id) actionDialog.task = { ...actionDialog.task, ...updated };
+}
+
+function openRowContextMenu(event, task) {
+  if (actionDialog.kind) return;
+  event.preventDefault();
+  event.stopPropagation();
+  ctxMenu.open = true;
+  ctxMenu.x = event.clientX;
+  ctxMenu.y = event.clientY;
+  ctxMenu.task = task;
+}
+
+function closeRowContextMenu() {
+  ctxMenu.open = false;
+}
+
+function onRowContextAction({ type, task, status, variant, focus }) {
+  closeRowContextMenu();
+  if (!task) return;
+  if (type === 'status') {
+    if (task.status !== status) {
+      patchTask(task.id, { status }, `Đã chuyển sang ${statusLabel(status)}.`);
+    }
+    return;
+  }
+  if (type === 'details') {
+    if (variant === 'edit') {
+      openTaskEdit(task);
+      return;
+    }
+    openTaskDetail(task, { blank: variant === 'blank' });
+    return;
+  }
+  actionDialog.kind = type;
+  actionDialog.task = task;
+  actionDialog.extra = { variant, focus };
+}
+
+function closeActionDialog() {
+  actionDialog.kind = null;
+  actionDialog.task = null;
+  actionDialog.extra = {};
+}
+
+async function onTaskDuplicated() {
+  closeActionDialog();
+  await loadTasks(1);
 }
 
 function askDelete() {
@@ -1830,15 +1896,35 @@ onBeforeUnmount(() => {
   <section class="task-page" :class="{ 'task-page--calendar': isCalendar }">
     <PageHeader
       title="Tất cả công việc"
-      icon="layoutList"
       description="Quản lý danh sách công việc của tổ chức."
-      :primary-action="canEdit
-        ? { label: 'Tạo công việc', icon: 'plus', to: { name: 'manager.project.tasks.create' } }
-        : null"
       export-label="Dữ liệu"
       :export-options="taskDataExportOptions"
       :export-busy-key="taskDataExportBusyKey"
     >
+      <template #title>
+        <span class="task-page__title">
+          <AppIcon name="layoutList" :size="16" />
+          Tất cả công việc
+          <button
+            type="button"
+            class="task-page__title-icon-btn"
+            aria-label="Làm mới danh sách"
+            :disabled="loading"
+            @click="loadTasks(meta.current_page)"
+          >
+            <AppIcon name="refresh" :size="15" :class="{ 'task-page__spin': loading }" />
+          </button>
+          <button
+            v-if="canEdit"
+            type="button"
+            class="task-page__title-icon-btn task-page__title-icon-btn--primary"
+            aria-label="Tạo công việc"
+            @click="router.push({ name: 'manager.project.tasks.create' })"
+          >
+            <AppIcon name="plus" :size="16" />
+          </button>
+        </span>
+      </template>
       <template #actions>
         <div class="task-page__header-search">
           <AppIcon name="search" :size="15" />
@@ -1849,10 +1935,6 @@ onBeforeUnmount(() => {
             @keydown.enter="loadTasks(1)"
           />
         </div>
-        <button type="button" class="task-page__header-btn" :disabled="loading" @click="loadTasks(meta.current_page)">
-          <AppIcon name="refresh" :size="16" :class="{ 'task-page__spin': loading }" />
-          Làm mới
-        </button>
       </template>
     </PageHeader>
 
@@ -2064,6 +2146,7 @@ onBeforeUnmount(() => {
                     { 'task-page__row--active': selected?.id === task.id },
                   ]"
                   @dblclick="openTaskDetail(task)"
+                  @contextmenu="openRowContextMenu($event, task)"
                 >
                   <td class="task-page__td-check" @click.stop>
                     <input
@@ -2238,6 +2321,7 @@ onBeforeUnmount(() => {
                 data-no-drag-scroll
                 @pointerdown="onKanbanCardPointerDown($event, task)"
                 @click="!isKanbanDragGroup && openTaskDetail(task)"
+                @contextmenu.stop="openRowContextMenu($event, task)"
               >
                 <span v-if="task.is_overdue" class="task-kanban__overdue-dot" aria-hidden="true" />
                 <header class="task-kanban__card-head">
@@ -2316,6 +2400,7 @@ onBeforeUnmount(() => {
           @inspect="openTaskDetail"
           @edit="editFromCalendar"
           @delete="deleteFromCalendar"
+          @context-task="openRowContextMenu"
         >
           <template #view-mode>
             <TaskViewModeMenu
@@ -2347,6 +2432,28 @@ onBeforeUnmount(() => {
       danger
       @confirm="confirmDelete"
       @update:open="confirmingDelete = $event"
+    />
+
+    <TaskRowContextMenu
+      :open="ctxMenu.open"
+      :x="ctxMenu.x"
+      :y="ctxMenu.y"
+      :task="ctxMenu.task"
+      :can-edit="canEdit"
+      :can-approve="canApprove"
+      :can-duplicate="canEdit"
+      @close="closeRowContextMenu"
+      @action="onRowContextAction"
+    />
+
+    <TaskQuickActionModals
+      :kind="actionDialog.kind"
+      :task="actionDialog.task"
+      :extra="actionDialog.extra"
+      :users="users"
+      @close="closeActionDialog"
+      @updated="applyTaskUpdate"
+      @duplicated="onTaskDuplicated"
     />
 
     <Teleport to="body">
@@ -2888,31 +2995,45 @@ onBeforeUnmount(() => {
   overflow: visible;
 }
 
-.task-page__header-btn {
-  flex-shrink: 0;
+.task-page__title {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  height: 2rem;
-  padding: 0 0.75rem;
+  gap: 0.5rem;
+}
+
+.task-page__title-icon-btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-left: 0.125rem;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-family-base);
-  font-size: 0.875rem;
-  font-weight: 500;
-  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+  background: transparent;
+  color: var(--color-text-muted);
   cursor: pointer;
 }
 
-.task-page__header-btn:hover:not(:disabled) {
+.task-page__title-icon-btn:hover:not(:disabled) {
   background: var(--color-surface-muted);
+  color: var(--color-primary);
 }
 
-.task-page__header-btn:disabled {
+.task-page__title-icon-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.task-page__title-icon-btn--primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.task-page__title-icon-btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  color: var(--color-on-primary);
 }
 
 .task-page__header-search {

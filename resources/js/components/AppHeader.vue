@@ -103,6 +103,7 @@ function setPageHeaderEl(el) {
   flex: 1;
   min-width: 0;
   height: 100%;
+  overflow: visible;
 }
 
 .app-header__actions {

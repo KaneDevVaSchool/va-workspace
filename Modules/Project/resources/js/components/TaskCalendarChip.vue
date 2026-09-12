@@ -12,7 +12,7 @@ defineProps({
   toneClass: { type: String, default: '' },
 });
 
-const emit = defineEmits(['open']);
+const emit = defineEmits(['open', 'contextmenu']);
 </script>
 
 <template>
@@ -22,6 +22,7 @@ const emit = defineEmits(['open']);
     role="button"
     tabindex="0"
     @click="emit('open', $event)"
+    @contextmenu.prevent="emit('contextmenu', $event)"
     @keydown.enter.prevent="emit('open', $event)"
   >
     <span class="task-cal__chip-head">

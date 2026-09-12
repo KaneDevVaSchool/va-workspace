@@ -34,7 +34,7 @@ const props = defineProps({
   currentUserId: { type: Number, default: null },
 });
 
-const emit = defineEmits(['range-change', 'mode-change', 'inspect', 'edit', 'delete']);
+const emit = defineEmits(['range-change', 'mode-change', 'inspect', 'edit', 'delete', 'context-task']);
 
 const datePicker = ref(null);
 const peek = ref(null);
@@ -435,6 +435,13 @@ function openPeek(task, event) {
   peek.value = task;
 }
 
+function openTaskContext(task, event) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  closePeek();
+  emit('context-task', event, task);
+}
+
 function closePeek() {
   peek.value = null;
 }
@@ -663,6 +670,7 @@ onBeforeUnmount(() => {
               :department="chipDept(task)"
               :tone-class="cardToneClass(task)"
               @open="openPeek(task, $event)"
+              @contextmenu="openTaskContext(task, $event)"
             />
           </div>
         </div>
@@ -707,6 +715,7 @@ onBeforeUnmount(() => {
               :department="chipDept(task)"
               :tone-class="cardToneClass(task)"
               @open="openPeek(task, $event)"
+              @contextmenu="openTaskContext(task, $event)"
             />
           </template>
 
@@ -723,6 +732,7 @@ onBeforeUnmount(() => {
               :department="chipDept(task)"
               :tone-class="cardToneClass(task)"
               @open="openPeek(task, $event)"
+              @contextmenu="openTaskContext(task, $event)"
             />
           </template>
 

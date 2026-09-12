@@ -69,7 +69,7 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         // RBAC — role-level: role:super_admin | role:department_director,team_lead
         'role' => \App\Http\Middleware\EnsureHasRole::class,
-        // RBAC — permission granular: permission:task.delegate | permission:project.create,department
+        // RBAC — permission granular: permission:task.delegate | permission:task.view|task.view_assigned
         'permission' => \App\Http\Middleware\EnsureHasPermission::class,
         // Menu bị superadmin ẩn TOÀN HỆ THỐNG: menu.not_hidden:manager.social.moderation
         'menu.not_hidden' => \App\Http\Middleware\EnsureMenuNotGloballyHidden::class,

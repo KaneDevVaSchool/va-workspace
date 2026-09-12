@@ -1,22 +1,20 @@
 <script setup>
 //
 // Trang Chi tiết dự án — TRANG RIÊNG (route /manager/project/:id), thay cho
-// panel trượt "Chi tiết dự án" trước đây trong ProjectList.vue. Bố cục theo
-// mẫu 1Office (header tabs + toolbar hành động + 2 cột nội dung/sidebar),
-// khung CSS độc lập (toolbar card + pill tabs + chip actions), không còn
-// copy full-bleed toolbar của TaskDetail.vue.
+// panel trượt "Chi tiết dự án" trước đây trong ProjectList.vue. Bố cục:
+// PageHeader (Theo dõi / Thành viên / Thêm testcase; dấu + khi tab Testcase)
+// + chrome 1 hàng (nav tab | thao tác theo ngữ cảnh tab) + 2 cột nội dung.
+// Tab đồng bộ ?tab= trên URL.
 //
-// 6 tab: Chi tiết (cột trái Thông tin chung 1 cột field + quyền/phạm vi;
-// cột phải Người quản trị / Người thực hiện / Người theo dõi + danh mục
-// công việc) · Công việc (danh sách / cha / Kanban / Gantt) · Thảo luận · Báo cáo · Đính kèm
-// (file manager 2 cột) · Đối tượng liên quan (người tham gia + theo dõi).
+// Tab: Chi tiết · Công việc · Thảo luận · Báo cáo (sheet nhân sự × việc,
+// cùng kiểu Đánh giá) · Đính kèm · Testcase · Phản hồi.
 //
 // Thẻ thống kê (Tổng công việc/Quá hạn/Đang thực hiện/Hoàn thành/Chờ thực
 // hiện) và "Danh mục công việc" (progress ring) tính từ cây task
 // (type=category là "danh mục", type=task là việc thật) — không thêm bảng
 // hay cột backend mới. Tab Chi tiết không còn khối Tài chính (chưa có model).
 //
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
@@ -25,24 +23,32 @@ import DualProgressBar from '@/components/DualProgressBar.vue';
 import ProjectDiscussionTab from '../components/ProjectDiscussionTab.vue';
 import ProjectDocumentsTab from '../components/ProjectDocumentsTab.vue';
 import ProjectTasksTab from '../components/ProjectTasksTab.vue';
+import ProjectTestcaseTab from '../components/ProjectTestcaseTab.vue';
+import ProjectFeedbackTab from '../components/ProjectFeedbackTab.vue';
+import ProjectReportTab from '../components/ProjectReportTab.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { computeExpectedProgress } from '@/lib/progress';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import ProjectQuickActionModals from '../components/ProjectQuickActionModals.vue';
 
+// core: true = tab cốt lõi, luôn hiện. core: false = tab tuỳ chọn, bật/tắt
+// riêng theo từng dự án qua project.disabled_tabs (menu "Thao tác" → "Cấu
+// hình tab hiển thị", xem ProjectService::OPTIONAL_TABS).
 const TABS = [
-  { key: 'general', label: 'Chi tiết' },
-  { key: 'tasks', label: 'Công việc' },
-  { key: 'discussion', label: 'Thảo luận' },
-  { key: 'report', label: 'Báo cáo' },
-  { key: 'attachments', label: 'Đính kèm' },
+  { key: 'general', label: 'Chi tiết', icon: 'layers', core: true },
+  { key: 'tasks', label: 'Công việc', icon: 'clipboardCheck', core: true },
+  { key: 'discussion', label: 'Thảo luận', icon: 'messageCircle', core: false },
+  { key: 'report', label: 'Báo cáo', icon: 'fileText', core: false },
+  { key: 'attachments', label: 'Đính kèm', icon: 'paperclip', core: false },
+  { key: 'test_case', label: 'Testcase', icon: 'listChecks', core: false },
+  { key: 'feedback', label: 'Phản hồi', icon: 'star', core: false },
 ];
 
 const TASK_ADD_VARIANTS = [
-  { key: 'normal', label: 'Thêm công việc thường' },
-  { key: 'bulk', label: 'Thêm nhiều công việc thường' },
-  { key: 'by_category', label: 'Thêm công việc theo danh mục' },
-  { key: 'by_phase', label: 'Thêm công việc theo phase' },
+  { key: 'normal', label: 'Thêm công việc thường', icon: 'plus' },
+  { key: 'bulk', label: 'Thêm nhiều công việc thường', icon: 'layoutList' },
+  { key: 'by_category', label: 'Thêm công việc theo danh mục', icon: 'listChecks' },
+  { key: 'by_phase', label: 'Thêm công việc theo phase', icon: 'flag' },
 ];
 
 const RULE_DEFS = [
@@ -73,7 +79,6 @@ const notFound = ref(false);
 const project = ref(null);
 const taskTree = ref([]);
 const tasksLoading = ref(false);
-const activeTab = ref('general');
 const followBusy = ref(false);
 const avatarUploading = ref(false);
 const avatarInput = ref(null);
@@ -82,8 +87,20 @@ const taskMenuOpen = ref(false);
 const moreMenuOpen = ref(false);
 const taskMenuRoot = ref(null);
 const moreMenuRoot = ref(null);
+const tabsRoot = ref(null);
+const documentsTab = ref(null);
+const testcaseTab = ref(null);
+const feedbackTab = ref(null);
+const reportTab = ref(null);
 const taskMenuPlacement = reactive({ up: false, right: false });
 const moreMenuPlacement = reactive({ up: false, right: true });
+
+function normalizeTabKey(raw) {
+  const key = String(raw || 'general');
+  return TABS.some((tab) => tab.key === key) ? key : 'general';
+}
+
+const activeTab = ref(normalizeTabKey(route.query.tab));
 
 const options = ref({ type: [], status: [], importance: [], progress_method: [], scope_type: [] });
 
@@ -92,6 +109,54 @@ const canEdit = computed(() => Boolean(project.value?.can_edit));
 const canManageMembers = computed(() => Boolean(project.value?.can_manage_members));
 const canCreateTask = computed(() => auth.can('task.create'));
 const canDuplicate = computed(() => auth.can('project.create'));
+const canViewReports = computed(
+  () => auth.can('report.manage_department') || auth.can('report.view_assigned'),
+);
+
+const showTaskActions = computed(
+  () => canCreateTask.value && (activeTab.value === 'general' || activeTab.value === 'tasks'),
+);
+const showDocActions = computed(() => activeTab.value === 'attachments' && canEdit.value);
+const showFeedbackAction = computed(() => activeTab.value === 'feedback');
+const showReportAction = computed(() => activeTab.value === 'report');
+const showContextActions = computed(
+  () => showTaskActions.value || showDocActions.value || showFeedbackAction.value || showReportAction.value,
+);
+const showMoreMenu = computed(() => canEdit.value || canDuplicate.value);
+
+const headerPrimaryAction = computed(() => {
+  if (activeTab.value !== 'test_case' || !project.value) return null;
+  const items = [];
+  if (canEdit.value) {
+    items.push({
+      key: 'testcase',
+      label: 'Thêm testcase',
+      icon: 'listChecks',
+      description: 'Tạo testcase kiểm thử cho dự án này',
+      onSelect: () => testcaseTab.value?.openCreate(),
+    });
+  }
+  if (canManageMembers.value) {
+    items.push({
+      key: 'members',
+      label: 'Thêm thành viên',
+      icon: 'userPlus',
+      description: 'Thêm người thực hiện hoặc theo dõi dự án',
+      onSelect: () => openAction('members'),
+    });
+  }
+  if (canCreateTask.value) {
+    items.push({
+      key: 'task',
+      label: 'Thêm công việc',
+      icon: 'clipboardCheck',
+      description: 'Tạo công việc mới trong dự án',
+      onSelect: () => openAction('task', { variant: 'normal' }),
+    });
+  }
+  if (!items.length) return null;
+  return { label: 'Thêm testcase hoặc công việc', icon: 'plus', items };
+});
 
 async function loadOptions() {
   try {
@@ -266,9 +331,11 @@ async function toggleFollow() {
     if (project.value.is_following) {
       const { data } = await window.axios.delete(`/api/project/${project.value.id}/follow`);
       project.value.is_following = data.is_following;
+      showClientToast('success', 'Đã bỏ theo dõi dự án.');
     } else {
       const { data } = await window.axios.post(`/api/project/${project.value.id}/follow`);
       project.value.is_following = data.is_following;
+      showClientToast('success', 'Đã theo dõi dự án.');
     }
   } catch (err) {
     showClientToast('error', err?.response?.data?.message || 'Không cập nhật được theo dõi dự án.');
@@ -415,12 +482,24 @@ function flattenTasks(nodes) {
 const flatTasks = computed(() => flattenTasks(taskTree.value));
 const realTasks = computed(() => flatTasks.value.filter((t) => t.type === 'task'));
 const commentsCount = ref(0);
+const testCaseCount = ref(0);
+const feedbackCount = ref(0);
+
+// Tab tuỳ chọn bị tắt riêng cho dự án này (menu "Thao tác" → "Cấu hình tab
+// hiển thị") — Chi tiết/Công việc (core) luôn hiện, không phụ thuộc cờ này.
+const visibleTabs = computed(() => {
+  const disabled = new Set(project.value?.disabled_tabs || []);
+  return TABS.filter((tab) => tab.core || !disabled.has(tab.key));
+});
 
 function tabBadge(key) {
-  if (key === 'tasks') return realTasks.value.length;
-  if (key === 'discussion') return commentsCount.value;
-  if (key === 'attachments') return (project.value?.attachments || []).length;
-  return null;
+  let count = null;
+  if (key === 'tasks') count = realTasks.value.length;
+  else if (key === 'discussion') count = commentsCount.value;
+  else if (key === 'attachments') count = (project.value?.attachments || []).length;
+  else if (key === 'test_case') count = testCaseCount.value;
+  else if (key === 'feedback') count = feedbackCount.value;
+  return count > 0 ? count : null;
 }
 
 const taskStats = computed(() => {
@@ -444,15 +523,67 @@ const STAT_CARDS = [
 
 const taskStatFilter = ref('all');
 
+function setActiveTab(key, { syncRoute = true } = {}) {
+  const allowed = visibleTabs.value.some((tab) => tab.key === key) ? key : 'general';
+  activeTab.value = allowed;
+  taskMenuOpen.value = false;
+  moreMenuOpen.value = false;
+  if (!syncRoute) return;
+  const current = String(route.query.tab || '');
+  const next = allowed === 'general' ? '' : allowed;
+  if (current === next) return;
+  const query = { ...route.query };
+  if (next) query.tab = next;
+  else delete query.tab;
+  router.replace({ query });
+}
+
 function onTabClick(key) {
   if (key === 'tasks') taskStatFilter.value = 'all';
-  activeTab.value = key;
+  setActiveTab(key);
 }
 
 function openTaskStats(filter) {
   taskStatFilter.value = filter;
-  activeTab.value = 'tasks';
+  setActiveTab('tasks');
 }
+
+function onTabListKeydown(event) {
+  const keys = visibleTabs.value.map((tab) => tab.key);
+  const idx = keys.indexOf(activeTab.value);
+  if (idx < 0) return;
+  let nextIdx = idx;
+  if (event.key === 'ArrowRight') nextIdx = (idx + 1) % keys.length;
+  else if (event.key === 'ArrowLeft') nextIdx = (idx - 1 + keys.length) % keys.length;
+  else if (event.key === 'Home') nextIdx = 0;
+  else if (event.key === 'End') nextIdx = keys.length - 1;
+  else return;
+  event.preventDefault();
+  const next = keys[nextIdx];
+  if (next === 'tasks') taskStatFilter.value = 'all';
+  setActiveTab(next);
+  nextTick(() => {
+    tabsRoot.value?.querySelector(`[data-tab="${next}"]`)?.focus();
+  });
+}
+
+function goReports() {
+  router.push({ name: 'manager.reports.list' });
+}
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    const key = normalizeTabKey(tab);
+    if (key !== activeTab.value) setActiveTab(key, { syncRoute: false });
+  },
+);
+
+watch(visibleTabs, (tabs) => {
+  if (!tabs.some((tab) => tab.key === activeTab.value)) {
+    setActiveTab('general');
+  }
+});
 
 const activeStatCard = computed(() => STAT_CARDS.find((card) => card.key === taskStatFilter.value) || STAT_CARDS[0]);
 
@@ -570,10 +701,11 @@ const performers = computed(() => {
 </script>
 
 <template>
-  <section class="pd" :class="{ 'pd--fill': project && activeTab === 'tasks' }">
+  <section class="pd" :class="{ 'pd--fill': project && (activeTab === 'tasks' || activeTab === 'report') }">
     <PageHeader
       :title="project?.name || 'Chi tiết dự án'"
       icon="layers"
+      :primary-action="headerPrimaryAction"
       :breadcrumbs="[
         { label: 'Trang chủ', to: { name: 'home' } },
         { label: 'Dự án', to: { name: 'manager.project.index' } },
@@ -581,6 +713,19 @@ const performers = computed(() => {
       ]"
     >
       <template #actions>
+        <template v-if="project">
+          <button
+            type="button"
+            class="pd__header-btn"
+            :class="{ 'pd__header-btn--on': project.is_following }"
+            :disabled="followBusy"
+            :aria-pressed="project.is_following ? 'true' : 'false'"
+            @click="toggleFollow"
+          >
+            <AppIcon name="bell" :size="16" :stroke-width="1.75" />
+            {{ project.is_following ? 'Đang theo dõi' : 'Theo dõi' }}
+          </button>
+        </template>
         <button type="button" class="pd__header-btn" @click="goBack">
           <AppIcon name="chevronLeft" :size="16" />
           Quay lại
@@ -592,165 +737,218 @@ const performers = computed(() => {
     <p v-else-if="notFound" class="pd__empty">Không tìm thấy dự án.</p>
 
     <div v-else-if="project" class="pd__page">
-      <div class="pd__toolbar hide-scrollbar">
-        <div class="pd__tabs hide-scrollbar" role="tablist" aria-label="Nhóm thông tin dự án">
+      <div class="pd__chrome">
+        <div
+          ref="tabsRoot"
+          class="pd__nav hide-scrollbar"
+          role="tablist"
+          aria-label="Nhóm thông tin dự án"
+          @keydown="onTabListKeydown"
+        >
           <button
-            v-for="tab in TABS"
+            v-for="tab in visibleTabs"
             :key="tab.key"
             type="button"
             role="tab"
             class="pd__tab"
             :class="{ 'pd__tab--active': activeTab === tab.key }"
+            :data-tab="tab.key"
             :aria-selected="activeTab === tab.key"
+            :tabindex="activeTab === tab.key ? 0 : -1"
+            aria-controls="pd-tab-panel"
             @click="onTabClick(tab.key)"
           >
+            <span class="pd__tab-icon" aria-hidden="true">
+              <AppIcon :name="tab.icon" :size="14" :stroke-width="1.75" />
+            </span>
             {{ tab.label }}
             <span v-if="tabBadge(tab.key) != null" class="pd__tab-count">{{ tabBadge(tab.key) }}</span>
           </button>
         </div>
-        <div class="pd__actions">
-          <button
-            type="button"
-            class="pd__action"
-            :class="{ 'pd__action--open': project.is_following }"
-            :disabled="followBusy"
-            @click="toggleFollow"
-          >
-            <span class="pd__action-icon"><AppIcon name="bell" :size="15" :stroke-width="1.75" /></span>
-            <span class="pd__action-label">{{ project.is_following ? 'Đang theo dõi' : 'Theo dõi' }}</span>
-          </button>
-          <button
-            type="button"
-            class="pd__action"
-            :disabled="!canManageMembers"
-            @click="openAction('members')"
-          >
-            <span class="pd__action-icon"><AppIcon name="userPlus" :size="15" :stroke-width="1.75" /></span>
-            <span class="pd__action-label">Tham gia</span>
-          </button>
-          <button
-            v-if="canCreateTask"
-            type="button"
-            class="pd__action"
-            @click="openAction('category')"
-          >
-            <span class="pd__action-icon"><AppIcon name="listChecks" :size="15" :stroke-width="1.75" /></span>
-            <span class="pd__action-label">Danh mục</span>
-          </button>
-          <div v-if="canCreateTask" ref="taskMenuRoot" class="pd__action-wrap">
-            <button
-              type="button"
-              class="pd__action pd__action--primary"
-              :class="{ 'pd__action--open': taskMenuOpen }"
-              :aria-expanded="taskMenuOpen ? 'true' : 'false'"
-              aria-haspopup="menu"
-              @click="toggleTaskMenu"
-            >
-              <span class="pd__action-icon"><AppIcon name="plus" :size="15" :stroke-width="1.75" /></span>
-              <span class="pd__action-label">Thêm việc</span>
-              <AppIcon name="chevronDown" :size="12" />
-            </button>
-            <div
-              v-if="taskMenuOpen"
-              class="pd__menu"
-              :class="{ 'pd__menu--up': taskMenuPlacement.up, 'pd__menu--right': taskMenuPlacement.right }"
-              role="menu"
-              aria-label="Thêm công việc"
-            >
-              <button
-                v-for="item in TASK_ADD_VARIANTS"
-                :key="item.key"
-                type="button"
-                class="pd__menu-item"
-                role="menuitem"
-                @click="openAction('task', { variant: item.key })"
-              >
-                {{ item.label }}
+
+        <div v-if="showContextActions || showMoreMenu" class="pd__toolbar" role="toolbar" aria-label="Thao tác dự án">
+          <div class="pd__actions">
+            <div v-if="showTaskActions" class="pd__action-group" aria-label="Công việc">
+              <button type="button" class="pd__action" @click="openAction('category')">
+                <span class="pd__action-icon"><AppIcon name="listChecks" :size="15" :stroke-width="1.75" /></span>
+                <span class="pd__action-label">Danh mục</span>
+              </button>
+              <div ref="taskMenuRoot" class="pd__action-wrap">
+                <button
+                  type="button"
+                  class="pd__action pd__action--primary"
+                  :class="{ 'pd__action--open': taskMenuOpen }"
+                  :aria-expanded="taskMenuOpen ? 'true' : 'false'"
+                  aria-haspopup="menu"
+                  @click="toggleTaskMenu"
+                >
+                  <span class="pd__action-icon"><AppIcon name="plus" :size="15" :stroke-width="1.75" /></span>
+                  <span class="pd__action-label">Thêm việc</span>
+                  <AppIcon name="chevronDown" :size="12" />
+                </button>
+                <div
+                  v-if="taskMenuOpen"
+                  class="pd__menu"
+                  :class="{ 'pd__menu--up': taskMenuPlacement.up, 'pd__menu--right': taskMenuPlacement.right }"
+                  role="menu"
+                  aria-label="Thêm công việc"
+                >
+                  <button
+                    v-for="item in TASK_ADD_VARIANTS"
+                    :key="item.key"
+                    type="button"
+                    class="pd__menu-item"
+                    role="menuitem"
+                    @click="openAction('task', { variant: item.key })"
+                  >
+                    <AppIcon :name="item.icon" :size="14" :stroke-width="1.75" />
+                    {{ item.label }}
+                  </button>
+                </div>
+              </div>
+              <button type="button" class="pd__action" @click="openAction('phase')">
+                <span class="pd__action-icon"><AppIcon name="flag" :size="15" :stroke-width="1.75" /></span>
+                <span class="pd__action-label">Thêm phase</span>
               </button>
             </div>
-          </div>
-          <button
-            v-if="canCreateTask"
-            type="button"
-            class="pd__action"
-            @click="openAction('phase')"
-          >
-            <span class="pd__action-icon"><AppIcon name="flag" :size="15" :stroke-width="1.75" /></span>
-            <span class="pd__action-label">Thêm phase</span>
-          </button>
-          <div ref="moreMenuRoot" class="pd__action-wrap">
-            <button
-              type="button"
-              class="pd__action pd__action--icon"
-              :class="{ 'pd__action--open': moreMenuOpen }"
-              aria-label="Thêm thao tác"
-              :aria-expanded="moreMenuOpen ? 'true' : 'false'"
-              aria-haspopup="menu"
-              @click="toggleMoreMenu"
-            >
-              <span class="pd__action-icon"><AppIcon name="moreVertical" :size="15" :stroke-width="1.75" /></span>
-            </button>
-            <div
-              v-if="moreMenuOpen"
-              class="pd__menu"
-              :class="{ 'pd__menu--up': moreMenuPlacement.up, 'pd__menu--right': moreMenuPlacement.right }"
-              role="menu"
-              aria-label="Thao tác dự án"
-            >
-              <button
-                v-if="canEdit"
-                type="button"
-                class="pd__menu-item"
-                role="menuitem"
-                @click="openAction('dates', { focus: 'planned' })"
-              >
-                Cập nhật thời gian
+
+            <div v-else-if="showDocActions" class="pd__action-group" aria-label="Tài liệu">
+              <button type="button" class="pd__action" @click="documentsTab?.openCreateFolder()">
+                <span class="pd__action-icon"><AppIcon name="folderPlus" :size="15" :stroke-width="1.75" /></span>
+                <span class="pd__action-label">Tạo thư mục</span>
+              </button>
+              <button type="button" class="pd__action" @click="documentsTab?.openAddLink()">
+                <span class="pd__action-icon"><AppIcon name="link" :size="15" :stroke-width="1.75" /></span>
+                <span class="pd__action-label">Thêm link</span>
               </button>
               <button
-                v-if="canEdit"
                 type="button"
-                class="pd__menu-item"
-                role="menuitem"
-                @click="openAction('description')"
+                class="pd__action pd__action--primary"
+                :disabled="documentsTab?.uploading"
+                @click="documentsTab?.triggerUpload()"
               >
-                Cập nhật mô tả
+                <span class="pd__action-icon"><AppIcon name="fileUp" :size="15" :stroke-width="1.75" /></span>
+                <span class="pd__action-label">{{ documentsTab?.uploading ? 'Đang tải…' : 'Tải tệp' }}</span>
               </button>
+            </div>
+
+            <div v-else-if="showFeedbackAction" class="pd__action-group" aria-label="Phản hồi">
+              <button type="button" class="pd__action pd__action--primary" @click="feedbackTab?.focusComposer()">
+                <span class="pd__action-icon"><AppIcon name="star" :size="15" :stroke-width="1.75" /></span>
+                <span class="pd__action-label">Viết phản hồi</span>
+              </button>
+            </div>
+
+            <div v-else-if="showReportAction" class="pd__action-group" aria-label="Báo cáo">
               <button
-                v-if="canEdit"
+                v-if="canViewReports"
                 type="button"
-                class="pd__menu-item"
-                role="menuitem"
-                @click="openAction('baseline')"
+                class="pd__action"
+                @click="goReports"
               >
-                Chốt baseline
+                <span class="pd__action-icon"><AppIcon name="fileText" :size="15" :stroke-width="1.75" /></span>
+                <span class="pd__action-label">Báo cáo phòng ban</span>
               </button>
+              <button type="button" class="pd__action pd__action--primary" @click="reportTab?.exportCsv()">
+                <span class="pd__action-icon"><AppIcon name="fileSpreadsheet" :size="15" :stroke-width="1.75" /></span>
+                <span class="pd__action-label">Xuất CSV</span>
+              </button>
+            </div>
+
+            <span v-if="showContextActions && showMoreMenu" class="pd__action-split" aria-hidden="true" />
+
+            <div v-if="showMoreMenu" ref="moreMenuRoot" class="pd__action-wrap">
               <button
-                v-if="canDuplicate"
                 type="button"
-                class="pd__menu-item"
-                role="menuitem"
-                @click="openAction('duplicate')"
+                class="pd__action pd__action--icon"
+                :class="{ 'pd__action--open': moreMenuOpen }"
+                aria-label="Thêm thao tác"
+                :aria-expanded="moreMenuOpen ? 'true' : 'false'"
+                aria-haspopup="menu"
+                @click="toggleMoreMenu"
               >
-                Nhân bản dự án
+                <span class="pd__action-icon"><AppIcon name="moreVertical" :size="15" :stroke-width="1.75" /></span>
               </button>
-              <button
-                v-if="canEdit"
-                type="button"
-                class="pd__menu-item"
-                role="menuitem"
-                @click="goEdit(); moreMenuOpen = false"
+              <div
+                v-if="moreMenuOpen"
+                class="pd__menu"
+                :class="{ 'pd__menu--up': moreMenuPlacement.up, 'pd__menu--right': moreMenuPlacement.right }"
+                role="menu"
+                aria-label="Thao tác dự án"
               >
-                Sửa
-              </button>
-              <button
-                v-if="canEdit"
-                type="button"
-                class="pd__menu-item pd__menu-item--danger"
-                role="menuitem"
-                @click="deleteProject(); moreMenuOpen = false"
-              >
-                Xoá
-              </button>
+                <button
+                  v-if="canEdit"
+                  type="button"
+                  class="pd__menu-item"
+                  role="menuitem"
+                  @click="openAction('dates', { focus: 'planned' })"
+                >
+                  <AppIcon name="calendar" :size="14" :stroke-width="1.75" />
+                  Cập nhật thời gian
+                </button>
+                <button
+                  v-if="canEdit"
+                  type="button"
+                  class="pd__menu-item"
+                  role="menuitem"
+                  @click="openAction('description')"
+                >
+                  <AppIcon name="fileText" :size="14" :stroke-width="1.75" />
+                  Cập nhật mô tả
+                </button>
+                <button
+                  v-if="canEdit"
+                  type="button"
+                  class="pd__menu-item"
+                  role="menuitem"
+                  @click="openAction('baseline')"
+                >
+                  <AppIcon name="flag" :size="14" :stroke-width="1.75" />
+                  Chốt baseline
+                </button>
+                <span v-if="canEdit" class="pd__menu-sep" />
+                <button
+                  v-if="canEdit"
+                  type="button"
+                  class="pd__menu-item"
+                  role="menuitem"
+                  @click="openAction('tabs_config')"
+                >
+                  <AppIcon name="sliders" :size="14" :stroke-width="1.75" />
+                  Cấu hình tab hiển thị
+                </button>
+                <button
+                  v-if="canDuplicate"
+                  type="button"
+                  class="pd__menu-item"
+                  role="menuitem"
+                  @click="openAction('duplicate')"
+                >
+                  <AppIcon name="copy" :size="14" :stroke-width="1.75" />
+                  Nhân bản dự án
+                </button>
+                <button
+                  v-if="canEdit"
+                  type="button"
+                  class="pd__menu-item"
+                  role="menuitem"
+                  @click="goEdit(); moreMenuOpen = false"
+                >
+                  <AppIcon name="pencil" :size="14" :stroke-width="1.75" />
+                  Sửa
+                </button>
+                <span v-if="canEdit" class="pd__menu-sep" />
+                <button
+                  v-if="canEdit"
+                  type="button"
+                  class="pd__menu-item pd__menu-item--danger"
+                  role="menuitem"
+                  @click="deleteProject(); moreMenuOpen = false"
+                >
+                  <AppIcon name="trash" :size="14" :stroke-width="1.75" />
+                  Xoá
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -780,8 +978,10 @@ const performers = computed(() => {
 
       <div
         class="pd__layout"
+        id="pd-tab-panel"
+        role="tabpanel"
         :class="{
-          'pd__layout--docs': activeTab === 'attachments' || activeTab === 'discussion' || activeTab === 'tasks',
+          'pd__layout--docs': activeTab === 'attachments' || activeTab === 'discussion' || activeTab === 'tasks' || activeTab === 'test_case' || activeTab === 'feedback' || activeTab === 'report',
           'pd__layout--general': activeTab === 'general',
         }"
       >
@@ -972,25 +1172,39 @@ const performers = computed(() => {
             />
           </template>
 
-          <!-- Tab: Báo cáo -->
+          <!-- Tab: Báo cáo — sheet nhân sự × việc, kín khung như Đánh giá -->
           <template v-else-if="activeTab === 'report'">
-            <section class="pd__card">
-              <header class="pd__section-head">
-                <span class="pd__section-icon pd__section-icon--info"><AppIcon name="fileText" :size="14" /></span>
-                <h3 class="pd__section-title">Báo cáo</h3>
-              </header>
-              <p class="pd__empty-inline">Dự án chưa có báo cáo nào.</p>
+            <section class="pd__card pd__card--gantt">
+              <ProjectReportTab
+                ref="reportTab"
+                :project="project"
+                :tree="taskTree"
+                :loading="tasksLoading"
+              />
             </section>
           </template>
 
           <!-- Tab: Đính kèm -->
           <template v-else-if="activeTab === 'attachments'">
-            <ProjectDocumentsTab :project="project" :can-edit="canEdit" @changed="onDocumentsChanged" />
+            <ProjectDocumentsTab ref="documentsTab" :project="project" :can-edit="canEdit" @changed="onDocumentsChanged" />
+          </template>
+
+          <!-- Tab: Testcase -->
+          <template v-else-if="activeTab === 'test_case'">
+            <ProjectTestcaseTab ref="testcaseTab" :project="project" :can-manage="canEdit" @count-changed="testCaseCount = $event" />
+          </template>
+
+          <!-- Tab: Phản hồi -->
+          <template v-else-if="activeTab === 'feedback'">
+            <ProjectFeedbackTab ref="feedbackTab" :project="project" @count-changed="feedbackCount = $event" />
           </template>
 
         </div>
 
-        <div v-if="activeTab !== 'attachments' && activeTab !== 'discussion' && activeTab !== 'tasks'" class="pd__col pd__col--side">
+        <div
+          v-if="activeTab !== 'attachments' && activeTab !== 'discussion' && activeTab !== 'tasks' && activeTab !== 'test_case' && activeTab !== 'feedback' && activeTab !== 'report'"
+          class="pd__col pd__col--side"
+        >
           <template v-if="activeTab === 'general'">
             <section class="pd__card pd__card--lead">
               <header class="pd__section-head">
@@ -1106,23 +1320,36 @@ const performers = computed(() => {
 
 .pd__header-btn {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: var(--space-2);
+  gap: 0.375rem;
   height: 2rem;
-  padding: 0 0.75rem;
+  padding: 0 0.625rem;
   border: none;
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-family-base);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 500;
+  white-space: nowrap;
   box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
   cursor: pointer;
 }
 
 .pd__header-btn:hover {
   background: var(--color-surface-muted);
+}
+
+.pd__header-btn:disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.pd__header-btn--on {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
 }
 
 .pd__empty {
@@ -1151,35 +1378,24 @@ const performers = computed(() => {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.pd__toolbar {
+.pd__chrome {
   display: flex;
+  flex-direction: row;
   align-items: stretch;
-  justify-content: space-between;
-  flex-wrap: nowrap;
-  gap: var(--space-4);
   width: auto;
   margin: var(--space-3) calc(var(--space-5) * -1) 0;
-  padding: 0 var(--space-5);
-  min-height: 2.75rem;
-  /* KHÔNG overflow ở toolbar — .pd__menu (dropdown "Thêm việc"/"Thêm thao
-     tác") định vị absolute bên trong .pd__actions, con của toolbar này; nếu
-     toolbar tự cuộn thì overflow-x: auto kéo theo overflow-y: auto (theo
-     spec CSS), cắt luôn dropdown theo chiều dọc. Chỉ .pd__tabs (bên dưới)
-     mới cần tự cuộn ngang khi nhiều tab. */
   background: var(--color-surface);
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.pd__tabs {
+.pd__nav {
   display: flex;
   flex: 1;
   align-items: stretch;
   gap: 0;
   min-width: 0;
-  padding: 0;
+  padding: 0 var(--space-5);
   overflow-x: auto;
-  border-radius: 0;
-  background: transparent;
 }
 
 .pd__tab {
@@ -1205,6 +1421,11 @@ const performers = computed(() => {
   background: transparent;
 }
 
+.pd__tab:focus-visible {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: -2px;
+}
+
 .pd__tab--active {
   color: var(--color-secondary-700);
   background: transparent;
@@ -1219,6 +1440,20 @@ const performers = computed(() => {
   bottom: 0;
   height: 2px;
   background: var(--color-secondary);
+}
+
+.pd__tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.875rem;
+  height: 0.875rem;
+  color: inherit;
+  opacity: 0.75;
+}
+
+.pd__tab--active .pd__tab-icon {
+  opacity: 1;
 }
 
 .pd__tab-count {
@@ -1241,13 +1476,44 @@ const performers = computed(() => {
   color: var(--color-secondary-700);
 }
 
+.pd__toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: var(--space-3);
+  min-height: 0;
+  padding: 0 var(--space-5) 0 var(--space-2);
+  /* KHÔNG overflow ở toolbar — .pd__menu định vị absolute; overflow-x: auto
+     kéo theo overflow-y và cắt dropdown. */
+  background: transparent;
+}
+
 .pd__actions {
   display: flex;
   flex-shrink: 0;
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
+  gap: 0.375rem;
+  margin-left: auto;
+}
+
+.pd__action-group {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 0.125rem;
+}
+
+.pd__action-split {
+  flex-shrink: 0;
+  width: 1px;
+  align-self: stretch;
+  margin: 0.25rem 0.125rem;
+  background: var(--color-border);
 }
 
 .pd__action-wrap {
@@ -1302,6 +1568,8 @@ const performers = computed(() => {
 .pd__menu-item {
   display: flex;
   width: 100%;
+  align-items: center;
+  gap: 0.5rem;
   padding: 0.5rem 0.875rem;
   border: none;
   background: transparent;
@@ -1325,8 +1593,15 @@ const performers = computed(() => {
   background: var(--color-danger-tint-bg);
 }
 
+.pd__menu-sep {
+  display: block;
+  height: 1px;
+  margin: 0.375rem 0;
+  box-shadow: inset 0 -1px 0 var(--color-border);
+}
+
 .pd__action:hover:not(:disabled) {
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
   color: var(--color-text);
 }
 
@@ -1342,6 +1617,12 @@ const performers = computed(() => {
 }
 
 .pd__action--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  color: var(--color-on-primary);
+}
+
+.pd__action--primary.pd__action--open,
+.pd__action--primary.pd__action--open:hover:not(:disabled) {
   background: var(--color-primary-hover);
   color: var(--color-on-primary);
 }
@@ -2184,10 +2465,19 @@ const performers = computed(() => {
     padding: 0 var(--space-3) var(--space-3);
   }
 
-  .pd__toolbar {
+  .pd__chrome {
     margin-left: calc(var(--space-3) * -1);
     margin-right: calc(var(--space-3) * -1);
-    padding: 0 var(--space-3);
+  }
+
+  .pd__nav {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+  }
+
+  .pd__toolbar {
+    padding-left: var(--space-2);
+    padding-right: var(--space-3);
   }
 
   .pd__stats {

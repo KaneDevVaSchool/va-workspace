@@ -35,6 +35,9 @@ class ProjectService
 {
     private const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
+    /** 5 tab tuỳ chọn bật/tắt được riêng theo dự án — Chi tiết/Công việc là cốt lõi, không có trong danh sách này. */
+    public const OPTIONAL_TABS = ['discussion', 'report', 'attachments', 'test_case', 'feedback'];
+
     public function __construct(
         private readonly ProjectRepositoryInterface $projects,
         private readonly PermissionService $permissions,
@@ -196,6 +199,20 @@ class ProjectService
         $provided = $row['provided_fields'] ?? [];
 
         return array_intersect_key($row, array_flip($provided));
+    }
+
+    /**
+     * Cấu hình tab tuỳ chọn hiện/ẩn riêng cho 1 dự án (menu "Thao tác" →
+     * "Cấu hình tab hiển thị") — chỉ chấp nhận key trong OPTIONAL_TABS,
+     * loại bỏ mọi key lạ để tránh rác dữ liệu JSON.
+     *
+     * @param  string[]  $disabledTabs
+     */
+    public function updateTabConfig(Project $project, array $disabledTabs): Project
+    {
+        $clean = array_values(array_intersect(self::OPTIONAL_TABS, $disabledTabs));
+
+        return $this->projects->update($project, ['disabled_tabs' => $clean]);
     }
 
     /** true nếu user được phép sửa executing_department_id của dự án này. */
@@ -951,6 +968,7 @@ class ProjectService
             'hide_cross_tasks_from_assignees' => (bool) $project->hide_cross_tasks_from_assignees,
             'hide_child_tasks_from_followers' => (bool) $project->hide_child_tasks_from_followers,
             'constrain_task_dates_to_project' => (bool) $project->constrain_task_dates_to_project,
+            'disabled_tabs' => $project->disabled_tabs ?? [],
             'avatar_path' => $project->avatar_path,
             'avatar_url' => $project->avatar_path ? Storage::disk('public')->url($project->avatar_path) : null,
             'evaluation_score' => $project->evaluation_score !== null ? (float) $project->evaluation_score : null,

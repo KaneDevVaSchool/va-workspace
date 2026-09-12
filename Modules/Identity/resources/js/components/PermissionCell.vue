@@ -1,31 +1,30 @@
 <script setup>
 //
-// 1 ô trong ma trận phân quyền — 3 trạng thái (cấp/không cấp/khoá) + chấm nhỏ
-// khi có chỉnh riêng (override tại scope hiện tại hoặc toàn hệ thống).
-// Click ô thường = yêu cầu đổi cấp/thu hồi (cha hiện hộp thoại xác nhận).
-// Click ô khoá = mở "Chi tiết quyền". Không đổi ngay, không double-click.
-// Dùng box-shadow cho dấu hiệu đang chọn, KHÔNG dùng border theo hướng.
+// 1 ô trong ma trận phân quyền — cấp / chưa cấp / khoá. Chấm nhỏ khi có
+// chỉnh riêng. Click mở chi tiết (cha xử lý cấp/thu hồi từ panel).
 //
 import AppIcon from '@/components/AppIcon.vue';
 
 const props = defineProps({
-  cell: { type: Object, required: true }, // { default, effective, reserved, global_override, scoped_override, effective_source }
+  cell: { type: Object, required: true },
   loading: { type: Boolean, default: false },
   active: { type: Boolean, default: false },
 });
-const emit = defineEmits(['toggle', 'inspect']);
+const emit = defineEmits(['inspect']);
 
 function hasOverride(cell) {
   return cell.global_override !== null || cell.scoped_override !== null;
 }
 
+function cellLabel(cell) {
+  if (cell.reserved) return 'Quyền hệ thống';
+  if (cell.effective) return hasOverride(cell) ? 'Được cấp, có sửa riêng' : 'Được cấp';
+  return hasOverride(cell) ? 'Chưa cấp, có sửa riêng' : 'Chưa cấp';
+}
+
 function onClick() {
-  if (props.cell.reserved) {
-    emit('inspect');
-    return;
-  }
   if (props.loading) return;
-  emit('toggle');
+  emit('inspect');
 }
 </script>
 
@@ -41,16 +40,16 @@ function onClick() {
       'perm-cell--active': active,
     }"
     :disabled="loading"
-    :aria-label="cell.reserved ? 'Quyền hệ thống, không thể đổi. Bấm để xem chi tiết' : (cell.effective ? 'Đang được cấp. Bấm để thu hồi' : 'Không được cấp. Bấm để cấp')"
-    @click="onClick"
+    :aria-label="cellLabel(cell)"
+    :aria-pressed="active"
+    @click.stop="onClick"
   >
     <span class="perm-cell__mark">
       <template v-if="loading">
         <span class="perm-cell__spinner" />
       </template>
-      <AppIcon v-else-if="cell.reserved" name="lock" :size="16" />
-      <AppIcon v-else-if="cell.effective" name="check" :size="18" />
-      <AppIcon v-else name="minus" :size="18" />
+      <AppIcon v-else-if="cell.reserved" name="lock" :size="15" />
+      <AppIcon v-else-if="cell.effective" name="check" :size="16" />
     </span>
     <span v-if="hasOverride(cell) && !cell.reserved" class="perm-cell__override-dot" aria-hidden="true" />
   </button>
@@ -60,11 +59,10 @@ function onClick() {
 .perm-cell {
   position: relative;
   width: 100%;
-  height: 2.5rem;
+  height: 2.25rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -80,16 +78,20 @@ function onClick() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
   line-height: 1;
 }
 
 .perm-cell--granted .perm-cell__mark {
   color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  border-radius: var(--radius-full);
 }
 
 .perm-cell--denied .perm-cell__mark {
-  color: var(--color-danger);
-  opacity: 0.85;
+  box-shadow: inset 0 0 0 1.5px var(--color-border);
+  border-radius: var(--radius-full);
 }
 
 .perm-cell--reserved .perm-cell__mark {
@@ -98,8 +100,8 @@ function onClick() {
 
 .perm-cell__override-dot {
   position: absolute;
-  top: 0.3125rem;
-  right: 0.3125rem;
+  top: 0.25rem;
+  right: 0.25rem;
   width: 0.375rem;
   height: 0.375rem;
   border-radius: var(--radius-full);
@@ -119,7 +121,6 @@ function onClick() {
   width: 0.875rem;
   height: 0.875rem;
   border-radius: var(--radius-full);
-  /* Vòng xoay dùng conic-gradient thay vì border-top-color (cấm border theo hướng, xem CLAUDE.md mục 2) */
   background: conic-gradient(var(--color-primary) 0deg, var(--color-primary) 90deg, var(--color-border) 90deg 360deg);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
@@ -134,5 +135,11 @@ function onClick() {
 
 .perm-cell:hover:not(:disabled) {
   background: var(--color-surface-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .perm-cell__spinner {
+    animation: none;
+  }
 }
 </style>

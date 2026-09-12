@@ -12,11 +12,13 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Cú pháp trên Route:
  *   Route::middleware('permission:task.delegate')
+ *   Route::middleware('permission:task.view|task.view_assigned')  // OR nhiều key
  *   Route::middleware('permission:project.create,department')
  *   Route::middleware('permission:project.create,department,{dept_id}')
  *
  * Tham số:
- *   $key       — permission key, vd. 'task.delegate'
+ *   $key       — permission key, vd. 'task.delegate'. Nhiều key cách nhau
+ *                bằng `|` nghĩa là thoả 1 trong các key (OR).
  *   $scopeType — 'global' | 'department' | 'team' (mặc định 'global')
  *   $scopeIdParam — tên route parameter chứa scope ID, vd. 'department'
  *                   middleware tự lấy $request->route($scopeIdParam) nếu có.
@@ -47,10 +49,17 @@ class EnsureHasPermission
             $scopeId = $raw !== null ? (int) $raw : null;
         }
 
-        if (! $this->permissions->allows($user, $key, $scopeType, $scopeId)) {
-            abort(403, "Bạn không có quyền thực hiện hành động này ({$key}).");
+        $keys = array_values(array_filter(array_map('trim', explode('|', $key))));
+        if ($keys === []) {
+            abort(403, 'Bạn không có quyền thực hiện hành động này.');
         }
 
-        return $next($request);
+        foreach ($keys as $permissionKey) {
+            if ($this->permissions->allows($user, $permissionKey, $scopeType, $scopeId)) {
+                return $next($request);
+            }
+        }
+
+        abort(403, 'Bạn không có quyền thực hiện hành động này.');
     }
 }

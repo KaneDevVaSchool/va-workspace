@@ -532,6 +532,8 @@ const confirmDescription = computed(() => {
   }
   return `Xoá “${fileName(target.item)}”? Thao tác này không hoàn tác được.`;
 });
+
+defineExpose({ triggerUpload, openCreateFolder, openAddLink, uploading });
 </script>
 
 <template>
@@ -557,34 +559,6 @@ const confirmDescription = computed(() => {
           <h3 class="docs__title">{{ title }}</h3>
         </div>
         <div class="docs__actions docs__actions--always">
-          <button
-            v-if="canEdit"
-            type="button"
-            class="docs__text-btn"
-            @click="openCreateFolder"
-          >
-            <AppIcon name="folderPlus" :size="15" :stroke-width="1.75" />
-            Thư mục
-          </button>
-          <button
-            v-if="canEdit"
-            type="button"
-            class="docs__text-btn"
-            :disabled="uploading"
-            @click="triggerUpload"
-          >
-            <AppIcon name="fileUp" :size="15" :stroke-width="1.75" />
-            {{ uploading ? 'Đang tải…' : 'Tải tệp' }}
-          </button>
-          <button
-            v-if="canEdit"
-            type="button"
-            class="docs__icon-btn"
-            aria-label="Thêm link Drive"
-            @click="openAddLink"
-          >
-            <AppIcon name="link" :size="16" :stroke-width="1.75" />
-          </button>
           <button
             type="button"
             class="docs__icon-btn"

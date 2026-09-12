@@ -985,21 +985,19 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div class="task-detail__actions">
-          <template v-if="canReportComplete">
-            <button
-              type="button"
-              class="task-detail__action task-detail__action--success"
-              :disabled="reportCompleteSaving"
-              aria-label="Báo cáo hoàn thành công việc"
-              @click="reportComplete"
-            >
-              <span class="task-detail__action-icon">
-                <AppIcon name="check" :size="18" :stroke-width="1.75" />
-              </span>
-              <span class="task-detail__action-label">{{ reportCompleteSaving ? 'Đang gửi…' : 'Báo cáo hoàn thành' }}</span>
-            </button>
-            <span class="task-detail__action-sep" aria-hidden="true" />
-          </template>
+          <button
+            v-if="canReportComplete"
+            type="button"
+            class="task-detail__action task-detail__action--success"
+            :disabled="reportCompleteSaving"
+            aria-label="Báo cáo hoàn thành công việc"
+            @click="reportComplete"
+          >
+            <span class="task-detail__action-icon">
+              <AppIcon name="check" :size="15" :stroke-width="1.75" />
+            </span>
+            <span class="task-detail__action-label">{{ reportCompleteSaving ? 'Đang gửi…' : 'Báo cáo hoàn thành' }}</span>
+          </button>
           <div ref="statusMenuRoot" class="task-detail__action-wrap">
             <button
               type="button"
@@ -1013,12 +1011,11 @@ onBeforeUnmount(() => {
               @click="toggleStatusMenu"
             >
               <span class="task-detail__action-icon">
-                <AppIcon name="pauseCircle" :size="18" :stroke-width="1.75" />
+                <AppIcon name="pauseCircle" :size="15" :stroke-width="1.75" />
               </span>
               <span class="task-detail__action-label">{{ statusSaving ? 'Đang đổi…' : 'Trạng thái' }}</span>
             </button>
           </div>
-          <span class="task-detail__action-sep" aria-hidden="true" />
           <button
             type="button"
             class="task-detail__action"
@@ -1026,11 +1023,10 @@ onBeforeUnmount(() => {
             @click="canEdit ? openWorklogForm() : focusWorklog()"
           >
             <span class="task-detail__action-icon">
-              <AppIcon name="clock" :size="18" :stroke-width="1.75" />
+              <AppIcon name="clock" :size="15" :stroke-width="1.75" />
             </span>
             <span class="task-detail__action-label">Thêm giờ làm</span>
           </button>
-          <span class="task-detail__action-sep" aria-hidden="true" />
           <button
             type="button"
             class="task-detail__action"
@@ -1039,22 +1035,20 @@ onBeforeUnmount(() => {
             @click="openPeopleModal"
           >
             <span class="task-detail__action-icon">
-              <AppIcon name="userPlus" :size="18" :stroke-width="1.75" />
+              <AppIcon name="userPlus" :size="15" :stroke-width="1.75" />
             </span>
             <span class="task-detail__action-label">Thực hiện</span>
           </button>
           <template v-if="canEdit">
-            <span class="task-detail__action-sep" aria-hidden="true" />
             <button type="button" class="task-detail__action" aria-label="Chỉnh sửa công việc" @click="goEdit">
               <span class="task-detail__action-icon">
-                <AppIcon name="pencil" :size="18" :stroke-width="1.75" />
+                <AppIcon name="pencil" :size="15" :stroke-width="1.75" />
               </span>
               <span class="task-detail__action-label">Chỉnh sửa</span>
             </button>
-            <span class="task-detail__action-sep" aria-hidden="true" />
             <button type="button" class="task-detail__action task-detail__action--danger" aria-label="Xoá công việc" @click="confirmingDelete = true">
               <span class="task-detail__action-icon">
-                <AppIcon name="trash" :size="18" :stroke-width="1.75" />
+                <AppIcon name="trash" :size="15" :stroke-width="1.75" />
               </span>
               <span class="task-detail__action-label">Xoá</span>
             </button>
@@ -1062,12 +1056,36 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
+      <div class="task-detail__summary">
+        <span class="task-detail__chip" :class="`task-detail__chip--${TASK_STATUS_TONES[task.status] || 'tertiary'}`">
+          {{ statusLabel(task.status) }}
+        </span>
+        <span class="task-detail__summary-item">
+          <AppIcon name="flag" :size="14" :class="`task-detail__flag--${priorityTone(task.priority)}`" />
+          {{ priorityLabel(task.priority) }}
+        </span>
+        <span v-if="evalProgressPercent != null" class="task-detail__summary-item task-detail__summary-item--progress">
+          <span class="task-detail__summary-track" aria-hidden="true">
+            <span class="task-detail__summary-bar" :style="{ width: `${evalProgressPercent}%` }" />
+          </span>
+          {{ evalProgressPercent }}%
+        </span>
+        <span class="task-detail__summary-item">
+          <AppIcon name="calendar" :size="14" />
+          {{ plannedTimeLabel }}
+        </span>
+        <span v-if="task.assignee" class="task-detail__summary-item">
+          <UserAvatarTip :user="task.assignee" label="Người thực hiện" />
+          {{ task.assignee.name }}
+        </span>
+      </div>
+
       <div class="task-detail__layout">
         <div class="task-detail__col">
-      <section class="task-detail__card task-detail__card--umber">
+      <section class="task-detail__card task-detail__card--lead">
         <header class="task-detail__section-head">
-          <span class="task-detail__section-icon task-detail__section-icon--umber" aria-hidden="true">
-            <AppIcon :name="infoTabMeta.icon" :size="16" :stroke-width="1.75" />
+          <span class="task-detail__section-icon task-detail__section-icon--primary" aria-hidden="true">
+            <AppIcon :name="infoTabMeta.icon" :size="14" :stroke-width="1.75" />
           </span>
           <h3 class="task-detail__section-title">{{ infoTabMeta.title }}</h3>
         </header>
@@ -1367,7 +1385,7 @@ onBeforeUnmount(() => {
           <header class="task-detail__section-head task-detail__section-head--worklog">
             <div class="task-detail__worklog-heading">
               <span class="task-detail__worklog-icon" aria-hidden="true">
-                <AppIcon name="clock" :size="16" :stroke-width="1.75" />
+                <AppIcon name="clock" :size="14" :stroke-width="1.75" />
               </span>
               <div>
                 <h3 class="task-detail__section-title">Nhật ký giờ làm</h3>
@@ -1409,12 +1427,14 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-          <section class="task-detail__card task-detail__card--tertiary">
+          <div class="task-detail__pair">
+          <section class="task-detail__card">
             <header class="task-detail__section-head">
               <span class="task-detail__section-icon task-detail__section-icon--tertiary" aria-hidden="true">
-                <AppIcon name="paperclip" :size="16" :stroke-width="1.75" />
+                <AppIcon name="paperclip" :size="14" :stroke-width="1.75" />
               </span>
-              <h3 class="task-detail__section-title">Đính kèm ({{ attachments.length }})</h3>
+              <h3 class="task-detail__section-title">Đính kèm</h3>
+              <span class="task-detail__section-count">{{ attachments.length }}</span>
               <button
                 v-if="canEdit"
                 type="button"
@@ -1499,10 +1519,10 @@ onBeforeUnmount(() => {
             <p v-else class="task-detail__empty">Chưa có tệp đính kèm.</p>
           </section>
 
-          <section class="task-detail__card task-detail__card--gold">
+          <section class="task-detail__card">
             <header class="task-detail__section-head">
               <span class="task-detail__section-icon task-detail__section-icon--gold" aria-hidden="true">
-                <AppIcon name="starFilled" :size="16" :stroke-width="1.75" />
+                <AppIcon name="starFilled" :size="14" :stroke-width="1.75" />
               </span>
               <h3 class="task-detail__section-title">Kết quả đánh giá</h3>
               <button
@@ -1605,14 +1625,16 @@ onBeforeUnmount(() => {
             </dl>
             <p v-else class="task-detail__empty">Không tìm thấy kết quả nào</p>
           </section>
+          </div>
         </div>
         <div class="task-detail__col task-detail__col--discuss">
           <section class="task-detail__card task-detail__card--discuss">
             <header class="task-detail__section-head">
               <span class="task-detail__section-icon task-detail__section-icon--tertiary" aria-hidden="true">
-                <AppIcon name="messageCircle" :size="16" :stroke-width="1.75" />
+                <AppIcon name="messageCircle" :size="14" :stroke-width="1.75" />
               </span>
-              <h3 class="task-detail__section-title">Thảo luận ({{ commentsCount }})</h3>
+              <h3 class="task-detail__section-title">Thảo luận</h3>
+              <span class="task-detail__section-count">{{ commentsCount }}</span>
             </header>
             <CommentList
               endpoint-base="/api/project/tasks"
@@ -2005,11 +2027,7 @@ onBeforeUnmount(() => {
 .task-detail {
   position: relative;
   isolation: isolate;
-  height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  min-height: 100%;
   padding: 0 var(--space-5) var(--space-4);
   background: linear-gradient(180deg, var(--color-tertiary-50) 0%, var(--color-surface-muted) 22rem);
 }
@@ -2050,55 +2068,49 @@ onBeforeUnmount(() => {
 .task-detail__page {
   position: relative;
   z-index: 1;
-  flex: 1;
-  min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--space-4);
-  overflow: hidden;
 }
 
 .task-detail__layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(22rem, 1fr);
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  align-items: start;
   gap: var(--space-4);
-  min-height: 0;
 }
 
 .task-detail__col {
   display: grid;
-  align-content: start;
   gap: var(--space-4);
   min-width: 0;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.task-detail__col::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
 }
 
 .task-detail__col--discuss {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
+  position: sticky;
+  top: var(--space-4);
   z-index: 1;
-  overflow: visible;
+  width: 20rem;
+}
+
+.task-detail__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.task-detail__pair > .task-detail__card {
+  min-width: 0;
 }
 
 .task-detail__toolbar {
   display: flex;
   align-items: stretch;
   justify-content: space-between;
+  flex-wrap: nowrap;
   gap: var(--space-4);
-  min-height: 3.25rem;
-  margin: 0 calc(var(--space-5) * -1);
+  min-height: 2.75rem;
+  margin: var(--space-3) calc(var(--space-5) * -1) 0;
   padding: 0 var(--space-5);
   background: var(--color-surface);
   box-shadow: 0 1px 0 var(--color-border);
@@ -2106,22 +2118,26 @@ onBeforeUnmount(() => {
 
 .task-detail__tabs {
   display: flex;
-  align-items: flex-end;
-  gap: var(--space-5);
+  flex: 1;
+  align-items: stretch;
+  gap: 0;
   min-width: 0;
   overflow-x: auto;
 }
 
 .task-detail__tab {
   position: relative;
+  display: inline-flex;
   flex-shrink: 0;
-  padding: 0.875rem 0 0.7rem;
+  align-items: center;
+  padding: 0.7rem 0.875rem;
   border: none;
   background: transparent;
   color: var(--color-text-muted);
   font-family: var(--font-family-base);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -2130,14 +2146,14 @@ onBeforeUnmount(() => {
 }
 
 .task-detail__tab--active {
-  color: var(--color-text);
+  color: var(--color-secondary-700);
 }
 
 .task-detail__tab--active::after {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 0.75rem;
+  right: 0.75rem;
   bottom: 0;
   height: 2px;
   background: var(--color-secondary);
@@ -2146,36 +2162,43 @@ onBeforeUnmount(() => {
 .task-detail__actions {
   display: flex;
   flex-shrink: 0;
+  flex-wrap: nowrap;
   align-items: center;
-  overflow-x: auto;
+  justify-content: flex-end;
+  gap: 0.125rem;
 }
 
 .task-detail__action-wrap {
   position: relative;
+  flex-shrink: 0;
 }
 
 .task-detail__action {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  gap: 0.125rem;
-  min-width: 3.75rem;
-  min-height: 3.25rem;
-  padding: 0.25rem 0.625rem;
+  gap: 0.3125rem;
+  height: 2rem;
+  padding: 0 0.625rem;
   border: none;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-text);
   font-family: var(--font-family-base);
   white-space: nowrap;
   cursor: pointer;
 }
 
-.task-detail__action:hover:not(:disabled),
-.task-detail__action--open {
+.task-detail__action:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.task-detail__action--open,
+.task-detail__action--open:hover:not(:disabled) {
+  background: var(--color-secondary-surface);
   color: var(--color-secondary-700);
-  background: color-mix(in srgb, var(--color-secondary) 8%, transparent);
 }
 
 .task-detail__action:disabled {
@@ -2187,21 +2210,18 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 0.9375rem;
+  height: 0.9375rem;
 }
 
 .task-detail__action-label {
-  font-size: 0.6875rem;
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 600;
   line-height: 1.2;
 }
 
-.task-detail__action-sep {
-  width: 1px;
-  height: 1.5rem;
-  flex-shrink: 0;
-  background: var(--color-border);
+.task-detail__action--danger {
+  color: var(--color-danger-tint-fg);
 }
 
 .task-detail__action--danger:hover:not(:disabled) {
@@ -2210,12 +2230,58 @@ onBeforeUnmount(() => {
 }
 
 .task-detail__action--success {
-  color: var(--color-success-tint-fg);
   background: var(--color-success-tint-bg);
+  color: var(--color-success-tint-fg);
 }
 
 .task-detail__action--success:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-success) 18%, var(--color-success-tint-bg));
+}
+
+.task-detail__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+  padding: 0.75rem var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.task-detail__summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.task-detail__summary-item--progress {
+  flex: 1 1 8rem;
+  max-width: 14rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.task-detail__summary-track {
+  display: block;
+  flex: 1;
+  min-width: 4rem;
+  height: 0.375rem;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+}
+
+.task-detail__summary-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-secondary);
 }
 
 .task-detail__status-dot,
@@ -2291,46 +2357,37 @@ onBeforeUnmount(() => {
 }
 
 .task-detail__card {
-  padding: var(--space-4);
+  padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s ease;
 }
 
-.task-detail__card:hover {
-  box-shadow: var(--shadow-md);
+.task-detail__card--lead {
+  position: relative;
+  padding-left: calc(var(--space-2) + 3px + var(--space-5));
 }
 
-.task-detail__card--tertiary {
-  background: linear-gradient(165deg, var(--color-tertiary-50) 0%, var(--color-surface) 46%);
-  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--color-tertiary-100);
-}
-
-.task-detail__card--gold {
-  background: linear-gradient(165deg, var(--color-gold-50) 0%, var(--color-surface) 46%);
-  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--color-gold-100);
-}
-
-.task-detail__card--umber {
-  background: linear-gradient(165deg, var(--color-umber-50) 0%, var(--color-surface) 46%);
-  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--color-umber-100);
+.task-detail__card--lead::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-primary);
 }
 
 .task-detail__card--discuss {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  max-height: min(32rem, calc(100vh - 8rem));
+  overflow: hidden;
 }
 
 .task-detail__card--discuss .task-detail__section-head {
   flex-shrink: 0;
-}
-
-.task-detail__col--discuss .task-detail__card--discuss {
-  height: 100%;
 }
 
 .task-detail__section-icon {
@@ -2338,35 +2395,52 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: var(--radius-md);
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.task-detail__section-icon--primary {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
 }
 
 .task-detail__section-icon--tertiary {
   background: var(--color-tertiary-surface);
   color: var(--color-tertiary-600);
-  box-shadow: inset 0 0 0 1px var(--color-tertiary-100);
 }
 
 .task-detail__section-icon--gold {
   background: var(--color-gold-surface);
   color: var(--color-gold-600);
-  box-shadow: inset 0 0 0 1px var(--color-gold-100);
 }
 
 .task-detail__section-icon--umber {
   background: var(--color-umber-surface);
   color: var(--color-umber-600);
-  box-shadow: inset 0 0 0 1px var(--color-umber-100);
+}
+
+.task-detail__section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .task-detail__card--worklog {
   position: relative;
   padding: 0;
   overflow: hidden;
-  background: linear-gradient(165deg, var(--color-secondary-50) 0%, var(--color-surface) 42%);
-  box-shadow: var(--shadow-md), inset 0 0 0 1px var(--color-secondary-100);
 }
 
 .task-detail__wm-defs {
@@ -2381,11 +2455,11 @@ onBeforeUnmount(() => {
   top: -10%;
   right: -6%;
   z-index: 0;
-  width: 15rem;
+  width: 12rem;
   height: auto;
-  max-width: 42%;
+  max-width: 36%;
   pointer-events: none;
-  opacity: 0.07;
+  opacity: 0.04;
   transform: rotate(-4deg);
 }
 
@@ -2413,12 +2487,11 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: var(--radius-md);
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-sm);
   background: var(--color-secondary-surface);
   color: var(--color-secondary-600);
-  box-shadow: inset 0 0 0 1px var(--color-secondary-100);
 }
 
 .task-detail__worklog-total {
@@ -2494,14 +2567,7 @@ onBeforeUnmount(() => {
   gap: var(--space-3);
   padding: 0.75rem var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
-}
-
-.task-detail__worklog-row:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
+  background: var(--color-surface-muted);
 }
 
 .task-detail__worklog-hours {
@@ -2558,10 +2624,9 @@ onBeforeUnmount(() => {
 .task-detail__section-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin: 0 0 var(--space-3);
-  padding-bottom: var(--space-2);
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding-bottom: var(--space-3);
   box-shadow: 0 1px 0 var(--color-border);
 }
 
@@ -2892,7 +2957,7 @@ onBeforeUnmount(() => {
 
 .task-detail__files {
   display: grid;
-  margin: 0 calc(var(--space-4) * -1);
+  margin: 0 calc(var(--space-5) * -1);
   padding: 0;
 }
 
@@ -2934,7 +2999,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: var(--space-2);
   min-height: 2.5rem;
-  padding: 0.25rem var(--space-4);
+  padding: 0.25rem var(--space-5);
   color: var(--color-text-muted);
   font-size: 0.75rem;
   font-weight: 600;
@@ -2970,7 +3035,7 @@ onBeforeUnmount(() => {
   grid-template-columns: 1.25rem minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
-  padding: 0.75rem var(--space-4);
+  padding: 0.75rem var(--space-5);
   box-shadow: 0 1px 0 var(--color-border);
   cursor: pointer;
   user-select: none;
@@ -3371,39 +3436,33 @@ onBeforeUnmount(() => {
   resize: vertical;
 }
 
+@media (max-width: 1280px) {
+  .task-detail__pair {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1100px) {
-  .task-detail {
-    height: auto;
-    overflow: visible;
-  }
-
-  .task-detail__page {
-    overflow: visible;
-    grid-template-rows: none;
-  }
-
   .task-detail__layout,
+  .task-detail__pair,
   .task-detail__people-grid {
     grid-template-columns: 1fr;
   }
 
-  .task-detail__layout {
-    overflow: visible;
-  }
-
-  .task-detail__col,
   .task-detail__col--discuss {
-    overflow: visible;
-    height: auto;
+    position: static;
+    width: auto;
   }
 
   .task-detail__card--discuss {
-    height: auto;
+    max-height: none;
+    overflow: visible;
   }
 
   .task-detail__card--discuss :deep(.comments--sidebar),
   .task-detail__card--discuss :deep(.comments__list--scroll) {
     flex: none;
+    max-height: none;
     overflow: visible;
   }
 

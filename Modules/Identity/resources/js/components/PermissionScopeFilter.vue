@@ -12,7 +12,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 
 const scopeType = ref(props.modelValue.type);
-const departmentId = ref(null); // dùng để lọc team, và làm scope_id khi type=department
+const departmentId = ref(null);
 const teamId = ref(null);
 
 const departments = ref([]);
@@ -86,7 +86,6 @@ function onTeamChange() {
 }
 
 watch(teams, () => {
-  // Nếu team đang chọn không còn trong danh sách (đổi phòng ban) → reset
   if (teamId.value && !teams.value.some((t) => t.id === teamId.value)) {
     teamId.value = null;
     emitChange();
@@ -126,11 +125,12 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
     </div>
 
     <div v-if="showDepartmentSelect" class="scope-filter__field">
-      <label class="scope-filter__label" for="scope-department">Phòng ban <span class="scope-filter__required">*</span></label>
+      <label class="scope-filter__label" for="scope-department">Phòng ban</label>
       <select
         id="scope-department"
         v-model="departmentId"
         class="scope-filter__select"
+        required
         @change="onDepartmentChange"
       >
         <option :value="null" disabled>Chọn phòng ban</option>
@@ -141,11 +141,12 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
     </div>
 
     <div v-if="showTeamSelect" class="scope-filter__field">
-      <label class="scope-filter__label" for="scope-team">Nhóm <span class="scope-filter__required">*</span></label>
+      <label class="scope-filter__label" for="scope-team">Nhóm</label>
       <select
         id="scope-team"
         v-model="teamId"
         class="scope-filter__select"
+        required
         :disabled="!departmentId || loadingTeams"
         @change="onTeamChange"
       >
@@ -175,10 +176,6 @@ const showTeamSelect = computed(() => scopeType.value === 'team');
   color: var(--color-text-muted);
   font-size: 0.75rem;
   font-weight: 600;
-}
-
-.scope-filter__required {
-  color: var(--color-danger);
 }
 
 .scope-filter__select {

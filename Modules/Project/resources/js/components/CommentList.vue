@@ -135,7 +135,7 @@ onMounted(load);
       :key="composerKey"
       :endpoint="endpoint"
       :mentions-endpoint="mentionsEndpoint"
-      auto-expand
+      :auto-expand="!isSidebar"
       prompt="Bạn có muốn thảo luận?"
       placeholder="Viết thảo luận..."
       @submitted="onSubmitted"
@@ -154,7 +154,7 @@ onMounted(load);
 .comments--sidebar {
   flex: 1;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .comments--sidebar :deep(.comment-composer) {
@@ -168,8 +168,9 @@ onMounted(load);
 }
 
 .comments__list--scroll {
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 4.5rem;
+  max-height: 16rem;
   overflow-x: hidden;
   overflow-y: auto;
   padding-right: 0.125rem;

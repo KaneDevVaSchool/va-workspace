@@ -307,14 +307,21 @@ class PermissionMatrixTest extends TestCase
         $this->assertContains('team.manage', $keys);
         $this->assertContains('workspace_config.assign_role_department', $keys);
         $this->assertContains('dashboard.view', $keys);
-        $this->assertNotContains('task.delegate', $keys);
+        $this->assertContains('project.view', $keys);
+        $this->assertContains('project.create', $keys);
+        $this->assertContains('task.delegate', $keys);
+        $this->assertContains('task.view_assigned', $keys);
+        $this->assertContains('report.*', $keys);
         $this->assertNotContains('ai_account.*', $keys);
         $this->assertNotContains('initiative.create', $keys);
+        $this->assertNotContains('daily_report.write', $keys);
 
         $firstRoleRow = collect($response->json('matrix'))->first();
         $this->assertIsArray($firstRoleRow);
         $this->assertArrayHasKey('team.manage', $firstRoleRow);
-        $this->assertArrayNotHasKey('task.delegate', $firstRoleRow);
+        $this->assertArrayHasKey('project.view', $firstRoleRow);
+        $this->assertArrayHasKey('task.delegate', $firstRoleRow);
+        $this->assertArrayNotHasKey('initiative.create', $firstRoleRow);
     }
 
     public function test_super_admin_viewing_as_another_role_cannot_access_permission_api(): void

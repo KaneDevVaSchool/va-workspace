@@ -5,6 +5,7 @@ import socialRoutes from '@modules/Social/resources/js/router.js';
 import evaluationRoutes from '@modules/Evaluation/resources/js/router.js';
 import projectRoutes from '@modules/Project/resources/js/router.js';
 import reportRoutes from '@modules/Report/resources/js/router.js';
+import credentialRoutes from '@modules/Credential/resources/js/router.js';
 
 /**
  * Route Vue (SPA phía client) — KHÔNG nhầm với route Laravel
@@ -28,6 +29,7 @@ const routes = [
     ...evaluationRoutes,
     ...projectRoutes,
     ...reportRoutes,
+    ...credentialRoutes,
     {
         path: '/:pathMatch(.*)*',
         name: 'not-found',

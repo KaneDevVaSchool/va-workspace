@@ -162,8 +162,9 @@ onBeforeUnmount(() => {
 <template>
   <Teleport defer :to="teleportTo" :disabled="!canTeleport">
     <div id="header" class="page-header" data-tour="page-header">
-      <div v-if="hasLeft" id="header-left-actions" class="page-header__left">
-        <slot name="primary">
+      <Transition name="page-header-add">
+        <div v-if="hasLeft" id="header-left-actions" class="page-header__left">
+          <slot name="primary">
           <div
             v-if="hasPrimaryAction && primaryAction && hasPrimaryMenu"
             ref="primaryRoot"
@@ -187,29 +188,32 @@ onBeforeUnmount(() => {
             >
               <AppIcon :name="primaryAction.icon || 'plus'" :size="18" :stroke-width="2" />
             </button>
-            <div
-              v-if="primaryOpen && !primaryAction.disabled"
-              :id="primaryMenuId"
-              role="menu"
-              class="page-header__menu page-header__add-menu"
-            >
-              <button
-                v-for="item in primaryAction.items"
-                :key="item.key || item.label"
-                type="button"
-                role="menuitem"
-                class="page-header__export-item"
-                @click="onPrimarySelect(item)"
+            <Transition name="page-header-menu">
+              <div
+                v-if="primaryOpen && !primaryAction.disabled"
+                :id="primaryMenuId"
+                role="menu"
+                class="page-header__menu page-header__add-menu"
               >
-                <span class="page-header__export-item-icon">
-                  <AppIcon :name="item.icon || 'plus'" :size="16" :stroke-width="1.75" />
-                </span>
-                <span class="page-header__export-item-copy">
-                  <span class="page-header__export-item-label">{{ item.label }}</span>
-                  <span v-if="item.description" class="page-header__export-item-desc">{{ item.description }}</span>
-                </span>
-              </button>
-            </div>
+                <button
+                  v-for="(item, index) in primaryAction.items"
+                  :key="item.key || item.label"
+                  type="button"
+                  role="menuitem"
+                  class="page-header__export-item"
+                  :style="{ '--item-i': index }"
+                  @click="onPrimarySelect(item)"
+                >
+                  <span class="page-header__export-item-icon">
+                    <AppIcon :name="item.icon || 'plus'" :size="16" :stroke-width="1.75" />
+                  </span>
+                  <span class="page-header__export-item-copy">
+                    <span class="page-header__export-item-label">{{ item.label }}</span>
+                    <span v-if="item.description" class="page-header__export-item-desc">{{ item.description }}</span>
+                  </span>
+                </button>
+              </div>
+            </Transition>
           </div>
           <component
             :is="primaryAction.to || primaryAction.href ? 'router-link' : 'button'"
@@ -228,7 +232,8 @@ onBeforeUnmount(() => {
             <AppIcon :name="primaryAction.icon || 'plus'" :size="18" :stroke-width="2" />
           </component>
         </slot>
-      </div>
+        </div>
+      </Transition>
 
       <div id="header-title" class="page-header__title-wrap">
         <h1 v-if="!slots.title" class="page-header__title" :title="titleHint || displayTitle">
@@ -434,6 +439,14 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
+.page-header__add :deep(svg) {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.page-header__add--open :deep(svg) {
+  transform: rotate(45deg);
+}
+
 .page-header__add--disabled {
   opacity: 0.4;
   pointer-events: none;
@@ -565,6 +578,52 @@ onBeforeUnmount(() => {
 .page-header__add-menu {
   top: 100%;
   left: 0;
+  transform-origin: top left;
+}
+
+.page-header__add-menu .page-header__export-item {
+  animation: page-header-item-in 220ms ease both;
+  animation-delay: calc(var(--item-i, 0) * 55ms);
+}
+
+.page-header-add-enter-active {
+  transition:
+    opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.page-header-add-leave-active {
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.page-header-add-enter-from,
+.page-header-add-leave-to {
+  opacity: 0;
+  transform: scale(0.55);
+}
+
+.page-header-menu-enter-active,
+.page-header-menu-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.page-header-menu-enter-from,
+.page-header-menu-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.96);
+}
+
+@keyframes page-header-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .page-header__export-sep {
@@ -647,7 +706,13 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .page-header__spin,
-  .page-header-control__caret {
+  .page-header-control__caret,
+  .page-header__add :deep(svg),
+  .page-header-add-enter-active,
+  .page-header-add-leave-active,
+  .page-header-menu-enter-active,
+  .page-header-menu-leave-active,
+  .page-header__add-menu .page-header__export-item {
     animation: none;
     transition: none;
   }

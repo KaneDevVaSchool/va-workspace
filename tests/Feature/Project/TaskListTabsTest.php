@@ -119,4 +119,25 @@ class TaskListTabsTest extends TestCase
         $titles = collect($response->json('tasks'))->pluck('title')->all();
         $this->assertEqualsCanonicalizing(['Trong tháng', 'Kéo dài sang tháng'], $titles);
     }
+
+    public function test_member_with_view_assigned_can_list_own_tasks(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'C', 'name' => 'Phòng C', 'is_active' => true]);
+        $member = $this->makeUser(['department_id' => $dept->id], ['member']);
+        $other = $this->makeUser(['department_id' => $dept->id, 'name' => 'Người khác'], ['member']);
+        $project = $this->makeProject([
+            'owner_department_id' => $dept->id,
+            'created_by' => $other->id,
+        ]);
+
+        $this->makeTask($project, ['title' => 'Việc của tôi', 'assignee_id' => $member->id]);
+        $this->makeTask($project, ['title' => 'Việc người khác', 'assignee_id' => $other->id]);
+
+        $response = $this->actingAs($member)->getJson('/api/project/tasks');
+        $response->assertOk();
+        $titles = collect($response->json('tasks'))->pluck('title')->all();
+        $this->assertSame(['Việc của tôi'], $titles);
+    }
 }
