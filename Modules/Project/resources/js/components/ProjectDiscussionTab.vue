@@ -525,6 +525,20 @@ onBeforeUnmount(() => {
   max-height: 42rem;
   overflow-y: auto;
   scroll-behavior: smooth;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+/* Khung soạn (CommentComposer, dùng chung với TaskDetail) nổi trên nền chat
+   vừa thêm ở .disc__thread — bọc nền trắng + bo góc thay vì sửa style dùng
+   chung trong CommentList.vue/CommentComposer.vue. */
+.disc__thread :deep(.comment-composer) {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .disc__loading {

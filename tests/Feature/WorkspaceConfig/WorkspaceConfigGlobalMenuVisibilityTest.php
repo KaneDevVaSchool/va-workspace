@@ -44,10 +44,10 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
             ->assertOk()
             ->assertJsonPath('menus.0.menu_key', 'home')
             ->assertJsonPath('menus.0.is_hidden', false)
-            ->assertJsonCount(13, 'menus')
+            ->assertJsonCount(16, 'menus')
             ->assertJsonFragment(['menu_key' => 'manager.project.index', 'default_label' => 'Dự án'])
             ->assertJsonFragment(['menu_key' => 'manager.project.tasks', 'default_label' => 'Công việc'])
-            ->assertJsonFragment(['menu_key' => 'manager.evaluation-score-kit.index', 'default_label' => 'Khung chấm điểm'])
+            ->assertJsonFragment(['menu_key' => 'manager.evaluation-score-kit.index', 'default_label' => 'Khung điểm'])
             ->assertJsonFragment(['menu_key' => 'manager.reports.index', 'default_label' => 'Báo cáo']);
 
         $this->actingAs($superAdmin)
@@ -267,8 +267,8 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
             ->json('menus.*.menu_key');
 
         $this->assertSame($catalogKeys, $before);
-        $this->assertSame('social.feed', $before[1]);
-        $this->assertSame('manager.evaluation.view', $before[2]);
+        $this->assertSame('social.feed', $before[3]);
+        $this->assertSame('manager.evaluation.view', $before[4]);
 
         $this->actingAs($superAdmin)
             ->putJson('/api/workspace-config/global-menu', [

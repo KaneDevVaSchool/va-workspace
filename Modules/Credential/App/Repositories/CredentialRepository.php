@@ -7,6 +7,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Modules\Credential\App\Enums\CredentialEnums;
 use Modules\Credential\App\Models\Credential;
 use Modules\Credential\App\Repositories\Contracts\CredentialRepositoryInterface;
@@ -16,18 +17,23 @@ use Modules\Credential\App\Repositories\Contracts\CredentialRepositoryInterface;
  */
 class CredentialRepository implements CredentialRepositoryInterface
 {
-    public function paginate(array $filters, int $perPage, int $page): LengthAwarePaginator
+    public function paginate(array $filters, int $perPage, int $page, ?array $departmentScope = null, ?int $viewerId = null): LengthAwarePaginator
     {
-        $query = Credential::query()->with(['provider', 'creator']);
+        $query = Credential::query()->with(['provider', 'creator', 'googleAccountOwner', 'department']);
 
+        $this->applyDepartmentScope($query, $departmentScope, $viewerId);
         $this->applyFilters($query, $filters);
 
         return $query->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
     }
 
-    public function find(int $id): ?Credential
+    public function find(int $id, ?array $departmentScope = null, ?int $viewerId = null): ?Credential
     {
-        return Credential::query()->with(['provider', 'creator', 'viewers'])->find($id);
+        $query = Credential::query()->with(['provider', 'creator', 'viewers', 'googleAccountOwner', 'department']);
+
+        $this->applyDepartmentScope($query, $departmentScope, $viewerId);
+
+        return $query->find($id);
     }
 
     public function create(array $data): Credential
@@ -39,7 +45,7 @@ class CredentialRepository implements CredentialRepositoryInterface
     {
         $credential->update($data);
 
-        return $credential->fresh(['provider', 'creator', 'viewers']);
+        return $credential->fresh(['provider', 'creator', 'viewers', 'googleAccountOwner', 'department']);
     }
 
     public function delete(Credential $credential): bool
@@ -64,26 +70,49 @@ class CredentialRepository implements CredentialRepositoryInterface
         $credential->viewers()->detach($userId);
     }
 
-    public function statusCounts(): array
+    public function syncViewers(Credential $credential, array $userIds, int $grantedBy): void
+    {
+        DB::transaction(function () use ($credential, $userIds, $grantedBy) {
+            $existingIds = $credential->viewers()->pluck('users.id')->all();
+            $toAdd = array_diff($userIds, $existingIds);
+            $toRemove = array_diff($existingIds, $userIds);
+
+            if (! empty($toAdd)) {
+                $syncData = [];
+                foreach ($toAdd as $id) {
+                    $syncData[$id] = ['granted_by' => $grantedBy];
+                }
+                // syncWithoutDetaching (không phải sync() trần) để KHÔNG
+                // ghi đè granted_by/created_at của người đã có từ trước.
+                $credential->viewers()->syncWithoutDetaching($syncData);
+            }
+
+            if (! empty($toRemove)) {
+                $credential->viewers()->detach($toRemove);
+            }
+        });
+    }
+
+    public function statusCounts(?array $departmentScope = null, ?int $viewerId = null): array
     {
         $today = Carbon::today();
         $renewingSoonAt = $today->copy()->addDays(CredentialEnums::RENEWING_SOON_DAYS);
         $expiringSoonAt = $today->copy()->addDays(CredentialEnums::EXPIRING_SOON_DAYS);
 
         return [
-            CredentialEnums::STATUS_ACTIVE => (clone $this->baseQuery())
+            CredentialEnums::STATUS_ACTIVE => (clone $this->baseQuery($departmentScope, $viewerId))
                 ->where(function (Builder $q) use ($renewingSoonAt) {
                     $q->whereNull('expires_at')->orWhere('expires_at', '>', $renewingSoonAt);
                 })->count(),
-            CredentialEnums::STATUS_RENEWING_SOON => (clone $this->baseQuery())
+            CredentialEnums::STATUS_RENEWING_SOON => (clone $this->baseQuery($departmentScope, $viewerId))
                 ->whereNotNull('expires_at')
                 ->whereBetween('expires_at', [$expiringSoonAt->copy()->addDay(), $renewingSoonAt])
                 ->count(),
-            CredentialEnums::STATUS_EXPIRING_SOON => (clone $this->baseQuery())
+            CredentialEnums::STATUS_EXPIRING_SOON => (clone $this->baseQuery($departmentScope, $viewerId))
                 ->whereNotNull('expires_at')
                 ->whereBetween('expires_at', [$today, $expiringSoonAt])
                 ->count(),
-            CredentialEnums::STATUS_EXPIRED => (clone $this->baseQuery())
+            CredentialEnums::STATUS_EXPIRED => (clone $this->baseQuery($departmentScope, $viewerId))
                 ->whereNotNull('expires_at')
                 ->where('expires_at', '<', $today)
                 ->count(),
@@ -95,9 +124,53 @@ class CredentialRepository implements CredentialRepositoryInterface
         return User::query()->select(['id', 'name', 'email'])->orderBy('name')->get();
     }
 
-    private function baseQuery(): Builder
+    public function allWithCost(?array $departmentScope = null, ?int $viewerId = null): Collection
     {
-        return Credential::query();
+        $query = Credential::query()
+            ->with('provider')
+            ->where('cost_hidden', false)
+            ->whereNotNull('monthly_cost')
+            ->where('monthly_cost', '>', 0);
+
+        $this->applyDepartmentScope($query, $departmentScope, $viewerId);
+
+        return $query->get();
+    }
+
+    private function baseQuery(?array $departmentScope = null, ?int $viewerId = null): Builder
+    {
+        $query = Credential::query();
+        $this->applyDepartmentScope($query, $departmentScope, $viewerId);
+
+        return $query;
+    }
+
+    /**
+     * Giới hạn dữ liệu theo phòng ban — null = không giới hạn (viewer có
+     * quyền global/superadmin, xem CredentialService::departmentScopeFor()).
+     * Mảng (kể cả rỗng) = chỉ thấy credential có department_id nằm trong
+     * danh sách này, CỘNG THÊM credential mà $viewerId là creator hoặc
+     * được cấp quyền xem riêng (bảng credential_viewers) dù khác phòng ban
+     * — đúng yêu cầu "được cho phép thì chỉ nhân viên đó mới thấy được".
+     * Credential department_id = NULL (chưa gán phòng ban) không tự thấy
+     * được qua nhánh phòng ban, chỉ qua viewer riêng hoặc khi không giới hạn.
+     *
+     * @param  list<int>|null  $departmentScope
+     */
+    private function applyDepartmentScope(Builder $query, ?array $departmentScope, ?int $viewerId = null): void
+    {
+        if ($departmentScope === null) {
+            return;
+        }
+
+        $query->where(function (Builder $q) use ($departmentScope, $viewerId) {
+            $q->whereIn('department_id', $departmentScope);
+
+            if ($viewerId !== null) {
+                $q->orWhere('created_by', $viewerId)
+                    ->orWhereHas('viewers', fn (Builder $v) => $v->where('users.id', $viewerId));
+            }
+        });
     }
 
     /** @param  array<string, mixed>  $filters */
@@ -120,6 +193,10 @@ class CredentialRepository implements CredentialRepositoryInterface
 
         if (! empty($filters['account_type'])) {
             $query->where('account_type', $filters['account_type']);
+        }
+
+        if (! empty($filters['group'])) {
+            $query->where('group', $filters['group']);
         }
 
         if (! empty($filters['status'])) {

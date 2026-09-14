@@ -4,6 +4,9 @@ export const ACCOUNT_TYPES = [
   { value: 'user', label: 'Người dùng' },
   { value: 'demo', label: 'Dùng thử' },
   { value: 'testing', label: 'Kiểm thử' },
+  { value: 'phu_huynh', label: 'Phụ huynh' },
+  { value: 'giao_vien', label: 'Giáo viên' },
+  { value: 'hoc_sinh', label: 'Học sinh' },
 ];
 
 export const STATUS_OPTIONS = [
@@ -23,14 +26,17 @@ export const STATUS_DOT_TONE = {
 
 export const CREDENTIAL_COLUMNS = [
   { key: 'name', label: 'Tên tài khoản', defaultOn: true },
+  { key: 'department', label: 'Phòng ban', defaultOn: true },
   { key: 'provider', label: 'Nhà cung cấp', defaultOn: true },
   { key: 'account_type', label: 'Loại tài khoản', defaultOn: true },
+  { key: 'email', label: 'Email đăng nhập', defaultOn: true },
   { key: 'status', label: 'Trạng thái', defaultOn: true },
   { key: 'expires_at', label: 'Ngày hết hạn', defaultOn: true },
+  { key: 'access_url', label: 'Link truy cập', defaultOn: false },
   { key: 'monthly_cost', label: 'Chi phí/tháng', defaultOn: false },
   { key: 'server_name', label: 'Server', defaultOn: false },
   { key: 'domain', label: 'Domain', defaultOn: false },
-  { key: 'creator_name', label: 'Người tạo', defaultOn: false },
+  { key: 'creator_name', label: 'Người tạo', defaultOn: true },
 ];
 
 export const CREDENTIAL_FILTERS = [
@@ -51,6 +57,44 @@ export function accountTypeLabel(value) {
 
 export function statusLabel(value) {
   return STATUS_OPTIONS.find((item) => item.value === value)?.label ?? value ?? '';
+}
+
+/**
+ * Số ngày còn lại đến hạn từ hôm nay (số nguyên, âm nếu đã quá hạn).
+ * Trả về null nếu không có ngày hết hạn (tài khoản không có hạn dùng).
+ */
+export function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const target = new Date(dateStr);
+  if (Number.isNaN(target.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  return Math.round((target.getTime() - today.getTime()) / 86400000);
+}
+
+/** Nhãn "Còn X ngày" / "Đã quá hạn X ngày" dùng chung List + Detail. */
+export function countdownLabel(dateStr) {
+  const days = daysUntil(dateStr);
+  if (days === null) return '';
+  if (days < 0) return `Đã quá hạn ${Math.abs(days)} ngày`;
+  if (days === 0) return 'Hết hạn hôm nay';
+  return `Còn ${days} ngày`;
+}
+
+/** Tone màu cho countdown — dùng token đã có, khớp ngưỡng backend (EXPIRING_SOON_DAYS/RENEWING_SOON_DAYS). */
+export function countdownTone(dateStr) {
+  const days = daysUntil(dateStr);
+  if (days === null) return null;
+  if (days <= 7) return 'danger';
+  if (days <= 30) return 'warning';
+  return null;
+}
+
+/** true nếu còn ≤7 ngày (kể cả đã quá hạn) — làm nổi bật countdown (đậm + pulse + icon). */
+export function isCountdownUrgent(dateStr) {
+  const days = daysUntil(dateStr);
+  return days !== null && days <= 7;
 }
 
 export function loadVisibility(storageKey, items) {

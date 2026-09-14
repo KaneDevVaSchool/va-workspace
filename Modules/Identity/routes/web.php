@@ -73,6 +73,7 @@ Route::middleware(['auth', 'throttle:60,1'])->prefix('api')->group(function () {
     Route::middleware(['role:super_admin'])->prefix('permissions')->name('permissions.')->group(function () {
         Route::get('/matrix', [PermissionMatrixController::class, 'matrix'])->name('matrix');
         Route::put('/grants', [PermissionGrantController::class, 'upsert'])->name('grants.upsert');
+        Route::put('/grants/bulk', [PermissionGrantController::class, 'bulkUpsert'])->name('grants.bulk');
         Route::delete('/grants', [PermissionGrantController::class, 'destroy'])->name('grants.destroy');
     });
 });

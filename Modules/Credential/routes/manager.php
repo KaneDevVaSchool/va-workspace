@@ -13,9 +13,11 @@ use Modules\Credential\App\Http\Controllers\CredentialViewerController;
 | ProjectServiceProvider. Trang Vue /manager/credential (SPA, phục vụ qua
 | fallback trong routes/web.php gốc) ≠ path JSON /api/credential/*.
 |
-| Đọc (index/show) chỉ cần credential.view — Service tự ẩn field nhạy cảm
-| (password/username) nếu viewer không phải creator/viewer được cấp riêng
-| (bảng credential_viewers). Ghi/xoá cần credential.manage.
+| Đọc (index/show) chỉ cần credential.view — Service chỉ ẩn riêng
+| `password` nếu viewer không phải creator/viewer được cấp riêng (bảng
+| credential_viewers); username/email hiện công khai cho ai có
+| credential.view (xem CredentialService::present()). Ghi/xoá cần
+| credential.manage.
 */
 
 Route::middleware(['auth', 'permission:credential.view'])
@@ -24,6 +26,10 @@ Route::middleware(['auth', 'permission:credential.view'])
         Route::get('/', [CredentialController::class, 'index'])->name('index');
         Route::get('/providers', [CredentialProviderController::class, 'index'])->name('providers.index');
         Route::get('/users', [CredentialController::class, 'users'])->name('users');
+        Route::get('/cost-summary', [CredentialController::class, 'costSummary'])->name('cost-summary');
+        Route::get('/cost-forecast', [CredentialController::class, 'costForecast'])->name('cost-forecast');
+        Route::get('/cost-summary/export-excel', [CredentialController::class, 'exportCostExcel'])->name('cost-summary.export-excel');
+        Route::get('/cost-summary/export-pdf', [CredentialController::class, 'exportCostPdf'])->name('cost-summary.export-pdf');
         Route::get('/{credential}', [CredentialController::class, 'show'])->name('show');
     });
 
@@ -47,5 +53,6 @@ Route::middleware(['auth'])
     ->prefix('credential')->name('credential.')
     ->group(function () {
         Route::post('/{credential}/viewers', [CredentialViewerController::class, 'store'])->name('viewers.store');
+        Route::put('/{credential}/viewers', [CredentialViewerController::class, 'sync'])->name('viewers.sync');
         Route::delete('/{credential}/viewers/{user}', [CredentialViewerController::class, 'destroy'])->name('viewers.destroy');
     });

@@ -21,6 +21,7 @@ import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import ProjectUserPicker from '../components/ProjectUserPicker.vue';
 import TaskCalendarView from '../components/TaskCalendarView.vue';
 import TaskQuickActionModals from '../components/TaskQuickActionModals.vue';
+import TaskQuickAddModal from '../components/TaskQuickAddModal.vue';
 import TaskRowContextMenu from '../components/TaskRowContextMenu.vue';
 import TaskViewModeMenu from '../components/TaskViewModeMenu.vue';
 import {
@@ -202,11 +203,32 @@ const isCalendar = computed(() => viewMode.value === 'calendar');
 const calendarMode = ref(loadCalendarMode());
 const calendarRange = ref(calendarOverlapRange(loadCalendarMode(), new Date()));
 const canEdit = computed(() => auth.can('task.create'));
+const taskCreateAction = computed(() => ({
+  label: 'Tạo công việc',
+  icon: 'plus',
+  items: [
+    {
+      key: 'single',
+      icon: 'plusCircle',
+      label: 'Tạo 1 công việc',
+      description: 'Mở đầy đủ các bước, cấu hình chi tiết.',
+      onSelect: () => router.push({ name: 'manager.project.tasks.create' }),
+    },
+    {
+      key: 'bulk',
+      icon: 'listChecks',
+      label: 'Tạo nhiều công việc',
+      description: 'Nhập nhanh nhiều dòng cùng lúc.',
+      onSelect: openQuickAdd,
+    },
+  ],
+}));
 const canApprove = computed(() => auth.can('task.approve'));
 const canDelegate = computed(() => auth.can('task.delegate'));
 
 const ctxMenu = reactive({ open: false, x: 0, y: 0, task: null });
 const actionDialog = reactive({ kind: null, task: null, extra: {} });
+const quickAddOpen = ref(false);
 
 /** Xem lịch công việc của toàn bộ mọi người — super_admin / admin / người có quyền rộng. */
 const canViewAllTasks = computed(() => auth.canViewAs || auth.canViewActivityLog);
@@ -800,6 +822,19 @@ function openTaskDetail(task, options = {}) {
 function openTaskEdit(task) {
   if (!task?.id) return;
   router.push({ name: 'manager.project.tasks.edit', params: { id: task.id } });
+}
+
+function openQuickAdd() {
+  quickAddOpen.value = true;
+}
+
+function closeQuickAdd() {
+  quickAddOpen.value = false;
+}
+
+async function onQuickAddCreated() {
+  closeQuickAdd();
+  await loadTasks(1);
 }
 
 function applyTaskUpdate(updated) {
@@ -1900,29 +1935,11 @@ onBeforeUnmount(() => {
       export-label="Dữ liệu"
       :export-options="taskDataExportOptions"
       :export-busy-key="taskDataExportBusyKey"
+      :primary-action="canEdit ? taskCreateAction : null"
     >
       <template #title>
         <span class="task-page__title">
-          <AppIcon name="layoutList" :size="16" />
           Tất cả công việc
-          <button
-            type="button"
-            class="task-page__title-icon-btn"
-            aria-label="Làm mới danh sách"
-            :disabled="loading"
-            @click="loadTasks(meta.current_page)"
-          >
-            <AppIcon name="refresh" :size="15" :class="{ 'task-page__spin': loading }" />
-          </button>
-          <button
-            v-if="canEdit"
-            type="button"
-            class="task-page__title-icon-btn task-page__title-icon-btn--primary"
-            aria-label="Tạo công việc"
-            @click="router.push({ name: 'manager.project.tasks.create' })"
-          >
-            <AppIcon name="plus" :size="16" />
-          </button>
         </span>
       </template>
       <template #actions>
@@ -2454,6 +2471,13 @@ onBeforeUnmount(() => {
       @close="closeActionDialog"
       @updated="applyTaskUpdate"
       @duplicated="onTaskDuplicated"
+    />
+
+    <TaskQuickAddModal
+      :open="quickAddOpen"
+      :users="users"
+      @close="closeQuickAdd"
+      @created="onQuickAddCreated"
     />
 
     <Teleport to="body">

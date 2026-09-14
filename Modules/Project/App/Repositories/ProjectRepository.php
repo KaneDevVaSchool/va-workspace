@@ -242,6 +242,11 @@ class ProjectRepository implements ProjectRepositoryInterface
             ->first();
     }
 
+    public function attachmentExistsByFilePath(string $filePath): bool
+    {
+        return ProjectAttachment::query()->where('file_path', $filePath)->exists();
+    }
+
     public function updateAttachment(ProjectAttachment $attachment, array $data): ProjectAttachment
     {
         $attachment->fill($data);

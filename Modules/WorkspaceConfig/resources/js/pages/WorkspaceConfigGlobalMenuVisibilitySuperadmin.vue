@@ -12,7 +12,16 @@ import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import SidebarMenuConfigPanel from '../components/SidebarMenuConfigPanel.vue';
 import { layoutPayload } from '../constants/sidebarMenus.js';
 
-const GLOBAL_SECTION_ORDER = ['general', 'admin', 'manager', 'superadmin-workspace-config'];
+const GLOBAL_SECTION_ORDER = [
+  'general',
+  'news',
+  'evaluation',
+  'operations',
+  'manager',
+  'control',
+  'admin',
+  'superadmin-workspace-config',
+];
 
 const auth = useAuthStore();
 

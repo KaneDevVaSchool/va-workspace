@@ -4,12 +4,16 @@ namespace Database\Seeders;
 
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Modules\Credential\Database\Seeders\CredentialExternalAccountsSeeder;
+use Modules\Credential\Database\Seeders\CredentialInternalToolsSeeder;
+use Modules\Credential\Database\Seeders\CredentialProviderSeeder;
+use Modules\Credential\Database\Seeders\CredentialSeeder;
 use Modules\Evaluation\Database\Seeders\EvaluationCriteriaSeeder;
 use Modules\Evaluation\Database\Seeders\EvaluationPositionSeeder;
 use Modules\Evaluation\Database\Seeders\HrNsEvaluationCriteriaSeeder;
+use Modules\Identity\Database\Seeders\CnttSoftwareTeamSeeder;
 use Modules\Identity\Database\Seeders\DemoUserSeeder;
 use Modules\Identity\Database\Seeders\DepartmentSeeder;
-use Modules\Identity\Database\Seeders\HrNsSuperAdminDepartmentSeeder;
 use Modules\Identity\Database\Seeders\RoleSeeder;
 use Modules\Identity\Database\Seeders\SuperAdminSeeder;
 use Modules\Project\Database\Seeders\HrOpportunityDemoSeeder;
@@ -38,10 +42,10 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             DepartmentSeeder::class,
             SuperAdminSeeder::class,
-            // Chuyển khoana@... (SUPERADMIN_EMAIL) sang phòng Hành chính
-            // Nhân sự — PHẢI chạy sau SuperAdminSeeder (ghi đè department
-            // mặc định CNTT của seeder đó).
-            HrNsSuperAdminDepartmentSeeder::class,
+            // Nhân sự THẬT phòng CNTT (ban lãnh đạo + team Phần mềm/Phần
+            // cứng) — PHẢI chạy sau SuperAdminSeeder (giữ nguyên department
+            // CNTT mặc định của khoana@..., không còn bị NS ghi đè).
+            CnttSoftwareTeamSeeder::class,
             DemoUserSeeder::class,
             EvaluationCriteriaSeeder::class,
             EvaluationPositionSeeder::class,
@@ -52,8 +56,18 @@ class DatabaseSeeder extends Seeder
             TaskSeeder::class,
             // 3 Project theo yêu cầu nghiệp vụ cụ thể (HRM, Cơ hội bất ngờ,
             // Quản lý Kho & Bán hàng) — PHẢI chạy sau DemoUserSeeder +
-            // HrNsSuperAdminDepartmentSeeder (cần nhân sự NS/CNTT đã seed).
+            // CnttSoftwareTeamSeeder (cần nhân sự NS/CNTT đã seed).
             HrOpportunityDemoSeeder::class,
+            // Modules/Credential — danh mục nhà cung cấp trước, rồi tài
+            // khoản mẫu "Claude Pro" (PHẢI chạy sau CredentialProviderSeeder
+            // vì cần provider_id, và sau SuperAdminSeeder để gắn creator/viewer).
+            CredentialProviderSeeder::class,
+            CredentialSeeder::class,
+            // 22 tài khoản thật của công ty (phần mềm/dịch vụ bên ngoài +
+            // công cụ nội bộ VA Schools) — PHẢI chạy sau
+            // CredentialProviderSeeder (cần provider_id).
+            CredentialExternalAccountsSeeder::class,
+            CredentialInternalToolsSeeder::class,
         ]);
     }
 }

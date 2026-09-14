@@ -30,6 +30,9 @@ import {
   statusLabel,
   loadVisibility,
   saveVisibility,
+  countdownLabel,
+  countdownTone,
+  isCountdownUrgent,
 } from '../constants/credential.js';
 
 const CELL_PAD_X = 32;
@@ -42,9 +45,113 @@ const auth = useAuthStore();
 
 const credentials = ref([]);
 const providers = ref([]);
+const departments = ref([]);
+const allUsers = ref([]);
 const meta = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0, per_page: 20 });
 const loading = ref(false);
 const selected = ref(null);
+
+// ---------- Tab: "Phần mềm/Dịch vụ" (external) / "Công cụ nội bộ" (internal) / "Dự toán chi phí" (cost) ----------
+const activeTab = ref('external');
+const costSummary = ref(null);
+const costForecast = ref(null);
+const costLoading = ref(false);
+const costLoaded = ref(false);
+const costHoverSlice = ref(null);
+const forecastHoverMonth = ref(null);
+const sheetSortKey = ref('name');
+const sheetSortDir = ref('asc');
+
+// Số hiển thị đếm dần (count-up) cho 3 ô số liệu lớn khi tab mở lần đầu.
+const animatedTotalMonthly = ref(0);
+const animatedYearly = ref(0);
+const animatedCount = ref(0);
+
+function animateCount(setter, finalValue, duration = 800) {
+  const start = performance.now();
+  function tick(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    setter(Math.round(finalValue * eased));
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+async function loadCostSummary() {
+  costLoading.value = true;
+  try {
+    const [summaryRes, forecastRes] = await Promise.all([
+      window.axios.get('/api/credential/cost-summary'),
+      window.axios.get('/api/credential/cost-forecast'),
+    ]);
+    costSummary.value = summaryRes.data;
+    costForecast.value = forecastRes.data;
+    costLoaded.value = true;
+    animateCount((v) => { animatedTotalMonthly.value = v; }, costSummary.value.total_monthly);
+    animateCount((v) => { animatedYearly.value = v; }, costSummary.value.total_yearly_estimate);
+    animateCount((v) => { animatedCount.value = v; }, costSummary.value.account_count, 500);
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không tải được dự toán chi phí.');
+  } finally {
+    costLoading.value = false;
+  }
+}
+
+function switchTab(tab) {
+  activeTab.value = tab;
+  if (tab === 'cost') {
+    if (!costLoaded.value) loadCostSummary();
+    return;
+  }
+  loadCredentials(1);
+}
+
+function toggleSheetSort(key) {
+  if (sheetSortKey.value === key) {
+    sheetSortDir.value = sheetSortDir.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    sheetSortKey.value = key;
+    sheetSortDir.value = 'asc';
+  }
+}
+
+const sortedSheetItems = computed(() => {
+  const items = [...(costSummary.value?.items ?? [])];
+  const key = sheetSortKey.value;
+  items.sort((a, b) => {
+    const av = a[key];
+    const bv = b[key];
+    const cmp = typeof av === 'number' && typeof bv === 'number'
+      ? av - bv
+      : String(av ?? '').localeCompare(String(bv ?? ''), 'vi');
+    return sheetSortDir.value === 'asc' ? cmp : -cmp;
+  });
+  return items;
+});
+
+/** Nhãn tháng rút gọn "T9", "T10"... từ khoá "2026-09". */
+function monthShortLabel(monthKey) {
+  const parts = String(monthKey).split('-');
+  return `T${Number(parts[1])}`;
+}
+
+/** Dựng path SVG tuyến tính (đường + vùng fill dưới) cho biểu đồ dự phóng 12 tháng. */
+function buildForecastPath(months, width = 600, height = 160, padding = 24) {
+  if (!months.length) return { path: '', points: [], areaPath: '' };
+  const maxY = Math.max(...months.map((m) => m.total_vnd), 1);
+  const stepX = (width - padding * 2) / (months.length - 1 || 1);
+  const points = months.map((m, i) => ({
+    x: padding + i * stepX,
+    y: height - padding - (m.total_vnd / maxY) * (height - padding * 2),
+    ...m,
+  }));
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const areaPath = `${path} L ${points[points.length - 1].x} ${height - padding} L ${points[0].x} ${height - padding} Z`;
+  return { path, points, areaPath };
+}
+
+const forecastChart = computed(() => buildForecastPath(costForecast.value?.months ?? []));
 
 const query = ref('');
 const providerId = ref('');
@@ -65,14 +172,15 @@ const columnWidths = reactive(loadColumnWidths());
 const tableZoom = ref(loadZoom());
 
 const canManage = computed(() => auth.can('credential.manage'));
+// Chỉ role đang giữ credential.manage KHÔNG scope theo phòng ban mới được
+// chọn/đổi phòng ban sở hữu khi tạo/sửa — khớp CredentialService::
+// departmentScopeFor() (null = không giới hạn) ở backend. Người khác luôn
+// bị backend ép về đúng phòng ban mình dù có gửi field này hay không, nên
+// ẩn hẳn field đi cho đỡ gây hiểu lầm "chọn được nhưng không có tác dụng".
+const canChooseDepartment = computed(() => canManage.value);
 
 const shownColumns = computed(() => CREDENTIAL_COLUMNS.filter((col) => visibleColumns[col.key]));
 const colSpan = computed(() => Math.max(shownColumns.value.length, 1));
-
-const expiringSoonCount = computed(
-  () => credentials.value.filter((c) => c.status === 'expiring_soon' || c.status === 'renewing_soon').length,
-);
-const expiredCount = computed(() => credentials.value.filter((c) => c.status === 'expired').length);
 
 const hasActiveFilters = computed(
   () =>
@@ -80,6 +188,92 @@ const hasActiveFilters = computed(
 );
 
 const hasVisibleFilterFields = computed(() => CREDENTIAL_FILTERS.some((item) => visibleFilters[item.key]));
+
+// 2 hue categorical đã chạy validate_palette.js (skill dataviz) xác nhận PASS
+// mọi check colorblind-safe SAU KHI loại --color-primary theo yêu cầu tab
+// dashboard này — mọi ứng viên thứ 3 (gold/umber các bậc, --color-info) đều
+// FAIL chroma/lightness hoặc trùng nghĩa màu trạng thái đã dùng trong chính
+// trang này (--color-warning = "sắp hết hạn"). Nhóm thứ 3 trở đi gộp "Khác"
+// ở backend, dùng màu xám trung tính (không phải hue phân loại). Khớp
+// CredentialEnums::COST_CHART_MAX_SLICES = 2.
+const COST_SLICE_COLORS = ['var(--color-secondary)', 'var(--color-tertiary)', 'var(--color-text-muted)'];
+
+/** Stop-color đậm hơn cho gradient — dùng color-mix() trên chính màu slice, không hex mới. */
+function sliceGradientDark(color) {
+  return `color-mix(in srgb, ${color} 70%, black)`;
+}
+
+function sliceColor(index) {
+  return COST_SLICE_COLORS[index] ?? COST_SLICE_COLORS[COST_SLICE_COLORS.length - 1];
+}
+
+function costFormat(amount) {
+  return `${Number(amount || 0).toLocaleString('vi-VN')} đ`;
+}
+
+/** Toạ độ điểm trên vòng tròn bán kính r, tâm (cx, cy), góc tính từ đỉnh 12h. */
+function polarPoint(cx, cy, r, angleDeg) {
+  const rad = ((angleDeg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+/** Chuẩn bị lát donut (path SVG) từ danh sách {label, amount} — kèm % và màu cố định theo thứ tự. */
+function buildDonutSlices(entries) {
+  const total = entries.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  if (total <= 0) return { total: 0, slices: [] };
+
+  const cx = 60;
+  const cy = 60;
+  const rOuter = 54;
+  const rInner = 32;
+  const gapDeg = entries.length > 1 ? 2 : 0;
+  let angle = 0;
+
+  const slices = entries.map((entry, index) => {
+    const fraction = Number(entry.amount || 0) / total;
+    const sweep = Math.max(fraction * 360 - gapDeg, 0);
+    const startAngle = angle;
+    const endAngle = angle + sweep;
+    angle += fraction * 360;
+
+    const large = sweep > 180 ? 1 : 0;
+    const outerStart = polarPoint(cx, cy, rOuter, startAngle);
+    const outerEnd = polarPoint(cx, cy, rOuter, endAngle);
+    const innerEnd = polarPoint(cx, cy, rInner, endAngle);
+    const innerStart = polarPoint(cx, cy, rInner, startAngle);
+
+    const path = [
+      `M ${outerStart.x} ${outerStart.y}`,
+      `A ${rOuter} ${rOuter} 0 ${large} 1 ${outerEnd.x} ${outerEnd.y}`,
+      `L ${innerEnd.x} ${innerEnd.y}`,
+      `A ${rInner} ${rInner} 0 ${large} 0 ${innerStart.x} ${innerStart.y}`,
+      'Z',
+    ].join(' ');
+
+    return {
+      key: entry.label,
+      label: entry.label,
+      amount: entry.amount,
+      percent: fraction * 100,
+      color: sliceColor(index),
+      path,
+    };
+  });
+
+  return { total, slices };
+}
+
+const providerDonut = computed(() => buildDonutSlices(costSummary.value?.by_provider ?? []));
+
+const costHoverInfo = computed(() => {
+  if (!costHoverSlice.value) return null;
+  return providerDonut.value.slices.find((s) => s.key === costHoverSlice.value) || null;
+});
+
+const accountTypeMaxAmount = computed(() => {
+  const list = costSummary.value?.by_account_type ?? [];
+  return list.reduce((max, e) => Math.max(max, Number(e.amount || 0)), 0) || 1;
+});
 
 const tableWidthPx = computed(() => {
   const keys = shownColumns.value.map((col) => col.key);
@@ -93,6 +287,7 @@ function currentFilterParams() {
     provider_id: providerId.value || undefined,
     account_type: accountType.value || undefined,
     status: status.value || undefined,
+    group: activeTab.value !== 'cost' ? activeTab.value : undefined,
   };
 }
 
@@ -102,6 +297,24 @@ async function loadProviders() {
     providers.value = data.providers ?? [];
   } catch {
     providers.value = [];
+  }
+}
+
+async function loadDepartments() {
+  try {
+    const { data } = await window.axios.get('/manager/departments');
+    departments.value = data.departments ?? [];
+  } catch {
+    departments.value = [];
+  }
+}
+
+async function loadUsers() {
+  try {
+    const { data } = await window.axios.get('/api/credential/users');
+    allUsers.value = data.users ?? [];
+  } catch {
+    allUsers.value = [];
   }
 }
 
@@ -148,10 +361,13 @@ function providerLabel(credential) {
 
 function cellText(credential, key) {
   if (key === 'name') return credential.name || '—';
+  if (key === 'department') return credential.department?.name || '—';
   if (key === 'provider') return providerLabel(credential);
   if (key === 'account_type') return accountTypeLabel(credential.account_type);
+  if (key === 'email') return credential.email || '—';
   if (key === 'status') return statusLabel(credential.status);
   if (key === 'expires_at') return credential.expires_at ? formatDate(credential.expires_at) : '—';
+  if (key === 'access_url') return credential.access_url || '—';
   if (key === 'monthly_cost') {
     if (credential.cost_hidden || credential.monthly_cost == null) return '—';
     return `${Number(credential.monthly_cost).toLocaleString('vi-VN')} ${credential.currency || 'VND'}`;
@@ -218,6 +434,18 @@ function columnContentWidth(key, fonts) {
   const label = CREDENTIAL_COLUMNS.find((col) => col.key === key)?.label ?? '';
   let maxW = measureText(label, fonts.header);
   for (const credential of credentials.value) {
+    if (key === 'status') {
+      // Trạng thái giờ xếp 2 dòng dọc (label / countdown, xem template) —
+      // đo dòng DÀI NHẤT trong 2 dòng, không cộng dồn ngang. Trước đây
+      // cellText('status') chỉ đo statusLabel(), hoàn toàn bỏ sót phần
+      // countdown mà template render thêm — cột bị đo hụt, gây tràn/đè
+      // chữ sang cột kế khi countdown xuất hiện.
+      const line1 = measureText(cellText(credential, key), fonts.cell);
+      const countdown = countdownLabel(credential.expires_at);
+      const line2 = countdown ? measureText(countdown, fonts.cell) + 32 : 0; // buffer icon + margin-left
+      maxW = Math.max(maxW, line1, line2);
+      continue;
+    }
     maxW = Math.max(maxW, measureText(cellText(credential, key), fonts.cell));
   }
   return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA));
@@ -318,23 +546,25 @@ const form = reactive(emptyForm());
 
 function emptyForm() {
   return {
+    department_id: '',
     name: '',
     provider_id: '',
     account_type: 'user',
+    group: activeTab.value === 'internal' ? 'internal' : 'external',
     username: '',
     email: '',
     password: '',
     is_google_login: false,
-    google_account_owner: '',
+    google_account_owner_id: '',
     server_name: '',
     vps_cluster: '',
     domain: '',
+    access_url: '',
     database_name: '',
     is_root_account: false,
     is_iam_account: false,
     notes: '',
     purchased_at: '',
-    expires_at: '',
     monthly_cost: '',
     cost_hidden: false,
     currency: 'VND',
@@ -359,25 +589,66 @@ function openCreateDialog() {
   dialogOpen.value = true;
 }
 
+// ---------- Tạo nhanh Nhà cung cấp (nút + cạnh select trong modal) ----------
+const providerQuickOpen = ref(false);
+const providerQuickForm = reactive({ name: '', category: '' });
+const providerQuickSaving = ref(false);
+
+function openProviderQuick() {
+  providerQuickForm.name = '';
+  providerQuickForm.category = '';
+  providerQuickOpen.value = true;
+}
+
+function closeProviderQuick() {
+  if (providerQuickSaving.value) return;
+  providerQuickOpen.value = false;
+}
+
+async function submitProviderQuick() {
+  if (!providerQuickForm.name.trim()) {
+    showClientToast('error', 'Vui lòng nhập tên nhà cung cấp.');
+    return;
+  }
+  providerQuickSaving.value = true;
+  try {
+    const { data } = await window.axios.post('/api/credential/providers', {
+      name: providerQuickForm.name.trim(),
+      category: providerQuickForm.category.trim() || null,
+    });
+    providers.value.push(data.provider);
+    form.provider_id = data.provider.id;
+    providerQuickOpen.value = false;
+    showClientToast('success', 'Đã thêm nhà cung cấp.');
+  } catch (error) {
+    const message = error?.response?.data?.message || Object.values(error?.response?.data?.errors || {})[0]?.[0];
+    showClientToast('error', message || 'Không thêm được nhà cung cấp.');
+  } finally {
+    providerQuickSaving.value = false;
+  }
+}
+
 function openEditDialog(credential) {
   Object.assign(form, {
+    department_id: credential.department_id || '',
     name: credential.name || '',
     provider_id: credential.provider?.id || '',
     account_type: credential.account_type || 'user',
+    group: credential.group || 'external',
     username: credential.username || '',
     email: credential.email || '',
     password: '',
     is_google_login: Boolean(credential.is_google_login),
-    google_account_owner: credential.google_account_owner || '',
+    google_account_owner_id: credential.google_account_owner_id || '',
     server_name: credential.server_name || '',
     vps_cluster: credential.vps_cluster || '',
     domain: credential.domain || '',
+    access_url: credential.access_url || '',
     database_name: credential.database_name || '',
     is_root_account: Boolean(credential.is_root_account),
     is_iam_account: Boolean(credential.is_iam_account),
     notes: credential.notes || '',
     purchased_at: credential.purchased_at || '',
-    expires_at: credential.expires_at || '',
     monthly_cost: credential.monthly_cost ?? '',
     cost_hidden: Boolean(credential.cost_hidden),
     currency: credential.currency || 'VND',
@@ -402,10 +673,11 @@ async function submitForm() {
   formSaving.value = true;
   try {
     const payload = { ...form };
+    if (payload.department_id === '') payload.department_id = null;
     if (payload.provider_id === '') payload.provider_id = null;
     if (payload.monthly_cost === '') payload.monthly_cost = null;
     if (payload.purchased_at === '') payload.purchased_at = null;
-    if (payload.expires_at === '') payload.expires_at = null;
+    if (payload.google_account_owner_id === '') payload.google_account_owner_id = null;
     if (dialogMode.value === 'edit' && payload.password === '') delete payload.password;
 
     if (dialogMode.value === 'create') {
@@ -469,6 +741,10 @@ function onDocumentClick(event) {
 function handleDocumentKeydown(event) {
   if (event.key === 'Escape') {
     closeRowMenu();
+    if (providerQuickOpen.value) {
+      closeProviderQuick();
+      return;
+    }
     if (dialogOpen.value) closeDialog();
   }
 }
@@ -491,6 +767,8 @@ onMounted(() => {
   document.addEventListener('mousedown', onDocumentClick);
   document.addEventListener('keydown', handleDocumentKeydown);
   loadProviders();
+  loadDepartments();
+  loadUsers();
   loadCredentials(1);
   nextTick(() => {
     fitColumnsToContent();
@@ -523,7 +801,16 @@ onBeforeUnmount(() => {
     >
       <template #title>
         <span class="credential-page__title">
-          <AppIcon name="lock" :size="16" />
+          <button
+            v-if="canManage"
+            type="button"
+            class="credential-page__title-icon-btn credential-page__title-icon-btn--add"
+            aria-label="Thêm tài khoản"
+            @click="openCreateDialog"
+          >
+            <AppIcon name="plus" :size="18" :stroke-width="2" />
+          </button>
+          <AppIcon v-else name="lock" :size="16" />
           Quản lý tài khoản
           <button
             type="button"
@@ -534,36 +821,46 @@ onBeforeUnmount(() => {
           >
             <AppIcon name="refresh" :size="15" :class="{ 'credential-page__spin': loading }" />
           </button>
-          <button
-            v-if="canManage"
-            type="button"
-            class="credential-page__title-icon-btn credential-page__title-icon-btn--primary"
-            aria-label="Thêm tài khoản"
-            @click="openCreateDialog"
-          >
-            <AppIcon name="plus" :size="16" />
-          </button>
+          <AppIcon v-if="canManage" name="lock" :size="16" />
         </span>
       </template>
     </PageHeader>
 
-    <div class="credential-page__body">
-      <div class="credential-page__main">
-        <div v-if="!loading && credentials.length > 0" class="credential-page__summary">
-          <span class="credential-page__summary-item">
-            <span class="credential-page__dot credential-page__dot--neutral" />
-            {{ meta.total || 0 }} tài khoản
-          </span>
-          <span v-if="expiringSoonCount > 0" class="credential-page__summary-item">
-            <span class="credential-page__dot credential-page__dot--warning" />
-            {{ expiringSoonCount }} sắp/chuẩn bị hết hạn
-          </span>
-          <span v-if="expiredCount > 0" class="credential-page__summary-item">
-            <span class="credential-page__dot credential-page__dot--danger" />
-            {{ expiredCount }} đã hết hạn
-          </span>
-        </div>
+    <div class="credential-page__tabs" role="tablist" aria-label="Chế độ xem tài khoản">
+      <button
+        type="button"
+        class="credential-page__tab"
+        :class="{ 'credential-page__tab--active': activeTab === 'external' }"
+        role="tab"
+        :aria-selected="activeTab === 'external' ? 'true' : 'false'"
+        @click="switchTab('external')"
+      >
+        Phần mềm/Dịch vụ
+      </button>
+      <button
+        type="button"
+        class="credential-page__tab"
+        :class="{ 'credential-page__tab--active': activeTab === 'internal' }"
+        role="tab"
+        :aria-selected="activeTab === 'internal' ? 'true' : 'false'"
+        @click="switchTab('internal')"
+      >
+        Công cụ nội bộ
+      </button>
+      <button
+        type="button"
+        class="credential-page__tab"
+        :class="{ 'credential-page__tab--active': activeTab === 'cost' }"
+        role="tab"
+        :aria-selected="activeTab === 'cost' ? 'true' : 'false'"
+        @click="switchTab('cost')"
+      >
+        Dự toán chi phí
+      </button>
+    </div>
 
+    <div v-if="activeTab !== 'cost'" class="credential-page__body">
+      <div class="credential-page__main">
         <div v-if="hasVisibleFilterFields" class="credential-page__toolbar">
           <div class="credential-page__filters">
             <div v-if="visibleFilters.q" class="credential-page__field">
@@ -671,10 +968,36 @@ onBeforeUnmount(() => {
               <tr v-for="credential in credentials" v-else :key="credential.id" @click="inspect(credential)">
                 <td v-for="col in shownColumns" :key="col.key">
                   <template v-if="col.key === 'status'">
-                    <span class="credential-page__status">
-                      <span class="credential-page__dot" :class="`credential-page__dot--${statusTone(credential.status)}`" />
-                      {{ statusLabel(credential.status) }}
+                    <span class="credential-page__status-cell">
+                      <span class="credential-page__status">
+                        <span class="credential-page__dot" :class="`credential-page__dot--${statusTone(credential.status)}`" />
+                        {{ statusLabel(credential.status) }}
+                      </span>
+                      <span
+                        v-if="countdownLabel(credential.expires_at)"
+                        class="credential-page__countdown"
+                        :class="[
+                          countdownTone(credential.expires_at) ? `credential-page__countdown--${countdownTone(credential.expires_at)}` : '',
+                          isCountdownUrgent(credential.expires_at) ? 'credential-page__countdown--urgent' : '',
+                        ]"
+                      >
+                        <AppIcon v-if="isCountdownUrgent(credential.expires_at)" name="clock" :size="11" />
+                        {{ countdownLabel(credential.expires_at) }}
+                      </span>
                     </span>
+                  </template>
+                  <template v-else-if="col.key === 'access_url'">
+                    <a
+                      v-if="credential.access_url"
+                      :href="credential.access_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="credential-page__link"
+                      @click.stop
+                    >
+                      {{ credential.access_url }}
+                    </a>
+                    <span v-else class="credential-page__cell">—</span>
                   </template>
                   <span v-else class="credential-page__cell">{{ cellText(credential, col.key) }}</span>
                 </td>
@@ -736,6 +1059,216 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <!-- Tab Dự toán chi phí -->
+    <div v-else class="credential-page__cost">
+      <div v-if="costLoading" class="credential-page__cost-loading">Đang tải dự toán chi phí…</div>
+
+      <template v-else-if="costSummary">
+        <div class="credential-page__report-head">
+          <div>
+            <h2 class="credential-page__report-title">Báo cáo chi phí tài khoản dịch vụ</h2>
+            <p class="credential-page__report-desc">Tổng hợp chi phí hiện tại, phân bổ theo nhà cung cấp/loại tài khoản và dự phóng 12 tháng tới.</p>
+          </div>
+          <div class="credential-page__report-actions">
+            <a class="credential-page__export-btn" href="/api/credential/cost-summary/export-excel" target="_blank" rel="noopener">
+              <AppIcon name="fileSpreadsheet" :size="15" />
+              Xuất Excel
+            </a>
+            <a class="credential-page__export-btn" href="/api/credential/cost-summary/export-pdf" target="_blank" rel="noopener">
+              <AppIcon name="fileText" :size="15" />
+              Xuất PDF
+            </a>
+          </div>
+        </div>
+
+        <div class="credential-page__cost-stats">
+          <div class="credential-page__cost-stat credential-page__cost-stat--secondary">
+            <svg class="credential-page__cost-stat-deco" viewBox="0 0 80 80" aria-hidden="true">
+              <defs>
+                <clipPath id="cred-stat-clip-0">
+                  <path d="M80 0 L80 80 L20 80 C50 60 60 30 80 0 Z" />
+                </clipPath>
+              </defs>
+              <rect width="80" height="80" fill="var(--color-secondary)" clip-path="url(#cred-stat-clip-0)" opacity="0.1" />
+            </svg>
+            <span class="credential-page__cost-stat-label">Tổng chi phí mỗi tháng</span>
+            <span class="credential-page__cost-stat-value">{{ costFormat(animatedTotalMonthly) }}</span>
+          </div>
+          <div class="credential-page__cost-stat credential-page__cost-stat--tertiary">
+            <svg class="credential-page__cost-stat-deco" viewBox="0 0 80 80" aria-hidden="true">
+              <defs>
+                <clipPath id="cred-stat-clip-1">
+                  <path d="M80 0 L80 80 L20 80 C50 60 60 30 80 0 Z" />
+                </clipPath>
+              </defs>
+              <rect width="80" height="80" fill="var(--color-tertiary)" clip-path="url(#cred-stat-clip-1)" opacity="0.1" />
+            </svg>
+            <span class="credential-page__cost-stat-label">Ước tính mỗi năm</span>
+            <span class="credential-page__cost-stat-value">{{ costFormat(animatedYearly) }}</span>
+          </div>
+          <div class="credential-page__cost-stat credential-page__cost-stat--muted">
+            <svg class="credential-page__cost-stat-deco" viewBox="0 0 80 80" aria-hidden="true">
+              <defs>
+                <clipPath id="cred-stat-clip-2">
+                  <path d="M80 0 L80 80 L20 80 C50 60 60 30 80 0 Z" />
+                </clipPath>
+              </defs>
+              <rect width="80" height="80" fill="var(--color-text-muted)" clip-path="url(#cred-stat-clip-2)" opacity="0.1" />
+            </svg>
+            <span class="credential-page__cost-stat-label">Số tài khoản đang tính phí</span>
+            <span class="credential-page__cost-stat-value">{{ animatedCount }}</span>
+          </div>
+        </div>
+
+        <div v-if="providerDonut.total > 0" class="credential-page__cost-panels">
+          <div class="credential-page__cost-card">
+            <h3 class="credential-page__cost-card-title">Theo nhà cung cấp</h3>
+            <div class="credential-page__donut-row">
+              <div class="credential-page__donut-wrap">
+                <svg viewBox="0 0 120 120" class="credential-page__donut" role="img" aria-label="Biểu đồ chi phí theo nhà cung cấp">
+                  <defs>
+                    <linearGradient
+                      v-for="(slice, i) in providerDonut.slices"
+                      :id="`cred-cost-grad-${i}`"
+                      :key="`grad-${slice.key}`"
+                      x1="0%"
+                      y1="0%"
+                      x2="100%"
+                      y2="100%"
+                    >
+                      <stop offset="0%" :style="{ stopColor: slice.color }" />
+                      <stop offset="100%" :style="{ stopColor: sliceGradientDark(slice.color) }" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    v-for="(slice, i) in providerDonut.slices"
+                    :key="slice.key"
+                    :d="slice.path"
+                    :fill="`url(#cred-cost-grad-${i})`"
+                    class="credential-page__donut-slice"
+                    :class="{ 'credential-page__donut-slice--dim': costHoverSlice && costHoverSlice !== slice.key }"
+                    @mouseenter="costHoverSlice = slice.key"
+                    @mouseleave="costHoverSlice = null"
+                  />
+                </svg>
+                <div class="credential-page__donut-center">
+                  <span class="credential-page__donut-center-label">{{ costHoverInfo ? costHoverInfo.label : 'Tổng' }}</span>
+                  <span class="credential-page__donut-center-value">
+                    {{ costFormat(costHoverInfo ? costHoverInfo.amount : providerDonut.total) }}
+                  </span>
+                </div>
+              </div>
+
+              <ul class="credential-page__legend">
+                <li
+                  v-for="slice in providerDonut.slices"
+                  :key="slice.key"
+                  class="credential-page__legend-item"
+                  :class="{ 'credential-page__legend-item--dim': costHoverSlice && costHoverSlice !== slice.key }"
+                  @mouseenter="costHoverSlice = slice.key"
+                  @mouseleave="costHoverSlice = null"
+                >
+                  <span class="credential-page__legend-dot" :style="{ background: slice.color }" />
+                  <span class="credential-page__legend-label">{{ slice.label }}</span>
+                  <span class="credential-page__legend-value">{{ costFormat(slice.amount) }}</span>
+                  <span class="credential-page__legend-percent">{{ slice.percent.toFixed(1) }}%</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="credential-page__cost-card">
+            <h3 class="credential-page__cost-card-title">Theo loại tài khoản</h3>
+            <ul class="credential-page__bars">
+              <li v-for="(entry, index) in costSummary.by_account_type" :key="entry.label" class="credential-page__bar-row">
+                <span class="credential-page__bar-label">{{ entry.label }}</span>
+                <span class="credential-page__bar-track">
+                  <span
+                    class="credential-page__bar-fill"
+                    :style="{
+                      width: `${(entry.amount / accountTypeMaxAmount) * 100}%`,
+                      background: `linear-gradient(90deg, ${sliceColor(index)} 0%, ${sliceGradientDark(sliceColor(index))} 100%)`,
+                    }"
+                  />
+                </span>
+                <span class="credential-page__bar-value">{{ costFormat(entry.amount) }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <p v-else class="credential-page__cost-empty">Chưa có tài khoản nào tính chi phí để dự toán.</p>
+
+        <div v-if="costForecast" class="credential-page__cost-card">
+          <h3 class="credential-page__cost-card-title">Dự phóng chi phí 12 tháng tới</h3>
+          <p class="credential-page__cost-note">{{ costForecast.note }}</p>
+
+          <div class="credential-page__forecast-wrap">
+            <svg viewBox="0 0 600 160" class="credential-page__forecast" preserveAspectRatio="none" role="img" aria-label="Biểu đồ dự phóng chi phí 12 tháng tới">
+              <defs>
+                <linearGradient id="cred-forecast-area" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" :style="{ stopColor: 'var(--color-secondary)', stopOpacity: 0.35 }" />
+                  <stop offset="100%" :style="{ stopColor: 'var(--color-secondary)', stopOpacity: 0 }" />
+                </linearGradient>
+              </defs>
+              <path :d="forecastChart.areaPath" fill="url(#cred-forecast-area)" />
+              <path :d="forecastChart.path" fill="none" stroke="var(--color-secondary)" stroke-width="2" />
+              <g v-for="(point, i) in forecastChart.points" :key="point.month">
+                <circle
+                  :cx="point.x"
+                  :cy="point.y"
+                  :r="point.expiring.length ? 6 : 3"
+                  :fill="point.expiring.length ? 'var(--color-danger)' : 'var(--color-secondary)'"
+                  class="credential-page__forecast-point"
+                  @mouseenter="forecastHoverMonth = i"
+                  @mouseleave="forecastHoverMonth = null"
+                />
+              </g>
+            </svg>
+            <div class="credential-page__forecast-labels">
+              <span v-for="m in costForecast.months" :key="m.month">{{ monthShortLabel(m.month) }}</span>
+            </div>
+          </div>
+
+          <div v-if="forecastHoverMonth !== null" class="credential-page__forecast-tooltip">
+            <strong>{{ monthShortLabel(costForecast.months[forecastHoverMonth].month) }}:</strong>
+            {{ costFormat(costForecast.months[forecastHoverMonth].total_vnd) }}
+            <span v-if="costForecast.months[forecastHoverMonth].expiring.length">
+              — hết hạn: {{ costForecast.months[forecastHoverMonth].expiring.map((e) => e.name).join(', ') }}
+            </span>
+          </div>
+        </div>
+
+        <div v-if="sortedSheetItems.length" class="credential-page__cost-card">
+          <h3 class="credential-page__cost-card-title">Bảng chi tiết chi phí</h3>
+          <div class="credential-page__sheet-wrap hide-scrollbar">
+            <table class="credential-page__table credential-page__sheet-table">
+              <thead>
+                <tr>
+                  <th @click="toggleSheetSort('name')">Tên</th>
+                  <th @click="toggleSheetSort('provider')">Nhà cung cấp</th>
+                  <th @click="toggleSheetSort('account_type')">Loại</th>
+                  <th @click="toggleSheetSort('monthly_cost_vnd')">Chi phí/tháng</th>
+                  <th @click="toggleSheetSort('expires_at')">Ngày hết hạn</th>
+                  <th @click="toggleSheetSort('status')">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in sortedSheetItems" :key="row.id">
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.provider }}</td>
+                  <td>{{ row.account_type }}</td>
+                  <td>{{ costFormat(row.monthly_cost_vnd) }}</td>
+                  <td>{{ row.expires_at ? formatDate(row.expires_at) : '—' }}</td>
+                  <td>{{ statusLabel(row.status) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+    </div>
+
     <!-- Modal tạo/sửa (skill form-modal) -->
     <Teleport to="body">
       <Transition name="credential-dialog-fade">
@@ -779,15 +1312,32 @@ onBeforeUnmount(() => {
             <div class="credential-page__dialog-body hide-scrollbar">
               <form v-if="dialogTab === 'info'" class="credential-page__form-info" @submit.prevent="submitForm">
                 <div class="credential-page__form-field">
-                  <label class="credential-page__label" for="cred-name">Tên tài khoản</label>
+                  <label class="credential-page__label" for="cred-name">Tên tài khoản <span class="credential-page__required">*</span></label>
                   <input id="cred-name" v-model="form.name" type="text" class="credential-page__input" placeholder="Canva Pro - Marketing" />
+                </div>
+                <div v-if="canChooseDepartment" class="credential-page__form-field">
+                  <label class="credential-page__label" for="cred-department">Phòng ban sở hữu</label>
+                  <select id="cred-department" v-model="form.department_id" class="credential-page__input">
+                    <option value="">{{ dialogMode === 'create' ? 'Phòng ban của tôi' : 'Chưa gán phòng ban' }}</option>
+                    <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
+                  </select>
                 </div>
                 <div class="credential-page__form-field">
                   <label class="credential-page__label" for="cred-provider">Nhà cung cấp</label>
-                  <select id="cred-provider" v-model="form.provider_id" class="credential-page__input">
-                    <option value="">Chưa chọn</option>
-                    <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.name }}</option>
-                  </select>
+                  <div class="credential-page__inline-add">
+                    <select id="cred-provider" v-model="form.provider_id" class="credential-page__input">
+                      <option value="">Chưa chọn</option>
+                      <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.name }}</option>
+                    </select>
+                    <button
+                      type="button"
+                      class="credential-page__inline-add-btn"
+                      aria-label="Thêm nhà cung cấp mới"
+                      @click="openProviderQuick"
+                    >
+                      <AppIcon name="plus" :size="14" />
+                    </button>
+                  </div>
                 </div>
                 <div class="credential-page__form-field">
                   <label class="credential-page__label" for="cred-type">Loại tài khoản</label>
@@ -823,7 +1373,15 @@ onBeforeUnmount(() => {
                 </div>
                 <div v-if="form.is_google_login" class="credential-page__form-field">
                   <label class="credential-page__label" for="cred-google-owner">Google này thuộc về ai</label>
-                  <input id="cred-google-owner" v-model="form.google_account_owner" type="text" class="credential-page__input" placeholder="Vd. Phòng Công nghệ" />
+                  <select id="cred-google-owner" v-model="form.google_account_owner_id" class="credential-page__input">
+                    <option value="">Chưa gắn với người cụ thể</option>
+                    <option v-for="u in allUsers" :key="u.id" :value="u.id">{{ u.name }} ({{ u.email }})</option>
+                  </select>
+                </div>
+
+                <div class="credential-page__form-field credential-page__form-field--span2">
+                  <label class="credential-page__label" for="cred-access-url">Link truy cập</label>
+                  <input id="cred-access-url" v-model="form.access_url" type="text" class="credential-page__input" placeholder="https://..." />
                 </div>
 
                 <template v-if="showInfraFields">
@@ -873,10 +1431,7 @@ onBeforeUnmount(() => {
                 <div class="credential-page__form-field">
                   <label class="credential-page__label" for="cred-purchased">Ngày mua</label>
                   <input id="cred-purchased" v-model="form.purchased_at" type="date" class="credential-page__input" placeholder="dd/mm/yyyy" />
-                </div>
-                <div class="credential-page__form-field">
-                  <label class="credential-page__label" for="cred-expires">Ngày hết hạn</label>
-                  <input id="cred-expires" v-model="form.expires_at" type="date" class="credential-page__input" placeholder="dd/mm/yyyy" />
+                  <p class="credential-page__hint">Ngày hết hạn sẽ tự động = ngày mua + 1 tháng.</p>
                 </div>
                 <div class="credential-page__form-field">
                   <label class="credential-page__label" for="cred-cost">Chi phí / tháng</label>
@@ -904,6 +1459,45 @@ onBeforeUnmount(() => {
       </Transition>
     </Teleport>
 
+    <!-- Modal phụ: tạo nhanh Nhà cung cấp -->
+    <Teleport to="body">
+      <Transition name="credential-dialog-fade">
+        <div
+          v-if="providerQuickOpen"
+          class="credential-page__dialog credential-page__dialog--quick"
+          role="presentation"
+          @mousedown.self="closeProviderQuick"
+        >
+          <div class="credential-page__quick-panel" role="dialog" aria-modal="true" aria-labelledby="provider-quick-title">
+            <div class="credential-page__dialog-head">
+              <h3 id="provider-quick-title" class="credential-page__dialog-title">Thêm nhà cung cấp</h3>
+              <button type="button" class="credential-page__dialog-close" aria-label="Đóng" :disabled="providerQuickSaving" @click="closeProviderQuick">
+                <AppIcon name="close" :size="16" />
+              </button>
+            </div>
+
+            <div class="credential-page__form-field">
+              <label class="credential-page__label" for="pq-name">Tên nhà cung cấp <span class="credential-page__required">*</span></label>
+              <input id="pq-name" v-model="providerQuickForm.name" type="text" class="credential-page__input" placeholder="Vd. Zoom" />
+            </div>
+            <div class="credential-page__form-field">
+              <label class="credential-page__label" for="pq-category">Nhóm (không bắt buộc)</label>
+              <input id="pq-category" v-model="providerQuickForm.category" type="text" class="credential-page__input" placeholder="Vd. Công cụ họp trực tuyến" />
+            </div>
+
+            <div class="credential-page__dialog-actions">
+              <button type="button" class="credential-page__dialog-btn credential-page__dialog-btn--ghost" :disabled="providerQuickSaving" @click="closeProviderQuick">
+                Huỷ
+              </button>
+              <button type="button" class="credential-page__dialog-btn credential-page__dialog-btn--primary" :disabled="providerQuickSaving" @click="submitProviderQuick">
+                {{ providerQuickSaving ? 'Đang lưu…' : 'Lưu' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <ConfirmDialog
       :open="Boolean(deleteTarget)"
       title="Xoá tài khoản?"
@@ -922,7 +1516,7 @@ onBeforeUnmount(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: var(--space-5);
+  padding: 0 var(--space-5) var(--space-3);
   overflow: hidden;
 }
 
@@ -957,35 +1551,45 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
-.credential-page__title-icon-btn--primary {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+.credential-page__title-icon-btn--add {
+  width: 2rem;
+  height: 2rem;
+  color: var(--color-primary);
 }
 
-.credential-page__title-icon-btn--primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-  color: var(--color-on-primary);
+.credential-page__title-icon-btn--add:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-primary);
 }
 
-.credential-page__summary {
+/* ---------- Tab switcher (Danh sách / Dự toán chi phí) ---------- */
+.credential-page__tabs {
   flex-shrink: 0;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
   gap: var(--space-4);
-  margin-top: var(--space-3);
+  padding: 0 var(--space-1);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.credential-page__tab {
+  padding: var(--space-3) var(--space-1);
+  border: none;
+  background: transparent;
   color: var(--color-text-muted);
-  font-size: 0.8125rem;
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 0 2px 0 transparent;
+  cursor: pointer;
 }
 
-.credential-page__summary-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
+.credential-page__tab:hover {
+  color: var(--color-text);
 }
 
-.credential-page__dot--neutral {
-  background: var(--color-text-muted);
+.credential-page__tab--active {
+  color: var(--color-primary);
+  box-shadow: 0 2px 0 var(--color-primary);
 }
 
 .credential-page__spin {
@@ -1053,6 +1657,10 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+.credential-page__required {
+  color: var(--color-danger);
+}
+
 .credential-page__input {
   width: 100%;
   min-width: 0;
@@ -1081,6 +1689,12 @@ onBeforeUnmount(() => {
 .credential-page__textarea {
   resize: vertical;
   min-height: 4.5rem;
+}
+
+.credential-page__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
 }
 
 .credential-page__check {
@@ -1190,10 +1804,70 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.credential-page__status-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  white-space: normal;
+}
+
 .credential-page__status {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.credential-page__countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.credential-page__countdown--danger {
+  color: var(--color-danger);
+}
+
+.credential-page__countdown--warning {
+  color: var(--color-warning);
+}
+
+.credential-page__countdown--urgent {
+  font-weight: 700;
+  animation: credential-countdown-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes credential-countdown-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.credential-page__link {
+  display: block;
+  overflow: hidden;
+  color: var(--color-tertiary);
+  font-size: 0.8125rem;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.credential-page__link:hover {
+  text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credential-page__countdown--urgent {
+    animation: none;
+  }
 }
 
 .credential-page__dot {
@@ -1286,6 +1960,420 @@ onBeforeUnmount(() => {
   color: var(--color-danger);
 }
 
+/* ---------- Tab Dự toán chi phí ---------- */
+.credential-page__cost {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-1) var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.credential-page__cost-loading,
+.credential-page__cost-empty {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  padding: var(--space-5) 0;
+}
+
+.credential-page__report-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.credential-page__report-title {
+  margin: 0 0 0.25rem;
+  color: var(--color-text);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.credential-page__report-desc {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.credential-page__report-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.credential-page__export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.25rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.credential-page__export-btn:hover {
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+}
+
+.credential-page__cost-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.credential-page__cost-stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  animation: credential-cost-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.credential-page__cost-stat:hover {
+  transform: translateY(-2px);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-md);
+}
+
+.credential-page__cost-stat-deco {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5rem;
+  height: 5rem;
+  pointer-events: none;
+}
+
+.credential-page__cost-stat-label {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.credential-page__cost-stat-value {
+  color: var(--color-text);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.credential-page__cost-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.credential-page__cost-card {
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  animation: credential-cost-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.credential-page__cost-card:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-md);
+}
+
+.credential-page__cost-card-title {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.credential-page__donut-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.credential-page__donut-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 9rem;
+  height: 9rem;
+}
+
+.credential-page__donut {
+  width: 100%;
+  height: 100%;
+  transform: rotate(0deg);
+}
+
+.credential-page__donut-slice {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform-origin: 60px 60px;
+  cursor: pointer;
+}
+
+.credential-page__donut-slice--dim {
+  opacity: 0.35;
+}
+
+.credential-page__donut-slice:hover {
+  transform: scale(1.03);
+}
+
+.credential-page__donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.125rem;
+  pointer-events: none;
+}
+
+.credential-page__donut-center-label {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+}
+
+.credential-page__donut-center-value {
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  max-width: 6.5rem;
+  overflow-wrap: break-word;
+}
+
+.credential-page__legend {
+  flex: 1;
+  min-width: 12rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.credential-page__legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.credential-page__legend-item:hover {
+  background: var(--color-surface-muted);
+}
+
+.credential-page__legend-item--dim {
+  opacity: 0.4;
+}
+
+.credential-page__legend-dot {
+  flex-shrink: 0;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: var(--radius-full);
+}
+
+.credential-page__legend-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.credential-page__legend-value {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.credential-page__legend-percent {
+  flex-shrink: 0;
+  width: 3rem;
+  text-align: right;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.credential-page__bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.credential-page__bar-row {
+  display: grid;
+  grid-template-columns: 8rem 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.credential-page__bar-label {
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.credential-page__bar-track {
+  height: 0.625rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+
+.credential-page__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  animation: credential-bar-grow 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.credential-page__bar-value {
+  min-width: 6rem;
+  text-align: right;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.credential-page__cost-note {
+  margin: calc(var(--space-4) * -1) 0 var(--space-4);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.credential-page__forecast-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.credential-page__forecast {
+  width: 100%;
+  height: 10rem;
+}
+
+.credential-page__forecast-point {
+  cursor: pointer;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.15s ease;
+}
+
+.credential-page__forecast-point:hover {
+  transform: scale(1.3);
+}
+
+.credential-page__forecast-labels {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+}
+
+.credential-page__forecast-tooltip {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+}
+
+.credential-page__sheet-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.credential-page__sheet-table {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+}
+
+.credential-page__sheet-table thead th {
+  position: static;
+  cursor: pointer;
+  user-select: none;
+}
+
+.credential-page__sheet-table thead th:hover {
+  color: var(--color-text);
+}
+
+@keyframes credential-cost-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes credential-bar-grow {
+  from {
+    width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credential-page__cost-stat,
+  .credential-page__cost-card,
+  .credential-page__bar-fill {
+    animation: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .credential-page__cost-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .credential-page__cost-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .credential-page__bar-row {
+    grid-template-columns: 6rem 1fr auto;
+  }
+}
+
 /* ---------- Modal tạo/sửa ---------- */
 .credential-page__dialog {
   position: fixed;
@@ -1299,13 +2387,12 @@ onBeforeUnmount(() => {
 }
 
 .credential-page__dialog-panel {
-  width: min(64rem, calc(100vw - 2.5rem));
-  height: min(40rem, calc(100vh - 2.5rem));
+  width: min(56rem, calc(100vw - 2.5rem));
   max-height: calc(100vh - 2.5rem);
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: 1.5rem 1.75rem 1.25rem;
+  gap: var(--space-3);
+  padding: 1.25rem 1.5rem 1.125rem;
   overflow: hidden;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
@@ -1384,7 +2471,6 @@ onBeforeUnmount(() => {
 }
 
 .credential-page__dialog-body {
-  flex: 1;
   min-height: 0;
   overflow: auto;
 }
@@ -1405,6 +2491,51 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.375rem;
   min-width: 0;
+}
+
+.credential-page__inline-add {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.credential-page__inline-add select {
+  flex: 1;
+  min-width: 0;
+}
+
+.credential-page__inline-add-btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.credential-page__inline-add-btn:hover {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+/* ---------- Modal phụ: tạo nhanh Nhà cung cấp ---------- */
+.credential-page__dialog--quick {
+  z-index: 320;
+}
+
+.credential-page__quick-panel {
+  width: min(24rem, calc(100vw - 2.5rem));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
 }
 
 .credential-page__dialog-actions {
@@ -1488,7 +2619,6 @@ onBeforeUnmount(() => {
 
   .credential-page__dialog-panel {
     width: 100%;
-    height: min(94vh, calc(100vh - 1.25rem));
     max-height: min(94vh, calc(100vh - 1.25rem));
     padding: var(--space-4);
   }

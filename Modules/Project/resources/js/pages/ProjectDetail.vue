@@ -85,8 +85,10 @@ const avatarInput = ref(null);
 const actionDialog = reactive({ kind: null, extra: {} });
 const taskMenuOpen = ref(false);
 const moreMenuOpen = ref(false);
+const exportMenuOpen = ref(false);
 const taskMenuRoot = ref(null);
 const moreMenuRoot = ref(null);
+const exportMenuRoot = ref(null);
 const tabsRoot = ref(null);
 const documentsTab = ref(null);
 const testcaseTab = ref(null);
@@ -94,6 +96,7 @@ const feedbackTab = ref(null);
 const reportTab = ref(null);
 const taskMenuPlacement = reactive({ up: false, right: false });
 const moreMenuPlacement = reactive({ up: false, right: true });
+const exportMenuPlacement = reactive({ up: false, right: true });
 
 function normalizeTabKey(raw) {
   const key = String(raw || 'general');
@@ -219,9 +222,10 @@ onBeforeUnmount(() => {
 
 function handleKeydown(event) {
   if (event.key === 'Escape') {
-    if (taskMenuOpen.value || moreMenuOpen.value) {
+    if (taskMenuOpen.value || moreMenuOpen.value || exportMenuOpen.value) {
       taskMenuOpen.value = false;
       moreMenuOpen.value = false;
+      exportMenuOpen.value = false;
     }
   }
 }
@@ -233,11 +237,15 @@ function onDocumentPointerDown(event) {
   if (moreMenuOpen.value && moreMenuRoot.value && !moreMenuRoot.value.contains(event.target)) {
     moreMenuOpen.value = false;
   }
+  if (exportMenuOpen.value && exportMenuRoot.value && !exportMenuRoot.value.contains(event.target)) {
+    exportMenuOpen.value = false;
+  }
 }
 
 function openAction(kind, extra = {}) {
   taskMenuOpen.value = false;
   moreMenuOpen.value = false;
+  exportMenuOpen.value = false;
   actionDialog.kind = kind;
   actionDialog.extra = extra;
 }
@@ -299,8 +307,24 @@ function toggleTaskMenu() {
 
 function toggleMoreMenu() {
   taskMenuOpen.value = false;
+  exportMenuOpen.value = false;
   moreMenuOpen.value = !moreMenuOpen.value;
   if (moreMenuOpen.value) placeMenu(moreMenuRoot.value, moreMenuPlacement, true);
+}
+
+function toggleExportMenu() {
+  taskMenuOpen.value = false;
+  moreMenuOpen.value = false;
+  exportMenuOpen.value = !exportMenuOpen.value;
+  if (exportMenuOpen.value) placeMenu(exportMenuRoot.value, exportMenuPlacement, true);
+}
+
+async function runExport(kind) {
+  exportMenuOpen.value = false;
+  if (!reportTab.value) return;
+  if (kind === 'csv') reportTab.value.exportCsv();
+  else if (kind === 'xlsx') await reportTab.value.exportXlsx();
+  else if (kind === 'pdf') await reportTab.value.exportPdf();
 }
 
 function goBack() {
@@ -849,10 +873,52 @@ const performers = computed(() => {
                 <span class="pd__action-icon"><AppIcon name="fileText" :size="15" :stroke-width="1.75" /></span>
                 <span class="pd__action-label">Báo cáo phòng ban</span>
               </button>
-              <button type="button" class="pd__action pd__action--primary" @click="reportTab?.exportCsv()">
-                <span class="pd__action-icon"><AppIcon name="fileSpreadsheet" :size="15" :stroke-width="1.75" /></span>
-                <span class="pd__action-label">Xuất CSV</span>
-              </button>
+              <div ref="exportMenuRoot" class="pd__action-wrap">
+                <button
+                  type="button"
+                  class="pd__action pd__action--primary"
+                  :class="{ 'pd__action--open': exportMenuOpen }"
+                  :disabled="!reportTab?.hasData || reportTab?.xlsxBusy || reportTab?.pdfBusy"
+                  aria-haspopup="menu"
+                  :aria-expanded="exportMenuOpen ? 'true' : 'false'"
+                  @click="toggleExportMenu"
+                >
+                  <span class="pd__action-icon"><AppIcon name="fileDown" :size="15" :stroke-width="1.75" /></span>
+                  <span class="pd__action-label">
+                    {{ reportTab?.xlsxBusy || reportTab?.pdfBusy ? 'Đang xuất…' : 'Xuất báo cáo' }}
+                  </span>
+                  <AppIcon name="chevronDown" :size="14" :stroke-width="2" />
+                </button>
+                <div
+                  v-if="exportMenuOpen"
+                  class="pd__menu pd__menu--export"
+                  :class="{ 'pd__menu--up': exportMenuPlacement.up, 'pd__menu--right': exportMenuPlacement.right }"
+                  role="menu"
+                  aria-label="Định dạng xuất báo cáo"
+                >
+                  <button type="button" class="pd__menu-item" role="menuitem" @click="runExport('csv')">
+                    <AppIcon name="fileText" :size="14" :stroke-width="1.75" />
+                    <span class="pd__menu-item-copy">
+                      <span class="pd__menu-item-title">CSV</span>
+                      <span class="pd__menu-item-sub">Mở bằng Excel, Google Sheets</span>
+                    </span>
+                  </button>
+                  <button type="button" class="pd__menu-item" role="menuitem" @click="runExport('xlsx')">
+                    <AppIcon name="fileSpreadsheet" :size="14" :stroke-width="1.75" />
+                    <span class="pd__menu-item-copy">
+                      <span class="pd__menu-item-title">Excel (.xlsx)</span>
+                      <span class="pd__menu-item-sub">Có định dạng cột, nhóm tiêu đề</span>
+                    </span>
+                  </button>
+                  <button type="button" class="pd__menu-item" role="menuitem" @click="runExport('pdf')">
+                    <AppIcon name="fileDown" :size="14" :stroke-width="1.75" />
+                    <span class="pd__menu-item-copy">
+                      <span class="pd__menu-item-title">PDF</span>
+                      <span class="pd__menu-item-sub">Bảng in sẵn, chia trang tự động</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <span v-if="showContextActions && showMoreMenu" class="pd__action-split" aria-hidden="true" />
@@ -1565,6 +1631,10 @@ const performers = computed(() => {
   bottom: calc(100% + 0.25rem);
 }
 
+.pd__menu--export {
+  min-width: 17.5rem;
+}
+
 .pd__menu-item {
   display: flex;
   width: 100%;
@@ -1591,6 +1661,26 @@ const performers = computed(() => {
 
 .pd__menu-item--danger:hover {
   background: var(--color-danger-tint-bg);
+}
+
+.pd__menu-item-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.pd__menu-item-title {
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.pd__menu-item-sub {
+  color: var(--color-text-muted);
+  font-size: 0.71875rem;
+  font-weight: 400;
+  font-style: italic;
 }
 
 .pd__menu-sep {

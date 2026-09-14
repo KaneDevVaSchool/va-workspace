@@ -41,6 +41,11 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
 
     Route::middleware('permission:task.create')->group(function () {
         Route::post('/tasks', [TaskController::class, 'storeStandalone'])->name('tasks.store-standalone');
+        // "Thêm công việc nhanh" xuyên project (trang Tất cả công việc) — mỗi
+        // dòng tự chọn project_id riêng. Route tĩnh /tasks/bulk PHẢI đăng ký
+        // TRƯỚC /{project}/tasks/bulk (wildcard) ngay dưới, dù khác param
+        // count/không xung đột thật — giữ nhất quán thói quen của file này.
+        Route::post('/tasks/bulk', [TaskController::class, 'storeBulkStandalone'])->name('tasks.store-bulk-standalone');
         // Route tĩnh /tasks/bulk và /structure/{type} PHẢI trước wildcard {project}/tasks
         // nếu cùng prefix — nhưng bulk gắn {project} nên đăng ký cạnh store.
         Route::post('/{project}/tasks/bulk', [TaskController::class, 'storeBulk'])->name('tasks.store-bulk');

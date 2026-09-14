@@ -54,6 +54,8 @@ const deleteDescription = computed(() =>
 );
 
 const sanitizedContent = computed(() => sanitizeCommentHtml(props.comment.content));
+/** Tin của chính mình căn phải kiểu khung chat (Messenger/Zalo) — tin người khác căn trái, chỉ áp dụng ở comment gốc (depth 0), trả lời lồng vẫn giữ layout cũ vì không có chỗ căn phải trong khối thụt lề. */
+const isMine = computed(() => props.depth === 0 && props.comment.author?.id === auth.user?.id);
 const attachments = computed(() => props.comment.attachments ?? []);
 const imageAttachments = computed(() => attachments.value.filter((item) => item.type === 'image'));
 const fileAttachments = computed(() => attachments.value.filter((item) => item.type !== 'image'));
@@ -168,7 +170,7 @@ async function confirmRemove() {
 </script>
 
 <template>
-  <div class="comment-item" :class="{ 'comment-item--reply': depth > 0 }">
+  <div class="comment-item" :class="{ 'comment-item--reply': depth > 0, 'comment-item--mine': isMine }">
     <div class="comment">
       <img
         v-if="comment.author.avatar_url"
@@ -182,12 +184,13 @@ async function confirmRemove() {
       </div>
 
       <div class="comment__body">
-        <div class="comment__bubble" :class="{ 'comment__bubble--pinned': localIsPinned }">
+        <div class="comment__bubble" :class="{ 'comment__bubble--pinned': localIsPinned, 'comment__bubble--mine': isMine }">
           <div class="comment__head">
-            <span class="comment__author">
+            <span v-if="!isMine" class="comment__author">
               <AppIcon v-if="localIsPinned" name="pin" :size="12" />
               {{ comment.author.name }}
             </span>
+            <AppIcon v-else-if="localIsPinned" name="pin" :size="12" class="comment__pin-icon" />
             <time class="comment__time" :datetime="comment.created_at">
               {{ new Date(comment.created_at).toLocaleString('vi-VN') }}
             </time>
@@ -342,6 +345,26 @@ async function confirmRemove() {
   gap: var(--space-2);
 }
 
+/* Tin của chính mình — đảo chiều cả hàng để avatar/nút thao tác nằm bên
+   phải, bubble bám theo (kiểu Messenger/Zalo). Chỉ áp dụng ở comment gốc
+   (component check isMine dựa vào depth === 0). */
+.comment-item--mine .comment {
+  flex-direction: row-reverse;
+}
+
+.comment-item--mine .comment__body {
+  align-items: flex-end;
+}
+
+.comment-item--mine .comment__meta-row {
+  flex-direction: row-reverse;
+}
+
+.comment-item--mine .comment__reaction-summary {
+  margin-left: 0;
+  margin-right: auto;
+}
+
 .comment__avatar {
   width: 28px;
   height: 28px;
@@ -375,6 +398,9 @@ async function confirmRemove() {
 }
 
 .comment__bubble {
+  display: inline-block;
+  max-width: 100%;
+  min-width: 0;
   background: var(--color-surface-muted);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
@@ -386,11 +412,27 @@ async function confirmRemove() {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-gold-600) 30%, transparent);
 }
 
+/* Bubble tin của mình — nền primary nhạt để phân biệt với tin người khác,
+   vẫn giữ chữ màu thường (không dùng nền primary đặc + chữ trắng) để chữ
+   mention/link bên trong không bị đổi tông theo mục 12 (không hard-code hex). */
+.comment__bubble--mine {
+  background: var(--color-primary-surface);
+}
+
+.comment__bubble--mine.comment__bubble--pinned {
+  background: var(--color-gold-surface);
+}
+
 .comment__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-2);
+}
+
+.comment__pin-icon {
+  flex-shrink: 0;
+  color: var(--color-gold-600);
 }
 
 .comment__author {
@@ -457,9 +499,15 @@ async function confirmRemove() {
 
 .comment__attachments {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: var(--space-2);
   margin-top: var(--space-2);
+  min-width: 0;
+}
+
+.comment__attachment {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .comment__images {
@@ -471,11 +519,19 @@ async function confirmRemove() {
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  min-width: 0;
+  max-width: 100%;
   background: var(--color-surface);
   border-radius: var(--radius-md);
   padding: var(--space-1) var(--space-2);
   font-size: 0.75rem;
   color: var(--color-text);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.comment__attachment-file :deep(svg) {
+  flex-shrink: 0;
 }
 
 .comment__meta-row {

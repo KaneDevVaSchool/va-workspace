@@ -1,15 +1,23 @@
 <script setup>
 //
 // Bảng ma trận role × permission, nhóm theo module. Ô đọc trực tiếp từ
-// props.matrix (PermissionService::matrixFor()). Click ô/dòng = mở chi tiết.
+// props.matrix (PermissionService::matrixFor()). Click ô/dòng = mở chi tiết,
+// double-click ô = cấp/thu hồi ngay (cha hiện ConfirmDialog). Header mỗi
+// nhóm module còn có nút "Cấp cả module"/"Thu hồi cả module" theo từng cột
+// role — gộp nhiều lần bấm ô lẻ thành 1 thao tác khi cấu hình cả module.
 //
 import { computed } from 'vue';
+import AppIcon from '@/components/AppIcon.vue';
 import PermissionCell from './PermissionCell.vue';
 import { roleCodeFromColumn } from '../constants/permissions.js';
 
 const props = defineProps({
   shownColumns: { type: Array, required: true },
   permissions: { type: Array, required: true },
+  // Toàn bộ quyền đã lọc nhưng CHƯA phân trang — chỉ dùng để tính đúng
+  // trạng thái nút "Cấp/Thu hồi cả module" khi 1 module bị cắt ngang bởi
+  // phân trang (permissions ở trên chỉ là trang đang xem).
+  allPermissionsByModule: { type: Object, default: () => ({}) },
   matrix: { type: Object, required: true },
   pendingCells: { type: Object, default: () => ({}) },
   activeKey: { type: String, default: null },
@@ -20,7 +28,7 @@ const props = defineProps({
   tableWidthPx: { type: String, default: '100%' },
 });
 
-const emit = defineEmits(['inspect', 'inspect-row', 'resize-start']);
+const emit = defineEmits(['inspect', 'inspect-row', 'resize-start', 'toggle', 'bulk-module']);
 
 const colSpan = computed(() => Math.max(props.shownColumns.length, 1));
 
@@ -37,6 +45,35 @@ const tableRows = computed(() => {
   }
   return rows;
 });
+
+// Module chỉ có 1 quyền hiện trên bảng thì bấm ô lẻ đã đủ nhanh — nút bulk
+// chỉ đáng có khi nhóm từ 2 quyền trở lên. Dùng allPermissionsByModule (toàn
+// bộ, không phân trang) thay vì row.perms để không sai lệch khi module bị
+// cắt ngang bởi phân trang.
+function moduleGrantableKeys(moduleLabel) {
+  const perms = props.allPermissionsByModule[moduleLabel] ?? [];
+  return perms.filter((perm) => !perm.reserved).map((perm) => perm.key);
+}
+
+function moduleState(moduleLabel, roleCode) {
+  const keys = moduleGrantableKeys(moduleLabel);
+  if (keys.length === 0) return 'none';
+  const grantedCount = keys.filter((key) => cellFor(roleCode, key).effective).length;
+  if (grantedCount === 0) return 'none';
+  if (grantedCount === keys.length) return 'all';
+  return 'partial';
+}
+
+function onBulkModule(row, col) {
+  const roleCode = roleCodeOf(col);
+  if (!roleCode) return;
+  const state = moduleState(row.module, roleCode);
+  emit('bulk-module', {
+    roleCode,
+    moduleLabel: row.module,
+    granted: state !== 'all',
+  });
+}
 
 function colWidthStyle(key) {
   const width = props.columnWidths[key];
@@ -126,9 +163,35 @@ function isStickyCol(col) {
           'perm-table__group': row.type === 'group',
           'perm-table__row--active': row.type === 'perm' && selectedKey === row.perm.key,
         }">
-          <td v-if="row.type === 'group'" :colspan="colSpan" class="perm-table__group-cell">
-            {{ row.module }}
-          </td>
+          <template v-if="row.type === 'group'">
+            <td
+              v-for="col in shownColumns"
+              :key="col.key"
+              class="perm-table__group-cell"
+              :class="{
+                'perm-table__group-cell--role': Boolean(roleCodeOf(col)),
+                'perm-table__td--sticky': isStickyCol(col),
+              }"
+            >
+              <template v-if="roleCodeOf(col)">
+                <button
+                  v-if="moduleGrantableKeys(row.module).length > 1"
+                  type="button"
+                  class="perm-table__bulk-btn"
+                  :class="`perm-table__bulk-btn--${moduleState(row.module, roleCodeOf(col))}`"
+                  :aria-label="`${moduleState(row.module, roleCodeOf(col)) === 'all' ? 'Thu hồi' : 'Cấp'} toàn bộ quyền module ${row.module} cho vai trò này`"
+                  @click="onBulkModule(row, col)"
+                >
+                  <AppIcon
+                    :name="moduleState(row.module, roleCodeOf(col)) === 'all' ? 'close' : 'check'"
+                    :size="12"
+                  />
+                  {{ moduleState(row.module, roleCodeOf(col)) === 'all' ? 'Thu hồi' : 'Cấp cả' }}
+                </button>
+              </template>
+              <template v-else-if="isStickyCol(col)">{{ row.module }}</template>
+            </td>
+          </template>
           <template v-else>
             <td
               v-for="col in shownColumns"
@@ -150,6 +213,7 @@ function isStickyCol(col) {
                 :loading="isPending(roleCodeOf(col), row.perm.key)"
                 :active="isActive(roleCodeOf(col), row.perm.key)"
                 @inspect="emit('inspect', payload(roleCodeOf(col), row.perm))"
+                @toggle="emit('toggle', payload(roleCodeOf(col), row.perm))"
               />
             </td>
           </template>
@@ -291,6 +355,48 @@ function isStickyCol(col) {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.perm-table__group-cell.perm-table__td--sticky {
+  z-index: 2;
+}
+
+.perm-table__group-cell--role {
+  text-align: center;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.perm-table__bulk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem 0.5rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-family: var(--font-family-base);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.perm-table__bulk-btn:hover {
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary-300);
+}
+
+.perm-table__bulk-btn--all {
+  color: var(--color-danger);
+}
+
+.perm-table__bulk-btn--all:hover {
+  color: var(--color-danger);
+  box-shadow: inset 0 0 0 1px var(--color-danger);
 }
 
 .perm-table__group {

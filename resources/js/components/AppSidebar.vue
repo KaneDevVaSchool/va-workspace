@@ -48,47 +48,47 @@ onBeforeUnmount(() => {
   document.body.style.overflow = '';
 });
 
+// Nhóm theo mạch "kể chuyện" khi dùng workspace: bắt đầu từ tổng quan → theo
+// dõi tin tức → đánh giá → điều hành công việc → quản lý/kiểm soát → quản trị
+// hệ thống → cấu hình. Cùng 1 danh sách section dùng chung cho mọi role, mỗi
+// mục tự ẩn/hiện theo quyền (itemPasses) nên super-admin và trưởng phòng thấy
+// bố cục khác nhau tự nhiên mà không cần nhánh riêng theo role.
 const MENU_SECTIONS = [
   {
     id: 'general',
-    label: 'Điều hướng',
+    label: 'Tổng quan',
     items: [
       // configurableByDepartment: true — đồng bộ thủ công với
       // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
-      { name: 'home', label: 'Tổng quan', icon: 'dashboard', configurableByDepartment: true },
-      { name: 'social.feed', label: 'Bảng tin nội bộ', icon: 'megaphone', configurableByDepartment: true },
+      { name: 'home', label: 'Quy trình', icon: 'gitBranch', configurableByDepartment: true },
+      { name: 'dashboard.company', label: 'Tổng công ty', icon: 'dashboard', requiresPermission: 'dashboard.view_company' },
       {
-        name: 'manager.evaluation.view',
-        label: 'Tiêu chí đánh giá',
-        icon: 'clipboardCheck',
+        name: 'dashboard.department',
+        label: 'Phòng ban',
+        icon: 'activity',
+        requiresAnyPermission: ['performance.view_department', 'project.view'],
+        // configurableByDepartment: true — đồng bộ thủ công với
+        // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
         configurableByDepartment: true,
       },
     ],
   },
   {
-    id: 'admin',
-    label: 'Quản trị',
+    id: 'news',
+    label: 'Thông tin',
     items: [
-      { name: 'superadmin.permissions', label: 'Phân quyền', icon: 'settings', requiresSuperAdmin: true },
-      { name: 'superadmin.activity', label: 'Nhật ký hoạt động', icon: 'clock', requiresAdmin: true },
+      { name: 'social.feed', label: 'Bảng tin', icon: 'megaphone', configurableByDepartment: true },
     ],
   },
   {
-    id: 'manager',
-    label: 'Quản lý',
+    id: 'evaluation',
+    label: 'Đánh giá',
     items: [
       {
-        name: 'manager.workspace-config.hub',
-        label: 'Cấu hình phòng ban',
-        icon: 'settings',
-        requiresPermission: 'workspace_config.view_department',
-        // super_admin (*) cũng có permission này nhưng dùng trang tổng hợp
-        // /superadmin/workspace-config — API members lấy department_id của
-        // chính user, super_admin thường không có phòng ban.
-        hideWhenSuperAdmin: true,
-        // KHÔNG configurableByDepartment — tránh trưởng phòng tự khoá lối
-        // vào trang cấu hình của chính mình. Tab con của hub (Thành viên,
-        // Menu, Tiêu chí) cũng không phải mục sidebar.
+        name: 'manager.evaluation.view',
+        label: 'Tiêu chí',
+        icon: 'clipboardCheck',
+        configurableByDepartment: true,
       },
       {
         // Khung chấm điểm — mục sidebar RIÊNG của phòng ban, khác tab
@@ -96,17 +96,23 @@ const MENU_SECTIONS = [
         // configurableByDepartment: true — đồng bộ thủ công với
         // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
         name: 'manager.evaluation-score-kit.index',
-        label: 'Khung chấm điểm',
+        label: 'Khung điểm',
         icon: 'layers',
         requiresPermission: 'evaluation.manage_department',
         hideWhenSuperAdmin: true,
         configurableByDepartment: true,
       },
+    ],
+  },
+  {
+    id: 'operations',
+    label: 'Điều hành',
+    items: [
       {
         // Dự án (Project module — giai đoạn 1: CRUD) — mục sidebar riêng,
-        // cùng nhóm "Quản lý" với "Mẫu đánh giá". Ai xem được danh sách dự
-        // án (project.view) đều thấy mục này — department_director trở lên
-        // có thêm quyền tạo/sửa/xoá (project.create/update_department).
+        // cùng nhóm "Điều hành" với Công việc/Báo cáo. Ai xem được danh sách
+        // dự án (project.view) đều thấy mục này — department_director trở
+        // lên có thêm quyền tạo/sửa/xoá (project.create/update_department).
         // configurableByDepartment: true — đồng bộ thủ công với
         // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
         name: 'manager.project.index',
@@ -140,37 +146,82 @@ const MENU_SECTIONS = [
         requiresAnyPermission: ['report.manage_department', 'report.view_assigned'],
         configurableByDepartment: true,
       },
+    ],
+  },
+  {
+    // Vận hành phòng ban — trưởng phòng dùng hằng ngày. "Tài khoản"
+    // (Credential) nằm ở section "control" (Kiểm soát) theo mặc định, nhưng
+    // trưởng phòng vẫn tự đổi nhóm/ẩn-hiện được qua configurableByDepartment
+    // — xem giải thích ở mục manager.credential.index bên dưới.
+    id: 'manager',
+    label: 'Quản lý',
+    items: [
+      {
+        name: 'manager.workspace-config.hub',
+        label: 'Cấu hình phòng ban',
+        icon: 'settings',
+        requiresPermission: 'workspace_config.view_department',
+        // super_admin (*) cũng có permission này nhưng dùng trang tổng hợp
+        // /superadmin/workspace-config — API members lấy department_id của
+        // chính user, super_admin thường không có phòng ban.
+        hideWhenSuperAdmin: true,
+        // KHÔNG configurableByDepartment — tránh trưởng phòng tự khoá lối
+        // vào trang cấu hình của chính mình. Tab con của hub (Thành viên,
+        // Menu, Tiêu chí) cũng không phải mục sidebar.
+      },
+    ],
+  },
+  {
+    // Kiểm soát toàn hệ thống — chủ yếu super_admin/admin. Trưởng phòng
+    // (không có 2 mục đầu) vẫn thấy nhóm này nhưng chỉ còn "Tài khoản".
+    id: 'control',
+    label: 'Kiểm soát',
+    items: [
       {
         // Duyệt bài viết (toàn trường) — khác "social.moderate" (xoá bài
         // vi phạm theo phòng ban). Hiện với bất kỳ ai có social.review:
         // mặc định admin/super_admin (social.* / *), hoặc được cấp thêm
         // qua ma trận phân quyền. KHÔNG configurableByDepartment.
         name: 'manager.social.moderation',
-        label: 'Duyệt bài viết',
+        label: 'Duyệt bài',
         icon: 'listChecks',
         requiresPermission: 'social.review',
       },
+      { name: 'superadmin.activity', label: 'Nhật ký', icon: 'clock', requiresAdmin: true },
       {
-        // Quản lý tài khoản (Credential module) — menu TOÀN HỆ THỐNG, không
-        // theo phòng ban (KHÔNG configurableByDepartment): chứa thông tin
-        // đăng nhập dịch vụ dùng chung công ty (Google, Canva, Cursor,
-        // Claude, AWS, VPS, database, IAM, domain...), không phải dữ liệu
-        // riêng của 1 phòng ban. Service tự ẩn password/username thật với
-        // ai không phải người tạo/được cấp quyền xem — xem CredentialService::present().
+        // Quản lý tài khoản (Credential module) — chứa thông tin đăng nhập
+        // dịch vụ dùng chung công ty (Google, Canva, Cursor, Claude, AWS,
+        // VPS, database, IAM, domain...), không phải dữ liệu riêng của 1
+        // phòng ban. Service tự ẩn password/username thật với ai không phải
+        // người tạo/được cấp quyền xem — xem CredentialService::present().
+        // Mặc định gán vào "Kiểm soát" (không phải "Quản lý") vì bản chất là
+        // dữ liệu dùng chung công ty cần giám sát — nhưng vẫn
+        // configurableByDepartment: true để trưởng phòng tự đổi nhóm/tên/
+        // ẩn-hiện được như các mục khác. configurableByDepartment: true —
+        // đồng bộ thủ công với CONFIGURABLE_MENUS trong
+        // DepartmentSidebarConfigService.
         name: 'manager.credential.index',
-        label: 'Quản lý tài khoản',
+        label: 'Tài khoản',
         icon: 'lock',
         requiresPermission: 'credential.view',
+        configurableByDepartment: true,
       },
     ],
   },
   {
+    id: 'admin',
+    label: 'Quản trị',
+    items: [
+      { name: 'superadmin.permissions', label: 'Phân quyền', icon: 'settings', requiresSuperAdmin: true },
+    ],
+  },
+  {
     id: 'superadmin-workspace-config',
-    label: 'Cấu hình Workspace',
+    label: 'Cấu hình',
     items: [
       {
         name: 'superadmin.workspace-config.overview',
-        label: 'Cấu hình Workspace theo phòng ban',
+        label: 'Workspace',
         icon: 'settings',
         requiresSuperAdmin: true,
       },
@@ -180,7 +231,7 @@ const MENU_SECTIONS = [
         // mục này KHÔNG tự ẩn được: GlobalMenuVisibilityService::PROTECTED_MENU_KEYS
         // chặn ở backend, đảm bảo super_admin luôn vào lại được trang này.
         name: 'superadmin.workspace-config.global-menu',
-        label: 'Ẩn/hiện menu toàn hệ thống',
+        label: 'Menu hệ thống',
         icon: 'eyeOff',
         requiresSuperAdmin: true,
       },
@@ -346,6 +397,11 @@ function closeDrawer() {
         </button>
       </div>
 
+      <p v-if="!collapsed" class="sidebar__tagline">
+        <AppIcon name="sparkles" :size="13" />
+        Không gian làm việc
+      </p>
+
       <nav class="sidebar__nav sidebar-scroll" aria-label="Điều hướng chính">
         <section
           v-for="section in visibleSections"
@@ -373,6 +429,18 @@ function closeDrawer() {
           </router-link>
         </section>
       </nav>
+
+      <div v-if="!collapsed" class="sidebar__footer">
+        <router-link :to="{ name: 'home' }" class="sidebar__promo" @click="closeDrawer">
+          <span class="sidebar__promo-icon">
+            <AppIcon name="gitBranch" :size="18" />
+          </span>
+          <span class="sidebar__promo-copy">
+            <strong>Xem quy trình làm việc</strong>
+            <span>Bắt đầu từ đây nếu chưa rõ nên làm gì</span>
+          </span>
+        </router-link>
+      </div>
     </aside>
   </div>
 </template>
@@ -440,15 +508,44 @@ function closeDrawer() {
   height: 2.5rem;
   object-fit: contain;
   filter: brightness(1.04);
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sidebar__brand-logo {
   display: block;
   width: auto;
   max-width: 100%;
-  height: 2.5rem;
+  height: clamp(2.5rem, 3.4vw, 3rem);
   object-fit: contain;
-  filter: brightness(1.04);
+  filter: brightness(1.04) drop-shadow(var(--shadow-md));
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sidebar__brand:hover .sidebar__brand-logo,
+.sidebar__brand:hover .sidebar__brand-mark {
+  transform: scale(1.05);
+}
+
+/* ---------- Tagline định vị dưới logo ---------- */
+.sidebar__tagline {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3);
+  color: var(--color-sidebar-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: center;
+  box-shadow: 0 1px 0 var(--color-sidebar-divider);
+  animation: sidebar-fade-up 420ms ease-out both;
+}
+
+.sidebar__tagline svg {
+  flex-shrink: 0;
+  color: var(--color-gold);
 }
 
 .sidebar__close-btn {
@@ -503,7 +600,17 @@ function closeDrawer() {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  animation: sidebar-fade-up 380ms ease-out both;
 }
+
+/* Vào trang: các mục hiện lên so le theo thứ tự section, không cần đánh số
+   thủ công trong template — chọn theo nth-of-type của .sidebar__section. */
+.sidebar__section:nth-of-type(1) { animation-delay: 40ms; }
+.sidebar__section:nth-of-type(2) { animation-delay: 90ms; }
+.sidebar__section:nth-of-type(3) { animation-delay: 140ms; }
+.sidebar__section:nth-of-type(4) { animation-delay: 190ms; }
+.sidebar__section:nth-of-type(n) .sidebar__link:nth-child(2) { animation-delay: 60ms; }
+.sidebar__section:nth-of-type(n) .sidebar__link:nth-child(3) { animation-delay: 110ms; }
 
 .sidebar__link {
   position: relative;
@@ -519,6 +626,26 @@ function closeDrawer() {
   font-weight: 500;
   white-space: nowrap;
   overflow: visible;
+  animation: sidebar-fade-up 420ms ease-out both;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Vạch sáng bên trái - chỉ "nở" ra khi mục đang mở, thay cho việc chỉ đổi
+   màu nền (dễ nhận ra hơn ở khoé mắt). */
+.sidebar__link::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 0 var(--radius-full) var(--radius-full) 0;
+  background: var(--color-gold);
+  transform: translateY(-50%);
+  transition: height 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sidebar--collapsed .sidebar__link {
@@ -536,6 +663,10 @@ function closeDrawer() {
   border-radius: var(--radius-sm);
   background: var(--color-sidebar-well);
   color: var(--color-sidebar-text-muted);
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .sidebar__link-text {
@@ -546,11 +677,17 @@ function closeDrawer() {
 .sidebar__link:hover {
   background: var(--color-sidebar-hover);
   color: var(--color-on-primary);
+  transform: translateX(3px);
 }
 
 .sidebar__link:hover .sidebar__link-icon {
   background: var(--color-sidebar-hover);
   color: var(--color-on-primary);
+  transform: scale(1.08) rotate(-4deg);
+}
+
+.sidebar--collapsed .sidebar__link:hover {
+  transform: none;
 }
 
 .sidebar__link--active {
@@ -563,9 +700,13 @@ function closeDrawer() {
   background: var(--color-sidebar-active);
 }
 
+.sidebar__link--active::before {
+  height: 60%;
+}
+
 .sidebar__link--active .sidebar__link-icon {
-  background: var(--color-sidebar-well-strong);
-  color: var(--color-on-primary);
+  background: var(--color-gold);
+  color: var(--color-umber-700);
 }
 
 .sidebar__flyout {
@@ -591,6 +732,85 @@ function closeDrawer() {
 .sidebar__link:hover .sidebar__flyout,
 .sidebar__link:focus-visible .sidebar__flyout {
   opacity: 1;
+}
+
+/* ---------- Footer: thẻ dẫn sang trang quy trình ---------- */
+.sidebar__footer {
+  flex-shrink: 0;
+  padding: var(--space-3);
+}
+
+.sidebar__promo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-sidebar-well);
+  color: var(--color-on-primary);
+  text-decoration: none;
+  overflow: hidden;
+  transition:
+    background-color 200ms ease,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sidebar__promo:hover {
+  background: var(--color-sidebar-well-strong);
+  transform: translateY(-2px);
+}
+
+.sidebar__promo:focus-visible {
+  outline: 2px solid var(--color-sidebar-focus);
+  outline-offset: 2px;
+}
+
+.sidebar__promo-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-sidebar-well-strong);
+  color: var(--color-gold);
+}
+
+.sidebar__promo-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sidebar__promo-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.sidebar__promo-copy > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-sidebar-text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.3;
+}
+
+/* ---------- Keyframes ---------- */
+@keyframes sidebar-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ---------- Responsive: off-canvas dưới desktop ---------- */
@@ -661,7 +881,16 @@ function closeDrawer() {
   .sidebar,
   .sidebar-overlay,
   .sidebar-nav-item,
-  .sidebar-wrap--open .sidebar {
+  .sidebar-wrap--open .sidebar,
+  .sidebar__tagline,
+  .sidebar__section-label,
+  .sidebar__link,
+  .sidebar__link-icon,
+  .sidebar__link::before,
+  .sidebar__brand-logo,
+  .sidebar__brand-mark,
+  .sidebar__promo,
+  .sidebar__flyout {
     transition: none;
     animation: none;
   }

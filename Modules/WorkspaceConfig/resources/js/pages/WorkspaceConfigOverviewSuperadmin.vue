@@ -205,6 +205,13 @@ function leadCaption(department) {
   return 'Workspace đã sẵn sàng';
 }
 
+function leadIcon(department) {
+  if (!department?.is_active) return 'pauseCircle';
+  if (!department.director) return 'userX';
+  if (!department.has_config) return 'settings';
+  return 'check';
+}
+
 function statIsActive(kind) {
   const onlyThis =
     !query.value.trim() &&
@@ -526,8 +533,13 @@ onBeforeUnmount(() => {
         :class="{ 'wc-overview__stat--on': statIsActive('total') }"
         @click="applyStatFilter('total')"
       >
-        <span class="wc-overview__stat-value">{{ stats.total }}</span>
-        <span class="wc-overview__stat-label">Tổng phòng ban</span>
+        <span class="wc-overview__stat-icon">
+          <AppIcon name="building" :size="18" :stroke-width="1.75" />
+        </span>
+        <span class="wc-overview__stat-copy">
+          <span class="wc-overview__stat-value">{{ stats.total }}</span>
+          <span class="wc-overview__stat-label">Tổng phòng ban</span>
+        </span>
       </button>
       <button
         type="button"
@@ -535,8 +547,13 @@ onBeforeUnmount(() => {
         :class="{ 'wc-overview__stat--on': statIsActive('active') }"
         @click="applyStatFilter('active')"
       >
-        <span class="wc-overview__stat-value">{{ stats.active }}</span>
-        <span class="wc-overview__stat-label">Đang hoạt động</span>
+        <span class="wc-overview__stat-icon">
+          <AppIcon name="check" :size="18" :stroke-width="2" />
+        </span>
+        <span class="wc-overview__stat-copy">
+          <span class="wc-overview__stat-value">{{ stats.active }}</span>
+          <span class="wc-overview__stat-label">Đang hoạt động</span>
+        </span>
       </button>
       <button
         type="button"
@@ -544,8 +561,13 @@ onBeforeUnmount(() => {
         :class="{ 'wc-overview__stat--on': statIsActive('noDirector') }"
         @click="applyStatFilter('noDirector')"
       >
-        <span class="wc-overview__stat-value">{{ stats.noDirector }}</span>
-        <span class="wc-overview__stat-label">Chưa gán trưởng</span>
+        <span class="wc-overview__stat-icon">
+          <AppIcon name="userX" :size="18" :stroke-width="1.75" />
+        </span>
+        <span class="wc-overview__stat-copy">
+          <span class="wc-overview__stat-value">{{ stats.noDirector }}</span>
+          <span class="wc-overview__stat-label">Chưa gán trưởng</span>
+        </span>
       </button>
       <button
         type="button"
@@ -553,8 +575,13 @@ onBeforeUnmount(() => {
         :class="{ 'wc-overview__stat--on': statIsActive('noConfig') }"
         @click="applyStatFilter('noConfig')"
       >
-        <span class="wc-overview__stat-value">{{ stats.noConfig }}</span>
-        <span class="wc-overview__stat-label">Chưa có cấu hình</span>
+        <span class="wc-overview__stat-icon">
+          <AppIcon name="settings" :size="18" :stroke-width="1.75" />
+        </span>
+        <span class="wc-overview__stat-copy">
+          <span class="wc-overview__stat-value">{{ stats.noConfig }}</span>
+          <span class="wc-overview__stat-label">Chưa có cấu hình</span>
+        </span>
       </button>
     </div>
 
@@ -679,11 +706,15 @@ onBeforeUnmount(() => {
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td :colspan="colSpan" class="wc-overview__empty">Đang tải…</td>
+                <td :colspan="colSpan" class="wc-overview__empty">
+                  <AppIcon name="refresh" :size="20" :stroke-width="1.75" class="wc-overview__spin" />
+                  <span>Đang tải…</span>
+                </td>
               </tr>
               <tr v-else-if="pageDepartments.length === 0">
                 <td :colspan="colSpan" class="wc-overview__empty">
-                  {{ emptyTableMessage }}
+                  <AppIcon name="building" :size="20" :stroke-width="1.5" />
+                  <span>{{ emptyTableMessage }}</span>
                 </td>
               </tr>
               <tr
@@ -792,7 +823,9 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="wc-overview__side-lead" :class="`wc-overview__side-lead--${leadTone(selected)}`">
-          <span class="wc-overview__dot" :class="`wc-overview__dot--${leadTone(selected)}`" />
+          <span class="wc-overview__side-lead-icon">
+            <AppIcon :name="leadIcon(selected)" :size="18" :stroke-width="1.75" />
+          </span>
           <div>
             <span class="wc-overview__side-lead-action">{{ leadCaption(selected) }}</span>
             <p class="wc-overview__side-lead-desc">{{ selected.name }}</p>
@@ -917,51 +950,66 @@ onBeforeUnmount(() => {
 .wc-overview__stat {
   position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.125rem;
+  align-items: center;
+  gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
+  padding: var(--space-3);
   border: none;
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-family-base);
   text-align: left;
-  box-shadow: var(--shadow-sm);
+  box-shadow: inset 0 0 0 1px transparent, var(--shadow-sm);
   cursor: pointer;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
 }
 
-.wc-overview__stat::before {
-  content: '';
-  position: absolute;
-  top: var(--space-2);
-  bottom: var(--space-2);
-  left: var(--space-2);
-  width: 3px;
-  border-radius: 0;
-  background: var(--color-border);
+.wc-overview__stat-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
 }
 
-.wc-overview__stat--success::before {
-  background: var(--color-success);
+.wc-overview__stat--info .wc-overview__stat-icon {
+  background: var(--color-info-tint-bg);
+  color: var(--color-info-tint-fg);
 }
 
-.wc-overview__stat--warning::before {
-  background: var(--color-warning);
+.wc-overview__stat--success .wc-overview__stat-icon {
+  background: var(--color-success-tint-bg);
+  color: var(--color-success-tint-fg);
 }
 
-.wc-overview__stat--danger::before {
-  background: var(--color-danger);
+.wc-overview__stat--warning .wc-overview__stat-icon {
+  background: var(--color-warning-tint-bg);
+  color: var(--color-warning-tint-fg);
 }
 
-.wc-overview__stat--info::before {
-  background: var(--color-info);
+.wc-overview__stat--danger .wc-overview__stat-icon {
+  background: var(--color-danger-tint-bg);
+  color: var(--color-danger-tint-fg);
 }
 
-.wc-overview__stat:hover,
+.wc-overview__stat-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.wc-overview__stat:hover {
+  background: var(--color-surface-muted);
+}
+
 .wc-overview__stat--on {
   background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
 }
 
 .wc-overview__stat-value {
@@ -1160,10 +1208,16 @@ onBeforeUnmount(() => {
 }
 
 .wc-overview__empty {
-  padding: var(--space-5);
-  text-align: center;
+  padding: var(--space-8) var(--space-5);
   color: var(--color-text-muted);
+  text-align: center;
   white-space: normal;
+}
+
+.wc-overview__empty > .app-icon {
+  display: block;
+  margin: 0 auto var(--space-2);
+  opacity: 0.6;
 }
 
 .wc-overview__muted {
@@ -1302,42 +1356,45 @@ onBeforeUnmount(() => {
 }
 
 .wc-overview__side-lead {
-  position: relative;
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin: var(--space-3) 0 var(--space-4);
-  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
+  padding: var(--space-3);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
 }
 
-.wc-overview__side-lead::before {
-  content: '';
-  position: absolute;
-  top: var(--space-2);
-  bottom: var(--space-2);
-  left: var(--space-2);
-  width: 3px;
-  border-radius: 0;
-  background: var(--color-border);
+.wc-overview__side-lead-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
 }
 
-.wc-overview__side-lead--success::before {
-  background: var(--color-success);
+.wc-overview__side-lead--success .wc-overview__side-lead-icon {
+  background: var(--color-success-tint-bg);
+  color: var(--color-success-tint-fg);
 }
 
-.wc-overview__side-lead--danger::before {
-  background: var(--color-danger);
+.wc-overview__side-lead--danger .wc-overview__side-lead-icon {
+  background: var(--color-danger-tint-bg);
+  color: var(--color-danger-tint-fg);
 }
 
-.wc-overview__side-lead--info::before {
-  background: var(--color-info);
+.wc-overview__side-lead--info .wc-overview__side-lead-icon {
+  background: var(--color-info-tint-bg);
+  color: var(--color-info-tint-fg);
 }
 
-.wc-overview__side-lead--warning::before {
-  background: var(--color-warning);
+.wc-overview__side-lead--warning .wc-overview__side-lead-icon {
+  background: var(--color-warning-tint-bg);
+  color: var(--color-warning-tint-fg);
 }
 
 .wc-overview__side-lead-action {
@@ -1356,30 +1413,6 @@ onBeforeUnmount(() => {
   line-height: 1.45;
 }
 
-.wc-overview__dot {
-  flex-shrink: 0;
-  margin-top: 0.375rem;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: var(--radius-full);
-  background: var(--color-text-muted);
-}
-
-.wc-overview__dot--success {
-  background: var(--color-success);
-}
-
-.wc-overview__dot--danger {
-  background: var(--color-danger);
-}
-
-.wc-overview__dot--info {
-  background: var(--color-info);
-}
-
-.wc-overview__dot--warning {
-  background: var(--color-warning);
-}
 
 .wc-overview__rows {
   display: flex;

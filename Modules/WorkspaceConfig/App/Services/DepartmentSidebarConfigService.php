@@ -24,32 +24,44 @@ class DepartmentSidebarConfigService
 
     public const SECTION_MENU_PREFIX = 'section:';
 
-    /** @var array<string, string> section_key => nhãn tiếng Việt mặc định */
+    /**
+     * @var array<string, string> section_key => nhãn tiếng Việt mặc định —
+     *     đồng bộ THỦ CÔNG với id các section trong MENU_SECTIONS
+     *     (AppSidebar.vue) chứa ít nhất 1 item configurableByDepartment.
+     */
     public const SECTIONS = [
-        'general' => 'Điều hướng',
+        'general' => 'Tổng quan',
+        'news' => 'Thông tin',
+        'evaluation' => 'Đánh giá',
+        'operations' => 'Điều hành',
         'manager' => 'Quản lý',
+        'control' => 'Kiểm soát',
     ];
 
     /** @var array<string, string> menu_key => nhãn tiếng Việt mặc định */
     private const CONFIGURABLE_MENUS = [
-        'home' => 'Tổng quan',
-        'social.feed' => 'Bảng tin nội bộ',
-        'manager.evaluation.view' => 'Tiêu chí đánh giá',
-        'manager.evaluation-score-kit.index' => 'Khung chấm điểm',
+        'home' => 'Quy trình',
+        'social.feed' => 'Bảng tin',
+        'manager.evaluation.view' => 'Tiêu chí',
+        'dashboard.department' => 'Phòng ban',
+        'manager.evaluation-score-kit.index' => 'Khung điểm',
         'manager.project.index' => 'Dự án',
         'manager.project.tasks' => 'Công việc',
         'manager.reports.index' => 'Báo cáo',
+        'manager.credential.index' => 'Tài khoản',
     ];
 
     /** @var array<string, string> menu_key => section_key mặc định */
     private const MENU_DEFAULT_SECTIONS = [
         'home' => 'general',
-        'social.feed' => 'general',
-        'manager.evaluation.view' => 'general',
-        'manager.evaluation-score-kit.index' => 'manager',
-        'manager.project.index' => 'manager',
-        'manager.project.tasks' => 'manager',
-        'manager.reports.index' => 'manager',
+        'social.feed' => 'news',
+        'manager.evaluation.view' => 'evaluation',
+        'dashboard.department' => 'general',
+        'manager.evaluation-score-kit.index' => 'evaluation',
+        'manager.project.index' => 'operations',
+        'manager.project.tasks' => 'operations',
+        'manager.reports.index' => 'operations',
+        'manager.credential.index' => 'control',
     ];
 
     public function __construct(

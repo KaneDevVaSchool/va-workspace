@@ -22,7 +22,7 @@ const props = defineProps({
   editable: { type: Boolean, default: false },
   savingKey: { type: String, default: null },
   busy: { type: Boolean, default: false },
-  /** Tuỳ chỉnh thứ tự section (null = dùng mặc định ['general', 'manager', 'other']). */
+  /** Tuỳ chỉnh thứ tự section (null = dùng mặc định SECTION_ORDER trong sidebarMenus.js). */
   sectionOrder: { type: Array, default: null },
 });
 

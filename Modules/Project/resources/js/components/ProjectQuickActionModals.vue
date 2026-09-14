@@ -102,10 +102,17 @@ const taskForm = reactive({
   description: '',
   start_date: '',
   end_date: '',
+  start_time: '',
+  due_time: '',
+  estimated_hours: '',
   assignee_id: '',
   category_id: '',
   phase_id: '',
 });
+// Đặt giờ cụ thể (giờ bắt đầu/hạn + thời gian dự kiến) là tuỳ chọn, ẩn mặc
+// định cho gọn — bật 1 checkbox chung để hiện thêm các ô giờ ở form thêm
+// công việc (đơn) và từng dòng ở "Thêm nhiều công việc thường" (bulk).
+const showHourFields = ref(false);
 const bulkRows = ref([]);
 const baselineForm = reactive({ title: '' });
 const tabsConfigForm = reactive(
@@ -219,6 +226,9 @@ function emptyBulkRow(overrides = {}) {
     title: '',
     start_date: props.project?.start_date || '',
     end_date: props.project?.end_date || '',
+    start_time: '',
+    due_time: '',
+    estimated_hours: '',
     assignee_id: '',
     description: '',
     ...overrides,
@@ -350,9 +360,13 @@ function resetForms(p) {
   taskForm.description = '';
   taskForm.start_date = p.start_date || '';
   taskForm.end_date = p.end_date || '';
+  taskForm.start_time = '';
+  taskForm.due_time = '';
+  taskForm.estimated_hours = '';
   taskForm.assignee_id = '';
   taskForm.category_id = '';
   taskForm.phase_id = '';
+  showHourFields.value = false;
   bulkRows.value = [emptyBulkRow()];
   baselineForm.title = '';
   const disabled = new Set(p.disabled_tabs || []);
@@ -597,6 +611,9 @@ async function submit() {
             description: row.description?.trim() || null,
             start_date: row.start_date || null,
             end_date: row.end_date || null,
+            start_time: showHourFields.value ? row.start_time || null : null,
+            due_time: showHourFields.value ? row.due_time || null : null,
+            estimated_hours: showHourFields.value && row.estimated_hours !== '' ? row.estimated_hours : null,
             assignee_id: row.assignee_id || null,
           })),
         });
@@ -629,6 +646,9 @@ async function submit() {
         parent_id: parentId || null,
         start_date: taskForm.start_date || null,
         end_date: taskForm.end_date || null,
+        start_time: showHourFields.value ? taskForm.start_time || null : null,
+        due_time: showHourFields.value ? taskForm.due_time || null : null,
+        estimated_hours: showHourFields.value && taskForm.estimated_hours !== '' ? taskForm.estimated_hours : null,
         assignee_id: taskForm.assignee_id || null,
       });
       emit('tasks-changed');
@@ -805,6 +825,11 @@ watch(
           </div>
 
           <div v-else-if="kind === 'task'" class="proj-qa__grid">
+            <label class="proj-qa__check proj-qa__field--full">
+              <input v-model="showHourFields" type="checkbox">
+              <span>Đặt giờ cụ thể (giờ bắt đầu/hạn, thời gian dự kiến)</span>
+            </label>
+
             <template v-if="taskVariant === 'bulk'">
               <div class="proj-qa__structure-list proj-qa__field--full">
                 <div v-for="row in bulkRows" :key="row.key" class="proj-qa__structure-row proj-qa__structure-row--bulk">
@@ -830,6 +855,27 @@ watch(
                     <span class="proj-qa__label">Ngày kết thúc</span>
                     <input v-model="row.end_date" type="date" class="proj-qa__input">
                   </label>
+                  <template v-if="showHourFields">
+                    <label class="proj-qa__field">
+                      <span class="proj-qa__label">Giờ bắt đầu</span>
+                      <input v-model="row.start_time" type="time" class="proj-qa__input">
+                    </label>
+                    <label class="proj-qa__field">
+                      <span class="proj-qa__label">Giờ hạn</span>
+                      <input v-model="row.due_time" type="time" class="proj-qa__input">
+                    </label>
+                    <label class="proj-qa__field">
+                      <span class="proj-qa__label">Thời gian dự kiến (giờ)</span>
+                      <input
+                        v-model="row.estimated_hours"
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        class="proj-qa__input"
+                        placeholder="Vd. 8"
+                      >
+                    </label>
+                  </template>
                   <button type="button" class="proj-qa__row-remove" aria-label="Xoá dòng" @click="removeBulkRow(row)">
                     <AppIcon name="close" :size="14" />
                   </button>
@@ -884,6 +930,27 @@ watch(
                 <span class="proj-qa__label">Ngày kết thúc</span>
                 <input v-model="taskForm.end_date" type="date" class="proj-qa__input">
               </label>
+              <template v-if="showHourFields">
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">Giờ bắt đầu</span>
+                  <input v-model="taskForm.start_time" type="time" class="proj-qa__input">
+                </label>
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">Giờ hạn</span>
+                  <input v-model="taskForm.due_time" type="time" class="proj-qa__input">
+                </label>
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">Thời gian dự kiến (giờ)</span>
+                  <input
+                    v-model="taskForm.estimated_hours"
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    class="proj-qa__input"
+                    placeholder="Vd. 8"
+                  >
+                </label>
+              </template>
               <div v-if="taskDurationLabel" class="proj-qa__stat proj-qa__field--full">
                 Thời gian thực hiện <strong>{{ taskDurationLabel }}</strong>
               </div>

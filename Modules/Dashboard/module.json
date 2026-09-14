@@ -1,0 +1,11 @@
+{
+    "name": "Dashboard",
+    "alias": "dashboard",
+    "description": "Dashboard điều hành tổng hợp số liệu dự án/công việc — Dashboard tổng công ty (Super Admin, Admin, Giám đốc điều hành) và Dashboard phòng ban (trưởng/phó phòng, trưởng bộ phận, trưởng nhóm). Chỉ đọc dữ liệu từ Project/Identity, không có bảng riêng.",
+    "keywords": ["dashboard", "report", "project", "kpi"],
+    "priority": 0,
+    "providers": [
+        "Modules\\Dashboard\\App\\Providers\\DashboardServiceProvider"
+    ],
+    "files": []
+}

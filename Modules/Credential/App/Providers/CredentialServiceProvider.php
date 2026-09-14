@@ -20,6 +20,7 @@ class CredentialServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadMigrationsFrom(module_path('Credential', 'Database/migrations'));
+        $this->loadViewsFrom(module_path('Credential', 'resources/views'), 'credential');
         $this->registerRoutes();
     }
 

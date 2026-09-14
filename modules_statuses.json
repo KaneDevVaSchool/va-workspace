@@ -6,5 +6,6 @@
     "Social": true,
     "Project": true,
     "Report": true,
-    "Credential": true
+    "Credential": true,
+    "Dashboard": true
 }

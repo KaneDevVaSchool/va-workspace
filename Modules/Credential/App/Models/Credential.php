@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Modules\Credential\App\Enums\CredentialEnums;
+use Modules\Identity\App\Models\Department;
 
 /**
  * Tài khoản dịch vụ (Canva, Cursor, Claude, AWS, VPS, database, IAM,
@@ -15,17 +16,21 @@ use Modules\Credential\App\Enums\CredentialEnums;
  * encrypt/decrypt qua cast 'encrypted', không bao giờ lộ plaintext trong DB.
  *
  * @property int $id
+ * @property int|null $department_id phòng ban sở hữu — quyết định ai mặc định thấy được (xem CredentialRepository)
  * @property string $name
  * @property int|null $provider_id
- * @property string $account_type admin|superadmin|user|demo|testing
+ * @property string $account_type admin|superadmin|user|demo|testing|phu_huynh|giao_vien|hoc_sinh
+ * @property string $group external|internal
  * @property string|null $username
  * @property string|null $email
  * @property string|null $password mã hoá 2 chiều (cast 'encrypted')
  * @property bool $is_google_login
- * @property string|null $google_account_owner
+ * @property string|null $google_account_owner ghi chú tự do (dữ liệu cũ) — ưu tiên googleAccountOwner() nếu có gắn
+ * @property int|null $google_account_owner_id
  * @property string|null $server_name
  * @property string|null $vps_cluster
  * @property string|null $domain
+ * @property string|null $access_url link truy cập tài khoản dịch vụ
  * @property string|null $database_name
  * @property bool $is_root_account
  * @property bool $is_iam_account
@@ -45,17 +50,21 @@ class Credential extends Model
     protected $table = 'credentials';
 
     protected $fillable = [
+        'department_id',
         'name',
         'provider_id',
         'account_type',
+        'group',
         'username',
         'email',
         'password',
         'is_google_login',
         'google_account_owner',
+        'google_account_owner_id',
         'server_name',
         'vps_cluster',
         'domain',
+        'access_url',
         'database_name',
         'is_root_account',
         'is_iam_account',
@@ -85,9 +94,21 @@ class Credential extends Model
         return $this->belongsTo(CredentialProvider::class, 'provider_id');
     }
 
+    /** Phòng ban sở hữu — mặc định ai KHÔNG thuộc phòng ban này sẽ không thấy credential (trừ viewer được cấp riêng). */
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** User thật được gắn "Google này thuộc về ai" — ưu tiên hơn cột text google_account_owner cũ. */
+    public function googleAccountOwner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'google_account_owner_id');
     }
 
     public function updater(): BelongsTo

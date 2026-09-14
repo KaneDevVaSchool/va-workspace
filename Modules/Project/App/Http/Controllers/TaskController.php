@@ -108,7 +108,7 @@ class TaskController extends Controller
         return response()->json(['task' => $this->service->present($result)], 201);
     }
 
-    /** POST /api/project/{project}/tasks/bulk — tạo nhiều công việc, mỗi dòng field riêng. */
+    /** POST /api/project/{project}/tasks/bulk — tạo nhiều công việc, mỗi dòng field riêng, cùng 1 dự án. */
     public function storeBulk(StoreBulkTasksRequest $request, int $project)
     {
         $model = $this->projects->find($project);
@@ -117,6 +117,24 @@ class TaskController extends Controller
         }
 
         $result = $this->service->createMany($model, $request->validated()['items'], $request->user());
+
+        if (isset($result['error'])) {
+            return response()->json(['message' => $result['error']], 422);
+        }
+
+        return response()->json([
+            'tasks' => collect($result)->map(fn ($t) => $this->service->present($t))->values(),
+        ], 201);
+    }
+
+    /**
+     * POST /api/project/tasks/bulk — "Thêm công việc nhanh" từ trang "Tất cả
+     * công việc" (không có {project} cố định) — mỗi dòng tự chọn project_id
+     * riêng, để trống = việc thường xuyên.
+     */
+    public function storeBulkStandalone(StoreBulkTasksRequest $request)
+    {
+        $result = $this->service->createMany(null, $request->validated()['items'], $request->user());
 
         if (isset($result['error'])) {
             return response()->json(['message' => $result['error']], 422);

@@ -272,6 +272,42 @@ class PermissionService
     }
 
     /**
+     * Cấp/thu hồi hàng loạt override cho nhiều key cùng lúc (1 role, 1 scope)
+     * — dùng bởi nút "Cấp/thu hồi cả module" trên PermissionMatrix.vue.
+     * Bỏ qua (không ghi) các key reserved thay vì fail cả loạt — FE đã tự
+     * loại reserved trước khi gửi, đây chỉ là lớp phòng thủ thêm.
+     *
+     * @param  array<string>  $keys
+     * @return array<string>  keys thực sự đã ghi (loại trừ reserved)
+     *
+     * @throws ScopeNotFound
+     */
+    public function setGrantsBulk(
+        string $roleCode,
+        array $keys,
+        bool $granted,
+        string $scopeType,
+        ?int $scopeId,
+        int $createdBy,
+    ): array {
+        if ($scopeType === 'team' && $scopeId !== null && ! $this->teams->find($scopeId)) {
+            throw new ScopeNotFound('team');
+        }
+
+        $applied = [];
+        foreach ($keys as $key) {
+            if ($this->isReserved($key)) {
+                continue;
+            }
+
+            $this->grants->upsert($roleCode, $key, $granted, $scopeType, $scopeId, $createdBy);
+            $applied[] = $key;
+        }
+
+        return $applied;
+    }
+
+    /**
      * Xoá 1 override (quay về config default hoặc override ở scope khác).
      *
      * @throws PermissionKeyReserved

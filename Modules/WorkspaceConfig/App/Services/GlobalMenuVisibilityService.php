@@ -22,13 +22,26 @@ class GlobalMenuVisibilityService
      * @var array<string, array{label: string, section: string, icon: string, audience?: string}>
      */
     public const CATALOG = [
-        // section: general (Điều hướng)
-        'home' => ['label' => 'Tổng quan', 'section' => 'general', 'icon' => 'dashboard'],
-        'social.feed' => ['label' => 'Bảng tin nội bộ', 'section' => 'general', 'icon' => 'megaphone'],
-        'manager.evaluation.view' => ['label' => 'Tiêu chí đánh giá', 'section' => 'general', 'icon' => 'clipboardCheck'],
+        // section: general (Tổng quan)
+        'home' => ['label' => 'Quy trình', 'section' => 'general', 'icon' => 'gitBranch'],
+        'dashboard.company' => [
+            'label' => 'Tổng công ty',
+            'section' => 'general',
+            'icon' => 'dashboard',
+            'audience' => 'Chỉ Super Admin, Admin và Giám đốc điều hành thấy mục này.',
+        ],
+        'dashboard.department' => [
+            'label' => 'Phòng ban',
+            'section' => 'general',
+            'icon' => 'activity',
+            'audience' => 'Trưởng/phó phòng, trưởng bộ phận, trưởng nhóm và cấp trên thấy mục này, giới hạn theo phòng ban/nhóm của họ.',
+        ],
+        // section: news (Thông tin)
+        'social.feed' => ['label' => 'Bảng tin', 'section' => 'news', 'icon' => 'megaphone'],
+        // section: evaluation (Đánh giá)
+        'manager.evaluation.view' => ['label' => 'Tiêu chí', 'section' => 'evaluation', 'icon' => 'clipboardCheck'],
         // section: admin (Quản trị)
         'superadmin.permissions' => ['label' => 'Phân quyền', 'section' => 'admin', 'icon' => 'settings'],
-        'superadmin.activity' => ['label' => 'Nhật ký hoạt động', 'section' => 'admin', 'icon' => 'clock'],
         // section: manager (Quản lý)
         'manager.workspace-config.hub' => [
             'label' => 'Cấu hình phòng ban',
@@ -37,43 +50,53 @@ class GlobalMenuVisibilityService
             'audience' => 'Menu này chỉ hiện với trưởng phòng và phó phòng, không phải Super Admin.',
         ],
         'manager.evaluation-score-kit.index' => [
-            'label' => 'Khung chấm điểm',
-            'section' => 'manager',
+            'label' => 'Khung điểm',
+            'section' => 'evaluation',
             'icon' => 'layers',
             'audience' => 'Menu này chỉ hiện với trưởng phòng và phó phòng. Chọn cách tính điểm gốc ± theo việc, hoặc theo trọng số khó/dễ và mức dự án.',
         ],
+        // section: operations (Điều hành)
         'manager.project.index' => [
             'label' => 'Dự án',
-            'section' => 'manager',
+            'section' => 'operations',
             'icon' => 'layers',
             'audience' => 'Super Admin và mọi tài khoản có quyền xem dự án đều thấy mục này.',
         ],
         'manager.project.tasks' => [
             'label' => 'Công việc',
-            'section' => 'manager',
+            'section' => 'operations',
             'icon' => 'layoutList',
             'audience' => 'Super Admin và mọi tài khoản có quyền xem công việc (kể cả nhân viên chỉ xem việc được giao) đều thấy mục này.',
         ],
         'manager.reports.index' => [
             'label' => 'Báo cáo',
-            'section' => 'manager',
+            'section' => 'operations',
             'icon' => 'barChart',
             'audience' => 'Trưởng phòng tạo báo cáo; người được chia sẻ chỉ xem các báo cáo có tên mình.',
         ],
+        // section: control (Kiểm soát) — dữ liệu/thao tác dùng chung toàn
+        // công ty, cần giám sát, không phải việc vận hành riêng của 1 phòng ban.
         'manager.social.moderation' => [
-            'label' => 'Duyệt bài viết',
-            'section' => 'manager',
+            'label' => 'Duyệt bài',
+            'section' => 'control',
             'icon' => 'listChecks',
             'audience' => 'Menu này hiện với người được cấp quyền duyệt bài viết, không chỉ riêng Super Admin.',
         ],
-        // section: superadmin-workspace-config (Cấu hình Workspace)
+        'superadmin.activity' => ['label' => 'Nhật ký', 'section' => 'control', 'icon' => 'clock'],
+        'manager.credential.index' => [
+            'label' => 'Tài khoản',
+            'section' => 'control',
+            'icon' => 'lock',
+            'audience' => 'Menu này hiện với người được cấp quyền xem tài khoản dịch vụ dùng chung công ty (Google, Canva, AWS...), không chỉ riêng Super Admin.',
+        ],
+        // section: superadmin-workspace-config (Cấu hình)
         'superadmin.workspace-config.overview' => [
-            'label' => 'Cấu hình Workspace theo phòng ban',
+            'label' => 'Workspace',
             'section' => 'superadmin-workspace-config',
             'icon' => 'settings',
         ],
         'superadmin.workspace-config.global-menu' => [
-            'label' => 'Ẩn/hiện menu toàn hệ thống',
+            'label' => 'Menu hệ thống',
             'section' => 'superadmin-workspace-config',
             'icon' => 'eyeOff',
         ],
@@ -81,10 +104,14 @@ class GlobalMenuVisibilityService
 
     /** @var array<string, string> section_key => nhãn mặc định */
     public const SECTIONS = [
-        'general' => 'Điều hướng',
-        'admin' => 'Quản trị',
+        'general' => 'Tổng quan',
+        'news' => 'Thông tin',
+        'evaluation' => 'Đánh giá',
+        'operations' => 'Điều hành',
         'manager' => 'Quản lý',
-        'superadmin-workspace-config' => 'Cấu hình Workspace',
+        'control' => 'Kiểm soát',
+        'admin' => 'Quản trị',
+        'superadmin-workspace-config' => 'Cấu hình',
     ];
 
     /** menu_key KHÔNG BAO GIỜ được phép tự ẩn — mở chính trang cấu hình này. */

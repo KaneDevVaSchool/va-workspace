@@ -46,7 +46,7 @@ const isLoading = ref(false);
 const pendingCells = reactive({});
 const inspectPanel = ref(null); // { roleCode, permissionKey, cell }
 const restoring = ref(false);
-const pendingAction = ref(null); // { type: 'toggle'|'restore', roleCode, permissionKey, cell }
+const pendingAction = ref(null); // { type: 'toggle'|'restore'|'bulk-module', ... }
 const confirmLoading = ref(false);
 
 const query = ref('');
@@ -125,6 +125,18 @@ const filteredPermissions = computed(() => {
     if (mod !== 0) return mod;
     return (a.label || '').localeCompare(b.label || '', 'vi');
   });
+});
+
+// Nhóm theo module TRÊN TOÀN BỘ filteredPermissions (chưa phân trang) — dùng
+// để PermissionMatrixTable tính đúng trạng thái nút "Cấp/Thu hồi cả module"
+// kể cả khi module bị cắt ngang giữa 2 trang.
+const allPermissionsByModule = computed(() => {
+  const map = {};
+  for (const perm of filteredPermissions.value) {
+    const key = perm.module || 'Khác';
+    (map[key] ??= []).push(perm);
+  }
+  return map;
 });
 
 const overrideCount = computed(() => {
@@ -279,6 +291,24 @@ const confirmCopy = computed(() => {
     return { title: '', description: '', confirmLabel: 'Xác nhận', danger: false };
   }
 
+  if (action.type === 'bulk-module') {
+    const role = roleLabel(action.roleCode);
+    if (action.granted) {
+      return {
+        title: 'Cấp cả module này?',
+        description: `Cấp toàn bộ ${action.keys.length} quyền thuộc module “${action.moduleLabel}” cho vai trò ${role} trong ${scopeLabel.value}.`,
+        confirmLabel: 'Cấp cả module',
+        danger: false,
+      };
+    }
+    return {
+      title: 'Thu hồi cả module này?',
+      description: `Thu hồi toàn bộ ${action.keys.length} quyền thuộc module “${action.moduleLabel}” của vai trò ${role} trong ${scopeLabel.value}.`,
+      confirmLabel: 'Thu hồi cả module',
+      danger: true,
+    };
+  }
+
   const perm = permissionLabel(action.permissionKey);
   const role = roleLabel(action.roleCode);
 
@@ -321,6 +351,35 @@ function requestToggle({ roleCode, permissionKey, cell }) {
   pendingAction.value = { type: 'toggle', roleCode, permissionKey, cell };
 }
 
+// Double-click trực tiếp trên ô — không mở panel trước, chỉ hiện xác nhận
+// rồi ghi ngay (xem PermissionCell.vue::onDblClick, mục 14 CLAUDE.md).
+function requestToggleQuick({ roleCode, permissionKey, cell }) {
+  if (cell.reserved) return;
+  if (pendingCells[`${roleCode}|${permissionKey}`]) return;
+
+  if (scope.value.type !== 'global' && !scope.value.id) {
+    showClientToast('error', 'Vui lòng chọn phòng ban hoặc nhóm trước khi thay đổi quyền.');
+    return;
+  }
+
+  pendingAction.value = { type: 'toggle', roleCode, permissionKey, cell };
+}
+
+function requestBulkModule({ roleCode, moduleLabel, granted }) {
+  // Dùng allPermissionsByModule (đã lọc nhưng CHƯA phân trang) thay vì chỉ
+  // danh sách trên trang đang xem — tránh bulk sót quyền khi module bị cắt
+  // ngang bởi phân trang (xem pagedPermissions).
+  const keys = (allPermissionsByModule.value[moduleLabel] ?? [])
+    .filter((perm) => !cellFor(roleCode, perm.key).reserved)
+    .map((perm) => perm.key);
+  if (!keys.length) return;
+  if (scope.value.type !== 'global' && !scope.value.id) {
+    showClientToast('error', 'Vui lòng chọn phòng ban hoặc nhóm trước khi thay đổi quyền.');
+    return;
+  }
+  pendingAction.value = { type: 'bulk-module', roleCode, moduleLabel, keys, granted };
+}
+
 function requestRestore() {
   if (!inspectPanel.value || restoring.value) return;
   pendingAction.value = {
@@ -339,6 +398,8 @@ async function onConfirmAction() {
   try {
     if (action.type === 'restore') {
       await restoreDefault(action);
+    } else if (action.type === 'bulk-module') {
+      await applyBulkModule(action);
     } else {
       await applyToggle(action);
     }
@@ -347,6 +408,45 @@ async function onConfirmAction() {
     // Toast lỗi đã hiện; giữ hộp thoại để người dùng thử lại hoặc huỷ.
   } finally {
     confirmLoading.value = false;
+  }
+}
+
+async function applyBulkModule({ roleCode, moduleLabel, keys, granted }) {
+  const scopeType = scope.value.type;
+  const scopeId = scope.value.id;
+
+  if (scopeType !== 'global' && !scopeId) {
+    showClientToast('error', 'Vui lòng chọn phòng ban hoặc nhóm trước khi thay đổi quyền.');
+    throw new Error('missing-scope');
+  }
+
+  for (const key of keys) pendingCells[`${roleCode}|${key}`] = true;
+
+  try {
+    const { data } = await window.axios.put('/api/permissions/grants/bulk', {
+      role_code: roleCode,
+      permission_keys: keys,
+      granted,
+      scope_type: scopeType,
+      scope_id: scopeId,
+    });
+
+    for (const [key, cell] of Object.entries(data.cells ?? {})) {
+      applyCellUpdate(roleCode, key, cell);
+    }
+
+    showClientToast(
+      'success',
+      granted
+        ? `Đã cấp cả module “${moduleLabel}” cho vai trò ${roleLabel(roleCode)}.`
+        : `Đã thu hồi cả module “${moduleLabel}” của vai trò ${roleLabel(roleCode)}.`,
+    );
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không lưu được thay đổi. Vui lòng thử lại.');
+    throw error;
+  } finally {
+    for (const key of keys) delete pendingCells[`${roleCode}|${key}`];
   }
 }
 
@@ -806,6 +906,10 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <p v-if="!isLoading && permissions.length" class="perm-page__hint">
+          Bấm 1 lần vào ô để xem chi tiết, bấm đúp để cấp/thu hồi ngay. Ở đầu mỗi nhóm module có nút cấp/thu hồi cả module cho từng vai trò.
+        </p>
+
         <TablePagesBar
           placement="top"
           :from="from"
@@ -859,6 +963,7 @@ onBeforeUnmount(() => {
           <PermissionMatrixTable
             :shown-columns="shownColumns"
             :permissions="pagedPermissions"
+            :all-permissions-by-module="allPermissionsByModule"
             :matrix="matrix"
             :pending-cells="pendingCells"
             :active-key="activeCellKey"
@@ -870,6 +975,8 @@ onBeforeUnmount(() => {
             @inspect="onInspect"
             @inspect-row="inspectPermission"
             @resize-start="startResize"
+            @toggle="requestToggleQuick"
+            @bulk-module="requestBulkModule"
           />
         </div>
 
@@ -1192,6 +1299,14 @@ onBeforeUnmount(() => {
   margin: 0 0 var(--space-2);
   color: var(--color-text-muted);
   font-size: 0.75rem;
+}
+
+.perm-page__hint {
+  flex-shrink: 0;
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
 }
 
 .perm-page__table-wrap {

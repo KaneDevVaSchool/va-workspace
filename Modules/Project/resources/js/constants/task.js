@@ -314,3 +314,27 @@ export function flattenProjectTasks(nodes, { parentsOnly = false, filter = 'all'
   walk(nodes, 0, null);
   return out;
 }
+
+/**
+ * Phẳng toàn bộ cây WBS (task, phase, category) — dùng riêng cho Kanban
+ * "Theo loại" vì flattenProjectTasks() chỉ trả node type=task.
+ */
+export function flattenAllProjectNodes(nodes, { filter = 'all', query = '' } = {}) {
+  const q = String(query || '').trim().toLowerCase();
+  const out = [];
+
+  const walk = (list, depth) => {
+    for (const node of list || []) {
+      if (matchesProjectTaskFilter(node, filter)) {
+        const hay = `${node.title || ''} ${node.code || ''}`.toLowerCase();
+        if (!q || hay.includes(q)) {
+          out.push({ ...node, depth, hasChildren: (node.children || []).length > 0 });
+        }
+      }
+      walk(node.children, depth + 1);
+    }
+  };
+
+  walk(nodes, 0);
+  return out;
+}

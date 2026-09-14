@@ -11,6 +11,7 @@ import AppIcon from '@/components/AppIcon.vue';
 import { useDragScroll } from '@/composables/useDragScroll';
 import { showClientToast } from '@/lib/clientToast';
 import { TASK_STATUS_LABELS, TASK_STATUS_TONES } from '../constants/task.js';
+import { exportReportCsv, exportReportPdf, exportReportXlsx } from '../lib/reportExport.js';
 
 const UNASSIGNED_ID = 0;
 
@@ -324,45 +325,58 @@ function openTask(task) {
   router.push({ name: 'manager.project.tasks.detail', params: { id: task.id } });
 }
 
-function csvCell(value) {
-  const text = String(value ?? '');
-  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
-  return text;
+function exportContext() {
+  return {
+    project: props.project,
+    rows: sheetRows.value,
+    foot: foot.value,
+    formatNumber,
+    formatPercent,
+  };
 }
 
 function exportCsv() {
-  const headers = ['Nhân sự', 'Email', ...GROUPS.flatMap((group) => group.cols.map((col) => `${group.label} · ${col.label}`))];
-  const lines = [headers.join(',')];
-  const cellsOf = (stats) => [
-    stats.total_count,
-    stats.total_on_time,
-    stats.total_overdue,
-    stats.in_progress_count,
-    stats.in_progress_on_time,
-    stats.in_progress_overdue,
-    stats.completed_count,
-    stats.completed_on_time,
-    stats.completed_late,
-    formatPercent(stats.progress),
-    formatNumber(stats.est_hours),
-    formatNumber(stats.work_hours),
-  ];
-  for (const row of sheetRows.value) {
-    lines.push([csvCell(row.name), csvCell(row.email), ...cellsOf(row.stats)].join(','));
+  if (!sheetRows.value.length) {
+    showClientToast('error', 'Chưa có dữ liệu để xuất báo cáo.');
+    return;
   }
-  if (sheetRows.value.length) {
-    lines.push([csvCell('Dự án'), '', ...cellsOf(foot.value)].join(','));
+  exportReportCsv(exportContext());
+  showClientToast('success', 'Đã xuất báo cáo dạng CSV.');
+}
+
+const xlsxBusy = ref(false);
+const pdfBusy = ref(false);
+
+async function exportXlsx() {
+  if (!sheetRows.value.length) {
+    showClientToast('error', 'Chưa có dữ liệu để xuất báo cáo.');
+    return;
   }
-  const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  const stamp = new Date().toISOString().slice(0, 10);
-  const code = String(props.project?.code || props.project?.id || 'du-an').replace(/[^\w.-]+/g, '_');
-  link.href = url;
-  link.download = `bao-cao-du-an_${code}_${stamp}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
-  showClientToast('success', 'Đã xuất bảng CSV.');
+  xlsxBusy.value = true;
+  try {
+    await exportReportXlsx(exportContext());
+    showClientToast('success', 'Đã xuất báo cáo dạng Excel.');
+  } catch {
+    showClientToast('error', 'Không xuất được file Excel.');
+  } finally {
+    xlsxBusy.value = false;
+  }
+}
+
+async function exportPdf() {
+  if (!sheetRows.value.length) {
+    showClientToast('error', 'Chưa có dữ liệu để xuất báo cáo.');
+    return;
+  }
+  pdfBusy.value = true;
+  try {
+    await exportReportPdf(exportContext());
+    showClientToast('success', 'Đã xuất báo cáo dạng PDF.');
+  } catch {
+    showClientToast('error', 'Không xuất được file PDF.');
+  } finally {
+    pdfBusy.value = false;
+  }
 }
 
 function onKeydown(event) {
@@ -396,7 +410,7 @@ onBeforeUnmount(() => {
   document.body.style.overflow = '';
 });
 
-defineExpose({ exportCsv });
+defineExpose({ exportCsv, exportXlsx, exportPdf, xlsxBusy, pdfBusy, hasData: computed(() => sheetRows.value.length > 0) });
 </script>
 
 <template>

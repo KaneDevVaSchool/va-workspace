@@ -88,6 +88,7 @@ return [
             'kpi.view_own',
             // Tổng quan
             'dashboard.view',
+            'dashboard.view_company',
             'performance.view_department',
             'weekly_report.view',
             // Báo cáo mọi phòng ban — giám đốc điều hành giám sát toàn hệ
@@ -144,6 +145,14 @@ return [
             'workspace_config.view_department',
             'workspace_config.manage_sidebar_department',
             'workspace_config.assign_role_department',
+            // Quản lý tài khoản dịch vụ — CHỈ 'view' (không 'manage'), scope
+            // check trong PermissionService vẫn là 'global' (permission key
+            // này không phân biệt scope department/team) nhưng
+            // CredentialService::departmentScopeFor() tự giới hạn theo đúng
+            // department_id của role này — không thấy được credential.manage
+            // nên không tạo/sửa/xoá được, chỉ xem tài khoản phòng ban mình
+            // (+ tài khoản được cấp quyền xem riêng dù khác phòng ban).
+            'credential.view',
             // Dashboard, My Work
             'dashboard.view',
             'weekly_report.view',
@@ -193,6 +202,9 @@ return [
             'workspace_config.view_department',
             'workspace_config.manage_sidebar_department',
             'workspace_config.assign_role_department',
+            // Quản lý tài khoản dịch vụ — chỉ xem, giới hạn theo phòng ban
+            // (xem ghi chú ở department_director cùng key).
+            'credential.view',
             'dashboard.view',
             'weekly_report.view',
             'my_work.*',
@@ -387,6 +399,7 @@ return [
         // ---------- Dashboard ----------
         'dashboard.*' => ['label' => 'Toàn bộ Dashboard', 'module' => 'Dashboard', 'description' => 'Toàn quyền xem/tuỳ biến dashboard'],
         'dashboard.view' => ['label' => 'Xem tổng quan', 'module' => 'Tổng quan', 'description' => 'Xem trang tổng quan sau khi đăng nhập', 'active' => true],
+        'dashboard.view_company' => ['label' => 'Xem dashboard tổng công ty', 'module' => 'Tổng quan', 'description' => 'Xem số liệu, biểu đồ tổng hợp toàn công ty (mọi phòng ban)', 'active' => true],
 
         // ---------- Phòng ban (department) ----------
         'department.*' => ['label' => 'Toàn bộ phòng ban', 'module' => 'Phòng ban', 'description' => 'Toàn quyền quản lý phòng ban', 'active' => true],

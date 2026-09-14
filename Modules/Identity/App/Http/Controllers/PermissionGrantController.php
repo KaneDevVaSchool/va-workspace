@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Modules\Identity\App\Exceptions\PermissionKeyReserved;
 use Modules\Identity\App\Exceptions\ScopeNotFound;
+use Modules\Identity\App\Http\Requests\BulkUpsertPermissionGrantRequest;
 use Modules\Identity\App\Http\Requests\DestroyPermissionGrantRequest;
 use Modules\Identity\App\Http\Requests\UpsertPermissionGrantRequest;
 use Modules\Identity\App\Services\ActivityLogService;
@@ -61,6 +62,50 @@ class PermissionGrantController extends Controller
         );
 
         return response()->json(['message' => 'Đã cập nhật quyền.', 'cell' => $cell]);
+    }
+
+    /**
+     * Cấp/thu hồi cả module cho 1 role trong 1 lần — nút "Cấp cả module" /
+     * "Thu hồi cả module" trên header nhóm module × cột role.
+     */
+    public function bulkUpsert(BulkUpsertPermissionGrantRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+
+        try {
+            $appliedKeys = $this->permissions->setGrantsBulk(
+                $data['role_code'],
+                $data['permission_keys'],
+                (bool) $data['granted'],
+                $data['scope_type'],
+                $data['scope_id'] ?? null,
+                $request->user()->id,
+            );
+        } catch (ScopeNotFound $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $cells = [];
+        foreach ($data['permission_keys'] as $key) {
+            $cells[$key] = $this->permissions->cellFor($data['role_code'], $key, $data['scope_type'], $data['scope_id'] ?? null);
+        }
+
+        if ($appliedKeys !== []) {
+            $verb = $data['granted'] ? 'Cấp' : 'Tắt';
+            $this->activityLogs->record(
+                $data['granted'] ? 'permission.grant' : 'permission.deny',
+                "{$verb} " . count($appliedKeys) . " quyền cho vai trò {$data['role_code']}",
+                $request->user(),
+                properties: [
+                    'role_code' => $data['role_code'],
+                    'permission_keys' => $appliedKeys,
+                    'granted' => $data['granted'],
+                    'scope_type' => $data['scope_type'],
+                ],
+            );
+        }
+
+        return response()->json(['message' => 'Đã cập nhật quyền.', 'cells' => $cells]);
     }
 
     public function destroy(DestroyPermissionGrantRequest $request): JsonResponse

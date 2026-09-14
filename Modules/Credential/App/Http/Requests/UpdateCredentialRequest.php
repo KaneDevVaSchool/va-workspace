@@ -15,9 +15,13 @@ class UpdateCredentialRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Xem ghi chú ở StoreCredentialRequest — CredentialService::update()
+            // chỉ áp dụng field này nếu người sửa có phạm vi không giới hạn.
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'provider_id' => ['nullable', 'integer', 'exists:credential_providers,id'],
             'account_type' => ['sometimes', 'required', 'string', 'in:'.implode(',', CredentialEnums::ACCOUNT_TYPES)],
+            'group' => ['nullable', 'string', 'in:'.CredentialEnums::GROUP_EXTERNAL.','.CredentialEnums::GROUP_INTERNAL],
 
             'username' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -25,17 +29,20 @@ class UpdateCredentialRequest extends FormRequest
 
             'is_google_login' => ['nullable', 'boolean'],
             'google_account_owner' => ['nullable', 'string', 'max:255'],
+            'google_account_owner_id' => ['nullable', 'integer', 'exists:users,id'],
 
             'server_name' => ['nullable', 'string', 'max:255'],
             'vps_cluster' => ['nullable', 'string', 'max:255'],
             'domain' => ['nullable', 'string', 'max:255'],
+            'access_url' => ['nullable', 'string', 'max:2048'],
             'database_name' => ['nullable', 'string', 'max:255'],
             'is_root_account' => ['nullable', 'boolean'],
             'is_iam_account' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:5000'],
 
+            // expires_at KHÔNG nhận từ client — CredentialService tự tính
+            // = purchased_at + 1 tháng (xem CredentialService::computeExpiresAt()).
             'purchased_at' => ['nullable', 'date'],
-            'expires_at' => ['nullable', 'date'],
             'monthly_cost' => ['nullable', 'numeric', 'min:0'],
             'cost_hidden' => ['nullable', 'boolean'],
             'currency' => ['nullable', 'string', 'max:10'],
@@ -51,7 +58,6 @@ class UpdateCredentialRequest extends FormRequest
             'provider_id.exists' => 'Nhà cung cấp không tồn tại.',
             'email.email' => 'Email không đúng định dạng.',
             'purchased_at.date' => 'Ngày mua không hợp lệ.',
-            'expires_at.date' => 'Ngày hết hạn không hợp lệ.',
             'monthly_cost.numeric' => 'Chi phí hằng tháng phải là số.',
             'monthly_cost.min' => 'Chi phí hằng tháng không được âm.',
         ];

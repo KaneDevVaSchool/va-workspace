@@ -1,7 +1,9 @@
 <script setup>
 //
 // 1 ô trong ma trận phân quyền — cấp / chưa cấp / khoá. Chấm nhỏ khi có
-// chỉnh riêng. Click mở chi tiết (cha xử lý cấp/thu hồi từ panel).
+// chỉnh riêng. Click 1 lần mở panel chi tiết (chỉ xem); double-click cấp/thu
+// hồi ngay (cha vẫn hiện ConfirmDialog trước khi ghi — xem mục 14 CLAUDE.md:
+// click = xem, double-click = đổi dữ liệu).
 //
 import AppIcon from '@/components/AppIcon.vue';
 
@@ -10,21 +12,28 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   active: { type: Boolean, default: false },
 });
-const emit = defineEmits(['inspect']);
+const emit = defineEmits(['inspect', 'toggle']);
 
 function hasOverride(cell) {
   return cell.global_override !== null || cell.scoped_override !== null;
 }
 
 function cellLabel(cell) {
-  if (cell.reserved) return 'Quyền hệ thống';
-  if (cell.effective) return hasOverride(cell) ? 'Được cấp, có sửa riêng' : 'Được cấp';
-  return hasOverride(cell) ? 'Chưa cấp, có sửa riêng' : 'Chưa cấp';
+  if (cell.reserved) return 'Quyền hệ thống, bấm để xem chi tiết';
+  const base = cell.effective
+    ? hasOverride(cell) ? 'Được cấp, có sửa riêng' : 'Được cấp'
+    : hasOverride(cell) ? 'Chưa cấp, có sửa riêng' : 'Chưa cấp';
+  return `${base}. Bấm để xem chi tiết, bấm đúp để ${cell.effective ? 'thu hồi' : 'cấp'} ngay.`;
 }
 
 function onClick() {
   if (props.loading) return;
   emit('inspect');
+}
+
+function onDblClick() {
+  if (props.loading || props.cell.reserved) return;
+  emit('toggle');
 }
 </script>
 
@@ -43,6 +52,7 @@ function onClick() {
     :aria-label="cellLabel(cell)"
     :aria-pressed="active"
     @click.stop="onClick"
+    @dblclick.stop="onDblClick"
   >
     <span class="perm-cell__mark">
       <template v-if="loading">
@@ -135,6 +145,10 @@ function onClick() {
 
 .perm-cell:hover:not(:disabled) {
   background: var(--color-surface-muted);
+}
+
+.perm-cell:not(.perm-cell--reserved):not(:disabled):hover .perm-cell__mark {
+  box-shadow: 0 0 0 2px var(--color-primary-200);
 }
 
 @media (prefers-reduced-motion: reduce) {

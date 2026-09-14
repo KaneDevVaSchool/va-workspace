@@ -22,12 +22,12 @@ class CredentialController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['q', 'provider_id', 'account_type', 'status']);
+        $filters = $request->only(['q', 'provider_id', 'account_type', 'status', 'group']);
         $perPage = (int) $request->input('per_page', 20);
         $page = (int) $request->input('page', 1);
         $viewer = $request->user();
 
-        $paginated = $this->service->paginate($filters, $perPage, $page);
+        $paginated = $this->service->paginate($filters, $perPage, $page, $viewer);
 
         return response()->json([
             'credentials' => collect($paginated->items())->map(fn ($c) => $this->service->present($c, $viewer))->values(),
@@ -39,7 +39,7 @@ class CredentialController extends Controller
                 'to' => $paginated->lastItem() ?? 0,
                 'per_page' => $paginated->perPage(),
             ],
-            'status_counts' => $this->service->statusCounts(),
+            'status_counts' => $this->service->statusCounts($viewer),
             'status_labels' => CredentialEnums::STATUS_LABELS,
             'account_type_labels' => CredentialEnums::ACCOUNT_TYPE_LABELS,
         ]);
@@ -51,9 +51,33 @@ class CredentialController extends Controller
         return response()->json(['users' => $this->service->allUsers()->values()]);
     }
 
+    /** Dự toán chi phí — tổng theo tháng/năm, theo nhà cung cấp, theo loại tài khoản, bảng chi tiết. */
+    public function costSummary(Request $request): JsonResponse
+    {
+        return response()->json($this->service->costSummary($request->user()));
+    }
+
+    /** Dự phóng chi phí 12 tháng tới (giả định không đổi) + tháng nào có tài khoản hết hạn. */
+    public function costForecast(Request $request): JsonResponse
+    {
+        return response()->json($this->service->costForecast($request->user()));
+    }
+
+    /** Xuất báo cáo chi phí ra file Excel (.xlsx). */
+    public function exportCostExcel(Request $request)
+    {
+        return $this->service->exportCostExcel($request->user());
+    }
+
+    /** Xuất báo cáo chi phí ra file PDF. */
+    public function exportCostPdf(Request $request)
+    {
+        return $this->service->exportCostPdf($request->user());
+    }
+
     public function show(Request $request, int $credential): JsonResponse
     {
-        $model = $this->service->find($credential);
+        $model = $this->service->find($credential, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy tài khoản.'], 404);
         }
@@ -65,12 +89,12 @@ class CredentialController extends Controller
     {
         $model = $this->service->create($request->validated(), $request->user());
 
-        return response()->json(['credential' => $this->service->present($model->fresh(['provider', 'creator', 'viewers']), $request->user())], 201);
+        return response()->json(['credential' => $this->service->present($model->fresh(['provider', 'creator', 'viewers', 'googleAccountOwner', 'department']), $request->user())], 201);
     }
 
     public function update(UpdateCredentialRequest $request, int $credential): JsonResponse
     {
-        $model = $this->service->find($credential);
+        $model = $this->service->find($credential, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy tài khoản.'], 404);
         }
@@ -86,7 +110,7 @@ class CredentialController extends Controller
             return response()->json(['message' => 'Bạn không có quyền xoá tài khoản.'], 403);
         }
 
-        $model = $this->service->find($credential);
+        $model = $this->service->find($credential, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy tài khoản.'], 404);
         }

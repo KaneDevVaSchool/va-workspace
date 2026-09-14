@@ -1,8 +1,9 @@
 <script setup>
 //
 // Chi tiết tài khoản dịch vụ — panel field ngay hàng (mục 14 CLAUDE.md):
-// mỗi field 1 dòng ngang, nhãn trái mờ, giá trị phải. Mật khẩu/username
-// thật chỉ hiện khi API trả can_see_secret=true (CredentialService::present()).
+// mỗi field 1 dòng ngang, nhãn trái mờ, giá trị phải. Chỉ mật khẩu thật
+// chỉ hiện khi API trả can_see_secret=true (CredentialService::present())
+// — username/email hiện công khai cho mọi người có quyền credential.view.
 //
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -11,7 +12,8 @@ import AppIcon from '@/components/AppIcon.vue';
 import { formatDate } from '@/lib/formatTime';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
-import { accountTypeLabel, statusLabel, STATUS_DOT_TONE } from '../constants/credential.js';
+import { accountTypeLabel, statusLabel, STATUS_DOT_TONE, countdownLabel, countdownTone, isCountdownUrgent } from '../constants/credential.js';
+import CredentialViewerPicker from '../components/CredentialViewerPicker.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -22,18 +24,27 @@ const loading = ref(false);
 const showPassword = ref(false);
 
 const allUsers = ref([]);
-const addingViewerId = ref('');
 const savingViewer = ref(false);
+
+// ---------- Picker multi-select "Người được xem thông tin đăng nhập" ----------
+// Đồng bộ 1 lần (PUT .../viewers) thay vì gọi API tuần tự từng người.
+const viewerIds = ref([]);
+const initialViewerIds = ref([]);
+
+const viewerIdsChanged = computed(() => {
+  const a = [...viewerIds.value].map(String).sort();
+  const b = [...initialViewerIds.value].map(String).sort();
+  return JSON.stringify(a) !== JSON.stringify(b);
+});
+
+function syncViewerIdsFromCredential() {
+  const ids = (credential.value?.viewers || []).map((v) => v.id);
+  viewerIds.value = [...ids];
+  initialViewerIds.value = [...ids];
+}
 
 const canManage = computed(() => auth.can('credential.manage'));
 const canManageViewers = computed(() => credential.value && (credential.value.created_by === auth.user?.id || canManage.value));
-
-const availableUsersToAdd = computed(() => {
-  if (!credential.value) return [];
-  const existingIds = new Set((credential.value.viewers || []).map((v) => v.id));
-  existingIds.add(credential.value.created_by);
-  return allUsers.value.filter((u) => !existingIds.has(u.id));
-});
 
 async function load() {
   loading.value = true;
@@ -41,6 +52,7 @@ async function load() {
     const { data } = await window.axios.get(`/api/credential/${route.params.id}`);
     credential.value = data.credential;
     showPassword.value = false;
+    syncViewerIdsFromCredential();
   } catch (error) {
     showClientToast('error', error?.response?.data?.message || 'Không tải được tài khoản.');
     router.push({ name: 'manager.credential.index' });
@@ -67,30 +79,19 @@ function costText() {
   return `${Number(credential.value.monthly_cost).toLocaleString('vi-VN')} ${credential.value.currency || 'VND'} / tháng`;
 }
 
-async function addViewer() {
-  if (!addingViewerId.value) return;
+async function saveViewers() {
   savingViewer.value = true;
   try {
-    const { data } = await window.axios.post(`/api/credential/${credential.value.id}/viewers`, {
-      user_id: addingViewerId.value,
+    const { data } = await window.axios.put(`/api/credential/${credential.value.id}/viewers`, {
+      user_ids: viewerIds.value,
     });
     credential.value = data.credential;
-    addingViewerId.value = '';
-    showClientToast('success', 'Đã cấp quyền xem.');
+    syncViewerIdsFromCredential();
+    showClientToast('success', 'Đã cập nhật danh sách người được cấp quyền.');
   } catch (error) {
-    showClientToast('error', error?.response?.data?.message || 'Không cấp được quyền xem.');
+    showClientToast('error', error?.response?.data?.message || 'Không lưu được thay đổi.');
   } finally {
     savingViewer.value = false;
-  }
-}
-
-async function removeViewer(userId) {
-  try {
-    const { data } = await window.axios.delete(`/api/credential/${credential.value.id}/viewers/${userId}`);
-    credential.value = data.credential;
-    showClientToast('success', 'Đã thu hồi quyền xem.');
-  } catch (error) {
-    showClientToast('error', error?.response?.data?.message || 'Không thu hồi được quyền xem.');
   }
 }
 
@@ -120,11 +121,31 @@ onMounted(() => {
           <div>
             <h2 class="credential-detail__name">{{ credential.name }}</h2>
             <p class="credential-detail__sub">{{ statusLabel(credential.status) }}</p>
+            <p
+              v-if="countdownLabel(credential.expires_at)"
+              class="credential-detail__countdown"
+              :class="[
+                countdownTone(credential.expires_at) ? `credential-detail__countdown--${countdownTone(credential.expires_at)}` : '',
+                isCountdownUrgent(credential.expires_at) ? 'credential-detail__countdown--urgent' : '',
+              ]"
+            >
+              <AppIcon v-if="isCountdownUrgent(credential.expires_at)" name="clock" :size="12" />
+              {{ countdownLabel(credential.expires_at) }}
+            </p>
           </div>
         </div>
 
         <div class="credential-detail__card">
-          <h3 class="credential-detail__card-title">Thông tin chung</h3>
+          <div class="credential-detail__card-head">
+            <span class="credential-detail__card-icon credential-detail__card-icon--tertiary">
+              <AppIcon name="info" :size="15" />
+            </span>
+            <h3 class="credential-detail__card-title">Thông tin chung</h3>
+          </div>
+          <div class="credential-detail__row">
+            <span class="credential-detail__row-label">Phòng ban sở hữu</span>
+            <span class="credential-detail__row-value">{{ credential.department?.name || 'Chưa gán phòng ban' }}</span>
+          </div>
           <div class="credential-detail__row">
             <span class="credential-detail__row-label">Nhà cung cấp</span>
             <span class="credential-detail__row-value">{{ credential.provider?.name || '—' }}</span>
@@ -137,9 +158,11 @@ onMounted(() => {
             <span class="credential-detail__row-label">Người tạo</span>
             <span class="credential-detail__row-value">{{ credential.creator_name || '—' }}</span>
           </div>
-          <div v-if="credential.is_google_login" class="credential-detail__row">
-            <span class="credential-detail__row-label">Đăng nhập Google công ty</span>
-            <span class="credential-detail__row-value">{{ credential.google_account_owner || 'Chưa ghi chú người sở hữu' }}</span>
+          <div v-if="credential.access_url" class="credential-detail__row">
+            <span class="credential-detail__row-label">Link truy cập</span>
+            <span class="credential-detail__row-value">
+              <a :href="credential.access_url" target="_blank" rel="noopener noreferrer" class="credential-detail__link">{{ credential.access_url }}</a>
+            </span>
           </div>
           <div v-if="credential.server_name" class="credential-detail__row">
             <span class="credential-detail__row-label">Server</span>
@@ -172,8 +195,27 @@ onMounted(() => {
         </div>
 
         <div class="credential-detail__card">
-          <h3 class="credential-detail__card-title">Thông tin đăng nhập</h3>
-          <template v-if="credential.can_see_secret">
+          <div class="credential-detail__card-head">
+            <span class="credential-detail__card-icon credential-detail__card-icon--primary">
+              <AppIcon name="lock" :size="15" />
+            </span>
+            <h3 class="credential-detail__card-title">Thông tin đăng nhập</h3>
+          </div>
+
+          <template v-if="credential.is_google_login">
+            <div class="credential-detail__row">
+              <span class="credential-detail__row-label">Cách đăng nhập</span>
+              <span class="credential-detail__row-value">Bằng tài khoản Google công ty</span>
+            </div>
+            <div class="credential-detail__row">
+              <span class="credential-detail__row-label">Google này thuộc về ai</span>
+              <span class="credential-detail__row-value">
+                {{ credential.google_account_owner_user?.name || credential.google_account_owner || 'Chưa ghi chú người sở hữu' }}
+              </span>
+            </div>
+          </template>
+
+          <template v-else>
             <div class="credential-detail__row">
               <span class="credential-detail__row-label">Tên đăng nhập</span>
               <span class="credential-detail__row-value">{{ credential.username || '—' }}</span>
@@ -182,7 +224,7 @@ onMounted(() => {
               <span class="credential-detail__row-label">Email</span>
               <span class="credential-detail__row-value">{{ credential.email || '—' }}</span>
             </div>
-            <div class="credential-detail__row">
+            <div v-if="credential.can_see_secret" class="credential-detail__row">
               <span class="credential-detail__row-label">Mật khẩu</span>
               <span class="credential-detail__row-value credential-detail__row-value--password">
                 <span>{{ showPassword ? (credential.password || '—') : '••••••••' }}</span>
@@ -196,14 +238,19 @@ onMounted(() => {
                 </button>
               </span>
             </div>
+            <p v-else class="credential-detail__note">
+              Chỉ {{ credential.creator_name || 'người tạo' }} và người được cấp quyền mới xem được mật khẩu.
+            </p>
           </template>
-          <p v-else class="credential-detail__note">
-            Chỉ {{ credential.creator_name || 'người tạo' }} và người được cấp quyền mới xem được thông tin đăng nhập.
-          </p>
         </div>
 
         <div v-if="costText()" class="credential-detail__card">
-          <h3 class="credential-detail__card-title">Chi phí</h3>
+          <div class="credential-detail__card-head">
+            <span class="credential-detail__card-icon credential-detail__card-icon--secondary">
+              <AppIcon name="dollarSign" :size="15" />
+            </span>
+            <h3 class="credential-detail__card-title">Chi phí</h3>
+          </div>
           <div class="credential-detail__row">
             <span class="credential-detail__row-label">Chi phí hằng tháng</span>
             <span class="credential-detail__row-value">{{ costText() }}</span>
@@ -214,32 +261,49 @@ onMounted(() => {
           </div>
           <div v-if="credential.expires_at" class="credential-detail__row">
             <span class="credential-detail__row-label">Ngày hết hạn</span>
-            <span class="credential-detail__row-value">{{ formatDate(credential.expires_at) }}</span>
+            <span class="credential-detail__row-value credential-detail__row-value--stacked">
+              <span>{{ formatDate(credential.expires_at) }}</span>
+              <span
+                v-if="countdownLabel(credential.expires_at)"
+                class="credential-detail__countdown"
+                :class="[
+                  countdownTone(credential.expires_at) ? `credential-detail__countdown--${countdownTone(credential.expires_at)}` : '',
+                  isCountdownUrgent(credential.expires_at) ? 'credential-detail__countdown--urgent' : '',
+                ]"
+              >
+                <AppIcon v-if="isCountdownUrgent(credential.expires_at)" name="clock" :size="11" />
+                {{ countdownLabel(credential.expires_at) }}
+              </span>
+            </span>
           </div>
         </div>
       </div>
 
       <aside v-if="canManageViewers" class="credential-detail__side" aria-label="Người được cấp quyền xem">
-        <h3 class="credential-detail__card-title">Người được xem thông tin đăng nhập</h3>
-        <ul class="credential-detail__viewer-list">
-          <li v-if="!credential.viewers?.length" class="credential-detail__note">Chưa cấp cho ai ngoài người tạo.</li>
-          <li v-for="viewer in credential.viewers" :key="viewer.id" class="credential-detail__viewer-item">
-            <span>{{ viewer.name }}</span>
-            <button type="button" class="credential-detail__icon-btn" aria-label="Thu hồi quyền xem" @click="removeViewer(viewer.id)">
-              <AppIcon name="close" :size="14" />
-            </button>
-          </li>
-        </ul>
-
-        <div class="credential-detail__add-viewer">
-          <select v-model="addingViewerId" class="credential-detail__select">
-            <option value="">Chọn người để cấp quyền</option>
-            <option v-for="u in availableUsersToAdd" :key="u.id" :value="u.id">{{ u.name }}</option>
-          </select>
-          <button type="button" class="credential-detail__add-btn" :disabled="!addingViewerId || savingViewer" @click="addViewer">
-            {{ savingViewer ? 'Đang cấp…' : 'Cấp quyền xem' }}
-          </button>
+        <div class="credential-detail__card-head">
+          <span class="credential-detail__card-icon credential-detail__card-icon--primary">
+            <AppIcon name="users" :size="15" />
+          </span>
+          <h3 class="credential-detail__card-title">Người được xem thông tin đăng nhập</h3>
         </div>
+
+        <CredentialViewerPicker
+          v-model="viewerIds"
+          :users="allUsers"
+          :disabled="savingViewer"
+          placeholder="Gõ tên hoặc email để thêm người…"
+          empty-text="Chưa cấp cho ai ngoài người tạo."
+          tone="primary"
+        />
+
+        <button
+          type="button"
+          class="credential-detail__add-btn"
+          :disabled="savingViewer || !viewerIdsChanged"
+          @click="saveViewers"
+        >
+          {{ savingViewer ? 'Đang lưu…' : 'Lưu thay đổi' }}
+        </button>
       </aside>
     </div>
   </section>
@@ -250,7 +314,7 @@ onMounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: var(--space-5);
+  padding: 0 var(--space-5) var(--space-3);
   overflow: hidden;
 }
 
@@ -342,6 +406,43 @@ onMounted(() => {
   font-size: 0.875rem;
 }
 
+.credential-detail__countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.25rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.credential-detail__countdown--danger {
+  color: var(--color-danger);
+}
+
+.credential-detail__countdown--warning {
+  color: var(--color-warning);
+}
+
+.credential-detail__countdown--urgent {
+  font-weight: 700;
+  animation: credential-detail-countdown-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes credential-detail-countdown-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credential-detail__countdown--urgent {
+    animation: none;
+  }
+}
+
 .credential-detail__card {
   padding: var(--space-4);
   border-radius: var(--radius-lg);
@@ -349,8 +450,40 @@ onMounted(() => {
   box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
 }
 
+.credential-detail__card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.credential-detail__card-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-sm);
+}
+
+.credential-detail__card-icon--tertiary {
+  background: color-mix(in srgb, var(--color-tertiary) 10%, transparent);
+  color: var(--color-tertiary);
+}
+
+.credential-detail__card-icon--primary {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+}
+
+.credential-detail__card-icon--secondary {
+  background: color-mix(in srgb, var(--color-secondary) 10%, transparent);
+  color: var(--color-secondary);
+}
+
 .credential-detail__card-title {
-  margin: 0 0 var(--space-3);
+  margin: 0;
   color: var(--color-text);
   font-size: 0.9375rem;
   font-weight: 700;
@@ -393,6 +526,23 @@ onMounted(() => {
   font-family: var(--font-family-mono, ui-monospace, monospace);
 }
 
+.credential-detail__row-value--stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.credential-detail__link {
+  color: var(--color-tertiary);
+  font-style: normal;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.credential-detail__link:hover {
+  text-decoration: underline;
+}
+
 .credential-detail__note {
   margin: 0;
   color: var(--color-text-muted);
@@ -421,58 +571,17 @@ onMounted(() => {
   flex-shrink: 0;
   width: 20rem;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
   padding: var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface-muted);
 }
 
-.credential-detail__viewer-list {
-  list-style: none;
-  margin: 0 0 var(--space-3);
-  padding: 0;
-}
-
-.credential-detail__viewer-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-  box-shadow: 0 1px 0 var(--color-border);
-  color: var(--color-text);
-  font-size: 0.875rem;
-}
-
-.credential-detail__viewer-item:last-child {
-  box-shadow: none;
-}
-
-.credential-detail__add-viewer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.credential-detail__select {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-family-base);
-  font-size: 0.875rem;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
-}
-
-.credential-detail__select:focus-visible,
-.credential-detail__select:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
-}
-
 .credential-detail__add-btn {
+  flex-shrink: 0;
   height: 2.25rem;
   border: none;
   border-radius: var(--radius-md);

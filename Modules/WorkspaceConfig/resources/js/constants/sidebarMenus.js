@@ -5,57 +5,73 @@
 //
 export const SIDEBAR_MENU_CATALOG = {
   home: {
-    icon: 'dashboard',
+    icon: 'gitBranch',
     section: 'general',
-    sectionLabel: 'Điều hướng',
-    description: 'Trang chủ sau khi đăng nhập. Ẩn thì thành viên không thấy mục Tổng quan trên menu trái.',
+    sectionLabel: 'Tổng quan',
+    description: 'Trang chủ sau khi đăng nhập. Ẩn thì thành viên không thấy mục Quy trình trên menu trái.',
   },
   'social.feed': {
     icon: 'megaphone',
-    section: 'general',
-    sectionLabel: 'Điều hướng',
+    section: 'news',
+    sectionLabel: 'Thông tin',
     description: 'Bảng tin nội bộ của trường. Ẩn thì thành viên không vào được tường từ menu trái.',
   },
   'manager.evaluation.view': {
     icon: 'clipboardCheck',
-    section: 'general',
-    sectionLabel: 'Điều hướng',
+    section: 'evaluation',
+    sectionLabel: 'Đánh giá',
     description: 'Xem tiêu chí đánh giá của phòng ban (chỉ đọc).',
   },
   'manager.evaluation-score-kit.index': {
     icon: 'layers',
-    section: 'manager',
-    sectionLabel: 'Quản lý',
+    section: 'evaluation',
+    sectionLabel: 'Đánh giá',
     description: 'Chọn cách tính điểm của phòng: điểm gốc ± theo việc, hoặc theo trọng số khó/dễ và mức dự án.',
+  },
+  'dashboard.department': {
+    icon: 'activity',
+    section: 'general',
+    sectionLabel: 'Tổng quan',
+    description: 'Dashboard số liệu phòng ban. Ẩn thì thành viên không vào được từ menu trái.',
   },
   'manager.project.index': {
     icon: 'layers',
-    section: 'manager',
-    sectionLabel: 'Quản lý',
+    section: 'operations',
+    sectionLabel: 'Điều hành',
     description: 'Danh sách dự án. Superadmin và mọi tài khoản có quyền xem dự án đều thấy mục này.',
   },
   'manager.project.tasks': {
     icon: 'layoutList',
-    section: 'manager',
-    sectionLabel: 'Quản lý',
+    section: 'operations',
+    sectionLabel: 'Điều hành',
     description: 'Tất cả công việc xuyên dự án. Superadmin và mọi tài khoản có quyền xem công việc đều thấy mục này.',
   },
   'manager.reports.index': {
     icon: 'barChart',
-    section: 'manager',
-    sectionLabel: 'Quản lý',
+    section: 'operations',
+    sectionLabel: 'Điều hành',
     description: 'Tạo và xem báo cáo phòng ban. Loại đánh giá nhân sự mở sang bảng chấm điểm sau khi tạo.',
+  },
+  'manager.credential.index': {
+    icon: 'lock',
+    section: 'control',
+    sectionLabel: 'Kiểm soát',
+    description: 'Quản lý tài khoản dịch vụ dùng chung công ty (Google, Canva, AWS...). Ẩn thì thành viên phòng ban không vào được từ menu trái.',
   },
 };
 
 export const SIDEBAR_SECTIONS = {
-  general: { id: 'general', defaultLabel: 'Điều hướng' },
-  admin: { id: 'admin', defaultLabel: 'Quản trị' },
+  general: { id: 'general', defaultLabel: 'Tổng quan' },
+  news: { id: 'news', defaultLabel: 'Thông tin' },
+  evaluation: { id: 'evaluation', defaultLabel: 'Đánh giá' },
+  operations: { id: 'operations', defaultLabel: 'Điều hành' },
   manager: { id: 'manager', defaultLabel: 'Quản lý' },
-  'superadmin-workspace-config': { id: 'superadmin-workspace-config', defaultLabel: 'Cấu hình Workspace' },
+  control: { id: 'control', defaultLabel: 'Kiểm soát' },
+  admin: { id: 'admin', defaultLabel: 'Quản trị' },
+  'superadmin-workspace-config': { id: 'superadmin-workspace-config', defaultLabel: 'Cấu hình' },
 };
 
-const SECTION_ORDER = ['general', 'manager', 'other'];
+const SECTION_ORDER = ['general', 'news', 'evaluation', 'operations', 'manager', 'control', 'other'];
 
 export const LABEL_MAX_LENGTH = 40;
 

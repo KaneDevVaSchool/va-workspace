@@ -1,8 +1,9 @@
 <script setup>
 //
-// Nhãn trạng thái on/off dạng chữ nhật (không pill/badge).
-// "Đang hiện" / "Đang hoạt động" luôn xanh lá (--color-success*),
-// không dùng màu brand đỏ.
+// Nhãn trạng thái on/off: chữ thường + 1 chấm màu nhỏ đứng trước, KHÔNG
+// dùng badge/pill nền màu bo tròn (mục 14 CLAUDE.md). Mẫu theo
+// PermissionMatrix.vue (.perm-page__dot). "Đang hiện" / "Đang hoạt động"
+// luôn chấm xanh lá (--color-success), không dùng màu brand đỏ.
 //
 defineProps({
   on: { type: Boolean, required: true },
@@ -11,7 +12,8 @@ defineProps({
 </script>
 
 <template>
-  <span class="status-mark" :class="on ? 'status-mark--on' : 'status-mark--off'">
+  <span class="status-mark">
+    <span class="status-mark__dot" :class="on ? 'status-mark__dot--on' : 'status-mark__dot--off'" aria-hidden="true" />
     {{ label }}
   </span>
 </template>
@@ -20,25 +22,27 @@ defineProps({
 .status-mark {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.375rem;
   max-width: 100%;
-  padding: 0.125rem 0.5rem;
-  border-radius: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
+  color: var(--color-text);
+  font-size: inherit;
+  font-weight: 400;
   line-height: 1.4;
   white-space: nowrap;
 }
 
-.status-mark--on {
-  background: var(--color-success-tint-bg);
-  color: var(--color-success-tint-fg);
-  box-shadow: inset 0 0 0 1px var(--color-success-tint-border);
+.status-mark__dot {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
 }
 
-.status-mark--off {
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+.status-mark__dot--on {
+  background: var(--color-success);
+}
+
+.status-mark__dot--off {
+  background: var(--color-text-muted);
 }
 </style>

@@ -14,6 +14,7 @@ use Modules\Project\App\Models\CommentReaction;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\Task;
 use Modules\Project\App\Repositories\Contracts\CommentRepositoryInterface;
+use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
 
 /**
  * Business logic của "Thảo luận" (Comment) — rút gọn từ
@@ -24,14 +25,23 @@ use Modules\Project\App\Repositories\Contracts\CommentRepositoryInterface;
  * Inject thẳng ProjectService để tái dùng userCanManageDepartment() có sẵn
  * (quyền ghim bình luận dự án == quyền sửa dự án, mục "Ghim" trong plan) —
  * không tạo phụ thuộc vòng vì ProjectService không gọi ngược lại CommentService.
+ *
+ * File đính kèm gửi trong thảo luận của 1 Project cũng được nhân bản 1 bản
+ * ghi ProjectAttachment (cùng file_path vật lý, không lưu file 2 lần) để
+ * xuất hiện trong tab Đính kèm — xem storeAttachments(). Dùng thẳng
+ * ProjectRepositoryInterface (không qua ProjectService::uploadAttachment())
+ * vì file đã có sẵn trên đĩa, chỉ cần tạo bản ghi.
  */
 class CommentService
 {
+    private const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
     public function __construct(
         private readonly CommentRepositoryInterface $comments,
         private readonly CommentSanitizer $sanitizer,
         private readonly UserRepositoryInterface $users,
         private readonly ProjectService $projects,
+        private readonly ProjectRepositoryInterface $projectRepository,
     ) {}
 
     public function listFor(Model $commentable, User $viewer): array
@@ -169,7 +179,7 @@ class CommentService
         ]);
 
         if ($files !== []) {
-            $this->storeAttachments($comment, $files);
+            $this->storeAttachments($comment, $commentable, $files);
             $comment = $this->comments->find($comment->id);
         }
 
@@ -258,7 +268,10 @@ class CommentService
     private function deleteTreeAttachments(Comment $comment): void
     {
         foreach ($comment->attachments as $attachment) {
-            if ($attachment->file_path) {
+            // Không xoá file vật lý nếu đã đồng bộ sang ProjectAttachment (tab
+            // Đính kèm) — file đó vẫn cần hiển thị/tải được ở đấy dù bình
+            // luận gốc đã bị xoá.
+            if ($attachment->file_path && ! $this->projectRepository->attachmentExistsByFilePath($attachment->file_path)) {
                 Storage::disk('public')->delete($attachment->file_path);
             }
         }
@@ -341,19 +354,35 @@ class CommentService
     }
 
     /** @param  UploadedFile[]  $files */
-    private function storeAttachments(Comment $comment, array $files): void
+    private function storeAttachments(Comment $comment, Model $commentable, array $files): void
     {
-        $imageMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        $project = $commentable instanceof Project ? $commentable : null;
 
         foreach ($files as $file) {
             $path = $file->store('comments/'.$comment->id, 'public');
+            $isImage = in_array($file->getMimeType(), self::IMAGE_MIMES, true);
 
             $comment->attachments()->create([
                 'file_path' => $path,
                 'file_name' => $file->getClientOriginalName(),
                 'file_size' => $file->getSize(),
-                'type' => in_array($file->getMimeType(), $imageMimes, true) ? 'image' : 'file',
+                'type' => $isImage ? 'image' : 'file',
             ]);
+
+            // Đồng bộ sang tab Đính kèm của dự án — dùng lại đúng file vật lý
+            // vừa lưu ở trên (không upload lại), chỉ thêm 1 bản ghi
+            // ProjectAttachment độc lập nên xoá bình luận không ảnh hưởng tệp
+            // đã hiện trong tab Đính kèm.
+            if ($project !== null) {
+                $this->projectRepository->addAttachment($project->id, [
+                    'kind' => $isImage ? 'image' : 'file',
+                    'file_path' => $path,
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType(),
+                    'size_bytes' => $file->getSize(),
+                    'uploaded_by' => $comment->user_id,
+                ]);
+            }
         }
     }
 }

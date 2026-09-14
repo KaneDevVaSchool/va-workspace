@@ -23,6 +23,13 @@ class CredentialProviderSeeder extends Seeder
             ['name' => 'Database', 'category' => 'Cơ sở dữ liệu'],
             ['name' => 'Domain', 'category' => 'Tên miền'],
             ['name' => 'IAM Console', 'category' => 'Hạ tầng cloud'],
+            ['name' => 'VNPT', 'category' => 'Phần mềm giáo vụ'],
+            ['name' => 'Kids Online', 'category' => 'Phần mềm giáo vụ'],
+            ['name' => 'Viettel', 'category' => 'Phần mềm giáo vụ'],
+            ['name' => 'Lingua Attack', 'category' => 'Học liệu số'],
+            ['name' => 'Raz Plus', 'category' => 'Học liệu số'],
+            ['name' => 'Kids A-Z', 'category' => 'Học liệu số'],
+            ['name' => 'VA Schools', 'category' => 'Công cụ nội bộ VA Schools'],
         ];
 
         foreach ($providers as $provider) {

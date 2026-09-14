@@ -303,12 +303,17 @@ class TaskService
     /**
      * Tạo nhiều công việc với field riêng từng dòng (1 transaction).
      *
+     * $project khác null = lô cố định thuộc 1 dự án (modal "Thêm việc" trong
+     * trang Chi tiết dự án) — mọi item dùng chung dự án này, item['project_id']
+     * bị bỏ qua. $project null = lô từ trang "Tất cả công việc", mỗi item tự
+     * chọn dự án qua project_id riêng (để trống = việc thường xuyên).
+     *
      * @param  list<array<string, mixed>>  $items
      * @return list<Task>|array{error: string}
      */
-    public function createMany(Project $project, array $items, User $creator): array
+    public function createMany(?Project $project, array $items, User $creator): array
     {
-        if (! $this->projects->viewerCanAssignTo($creator, $project)) {
+        if ($project !== null && ! $this->projects->viewerCanAssignTo($creator, $project)) {
             return ['error' => 'Bạn không thể tạo công việc trong dự án này.'];
         }
 
@@ -316,11 +321,22 @@ class TaskService
             return DB::transaction(function () use ($project, $items, $creator) {
                 $created = [];
                 foreach ($items as $index => $item) {
+                    $itemProject = $project;
+                    if ($itemProject === null && ! empty($item['project_id'])) {
+                        $itemProject = $this->projects->find((int) $item['project_id']);
+                        if ($itemProject === null) {
+                            throw new \RuntimeException('Dự án không tồn tại.');
+                        }
+                        if (! $this->projects->viewerCanAssignTo($creator, $itemProject)) {
+                            throw new \RuntimeException('Bạn không thể tạo công việc trong dự án này.');
+                        }
+                    }
+
                     $payload = array_merge($item, [
                         'type' => 'task',
                         'sort_order' => $item['sort_order'] ?? $index,
                     ]);
-                    $row = $this->createSingle($project, $payload, $creator);
+                    $row = $this->createSingle($itemProject, $payload, $creator);
                     if (is_array($row)) {
                         throw new \RuntimeException($row['error'] ?? 'Không tạo được công việc.');
                     }

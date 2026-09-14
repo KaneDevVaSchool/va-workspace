@@ -13,6 +13,7 @@ import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import { useDragScroll } from '@/composables/useDragScroll';
 import { showClientToast } from '@/lib/clientToast';
 import { computeExpectedProgress } from '@/lib/progress';
+import { exportTaskListCsv, exportTaskListPdf, exportTaskListXlsx } from '../lib/taskListExport.js';
 import {
   PROJECT_TASK_COL_KEY,
   PROJECT_TASK_COLUMNS,
@@ -28,6 +29,7 @@ import {
   TASK_STATUS_TONES,
   TASK_TYPE_LABELS,
   TASK_TYPE_TONES,
+  flattenAllProjectNodes,
   flattenProjectTasks,
   loadVisibility,
   saveVisibility,
@@ -79,6 +81,14 @@ const tableZoom = ref(loadZoom());
 const collapsedIds = ref(new Set());
 const visibility = reactive(loadVisibility(PROJECT_TASK_COL_KEY, PROJECT_TASK_COLUMNS));
 const columnWidths = reactive(loadWidths());
+
+// ---------- Xuất dữ liệu (CSV / Excel / PDF) — theo đúng bộ lọc + cột chọn ----------
+const exportMenuOpen = ref(false);
+const exportDialogOpen = ref(false);
+const exportKind = ref('xlsx');
+const exportBusy = ref(false);
+const exportSelectedColumns = ref(new Set(PROJECT_TASK_COLUMNS.filter((col) => col.defaultOn).map((col) => col.key)));
+
 const tableWrap = ref(null);
 const kanbanWrap = ref(null);
 const resizing = ref(false);
@@ -134,6 +144,12 @@ const sourceTasks = computed(() =>
   }),
 );
 
+// Kanban "Theo loại" cần cả phase/category, không chỉ type=task như sourceTasks.
+const kanbanSourceTasks = computed(() => {
+  if (!isKanban.value || kanbanGroupBy.value !== 'type') return sourceTasks.value;
+  return flattenAllProjectNodes(props.tree, { filter: props.filter, query: query.value });
+});
+
 const visibleTasks = computed(() => {
   if (viewMode.value !== 'all') return sourceTasks.value;
   const ids = new Set(sourceTasks.value.map((task) => task.id));
@@ -170,7 +186,7 @@ const tableWidthPx = computed(() => {
 });
 
 const kanbanColumns = computed(() => {
-  const tasks = sourceTasks.value;
+  const tasks = kanbanSourceTasks.value;
   if (kanbanGroupBy.value === 'assignees') {
     const map = new Map();
     for (const task of tasks) {
@@ -336,6 +352,8 @@ function closeViewMenu() {
 function onDocClick(event) {
   const root = document.getElementById('project-task-view-mode');
   if (viewModeOpen.value && root && !root.contains(event.target)) closeViewMenu();
+  const exportRoot = document.getElementById('project-task-export-menu');
+  if (exportMenuOpen.value && exportRoot && !exportRoot.contains(event.target)) exportMenuOpen.value = false;
 }
 
 function onKeydown(event) {
@@ -344,6 +362,11 @@ function onKeydown(event) {
     clearKanbanDrag();
     return;
   }
+  if (exportDialogOpen.value) {
+    closeExportDialog();
+    return;
+  }
+  exportMenuOpen.value = false;
   closeViewMenu();
 }
 
@@ -420,6 +443,19 @@ function cellText(task, key) {
   if (key === 'progress_percent') return task.progress_percent == null ? '—' : `${task.progress_percent}%`;
   if (key === 'type') return typeLabel(task.type);
   if (key === 'priority') return priorityLabel(task.priority);
+  if (key === 'assignee') return task.assignee?.name || '—';
+  if (key === 'status') return statusLabel(task.status);
+  if (key === 'creator') return task.creator?.name || '—';
+  if (key === 'created_at' || key === 'updated_at') return formatDateTime(task[key]);
+  if (key === 'parent') return task.parent?.title || '—';
+  if (key === 'attachments_count') return String(task.attachments_count || 0);
+  if (key === 'estimated_hours') return task.estimated_hours ?? '—';
+  if (key === 'worklog_hours') return String(task.worklog_hours || 0);
+  if (key === 'manager') return task.manager?.name || '—';
+  if (key === 'accepted_by') return task.accepted_by_user?.name || '—';
+  if (key === 'weight') return task.weight != null ? `${task.weight}%` : '—';
+  if (key === 'is_overdue') return task.is_overdue ? 'Quá hạn' : 'Đúng hạn';
+  if (key === 'variance_days') return formatVarianceDays(task.variance_days);
   return '—';
 }
 function colWidthStyle(key) {
@@ -430,6 +466,61 @@ function toggleCol(key, on) {
   if (!col || col.always) return;
   visibility[key] = on;
   saveVisibility(PROJECT_TASK_COL_KEY, { ...visibility });
+}
+
+function toggleExportMenu() {
+  exportMenuOpen.value = !exportMenuOpen.value;
+}
+
+function openExportDialog(kind) {
+  exportMenuOpen.value = false;
+  exportKind.value = kind;
+  exportSelectedColumns.value = new Set(PROJECT_TASK_COLUMNS.filter((col) => col.defaultOn).map((col) => col.key));
+  exportDialogOpen.value = true;
+}
+
+function closeExportDialog() {
+  if (exportBusy.value) return;
+  exportDialogOpen.value = false;
+}
+
+function toggleExportColumn(key) {
+  const col = PROJECT_TASK_COLUMNS.find((item) => item.key === key);
+  if (col?.always) return;
+  const next = new Set(exportSelectedColumns.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  exportSelectedColumns.value = next;
+}
+
+function selectAllExportColumns() {
+  exportSelectedColumns.value = new Set(PROJECT_TASK_COLUMNS.map((col) => col.key));
+}
+
+function deselectAllExportColumns() {
+  exportSelectedColumns.value = new Set(PROJECT_TASK_COLUMNS.filter((col) => col.always).map((col) => col.key));
+}
+
+function buildExportContext() {
+  const columns = PROJECT_TASK_COLUMNS.filter((col) => col.always || exportSelectedColumns.value.has(col.key));
+  const rows = visibleTasks.value.map((task) => columns.map((col) => cellText(task, col.key)));
+  return { project: props.project, columns, rows };
+}
+
+async function submitExportDialog() {
+  exportBusy.value = true;
+  try {
+    const ctx = buildExportContext();
+    if (exportKind.value === 'csv') exportTaskListCsv(ctx);
+    else if (exportKind.value === 'xlsx') await exportTaskListXlsx(ctx);
+    else if (exportKind.value === 'pdf') await exportTaskListPdf(ctx);
+    showClientToast('success', 'Đã xuất file.');
+    exportDialogOpen.value = false;
+  } catch (error) {
+    showClientToast('error', error?.message || 'Không xuất được file.');
+  } finally {
+    exportBusy.value = false;
+  }
 }
 function persistWidths() {
   try {
@@ -726,16 +817,24 @@ async function commitKanbanDrop(taskId, targetKey) {
   }
 }
 
+/** Gán độ rộng mặc định cho cột chưa có width — chạy lại mỗi khi danh sách
+ *  cột hiển thị đổi (bật/tắt checkbox cột), không chỉ lúc mount. Thiếu bước
+ *  này thì cột mới bật không có width trong <colgroup>, table-layout: fixed
+ *  sẽ co giãn sai làm vỡ format khi bật nhiều cột. */
+function ensureColumnWidths() {
+  for (const col of shownColumns.value) {
+    if (!columnWidths[col.key]) {
+      columnWidths[col.key] = col.key === 'title' ? 280 : 140;
+    }
+  }
+}
+
+watch(shownColumns, () => nextTick(ensureColumnWidths));
+
 onMounted(() => {
   document.addEventListener('mousedown', onDocClick);
   document.addEventListener('keydown', onKeydown);
-  nextTick(() => {
-    if (!Object.keys(columnWidths).length) {
-      for (const col of shownColumns.value) {
-        columnWidths[col.key] = col.key === 'title' ? 280 : 140;
-      }
-    }
-  });
+  nextTick(ensureColumnWidths);
 });
 
 onBeforeUnmount(() => {
@@ -768,10 +867,46 @@ watch(tableZoom, (value) => {
         @select-kanban="chooseKanban"
       />
       <h3 class="ptasks__filter">{{ filterLabel }}</h3>
-      <label v-if="!isGantt" class="ptasks__search">
+      <label v-if="!isGantt" class="ptasks__search" :class="{ 'ptasks__search--with-export': isList }">
         <AppIcon name="search" :size="15" />
         <input v-model="query" type="search" placeholder="Tìm theo tên công việc…" />
       </label>
+      <div v-if="isList" id="project-task-export-menu" class="ptasks__export">
+        <button
+          type="button"
+          class="ptasks__export-trigger"
+          aria-haspopup="menu"
+          :aria-expanded="exportMenuOpen"
+          @click.stop="toggleExportMenu"
+        >
+          <AppIcon name="fileDown" :size="15" />
+          <span>Xuất dữ liệu</span>
+          <AppIcon name="chevronDown" :size="14" />
+        </button>
+        <div v-if="exportMenuOpen" class="ptasks__export-menu" role="menu" @click.stop>
+          <button type="button" class="ptasks__export-item" role="menuitem" @click="openExportDialog('csv')">
+            <AppIcon name="fileText" :size="14" :stroke-width="1.75" />
+            <span class="ptasks__export-item-copy">
+              <span class="ptasks__export-item-title">CSV</span>
+              <span class="ptasks__export-item-sub">Mở bằng Excel, Google Sheets</span>
+            </span>
+          </button>
+          <button type="button" class="ptasks__export-item" role="menuitem" @click="openExportDialog('xlsx')">
+            <AppIcon name="fileSpreadsheet" :size="14" :stroke-width="1.75" />
+            <span class="ptasks__export-item-copy">
+              <span class="ptasks__export-item-title">Excel (.xlsx)</span>
+              <span class="ptasks__export-item-sub">Có định dạng cột, lọc nhanh</span>
+            </span>
+          </button>
+          <button type="button" class="ptasks__export-item" role="menuitem" @click="openExportDialog('pdf')">
+            <AppIcon name="fileDown" :size="14" :stroke-width="1.75" />
+            <span class="ptasks__export-item-copy">
+              <span class="ptasks__export-item-title">PDF</span>
+              <span class="ptasks__export-item-sub">Bảng in sẵn, chia trang tự động</span>
+            </span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <template v-if="isList">
@@ -953,7 +1088,7 @@ watch(tableZoom, (value) => {
       }"
     >
       <p v-if="loading" class="ptasks__empty">Đang tải công việc…</p>
-      <p v-else-if="!sourceTasks.length" class="ptasks__empty">
+      <p v-else-if="!kanbanSourceTasks.length" class="ptasks__empty">
         {{ query.trim() || filter !== 'all' ? 'Không có công việc phù hợp.' : 'Dự án chưa có công việc nào.' }}
       </p>
       <div
@@ -1076,6 +1211,77 @@ watch(tableZoom, (value) => {
         <h3 class="ptasks-kanban__card-title">{{ kanbanDrag.task.title }}</h3>
       </div>
     </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="exportDialogOpen"
+        class="ptasks__dialog"
+        role="presentation"
+        @mousedown.self="closeExportDialog"
+      >
+        <div class="ptasks__dialog-panel" role="dialog" aria-modal="true" aria-labelledby="ptasks-export-title">
+          <div class="ptasks__dialog-head">
+            <span class="ptasks__dialog-icon" aria-hidden="true">
+              <AppIcon name="fileDown" :size="22" :stroke-width="1.75" />
+            </span>
+            <div class="ptasks__dialog-head-copy">
+              <h2 id="ptasks-export-title" class="ptasks__dialog-title">
+                Xuất công việc ra {{ exportKind === 'csv' ? 'CSV' : exportKind === 'pdf' ? 'PDF' : 'Excel' }}
+              </h2>
+            </div>
+            <button
+              type="button"
+              class="ptasks__dialog-close"
+              aria-label="Đóng"
+              :disabled="exportBusy"
+              @click="closeExportDialog"
+            >
+              <AppIcon name="close" :size="16" />
+            </button>
+          </div>
+
+          <div class="ptasks__dialog-body">
+            <p class="ptasks__dialog-hint">
+              Xuất theo đúng bộ lọc và tìm kiếm đang xem trên tab. Chọn cột cần xuất — cột Tên công việc luôn được xuất.
+            </p>
+            <div class="ptasks__dialog-toolbar">
+              <button type="button" class="ptasks__dialog-link" @click="selectAllExportColumns">Chọn tất cả</button>
+              <button type="button" class="ptasks__dialog-link" @click="deselectAllExportColumns">Bỏ chọn tất cả</button>
+            </div>
+            <div class="ptasks__dialog-grid">
+              <label
+                v-for="col in PROJECT_TASK_COLUMNS"
+                :key="col.key"
+                class="ptasks__dialog-col"
+                :class="{ 'ptasks__dialog-col--disabled': col.always }"
+              >
+                <input
+                  type="checkbox"
+                  :checked="col.always || exportSelectedColumns.has(col.key)"
+                  :disabled="col.always"
+                  @change="toggleExportColumn(col.key)"
+                />
+                <span>{{ col.label }}</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="ptasks__dialog-actions">
+            <button type="button" class="ptasks__dialog-btn ptasks__dialog-btn--ghost" :disabled="exportBusy" @click="closeExportDialog">
+              Đóng
+            </button>
+            <button
+              type="button"
+              class="ptasks__dialog-btn ptasks__dialog-btn--primary"
+              :disabled="exportBusy"
+              @click="submitExportDialog"
+            >
+              {{ exportBusy ? 'Đang xuất…' : `Xuất (${visibleTasks.length} công việc)` }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -1127,6 +1333,10 @@ watch(tableZoom, (value) => {
   box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
+.ptasks__search--with-export {
+  margin-right: 0.5rem;
+}
+
 .ptasks__search input {
   width: 14rem;
   max-width: 36vw;
@@ -1149,6 +1359,289 @@ watch(tableZoom, (value) => {
   color: var(--color-text);
   font-size: 0.8125rem;
   cursor: pointer;
+}
+
+.ptasks__export {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  margin: 0.375rem 0.75rem 0.375rem 0;
+}
+
+.ptasks__export-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.875rem;
+  padding: 0 0.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ptasks__export-trigger:hover,
+.ptasks__export-trigger[aria-expanded='true'] {
+  color: var(--color-primary);
+  background: var(--color-primary-surface);
+}
+
+.ptasks__export-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 16.5rem;
+  padding: 0.25rem;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-lg);
+}
+
+.ptasks__export-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ptasks__export-item:hover {
+  background: var(--color-surface-muted);
+}
+
+.ptasks__export-item-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+}
+
+.ptasks__export-item-title {
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.ptasks__export-item-sub {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.ptasks__dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: var(--color-sidebar-overlay);
+}
+
+.ptasks__dialog-panel {
+  width: min(40rem, calc(100vw - 2.5rem));
+  height: auto;
+  max-width: calc(100vw - 2.5rem);
+  max-height: calc(100vh - 2.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 1rem 1.25rem 1rem;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.ptasks__dialog-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  box-shadow: 0 1px 0 var(--color-border);
+  padding-bottom: var(--space-3);
+}
+
+.ptasks__dialog-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.ptasks__dialog-head-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.ptasks__dialog-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.ptasks__dialog-close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.ptasks__dialog-close:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.ptasks__dialog-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ptasks__dialog-hint {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.ptasks__dialog-toolbar {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.ptasks__dialog-link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ptasks__dialog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+  overflow-y: auto;
+}
+
+.ptasks__dialog-col {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.ptasks__dialog-col:hover {
+  background: var(--color-surface-muted);
+}
+
+.ptasks__dialog-col--disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.ptasks__dialog-col--disabled:hover {
+  background: transparent;
+}
+
+.ptasks__dialog-actions {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.ptasks__dialog-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ptasks__dialog-btn--primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.ptasks__dialog-btn--primary:hover {
+  background: var(--color-primary-hover);
+}
+
+.ptasks__dialog-btn--ghost {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.ptasks__dialog-btn--ghost:hover {
+  background: var(--color-surface-muted);
+}
+
+.ptasks__dialog-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 768px) {
+  .ptasks__dialog-panel {
+    width: calc(100vw - 1.5rem);
+    max-height: calc(100vh - 1.5rem);
+  }
+
+  .ptasks__dialog-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .ptasks__table-wrap {

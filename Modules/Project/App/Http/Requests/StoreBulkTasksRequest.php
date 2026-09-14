@@ -24,8 +24,15 @@ class StoreBulkTasksRequest extends FormRequest
             'items.*.title' => ['required', 'string', 'max:255'],
             'items.*.description' => ['nullable', 'string', 'max:5000'],
             'items.*.parent_id' => ['nullable', 'integer', 'exists:tasks,id'],
+            // project_id: chỉ dùng khi tạo từ trang "Tất cả công việc" (không có
+            // {project} cố định trên route) — mỗi dòng tự chọn dự án, để trống =
+            // việc thường xuyên. Route /{project}/tasks/bulk bỏ qua field này.
+            'items.*.project_id' => ['nullable', 'integer', 'exists:projects,id'],
             'items.*.start_date' => ['nullable', 'date'],
             'items.*.end_date' => ['nullable', 'date'],
+            'items.*.start_time' => ['nullable', 'date_format:H:i'],
+            'items.*.due_time' => ['nullable', 'date_format:H:i'],
+            'items.*.estimated_hours' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             'items.*.assignee_id' => ['nullable', 'integer', 'exists:users,id'],
             'items.*.progress_type' => ['nullable', 'string', 'in:'.implode(',', TaskEnums::PROGRESS_TYPES)],
             'items.*.weight' => ['nullable', 'numeric', 'min:0', 'max:100'],
@@ -58,7 +65,11 @@ class StoreBulkTasksRequest extends FormRequest
             'items.*.title.required' => 'Tên công việc không được để trống.',
             'items.*.title.max' => 'Tên công việc không được vượt quá 255 ký tự.',
             'items.*.parent_id.exists' => 'Công việc cha không tồn tại.',
+            'items.*.project_id.exists' => 'Dự án không tồn tại.',
             'items.*.assignee_id.exists' => 'Người thực hiện không tồn tại.',
+            'items.*.start_time.date_format' => 'Giờ bắt đầu không hợp lệ (định dạng HH:MM).',
+            'items.*.due_time.date_format' => 'Giờ hạn không hợp lệ (định dạng HH:MM).',
+            'items.*.estimated_hours.min' => 'Thời gian dự kiến không được âm.',
         ];
     }
 }

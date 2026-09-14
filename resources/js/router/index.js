@@ -6,6 +6,7 @@ import evaluationRoutes from '@modules/Evaluation/resources/js/router.js';
 import projectRoutes from '@modules/Project/resources/js/router.js';
 import reportRoutes from '@modules/Report/resources/js/router.js';
 import credentialRoutes from '@modules/Credential/resources/js/router.js';
+import dashboardRoutes from '@modules/Dashboard/resources/js/router.js';
 
 /**
  * Route Vue (SPA phía client) — KHÔNG nhầm với route Laravel
@@ -21,7 +22,7 @@ const routes = [
         path: '/',
         name: 'home',
         component: () => import('../pages/Home.vue'),
-        meta: { requiresAuth: true, title: 'Tổng quan' },
+        meta: { requiresAuth: true, title: 'Quy trình' },
     },
     ...identityRoutes,
     ...workspaceConfigRoutes,
@@ -30,6 +31,7 @@ const routes = [
     ...projectRoutes,
     ...reportRoutes,
     ...credentialRoutes,
+    ...dashboardRoutes,
     {
         path: '/:pathMatch(.*)*',
         name: 'not-found',

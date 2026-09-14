@@ -67,6 +67,9 @@ interface ProjectRepositoryInterface
 
     public function deleteAttachment(ProjectAttachment $attachment): bool;
 
+    /** Còn bản ghi ProjectAttachment nào trỏ tới file_path này không — dùng khi xoá bình luận có tệp đã đồng bộ sang tab Đính kèm (CommentService::deleteTreeAttachments()), tránh xoá nhầm file vật lý đang được tab Đính kèm tham chiếu. */
+    public function attachmentExistsByFilePath(string $filePath): bool;
+
     /** @return Collection<int, ProjectFolder> */
     public function listFolders(int $projectId, ?int $parentId): Collection;
 

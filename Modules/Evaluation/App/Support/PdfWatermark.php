@@ -79,7 +79,7 @@ class PdfWatermark
         $brandR = 0x9A;
         $brandG = 0x00;
         $brandB = 0x36;
-        $fade = 0.28;
+        $fade = 0.10;
 
         for ($y = 0; $y < $height; $y++) {
             for ($x = 0; $x < $width; $x++) {

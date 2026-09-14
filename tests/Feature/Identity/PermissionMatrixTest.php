@@ -251,6 +251,89 @@ class PermissionMatrixTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // Bulk grant (cấp/thu hồi cả module cho 1 role)
+    // ------------------------------------------------------------------
+
+    public function test_bulk_grants_upserts_all_keys_and_returns_updated_cells(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $superAdmin = $this->makeUser([], ['super_admin']);
+
+        $response = $this->actingAs($superAdmin)->putJson('/api/permissions/grants/bulk', [
+            'role_code' => 'member',
+            'permission_keys' => ['project.view', 'project.create'],
+            'granted' => true,
+            'scope_type' => 'global',
+        ]);
+
+        $response->assertOk();
+        $this->assertDatabaseHas('permission_grants', [
+            'role_code' => 'member',
+            'permission_key' => 'project.view',
+            'granted' => true,
+        ]);
+        $this->assertDatabaseHas('permission_grants', [
+            'role_code' => 'member',
+            'permission_key' => 'project.create',
+            'granted' => true,
+        ]);
+
+        $cells = $response->json('cells');
+        $this->assertTrue($cells['project.view']['effective']);
+        $this->assertTrue($cells['project.create']['effective']);
+    }
+
+    public function test_bulk_grants_skips_reserved_keys_instead_of_failing_whole_batch(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $superAdmin = $this->makeUser([], ['super_admin']);
+
+        $response = $this->actingAs($superAdmin)->putJson('/api/permissions/grants/bulk', [
+            'role_code' => 'member',
+            'permission_keys' => ['project.view', 'permissions.manage'],
+            'granted' => true,
+            'scope_type' => 'global',
+        ]);
+
+        $response->assertOk();
+        $this->assertDatabaseHas('permission_grants', [
+            'role_code' => 'member',
+            'permission_key' => 'project.view',
+        ]);
+        $this->assertDatabaseMissing('permission_grants', [
+            'role_code' => 'member',
+            'permission_key' => 'permissions.manage',
+        ]);
+    }
+
+    public function test_bulk_grants_rejects_nonexistent_team_scope_id_with_422(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $superAdmin = $this->makeUser([], ['super_admin']);
+
+        $this->actingAs($superAdmin)->putJson('/api/permissions/grants/bulk', [
+            'role_code' => 'member',
+            'permission_keys' => ['project.view'],
+            'granted' => true,
+            'scope_type' => 'team',
+            'scope_id' => 999999,
+        ])->assertStatus(422);
+    }
+
+    public function test_non_super_admin_cannot_access_bulk_grant_api(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $member = $this->makeUser([], ['member']);
+
+        $this->actingAs($member)->putJson('/api/permissions/grants/bulk', [
+            'role_code' => 'member',
+            'permission_keys' => ['project.view'],
+            'granted' => true,
+            'scope_type' => 'global',
+        ])->assertStatus(403);
+    }
+
+    // ------------------------------------------------------------------
     // Validation
     // ------------------------------------------------------------------
 

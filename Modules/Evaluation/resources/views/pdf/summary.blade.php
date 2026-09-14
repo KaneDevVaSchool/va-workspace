@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>{{ $meta['title'] }}</title>
 <style>
-    @page { margin: 16px 20px 20px; }
+    @page { margin: 18px 22px 22px; }
     body {
         font-family: 'DejaVu Sans', sans-serif;
         font-size: 9px;
@@ -12,37 +12,40 @@
         margin: 0;
     }
     h1, h2, h3, p, table { margin: 0; padding: 0; }
+
+    /* ===== Header thương hiệu — không tô nền, phân định bằng gạch dưới ===== */
     .brand {
-        background: #9A0036;
-        color: #FFFFFF;
-        padding: 10px 14px 9px;
-        margin-bottom: 8px;
+        padding: 0 0 8px;
+        margin-bottom: 10px;
+        box-shadow: 0 1.5px 0 #9A0036;
     }
     .brand .org {
         font-size: 8px;
         letter-spacing: 0.12em;
         text-transform: uppercase;
-        opacity: 0.85;
-        margin-bottom: 2px;
+        color: #9A0036;
+        font-weight: bold;
+        margin-bottom: 3px;
     }
     .brand h1 {
-        font-size: 16px;
-        letter-spacing: 0.04em;
+        font-size: 17px;
+        letter-spacing: 0.02em;
+        color: #1A1A1A;
     }
     .brand .sub {
         font-size: 8.5px;
         margin-top: 3px;
-        opacity: 0.9;
+        color: #6B6B6F;
     }
 
     table.form {
         width: 100%;
         border-collapse: collapse;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
         table-layout: fixed;
     }
     table.form td {
-        border: 1px solid #E5E5E8;
+        border: 0.75px solid #D9D9DE;
         padding: 5px 8px 6px;
         vertical-align: top;
         width: 16.66%;
@@ -58,6 +61,7 @@
     table.form .v {
         font-size: 9.5px;
         font-weight: bold;
+        color: #1A1A1A;
     }
 
     .section {
@@ -66,11 +70,12 @@
         color: #9A0036;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        margin: 10px 0 4px;
+        margin: 12px 0 5px;
         padding-bottom: 3px;
-        border-bottom: 1.5px solid #9A0036;
+        box-shadow: 0 1px 0 #9A0036;
     }
 
+    /* ===== Bảng tổng hợp / chi tiết — chỉ viền mảnh, không tô nền ===== */
     table.matrix {
         width: 100%;
         border-collapse: collapse;
@@ -78,21 +83,22 @@
     }
     table.matrix th,
     table.matrix td {
-        border: 1px solid #E5E5E8;
+        border: 0.75px solid #D9D9DE;
         padding: 4px 5px;
         font-size: 8px;
         vertical-align: top;
     }
     table.matrix thead th {
-        background: #9A0036;
-        color: #FFFFFF;
+        color: #9A0036;
         font-weight: bold;
         text-align: center;
+        border-width: 0.75px 0.75px 1.5px 0.75px;
+        border-color: #D9D9DE #D9D9DE #9A0036 #D9D9DE;
     }
     table.matrix thead tr.leaves th {
-        background: #7A002B;
         font-size: 7.5px;
         font-weight: normal;
+        color: #4A4A4E;
     }
     table.matrix .user {
         text-align: left;
@@ -106,12 +112,12 @@
     }
     table.matrix tbody td { text-align: center; }
     table.matrix tbody td.user { text-align: left; }
-    table.matrix tbody tr.zebra td { background: #F7F7F8; }
     table.matrix tfoot td,
     table.matrix tfoot th {
-        background: #F3E6EB;
         font-weight: bold;
         text-align: center;
+        border-width: 1.5px 0.75px 0.75px 0.75px;
+        border-color: #9A0036 #D9D9DE #D9D9DE #D9D9DE;
     }
     table.matrix tfoot th.user { text-align: left; }
     .plus { color: #0F7B3A; font-weight: bold; }
@@ -119,9 +125,7 @@
     .warn { color: #B42318; font-size: 7px; display: block; }
     .klass {
         display: inline-block;
-        background: #F3E6EB;
         color: #9A0036;
-        padding: 1px 5px;
         font-weight: bold;
         font-size: 7.5px;
     }
@@ -130,7 +134,7 @@
     .sign {
         width: 100%;
         border-collapse: collapse;
-        margin-top: 18px;
+        margin-top: 20px;
     }
     .sign td {
         width: 33.33%;
@@ -139,27 +143,34 @@
         padding: 0 10px;
     }
     .sign .place { font-size: 8px; color: #6B6B6F; margin-bottom: 8px; }
-    .sign .role { font-weight: bold; font-size: 9.5px; }
+    .sign .role { font-weight: bold; font-size: 9.5px; color: #1A1A1A; }
     .sign .space { height: 48px; }
 
     .person { page-break-before: always; }
     .person-head {
-        background: #9A0036;
-        color: #FFFFFF;
-        padding: 9px 12px;
-        margin-bottom: 8px;
+        padding: 0 0 8px;
+        margin-bottom: 10px;
+        box-shadow: 0 1.5px 0 #9A0036;
     }
-    .person-head h2 { font-size: 14px; }
-    .person-head .email { font-size: 8.5px; opacity: 0.9; margin-top: 2px; }
+    .person-head .org {
+        font-size: 8px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #9A0036;
+        font-weight: bold;
+        margin-bottom: 3px;
+    }
+    .person-head h2 { font-size: 15px; color: #1A1A1A; }
+    .person-head .email { font-size: 8.5px; color: #6B6B6F; margin-top: 2px; }
 
     table.kpi {
         width: 100%;
         border-collapse: collapse;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
         table-layout: fixed;
     }
     table.kpi td {
-        border: 1px solid #E5E5E8;
+        border: 0.75px solid #D9D9DE;
         padding: 6px 8px;
         width: 33.33%;
         vertical-align: top;
@@ -172,39 +183,40 @@
         letter-spacing: 0.04em;
         margin-bottom: 2px;
     }
-    table.kpi .v { font-size: 11px; font-weight: bold; }
+    table.kpi .v { font-size: 11px; font-weight: bold; color: #1A1A1A; }
 
     table.detail {
         width: 100%;
         border-collapse: collapse;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
     }
     table.detail th,
     table.detail td {
-        border: 1px solid #E5E5E8;
+        border: 0.75px solid #D9D9DE;
         padding: 4px 6px;
         font-size: 8px;
         vertical-align: top;
     }
     table.detail th {
-        background: #9A0036;
-        color: #FFFFFF;
+        color: #9A0036;
         text-align: left;
         font-weight: bold;
         font-size: 7.5px;
+        border-width: 0.75px 0.75px 1.5px 0.75px;
+        border-color: #D9D9DE #D9D9DE #9A0036 #D9D9DE;
     }
     table.detail td.num { text-align: right; white-space: nowrap; }
-    table.detail tr.zebra td { background: #F7F7F8; }
-    table.detail tr.danger td { background: #FBEAEA; }
-    table.detail tr.gap td { background: #FFF6E5; }
+    table.detail tr.danger td { color: #B42318; }
+    table.detail tr.gap td { color: #A15C00; }
     table.detail .sub { display: block; color: #6B6B6F; font-size: 7px; }
     .empty { color: #6B6B6F; font-style: italic; padding: 8px 0; }
     .footer {
         font-size: 7.5px;
         color: #6B6B6F;
         text-align: right;
-        margin-top: 8px;
+        margin-top: 10px;
     }
+    .footer .by { color: #9A0036; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -310,7 +322,7 @@
         </thead>
         <tbody>
             @forelse($rows as $i => $row)
-                <tr class="{{ $i % 2 === 1 ? 'zebra' : '' }}">
+                <tr>
                     <td class="user">
                         {{ $row['name'] }}
                         @if($row['email'] !== '')
@@ -396,14 +408,14 @@
             </td>
         </tr>
     </table>
-    <p class="footer">VA Workspace · Đánh giá nhân sự</p>
+    <p class="footer">VA Workspace · Đánh giá nhân sự · Xuất bởi <span class="by">{{ $meta['exported_by'] }}</span></p>
 
     {{-- ========== Phiếu chi tiết từng nhân sự ========== --}}
     @foreach($people as $person)
         @php $sheet = $person['sheet']; @endphp
         <div class="person">
             <div class="person-head">
-                <div class="org" style="font-size:8px;letter-spacing:0.12em;text-transform:uppercase;opacity:0.85;margin-bottom:2px;">
+                <div class="org">
                     {{ $meta['org'] }} · Phiếu chi tiết nhân sự
                 </div>
                 <h2>{{ $sheet['name'] }}</h2>
@@ -443,7 +455,7 @@
                     </thead>
                     <tbody>
                         @foreach($person['criteria'] as $i => $line)
-                            <tr class="{{ $i % 2 === 1 ? 'zebra' : '' }}">
+                            <tr>
                                 <td>{{ $line['group'] }}</td>
                                 <td>{{ $line['name'] }}</td>
                                 <td class="num {{ $line['class'] }}">
@@ -485,7 +497,7 @@
                     </thead>
                     <tbody>
                         @foreach($person['tasks'] as $i => $task)
-                            <tr class="{{ $task['overdue'] ? 'danger' : ($task['gap'] ? 'gap' : ($i % 2 === 1 ? 'zebra' : '')) }}">
+                            <tr class="{{ $task['overdue'] ? 'danger' : ($task['gap'] ? 'gap' : '') }}">
                                 <td>
                                     {{ $task['title'] }}
                                     @if($task['project'] !== '')
@@ -531,7 +543,7 @@
                     </thead>
                     <tbody>
                         @foreach($person['events'] as $i => $event)
-                            <tr class="{{ $i % 2 === 1 ? 'zebra' : '' }}">
+                            <tr>
                                 <td>{{ $event['date'] }}</td>
                                 <td>{{ $event['criterion'] }}</td>
                                 <td>{{ $event['group'] !== '' ? $event['group'] : '—' }}</td>
@@ -545,7 +557,7 @@
                     </tbody>
                 </table>
             @endif
-            <p class="footer">VA Workspace · {{ $sheet['name'] }} · {{ $meta['period'] }}</p>
+            <p class="footer">VA Workspace · {{ $sheet['name'] }} · {{ $meta['period'] }} · Xuất bởi <span class="by">{{ $meta['exported_by'] }}</span></p>
         </div>
     @endforeach
 </body>

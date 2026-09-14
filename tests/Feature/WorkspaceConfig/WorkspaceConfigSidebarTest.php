@@ -37,16 +37,14 @@ class WorkspaceConfigSidebarTest extends TestCase
             ->getJson('/api/workspace-config/sidebar')
             ->assertOk()
             ->assertJsonPath('menus.0.menu_key', 'home')
-            ->assertJsonPath('menus.0.default_label', 'Tổng quan')
+            ->assertJsonPath('menus.0.default_label', 'Quy trình')
             ->assertJsonPath('menus.0.custom_label', null)
-            ->assertJsonPath('menus.0.label', 'Tổng quan')
+            ->assertJsonPath('menus.0.label', 'Quy trình')
             ->assertJsonPath('menus.0.is_visible', true)
             ->assertJsonPath('menus.0.section', 'general')
             ->assertJsonPath('sections.0.id', 'general')
-            ->assertJsonPath('sections.0.label', 'Điều hướng')
-            ->assertJsonPath('sections.1.id', 'manager')
-            ->assertJsonPath('sections.1.label', 'Quản lý')
-            ->assertJsonFragment(['menu_key' => 'manager.evaluation-score-kit.index', 'default_label' => 'Khung chấm điểm']);
+            ->assertJsonPath('sections.0.label', 'Tổng quan')
+            ->assertJsonFragment(['menu_key' => 'manager.evaluation-score-kit.index', 'default_label' => 'Khung điểm']);
 
         $this->actingAs($director)
             ->putJson('/api/workspace-config/sidebar', [
@@ -85,7 +83,7 @@ class WorkspaceConfigSidebarTest extends TestCase
             ->assertJsonPath('menu.menu_key', 'home')
             ->assertJsonPath('menu.custom_label', 'Trang chủ phòng')
             ->assertJsonPath('menu.label', 'Trang chủ phòng')
-            ->assertJsonPath('menu.default_label', 'Tổng quan')
+            ->assertJsonPath('menu.default_label', 'Quy trình')
             ->assertJsonPath('menu.is_visible', true);
 
         $this->assertDatabaseHas('department_sidebar_configs', [
@@ -117,7 +115,7 @@ class WorkspaceConfigSidebarTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('menu.custom_label', null)
-            ->assertJsonPath('menu.label', 'Tổng quan');
+            ->assertJsonPath('menu.label', 'Quy trình');
     }
 
     public function test_cannot_toggle_unknown_menu_key(): void
@@ -166,13 +164,17 @@ class WorkspaceConfigSidebarTest extends TestCase
         $this->actingAs($director)
             ->putJson('/api/workspace-config/sidebar/layout', [
                 'items' => [
+                    // Đưa "Khung điểm" (mặc định section evaluation) lên đầu
+                    // section "general" — kiểm tra chuyển section + thứ tự.
                     ['menu_key' => 'manager.evaluation-score-kit.index', 'section' => 'general'],
                     ['menu_key' => 'home', 'section' => 'general'],
-                    ['menu_key' => 'social.feed', 'section' => 'general'],
-                    ['menu_key' => 'manager.evaluation.view', 'section' => 'general'],
-                    ['menu_key' => 'manager.project.index', 'section' => 'manager'],
-                    ['menu_key' => 'manager.project.tasks', 'section' => 'manager'],
-                    ['menu_key' => 'manager.reports.index', 'section' => 'manager'],
+                    ['menu_key' => 'dashboard.department', 'section' => 'general'],
+                    ['menu_key' => 'social.feed', 'section' => 'news'],
+                    ['menu_key' => 'manager.evaluation.view', 'section' => 'evaluation'],
+                    ['menu_key' => 'manager.project.index', 'section' => 'operations'],
+                    ['menu_key' => 'manager.project.tasks', 'section' => 'operations'],
+                    ['menu_key' => 'manager.reports.index', 'section' => 'operations'],
+                    ['menu_key' => 'manager.credential.index', 'section' => 'control'],
                 ],
             ])
             ->assertOk()
@@ -234,7 +236,7 @@ class WorkspaceConfigSidebarTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('section.custom_label', null)
-            ->assertJsonPath('section.label', 'Điều hướng');
+            ->assertJsonPath('section.label', 'Tổng quan');
     }
 
     public function test_cannot_reorder_with_unknown_or_partial_menu_keys(): void
