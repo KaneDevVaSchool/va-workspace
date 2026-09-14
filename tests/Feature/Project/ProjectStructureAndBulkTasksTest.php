@@ -145,7 +145,7 @@ class ProjectStructureAndBulkTasksTest extends TestCase
         $editor = $this->makeUser(['department_id' => $dept->id]);
         $project = $this->makeProject($editor);
 
-        $create = $this->actingAs($editor)->putJson('/api/project/'.$project->id.'/structure/category', [
+        $create = $this->actingAs($editor)->postJson('/api/project/'.$project->id.'/structure/category', [
             'items' => [
                 ['title' => 'Danh mục A', 'progress_type' => 'average', 'sort_order' => 0],
                 ['title' => 'Danh mục B', 'progress_type' => 'task_weighted', 'sort_order' => 1],

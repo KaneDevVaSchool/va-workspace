@@ -28,6 +28,7 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
     // có trong route:cache; tránh PUT rơi vào SPA fallback → 405 GET/HEAD.
     Route::middleware('permission:task.create')
         ->match(['put', 'post'], '/{project}/structure/{type}', [TaskController::class, 'syncStructure'])
+        ->whereNumber('project')
         ->where('type', 'category|phase')
         ->name('structure.sync');
 

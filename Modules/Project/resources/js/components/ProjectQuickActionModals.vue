@@ -574,7 +574,9 @@ async function submit() {
         }
         return item;
       });
-      const { data } = await window.axios.put(`/api/project/${props.project.id}/structure/${type}`, {
+      // POST (không chỉ PUT) — route api.project.structure.sync hỗ trợ cả hai;
+      // một số môi trường / cache route cũ khiến PUT rơi vào SPA fallback → 405.
+      const { data } = await window.axios.post(`/api/project/${props.project.id}/structure/${type}`, {
         items,
         deleted_ids: deletedStructureIds.value,
       });

@@ -169,7 +169,7 @@ class TaskController extends Controller
     }
 
     /**
-     * PUT /api/project/{project}/structure/{type} — type = category|phase.
+     * PUT|POST /api/project/{project}/structure/{type} — type = category|phase.
      * Đồng bộ danh sách cấu trúc (tạo/sửa/xoá/đổi thứ tự) trong 1 transaction.
      */
     public function syncStructure(SyncProjectStructureRequest $request, int $project, string $type)
