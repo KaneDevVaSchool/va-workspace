@@ -58,8 +58,8 @@ function onSearchInput() {
   searchTimer = setTimeout(() => emit('search', searchTerm.value), 300);
 }
 
-function projectsText(row) {
-  return (row.projects ?? []).map((p) => p.name).join(', ') || '—';
+function projectsText(row, key) {
+  return (row[key] ?? []).map((p) => p.name).join(', ') || '—';
 }
 
 function taskStatusSummary(row) {
@@ -69,7 +69,7 @@ function taskStatusSummary(row) {
 }
 
 function cellText(row, key) {
-  if (key === 'projects') return projectsText(row);
+  if (key === 'projects_leading' || key === 'projects_collaborating') return projectsText(row, key);
   if (key === 'tasks_status') return taskStatusSummary(row);
   if (key === 'average_progress_percent') return row.average_progress_percent === null ? 'Chưa có dữ liệu' : `${row.average_progress_percent}%`;
   if (key === 'team_name') return row.team_name ?? '—';
@@ -110,8 +110,9 @@ function columnContentWidth(key, fonts) {
   let maxW = measureText(label, fonts.header);
   for (const row of props.rows) {
     const text = cellText(row, key);
-    // Cột dài (dự án, trạng thái việc) cắt bớt lúc đo để tránh kéo bảng quá rộng — vẫn hiển thị full text, chỉ giới hạn độ rộng đo.
-    const capped = (key === 'projects' || key === 'tasks_status') && text.length > 60 ? text.slice(0, 60) : text;
+    // Cột trạng thái việc cắt bớt lúc đo để tránh kéo bảng quá rộng — vẫn hiển thị full text, chỉ giới hạn độ rộng đo.
+    // Cột dự án (phụ trách/phối hợp) đo đủ toàn bộ nội dung để không bị cắt bởi ellipsis.
+    const capped = key === 'tasks_status' && text.length > 60 ? text.slice(0, 60) : text;
     maxW = Math.max(maxW, measureText(capped, fonts.cell));
   }
   return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA));

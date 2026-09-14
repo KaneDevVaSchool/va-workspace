@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Dashboard\App\Http\Controllers\CompanyDashboardController;
 use Modules\Dashboard\App\Http\Controllers\DepartmentDashboardController;
+use Modules\Dashboard\App\Http\Controllers\MyDashboardController;
 
 /*
 |--------------------------------------------------------------------------
@@ -17,6 +18,10 @@ use Modules\Dashboard\App\Http\Controllers\DepartmentDashboardController;
 | 2 key có sẵn phủ đúng 4 role (department_director/deputy/section_head/
 | team_lead) + role cao hơn. Phạm vi phòng ban chính xác được Controller tự
 | chặn thêm (viewer chỉ xem phòng ban của mình trừ khi có quyền toàn cục).
+|
+| Dashboard cá nhân (me): dashboard.view — permission có sẵn, gán cho hầu
+| hết mọi role kể cả viewer. Luôn scope theo chính người đăng nhập
+| (MyDashboardController không nhận tham số user nào từ request).
 |
 | Route tĩnh (/projects, /employees) đặt trước route wildcard (/{project},
 | /{user}) — đúng convention của Project/Report.
@@ -38,5 +43,9 @@ Route::middleware(['auth'])->prefix('dashboard')->group(function () {
         Route::get('/employees/{user}', [DepartmentDashboardController::class, 'employeeDetail'])
             ->whereNumber('user')
             ->name('employees.show');
+    });
+
+    Route::middleware('permission:dashboard.view')->prefix('me')->name('me.')->group(function () {
+        Route::get('/overview', [MyDashboardController::class, 'overview'])->name('overview');
     });
 });

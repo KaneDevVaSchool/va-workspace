@@ -7,6 +7,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import AppIcon from '@/components/AppIcon.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import { useDragScroll } from '@/composables/useDragScroll';
+import TaskPeopleListModal from './TaskPeopleListModal.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { computeExpectedProgress } from '@/lib/progress';
 import {
@@ -423,6 +424,22 @@ function people(row) {
   return peopleOf(row);
 }
 
+const peopleModalOpen = ref(false);
+const peopleModalTitle = ref('Người thực hiện');
+const peopleModalPeople = ref([]);
+
+function openPeopleModal(row) {
+  const list = people(row);
+  if (!list.length) return;
+  peopleModalTitle.value = row.title ? `Người thực hiện — ${row.title}` : 'Người thực hiện';
+  peopleModalPeople.value = list;
+  peopleModalOpen.value = true;
+}
+
+function closePeopleModal() {
+  peopleModalOpen.value = false;
+}
+
 function expectedPct(row) {
   return computeExpectedProgress(row.start_date, row.end_date);
 }
@@ -642,15 +659,23 @@ onBeforeUnmount(() => {
                   </div>
                 </template>
                 <template v-else-if="col.key === 'assignee'">
-                  <span class="gantt__people">
-                    <UserAvatarTip
-                      v-for="user in people(item.row).slice(0, 2)"
-                      :key="user.id"
-                      :user="user"
-                      label="Người thực hiện"
-                    />
-                    <span v-if="people(item.row).length > 2" class="gantt__people-more">+{{ people(item.row).length - 2 }}</span>
-                  </span>
+                  <button
+                    type="button"
+                    class="gantt__assignee-btn"
+                    :class="{ 'gantt__assignee-btn--empty': !people(item.row).length }"
+                    :disabled="!people(item.row).length"
+                    :aria-label="`Xem người thực hiện của ${item.row.title}`"
+                    @click.stop="openPeopleModal(item.row)"
+                  >
+                    <span v-if="!people(item.row).length">—</span>
+                    <template v-else>
+                      <span v-for="user in people(item.row).slice(0, 2)" :key="user.id" class="gantt__assignee-avatar" aria-hidden="true">
+                        <img v-if="user.avatar_url" :src="user.avatar_url" alt="" referrerpolicy="no-referrer" />
+                        <template v-else>{{ (user.name || '?').trim().charAt(0).toUpperCase() }}</template>
+                      </span>
+                      <span v-if="people(item.row).length > 2" class="gantt__people-more">+{{ people(item.row).length - 2 }}</span>
+                    </template>
+                  </button>
                 </template>
                 <template v-else-if="col.key === 'status'">
                   <span class="gantt__chip" :class="`gantt__chip--${statusChipTone(item.row.status)}`">
@@ -851,6 +876,13 @@ onBeforeUnmount(() => {
         </router-link>
       </div>
     </div>
+
+    <TaskPeopleListModal
+      :open="peopleModalOpen"
+      :title="peopleModalTitle"
+      :people="peopleModalPeople"
+      @close="closePeopleModal"
+    />
   </section>
 </template>
 
@@ -1205,6 +1237,54 @@ onBeforeUnmount(() => {
 .gantt__people {
   display: inline-flex;
   align-items: center;
+}
+
+.gantt__assignee-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 1.875rem;
+  padding: 0 0.25rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-base);
+  cursor: pointer;
+}
+
+.gantt__assignee-btn:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.gantt__assignee-btn--empty,
+.gantt__assignee-btn:disabled {
+  cursor: default;
+}
+
+.gantt__assignee-avatar {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-left: -0.35rem;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-surface);
+  color: var(--color-on-primary);
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.gantt__assignee-avatar:first-child {
+  margin-left: 0;
+}
+
+.gantt__assignee-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .gantt__people :deep(.user-avatar-tip) {

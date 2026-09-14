@@ -1225,6 +1225,7 @@ const performers = computed(() => {
                 :filter="taskStatFilter"
                 :filter-label="activeStatCard.label"
                 :can-edit="canCreateTask"
+                @tasks-changed="onTasksChanged"
               />
             </section>
           </template>

@@ -101,6 +101,12 @@ interface ProjectRepositoryInterface
     /** Xem trước mã tiếp theo mà KHÔNG lưu/tăng bộ đếm thật. */
     public function previewNextCode(): string;
 
+    /** Mã công việc tiếp theo sinh theo mẫu trong project_settings — xem ProjectSetting. */
+    public function nextTaskCode(): string;
+
+    /** Xem trước mã công việc tiếp theo mà KHÔNG lưu/tăng bộ đếm thật. */
+    public function previewNextTaskCode(): string;
+
     /** Danh sách user cùng phòng ban (dùng cho "Người thực hiện"/"Phụ trách chính"). */
     public function assignableUsersInDepartment(?int $departmentId): Collection;
 

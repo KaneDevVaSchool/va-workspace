@@ -48,8 +48,12 @@ const taskStatusLabels = {
           <div class="employee-drawer__progress-fill" :style="{ width: employee.average_progress_percent + '%' }"></div>
         </div>
         <div class="employee-drawer__row">
-          <span class="employee-drawer__row-label">Dự án đang tham gia</span>
-          <span class="employee-drawer__row-value">{{ (employee.projects ?? []).map((p) => p.name).join(', ') || '—' }}</span>
+          <span class="employee-drawer__row-label">Dự án đang phụ trách</span>
+          <span class="employee-drawer__row-value">{{ (employee.projects_leading ?? []).map((p) => p.name).join(', ') || '—' }}</span>
+        </div>
+        <div class="employee-drawer__row">
+          <span class="employee-drawer__row-label">Dự án đang phối hợp</span>
+          <span class="employee-drawer__row-value">{{ (employee.projects_collaborating ?? []).map((p) => p.name).join(', ') || '—' }}</span>
         </div>
       </div>
 

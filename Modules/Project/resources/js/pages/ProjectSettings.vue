@@ -14,6 +14,8 @@ import ProjectMemberPicker from '../components/ProjectMemberPicker.vue';
 
 const DEFAULT_PATTERN = 'DA_{date,"m/Y"}_{count}';
 const DEFAULT_COUNTER = 344;
+const DEFAULT_TASK_PATTERN = 'CV_{date,"m/Y"}_{count}';
+const DEFAULT_TASK_COUNTER = 1;
 
 const RULES = [
   {
@@ -56,6 +58,8 @@ const saving = ref(false);
 const general = reactive({
   code_pattern: DEFAULT_PATTERN,
   code_counter: DEFAULT_COUNTER,
+  task_code_pattern: DEFAULT_TASK_PATTERN,
+  task_code_counter: DEFAULT_TASK_COUNTER,
   auto_start_on_begin_date: false,
   default_progress_method: 'average',
   shift_task_dates_with_project: false,
@@ -96,9 +100,15 @@ const nextCodePreview = computed(() =>
   clientPreview(general.code_pattern, Number(general.code_counter) || 0),
 );
 
+const nextTaskCodePreview = computed(() =>
+  clientPreview(general.task_code_pattern, Number(general.task_code_counter) || 0),
+);
+
 function applyGeneral(data) {
   general.code_pattern = data.code_pattern ?? DEFAULT_PATTERN;
   general.code_counter = data.code_counter ?? DEFAULT_COUNTER;
+  general.task_code_pattern = data.task_code_pattern ?? DEFAULT_TASK_PATTERN;
+  general.task_code_counter = data.task_code_counter ?? DEFAULT_TASK_COUNTER;
   general.auto_start_on_begin_date = Boolean(data.auto_start_on_begin_date);
   general.default_progress_method = data.default_progress_method || 'average';
   general.shift_task_dates_with_project = Boolean(data.shift_task_dates_with_project);
@@ -149,6 +159,8 @@ async function saveAll() {
       window.axios.put('/api/project/settings/general', {
         code_pattern: general.code_pattern,
         code_counter: Number(general.code_counter) || 0,
+        task_code_pattern: general.task_code_pattern,
+        task_code_counter: Number(general.task_code_counter) || 0,
         default_progress_method: general.default_progress_method,
         auto_start_on_begin_date: Boolean(general.auto_start_on_begin_date),
         shift_task_dates_with_project: Boolean(general.shift_task_dates_with_project),
@@ -238,6 +250,42 @@ onMounted(async () => {
               <div class="proj-settings__field">
                 <span class="proj-settings__label">Mã tiếp theo</span>
                 <span class="proj-settings__preview">{{ nextCodePreview }}</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="proj-settings__item proj-settings__item--block">
+            <div class="proj-settings__item-copy">
+              <h2 class="proj-settings__item-title">Mã công việc</h2>
+            </div>
+            <div class="proj-settings__code">
+              <div class="proj-settings__field proj-settings__field--pattern">
+                <label class="proj-settings__label" for="proj-settings-task-pattern">Mẫu mã</label>
+                <input
+                  id="proj-settings-task-pattern"
+                  v-model="general.task_code_pattern"
+                  type="text"
+                  class="proj-settings__input"
+                  spellcheck="false"
+                  autocomplete="off"
+                  :disabled="saving"
+                />
+              </div>
+              <div class="proj-settings__field">
+                <label class="proj-settings__label" for="proj-settings-task-counter">Bộ đếm</label>
+                <input
+                  id="proj-settings-task-counter"
+                  v-model="general.task_code_counter"
+                  type="number"
+                  min="0"
+                  step="1"
+                  class="proj-settings__input"
+                  :disabled="saving"
+                />
+              </div>
+              <div class="proj-settings__field">
+                <span class="proj-settings__label">Mã tiếp theo</span>
+                <span class="proj-settings__preview">{{ nextTaskCodePreview }}</span>
               </div>
             </div>
           </article>

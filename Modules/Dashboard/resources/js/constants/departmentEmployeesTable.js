@@ -5,7 +5,8 @@
 export const EMPLOYEE_TABLE_COLUMNS = [
   { key: 'name', label: 'Nhân viên', defaultOn: true },
   { key: 'team_name', label: 'Nhóm', defaultOn: true },
-  { key: 'projects', label: 'Dự án tham gia', defaultOn: true },
+  { key: 'projects_leading', label: 'Dự án đang phụ trách', defaultOn: true },
+  { key: 'projects_collaborating', label: 'Dự án đang phối hợp', defaultOn: true },
   { key: 'tasks_total', label: 'Tổng việc', defaultOn: true },
   { key: 'tasks_status', label: 'Việc theo trạng thái', defaultOn: true },
   { key: 'average_progress_percent', label: 'Tiến độ TB', defaultOn: true },

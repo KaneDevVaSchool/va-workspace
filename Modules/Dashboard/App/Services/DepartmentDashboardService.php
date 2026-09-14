@@ -103,7 +103,10 @@ class DepartmentDashboardService
         $paginator = $this->repository->paginateEmployees($departmentId, $teamId, $filters, $perPage, $page);
         $projectIds = $this->repository->projectIdsForDepartment($departmentId, $teamId);
 
-        $data = collect($paginator->items())->map(function ($user) use ($projectIds) {
+        $userIds = collect($paginator->items())->pluck('id')->all();
+        $roles = $this->repository->projectRolesForUsers($projectIds, $userIds);
+
+        $data = collect($paginator->items())->map(function ($user) use ($projectIds, $roles) {
             $tasks = $this->repository->tasksForUser($user->id, $projectIds);
 
             $tasksByStatus = [];
@@ -112,17 +115,12 @@ class DepartmentDashboardService
             }
 
             $progressValues = [];
-            $projects = [];
 
             foreach ($tasks as $task) {
                 $tasksByStatus[$task->status] = ($tasksByStatus[$task->status] ?? 0) + 1;
 
                 if ($task->progress_percent !== null && $task->status !== 'cancelled') {
                     $progressValues[] = (float) $task->progress_percent;
-                }
-
-                if ($task->project) {
-                    $projects[$task->project->id] = $task->project->name;
                 }
             }
 
@@ -131,7 +129,8 @@ class DepartmentDashboardService
                 'name' => $user->name,
                 'avatar_url' => $user->avatar_url,
                 'team_name' => $user->team->name ?? null,
-                'projects' => collect($projects)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values()->all(),
+                'projects_leading' => $this->presentProjectList($roles['leading'][$user->id] ?? collect()),
+                'projects_collaborating' => $this->presentProjectList($roles['collaborating'][$user->id] ?? collect()),
                 'tasks_total' => $tasks->count(),
                 'tasks_by_status' => $tasksByStatus,
                 'average_progress_percent' => count($progressValues) > 0 ? round(array_sum($progressValues) / count($progressValues), 1) : null,
@@ -147,6 +146,12 @@ class DepartmentDashboardService
         ];
     }
 
+    /** @return list<array{id:int,name:string}> */
+    private function presentProjectList(\Illuminate\Support\Collection $projects): array
+    {
+        return $projects->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->values()->all();
+    }
+
     public function employeeDetail(int $userId, int $viewerDepartmentId): ?array
     {
         $user = $this->repository->findUser($userId);
@@ -156,15 +161,11 @@ class DepartmentDashboardService
 
         $projectIds = $this->repository->projectIdsForDepartment($viewerDepartmentId);
         $tasks = $this->repository->tasksForUser($userId, $projectIds);
+        $roles = $this->repository->projectRolesForUsers($projectIds, [$userId]);
 
-        $projects = [];
         $taskList = [];
 
         foreach ($tasks as $task) {
-            if ($task->project) {
-                $projects[$task->project->id] = $task->project->name;
-            }
-
             $taskList[] = [
                 'id' => $task->id,
                 'title' => $task->title,
@@ -185,7 +186,8 @@ class DepartmentDashboardService
             'avatar_url' => $user->avatar_url,
             'team_name' => $user->team->name ?? null,
             'department_name' => $user->department->name ?? null,
-            'projects' => collect($projects)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values()->all(),
+            'projects_leading' => $this->presentProjectList($roles['leading'][$userId] ?? collect()),
+            'projects_collaborating' => $this->presentProjectList($roles['collaborating'][$userId] ?? collect()),
             'tasks' => $taskList,
             'average_progress_percent' => $progressValues->isEmpty() ? null : round($progressValues->avg(), 1),
         ];

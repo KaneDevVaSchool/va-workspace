@@ -7,7 +7,9 @@ use Illuminate\Support\ServiceProvider;
 use Modules\Dashboard\App\Repositories\CompanyDashboardRepository;
 use Modules\Dashboard\App\Repositories\Contracts\CompanyDashboardRepositoryInterface;
 use Modules\Dashboard\App\Repositories\Contracts\DepartmentDashboardRepositoryInterface;
+use Modules\Dashboard\App\Repositories\Contracts\MyDashboardRepositoryInterface;
 use Modules\Dashboard\App\Repositories\DepartmentDashboardRepository;
+use Modules\Dashboard\App\Repositories\MyDashboardRepository;
 
 class DashboardServiceProvider extends ServiceProvider
 {
@@ -21,6 +23,11 @@ class DashboardServiceProvider extends ServiceProvider
         $this->app->bind(
             DepartmentDashboardRepositoryInterface::class,
             DepartmentDashboardRepository::class,
+        );
+
+        $this->app->bind(
+            MyDashboardRepositoryInterface::class,
+            MyDashboardRepository::class,
         );
     }
 

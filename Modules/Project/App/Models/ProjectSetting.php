@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property int    $id
  * @property string $code_pattern
  * @property int    $code_counter
+ * @property string $task_code_pattern
+ * @property int    $task_code_counter
  * @property string $default_progress_method
  * @property bool   $auto_start_on_begin_date
  * @property bool   $shift_task_dates_with_project
@@ -24,11 +26,17 @@ class ProjectSetting extends Model
 
     public const DEFAULT_CODE_COUNTER = 344;
 
+    public const DEFAULT_TASK_CODE_PATTERN = 'CV_{date,"m/Y"}_{count}';
+
+    public const DEFAULT_TASK_CODE_COUNTER = 1;
+
     protected $table = 'project_settings';
 
     protected $fillable = [
         'code_pattern',
         'code_counter',
+        'task_code_pattern',
+        'task_code_counter',
         'default_progress_method',
         'auto_start_on_begin_date',
         'shift_task_dates_with_project',
@@ -39,6 +47,7 @@ class ProjectSetting extends Model
 
     protected $casts = [
         'code_counter' => 'integer',
+        'task_code_counter' => 'integer',
         'auto_start_on_begin_date' => 'boolean',
         'shift_task_dates_with_project' => 'boolean',
         'hide_cross_tasks_from_assignees' => 'boolean',
@@ -52,6 +61,8 @@ class ProjectSetting extends Model
         return [
             'code_pattern' => self::DEFAULT_CODE_PATTERN,
             'code_counter' => self::DEFAULT_CODE_COUNTER,
+            'task_code_pattern' => self::DEFAULT_TASK_CODE_PATTERN,
+            'task_code_counter' => self::DEFAULT_TASK_CODE_COUNTER,
             'default_progress_method' => 'average',
             'auto_start_on_begin_date' => false,
             'shift_task_dates_with_project' => false,

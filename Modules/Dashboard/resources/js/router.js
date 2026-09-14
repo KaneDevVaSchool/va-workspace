@@ -5,6 +5,8 @@
  * (permission dashboard.view_company — key riêng, không mượn report.*).
  * Dashboard phòng ban: department_director/deputy/section_head/team_lead
  * (+ cấp cao hơn) qua OR 2 permission có sẵn.
+ * Dashboard cá nhân (me): permission dashboard.view — gán cho hầu hết mọi
+ * role kể cả viewer, luôn scope theo chính người đăng nhập.
  */
 export default [
   {
@@ -25,6 +27,16 @@ export default [
       requiresAuth: true,
       title: 'Dashboard phòng ban',
       requiresAnyPermission: ['performance.view_department', 'project.view'],
+    },
+  },
+  {
+    path: '/dashboard/me',
+    name: 'dashboard.me',
+    component: () => import('./pages/DashboardMe.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Dashboard của tôi',
+      requiresPermission: 'dashboard.view',
     },
   },
 ];

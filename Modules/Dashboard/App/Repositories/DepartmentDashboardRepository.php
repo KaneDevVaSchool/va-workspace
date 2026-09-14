@@ -150,4 +150,39 @@ class DepartmentDashboardRepository implements DepartmentDashboardRepositoryInte
             ->orderByDesc('updated_at')
             ->get();
     }
+
+    public function projectRolesForUsers(array $projectIds, array $userIds): array
+    {
+        $leading = array_fill_keys($userIds, collect());
+        $collaborating = array_fill_keys($userIds, collect());
+
+        if (empty($projectIds) || empty($userIds)) {
+            return ['leading' => $leading, 'collaborating' => $collaborating];
+        }
+
+        $projects = Project::query()
+            ->whereIn('id', $projectIds)
+            ->where(function (Builder $q) use ($userIds) {
+                $q->whereIn('lead_user_id', $userIds)
+                    ->orWhereHas('members', fn ($mq) => $mq->whereIn('users.id', $userIds));
+            })
+            ->with(['members' => fn ($mq) => $mq->whereIn('users.id', $userIds)])
+            ->select(['id', 'code', 'name', 'lead_user_id'])
+            ->get();
+
+        foreach ($projects as $project) {
+            if ($project->lead_user_id !== null && in_array($project->lead_user_id, $userIds, true)) {
+                $leading[$project->lead_user_id]->push($project);
+            }
+
+            foreach ($project->members as $member) {
+                if ($member->id === $project->lead_user_id) {
+                    continue;
+                }
+                $collaborating[$member->id]->push($project);
+            }
+        }
+
+        return ['leading' => $leading, 'collaborating' => $collaborating];
+    }
 }

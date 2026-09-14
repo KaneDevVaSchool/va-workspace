@@ -34,8 +34,11 @@ import {
   loadVisibility,
   saveVisibility,
 } from '../constants/task.js';
+import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import ProjectGanttTab from './ProjectGanttTab.vue';
 import ProjectTaskViewModeMenu from './ProjectTaskViewModeMenu.vue';
+import TaskRowContextMenu from './TaskRowContextMenu.vue';
+import TaskQuickActionModals from './TaskQuickActionModals.vue';
 
 const props = defineProps({
   tree: { type: Array, default: () => [] },
@@ -46,7 +49,11 @@ const props = defineProps({
   canEdit: { type: Boolean, default: false },
 });
 
+const emit = defineEmits(['tasks-changed']);
+
 const router = useRouter();
+const auth = useAuthStore();
+const canApprove = computed(() => auth.can('task.approve'));
 
 const KANBAN_GROUPS = ['status', 'assignees', 'priority', 'type'];
 const THEME_TONES = [
@@ -112,6 +119,9 @@ let kanbanPendingY = 0;
 let kanbanRaf = 0;
 let kanbanScrollRaf = 0;
 let kanbanJustMovedTimer = 0;
+
+const ctxMenu = reactive({ open: false, x: 0, y: 0, task: null });
+const actionDialog = reactive({ kind: null, task: null, extra: {} });
 
 useDragScroll(tableWrap, { isBlocked: () => resizing.value, axis: 'x' });
 useDragScroll(kanbanWrap, { axis: 'x', isBlocked: () => kanbanDrag.active });
@@ -373,6 +383,70 @@ function onKeydown(event) {
 function openTask(task) {
   if (!task?.id) return;
   router.push({ name: 'manager.project.tasks.detail', params: { id: task.id } });
+}
+
+function openTaskEdit(task) {
+  if (!task?.id) return;
+  router.push({ name: 'manager.project.tasks.edit', params: { id: task.id } });
+}
+
+function openRowContextMenu(event, task) {
+  if (actionDialog.kind) return;
+  event.preventDefault();
+  event.stopPropagation();
+  ctxMenu.open = true;
+  ctxMenu.x = event.clientX;
+  ctxMenu.y = event.clientY;
+  ctxMenu.task = task;
+}
+
+function closeRowContextMenu() {
+  ctxMenu.open = false;
+}
+
+function onRowContextAction({ type, task, status, variant, focus }) {
+  closeRowContextMenu();
+  if (!task) return;
+  if (type === 'status') {
+    if (task.status !== status) {
+      patchTask(task.id, { status }, `Đã chuyển sang ${statusLabel(status)}.`);
+    }
+    return;
+  }
+  if (type === 'details') {
+    if (variant === 'edit') {
+      openTaskEdit(task);
+      return;
+    }
+    if (variant === 'blank') {
+      window.open(router.resolve({ name: 'manager.project.tasks.detail', params: { id: task.id } }).href, '_blank');
+      return;
+    }
+    openTask(task);
+    return;
+  }
+  actionDialog.kind = type;
+  actionDialog.task = task;
+  actionDialog.extra = { variant, focus };
+}
+
+function closeActionDialog() {
+  actionDialog.kind = null;
+  actionDialog.task = null;
+  actionDialog.extra = {};
+}
+
+function applyTaskUpdate(updated) {
+  if (!updated?.id) return;
+  const node = findTreeTask(props.tree, updated.id);
+  applyPresentedTask(node, updated);
+  if (ctxMenu.task?.id === updated.id) ctxMenu.task = { ...ctxMenu.task, ...updated };
+  if (actionDialog.task?.id === updated.id) actionDialog.task = { ...actionDialog.task, ...updated };
+}
+
+function onTaskDuplicated() {
+  closeActionDialog();
+  emit('tasks-changed');
 }
 
 function toggleCollapse(id) {
@@ -979,6 +1053,7 @@ watch(tableZoom, (value) => {
               :key="task.id"
               class="ptasks__row"
               @dblclick="openTask(task)"
+              @contextmenu="openRowContextMenu($event, task)"
             >
               <td
                 v-for="col in shownColumns"
@@ -1127,6 +1202,7 @@ watch(tableZoom, (value) => {
             data-no-drag-scroll
             @pointerdown="onKanbanCardPointerDown($event, task)"
             @click="!isKanbanDragGroup && openTask(task)"
+            @contextmenu.stop="openRowContextMenu($event, task)"
           >
             <span v-if="task.is_overdue" class="ptasks-kanban__overdue" aria-hidden="true" />
             <header class="ptasks-kanban__card-head">
@@ -1282,6 +1358,27 @@ watch(tableZoom, (value) => {
         </div>
       </div>
     </Teleport>
+
+    <TaskRowContextMenu
+      :open="ctxMenu.open"
+      :x="ctxMenu.x"
+      :y="ctxMenu.y"
+      :task="ctxMenu.task"
+      :can-edit="canEdit"
+      :can-approve="canApprove"
+      :can-duplicate="canEdit"
+      @close="closeRowContextMenu"
+      @action="onRowContextAction"
+    />
+
+    <TaskQuickActionModals
+      :kind="actionDialog.kind"
+      :task="actionDialog.task"
+      :extra="actionDialog.extra"
+      @close="closeActionDialog"
+      @updated="applyTaskUpdate"
+      @duplicated="onTaskDuplicated"
+    />
   </div>
 </template>
 

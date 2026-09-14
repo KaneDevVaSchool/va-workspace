@@ -58,6 +58,9 @@ const MENU_SECTIONS = [
     id: 'general',
     label: 'Tổng quan',
     items: [
+      // dashboard.view gán cho hầu hết mọi role kể cả viewer — điểm chạm
+      // đầu tiên sau đăng nhập, luôn hiện đầu mục Tổng quan.
+      { name: 'dashboard.me', label: 'Của tôi', icon: 'target', requiresPermission: 'dashboard.view' },
       // configurableByDepartment: true — đồng bộ thủ công với
       // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
       { name: 'home', label: 'Quy trình', icon: 'gitBranch', configurableByDepartment: true },

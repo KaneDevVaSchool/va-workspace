@@ -80,7 +80,7 @@ class Task extends Model
     protected $fillable = [
         'project_id',
         'parent_id',
-        'code',
+        'code', // sinh tự động — TaskService::createSingle() set qua ProjectRepository::nextTaskCode()
         'type',
         'title',
         'description',

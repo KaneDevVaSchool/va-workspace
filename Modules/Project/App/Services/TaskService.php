@@ -543,6 +543,10 @@ class TaskService
         ]);
 
         $result = DB::transaction(function () use ($payload, $watcherIds, $collaboratorIds) {
+            if (empty($payload['code'])) {
+                $payload['code'] = $this->projects->nextTaskCode();
+            }
+
             $task = $this->tasks->create($payload);
 
             return $this->tasks->syncPeople($task, $watcherIds, $collaboratorIds);
@@ -626,6 +630,7 @@ class TaskService
             $data['priority'] = TaskEnums::normalizePriority($data['priority'] ?? null);
         }
         $data = $this->applyAcceptedTracking($task, $data);
+        $data = $this->applyCompletionTracking($task, $data);
 
         $data['updated_by'] = $editor->id;
 
@@ -711,6 +716,33 @@ class TaskService
         if ($task->status === 'not_started' && $data['status'] !== 'not_started' && $task->accepted_by === null) {
             $data['accepted_by'] = $task->assignee_id ?? $data['assignee_id'] ?? null;
             $data['accepted_at'] = now();
+        }
+
+        return $data;
+    }
+
+    /**
+     * Nhóm G — chuyển status sang 'completed' (từ bất kỳ đường nào: menu
+     * chuột phải, Kanban kéo thả, form sửa) tự ghi actual_end_date = hôm nay
+     * nếu chưa có sẵn, để is_overdue/variance_days (xem
+     * TaskService::computeOverdue()) tính được độ trễ so với end_date dự
+     * kiến ngay khi đổi trạng thái — không cần người dùng tự nhập tay qua
+     * modal "Cập nhật thời gian". Rời khỏi 'completed' (mở lại việc) thì xoá
+     * actual_end_date để không giữ mốc hoàn thành cũ sai lệch.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function applyCompletionTracking(Task $task, array $data): array
+    {
+        if (! array_key_exists('status', $data) || $data['status'] === $task->status) {
+            return $data;
+        }
+
+        if ($data['status'] === 'completed' && ! array_key_exists('actual_end_date', $data) && $task->actual_end_date === null) {
+            $data['actual_end_date'] = now()->toDateString();
+        } elseif ($task->status === 'completed' && $data['status'] !== 'completed' && ! array_key_exists('actual_end_date', $data)) {
+            $data['actual_end_date'] = null;
         }
 
         return $data;

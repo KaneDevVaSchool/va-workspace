@@ -26,6 +26,17 @@ class UpdateProjectSettingsRequest extends FormRequest
                 },
             ],
             'code_counter' => ['required', 'integer', 'min:0'],
+            'task_code_pattern' => [
+                'required',
+                'string',
+                'max:100',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! is_string($value) || ! preg_match('/\{count(?::\d+)?\}/', $value)) {
+                        $fail('Mẫu mã công việc phải chứa {count} hoặc {count:N}.');
+                    }
+                },
+            ],
+            'task_code_counter' => ['required', 'integer', 'min:0'],
             'default_progress_method' => ['required', 'string', 'in:'.implode(',', ProjectEnums::PROGRESS_METHODS)],
             'auto_start_on_begin_date' => ['required', 'boolean'],
             'shift_task_dates_with_project' => ['required', 'boolean'],
@@ -43,6 +54,11 @@ class UpdateProjectSettingsRequest extends FormRequest
             'code_counter.required' => 'Bộ đếm không được để trống.',
             'code_counter.integer' => 'Bộ đếm phải là số nguyên.',
             'code_counter.min' => 'Bộ đếm không được âm.',
+            'task_code_pattern.required' => 'Mẫu mã công việc không được để trống.',
+            'task_code_pattern.max' => 'Mẫu mã công việc không được vượt quá 100 ký tự.',
+            'task_code_counter.required' => 'Bộ đếm không được để trống.',
+            'task_code_counter.integer' => 'Bộ đếm phải là số nguyên.',
+            'task_code_counter.min' => 'Bộ đếm không được âm.',
             'default_progress_method.required' => 'Phương pháp tính tiến độ không được để trống.',
             'default_progress_method.in' => 'Phương pháp tính tiến độ không hợp lệ.',
         ];

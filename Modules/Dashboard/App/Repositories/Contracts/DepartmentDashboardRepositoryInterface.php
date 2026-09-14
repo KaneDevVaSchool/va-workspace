@@ -34,4 +34,14 @@ interface DepartmentDashboardRepositoryInterface
 
     /** Danh sách task của 1 nhân viên trong phạm vi (kèm project name). */
     public function tasksForUser(int $userId, array $allowedProjectIds): Collection;
+
+    /**
+     * Dự án (trong phạm vi phòng ban) mà từng user là người phụ trách
+     * (Project.lead_user_id) hoặc đang phối hợp (Project.members, trừ
+     * chính người phụ trách).
+     *
+     * @param  list<int>  $userIds
+     * @return array{leading: array<int, Collection>, collaborating: array<int, Collection>} khoá là user_id, mỗi phần tử là Collection<Project>
+     */
+    public function projectRolesForUsers(array $projectIds, array $userIds): array;
 }

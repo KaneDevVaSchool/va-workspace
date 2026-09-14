@@ -374,6 +374,30 @@ class ProjectRepository implements ProjectRepositoryInterface
         return $this->applyCodePattern($settings->code_pattern, (int) $settings->code_counter);
     }
 
+    public function nextTaskCode(): string
+    {
+        return DB::transaction(function () {
+            $settings = ProjectSetting::query()->lockForUpdate()->first();
+            if ($settings === null) {
+                $settings = ProjectSetting::query()->create(ProjectSetting::defaultAttributes());
+            }
+
+            $counter = (int) $settings->task_code_counter;
+            $code = $this->applyCodePattern($settings->task_code_pattern, $counter);
+
+            $settings->update(['task_code_counter' => $counter + 1]);
+
+            return $code;
+        });
+    }
+
+    public function previewNextTaskCode(): string
+    {
+        $settings = $this->getSettings();
+
+        return $this->applyCodePattern($settings->task_code_pattern, (int) $settings->task_code_counter);
+    }
+
     /**
      * Áp pattern mã dự án. Token hỗ trợ:
      *  - {count}        số đếm không đệm
