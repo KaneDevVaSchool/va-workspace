@@ -1,6 +1,7 @@
 <script setup>
 import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
+import { showClientToast } from '@/lib/clientToast';
 import { computed, onMounted, ref } from 'vue';
 import BarChart from '../components/BarChart.vue';
 import DashboardSkeleton from '../components/DashboardSkeleton.vue';
@@ -10,6 +11,7 @@ import ProjectDataTable from '../components/ProjectDataTable.vue';
 import ProjectDetailDrawer from '../components/ProjectDetailDrawer.vue';
 import ProjectHealth from '../components/ProjectHealth.vue';
 import { statusColor } from '../utils/chartColors';
+import { asList, asRecord, formatYearMonth, unwrapOverview, unwrapTablePage } from '../utils/dashboardPayload';
 
 const overview = ref(null);
 const overviewLoading = ref(true);
@@ -45,9 +47,9 @@ async function loadOverview() {
     const { data } = await window.axios.get('/api/dashboard/company/overview', {
       params: { department_id: departmentFilter.value || undefined },
     });
-    overview.value = data;
+    overview.value = unwrapOverview(data);
   } catch (error) {
-    window.showClientToast?.('error', error?.response?.data?.message || 'Không tải được số liệu tổng quan.');
+    showClientToast('error', error?.response?.data?.message || 'Không tải được số liệu tổng quan.');
   } finally {
     overviewLoading.value = false;
   }
@@ -70,9 +72,9 @@ async function loadTable() {
         page: 1,
       },
     });
-    table.value = data;
+    table.value = unwrapTablePage(data, { data: [], total: 0 });
   } catch (error) {
-    window.showClientToast?.('error', error?.response?.data?.message || 'Không tải được danh sách dự án.');
+    showClientToast('error', error?.response?.data?.message || 'Không tải được danh sách dự án.');
   } finally {
     tableLoading.value = false;
   }
@@ -140,7 +142,7 @@ async function openProject(id) {
     const { data } = await window.axios.get(`/api/dashboard/company/projects/${id}`);
     selectedProject.value = data;
   } catch (error) {
-    window.showClientToast?.('error', error?.response?.data?.message || 'Không tải được chi tiết dự án.');
+    showClientToast('error', error?.response?.data?.message || 'Không tải được chi tiết dự án.');
   } finally {
     selectedLoading.value = false;
   }
@@ -160,8 +162,8 @@ const statusLabels = {
 };
 
 const statusDonutData = computed(() => {
-  if (!overview.value) return { labels: [], series: [] };
-  const breakdown = overview.value.status_breakdown;
+  const breakdown = asRecord(overview.value?.status_breakdown);
+  if (!breakdown) return { labels: [], series: [] };
   const labels = Object.keys(breakdown).map((key) => ({ value: key, label: statusLabels[key] ?? key, color: statusColor(key) }));
   const series = Object.values(breakdown);
   return { labels, series };
@@ -169,8 +171,8 @@ const statusDonutData = computed(() => {
 
 const agingLabels = { '0_3': '0–3 ngày', '4_7': '4–7 ngày', '8_14': '8–14 ngày', over_14: '>14 ngày' };
 const agingBarData = computed(() => {
-  if (!overview.value) return { categories: [], series: [] };
-  const aging = overview.value.overdue_aging;
+  const aging = asRecord(overview.value?.overdue_aging);
+  if (!aging) return { categories: [], values: [], series: [] };
   return {
     categories: Object.keys(aging).map((k) => agingLabels[k]),
     values: Object.keys(aging),
@@ -179,8 +181,7 @@ const agingBarData = computed(() => {
 });
 
 const departmentRows = computed(() => {
-  if (!overview.value) return [];
-  const rows = [...overview.value.departments_performance];
+  const rows = [...asList(overview.value?.departments_performance)];
   if (departmentSort.value === 'progress') {
     rows.sort((a, b) => (a.average_progress_percent ?? 999) - (b.average_progress_percent ?? 999));
   } else if (departmentSort.value === 'running') {
@@ -201,18 +202,22 @@ const departmentBarData = computed(() => {
 });
 
 const timelineData = computed(() => {
-  if (!overview.value) return { categories: [], series: [] };
-  const t = overview.value.timeline;
+  const t = asRecord(overview.value?.timeline);
+  const months = asList(t?.months);
+  if (!months.length) return { categories: [], series: [] };
   const startKey = timelineTab.value === 'projects' ? 'projects_starting' : 'tasks_starting';
   const endKey = timelineTab.value === 'projects' ? 'projects_ending' : 'tasks_ending';
+  const zeros = months.map(() => 0);
   return {
-    categories: t.months,
+    categories: months.map(formatYearMonth),
     series: [
-      { name: 'Bắt đầu', data: t[startKey] },
-      { name: 'Kết thúc', data: t[endKey] },
+      { name: 'Bắt đầu', data: asList(t[startKey]).length ? asList(t[startKey]) : zeros },
+      { name: 'Kết thúc', data: asList(t[endKey]).length ? asList(t[endKey]) : zeros },
     ],
   };
 });
+
+const tableRows = computed(() => asList(table.value?.data));
 </script>
 
 <template>
@@ -318,10 +323,10 @@ const timelineData = computed(() => {
     <section class="dashboard-company__table-section">
       <div class="dashboard-company__table-area">
         <h2 class="dashboard-company__table-title">Danh sách dự án</h2>
-        <DashboardSkeleton v-if="tableLoading && table.data.length === 0" :rows="6" />
+        <DashboardSkeleton v-if="tableLoading && tableRows.length === 0" :rows="6" />
         <ProjectDataTable
           v-else
-          :rows="table.data"
+          :rows="tableRows"
           :loading="tableLoading"
           :total="table.total"
           :sort-by="tableSortBy"

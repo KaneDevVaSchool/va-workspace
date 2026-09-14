@@ -92,8 +92,8 @@ class DepartmentDashboardService
                 'overdue_tasks_count' => $overdueTasksCount,
             ],
             'tasks_status_breakdown' => $tasksByStatus,
-            'workload' => $workload,
-            'employee_progress' => $employeeProgress,
+            'workload' => $workload->all(),
+            'employee_progress' => $employeeProgress->all(),
             'work_aging' => $workAging,
         ];
     }
@@ -131,7 +131,7 @@ class DepartmentDashboardService
                 'name' => $user->name,
                 'avatar_url' => $user->avatar_url,
                 'team_name' => $user->team->name ?? null,
-                'projects' => collect($projects)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+                'projects' => collect($projects)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values()->all(),
                 'tasks_total' => $tasks->count(),
                 'tasks_by_status' => $tasksByStatus,
                 'average_progress_percent' => count($progressValues) > 0 ? round(array_sum($progressValues) / count($progressValues), 1) : null,
@@ -139,7 +139,7 @@ class DepartmentDashboardService
         })->values();
 
         return [
-            'data' => $data,
+            'data' => $data->all(),
             'current_page' => $paginator->currentPage(),
             'last_page' => $paginator->lastPage(),
             'per_page' => $paginator->perPage(),
@@ -185,7 +185,7 @@ class DepartmentDashboardService
             'avatar_url' => $user->avatar_url,
             'team_name' => $user->team->name ?? null,
             'department_name' => $user->department->name ?? null,
-            'projects' => collect($projects)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'projects' => collect($projects)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values()->all(),
             'tasks' => $taskList,
             'average_progress_percent' => $progressValues->isEmpty() ? null : round($progressValues->avg(), 1),
         ];

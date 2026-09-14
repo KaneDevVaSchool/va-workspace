@@ -24,6 +24,13 @@ use Modules\Project\App\Http\Controllers\TaskWorklogController;
 
 Route::middleware(['auth'])->prefix('project')->name('project.')->group(function () {
 
+    // Đồng bộ danh mục / phase — đăng ký sớm (trước GET /{project}/...) để luôn
+    // có trong route:cache; tránh PUT rơi vào SPA fallback → 405 GET/HEAD.
+    Route::middleware('permission:task.create')
+        ->match(['put', 'post'], '/{project}/structure/{type}', [TaskController::class, 'syncStructure'])
+        ->where('type', 'category|phase')
+        ->name('structure.sync');
+
     // ---------- Task (Project Giai đoạn 2 — WBS đa cấp, thuộc project) ----------
     // Route tĩnh /tasks* PHẢI đăng ký trước GET /{project} (int binding, dòng
     // dưới) — nếu không Laravel sẽ hiểu "tasks" là giá trị {project}.
@@ -49,9 +56,6 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
         // Route tĩnh /tasks/bulk và /structure/{type} PHẢI trước wildcard {project}/tasks
         // nếu cùng prefix — nhưng bulk gắn {project} nên đăng ký cạnh store.
         Route::post('/{project}/tasks/bulk', [TaskController::class, 'storeBulk'])->name('tasks.store-bulk');
-        Route::put('/{project}/structure/{type}', [TaskController::class, 'syncStructure'])
-            ->whereIn('type', ['category', 'phase'])
-            ->name('structure.sync');
         Route::post('/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
         Route::post('/tasks/import/preview', [TaskController::class, 'importPreview'])->name('tasks.import-preview');
         Route::post('/tasks/import/resolve-row', [TaskController::class, 'importResolveRow'])->name('tasks.import-resolve-row');

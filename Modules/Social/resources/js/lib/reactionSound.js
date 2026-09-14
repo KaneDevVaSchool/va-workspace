@@ -7,6 +7,9 @@ let sharedCtx = null;
 
 function getCtx() {
   if (typeof window === 'undefined') return null;
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+    return null;
+  }
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return null;
   if (!sharedCtx || sharedCtx.state === 'closed') {

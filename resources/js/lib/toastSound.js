@@ -7,6 +7,11 @@ let sharedCtx = null;
 
 function getCtx() {
   if (typeof window === 'undefined') return null;
+  // Chrome cấm tạo AudioContext trước gesture — new AudioContext() sẽ log
+  // "The AudioContext was not allowed to start" dù có try/catch.
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+    return null;
+  }
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return null;
   if (!sharedCtx || sharedCtx.state === 'closed') {

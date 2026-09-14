@@ -15,7 +15,7 @@ const emit = defineEmits(['select']);
 const el = ref(null);
 let chart = null;
 
-const hasData = () => props.series.some((v) => v > 0);
+const hasData = () => (props.series ?? []).some((v) => v > 0);
 
 function buildOptions() {
   return {
@@ -25,13 +25,13 @@ function buildOptions() {
       fontFamily: 'inherit',
       events: {
         dataPointSelection(_event, _ctx, config) {
-          const item = props.labels[config.dataPointIndex];
+          const item = props.labels?.[config.dataPointIndex];
           if (item) emit('select', item.value);
         },
       },
     },
-    labels: props.labels.map((l) => l.label),
-    colors: props.labels.map((l) => l.color),
+    labels: (props.labels ?? []).map((l) => l.label),
+    colors: (props.labels ?? []).map((l) => l.color),
     dataLabels: { enabled: false },
     legend: { position: 'bottom', fontSize: '13px' },
     stroke: { width: 2 },
@@ -61,7 +61,7 @@ function render() {
   }
   if (!hasData()) return;
 
-  chart = new ApexCharts(el.value, { ...buildOptions(), series: props.series });
+  chart = new ApexCharts(el.value, { ...buildOptions(), series: props.series ?? [] });
   chart.render();
 }
 

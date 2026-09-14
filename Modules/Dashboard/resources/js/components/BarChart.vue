@@ -24,10 +24,11 @@ const emit = defineEmits(['select']);
 const el = ref(null);
 let chart = null;
 
-const hasData = () => props.series.some((s) => (s.data ?? []).some((v) => v > 0));
+const hasData = () => (props.series ?? []).some((s) => (s.data ?? []).some((v) => v > 0));
 
 function buildOptions() {
   const textMuted = getComputedStyle(document.documentElement).getPropertyValue('--color-text-muted').trim();
+  const categories = Array.isArray(props.categories) ? props.categories : [];
 
   return {
     chart: {
@@ -38,7 +39,7 @@ function buildOptions() {
       toolbar: { show: false },
       events: {
         dataPointSelection(_event, _ctx, config) {
-          const values = props.clickableCategories ?? props.categories;
+          const values = props.clickableCategories ?? categories;
           const value = values[config.dataPointIndex];
           if (value !== undefined) emit('select', value);
         },
@@ -55,13 +56,14 @@ function buildOptions() {
     colors: props.colors.length ? props.colors : undefined,
     dataLabels: { enabled: false },
     xaxis: {
-      categories: props.categories,
+      type: 'category',
+      categories,
       labels: { style: { colors: textMuted, fontSize: '12px' } },
     },
     yaxis: {
       labels: { style: { colors: textMuted, fontSize: '12px' } },
     },
-    legend: { show: props.series.length > 1, position: 'top', fontSize: '13px' },
+    legend: { show: (props.series ?? []).length > 1, position: 'top', fontSize: '13px' },
     grid: { borderColor: getComputedStyle(document.documentElement).getPropertyValue('--color-border').trim() },
     tooltip: { y: { formatter: (v) => `${v}${props.valueSuffix}` } },
   };
@@ -75,7 +77,7 @@ function render() {
   }
   if (!hasData()) return;
 
-  chart = new ApexCharts(el.value, { ...buildOptions(), series: props.series });
+  chart = new ApexCharts(el.value, { ...buildOptions(), series: props.series ?? [] });
   chart.render();
 }
 

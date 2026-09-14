@@ -1,6 +1,7 @@
 <script setup>
 import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
+import { showClientToast } from '@/lib/clientToast';
 import { computed, onMounted, ref } from 'vue';
 import BarChart from '../components/BarChart.vue';
 import DashboardSkeleton from '../components/DashboardSkeleton.vue';
@@ -9,6 +10,7 @@ import EmployeeDataTable from '../components/EmployeeDataTable.vue';
 import EmployeeDetailDrawer from '../components/EmployeeDetailDrawer.vue';
 import KpiCard from '../components/KpiCard.vue';
 import { statusColor } from '../utils/chartColors';
+import { asList, asRecord, unwrapOverview, unwrapTablePage } from '../utils/dashboardPayload';
 
 const overview = ref(null);
 const overviewLoading = ref(true);
@@ -29,9 +31,9 @@ async function loadOverview() {
   overviewLoading.value = true;
   try {
     const { data } = await window.axios.get('/api/dashboard/department/overview');
-    overview.value = data;
+    overview.value = unwrapOverview(data);
   } catch (error) {
-    window.showClientToast?.('error', error?.response?.data?.message || 'Không tải được số liệu tổng quan.');
+    showClientToast('error', error?.response?.data?.message || 'Không tải được số liệu tổng quan.');
   } finally {
     overviewLoading.value = false;
   }
@@ -48,9 +50,15 @@ async function loadTable(page = 1) {
         page,
       },
     });
-    table.value = data;
+    table.value = unwrapTablePage(data, {
+      data: [],
+      current_page: 1,
+      last_page: 1,
+      per_page: tablePerPage.value,
+      total: 0,
+    });
   } catch (error) {
-    window.showClientToast?.('error', error?.response?.data?.message || 'Không tải được danh sách nhân viên.');
+    showClientToast('error', error?.response?.data?.message || 'Không tải được danh sách nhân viên.');
   } finally {
     tableLoading.value = false;
   }
@@ -87,7 +95,7 @@ async function openEmployee(userId) {
     const { data } = await window.axios.get(`/api/dashboard/department/employees/${userId}`);
     selectedEmployee.value = data;
   } catch (error) {
-    window.showClientToast?.('error', error?.response?.data?.message || 'Không tải được chi tiết nhân viên.');
+    showClientToast('error', error?.response?.data?.message || 'Không tải được chi tiết nhân viên.');
   } finally {
     selectedLoading.value = false;
   }
@@ -108,15 +116,14 @@ const taskStatusLabels = {
 };
 
 const workStatusDonutData = computed(() => {
-  if (!overview.value) return { labels: [], series: [] };
-  const breakdown = overview.value.tasks_status_breakdown;
+  const breakdown = asRecord(overview.value?.tasks_status_breakdown);
+  if (!breakdown) return { labels: [], series: [] };
   const labels = Object.keys(breakdown).map((key) => ({ value: key, label: taskStatusLabels[key] ?? key, color: statusColor(key) }));
   return { labels, series: Object.values(breakdown) };
 });
 
 const workloadBarData = computed(() => {
-  if (!overview.value) return { categories: [], series: [] };
-  const rows = overview.value.workload.slice(0, 12);
+  const rows = asList(overview.value?.workload).slice(0, 12);
   return {
     categories: rows.map((r) => r.name),
     values: rows.map((r) => r.user_id),
@@ -125,8 +132,7 @@ const workloadBarData = computed(() => {
 });
 
 const employeeProgressBarData = computed(() => {
-  if (!overview.value) return { categories: [], series: [] };
-  const rows = overview.value.employee_progress.slice(0, 12);
+  const rows = asList(overview.value?.employee_progress).slice(0, 12);
   return {
     categories: rows.map((r) => r.name),
     values: rows.map((r) => r.user_id),
@@ -136,13 +142,15 @@ const employeeProgressBarData = computed(() => {
 
 const agingLabels = { '0_3': '0–3 ngày', '4_7': '4–7 ngày', '8_14': '8–14 ngày', over_14: '>14 ngày' };
 const workAgingBarData = computed(() => {
-  if (!overview.value) return { categories: [], series: [] };
-  const aging = overview.value.work_aging;
+  const aging = asRecord(overview.value?.work_aging);
+  if (!aging) return { categories: [], series: [] };
   return {
     categories: Object.keys(aging).map((k) => agingLabels[k]),
     series: [{ name: 'Công việc chưa hoàn thành', data: Object.values(aging) }],
   };
 });
+
+const tableRows = computed(() => asList(table.value?.data));
 
 function onWorkloadSelect(userId) {
   openEmployee(userId);
@@ -230,10 +238,10 @@ function onWorkloadSelect(userId) {
     <section class="dashboard-department__table-section">
       <div class="dashboard-department__table-area">
         <h2 class="dashboard-department__table-title">Danh sách nhân viên</h2>
-        <DashboardSkeleton v-if="tableLoading && table.data.length === 0" :rows="6" />
+        <DashboardSkeleton v-if="tableLoading && tableRows.length === 0" :rows="6" />
         <EmployeeDataTable
           v-else
-          :rows="table.data"
+          :rows="tableRows"
           :loading="tableLoading"
           :page="table.current_page"
           :last-page="table.last_page"

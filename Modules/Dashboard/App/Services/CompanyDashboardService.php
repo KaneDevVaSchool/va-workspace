@@ -89,7 +89,7 @@ class CompanyDashboardService
             'status_breakdown' => $statusBreakdown,
             'health' => $health,
             'overdue_aging' => $overdueAging,
-            'departments_performance' => $departmentsPerformance,
+            'departments_performance' => $departmentsPerformance->all(),
             'timeline' => $this->buildTimeline($filters),
             'generated_at' => Carbon::now()->toIso8601String(),
         ];
@@ -150,7 +150,7 @@ class CompanyDashboardService
         $paged = $rows->forPage($page, $perPage)->values();
 
         return [
-            'data' => $paged,
+            'data' => $paged->all(),
             'current_page' => $page,
             'last_page' => $lastPage,
             'per_page' => $perPage,
@@ -183,7 +183,7 @@ class CompanyDashboardService
             'days_overdue' => $this->healthClassifier->daysOverdue($project),
             'health' => $this->healthClassifier->classify($project, $taskCount, $progress),
             'owner_department_name' => $project->ownerDepartment->name ?? null,
-            'executing_departments' => $project->executingDepartments->pluck('name')->values(),
+            'executing_departments' => $project->executingDepartments->pluck('name')->values()->all(),
             'lead_name' => $project->lead->name ?? null,
             'tasks_total' => $taskCounts['tasks_total'],
             'tasks_completed' => $taskCounts['tasks_completed'],
