@@ -224,6 +224,13 @@ onBeforeUnmount(() => {
           <span>Thêm người thực hiện</span>
         </button>
 
+        <button type="button" class="task-ctx__item" role="menuitem" @click="pick('progress')" @mouseenter="openSub = null">
+          <span class="task-ctx__ico task-ctx__ico--secondary">
+            <AppIcon name="trendingUp" :size="15" :stroke-width="1.75" />
+          </span>
+          <span>Cập nhật tiến độ</span>
+        </button>
+
         <div
           class="task-ctx__wrap"
           @mouseenter="showSub('time')"

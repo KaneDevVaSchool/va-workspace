@@ -25,6 +25,7 @@ const KIND_META = {
   members: { title: 'Thêm người thực hiện', icon: 'userPlus', tone: 'tertiary' },
   dates: { title: 'Cập nhật thời gian', icon: 'calendar', tone: 'info' },
   move: { title: 'Chuyển công việc', icon: 'move', tone: 'secondary' },
+  progress: { title: 'Cập nhật tiến độ', icon: 'trendingUp', tone: 'secondary' },
   evaluate: { title: 'Đánh giá kết quả', icon: 'starFilled', tone: 'gold' },
   documents: { title: 'Thêm tài liệu', icon: 'fileUp', tone: 'info' },
   duplicate: { title: 'Nhân bản công việc', icon: 'copy', tone: 'success' },
@@ -57,6 +58,7 @@ const datesForm = reactive({
   actual_end_date: '',
 });
 const moveForm = reactive({ parent_id: '' });
+const progressForm = reactive({ progress_percent: '', progress_number: '', progress_total: '', unit: '' });
 const scoreForm = reactive({
   rating_score: '',
   rating_result: '',
@@ -69,7 +71,7 @@ const dateFocus = computed(() => props.extra?.focus || 'planned');
 const isActualFocus = computed(() => dateFocus.value === 'actual');
 const dialogMeta = computed(() => KIND_META[props.kind] || { title: '', icon: 'layers', tone: 'primary' });
 const panelClass = computed(() => {
-  if (props.kind === 'evaluate' || props.kind === 'move' || props.kind === 'documents') return 'task-qa__panel--md';
+  if (props.kind === 'evaluate' || props.kind === 'move' || props.kind === 'documents' || props.kind === 'progress') return 'task-qa__panel--md';
   if (props.kind === 'members') return 'task-qa__panel--xl';
   return 'task-qa__panel--lg';
 });
@@ -127,6 +129,12 @@ const peopleStory = computed(() => {
 
 const canSubmitDocuments = computed(() => pendingFiles.value.length > 0 && !saving.value);
 const canSubmitDates = computed(() => !plannedRangeInvalid.value && !actualRangeInvalid.value);
+const isQuantityProgress = computed(() => props.task?.progress_type === 'quantity');
+const canSubmitProgress = computed(() => {
+  if (!isQuantityProgress.value) return true;
+  const total = Number(progressForm.progress_total);
+  return progressForm.progress_total !== '' && total > 0;
+});
 
 function compactDays(start, end) {
   const n = dayCount(start, end);
@@ -163,6 +171,10 @@ function resetForms(task) {
   datesForm.actual_start_date = task.actual_start_date || '';
   datesForm.actual_end_date = task.actual_end_date || '';
   moveForm.parent_id = task.parent_id || '';
+  progressForm.progress_percent = task.progress_percent != null ? String(task.progress_percent) : '';
+  progressForm.progress_number = task.progress_number != null ? String(task.progress_number) : '';
+  progressForm.progress_total = task.progress_total != null ? String(task.progress_total) : '';
+  progressForm.unit = task.unit || '';
   const score = task.task_score;
   scoreForm.rating_score = score?.rating_score ?? '';
   scoreForm.rating_result = score?.rating_result ?? '';
@@ -309,6 +321,21 @@ async function submitMove() {
   showClientToast('success', 'Đã chuyển công việc.');
 }
 
+async function submitProgress() {
+  const payload = isQuantityProgress.value
+    ? {
+        progress_number: progressForm.progress_number === '' ? 0 : Number(progressForm.progress_number),
+        progress_total: Number(progressForm.progress_total),
+        unit: progressForm.unit || null,
+      }
+    : {
+        progress_percent: progressForm.progress_percent === '' ? null : Number(progressForm.progress_percent),
+      };
+  const { data } = await window.axios.put(`/api/project/tasks/${props.task.id}`, payload);
+  emit('updated', data.task);
+  showClientToast('success', 'Đã cập nhật tiến độ.');
+}
+
 async function submitEvaluate() {
   const payload = {
     rating_score: scoreForm.rating_score === '' ? null : Number(scoreForm.rating_score),
@@ -401,11 +428,13 @@ async function submit() {
   if (!props.task || saving.value) return;
   if (props.kind === 'dates' && !canSubmitDates.value) return;
   if (props.kind === 'documents' && !canSubmitDocuments.value) return;
+  if (props.kind === 'progress' && !canSubmitProgress.value) return;
   saving.value = true;
   try {
     if (props.kind === 'members') await submitMembers();
     else if (props.kind === 'dates') await submitDates();
     else if (props.kind === 'move') await submitMove();
+    else if (props.kind === 'progress') await submitProgress();
     else if (props.kind === 'evaluate') await submitEvaluate();
     else if (props.kind === 'documents') await submitDocuments();
     emit('close');
@@ -420,6 +449,7 @@ const primaryLabel = computed(() => {
   if (props.kind === 'documents') return pendingFiles.value.length ? `Tải lên (${pendingFiles.value.length})` : 'Tải lên';
   if (props.kind === 'evaluate') return 'Lưu đánh giá';
   if (props.kind === 'move') return 'Chuyển';
+  if (props.kind === 'progress') return 'Cập nhật';
   return 'Lưu';
 });
 </script>
@@ -642,6 +672,27 @@ const primaryLabel = computed(() => {
             </div>
           </div>
 
+          <div v-else-if="kind === 'progress'" class="task-qa__grid task-qa__grid--stack">
+            <template v-if="isQuantityProgress">
+              <div class="task-qa__field">
+                <span class="task-qa__label">Khối lượng đã hoàn thành</span>
+                <input v-model="progressForm.progress_number" type="number" min="0" step="0.01" class="task-qa__input" placeholder="Ví dụ: 6">
+              </div>
+              <div class="task-qa__field">
+                <span class="task-qa__label">Khối lượng cần hoàn thành</span>
+                <input v-model="progressForm.progress_total" type="number" min="0.01" step="0.01" class="task-qa__input" placeholder="Ví dụ: 10">
+              </div>
+              <div class="task-qa__field">
+                <span class="task-qa__label">Đơn vị</span>
+                <input v-model="progressForm.unit" type="text" maxlength="50" class="task-qa__input" placeholder="Ví dụ: hạng mục, trang, m²">
+              </div>
+            </template>
+            <div v-else class="task-qa__field">
+              <span class="task-qa__label">Tiến độ (%)</span>
+              <input v-model="progressForm.progress_percent" type="number" min="0" max="100" step="1" class="task-qa__input" placeholder="Ví dụ: 70">
+            </div>
+          </div>
+
           <div v-else-if="kind === 'evaluate'" class="task-qa__grid">
             <label class="task-qa__field">
               <span class="task-qa__label">Kết quả</span>
@@ -746,7 +797,7 @@ const primaryLabel = computed(() => {
           <button
             type="button"
             class="task-qa__btn task-qa__btn--primary"
-            :disabled="saving || (kind === 'documents' && !canSubmitDocuments) || (kind === 'dates' && !canSubmitDates)"
+            :disabled="saving || (kind === 'documents' && !canSubmitDocuments) || (kind === 'dates' && !canSubmitDates) || (kind === 'progress' && !canSubmitProgress)"
             @click="submit"
           >
             {{ saving ? 'Đang lưu…' : primaryLabel }}

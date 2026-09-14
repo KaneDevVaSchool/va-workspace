@@ -730,6 +730,12 @@ class TaskService
      * modal "Cập nhật thời gian". Rời khỏi 'completed' (mở lại việc) thì xoá
      * actual_end_date để không giữ mốc hoàn thành cũ sai lệch.
      *
+     * Đồng thời tự suy progress_percent từ status khi progress_type không
+     * phải 'quantity' (loại đó đã có công thức riêng ở applyQuantityProgress)
+     * và client không tự gửi progress_percent trong cùng request: completed
+     * → 100, not_started → 0. Không đụng tới trường hợp client đang chủ động
+     * nhập tay progress_percent trong cùng lần lưu.
+     *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -743,6 +749,15 @@ class TaskService
             $data['actual_end_date'] = now()->toDateString();
         } elseif ($task->status === 'completed' && $data['status'] !== 'completed' && ! array_key_exists('actual_end_date', $data)) {
             $data['actual_end_date'] = null;
+        }
+
+        $progressType = $data['progress_type'] ?? $task->progress_type;
+        if ($progressType !== 'quantity' && ! array_key_exists('progress_percent', $data)) {
+            if ($data['status'] === 'completed') {
+                $data['progress_percent'] = 100;
+            } elseif ($data['status'] === 'not_started') {
+                $data['progress_percent'] = 0;
+            }
         }
 
         return $data;
