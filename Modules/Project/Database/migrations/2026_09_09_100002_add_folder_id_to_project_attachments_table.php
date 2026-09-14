@@ -23,7 +23,11 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('project_attachments', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('folder_id');
+            // Tên constraint đặt tay ở up() ('project_attachments_folder_fk')
+            // khác convention mặc định mà dropConstrainedForeignId() đoán
+            // ('..._folder_id_foreign') — phải drop đúng tên đã đặt.
+            $table->dropForeign('project_attachments_folder_fk');
+            $table->dropColumn('folder_id');
         });
     }
 };

@@ -35,8 +35,12 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('projects', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('owner_department_id');
-            $table->dropConstrainedForeignId('executing_department_id');
+            // dropConstrainedForeignId() suy tên constraint theo convention
+            // mặc định — không khớp tên tường minh đã đặt lúc up(), nên drop
+            // foreign key bằng đúng tên constraint rồi mới drop cột.
+            $table->dropForeign('projects_owner_department_fk');
+            $table->dropForeign('projects_executing_department_fk');
+            $table->dropColumn(['owner_department_id', 'executing_department_id']);
         });
     }
 };

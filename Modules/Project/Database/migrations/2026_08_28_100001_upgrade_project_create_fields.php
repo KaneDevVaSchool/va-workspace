@@ -111,7 +111,11 @@ return new class extends Migration
                     $table->dropColumn($drops);
                 }
                 if (Schema::hasColumn('projects', 'lead_department_id')) {
-                    $table->dropConstrainedForeignId('lead_department_id');
+                    // dropConstrainedForeignId() suy tên constraint theo
+                    // convention mặc định — không khớp tên tường minh đã đặt
+                    // lúc up() ('projects_lead_department_fk').
+                    $table->dropForeign('projects_lead_department_fk');
+                    $table->dropColumn('lead_department_id');
                 }
             });
         }
