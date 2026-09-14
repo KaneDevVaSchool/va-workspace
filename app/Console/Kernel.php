@@ -8,6 +8,16 @@ use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 class Kernel extends ConsoleKernel
 {
     /**
+     * Lệnh Identity — đăng ký qua property, không gọi $this->commands() (đệ quy).
+     *
+     * @var array<int, class-string>
+     */
+    protected $commands = [
+        \Modules\Identity\App\Console\EnsureSuperAdminCommand::class,
+        \Modules\Identity\App\Console\GenerateVapidKeysCommand::class,
+    ];
+
+    /**
      * Define the application's command schedule.
      */
     protected function schedule(Schedule $schedule): void
@@ -23,13 +33,5 @@ class Kernel extends ConsoleKernel
         $this->load(__DIR__.'/Commands');
 
         require base_path('routes/console.php');
-
-        // Đăng ký trực tiếp — không phụ thuộc nwidart nạp IdentityServiceProvider.
-        if (class_exists(\Modules\Identity\App\Console\GenerateVapidKeysCommand::class)) {
-            $this->commands([
-                \Modules\Identity\App\Console\EnsureSuperAdminCommand::class,
-                \Modules\Identity\App\Console\GenerateVapidKeysCommand::class,
-            ]);
-        }
     }
 }
