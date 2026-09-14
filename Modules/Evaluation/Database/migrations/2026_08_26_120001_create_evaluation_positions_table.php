@@ -34,6 +34,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        // Khi rollback xa hơn migration 2026_08_31_000002 (đã dựng lại
+        // evaluation_template_positions có FK trỏ vào bảng này trong down()
+        // của chính nó), bảng pivot đó vẫn còn tồn tại tại thời điểm này
+        // chạy — phải drop trước, nếu không MySQL báo lỗi 3730 "Cannot drop
+        // table ... referenced by a foreign key constraint".
+        Schema::dropIfExists('evaluation_template_positions');
         Schema::dropIfExists('evaluation_positions');
     }
 };
