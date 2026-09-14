@@ -466,4 +466,19 @@ class TaskRepository implements TaskRepositoryInterface
         $query->whereDate('end_date', '<', now()->toDateString())
             ->whereNotIn('status', ['completed', 'cancelled']);
     }
+
+    public function dueSoon(): Collection
+    {
+        return $this->baseQuery()
+            ->whereDate('end_date', '>=', now()->toDateString())
+            ->whereDate('end_date', '<=', now()->addDay()->toDateString())
+            ->whereNotIn('status', ['completed', 'cancelled'])
+            ->whereNull('due_soon_notified_at')
+            ->get();
+    }
+
+    public function markDueSoonNotified(Task $task): void
+    {
+        $task->forceFill(['due_soon_notified_at' => now()])->save();
+    }
 }

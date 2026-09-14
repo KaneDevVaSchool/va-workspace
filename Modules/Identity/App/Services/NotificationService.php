@@ -31,6 +31,12 @@ class NotificationService
 
     public const TYPE_TASK_DELEGATED = 'task_delegated';
 
+    public const TYPE_TASK_ASSIGNED = 'task_assigned';
+
+    public const TYPE_TASK_DUE_SOON = 'task_due_soon';
+
+    public const TYPE_DISCUSSION_COMMENT = 'discussion_comment';
+
     public function __construct(
         private readonly UserNotificationRepositoryInterface $notifications,
         private readonly UserRepositoryInterface $users,

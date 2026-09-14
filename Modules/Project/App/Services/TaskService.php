@@ -542,11 +542,17 @@ class TaskService
             'updated_by' => $creator->id,
         ]);
 
-        return DB::transaction(function () use ($payload, $watcherIds, $collaboratorIds) {
+        $result = DB::transaction(function () use ($payload, $watcherIds, $collaboratorIds) {
             $task = $this->tasks->create($payload);
 
             return $this->tasks->syncPeople($task, $watcherIds, $collaboratorIds);
         });
+
+        if ($result instanceof Task && $result->assignee_id !== null) {
+            $this->notifyAssigned($result, $creator);
+        }
+
+        return $result;
     }
 
     private function validateChildDateRange(Task $parent, array $data): ?string
@@ -623,7 +629,17 @@ class TaskService
 
         $data['updated_by'] = $editor->id;
 
-        return DB::transaction(function () use ($task, $data, $hasWatchers, $hasCollaborators, $watcherIds, $collaboratorIds) {
+        if (array_key_exists('end_date', $data)) {
+            $newEndDate = $data['end_date'] !== null ? Carbon::parse($data['end_date'])->toDateString() : null;
+            $oldEndDate = $task->end_date?->toDateString();
+            if ($newEndDate !== $oldEndDate) {
+                $data['due_soon_notified_at'] = null;
+            }
+        }
+
+        $previousAssigneeId = $task->assignee_id;
+
+        $result = DB::transaction(function () use ($task, $data, $hasWatchers, $hasCollaborators, $watcherIds, $collaboratorIds) {
             $updated = $this->tasks->update($task, $data);
 
             if (! $hasWatchers && ! $hasCollaborators) {
@@ -639,6 +655,16 @@ class TaskService
 
             return $this->tasks->syncPeople($updated, $watchers, $collaborators);
         });
+
+        if ($result instanceof Task
+            && array_key_exists('assignee_id', $data)
+            && $data['assignee_id'] !== null
+            && (int) $data['assignee_id'] !== (int) $previousAssigneeId
+        ) {
+            $this->notifyAssigned($result, $editor);
+        }
+
+        return $result;
     }
 
     /**
@@ -871,6 +897,63 @@ class TaskService
             null,
             ['task_ids' => array_map(fn ($t) => $t->id, $tasks)],
         );
+    }
+
+    /** Báo cho assignee khi được giao việc mới (tạo mới hoặc đổi assignee qua sửa task thường — không trùng bulkDelegate()/notifyDelegation() vì action đó đi thẳng qua Repository). */
+    private function notifyAssigned(Task $task, User $actor): void
+    {
+        if ($task->assignee_id === null) {
+            return;
+        }
+
+        $this->notifications->notifyUsers(
+            [(int) $task->assignee_id],
+            $actor,
+            NotificationService::TYPE_TASK_ASSIGNED,
+            'Bạn được giao công việc mới',
+            $task->title,
+            "/manager/project/tasks/{$task->id}",
+            ['task_id' => $task->id],
+        );
+    }
+
+    /**
+     * Cron tối thiểu — quét task sắp quá hạn (end_date trong [hôm nay,
+     * hôm nay+1]), gửi 1 lần duy nhất/task (due_soon_notified_at chặn lặp,
+     * reset khi end_date đổi — xem update()). KHÔNG phải Reminder Engine
+     * đầy đủ (plans/2026-08-28-notification-reminder-engine-proposal.md).
+     * Actor dùng manager ?? creator vì notify() tự loại actor trùng
+     * recipient — assignee không thể tự làm actor cho chính mình.
+     */
+    public function notifyDueSoonTasks(): int
+    {
+        $tasks = $this->tasks->dueSoon();
+        $count = 0;
+
+        foreach ($tasks as $task) {
+            $actor = $task->manager ?? $task->creator;
+
+            if ($task->assignee_id === null || $actor === null) {
+                $this->tasks->markDueSoonNotified($task);
+
+                continue;
+            }
+
+            $this->notifications->notifyUsers(
+                [(int) $task->assignee_id],
+                $actor,
+                NotificationService::TYPE_TASK_DUE_SOON,
+                'Công việc sắp đến hạn',
+                "\"{$task->title}\" sẽ đến hạn vào {$task->end_date->format('d/m/Y')}.",
+                "/manager/project/tasks/{$task->id}",
+                ['task_id' => $task->id],
+            );
+
+            $this->tasks->markDueSoonNotified($task);
+            $count++;
+        }
+
+        return $count;
     }
 
     public function present(Task $task): array

@@ -9,6 +9,7 @@ use Modules\Identity\App\Exceptions\ShortcutPathTaken;
 use Modules\Identity\App\Http\Requests\StoreShortcutRequest;
 use Modules\Identity\App\Http\Requests\UpdateShortcutRequest;
 use Modules\Identity\App\Repositories\Contracts\UserShortcutRepositoryInterface;
+use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\ShortcutService;
 
 class ShortcutController extends Controller
@@ -16,6 +17,7 @@ class ShortcutController extends Controller
     public function __construct(
         private readonly ShortcutService $shortcuts,
         private readonly UserShortcutRepositoryInterface $repository,
+        private readonly ActivityLogService $activityLogs,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -36,6 +38,14 @@ class ShortcutController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        $this->activityLogs->record(
+            'shortcut.create',
+            "Tạo lối tắt \"{$shortcut->title}\"",
+            $request->user(),
+            'shortcut',
+            $shortcut->id,
+        );
+
         return response()->json([
             'message' => 'Đã thêm vào lối tắt.',
             'shortcut' => $this->shortcuts->present($shortcut),
@@ -50,6 +60,14 @@ class ShortcutController extends Controller
         }
 
         $model = $this->shortcuts->update($model, $request->validated());
+
+        $this->activityLogs->record(
+            'shortcut.update',
+            "Cập nhật lối tắt \"{$model->title}\"",
+            $request->user(),
+            'shortcut',
+            $model->id,
+        );
 
         return response()->json([
             'message' => 'Đã cập nhật lối tắt.',
@@ -78,7 +96,17 @@ class ShortcutController extends Controller
             return response()->json(['message' => 'Không tìm thấy lối tắt.'], 404);
         }
 
+        $title = $model->title;
+        $id = $model->id;
         $this->shortcuts->delete($model);
+
+        $this->activityLogs->record(
+            'shortcut.delete',
+            "Xoá lối tắt \"{$title}\"",
+            $request->user(),
+            'shortcut',
+            $id,
+        );
 
         return response()->json(['message' => 'Đã xoá lối tắt.']);
     }

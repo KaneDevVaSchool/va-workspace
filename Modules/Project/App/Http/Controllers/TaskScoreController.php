@@ -6,13 +6,17 @@ use App\Http\Controllers\Controller;
 use Modules\Project\App\Http\Requests\UpsertTaskScoreRequest;
 use Modules\Project\App\Models\Task;
 use Modules\Project\App\Services\TaskScoreService;
+use Modules\Identity\App\Services\ActivityLogService;
 
 /**
  * Controller mỏng: chỉ nhận request, gọi Service, trả response.
  */
 class TaskScoreController extends Controller
 {
-    public function __construct(private readonly TaskScoreService $service) {}
+    public function __construct(
+        private readonly TaskScoreService $service,
+        private readonly ActivityLogService $activityLogs,
+    ) {}
 
     /** GET /api/project/tasks/{task}/score — ai có task.view cũng xem được. */
     public function show(Task $task)
@@ -26,6 +30,14 @@ class TaskScoreController extends Controller
     public function upsert(UpsertTaskScoreRequest $request, Task $task)
     {
         $score = $this->service->upsert($task, $request->validated(), $request->user());
+
+        $this->activityLogs->record(
+            'task_score.upsert',
+            "Chấm điểm công việc \"{$task->title}\"",
+            $request->user(),
+            'task',
+            $task->id,
+        );
 
         return response()->json(['task_score' => $this->service->present($score)]);
     }

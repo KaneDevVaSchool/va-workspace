@@ -88,4 +88,17 @@ interface TaskRepositoryInterface
 
     /** Đếm tổng số Task của 1 project — dùng cho baseline (work_items). */
     public function countByProject(int $projectId): int;
+
+    /**
+     * Task sắp quá hạn (end_date trong [hôm nay, hôm nay+1]), chưa hoàn
+     * thành/huỷ, chưa từng được nhắc (due_soon_notified_at null) — dùng cho
+     * cron nhắc deadline tối thiểu (không phải Reminder Engine đầy đủ,
+     * xem plans/2026-08-28-notification-reminder-engine-proposal.md).
+     *
+     * @return Collection<int, Task>
+     */
+    public function dueSoon(): Collection;
+
+    /** Đánh dấu đã gửi thông báo sắp quá hạn — chống cron gửi lặp. */
+    public function markDueSoonNotified(Task $task): void;
 }

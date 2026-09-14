@@ -12,6 +12,7 @@ use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\Task;
 use Modules\Project\App\Repositories\Contracts\CommentRepositoryInterface;
 use Modules\Project\App\Services\CommentService;
+use Modules\Identity\App\Services\ActivityLogService;
 
 /**
  * Controller mỏng: chỉ nhận request, gọi Service, trả response — comment
@@ -24,6 +25,7 @@ class CommentController extends Controller
     public function __construct(
         private readonly CommentService $service,
         private readonly CommentRepositoryInterface $comments,
+        private readonly ActivityLogService $activityLogs,
     ) {}
 
     public function mentions(Request $request): JsonResponse
@@ -92,6 +94,14 @@ class CommentController extends Controller
 
         $commentsCount = $this->service->delete($model);
 
+        $this->activityLogs->record(
+            'comment.delete',
+            'Xoá bình luận',
+            $request->user(),
+            'comment',
+            $model->id,
+        );
+
         return response()->json(['message' => 'Đã xoá bình luận.', 'comments_count' => $commentsCount]);
     }
 
@@ -137,7 +147,17 @@ class CommentController extends Controller
             return response()->json(['message' => 'Bạn không có quyền ghim bình luận này.'], 403);
         }
 
-        return response()->json($this->service->pin($model, $request->user()));
+        $result = $this->service->pin($model, $request->user());
+
+        $this->activityLogs->record(
+            'comment.pin',
+            'Ghim bình luận',
+            $request->user(),
+            'comment',
+            $model->id,
+        );
+
+        return response()->json($result);
     }
 
     public function unpin(Request $request, int $comment): JsonResponse
@@ -151,7 +171,17 @@ class CommentController extends Controller
             return response()->json(['message' => 'Bạn không có quyền ghim bình luận này.'], 403);
         }
 
-        return response()->json($this->service->unpin($model, $request->user()));
+        $result = $this->service->unpin($model, $request->user());
+
+        $this->activityLogs->record(
+            'comment.unpin',
+            'Bỏ ghim bình luận',
+            $request->user(),
+            'comment',
+            $model->id,
+        );
+
+        return response()->json($result);
     }
 
     public function markThreadRead(Request $request, Project $project): JsonResponse

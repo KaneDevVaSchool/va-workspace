@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Modules\Project\App\Console\Commands\AutoStartProjectsCommand;
+use Modules\Project\App\Console\Commands\NotifyTasksDueSoonCommand;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\Task;
 use Modules\Project\App\Repositories\CommentRepository;
@@ -87,6 +88,7 @@ class ProjectServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 AutoStartProjectsCommand::class,
+                NotifyTasksDueSoonCommand::class,
             ]);
         }
 
@@ -96,6 +98,8 @@ class ProjectServiceProvider extends ServiceProvider
         $this->app->booted(function () {
             $schedule = $this->app->make(Schedule::class);
             $schedule->command('project:auto-start')->dailyAt('00:05');
+            // Giờ hành chính — user thấy thông báo "sắp quá hạn" khi vào làm.
+            $schedule->command('project:notify-tasks-due-soon')->dailyAt('07:00');
         });
     }
 

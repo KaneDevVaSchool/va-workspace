@@ -3,18 +3,23 @@
 namespace Modules\Project\App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
 use Modules\Project\App\Http\Requests\StoreTaskAttachmentRequest;
 use Modules\Project\App\Http\Requests\UpdateTaskAttachmentRequest;
 use Modules\Project\App\Models\Task;
 use Modules\Project\App\Models\TaskAttachment;
 use Modules\Project\App\Services\TaskAttachmentService;
+use Modules\Identity\App\Services\ActivityLogService;
 
 /**
  * Controller mỏng: chỉ nhận request, gọi Service, trả response.
  */
 class TaskAttachmentController extends Controller
 {
-    public function __construct(private readonly TaskAttachmentService $service) {}
+    public function __construct(
+        private readonly TaskAttachmentService $service,
+        private readonly ActivityLogService $activityLogs,
+    ) {}
 
     /** GET /api/project/tasks/{task}/attachments */
     public function index(Task $task)
@@ -31,6 +36,14 @@ class TaskAttachmentController extends Controller
     {
         $attachment = $this->service->upload($task, $request->file('file'), $request->user());
 
+        $this->activityLogs->record(
+            'task_attachment.upload',
+            "Tải lên tệp đính kèm \"{$attachment->file_name}\" cho công việc \"{$task->title}\"",
+            $request->user(),
+            'task',
+            $task->id,
+        );
+
         return response()->json(['attachment' => $this->service->present($attachment)], 201);
     }
 
@@ -41,6 +54,14 @@ class TaskAttachmentController extends Controller
         if (is_array($result)) {
             return response()->json(['message' => $result['error']], 404);
         }
+
+        $this->activityLogs->record(
+            'task_attachment.rename',
+            "Đổi tên tệp đính kèm thành \"{$result->file_name}\" của công việc \"{$result->task->title}\"",
+            $request->user(),
+            'task',
+            $result->task_id,
+        );
 
         return response()->json(['attachment' => $this->service->present($result)]);
     }
@@ -53,16 +74,31 @@ class TaskAttachmentController extends Controller
             return response()->json(['message' => $result['error']], 404);
         }
 
+        $this->activityLogs->record(
+            'task_attachment.replace',
+            "Thay thế tệp đính kèm \"{$result->file_name}\" của công việc \"{$result->task->title}\"",
+            $request->user(),
+            'task',
+            $result->task_id,
+        );
+
         return response()->json(['attachment' => $this->service->present($result)]);
     }
 
     /** DELETE /api/project/tasks/attachments/{attachment} */
-    public function destroy(int $attachment)
+    public function destroy(Request $request, int $attachment)
     {
         $error = $this->service->delete($attachment);
         if ($error !== null) {
             return response()->json(['message' => $error['error']], 404);
         }
+
+        $this->activityLogs->record(
+            'task_attachment.delete',
+            'Xoá tệp đính kèm',
+            $request->user(),
+            'task',
+        );
 
         return response()->json(['message' => 'Đã xoá tệp đính kèm.']);
     }

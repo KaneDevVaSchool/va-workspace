@@ -10,6 +10,7 @@ use Modules\Project\App\Http\Requests\UpdateProjectFeedbackRequest;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Repositories\Contracts\ProjectFeedbackRepositoryInterface;
 use Modules\Project\App\Services\ProjectFeedbackService;
+use Modules\Identity\App\Services\ActivityLogService;
 
 /**
  * Controller mỏng: chỉ nhận request, gọi Service, trả response.
@@ -19,6 +20,7 @@ class ProjectFeedbackController extends Controller
     public function __construct(
         private readonly ProjectFeedbackService $service,
         private readonly ProjectFeedbackRepositoryInterface $feedbacks,
+        private readonly ActivityLogService $activityLogs,
     ) {}
 
     public function index(Project $project): JsonResponse
@@ -29,6 +31,14 @@ class ProjectFeedbackController extends Controller
     public function store(StoreProjectFeedbackRequest $request, Project $project): JsonResponse
     {
         $feedback = $this->service->create($project, $request->validated(), $request->user());
+
+        $this->activityLogs->record(
+            'project_feedback.create',
+            "Thêm phản hồi cho dự án \"{$project->name}\"",
+            $request->user(),
+            'project',
+            $project->id,
+        );
 
         return response()->json(['feedback' => $this->service->present($feedback)], 201);
     }
@@ -46,6 +56,14 @@ class ProjectFeedbackController extends Controller
 
         $updated = $this->service->update($model, $request->validated());
 
+        $this->activityLogs->record(
+            'project_feedback.update',
+            "Cập nhật phản hồi của dự án \"{$updated->project->name}\"",
+            $request->user(),
+            'project',
+            $updated->project_id,
+        );
+
         return response()->json(['feedback' => $this->service->present($updated)]);
     }
 
@@ -60,7 +78,17 @@ class ProjectFeedbackController extends Controller
             return response()->json(['message' => 'Bạn không có quyền xoá phản hồi này.'], 403);
         }
 
+        $projectName = $model->project->name;
+        $projectId = $model->project_id;
         $this->service->delete($model);
+
+        $this->activityLogs->record(
+            'project_feedback.delete',
+            "Xoá phản hồi của dự án \"{$projectName}\"",
+            $request->user(),
+            'project',
+            $projectId,
+        );
 
         return response()->json(['message' => 'Đã xoá phản hồi.']);
     }

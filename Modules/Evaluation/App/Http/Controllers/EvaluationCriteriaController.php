@@ -391,6 +391,13 @@ class EvaluationCriteriaController extends Controller
 
         $this->service->reorder($departmentId, array_map('intval', $ids));
 
+        $this->activityLogs->record(
+            'evaluation_criteria.reorder',
+            'Sắp xếp lại thứ tự tiêu chí đánh giá',
+            $request->user(),
+            'evaluation_criteria',
+        );
+
         return response()->json(['message' => 'Đã cập nhật thứ tự tiêu chí.']);
     }
 

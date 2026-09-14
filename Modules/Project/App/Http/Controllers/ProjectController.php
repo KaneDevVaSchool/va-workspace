@@ -25,6 +25,7 @@ use Modules\Project\App\Http\Requests\UploadProjectAttachmentRequest;
 use Modules\Project\App\Http\Requests\UploadProjectAvatarRequest;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
 use Modules\Project\App\Services\ProjectService;
+use Modules\Identity\App\Services\ActivityLogService;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
@@ -36,6 +37,7 @@ class ProjectController extends Controller
     public function __construct(
         private readonly ProjectService $service,
         private readonly ProjectRepositoryInterface $projects,
+        private readonly ActivityLogService $activityLogs,
     ) {}
 
     public function index(Request $request)
@@ -86,6 +88,14 @@ class ProjectController extends Controller
 
         $updated = $this->service->updateTabConfig($model, $request->validated()['disabled_tabs']);
 
+        $this->activityLogs->record(
+            'project.tab_config.update',
+            "Cập nhật cấu hình tab dự án \"{$updated->name}\"",
+            $request->user(),
+            'project',
+            $updated->id,
+        );
+
         return response()->json(['project' => $this->service->present($updated, $request->user())]);
     }
 
@@ -100,6 +110,14 @@ class ProjectController extends Controller
         if (is_array($result)) {
             return response()->json(['message' => $result['error']], 422);
         }
+
+        $this->activityLogs->record(
+            'project.create',
+            "Tạo dự án \"{$result->name}\"",
+            $request->user(),
+            'project',
+            $result->id,
+        );
 
         return response()->json(['project' => $this->service->present($result, $request->user())], 201);
     }
@@ -138,6 +156,14 @@ class ProjectController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        $createdCount = count($result['created'] ?? []);
+        $updatedCount = count($result['updated'] ?? []);
+        $this->activityLogs->record(
+            'project.import',
+            "Nhập dự án từ Excel: tạo mới {$createdCount}, cập nhật {$updatedCount}",
+            $request->user(),
+        );
+
         return response()->json($result);
     }
 
@@ -154,6 +180,14 @@ class ProjectController extends Controller
             return response()->json(['message' => $result['error']], 422);
         }
 
+        $this->activityLogs->record(
+            'project.update',
+            "Cập nhật dự án \"{$result->name}\"",
+            $request->user(),
+            'project',
+            $result->id,
+        );
+
         return response()->json(['project' => $this->service->present($result, $request->user())]);
     }
 
@@ -164,7 +198,16 @@ class ProjectController extends Controller
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
 
+        $name = $model->name;
+        $id = $model->id;
         $this->service->delete($model);
+
+        $this->activityLogs->record(
+            'project.delete',
+            "Xoá dự án \"{$name}\"",
+            subjectType: 'project',
+            subjectId: $id,
+        );
 
         return response()->json(['message' => 'Đã xoá dự án.']);
     }
@@ -189,6 +232,15 @@ class ProjectController extends Controller
         if (is_array($result)) {
             return response()->json(['message' => $result['error']], 422);
         }
+
+        $this->activityLogs->record(
+            'project.duplicate',
+            "Nhân bản dự án \"{$model->name}\" thành \"{$result->name}\"",
+            $request->user(),
+            'project',
+            $result->id,
+            ['source_project_id' => $model->id],
+        );
 
         return response()->json(['project' => $this->service->present($result, $request->user())], 201);
     }
@@ -215,6 +267,14 @@ class ProjectController extends Controller
 
         $result = $this->service->createQuickItems($model, $request->validated(), $request->user());
 
+        $this->activityLogs->record(
+            'project_quick_item.create',
+            "Thêm mục nhanh cho dự án \"{$model->name}\"",
+            $request->user(),
+            'project',
+            $model->id,
+        );
+
         return response()->json($result, 201);
     }
 
@@ -237,6 +297,14 @@ class ProjectController extends Controller
             return response()->json(['message' => $result['error']], 422);
         }
 
+        $this->activityLogs->record(
+            'project.attachment.upload',
+            "Tải lên tệp đính kèm \"{$result->original_name}\" cho dự án \"{$model->name}\"",
+            $request->user(),
+            'project',
+            $model->id,
+        );
+
         return response()->json(['attachment' => $this->service->presentAttachment($result)], 201);
     }
 
@@ -251,6 +319,13 @@ class ProjectController extends Controller
         if ($error !== null) {
             return response()->json(['message' => $error['error']], 404);
         }
+
+        $this->activityLogs->record(
+            'project.attachment.delete',
+            "Xoá tệp đính kèm của dự án \"{$model->name}\"",
+            subjectType: 'project',
+            subjectId: $model->id,
+        );
 
         return response()->json(['message' => 'Đã xoá tệp đính kèm.']);
     }
@@ -289,6 +364,14 @@ class ProjectController extends Controller
             return response()->json(['message' => $result['error']], 422);
         }
 
+        $this->activityLogs->record(
+            'project.folder.create',
+            "Tạo thư mục \"{$result->name}\" trong dự án \"{$model->name}\"",
+            $request->user(),
+            'project',
+            $model->id,
+        );
+
         return response()->json(['folder' => $this->service->presentFolder($result, true)], 201);
     }
 
@@ -303,6 +386,14 @@ class ProjectController extends Controller
         if (is_array($result)) {
             return response()->json(['message' => $result['error']], $result['error'] === 'Không tìm thấy thư mục.' ? 404 : 422);
         }
+
+        $this->activityLogs->record(
+            'project.folder.update',
+            "Đổi tên thư mục thành \"{$result->name}\" trong dự án \"{$model->name}\"",
+            $request->user(),
+            'project',
+            $model->id,
+        );
 
         return response()->json(['folder' => $this->service->presentFolder($result, true)]);
     }
@@ -319,6 +410,13 @@ class ProjectController extends Controller
             return response()->json(['message' => $error['error']], 404);
         }
 
+        $this->activityLogs->record(
+            'project.folder.delete',
+            "Xoá thư mục trong dự án \"{$model->name}\"",
+            subjectType: 'project',
+            subjectId: $model->id,
+        );
+
         return response()->json(['message' => 'Đã xoá thư mục.']);
     }
 
@@ -333,6 +431,14 @@ class ProjectController extends Controller
         if (is_array($result)) {
             return response()->json(['message' => $result['error']], 404);
         }
+
+        $this->activityLogs->record(
+            'project.attachment.rename',
+            "Đổi tên tệp đính kèm thành \"{$result->original_name}\" trong dự án \"{$model->name}\"",
+            $request->user(),
+            'project',
+            $model->id,
+        );
 
         return response()->json(['attachment' => $this->service->presentAttachment($result)]);
     }
@@ -356,6 +462,14 @@ class ProjectController extends Controller
 
         $updated = $this->service->updateAvatar($model, $request->file('avatar'), $request->user()->id);
 
+        $this->activityLogs->record(
+            'project.avatar.update',
+            "Cập nhật ảnh đại diện dự án \"{$updated->name}\"",
+            $request->user(),
+            'project',
+            $updated->id,
+        );
+
         return response()->json(['project' => $this->service->present($updated, $request->user())]);
     }
 
@@ -367,6 +481,14 @@ class ProjectController extends Controller
         }
 
         $updated = $this->service->deleteAvatar($model, $request->user()->id);
+
+        $this->activityLogs->record(
+            'project.avatar.delete',
+            "Xoá ảnh đại diện dự án \"{$updated->name}\"",
+            $request->user(),
+            'project',
+            $updated->id,
+        );
 
         return response()->json(['project' => $this->service->present($updated, $request->user())]);
     }
@@ -456,6 +578,14 @@ class ProjectController extends Controller
             return response()->json(['message' => $result['error']], 422);
         }
 
+        $this->activityLogs->record(
+            'project_label.create',
+            "Tạo nhãn dự án \"{$result->name}\"",
+            $request->user(),
+            'project_label',
+            $result->id,
+        );
+
         return response()->json(['label' => ['id' => $result->id, 'name' => $result->name, 'color' => $result->color]], 201);
     }
 
@@ -474,6 +604,14 @@ class ProjectController extends Controller
             return response()->json(['message' => $result['error']], 422);
         }
 
+        $this->activityLogs->record(
+            'project_type.create',
+            "Tạo loại dự án \"{$result->name}\"",
+            $request->user(),
+            'project_type',
+            $result->id,
+        );
+
         return response()->json(['type' => ['value' => $result->name, 'label' => $result->name]], 201);
     }
 
@@ -487,6 +625,12 @@ class ProjectController extends Controller
     public function settingsGeneralUpdate(UpdateProjectSettingsRequest $request)
     {
         $this->service->updateSettings($request->validated());
+
+        $this->activityLogs->record(
+            'project_settings.general.update',
+            'Cập nhật cấu hình chung của dự án',
+            $request->user(),
+        );
 
         return response()->json($this->service->presentSettings());
     }
@@ -504,6 +648,12 @@ class ProjectController extends Controller
         ]);
 
         $this->service->replaceCreatorAllowlist($data['user_ids']);
+
+        $this->activityLogs->record(
+            'project_settings.creator_allowlist.update',
+            'Cập nhật danh sách người được phép tạo dự án',
+            $request->user(),
+        );
 
         return response()->json(['users' => $this->service->creatorAllowlistUsers()]);
     }

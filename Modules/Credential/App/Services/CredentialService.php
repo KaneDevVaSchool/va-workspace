@@ -8,6 +8,7 @@ use Illuminate\Support\Carbon;
 use Modules\Credential\App\Enums\CredentialEnums;
 use Modules\Credential\App\Models\Credential;
 use Modules\Credential\App\Repositories\Contracts\CredentialRepositoryInterface;
+use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -24,6 +25,7 @@ class CredentialService
         private readonly CredentialRepositoryInterface $credentials,
         private readonly PermissionService $permissions,
         private readonly CredentialExcelExporter $excelExporter,
+        private readonly ActivityLogService $activityLogs,
     ) {}
 
     /** @param  array<string, mixed>  $filters */
@@ -82,7 +84,17 @@ class CredentialService
             $data['department_id'] = $creator->department_id;
         }
 
-        return $this->credentials->create($data);
+        $credential = $this->credentials->create($data);
+
+        $this->activityLogs->record(
+            'credential.create',
+            "Tạo thông tin đăng nhập \"{$credential->name}\"",
+            $creator,
+            'credential',
+            $credential->id,
+        );
+
+        return $credential;
     }
 
     /** @param  array<string, mixed>  $data */
@@ -103,7 +115,17 @@ class CredentialService
             $data['expires_at'] = $this->computeExpiresAt($data['purchased_at']);
         }
 
-        return $this->credentials->update($credential, $data);
+        $updated = $this->credentials->update($credential, $data);
+
+        $this->activityLogs->record(
+            'credential.update',
+            "Cập nhật thông tin đăng nhập \"{$updated->name}\"",
+            $updater,
+            'credential',
+            $updated->id,
+        );
+
+        return $updated;
     }
 
     /**
@@ -125,7 +147,18 @@ class CredentialService
 
     public function delete(Credential $credential): bool
     {
-        return $this->credentials->delete($credential);
+        $name = $credential->name;
+        $id = $credential->id;
+        $result = $this->credentials->delete($credential);
+
+        $this->activityLogs->record(
+            'credential.delete',
+            "Xoá thông tin đăng nhập \"{$name}\"",
+            subjectType: 'credential',
+            subjectId: $id,
+        );
+
+        return $result;
     }
 
     public function canSeeSecret(Credential $credential, User $viewer): bool
@@ -145,11 +178,28 @@ class CredentialService
     public function addViewer(Credential $credential, int $userId, User $grantedBy): void
     {
         $this->credentials->addViewer($credential, $userId, $grantedBy->id);
+
+        $targetName = User::find($userId)?->name ?? "#{$userId}";
+        $this->activityLogs->record(
+            'credential_viewer.grant',
+            "Chia sẻ quyền xem \"{$credential->name}\" cho \"{$targetName}\"",
+            $grantedBy,
+            'credential',
+            $credential->id,
+        );
     }
 
     public function removeViewer(Credential $credential, int $userId): void
     {
         $this->credentials->removeViewer($credential, $userId);
+
+        $targetName = User::find($userId)?->name ?? "#{$userId}";
+        $this->activityLogs->record(
+            'credential_viewer.revoke',
+            "Thu hồi quyền xem \"{$credential->name}\" của \"{$targetName}\"",
+            subjectType: 'credential',
+            subjectId: $credential->id,
+        );
     }
 
     /**
@@ -164,6 +214,15 @@ class CredentialService
     public function syncViewers(Credential $credential, array $userIds, User $grantedBy): void
     {
         $this->credentials->syncViewers($credential, $userIds, $grantedBy->id);
+
+        $this->activityLogs->record(
+            'credential_viewer.sync',
+            "Đồng bộ danh sách người được xem \"{$credential->name}\"",
+            $grantedBy,
+            'credential',
+            $credential->id,
+            ['viewer_count' => count($userIds)],
+        );
     }
 
     /** @return array<string, int> */
@@ -390,6 +449,12 @@ class CredentialService
         $forecast = $this->costForecast($exportedBy);
         $filename = 'Bao_cao_chi_phi_tai_khoan_'.now()->format('Ymd_His').'.xlsx';
 
+        $this->activityLogs->record(
+            'credential.export_cost_excel',
+            'Xuất báo cáo chi phí tài khoản ra Excel',
+            $exportedBy,
+        );
+
         return $this->excelExporter->download($summary, $forecast, $exportedBy, $filename);
     }
 
@@ -398,6 +463,12 @@ class CredentialService
     {
         $summary = $this->costSummary($exportedBy);
         $filename = 'Bao_cao_chi_phi_tai_khoan_'.now()->format('Ymd_His').'.pdf';
+
+        $this->activityLogs->record(
+            'credential.export_cost_pdf',
+            'Xuất báo cáo chi phí tài khoản ra PDF',
+            $exportedBy,
+        );
 
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('credential::pdf.cost-report', [
             'summary' => $summary,

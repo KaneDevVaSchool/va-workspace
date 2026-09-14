@@ -7,8 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
+use Modules\Identity\App\Services\NotificationService;
 use Modules\Project\App\Models\Comment;
 use Modules\Project\App\Models\CommentReaction;
 use Modules\Project\App\Models\Project;
@@ -19,8 +21,9 @@ use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
 /**
  * Business logic của "Thảo luận" (Comment) — rút gọn từ
  * Modules\Social\App\Services\SocialCommentService: bỏ hẳn permission
- * moderate (chỉ tác giả xoá được) và notification mention (không có trong
- * yêu cầu ban đầu); nhận Model $commentable polymorphic thay vì SocialPost.
+ * moderate (chỉ tác giả xoá được), nhận Model $commentable polymorphic
+ * thay vì SocialPost. Có notify "thảo luận có mình tham gia" — xem
+ * notifyParticipants().
  *
  * Inject thẳng ProjectService để tái dùng userCanManageDepartment() có sẵn
  * (quyền ghim bình luận dự án == quyền sửa dự án, mục "Ghim" trong plan) —
@@ -42,6 +45,7 @@ class CommentService
         private readonly UserRepositoryInterface $users,
         private readonly ProjectService $projects,
         private readonly ProjectRepositoryInterface $projectRepository,
+        private readonly NotificationService $notifications,
     ) {}
 
     public function listFor(Model $commentable, User $viewer): array
@@ -183,10 +187,61 @@ class CommentService
             $comment = $this->comments->find($comment->id);
         }
 
+        $this->notifyParticipants($comment, $commentable, $author, $clean);
+
         return [
             'comment' => $this->present($comment, $author),
             'comments_count' => $this->comments->countFor($commentable),
         ];
+    }
+
+    /**
+     * Gộp "đã từng tham gia thảo luận" (có comment gốc trước đó) + "được
+     * mention trực tiếp trong comment này" thành 1 danh sách, gửi CHUNG 1
+     * loại thông báo — không tách participant/mention để đơn giản hoá
+     * (khác Social vì Social đã có sẵn 2 loại riêng từ trước).
+     *
+     * KHÔNG tự động thêm assignee/creator của Task/Project nếu họ chưa
+     * từng tương tác — đúng phạm vi "thảo luận có mình", tránh spam.
+     */
+    private function notifyParticipants(Comment $comment, Model $commentable, User $author, string $cleanContent): void
+    {
+        $participantIds = array_keys($this->comments->latestCommentAtByAuthor($commentable));
+        $mentionIds = $this->sanitizer->mentionIds($cleanContent);
+
+        if ($comment->mentioned_user_id !== null) {
+            $mentionIds[] = $comment->mentioned_user_id;
+        }
+
+        $recipientIds = array_values(array_unique(array_merge($participantIds, $mentionIds)));
+        if ($recipientIds === []) {
+            return;
+        }
+
+        $isTask = $commentable instanceof Task;
+        $name = $isTask ? $commentable->title : $commentable->name;
+        $url = $isTask
+            ? "/manager/project/tasks/{$commentable->id}"
+            : "/manager/project/{$commentable->id}?tab=discussion";
+
+        $excerpt = Str::limit(
+            trim(html_entity_decode(strip_tags($cleanContent), ENT_QUOTES, 'UTF-8')),
+            120,
+        );
+
+        $this->notifications->notifyUsers(
+            $recipientIds,
+            $author,
+            NotificationService::TYPE_DISCUSSION_COMMENT,
+            "Có bình luận mới trong \"{$name}\"",
+            $excerpt !== '' ? $excerpt : null,
+            $url,
+            [
+                'commentable_type' => $comment->commentable_type,
+                'commentable_id' => $comment->commentable_id,
+                'comment_id' => $comment->id,
+            ],
+        );
     }
 
     public function setReaction(Comment $comment, User $user, string $type): array

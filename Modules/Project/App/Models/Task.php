@@ -30,6 +30,7 @@ use Modules\Identity\App\Models\Department;
  * @property string|null $start_date
  * @property string|null $start_time giờ trong ngày start_date, tuỳ chọn
  * @property string|null $end_date
+ * @property \Illuminate\Support\Carbon|null $due_soon_notified_at thời điểm đã gửi thông báo "sắp quá hạn" — reset khi end_date đổi
  * @property string|null $due_time giờ hạn trong ngày end_date, tuỳ chọn
  * @property string|null $actual_start_date
  * @property string|null $actual_end_date
@@ -88,6 +89,7 @@ class Task extends Model
         'start_date',
         'start_time',
         'end_date',
+        'due_soon_notified_at',
         'due_time',
         'constrain_child_dates',
         'hide_cross_tasks_from_assignees',
@@ -130,6 +132,7 @@ class Task extends Model
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'due_soon_notified_at' => 'datetime',
         'actual_start_date' => 'date',
         'actual_end_date' => 'date',
         'progress_percent' => 'integer',

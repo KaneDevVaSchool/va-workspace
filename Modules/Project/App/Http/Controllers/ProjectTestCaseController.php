@@ -12,6 +12,7 @@ use Modules\Project\App\Http\Requests\UploadProjectTestCaseAttachmentRequest;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Repositories\Contracts\ProjectTestCaseRepositoryInterface;
 use Modules\Project\App\Services\ProjectTestCaseService;
+use Modules\Identity\App\Services\ActivityLogService;
 
 /**
  * Controller mỏng: chỉ nhận request, gọi Service, trả response.
@@ -21,6 +22,7 @@ class ProjectTestCaseController extends Controller
     public function __construct(
         private readonly ProjectTestCaseService $service,
         private readonly ProjectTestCaseRepositoryInterface $testCases,
+        private readonly ActivityLogService $activityLogs,
     ) {}
 
     public function index(Project $project): JsonResponse
@@ -31,6 +33,14 @@ class ProjectTestCaseController extends Controller
     public function store(StoreProjectTestCaseRequest $request, Project $project): JsonResponse
     {
         $testCase = $this->service->create($project, $request->validated(), $request->user());
+
+        $this->activityLogs->record(
+            'project_testcase.create',
+            "Tạo testcase \"{$testCase->title}\" cho dự án \"{$project->name}\"",
+            $request->user(),
+            'project',
+            $project->id,
+        );
 
         return response()->json(['test_case' => $this->service->present($testCase)], 201);
     }
@@ -44,6 +54,14 @@ class ProjectTestCaseController extends Controller
 
         $updated = $this->service->update($model, $request->validated(), $request->user());
 
+        $this->activityLogs->record(
+            'project_testcase.update',
+            "Cập nhật testcase \"{$updated->title}\"",
+            $request->user(),
+            'project',
+            $updated->project_id,
+        );
+
         return response()->json(['test_case' => $this->service->present($updated)]);
     }
 
@@ -54,7 +72,17 @@ class ProjectTestCaseController extends Controller
             return response()->json(['message' => 'Không tìm thấy testcase.'], 404);
         }
 
+        $title = $model->title;
+        $projectId = $model->project_id;
         $this->service->delete($model);
+
+        $this->activityLogs->record(
+            'project_testcase.delete',
+            "Xoá testcase \"{$title}\"",
+            $request->user(),
+            'project',
+            $projectId,
+        );
 
         return response()->json(['message' => 'Đã xoá testcase.']);
     }
@@ -73,6 +101,14 @@ class ProjectTestCaseController extends Controller
 
         $updated = $this->service->updateCheck1($model, $request->validated()['status'], $request->user());
 
+        $this->activityLogs->record(
+            'project_testcase.check',
+            "Chấm Check lần 1 testcase \"{$updated->title}\"",
+            $request->user(),
+            'project',
+            $updated->project_id,
+        );
+
         return response()->json(['test_case' => $this->service->present($updated)]);
     }
 
@@ -90,6 +126,14 @@ class ProjectTestCaseController extends Controller
 
         $updated = $this->service->updateCheck2($model, $request->validated()['status'], $request->user());
 
+        $this->activityLogs->record(
+            'project_testcase.check',
+            "Chấm Check lần 2 testcase \"{$updated->title}\"",
+            $request->user(),
+            'project',
+            $updated->project_id,
+        );
+
         return response()->json(['test_case' => $this->service->present($updated)]);
     }
 
@@ -102,6 +146,14 @@ class ProjectTestCaseController extends Controller
 
         $updated = $this->service->updateAttachment($model, $request->file('attachment'), $request->user());
 
+        $this->activityLogs->record(
+            'project_testcase.attachment.upload',
+            "Tải lên tệp đính kèm cho testcase \"{$updated->title}\"",
+            $request->user(),
+            'project',
+            $updated->project_id,
+        );
+
         return response()->json(['test_case' => $this->service->present($updated)]);
     }
 
@@ -113,6 +165,14 @@ class ProjectTestCaseController extends Controller
         }
 
         $updated = $this->service->deleteAttachment($model, $request->user());
+
+        $this->activityLogs->record(
+            'project_testcase.attachment.delete',
+            "Xoá tệp đính kèm của testcase \"{$updated->title}\"",
+            $request->user(),
+            'project',
+            $updated->project_id,
+        );
 
         return response()->json(['test_case' => $this->service->present($updated)]);
     }

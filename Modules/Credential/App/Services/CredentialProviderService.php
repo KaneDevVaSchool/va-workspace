@@ -5,11 +5,13 @@ namespace Modules\Credential\App\Services;
 use Illuminate\Support\Collection;
 use Modules\Credential\App\Models\CredentialProvider;
 use Modules\Credential\App\Repositories\Contracts\CredentialProviderRepositoryInterface;
+use Modules\Identity\App\Services\ActivityLogService;
 
 class CredentialProviderService
 {
     public function __construct(
         private readonly CredentialProviderRepositoryInterface $providers,
+        private readonly ActivityLogService $activityLogs,
     ) {}
 
     /** @return Collection<int, CredentialProvider> */
@@ -21,13 +23,31 @@ class CredentialProviderService
     /** @param  array<string, mixed>  $data */
     public function create(array $data): CredentialProvider
     {
-        return $this->providers->create($data);
+        $provider = $this->providers->create($data);
+
+        $this->activityLogs->record(
+            'credential_provider.create',
+            "Tạo nhà cung cấp \"{$provider->name}\"",
+            subjectType: 'credential_provider',
+            subjectId: $provider->id,
+        );
+
+        return $provider;
     }
 
     /** @param  array<string, mixed>  $data */
     public function update(CredentialProvider $provider, array $data): CredentialProvider
     {
-        return $this->providers->update($provider, $data);
+        $updated = $this->providers->update($provider, $data);
+
+        $this->activityLogs->record(
+            'credential_provider.update',
+            "Cập nhật nhà cung cấp \"{$updated->name}\"",
+            subjectType: 'credential_provider',
+            subjectId: $updated->id,
+        );
+
+        return $updated;
     }
 
     public function delete(CredentialProvider $provider): bool
@@ -36,6 +56,17 @@ class CredentialProviderService
             throw new \RuntimeException('Nhà cung cấp đang được sử dụng bởi ít nhất một tài khoản, không thể xoá.');
         }
 
-        return $this->providers->delete($provider);
+        $name = $provider->name;
+        $id = $provider->id;
+        $result = $this->providers->delete($provider);
+
+        $this->activityLogs->record(
+            'credential_provider.delete',
+            "Xoá nhà cung cấp \"{$name}\"",
+            subjectType: 'credential_provider',
+            subjectId: $id,
+        );
+
+        return $result;
     }
 }

@@ -3,6 +3,7 @@
 namespace Modules\Project\App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Modules\Project\App\Enums\TaskEnums;
 use Modules\Project\App\Http\Requests\BulkDelegateTaskRequest;
@@ -19,6 +20,7 @@ use Modules\Project\App\Models\Task;
 use Modules\Project\App\Services\ProjectService;
 use Modules\Project\App\Services\TaskImportanceOptions;
 use Modules\Project\App\Services\TaskService;
+use Modules\Identity\App\Services\ActivityLogService;
 
 /**
  * Controller mỏng: chỉ nhận request, gọi Service, trả response. Không chứa
@@ -30,6 +32,7 @@ class TaskController extends Controller
         private readonly TaskService $service,
         private readonly ProjectService $projects,
         private readonly TaskImportanceOptions $importanceOptions,
+        private readonly ActivityLogService $activityLogs,
     ) {}
 
     /** GET /api/project/tasks — xuyên project, cho trang "Tất cả công việc". */
@@ -99,11 +102,17 @@ class TaskController extends Controller
         if (is_array($result) && isset($result['tasks'])) {
             $presented = collect($result['tasks'])->map(fn ($t) => $this->service->present($t))->values();
 
+            foreach ($result['tasks'] as $t) {
+                $this->activityLogs->record('task.create', "Tạo công việc \"{$t->title}\"", $request->user(), 'task', $t->id);
+            }
+
             return response()->json([
                 'tasks' => $presented,
                 'task' => $presented->last(),
             ], 201);
         }
+
+        $this->activityLogs->record('task.create', "Tạo công việc \"{$result->title}\"", $request->user(), 'task', $result->id);
 
         return response()->json(['task' => $this->service->present($result)], 201);
     }
@@ -122,6 +131,14 @@ class TaskController extends Controller
             return response()->json(['message' => $result['error']], 422);
         }
 
+        $this->activityLogs->record(
+            'task.create_bulk',
+            'Tạo nhanh '.count($result)." công việc trong dự án \"{$model->name}\"",
+            $request->user(),
+            'project',
+            $model->id,
+        );
+
         return response()->json([
             'tasks' => collect($result)->map(fn ($t) => $this->service->present($t))->values(),
         ], 201);
@@ -139,6 +156,12 @@ class TaskController extends Controller
         if (isset($result['error'])) {
             return response()->json(['message' => $result['error']], 422);
         }
+
+        $this->activityLogs->record(
+            'task.create_bulk',
+            'Tạo nhanh '.count($result).' công việc',
+            $request->user(),
+        );
 
         return response()->json([
             'tasks' => collect($result)->map(fn ($t) => $this->service->present($t))->values(),
@@ -173,6 +196,14 @@ class TaskController extends Controller
             return response()->json(['message' => $result['error']], 422);
         }
 
+        $this->activityLogs->record(
+            'task.structure.sync',
+            "Sắp xếp lại cấu trúc {$type} của dự án \"{$model->name}\"",
+            $request->user(),
+            'project',
+            $model->id,
+        );
+
         return response()->json([
             'tasks' => collect($result)->map(fn ($t) => $this->service->present($t))->values(),
         ]);
@@ -199,11 +230,17 @@ class TaskController extends Controller
         if (is_array($result) && isset($result['tasks'])) {
             $presented = collect($result['tasks'])->map(fn ($t) => $this->service->present($t))->values();
 
+            foreach ($result['tasks'] as $t) {
+                $this->activityLogs->record('task.create', "Tạo công việc \"{$t->title}\"", $request->user(), 'task', $t->id);
+            }
+
             return response()->json([
                 'tasks' => $presented,
                 'task' => $presented->last(),
             ], 201);
         }
+
+        $this->activityLogs->record('task.create', "Tạo công việc \"{$result->title}\"", $request->user(), 'task', $result->id);
 
         return response()->json(['task' => $this->service->present($result)], 201);
     }
@@ -227,11 +264,18 @@ class TaskController extends Controller
      */
     public function update(UpdateTaskRequest $request, Task $task)
     {
-        $result = $this->service->update($task, $request->validated(), $request->user());
+        $validated = $request->validated();
+        $result = $this->service->update($task, $validated, $request->user());
 
         if (is_array($result)) {
             return response()->json(['message' => $result['error']], 422);
         }
+
+        $statusLabel = isset($validated['status']) ? TaskEnums::STATUS_LABELS[$validated['status']] ?? $validated['status'] : null;
+        $description = $statusLabel !== null
+            ? "Cập nhật công việc \"{$result->title}\" (trạng thái: {$statusLabel})"
+            : "Cập nhật công việc \"{$result->title}\"";
+        $this->activityLogs->record('task.update', $description, $request->user(), 'task', $result->id);
 
         return response()->json(['task' => $this->service->present($result)]);
     }
@@ -249,6 +293,14 @@ class TaskController extends Controller
             return response()->json(['message' => $result['error']], 422);
         }
 
+        $this->activityLogs->record(
+            'task.report_complete',
+            "Báo hoàn thành công việc \"{$result->title}\"",
+            $request->user(),
+            'task',
+            $result->id,
+        );
+
         return response()->json(['task' => $this->service->present($result)]);
     }
 
@@ -260,11 +312,20 @@ class TaskController extends Controller
             return response()->json(['message' => 'Không tìm thấy công việc.'], 404);
         }
 
+        $name = $model->title;
+        $id = $model->id;
         $result = $this->service->delete($model);
 
         if (is_array($result)) {
             return response()->json(['message' => $result['error']], 422);
         }
+
+        $this->activityLogs->record(
+            'task.delete',
+            "Xoá công việc \"{$name}\"",
+            subjectType: 'task',
+            subjectId: $id,
+        );
 
         return response()->json(['message' => 'Đã xoá công việc.']);
     }
@@ -289,6 +350,14 @@ class TaskController extends Controller
 
         $updated = $this->service->bulkUpdate($taskIds, $validated, $request->user());
 
+        if ($updated !== []) {
+            $this->activityLogs->record(
+                'task.update_bulk',
+                'Cập nhật hàng loạt '.count($updated).' công việc',
+                $request->user(),
+            );
+        }
+
         return response()->json([
             'tasks' => collect($updated)->map(fn ($t) => $this->service->present($t))->values(),
         ]);
@@ -304,6 +373,16 @@ class TaskController extends Controller
             (int) $validated['delegated_to_employee_id'],
             $request->user(),
         );
+
+        if ($updated !== []) {
+            $recipientName = User::find((int) $validated['delegated_to_employee_id'])?->name
+                ?? '#'.$validated['delegated_to_employee_id'];
+            $this->activityLogs->record(
+                'task.delegate_bulk',
+                'Chuyển giao '.count($updated)." công việc cho \"{$recipientName}\"",
+                $request->user(),
+            );
+        }
 
         return response()->json([
             'tasks' => collect($updated)->map(fn ($t) => $this->service->present($t))->values(),
@@ -336,6 +415,14 @@ class TaskController extends Controller
     public function importConfirm(ConfirmImportTaskRequest $request)
     {
         $result = $this->service->confirmImport($request->validated()['rows'], $request->user());
+
+        $createdCount = count($result['created'] ?? []);
+        $updatedCount = count($result['updated'] ?? []);
+        $this->activityLogs->record(
+            'task.import',
+            "Nhập công việc từ Excel: tạo mới {$createdCount}, cập nhật {$updatedCount}",
+            $request->user(),
+        );
 
         return response()->json($result);
     }
