@@ -43,7 +43,6 @@ class DatabaseSeeder extends Seeder
             // cứng) — PHẢI chạy sau SuperAdminSeeder (giữ nguyên department
             // CNTT mặc định của khoana@..., không còn bị NS ghi đè).
             CnttSoftwareTeamSeeder::class,
-            DemoUserSeeder::class,
         ]);
     }
 }
