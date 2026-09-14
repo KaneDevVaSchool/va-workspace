@@ -44,6 +44,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        // Rollback xa hơn migration 2026_08_31_000002_drop_evaluation_templates_tables
+        // (down() của nó dựng lại evaluation_template_criteria có FK trỏ vào
+        // bảng này) sẽ còn thấy bảng pivot đó tồn tại — phải drop trước, nếu
+        // không MySQL báo lỗi 3730 "Cannot drop table ... referenced by a
+        // foreign key constraint".
+        Schema::dropIfExists('evaluation_template_criteria');
         Schema::dropIfExists('evaluation_criteria');
     }
 };
