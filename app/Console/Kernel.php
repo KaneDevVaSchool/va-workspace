@@ -23,5 +23,13 @@ class Kernel extends ConsoleKernel
         $this->load(__DIR__.'/Commands');
 
         require base_path('routes/console.php');
+
+        // Đăng ký trực tiếp — không phụ thuộc nwidart nạp IdentityServiceProvider.
+        if (class_exists(\Modules\Identity\App\Console\GenerateVapidKeysCommand::class)) {
+            $this->commands([
+                \Modules\Identity\App\Console\EnsureSuperAdminCommand::class,
+                \Modules\Identity\App\Console\GenerateVapidKeysCommand::class,
+            ]);
+        }
     }
 }
