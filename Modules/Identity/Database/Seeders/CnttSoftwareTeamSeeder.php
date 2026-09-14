@@ -40,10 +40,10 @@ class CnttSoftwareTeamSeeder extends Seeder
 
         // 1) Ban lãnh đạo phòng CNTT — không thuộc team con nào.
         $toan = $this->upsertUser('toanbq@vaschools.edu.vn', 'Bùi Quang Toàn', $department->id, null);
-        $this->assignRoles($toan, $roles, ['department_director']);
+        $this->assignRoles($toan, $roles, ['department_director', 'super_admin']);
 
         $hoang = $this->upsertUser('hoangbh@vaschools.edu.vn', 'Bùi Huy Hoàng', $department->id, null);
-        $this->assignRoles($hoang, $roles, ['deputy_department_director']);
+        $this->assignRoles($hoang, $roles, ['deputy_department_director', 'super_admin']);
 
         $hung = $this->upsertUser('hungnv@vaschools.edu.vn', 'Nguyễn Viết Hùng', $department->id, null);
         $this->assignRoles($hung, $roles, ['section_head']);

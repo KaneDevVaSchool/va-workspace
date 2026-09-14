@@ -50,19 +50,17 @@ class IdentityServiceProvider extends ServiceProvider
         $this->app->bind(GlobalMenuSectionConfigRepositoryInterface::class, GlobalMenuSectionConfigRepository::class);
         $this->app->bind(UserNotificationRepositoryInterface::class, UserNotificationRepository::class);
         $this->app->bind(PushSubscriptionRepositoryInterface::class, PushSubscriptionRepository::class);
+
+        $this->commands([
+            \Modules\Identity\App\Console\EnsureSuperAdminCommand::class,
+            \Modules\Identity\App\Console\GenerateVapidKeysCommand::class,
+        ]);
     }
 
     public function boot(): void
     {
         $this->loadMigrationsFrom(module_path('Identity', 'Database/migrations'));
         $this->registerRoutes();
-
-        if ($this->app->runningInConsole()) {
-            $this->commands([
-                \Modules\Identity\App\Console\EnsureSuperAdminCommand::class,
-                \Modules\Identity\App\Console\GenerateVapidKeysCommand::class,
-            ]);
-        }
     }
 
     /**

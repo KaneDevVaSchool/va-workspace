@@ -1,0 +1,16 @@
+HOME = .
+oid_section = new_oids
+
+[ new_oids ]
+
+[ req ]
+default_bits = 2048
+default_md = sha256
+string_mask = utf8only
+distinguished_name = req_distinguished_name
+x509_extensions = v3_ca
+
+[ req_distinguished_name ]
+
+[ v3_ca ]
+basicConstraints = CA:true

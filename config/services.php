@@ -56,7 +56,7 @@ return [
 
     /*
     | Web Push (VAPID) — chuông header + thông báo đẩy trình duyệt.
-    | Tạo khóa: php artisan identity:vapid-keys
+    | Tạo khóa: php artisan identity:vapid-keys --write
     */
     'webpush' => [
         'public_key' => env('VAPID_PUBLIC_KEY'),
