@@ -98,7 +98,9 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
         @click="pick(item)"
       >
         <img :src="item.preview_url" :alt="item.title" loading="lazy" />
-        <span v-if="downloadingId === item.id" class="gif-picker__spinner"></span>
+        <span v-if="downloadingId === item.id" class="gif-picker__spinner-overlay">
+          <span class="gif-picker__spinner"></span>
+        </span>
       </button>
 
       <p v-if="!loading && results.length === 0" class="gif-picker__empty">
@@ -258,6 +260,20 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
   text-align: right;
   color: var(--color-text-muted);
   font-size: 0.6875rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gif-picker__tile {
+    animation: none;
+  }
+
+  .gif-picker__tile:hover {
+    transform: none;
+  }
+
+  .gif-picker__spinner {
+    animation-duration: 1.4s;
+  }
 }
 
 </style>
