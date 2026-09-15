@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\Role;
+use Modules\Identity\App\Models\Team;
 
 /**
  * Nhân sự THẬT của Phòng Kinh doanh.
@@ -30,13 +31,23 @@ class KinhDoanhTeamSeeder extends Seeder
 
         $roles = Role::query()->get()->keyBy('code');
 
-        $duc = $this->upsertUser('ducdm@hcm.vaschools.edu.vn', 'Đỗ Minh Đức', $department->id, null);
+        $team = Team::query()->updateOrCreate(
+            ['department_id' => $department->id, 'name' => 'Kinh doanh'],
+            [],
+        );
+
+        $giau = $this->upsertUser('giaultt@hcm.vaschools.edu.vn', 'Lê Thị Thanh Giàu', $department->id, $team->id);
+        $this->assignRoles($giau, $roles, ['team_lead']);
+
+        $duc = $this->upsertUser('ducdm@hcm.vaschools.edu.vn', 'Đỗ Minh Đức', $department->id, $team->id);
         $this->assignRoles($duc, $roles, ['member']);
 
-        $giau = $this->upsertUser('giaultt@hcm.vaschools.edu.vn', 'Lê Thị Thanh Giàu', $department->id, null);
-        $this->assignRoles($giau, $roles, ['member']);
+        if ((int) $team->team_lead_id !== (int) $giau->id) {
+            $team->team_lead_id = $giau->id;
+            $team->save();
+        }
 
-        $this->command?->info('Đã seed nhân sự phòng Kinh doanh.');
+        $this->command?->info('Đã seed nhân sự phòng Kinh doanh (team Kinh doanh).');
     }
 
     private function upsertUser(string $email, string $name, int $departmentId, ?int $teamId): User
