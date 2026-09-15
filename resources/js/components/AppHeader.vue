@@ -5,6 +5,7 @@
 //
 import AppIcon from './AppIcon.vue';
 import HeaderShortcuts from './HeaderShortcuts.vue';
+import HeaderFeatureRequestButton from './HeaderFeatureRequestButton.vue';
 import HeaderNotifications from './HeaderNotifications.vue';
 import HeaderActivityLog from './HeaderActivityLog.vue';
 import HeaderAccountMenu from './HeaderAccountMenu.vue';
@@ -44,6 +45,7 @@ function setPageHeaderEl(el) {
 
     <div class="app-header__actions">
       <HeaderShortcuts />
+      <HeaderFeatureRequestButton v-if="auth.isAuthenticated" />
       <HeaderNotifications />
       <HeaderActivityLog v-if="auth.canViewActivityLog" />
       <HeaderAccountMenu />

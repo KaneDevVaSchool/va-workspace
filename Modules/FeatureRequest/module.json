@@ -1,0 +1,11 @@
+{
+    "name": "FeatureRequest",
+    "alias": "feature-request",
+    "description": "Ghi nhận yêu cầu tính năng từ nhân viên, superadmin theo dõi và xử lý theo phòng ban.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\FeatureRequest\\App\\Providers\\FeatureRequestServiceProvider"
+    ],
+    "files": []
+}

@@ -67,6 +67,7 @@ return [
             'my_work.*',
             'notification.*',
             'social.*',
+            'feature_request.create',
         ],
 
         'director_officer' => [
@@ -96,6 +97,7 @@ return [
             'report.*',
             'my_work.*',
             'notification.*',
+            'feature_request.create',
         ],
 
         'department_director' => [
@@ -162,6 +164,7 @@ return [
             // trong phòng ban mình
             'social.moderate',
             'social.pin',
+            'feature_request.create',
         ],
 
         'deputy_department_director' => [
@@ -211,6 +214,7 @@ return [
             'notification.*',
             'social.moderate',
             'social.pin',
+            'feature_request.create',
         ],
 
         'section_head' => [
@@ -241,6 +245,7 @@ return [
             'notification.*',
             'social.moderate',
             'social.pin',
+            'feature_request.create',
         ],
 
         'team_lead' => [
@@ -273,6 +278,7 @@ return [
             'notification.*',
             'social.moderate',
             'social.pin',
+            'feature_request.create',
         ],
 
         'member' => [
@@ -297,6 +303,7 @@ return [
             // My Work
             'my_work.*',
             'notification.*',
+            'feature_request.create',
         ],
 
         'viewer' => [
@@ -307,6 +314,7 @@ return [
             'contract.view',
             'report.view_assigned',
             'notification.*',
+            'feature_request.create',
         ],
 
     ],
@@ -330,6 +338,7 @@ return [
         'workspace.task_scoring.*',
         'workspace_config.view_all',
         'workspace_config.manage_global_menu',
+        'feature_request.review',
     ],
 
     /*
@@ -455,6 +464,11 @@ return [
         'feedback.*' => ['label' => 'Toàn bộ đề xuất', 'module' => 'Đề xuất', 'description' => 'Toàn quyền quản lý đề xuất/phản hồi', 'active' => true],
         'feedback.create' => ['label' => 'Tạo đề xuất', 'module' => 'Đề xuất', 'description' => 'Gửi đề xuất/phản hồi mới', 'active' => true],
         'feedback.view' => ['label' => 'Xem đề xuất', 'module' => 'Đề xuất', 'description' => 'Xem danh sách đề xuất/phản hồi', 'active' => true],
+
+        // ---------- Ghi nhận yêu cầu tính năng (feature_request) ----------
+        'feature_request.*' => ['label' => 'Toàn bộ ghi nhận yêu cầu tính năng', 'module' => 'Ghi nhận yêu cầu tính năng', 'description' => 'Toàn quyền xử lý ghi nhận yêu cầu tính năng', 'active' => true],
+        'feature_request.create' => ['label' => 'Ghi nhận yêu cầu tính năng', 'module' => 'Ghi nhận yêu cầu tính năng', 'description' => 'Gửi ghi nhận yêu cầu tính năng mới ngay tại trang đang dùng, xem/sửa/xoá ghi nhận của bản thân', 'active' => true],
+        'feature_request.review' => ['label' => 'Xử lý ghi nhận yêu cầu tính năng', 'module' => 'Ghi nhận yêu cầu tính năng', 'description' => 'Xem toàn bộ theo phòng ban, duyệt/từ chối/cập nhật tiến độ', 'active' => true],
 
         // ---------- Nhật ký công việc (worklog) ----------
         'worklog.*' => ['label' => 'Toàn bộ worklog', 'module' => 'Worklog', 'description' => 'Toàn quyền quản lý nhật ký công việc'],

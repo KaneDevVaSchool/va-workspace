@@ -7,5 +7,6 @@
     "Project": true,
     "Report": true,
     "Credential": true,
-    "Dashboard": true
+    "Dashboard": true,
+    "FeatureRequest": true
 }

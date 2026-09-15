@@ -192,6 +192,12 @@ const MENU_SECTIONS = [
       },
       { name: 'superadmin.activity', label: 'Nhật ký', icon: 'clock', requiresAdmin: true },
       {
+        name: 'superadmin.feature-requests.index',
+        label: 'Ghi nhận yêu cầu tính năng',
+        icon: 'alertTriangle',
+        requiresPermission: 'feature_request.review',
+      },
+      {
         // Quản lý tài khoản (Credential module) — chứa thông tin đăng nhập
         // dịch vụ dùng chung công ty (Google, Canva, Cursor, Claude, AWS,
         // VPS, database, IAM, domain...), không phải dữ liệu riêng của 1

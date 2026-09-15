@@ -110,6 +110,15 @@ class UserRepository implements UserRepositoryInterface
             ->get();
     }
 
+    public function allActiveSuperAdmins(): \Illuminate\Support\Collection
+    {
+        return User::query()
+            ->where('status', 'active')
+            ->whereHas('roles', fn ($query) => $query->where('code', 'super_admin'))
+            ->orderBy('name')
+            ->get();
+    }
+
     public function create(array $data): User
     {
         return User::query()->create($data);

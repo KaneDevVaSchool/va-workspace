@@ -45,6 +45,14 @@ class NotificationService
 
     public const TYPE_DISCUSSION_COMMENT = 'discussion_comment';
 
+    public const TYPE_FEATURE_REQUEST_CREATED = 'feature_request_created';
+
+    public const TYPE_FEATURE_REQUEST_APPROVED = 'feature_request_approved';
+
+    public const TYPE_FEATURE_REQUEST_REJECTED = 'feature_request_rejected';
+
+    public const TYPE_FEATURE_REQUEST_DONE = 'feature_request_done';
+
     public function __construct(
         private readonly UserNotificationRepositoryInterface $notifications,
         private readonly UserRepositoryInterface $users,

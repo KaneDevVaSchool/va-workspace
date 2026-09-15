@@ -75,4 +75,12 @@ interface UserRepositoryInterface
      * @return \Illuminate\Support\Collection<int, User>
      */
     public function findActiveByIds(array $ids): \Illuminate\Support\Collection;
+
+    /**
+     * Toàn bộ superadmin đang hoạt động — dùng để báo có ghi nhận mới cần xử lý
+     * (feature request, v.v.) mà không cần chọn từng người theo phòng ban.
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public function allActiveSuperAdmins(): \Illuminate\Support\Collection;
 }
