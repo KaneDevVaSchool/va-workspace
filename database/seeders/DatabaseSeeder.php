@@ -8,6 +8,7 @@ use Modules\Identity\Database\Seeders\CnttSoftwareTeamSeeder;
 use Modules\Identity\Database\Seeders\DemoUserSeeder;
 use Modules\Identity\Database\Seeders\DepartmentSeeder;
 use Modules\Identity\Database\Seeders\HcnsTeamSeeder;
+use Modules\Identity\Database\Seeders\KinhDoanhTeamSeeder;
 use Modules\Identity\Database\Seeders\RoleSeeder;
 use Modules\Identity\Database\Seeders\SuperAdminSeeder;
 
@@ -46,6 +47,8 @@ class DatabaseSeeder extends Seeder
             CnttSoftwareTeamSeeder::class,
             // Nhân sự THẬT phòng Hành chính Nhân sự (HCNS).
             HcnsTeamSeeder::class,
+            // Nhân sự THẬT phòng Kinh doanh — chờ API HRM để tự động mapping.
+            KinhDoanhTeamSeeder::class,
         ]);
     }
 }
