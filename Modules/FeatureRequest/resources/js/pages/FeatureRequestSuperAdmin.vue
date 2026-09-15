@@ -13,13 +13,17 @@ const STATUS_LABEL = {
   done: 'Đã hoàn thành',
 };
 
-const STATUS_FILTERS = [
-  { value: '', label: 'Tất cả', icon: 'layoutList' },
-  { value: 'pending', label: 'Chờ ghi nhận', icon: 'clock' },
-  { value: 'reviewing', label: 'Đang xem xét', icon: 'eye' },
-  { value: 'approved', label: 'Đã duyệt', icon: 'check' },
-  { value: 'done', label: 'Đã hoàn thành', icon: 'clipboardCheck' },
-  { value: 'rejected', label: 'Từ chối', icon: 'close' },
+// Thẻ thống kê đầu trang — đồng thời là bộ lọc theo trạng thái (thay cho
+// hàng filter chữ riêng), cùng kiểu thẻ KPI với trang Chi tiết dự án
+// (ProjectDetail.vue::STAT_CARDS): icon nền tint theo tone, số lớn, nhãn
+// dưới, bấm để lọc nhanh. key rỗng ('') = "Tổng ghi nhận" = bỏ lọc.
+const STAT_CARDS = [
+  { key: '', tone: 'gold', icon: 'layoutList', label: 'Tổng ghi nhận', stat: 'total' },
+  { key: 'pending', tone: 'neutral', icon: 'clock', label: 'Chờ ghi nhận', stat: 'pending' },
+  { key: 'reviewing', tone: 'warning', icon: 'eye', label: 'Đang xem xét', stat: 'reviewing' },
+  { key: 'approved', tone: 'info', icon: 'check', label: 'Đã duyệt', stat: 'approved' },
+  { key: 'done', tone: 'success', icon: 'clipboardCheck', label: 'Hoàn thành', stat: 'done' },
+  { key: 'rejected', tone: 'danger', icon: 'close', label: 'Từ chối', stat: 'rejected' },
 ];
 
 const REJECT_REASON_MAX = 500;
@@ -37,19 +41,10 @@ const rejectReason = ref('');
 const showRejectForm = ref(false);
 const acting = ref(false);
 
-const totalCount = computed(() =>
-  groups.value.reduce((sum, group) => sum + (group.counts?.total || 0), 0),
-);
-
-const overallCounts = computed(() => {
-  const counts = { pending: 0, reviewing: 0, approved: 0, rejected: 0, done: 0 };
-  for (const group of groups.value) {
-    for (const key of Object.keys(counts)) {
-      counts[key] += group.counts?.[key] || 0;
-    }
-  }
-  return counts;
-});
+// Đến từ overall_counts của API — luôn tính trên toàn bộ dữ liệu, không đổi
+// theo statusFilter đang chọn (giống thẻ KPI ở trang Chi tiết dự án luôn
+// hiển thị tổng, không phụ thuộc tab đang xem).
+const overallCounts = ref({ pending: 0, reviewing: 0, approved: 0, rejected: 0, done: 0, total: 0 });
 
 const visibleGroups = computed(() => {
   const needle = searchQuery.value.trim().toLowerCase();
@@ -75,6 +70,7 @@ async function load() {
       params: statusFilter.value ? { status: statusFilter.value } : {},
     });
     groups.value = data.groups ?? [];
+    if (data.overall_counts) overallCounts.value = data.overall_counts;
     for (const group of groups.value) {
       if (!(group.department_id in openDepartments)) {
         openDepartments[group.department_id ?? 'none'] = true;
@@ -93,13 +89,19 @@ function toggleDepartment(id) {
 }
 
 function patchItemInGroups(item) {
+  let oldStatus = null;
   for (const group of groups.value) {
     const index = group.items.findIndex((row) => row.id === item.id);
     if (index !== -1) {
+      oldStatus = group.items[index].status;
       group.items.splice(index, 1, item);
       group.counts = recomputeCounts(group.items);
       break;
     }
+  }
+  if (oldStatus && oldStatus !== item.status) {
+    if (oldStatus in overallCounts.value) overallCounts.value[oldStatus] -= 1;
+    if (item.status in overallCounts.value) overallCounts.value[item.status] += 1;
   }
   if (selected.value?.id === item.id) {
     selected.value = item;
@@ -188,35 +190,27 @@ onMounted(load);
     <PageHeader
       title="Ghi nhận yêu cầu tính năng"
       icon="alertTriangle"
-      :subtitle="`${totalCount} ghi nhận`"
+      :subtitle="`${overallCounts.total} ghi nhận`"
     />
 
-    <div class="fr-page__summary">
-      <div class="fr-page__summary-item">
-        <span class="fr-page__summary-dot fr-page__summary-dot--pending" />
-        <span class="fr-page__summary-value">{{ overallCounts.pending }}</span>
-        <span class="fr-page__summary-label">chờ ghi nhận</span>
-      </div>
-      <div class="fr-page__summary-item">
-        <span class="fr-page__summary-dot fr-page__summary-dot--reviewing" />
-        <span class="fr-page__summary-value">{{ overallCounts.reviewing }}</span>
-        <span class="fr-page__summary-label">đang xem xét</span>
-      </div>
-      <div class="fr-page__summary-item">
-        <span class="fr-page__summary-dot fr-page__summary-dot--approved" />
-        <span class="fr-page__summary-value">{{ overallCounts.approved }}</span>
-        <span class="fr-page__summary-label">đã duyệt</span>
-      </div>
-      <div class="fr-page__summary-item">
-        <span class="fr-page__summary-dot fr-page__summary-dot--done" />
-        <span class="fr-page__summary-value">{{ overallCounts.done }}</span>
-        <span class="fr-page__summary-label">hoàn thành</span>
-      </div>
-      <div class="fr-page__summary-item">
-        <span class="fr-page__summary-dot fr-page__summary-dot--rejected" />
-        <span class="fr-page__summary-value">{{ overallCounts.rejected }}</span>
-        <span class="fr-page__summary-label">từ chối</span>
-      </div>
+    <div class="fr-page__stats" role="group" aria-label="Lọc theo trạng thái">
+      <button
+        v-for="card in STAT_CARDS"
+        :key="card.key || 'all'"
+        type="button"
+        class="fr-page__stat"
+        :class="[`fr-page__stat--${card.tone}`, { 'fr-page__stat--active': statusFilter === card.key }]"
+        :aria-pressed="statusFilter === card.key"
+        @click="statusFilter = card.key; load();"
+      >
+        <span class="fr-page__stat-icon">
+          <AppIcon :name="card.icon" :size="18" :stroke-width="1.75" />
+        </span>
+        <span class="fr-page__stat-copy">
+          <span class="fr-page__stat-value">{{ overallCounts[card.stat] || 0 }}</span>
+          <span class="fr-page__stat-label">{{ card.label }}</span>
+        </span>
+      </button>
     </div>
 
     <div class="fr-page__toolbar">
@@ -228,20 +222,6 @@ onMounted(load);
           placeholder="Tìm theo nội dung, người gửi hoặc trang đính kèm…"
           class="fr-page__search-input"
         />
-      </div>
-
-      <div class="fr-page__filters">
-        <button
-          v-for="option in STATUS_FILTERS"
-          :key="option.value"
-          type="button"
-          class="fr-page__filter-chip"
-          :class="{ 'fr-page__filter-chip--active': statusFilter === option.value }"
-          @click="statusFilter = option.value; load();"
-        >
-          <AppIcon :name="option.icon" :size="13" :stroke-width="2" />
-          {{ option.label }}
-        </button>
       </div>
     </div>
 
@@ -451,58 +431,112 @@ onMounted(load);
   overflow: hidden;
 }
 
-.fr-page__summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  flex-shrink: 0;
-  padding-bottom: var(--space-3);
-  box-shadow: 0 1px 0 var(--color-border);
-}
-
-.fr-page__summary-item {
-  display: flex;
-  align-items: baseline;
-  gap: 0.375rem;
-}
-
-.fr-page__summary-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: var(--radius-full);
-  align-self: center;
+/* Thẻ thống kê — cùng kiểu KPI với trang Chi tiết dự án (.pd__stat trong
+   ProjectDetail.vue): icon nền tint theo tone, số lớn, nhãn dưới, bấm để lọc
+   nhanh. Không dùng badge/pill nền màu rắn — chỉ tint nhẹ ở icon. */
+.fr-page__stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-3);
   flex-shrink: 0;
 }
 
-.fr-page__summary-dot--pending {
-  background: var(--color-text-muted);
+.fr-page__stat {
+  --stat-color: var(--color-text);
+  --stat-fill: var(--color-surface-muted);
+  --stat-on: var(--color-on-primary);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  color: inherit;
+  font-family: var(--font-family-base);
+  text-align: left;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
 }
 
-.fr-page__summary-dot--reviewing {
-  background: var(--color-warning);
+.fr-page__stat:hover {
+  box-shadow: var(--shadow-md);
 }
 
-.fr-page__summary-dot--approved {
-  background: var(--color-primary);
+.fr-page__stat:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-md), 0 0 0 2px var(--color-surface), 0 0 0 4px var(--stat-color);
 }
 
-.fr-page__summary-dot--done {
-  background: var(--color-success);
+.fr-page__stat--active {
+  box-shadow: var(--shadow-md), inset 0 0 0 1px var(--stat-color);
 }
 
-.fr-page__summary-dot--rejected {
-  background: var(--color-danger);
+.fr-page__stat--gold {
+  --stat-color: var(--color-gold-600);
+  --stat-fill: var(--color-gold-surface);
+  --stat-on: var(--color-on-gold);
 }
 
-.fr-page__summary-value {
-  color: var(--color-text);
-  font-size: 1.0625rem;
+.fr-page__stat--neutral {
+  --stat-color: var(--color-text-muted);
+  --stat-fill: var(--color-surface-muted);
+}
+
+.fr-page__stat--warning {
+  --stat-color: var(--color-warning);
+  --stat-fill: var(--color-warning-tint-bg);
+}
+
+.fr-page__stat--info {
+  --stat-color: var(--color-info);
+  --stat-fill: var(--color-info-tint-bg);
+}
+
+.fr-page__stat--success {
+  --stat-color: var(--color-success);
+  --stat-fill: var(--color-success-tint-bg);
+}
+
+.fr-page__stat--danger {
+  --stat-color: var(--color-danger);
+  --stat-fill: var(--color-danger-tint-bg);
+}
+
+.fr-page__stat-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--stat-fill);
+  color: var(--stat-color);
+}
+
+.fr-page__stat-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.fr-page__stat-value {
+  color: var(--stat-color);
+  font-size: 1.25rem;
   font-weight: 700;
+  line-height: 1.15;
 }
 
-.fr-page__summary-label {
+.fr-page__stat-label {
   color: var(--color-text-muted);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.3;
 }
 
 .fr-page__toolbar {
@@ -548,30 +582,32 @@ onMounted(load);
   flex-shrink: 0;
 }
 
-.fr-page__filter-chip {
+/* Filter dạng chữ, không pill/không nền màu rắn — trạng thái chọn chỉ đổi
+   màu chữ + gạch chân mảnh bằng box-shadow (không border-bottom, xem mục 2
+   CLAUDE.md). */
+.fr-page__filter {
   display: inline-flex;
   align-items: center;
   gap: 0.3125rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  padding: var(--space-1) var(--space-3);
-  background: var(--color-surface);
+  border: none;
+  padding: var(--space-1) 0.125rem var(--space-2);
+  background: transparent;
   color: var(--color-text-muted);
   font-family: var(--font-family-base);
   font-size: 0.8125rem;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  box-shadow: 0 2px 0 transparent;
+  transition: color 0.12s ease, box-shadow 0.12s ease;
 }
 
-.fr-page__filter-chip:hover {
-  background: var(--color-surface-muted);
+.fr-page__filter:hover {
+  color: var(--color-text);
 }
 
-.fr-page__filter-chip--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-surface);
+.fr-page__filter--active {
   color: var(--color-primary);
   font-weight: 600;
+  box-shadow: 0 2px 0 var(--color-primary);
 }
 
 .fr-page__body {
@@ -955,6 +991,10 @@ onMounted(load);
 }
 
 @media (max-width: 768px) {
+  .fr-page__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .fr-page__body {
     flex-direction: column;
   }
@@ -962,6 +1002,16 @@ onMounted(load);
   .fr-detail {
     width: 100%;
     max-height: 60%;
+  }
+}
+
+@media (max-width: 480px) {
+  .fr-page__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fr-page__stat-label {
+    font-size: 0.6875rem;
   }
 }
 </style>

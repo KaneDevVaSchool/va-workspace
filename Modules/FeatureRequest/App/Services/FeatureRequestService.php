@@ -42,35 +42,53 @@ class FeatureRequestService
      * Nhóm toàn bộ ghi nhận theo phòng ban cho superadmin — mỗi khối gồm
      * thông tin phòng ban, đếm theo trạng thái, và danh sách ghi nhận.
      *
-     * @return list<array<string, mixed>>
+     * @return array{groups: list<array<string, mixed>>, overall_counts: array<string, int>}
      */
     public function groupedByDepartment(?string $status = null): array
     {
-        $all = $this->requests->allWithRelations($status);
+        // Luôn lấy toàn bộ (không lọc status ở tầng query) để overall_counts
+        // phản ánh đúng tổng thể — không đổi theo filter đang chọn, giống
+        // thẻ thống kê ở trang Chi tiết dự án.
+        $all = $this->requests->allWithRelations(null);
+        $filtered = ($status === null || $status === '')
+            ? $all
+            : $all->filter(fn (FeatureRequest $r) => $r->status === $status)->values();
 
-        $groups = $all->groupBy(fn (FeatureRequest $r) => $r->department_id ?? 0);
+        $groups = $filtered->groupBy(fn (FeatureRequest $r) => $r->department_id ?? 0);
 
-        return $groups->map(function (Collection $items, $departmentId) {
+        $groupList = $groups->map(function (Collection $items, $departmentId) {
             $first = $items->first();
-            $counts = $items->countBy('status');
 
             return [
                 'department_id' => $departmentId ?: null,
                 'department_name' => $first?->department?->name ?? 'Chưa xác định',
-                'counts' => [
-                    'pending' => (int) ($counts[FeatureRequest::STATUS_PENDING] ?? 0),
-                    'reviewing' => (int) ($counts[FeatureRequest::STATUS_REVIEWING] ?? 0),
-                    'approved' => (int) ($counts[FeatureRequest::STATUS_APPROVED] ?? 0),
-                    'rejected' => (int) ($counts[FeatureRequest::STATUS_REJECTED] ?? 0),
-                    'done' => (int) ($counts[FeatureRequest::STATUS_DONE] ?? 0),
-                    'total' => $items->count(),
-                ],
+                'counts' => $this->countByStatus($items),
                 'items' => $items->map(fn (FeatureRequest $r) => $this->present($r))->values()->all(),
             ];
         })
             ->sortByDesc(fn ($group) => $group['counts']['total'])
             ->values()
             ->all();
+
+        return [
+            'groups' => $groupList,
+            'overall_counts' => $this->countByStatus($all),
+        ];
+    }
+
+    /** @return array<string, int> */
+    private function countByStatus(Collection $items): array
+    {
+        $counts = $items->countBy('status');
+
+        return [
+            'pending' => (int) ($counts[FeatureRequest::STATUS_PENDING] ?? 0),
+            'reviewing' => (int) ($counts[FeatureRequest::STATUS_REVIEWING] ?? 0),
+            'approved' => (int) ($counts[FeatureRequest::STATUS_APPROVED] ?? 0),
+            'rejected' => (int) ($counts[FeatureRequest::STATUS_REJECTED] ?? 0),
+            'done' => (int) ($counts[FeatureRequest::STATUS_DONE] ?? 0),
+            'total' => $items->count(),
+        ];
     }
 
     public function create(User $user, array $data): FeatureRequest

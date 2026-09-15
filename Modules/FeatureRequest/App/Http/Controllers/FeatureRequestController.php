@@ -122,7 +122,7 @@ class FeatureRequestController extends Controller
 
         $status = $request->query('status');
 
-        return response()->json(['groups' => $this->service->groupedByDepartment(is_string($status) ? $status : null)]);
+        return response()->json($this->service->groupedByDepartment(is_string($status) ? $status : null));
     }
 
     public function show(Request $request, int $id): JsonResponse
