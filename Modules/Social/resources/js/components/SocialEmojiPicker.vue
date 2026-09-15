@@ -4,6 +4,7 @@ import AppIcon from '@/components/AppIcon.vue';
 import { EMOJI_GROUPS } from '../constants/emojiGroups.js';
 import { STICKER_PACKS } from '../constants/stickers.js';
 import SocialAnimatedSticker from './SocialAnimatedSticker.vue';
+import SocialGifPicker from './SocialGifPicker.vue';
 
 const props = defineProps({
   /** Nút/khung neo — click vào đây không đóng picker. */
@@ -11,7 +12,7 @@ const props = defineProps({
   panel: { type: String, default: 'emoji' },
 });
 
-const emit = defineEmits(['pick', 'pick-sticker', 'close', 'update:panel']);
+const emit = defineEmits(['pick', 'pick-sticker', 'pick-gif', 'close', 'update:panel']);
 
 const activeGroup = ref(EMOJI_GROUPS[0].key);
 const activePack = ref(STICKER_PACKS[0].key);
@@ -20,6 +21,7 @@ const popupStyle = ref({});
 let pageBound = false;
 
 const isStickerPanel = computed(() => props.panel === 'sticker');
+const isGifPanel = computed(() => props.panel === 'gif');
 
 function currentEmojis() {
   return EMOJI_GROUPS.find((g) => g.key === activeGroup.value)?.emojis ?? [];
@@ -125,13 +127,13 @@ onBeforeUnmount(() => {
       class="emoji-picker"
       :style="popupStyle"
       role="dialog"
-      :aria-label="isStickerPanel ? 'Chọn sticker động' : 'Chọn emoji'"
+      :aria-label="isGifPanel ? 'Tìm GIF' : (isStickerPanel ? 'Chọn sticker động' : 'Chọn emoji')"
     >
       <div class="emoji-picker__modes">
         <button
           type="button"
           class="emoji-picker__mode"
-          :class="{ 'emoji-picker__mode--active': !isStickerPanel }"
+          :class="{ 'emoji-picker__mode--active': !isStickerPanel && !isGifPanel }"
           @click="setPanel('emoji')"
         >
           Emoji
@@ -144,12 +146,20 @@ onBeforeUnmount(() => {
         >
           Sticker
         </button>
+        <button
+          type="button"
+          class="emoji-picker__mode"
+          :class="{ 'emoji-picker__mode--active': isGifPanel }"
+          @click="setPanel('gif')"
+        >
+          GIF
+        </button>
         <button type="button" class="emoji-picker__close" aria-label="Đóng bảng sticker" @click="emit('close')">
           <AppIcon name="close" :size="14" />
         </button>
       </div>
 
-      <div class="emoji-picker__tabs">
+      <div v-if="!isGifPanel" class="emoji-picker__tabs">
         <div v-if="!isStickerPanel" class="emoji-picker__tab-list hide-scrollbar">
           <button
             v-for="group in EMOJI_GROUPS"
@@ -178,7 +188,10 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="!isStickerPanel" class="emoji-picker__grid hide-scrollbar">
+      <div v-if="isGifPanel" class="emoji-picker__gif-wrap">
+        <SocialGifPicker kind="gif" @pick="emit('pick-gif', $event)" />
+      </div>
+      <div v-else-if="!isStickerPanel" class="emoji-picker__grid hide-scrollbar">
         <button
           v-for="(emoji, index) in currentEmojis()"
           :key="index"
@@ -303,6 +316,12 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.emoji-picker__gif-wrap {
+  display: flex;
+  flex: 1;
+  min-height: 0;
 }
 
 .emoji-picker__stickers {

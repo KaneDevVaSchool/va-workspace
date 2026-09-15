@@ -26,6 +26,7 @@ const auth = useAuthStore();
 const content = ref('');
 const editorEmpty = ref(true);
 const files = ref([]);
+const gifAttachments = ref([]);
 const submitting = ref(false);
 const expanded = ref(false);
 const fileInput = ref(null);
@@ -120,6 +121,16 @@ function insertSticker(sticker) {
   editorRef.value?.insertSticker(sticker);
 }
 
+function insertGif(descriptor) {
+  if (!descriptor?.token) return;
+  gifAttachments.value = [...gifAttachments.value, descriptor];
+  pickerOpen.value = false;
+}
+
+function removeGif(index) {
+  gifAttachments.value = gifAttachments.value.filter((_, i) => i !== index);
+}
+
 function resetDeptVisibility() {
   deptVisibilityOpen.value = false;
   deptVisibilityMode.value = 'all';
@@ -129,6 +140,7 @@ function resetDeptVisibility() {
 function closeComposer() {
   content.value = '';
   files.value = [];
+  gifAttachments.value = [];
   pickerOpen.value = false;
   asSystemAnnouncement.value = false;
   isAnonymous.value = false;
@@ -178,7 +190,7 @@ function removeFile(index) {
 }
 
 async function submit() {
-  if (editorEmpty.value && files.value.length === 0) {
+  if (editorEmpty.value && files.value.length === 0 && gifAttachments.value.length === 0) {
     showClientToast('error', 'Bài viết phải có nội dung hoặc ít nhất 1 tệp đính kèm.');
     return;
   }
@@ -204,6 +216,7 @@ async function submit() {
       deptVisibilityIds.value.forEach((id) => form.append('department_visibility_ids[]', String(id)));
     }
     files.value.forEach((file) => form.append('attachments[]', file));
+    gifAttachments.value.forEach((gif) => form.append('gif_attachments[]', gif.token));
 
     const { data } = await window.axios.post('/api/social/posts', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -212,6 +225,7 @@ async function submit() {
     emit('posted', data.post);
     content.value = '';
     files.value = [];
+    gifAttachments.value = [];
     pickerOpen.value = false;
     asSystemAnnouncement.value = false;
     isAnonymous.value = false;
@@ -295,6 +309,20 @@ defineExpose({ expand });
         @remove="removeFile"
       />
 
+      <div v-if="gifAttachments.length > 0" class="composer__gifs">
+        <article v-for="(gif, index) in gifAttachments" :key="gif.token" class="composer__gif-tile">
+          <img :src="gif.previewUrl" alt="GIF đã chọn" />
+          <button
+            type="button"
+            class="composer__gif-remove"
+            aria-label="Bỏ GIF này"
+            @click="removeGif(index)"
+          >
+            <AppIcon name="close" :size="12" />
+          </button>
+        </article>
+      </div>
+
       <div v-if="canBeAnonymous && isAnonymous" class="composer__anon-name">
         <label class="composer__anon-name-label" for="composer-anon-name">
           Tên hiển thị khi ẩn danh (để trống sẽ hiện "Người ẩn danh")
@@ -358,6 +386,7 @@ defineExpose({ expand });
             @update:panel="pickerPanel = $event"
             @pick="insertEmoji"
             @pick-sticker="insertSticker"
+            @pick-gif="insertGif"
             @close="pickerOpen = false"
           />
         </div>
@@ -520,6 +549,45 @@ defineExpose({ expand });
 .composer__author-name {
   font-weight: 600;
   color: var(--color-text);
+}
+
+.composer__gifs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.composer__gif-tile {
+  position: relative;
+  width: 6.5rem;
+  height: 6.5rem;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.composer__gif-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.composer__gif-remove {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, #000000 58%, transparent);
+  color: #fff;
+  cursor: pointer;
 }
 
 .composer__anon-name {

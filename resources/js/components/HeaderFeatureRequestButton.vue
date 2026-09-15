@@ -1,12 +1,13 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { formatRelativeTime } from '../lib/formatTime';
 import { showClientToast } from '../lib/clientToast';
 import { useHeaderPopover } from '../composables/useHeaderPopover';
 import AppIcon from './AppIcon.vue';
 
 const route = useRoute();
+const router = useRouter();
 const rootRef = ref(null);
 const { isOpen, toggle, close } = useHeaderPopover('feature-request');
 
@@ -146,6 +147,11 @@ function togglePanel() {
   loadMine().catch(() => {});
 }
 
+function openFullPage() {
+  close();
+  router.push({ name: 'feature-requests.mine' });
+}
+
 onMounted(() => {
   document.addEventListener('mousedown', handleDocumentClick);
   document.addEventListener('keydown', handleDocumentKeydown);
@@ -204,6 +210,16 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
+
+        <button
+          v-if="tab === 'mine'"
+          type="button"
+          class="header-pop__full-link"
+          @click="openFullPage"
+        >
+          Xem đầy đủ, có bộ lọc theo trạng thái
+          <AppIcon name="chevronRight" :size="13" :stroke-width="2" />
+        </button>
 
         <div v-if="tab === 'create'" class="fr-form">
           <p class="fr-form__intro">
@@ -462,6 +478,26 @@ onBeforeUnmount(() => {
 .header-pop__tab-btn--active .header-pop__tab-count {
   background: var(--color-primary-surface);
   color: var(--color-primary);
+}
+
+.header-pop__full-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: var(--space-2) 0;
+  color: var(--color-primary);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.header-pop__full-link:hover {
+  text-decoration: underline;
 }
 
 .fr-form {

@@ -14,12 +14,14 @@ class StoreSocialCommentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'content' => ['nullable', 'string', 'max:8000', 'required_without:attachments'],
+            'content' => ['nullable', 'string', 'max:8000', 'required_without_all:attachments,gif_attachments'],
             'attachments' => ['nullable', 'array', 'max:5'],
             'attachments.*' => [
                 'file', 'max:10240',
                 'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xlsx,xls',
             ],
+            'gif_attachments' => ['sometimes', 'array', 'max:5'],
+            'gif_attachments.*' => ['string', 'regex:/^[0-9a-f-]{36}$/i'],
             'parent_comment_id' => ['nullable', 'integer', 'exists:social_post_comments,id'],
             'mentioned_user_id' => ['nullable', 'integer', 'exists:users,id'],
         ];

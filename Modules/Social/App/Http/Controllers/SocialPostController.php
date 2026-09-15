@@ -214,6 +214,7 @@ class SocialPostController extends Controller
             $request->user(),
             $request->validated(),
             $request->file('attachments', []),
+            $request->validated('gif_attachments', []),
         );
 
         return response()->json([

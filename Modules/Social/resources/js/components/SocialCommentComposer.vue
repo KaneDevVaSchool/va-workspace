@@ -24,6 +24,7 @@ const auth = useAuthStore();
 const content = ref('');
 const editorEmpty = ref(true);
 const files = ref([]);
+const gifAttachments = ref([]);
 const submitting = ref(false);
 const pickerOpen = ref(false);
 const pickerPanel = ref('emoji');
@@ -58,6 +59,7 @@ async function expand() {
 function resetDraft() {
   content.value = '';
   files.value = [];
+  gifAttachments.value = [];
   pickerOpen.value = false;
 }
 
@@ -88,13 +90,23 @@ function openPicker(panel) {
 }
 
 async function insertSticker(sticker) {
-  const sendImmediately = editorEmpty.value && files.value.length === 0;
+  const sendImmediately = editorEmpty.value && files.value.length === 0 && gifAttachments.value.length === 0;
   editorRef.value?.insertSticker(sticker);
   pickerOpen.value = false;
   if (sendImmediately) {
     await nextTick();
     submit();
   }
+}
+
+function insertGif(descriptor) {
+  if (!descriptor?.token) return;
+  gifAttachments.value = [...gifAttachments.value, descriptor];
+  pickerOpen.value = false;
+}
+
+function removeGif(index) {
+  gifAttachments.value = gifAttachments.value.filter((_, i) => i !== index);
 }
 
 function onFilesChosen(event) {
@@ -112,7 +124,7 @@ function removeFile(index) {
 }
 
 function canSubmit() {
-  return !editorEmpty.value || files.value.length > 0;
+  return !editorEmpty.value || files.value.length > 0 || gifAttachments.value.length > 0;
 }
 
 async function submit() {
@@ -125,6 +137,7 @@ async function submit() {
     if (props.parentCommentId) form.append('parent_comment_id', String(props.parentCommentId));
     if (props.mentionedUser?.id) form.append('mentioned_user_id', String(props.mentionedUser.id));
     files.value.forEach((file) => form.append('attachments[]', file));
+    gifAttachments.value.forEach((gif) => form.append('gif_attachments[]', gif.token));
 
     const { data } = await window.axios.post(`/api/social/posts/${props.postId}/comments`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -191,6 +204,20 @@ async function submit() {
         @remove="removeFile"
       />
 
+      <div v-if="gifAttachments.length > 0" class="comment-composer__gifs">
+        <article v-for="(gif, index) in gifAttachments" :key="gif.token" class="comment-composer__gif-tile">
+          <img :src="gif.previewUrl" alt="GIF đã chọn" />
+          <button
+            type="button"
+            class="comment-composer__gif-remove"
+            aria-label="Bỏ GIF này"
+            @click="removeGif(index)"
+          >
+            <AppIcon name="close" :size="12" />
+          </button>
+        </article>
+      </div>
+
       <div class="comment-composer__actions">
         <div class="comment-composer__actions-left">
           <div ref="pickerWrap" class="comment-composer__emoji-wrap">
@@ -214,6 +241,16 @@ async function submit() {
               <AppIcon name="sticker" :size="16" />
               <span>Sticker</span>
             </button>
+            <button
+              type="button"
+              class="comment-composer__tool"
+              :class="{ 'comment-composer__tool--on': pickerOpen && pickerPanel === 'gif' }"
+              aria-label="Tìm GIF"
+              @click="openPicker('gif')"
+            >
+              <AppIcon name="gifImage" :size="16" />
+              <span>GIF</span>
+            </button>
             <SocialEmojiPicker
               v-if="pickerOpen"
               :anchor="pickerWrap"
@@ -221,6 +258,7 @@ async function submit() {
               @update:panel="pickerPanel = $event"
               @pick="insertEmoji"
               @pick-sticker="insertSticker"
+              @pick-gif="insertGif"
               @close="pickerOpen = false"
             />
           </div>
@@ -320,6 +358,45 @@ async function submit() {
 .comment-composer__prompt-close:hover {
   background: var(--color-surface-muted);
   color: var(--color-text);
+}
+
+.comment-composer__gifs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.comment-composer__gif-tile {
+  position: relative;
+  width: 5rem;
+  height: 5rem;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.comment-composer__gif-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.comment-composer__gif-remove {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, #000000 58%, transparent);
+  color: #fff;
+  cursor: pointer;
 }
 
 .comment-composer__actions {

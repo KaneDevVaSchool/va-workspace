@@ -55,6 +55,7 @@ class SocialCommentService
         ?int $parentCommentId = null,
         ?int $mentionedUserId = null,
         array $files = [],
+        array $gifAttachments = [],
     ): array {
         $resolvedParentId = null;
         $resolvedMentionId = $mentionedUserId;
@@ -84,7 +85,7 @@ class SocialCommentService
         $clean = $this->sanitizeContent($content ?? '');
         $plain = trim(html_entity_decode(strip_tags($clean), ENT_QUOTES, 'UTF-8'));
 
-        if ($plain === '' && $files === []) {
+        if ($plain === '' && $files === [] && $gifAttachments === []) {
             throw ValidationException::withMessages([
                 'content' => ['Bình luận phải có nội dung hoặc ít nhất 1 tệp đính kèm.'],
             ]);
@@ -98,10 +99,12 @@ class SocialCommentService
             'content' => $clean,
         ]);
 
-        if ($files !== []) {
-            $comment = $this->comments->update($comment, [
-                'attachments' => $this->storeAttachments($comment->id, $files),
-            ]);
+        if ($files !== [] || $gifAttachments !== []) {
+            $attachments = array_merge(
+                $this->storeAttachments($comment->id, $files),
+                SocialGifService::movePendingAttachments($gifAttachments, 'social/comments/'.$comment->id),
+            );
+            $comment = $this->comments->update($comment, ['attachments' => $attachments]);
         }
 
         $mentionedIds = $this->mentions->notifyComment($author, $post, $comment, $resolvedMentionId);

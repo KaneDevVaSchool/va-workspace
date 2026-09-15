@@ -56,6 +56,7 @@ class SocialCommentController extends Controller
                 isset($validated['parent_comment_id']) ? (int) $validated['parent_comment_id'] : null,
                 isset($validated['mentioned_user_id']) ? (int) $validated['mentioned_user_id'] : null,
                 $request->file('attachments', []),
+                $validated['gif_attachments'] ?? [],
             ),
             201,
         );

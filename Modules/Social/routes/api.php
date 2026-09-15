@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Social\App\Http\Controllers\SocialCommentController;
+use Modules\Social\App\Http\Controllers\SocialGifController;
 use Modules\Social\App\Http\Controllers\SocialGroupController;
 use Modules\Social\App\Http\Controllers\SocialHashtagController;
 use Modules\Social\App\Http\Controllers\SocialPollController;
@@ -47,6 +48,9 @@ Route::middleware('auth')->prefix('social')->name('social.')->group(function () 
     Route::post('/posts/{postId}/poll/votes', [SocialPollController::class, 'vote']);
     Route::get('/posts/{postId}/poll/votes', [SocialPollController::class, 'voters']);
     Route::post('/posts/{postId}/poll/close', [SocialPollController::class, 'close']);
+
+    Route::get('/gifs/search', [SocialGifController::class, 'search'])->name('gifs.search');
+    Route::post('/gifs/download', [SocialGifController::class, 'download'])->name('gifs.download');
 
     Route::get('/hashtags', [SocialHashtagController::class, 'index']);
     Route::get('/mentions', [SocialCommentController::class, 'mentions']);

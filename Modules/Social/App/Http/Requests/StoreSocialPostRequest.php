@@ -29,6 +29,8 @@ class StoreSocialPostRequest extends FormRequest
                 'file', 'max:10240',
                 'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xlsx,xls',
             ],
+            'gif_attachments' => ['sometimes', 'array', 'max:10'],
+            'gif_attachments.*' => ['string', 'regex:/^[0-9a-f-]{36}$/i'],
             'poll' => ['sometimes', 'array'],
             'poll.title' => ['sometimes', 'nullable', 'string', 'max:200'],
             'poll.content' => ['sometimes', 'nullable', 'string', 'max:2000'],
@@ -43,7 +45,7 @@ class StoreSocialPostRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            if (! $this->hasContent() && ! $this->hasFile('attachments') && ! $this->hasPoll()) {
+            if (! $this->hasContent() && ! $this->hasFile('attachments') && ! $this->hasPoll() && $this->input('gif_attachments', []) === []) {
                 $validator->errors()->add('content', 'Bài viết phải có nội dung, tệp đính kèm hoặc bình chọn.');
             }
 

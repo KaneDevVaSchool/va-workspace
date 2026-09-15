@@ -64,4 +64,12 @@ return [
         'subject' => env('VAPID_SUBJECT', 'mailto:'.env('MAIL_FROM_ADDRESS', 'workspace@vaschools.edu.vn')),
     ],
 
+    /*
+    | GIPHY (tìm & tải GIF/sticker động cho bảng tin) — Modules/Social.
+    | Đăng ký key miễn phí tại developers.giphy.com.
+    */
+    'giphy' => [
+        'api_key' => env('GIPHY_API_KEY'),
+    ],
+
 ];

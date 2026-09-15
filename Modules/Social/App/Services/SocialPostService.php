@@ -191,7 +191,7 @@ class SocialPostService
             : self::PIN_SCOPE_COMPANY;
     }
 
-    public function create(User $author, array $data, array $files = []): SocialPost
+    public function create(User $author, array $data, array $files = [], array $gifAttachments = []): SocialPost
     {
         $asSystem = (bool) ($data['as_system_announcement'] ?? false);
         $destination = $this->resolveDestination($author, $data);
@@ -223,7 +223,7 @@ class SocialPostService
             ? SocialPost::REVIEW_PENDING
             : SocialPost::REVIEW_APPROVED;
 
-        $post = DB::transaction(function () use ($author, $data, $files, $asSystem, $destination, $visibility, $isAnonymous, $anonymousName, $reviewStatus) {
+        $post = DB::transaction(function () use ($author, $data, $files, $gifAttachments, $asSystem, $destination, $visibility, $isAnonymous, $anonymousName, $reviewStatus) {
             $payload = [
                 'user_id' => $author->id,
                 'department_id' => $destination['department_id'],
@@ -250,10 +250,12 @@ class SocialPostService
                 $post = $this->posts->find($post->id) ?? $post;
             }
 
-            if ($files !== []) {
-                $post = $this->posts->update($post, [
-                    'attachments' => $this->storeAttachments($post->id, $files),
-                ]);
+            if ($files !== [] || $gifAttachments !== []) {
+                $attachments = array_merge(
+                    $this->storeAttachments($post->id, $files),
+                    SocialGifService::movePendingAttachments($gifAttachments, 'social/'.$post->id),
+                );
+                $post = $this->posts->update($post, ['attachments' => $attachments]);
             }
 
             if (isset($data['poll']) && is_array($data['poll'])) {
