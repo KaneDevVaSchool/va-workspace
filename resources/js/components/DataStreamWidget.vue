@@ -243,6 +243,16 @@ function handleBtnClick(btn) {
   emit('btn-click', { btn });
 }
 
+// Card có `button` (link điều hướng) thì bấm bất kỳ đâu trên card cũng đi tới
+// đích đó — không bắt người dùng phải nhắm đúng nút nhỏ bên dưới. Bấm thẳng
+// vào nút vẫn nổ handleBtnClick riêng của nút đó nên chặn nổi 2 lần ở đây;
+// click "ăn theo" sau một cú kéo thật đã bị suppressNextClick chặn từ trước.
+function handleCardClick(node, event) {
+  if (!node.button) return;
+  if (isInteractiveTarget(event.target)) return;
+  handleBtnClick(node.button);
+}
+
 // ─── SVG arrow marker / watermark filter unique id ─────────────────────────────
 const uid     = getCurrentInstance()?.uid ?? Math.random().toString(36).slice(2);
 const arrowId = `dsw-arrow-${uid}`;
@@ -513,9 +523,11 @@ function pathD(edge) {
               'dsw-node--hl': node.highlight,
               'dsw-node--compact': node.compact,
               'dsw-node--dragging': draggingId === node.id,
+              'dsw-node--clickable': node.button,
             }"
             :style="{ left: posOf(node).x + 'px', top: posOf(node).y + 'px', width: node.w + 'px' }"
             @pointerdown.stop="startDrag($event, node)"
+            @click="handleCardClick(node, $event)"
           >
             <!-- Header -->
             <div v-if="!node.compact && node.title" class="dsw-card-head">
@@ -897,6 +909,19 @@ function pathD(edge) {
 .dsw-node--hl {
   background: var(--color-primary-surface);
   box-shadow: 0 0 0 1.5px var(--color-primary-200), 0 2px 6px rgba(0,0,0,.05);
+}
+
+/* Card có button điều hướng — cả card bấm được, không chỉ riêng nút bên dưới */
+.dsw-node--clickable {
+  cursor: pointer;
+}
+
+.dsw-node--clickable:hover {
+  box-shadow: 0 0 0 1px var(--color-primary-200), 0 4px 12px rgba(0,0,0,.08);
+}
+
+.dsw-node--clickable.dsw-node--hl:hover {
+  box-shadow: 0 0 0 1.5px var(--color-primary-300), 0 4px 12px rgba(0,0,0,.08);
 }
 
 .dsw-node--compact .dsw-card-body {

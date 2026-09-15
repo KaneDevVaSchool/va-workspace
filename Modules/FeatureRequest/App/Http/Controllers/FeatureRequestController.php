@@ -36,12 +36,20 @@ class FeatureRequestController extends Controller
 
     public function mine(Request $request): JsonResponse
     {
+        if (! $request->user()) {
+            return response()->json(['message' => 'Bạn cần đăng nhập.'], 401);
+        }
+
         return response()->json(['items' => $this->service->ownList($request->user())]);
     }
 
     public function store(StoreFeatureRequestRequest $request): JsonResponse
     {
-        if (! $request->user()->allows('feature_request.create')) {
+        if (! $request->user()) {
+            return response()->json(['message' => 'Bạn cần đăng nhập.'], 401);
+        }
+
+        if (! $this->permissions->allows($request->user(), 'feature_request.create')) {
             return response()->json(['message' => 'Bạn không có quyền ghi nhận yêu cầu tính năng.'], 403);
         }
 
@@ -60,6 +68,10 @@ class FeatureRequestController extends Controller
 
     public function update(UpdateFeatureRequestRequest $request, int $id): JsonResponse
     {
+        if (! $request->user()) {
+            return response()->json(['message' => 'Bạn cần đăng nhập.'], 401);
+        }
+
         $item = $this->service->find($id);
         if ($item === null) {
             return response()->json(['message' => 'Không tìm thấy ghi nhận.'], 404);
@@ -80,6 +92,10 @@ class FeatureRequestController extends Controller
 
     public function destroy(Request $request, int $id): JsonResponse
     {
+        if (! $request->user()) {
+            return response()->json(['message' => 'Bạn cần đăng nhập.'], 401);
+        }
+
         $item = $this->service->find($id);
         if ($item === null) {
             return response()->json(['message' => 'Không tìm thấy ghi nhận.'], 404);
@@ -203,6 +219,6 @@ class FeatureRequestController extends Controller
 
     private function allowedReview(Request $request): bool
     {
-        return $this->permissions->allows($request->user(), 'feature_request.review');
+        return $request->user() !== null && $this->permissions->allows($request->user(), 'feature_request.review');
     }
 }
