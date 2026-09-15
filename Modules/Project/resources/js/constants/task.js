@@ -168,6 +168,7 @@ export const PROJECT_TASK_KANBAN_GROUP_KEY = 'va-project-task-kanban-group';
 export const PROJECT_TASK_VIEWS = [
   { key: 'all', label: 'Tất cả công việc', icon: 'layoutList' },
   { key: 'parents', label: 'Công việc cha', icon: 'listNumbered' },
+  { key: 'phase', label: 'Theo giai đoạn', icon: 'flag' },
   { key: 'kanban', label: 'Kanban', icon: 'layoutGrid' },
   { key: 'gantt', label: 'Gantt', icon: 'gantt' },
 ];
@@ -313,6 +314,127 @@ export function flattenProjectTasks(nodes, { parentsOnly = false, filter = 'all'
 
   walk(nodes, 0, null);
   return out;
+}
+
+/**
+ * Nhóm công việc (type=task) theo giai đoạn (node type=phase) gần nhất
+ * chứa nó trong cây WBS — task dưới category lồng trong phase vẫn tính
+ * vào phase đó. Task không nằm dưới phase nào (trực tiếp dưới category
+ * hoặc gốc dự án) gom vào nhóm cuối "Chưa thuộc giai đoạn nào".
+ */
+export function groupProjectTasksByPhase(nodes, { filter = 'all', query = '' } = {}) {
+  const q = String(query || '').trim().toLowerCase();
+  const groups = new Map();
+  const noPhaseKey = '__no_phase__';
+
+  const ensureGroup = (key, phaseNode) => {
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        id: phaseNode?.id ?? null,
+        title: phaseNode?.title || 'Chưa thuộc giai đoạn nào',
+        code: phaseNode?.code || null,
+        tasks: [],
+      });
+    }
+    return groups.get(key);
+  };
+
+  const walk = (list, phaseNode) => {
+    for (const node of list || []) {
+      const nextPhaseNode = node.type === 'phase' ? node : phaseNode;
+      if (node.type === 'task') {
+        if (matchesProjectTaskFilter(node, filter)) {
+          const hay = `${node.title || ''} ${node.code || ''}`.toLowerCase();
+          if (!q || hay.includes(q)) {
+            const key = nextPhaseNode ? `phase-${nextPhaseNode.id}` : noPhaseKey;
+            ensureGroup(key, nextPhaseNode).tasks.push({ ...node, depth: 0, hasChildren: false });
+          }
+        }
+      }
+      walk(node.children, nextPhaseNode);
+    }
+  };
+
+  walk(nodes, null);
+
+  const out = Array.from(groups.values()).filter((group) => group.tasks.length > 0);
+  out.sort((a, b) => {
+    if (a.key === noPhaseKey) return 1;
+    if (b.key === noPhaseKey) return -1;
+    return 0;
+  });
+
+  return out.map((group) => {
+    const withProgress = group.tasks.filter((task) => task.progress_percent != null);
+    const avgProgress = withProgress.length
+      ? Math.round(withProgress.reduce((sum, task) => sum + Number(task.progress_percent || 0), 0) / withProgress.length)
+      : null;
+    return { ...group, avgProgress };
+  });
+}
+
+/** Nhãn/tone hiển thị 1 công việc — dùng chung giữa bảng phẳng, bảng nhóm
+ *  theo giai đoạn (TaskTableRow.vue) và export (ProjectTasksTab.vue). */
+export function taskStatusLabel(value) {
+  return TASK_STATUS_LABELS[value] || value || '—';
+}
+export function taskStatusTone(value) {
+  return TASK_STATUS_TONES[value] || 'neutral';
+}
+export function taskTypeLabel(value) {
+  return TASK_TYPE_LABELS[value] || value || '—';
+}
+export function taskTypeTone(value) {
+  return TASK_TYPE_TONES[value] || 'neutral';
+}
+export function taskPriorityLabel(value) {
+  return value ? (TASK_PRIORITY_LABELS[value] || value) : '—';
+}
+export function taskPriorityTone(value) {
+  return TASK_PRIORITY_TONES[value] || 'neutral';
+}
+export function formatTaskDate(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('vi-VN');
+}
+export function formatTaskDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('vi-VN');
+}
+export function formatTaskVarianceDays(value) {
+  if (value == null) return '—';
+  if (value > 0) return `Trễ ${value} ngày`;
+  if (value < 0) return `Sớm ${Math.abs(value)} ngày`;
+  return 'Đúng hạn';
+}
+export function taskCellText(task, key) {
+  if (key === 'code') return task.code || '—';
+  if (key === 'title') return task.title || '—';
+  if (key === 'start_date' || key === 'end_date' || key === 'actual_start_date' || key === 'actual_end_date') {
+    return formatTaskDate(task[key]);
+  }
+  if (key === 'progress_percent') return task.progress_percent == null ? '—' : `${task.progress_percent}%`;
+  if (key === 'type') return taskTypeLabel(task.type);
+  if (key === 'priority') return taskPriorityLabel(task.priority);
+  if (key === 'assignee') return task.assignee?.name || '—';
+  if (key === 'status') return taskStatusLabel(task.status);
+  if (key === 'creator') return task.creator?.name || '—';
+  if (key === 'created_at' || key === 'updated_at') return formatTaskDateTime(task[key]);
+  if (key === 'parent') return task.parent?.title || '—';
+  if (key === 'attachments_count') return String(task.attachments_count || 0);
+  if (key === 'estimated_hours') return task.estimated_hours ?? '—';
+  if (key === 'worklog_hours') return String(task.worklog_hours || 0);
+  if (key === 'manager') return task.manager?.name || '—';
+  if (key === 'accepted_by') return task.accepted_by_user?.name || '—';
+  if (key === 'weight') return task.weight != null ? `${task.weight}%` : '—';
+  if (key === 'is_overdue') return task.is_overdue ? 'Quá hạn' : 'Đúng hạn';
+  if (key === 'variance_days') return formatTaskVarianceDays(task.variance_days);
+  return '—';
 }
 
 /**

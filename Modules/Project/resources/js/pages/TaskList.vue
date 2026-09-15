@@ -877,6 +877,11 @@ function onRowContextAction({ type, task, status, variant, focus }) {
     openTaskDetail(task, { blank: variant === 'blank' });
     return;
   }
+  if (type === 'delete') {
+    selected.value = task;
+    askDelete();
+    return;
+  }
   actionDialog.kind = type;
   actionDialog.task = task;
   actionDialog.extra = { variant, focus };

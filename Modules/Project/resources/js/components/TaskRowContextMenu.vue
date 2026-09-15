@@ -397,6 +397,17 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </div>
+
+      <template v-if="canEdit">
+        <span class="task-ctx__sep" role="separator" />
+
+        <button type="button" class="task-ctx__item" role="menuitem" @click="pick('delete')" @mouseenter="openSub = null">
+          <span class="task-ctx__ico task-ctx__ico--danger">
+            <AppIcon name="trash" :size="15" :stroke-width="1.75" />
+          </span>
+          <span>Xoá công việc</span>
+        </button>
+      </template>
     </div>
   </Teleport>
 </template>
@@ -539,6 +550,11 @@ onBeforeUnmount(() => {
 .task-ctx__ico--success {
   background: var(--color-success-tint-bg);
   color: var(--color-success-tint-fg);
+}
+
+.task-ctx__ico--danger {
+  background: var(--color-danger-tint-bg);
+  color: var(--color-danger-tint-fg);
 }
 
 .task-ctx__dot {

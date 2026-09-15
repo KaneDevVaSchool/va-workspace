@@ -19,7 +19,7 @@ const props = defineProps({
   users: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(['close', 'updated', 'duplicated']);
+const emit = defineEmits(['close', 'updated', 'duplicated', 'deleted']);
 
 const KIND_META = {
   members: { title: 'Thêm người thực hiện', icon: 'userPlus', tone: 'tertiary' },
@@ -29,6 +29,7 @@ const KIND_META = {
   evaluate: { title: 'Đánh giá kết quả', icon: 'starFilled', tone: 'gold' },
   documents: { title: 'Thêm tài liệu', icon: 'fileUp', tone: 'info' },
   duplicate: { title: 'Nhân bản công việc', icon: 'copy', tone: 'success' },
+  delete: { title: 'Xoá công việc', icon: 'trash', tone: 'danger' },
 };
 
 const saving = ref(false);
@@ -66,7 +67,7 @@ const scoreForm = reactive({
   rating_desc: '',
 });
 
-const isOpen = computed(() => Boolean(props.kind && props.task && props.kind !== 'duplicate'));
+const isOpen = computed(() => Boolean(props.kind && props.task && props.kind !== 'duplicate' && props.kind !== 'delete'));
 const dateFocus = computed(() => props.extra?.focus || 'planned');
 const isActualFocus = computed(() => dateFocus.value === 'actual');
 const dialogMeta = computed(() => KIND_META[props.kind] || { title: '', icon: 'layers', tone: 'primary' });
@@ -424,6 +425,20 @@ async function confirmDuplicate() {
   }
 }
 
+async function confirmDelete() {
+  if (!props.task || saving.value) return;
+  saving.value = true;
+  try {
+    await window.axios.delete(`/api/project/tasks/${props.task.id}`);
+    showClientToast('success', 'Đã xoá công việc.');
+    emit('deleted', props.task);
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không xoá được công việc — có thể còn công việc con.');
+  } finally {
+    saving.value = false;
+  }
+}
+
 async function submit() {
   if (!props.task || saving.value) return;
   if (props.kind === 'dates' && !canSubmitDates.value) return;
@@ -464,6 +479,18 @@ const primaryLabel = computed(() => {
     :loading="saving"
     @update:open="(v) => !v && close()"
     @confirm="confirmDuplicate"
+  />
+
+  <ConfirmDialog
+    :open="kind === 'delete' && Boolean(task)"
+    title="Xoá công việc"
+    :description="task ? `Bạn có chắc muốn xoá công việc “${task.title}”? Thao tác này không thể hoàn tác.` : ''"
+    confirm-label="Xoá"
+    cancel-label="Huỷ bỏ"
+    :loading="saving"
+    danger
+    @update:open="(v) => !v && close()"
+    @confirm="confirmDelete"
   />
 
   <Teleport to="body">

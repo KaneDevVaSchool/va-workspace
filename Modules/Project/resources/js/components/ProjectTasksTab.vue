@@ -31,14 +31,26 @@ import {
   TASK_TYPE_TONES,
   flattenAllProjectNodes,
   flattenProjectTasks,
+  formatTaskDate,
+  formatTaskDateTime,
+  formatTaskVarianceDays,
+  groupProjectTasksByPhase,
   loadVisibility,
   saveVisibility,
+  taskCellText,
+  taskPriorityLabel,
+  taskPriorityTone,
+  taskStatusLabel,
+  taskStatusTone,
+  taskTypeLabel,
+  taskTypeTone,
 } from '../constants/task.js';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import ProjectGanttTab from './ProjectGanttTab.vue';
 import ProjectTaskViewModeMenu from './ProjectTaskViewModeMenu.vue';
 import TaskRowContextMenu from './TaskRowContextMenu.vue';
 import TaskQuickActionModals from './TaskQuickActionModals.vue';
+import TaskTableRow from './TaskTableRow.vue';
 
 const props = defineProps({
   tree: { type: Array, default: () => [] },
@@ -86,6 +98,7 @@ const perPage = ref(20);
 const page = ref(1);
 const tableZoom = ref(loadZoom());
 const collapsedIds = ref(new Set());
+const collapsedPhaseKeys = ref(new Set());
 const visibility = reactive(loadVisibility(PROJECT_TASK_COL_KEY, PROJECT_TASK_COLUMNS));
 const columnWidths = reactive(loadWidths());
 
@@ -127,8 +140,10 @@ useDragScroll(tableWrap, { isBlocked: () => resizing.value, axis: 'x' });
 useDragScroll(kanbanWrap, { axis: 'x', isBlocked: () => kanbanDrag.active });
 
 const isList = computed(() => viewMode.value === 'all' || viewMode.value === 'parents');
+const isPhaseGroup = computed(() => viewMode.value === 'phase');
 const isKanban = computed(() => viewMode.value === 'kanban');
 const isGantt = computed(() => viewMode.value === 'gantt');
+const isTableLike = computed(() => isList.value || isPhaseGroup.value);
 
 const triggerMeta = computed(() => {
   if (isKanban.value) {
@@ -159,6 +174,12 @@ const kanbanSourceTasks = computed(() => {
   if (!isKanban.value || kanbanGroupBy.value !== 'type') return sourceTasks.value;
   return flattenAllProjectNodes(props.tree, { filter: props.filter, query: query.value });
 });
+
+const phaseGroups = computed(() => {
+  if (!isPhaseGroup.value) return [];
+  return groupProjectTasksByPhase(props.tree, { filter: props.filter, query: query.value });
+});
+const phaseGroupTotal = computed(() => phaseGroups.value.reduce((sum, group) => sum + group.tasks.length, 0));
 
 const visibleTasks = computed(() => {
   if (viewMode.value !== 'all') return sourceTasks.value;
@@ -449,6 +470,11 @@ function onTaskDuplicated() {
   emit('tasks-changed');
 }
 
+function onTaskDeleted() {
+  closeActionDialog();
+  emit('tasks-changed');
+}
+
 function toggleCollapse(id) {
   const next = new Set(collapsedIds.value);
   if (next.has(id)) next.delete(id);
@@ -456,24 +482,19 @@ function toggleCollapse(id) {
   collapsedIds.value = next;
 }
 
-function statusLabel(value) {
-  return TASK_STATUS_LABELS[value] || value || '—';
+function toggleCollapsePhase(key) {
+  const next = new Set(collapsedPhaseKeys.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  collapsedPhaseKeys.value = next;
 }
-function statusTone(value) {
-  return TASK_STATUS_TONES[value] || 'neutral';
-}
-function typeLabel(value) {
-  return TASK_TYPE_LABELS[value] || value || '—';
-}
-function typeTone(value) {
-  return TASK_TYPE_TONES[value] || 'neutral';
-}
-function priorityLabel(value) {
-  return value ? (TASK_PRIORITY_LABELS[value] || value) : '—';
-}
-function priorityTone(value) {
-  return TASK_PRIORITY_TONES[value] || 'neutral';
-}
+
+const statusLabel = taskStatusLabel;
+const statusTone = taskStatusTone;
+const typeLabel = taskTypeLabel;
+const typeTone = taskTypeTone;
+const priorityLabel = taskPriorityLabel;
+const priorityTone = taskPriorityTone;
 function progressTone(percent) {
   if (percent == null) return 'neutral';
   if (percent >= 80) return 'success';
@@ -486,52 +507,14 @@ function hashTone(key) {
   for (let i = 0; i < String(key).length; i += 1) hash = (hash * 31 + String(key).charCodeAt(i)) | 0;
   return THEME_TONES[Math.abs(hash) % THEME_TONES.length];
 }
-function formatDate(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('vi-VN');
-}
-function formatDateTime(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('vi-VN');
-}
+const formatDate = formatTaskDate;
+const formatDateTime = formatTaskDateTime;
 function dateRangeLabel(task) {
   if (!task.start_date && !task.end_date) return '';
   return `${formatDate(task.start_date)} – ${formatDate(task.end_date)}`;
 }
-function formatVarianceDays(value) {
-  if (value == null) return '—';
-  if (value > 0) return `Trễ ${value} ngày`;
-  if (value < 0) return `Sớm ${Math.abs(value)} ngày`;
-  return 'Đúng hạn';
-}
-function cellText(task, key) {
-  if (key === 'code') return task.code || '—';
-  if (key === 'title') return task.title || '—';
-  if (key === 'start_date' || key === 'end_date' || key === 'actual_start_date' || key === 'actual_end_date') {
-    return formatDate(task[key]);
-  }
-  if (key === 'progress_percent') return task.progress_percent == null ? '—' : `${task.progress_percent}%`;
-  if (key === 'type') return typeLabel(task.type);
-  if (key === 'priority') return priorityLabel(task.priority);
-  if (key === 'assignee') return task.assignee?.name || '—';
-  if (key === 'status') return statusLabel(task.status);
-  if (key === 'creator') return task.creator?.name || '—';
-  if (key === 'created_at' || key === 'updated_at') return formatDateTime(task[key]);
-  if (key === 'parent') return task.parent?.title || '—';
-  if (key === 'attachments_count') return String(task.attachments_count || 0);
-  if (key === 'estimated_hours') return task.estimated_hours ?? '—';
-  if (key === 'worklog_hours') return String(task.worklog_hours || 0);
-  if (key === 'manager') return task.manager?.name || '—';
-  if (key === 'accepted_by') return task.accepted_by_user?.name || '—';
-  if (key === 'weight') return task.weight != null ? `${task.weight}%` : '—';
-  if (key === 'is_overdue') return task.is_overdue ? 'Quá hạn' : 'Đúng hạn';
-  if (key === 'variance_days') return formatVarianceDays(task.variance_days);
-  return '—';
-}
+const formatVarianceDays = formatTaskVarianceDays;
+const cellText = taskCellText;
 function colWidthStyle(key) {
   return columnWidths[key] ? `${columnWidths[key]}px` : undefined;
 }
@@ -1047,94 +1030,17 @@ watch(tableZoom, (value) => {
                 {{ query.trim() || filter !== 'all' ? 'Không có công việc phù hợp.' : 'Dự án chưa có công việc nào.' }}
               </td>
             </tr>
-            <tr
+            <TaskTableRow
               v-for="task in pagedTasks"
               v-else
               :key="task.id"
-              class="ptasks__row"
-              @dblclick="openTask(task)"
-              @contextmenu="openRowContextMenu($event, task)"
-            >
-              <td
-                v-for="col in shownColumns"
-                :key="col.key"
-                :class="{
-                  'ptasks__td--name': col.key === 'title',
-                  'ptasks__td--avatar': col.key === 'assignee' || col.key === 'creator' || col.key === 'manager',
-                }"
-              >
-                <span v-if="col.key === 'code'" class="ptasks__pill ptasks__pill--code">{{ task.code || '—' }}</span>
-                <span v-else-if="col.key === 'title'" class="ptasks__name">
-                  <span class="ptasks__name-row" :style="task.depth ? { paddingLeft: `${task.depth * 20}px` } : undefined">
-                    <button
-                      v-if="task.hasChildren"
-                      type="button"
-                      class="ptasks__tree"
-                      :aria-label="collapsedIds.has(task.id) ? 'Mở rộng công việc con' : 'Thu gọn công việc con'"
-                      @click.stop="toggleCollapse(task.id)"
-                    >
-                      <AppIcon
-                        name="chevronRight"
-                        :size="12"
-                        class="ptasks__tree-icon"
-                        :class="{ 'ptasks__tree-icon--open': !collapsedIds.has(task.id) }"
-                      />
-                    </button>
-                    <button type="button" class="ptasks__link" @click.stop="openTask(task)">{{ task.title }}</button>
-                  </span>
-                </span>
-                <span v-else-if="col.key === 'assignee'">
-                  <UserAvatarTip v-if="task.assignee" :user="task.assignee" label="Người thực hiện" />
-                  <span v-else>—</span>
-                </span>
-                <span v-else-if="col.key === 'status'" class="ptasks__pill" :class="`ptasks__pill--${statusTone(task.status)}`">
-                  <span class="ptasks__dot" :class="`ptasks__dot--${statusTone(task.status)}`" />
-                  {{ statusLabel(task.status) }}
-                </span>
-                <span v-else-if="col.key === 'priority'" class="ptasks__pill" :class="`ptasks__pill--${priorityTone(task.priority)}`">
-                  <span class="ptasks__dot" :class="`ptasks__dot--${priorityTone(task.priority)}`" />
-                  {{ priorityLabel(task.priority) }}
-                </span>
-                <span v-else-if="col.key === 'start_date'" class="ptasks__pill ptasks__pill--date">{{ formatDate(task.start_date) }}</span>
-                <span v-else-if="col.key === 'end_date'" class="ptasks__pill ptasks__pill--date">{{ formatDate(task.end_date) }}</span>
-                <span v-else-if="col.key === 'actual_start_date'" class="ptasks__pill ptasks__pill--date">{{ formatDate(task.actual_start_date) }}</span>
-                <span v-else-if="col.key === 'actual_end_date'" class="ptasks__pill ptasks__pill--date">{{ formatDate(task.actual_end_date) }}</span>
-                <span v-else-if="col.key === 'progress_percent'" class="ptasks__progress">
-                  <DualProgressBar
-                    v-if="task.progress_percent != null"
-                    :actual="task.progress_percent"
-                    :expected="computeExpectedProgress(task.start_date, task.end_date)"
-                    size="sm"
-                  />
-                  <span v-else>—</span>
-                </span>
-                <span v-else-if="col.key === 'type'" class="ptasks__pill" :class="`ptasks__pill--${typeTone(task.type)}`">
-                  {{ typeLabel(task.type) }}
-                </span>
-                <span v-else-if="col.key === 'creator'">
-                  <UserAvatarTip v-if="task.creator" :user="task.creator" label="Người tạo" />
-                  <span v-else>—</span>
-                </span>
-                <span v-else-if="col.key === 'created_at'">{{ formatDateTime(task.created_at) }}</span>
-                <span v-else-if="col.key === 'updated_at'">{{ formatDateTime(task.updated_at) }}</span>
-                <span v-else-if="col.key === 'parent'">{{ task.parent?.title || '—' }}</span>
-                <span v-else-if="col.key === 'attachments_count'">{{ task.attachments_count || 0 }}</span>
-                <span v-else-if="col.key === 'estimated_hours'">{{ task.estimated_hours ?? '—' }}</span>
-                <span v-else-if="col.key === 'worklog_hours'">{{ task.worklog_hours || 0 }}</span>
-                <span v-else-if="col.key === 'manager'">
-                  <UserAvatarTip v-if="task.manager" :user="task.manager" label="Người quản lý" />
-                  <span v-else>—</span>
-                </span>
-                <span v-else-if="col.key === 'accepted_by'">{{ task.accepted_by_user?.name || '—' }}</span>
-                <span v-else-if="col.key === 'weight'">{{ task.weight != null ? `${task.weight}%` : '—' }}</span>
-                <span v-else-if="col.key === 'is_overdue'" class="ptasks__pill" :class="`ptasks__pill--${task.is_overdue ? 'danger' : 'success'}`">
-                  <span class="ptasks__dot" :class="`ptasks__dot--${task.is_overdue ? 'danger' : 'success'}`" />
-                  {{ task.is_overdue ? 'Quá hạn' : 'Đúng hạn' }}
-                </span>
-                <span v-else-if="col.key === 'variance_days'">{{ formatVarianceDays(task.variance_days) }}</span>
-                <span v-else>{{ cellText(task, col.key) }}</span>
-              </td>
-            </tr>
+              :task="task"
+              :shown-columns="shownColumns"
+              :collapsed-ids="collapsedIds"
+              @open="openTask"
+              @context-menu="openRowContextMenu"
+              @toggle-collapse="toggleCollapse"
+            />
           </tbody>
         </table>
       </div>
@@ -1151,6 +1057,102 @@ watch(tableZoom, (value) => {
         @update:page="page = $event"
         @update:per-page="perPage = $event"
       />
+    </template>
+
+    <template v-else-if="isPhaseGroup">
+      <TablePagesBar
+        placement="top"
+        :from="phaseGroupTotal ? 1 : 0"
+        :to="phaseGroupTotal"
+        :total="phaseGroupTotal"
+        :page="1"
+        :last-page="1"
+        :per-page="phaseGroupTotal || 1"
+        show-search
+        :show-clear-filters="Boolean(query.trim()) || filter !== 'all'"
+        @clear-filters="query = ''"
+      >
+        <template #settings>
+          <label v-for="col in PROJECT_TASK_COLUMNS" :key="col.key" class="ptasks__check">
+            <input
+              type="checkbox"
+              :checked="col.always || visibility[col.key]"
+              :disabled="col.always"
+              @change="toggleCol(col.key, $event.target.checked)"
+            />
+            <span>{{ col.label }}</span>
+          </label>
+        </template>
+      </TablePagesBar>
+
+      <div
+        ref="tableWrap"
+        class="ptasks__table-wrap hide-scrollbar"
+        :class="{ 'ptasks__table-wrap--resizing': resizing }"
+        :style="{ '--table-zoom': tableZoom }"
+      >
+        <table class="ptasks__table" :style="{ width: tableWidthPx }">
+          <colgroup>
+            <col v-for="col in shownColumns" :key="col.key" :style="{ width: colWidthStyle(col.key) }" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th v-for="col in shownColumns" :key="col.key">
+                <span>{{ col.label }}</span>
+                <button
+                  type="button"
+                  class="ptasks__resize"
+                  aria-label="Kéo để đổi độ rộng cột"
+                  @click.stop
+                  @mousedown.stop.prevent="startResize($event, col.key)"
+                />
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td :colspan="colSpan" class="ptasks__empty">Đang tải công việc…</td>
+            </tr>
+            <tr v-else-if="!phaseGroups.length">
+              <td :colspan="colSpan" class="ptasks__empty">
+                {{ query.trim() || filter !== 'all' ? 'Không có công việc phù hợp.' : 'Dự án chưa có công việc nào.' }}
+              </td>
+            </tr>
+            <template v-for="group in phaseGroups" v-else :key="group.key">
+              <tr class="ptasks__group-row" @click="toggleCollapsePhase(group.key)">
+                <td :colspan="colSpan">
+                  <span class="ptasks__group-toggle">
+                    <span class="ptasks__group-head">
+                      <AppIcon
+                        name="chevronRight"
+                        :size="14"
+                        class="ptasks__group-chevron"
+                        :class="{ 'ptasks__group-chevron--open': !collapsedPhaseKeys.has(group.key) }"
+                      />
+                      <span class="ptasks__group-label">{{ group.title }}</span>
+                    </span>
+                    <span class="ptasks__group-meta">
+                      <span v-if="group.avgProgress != null" class="ptasks__group-progress">Tiến độ {{ group.avgProgress }}%</span>
+                      <span class="ptasks__group-count">{{ group.tasks.length }} công việc</span>
+                    </span>
+                  </span>
+                </td>
+              </tr>
+              <TaskTableRow
+                v-for="task in group.tasks"
+                v-show="!collapsedPhaseKeys.has(group.key)"
+                :key="task.id"
+                :task="task"
+                :shown-columns="shownColumns"
+                :collapsed-ids="collapsedIds"
+                @open="openTask"
+                @context-menu="openRowContextMenu"
+                @toggle-collapse="toggleCollapse"
+              />
+            </template>
+          </tbody>
+        </table>
+      </div>
     </template>
 
     <div
@@ -1378,6 +1380,7 @@ watch(tableZoom, (value) => {
       @close="closeActionDialog"
       @updated="applyTaskUpdate"
       @duplicated="onTaskDuplicated"
+      @deleted="onTaskDeleted"
     />
   </div>
 </template>
@@ -1921,6 +1924,85 @@ watch(tableZoom, (value) => {
   color: var(--color-text-muted);
   text-align: center;
   white-space: normal;
+}
+
+.ptasks__group-row {
+  cursor: pointer;
+}
+
+.ptasks__group-row td {
+  position: relative;
+  width: 100%;
+  overflow: visible;
+  padding: var(--space-2) var(--space-4) var(--space-2) calc(var(--space-4) + 3px + var(--space-2)) !important;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  box-shadow: inset 0 -2px 0 var(--color-border) !important;
+}
+
+.ptasks__group-row td::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  background: var(--color-gold);
+}
+
+.ptasks__group-row:hover td {
+  background: color-mix(in srgb, var(--color-gold) 6%, var(--color-surface));
+}
+
+.ptasks__group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+}
+
+.ptasks__group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.ptasks__group-chevron {
+  flex-shrink: 0;
+  color: var(--color-gold);
+  transition: transform 0.15s ease;
+}
+
+.ptasks__group-chevron--open {
+  transform: rotate(90deg);
+}
+
+.ptasks__group-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: calc(0.8125rem * var(--table-zoom, 1));
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ptasks__group-meta {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ptasks__group-progress,
+.ptasks__group-count {
+  color: var(--color-text-muted);
+  font-size: calc(0.75rem * var(--table-zoom, 1));
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .ptasks__mini {
