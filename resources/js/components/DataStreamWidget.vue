@@ -18,8 +18,9 @@ const canvasW = computed(() => current.value.canvasW ?? 1400);
 const canvasH = computed(() => current.value.canvasH ?? 720);
 
 // ─── Zoom ─────────────────────────────────────────────────────────────────────
-const MIN_ZOOM = 0.3;
+const MIN_ZOOM = 0.45; // trước: 0.3 — đảm bảo chữ/nút trong card vẫn đọc/bấm được ở mức zoom fit nhỏ nhất
 const MAX_ZOOM = 2;
+const DRAG_THRESHOLD = 4; // px — ngưỡng trước khi coi là kéo thật, tránh nuốt click gần rìa nút/khi zoom nhỏ
 const zoom = ref(1);
 const userZoomed = ref(false);
 
@@ -66,6 +67,13 @@ function resetPan() {
   panX.value = 0;
   panY.value = 0;
   hasPanned.value = false;
+}
+
+function resetLayout() {
+  resetPositions();
+  resetPan();
+  userZoomed.value = false;
+  fitZoom();
 }
 
 function eventElement(target) {
@@ -127,29 +135,52 @@ function captureStage(event) {
   }
 }
 
+// Chặn 1 click "ăn theo" ngay sau khi vừa kéo thật xong (tay rung nhẹ lúc thả
+// sau một cú kéo hợp lệ không nên vô tình kích hoạt điều hướng/bấm nhầm).
+function suppressNextClick(target) {
+  target?.addEventListener?.(
+    'click',
+    (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+    },
+    { capture: true, once: true },
+  );
+}
+
 function startDrag(event, node) {
   if (event.button !== 0) return;
   if (isInteractiveTarget(event.target)) return;
 
-  event.preventDefault();
-  event.stopPropagation();
-  captureStage(event);
-
   const origin = posOf(node);
   const startX = event.clientX;
   const startY = event.clientY;
-  draggingId.value = node.id;
+  let moved = false;
 
   listenPointer(
     (moveEvent) => {
-      const dx = (moveEvent.clientX - startX) / zoom.value;
-      const dy = (moveEvent.clientY - startY) / zoom.value;
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+
+      // Chưa vượt ngưỡng: coi như chưa chắc là kéo, không đổi gì cả — để
+      // pointerup có thể phát sinh click bình thường lên nút/thẻ bên dưới
+      // (tránh nuốt mất cú bấm nút khi lệch nhẹ ra rìa lúc zoom nhỏ).
+      if (!moved) {
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        moved = true;
+        draggingId.value = node.id;
+        event.preventDefault();
+        event.stopPropagation();
+        captureStage(event);
+      }
+
       positions[node.id] = {
-        x: Math.max(0, origin.x + dx),
-        y: Math.max(0, origin.y + dy),
+        x: Math.max(0, origin.x + dx / zoom.value),
+        y: Math.max(0, origin.y + dy / zoom.value),
       };
     },
     () => {
+      if (moved) suppressNextClick(event.target);
       draggingId.value = null;
     },
   );
@@ -161,20 +192,28 @@ function startPan(event) {
   if (isInteractiveTarget(event.target)) return;
   if (eventElement(event.target)?.closest?.('.dsw-node')) return;
 
-  event.preventDefault();
-  captureStage(event);
-
   const startX = event.clientX;
   const startY = event.clientY;
   const originX = panX.value;
   const originY = panY.value;
-  panning.value = true;
-  hasPanned.value = true;
+  let moved = false;
 
   listenPointer(
     (moveEvent) => {
-      panX.value = originX + (moveEvent.clientX - startX);
-      panY.value = originY + (moveEvent.clientY - startY);
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+
+      if (!moved) {
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        moved = true;
+        panning.value = true;
+        hasPanned.value = true;
+        event.preventDefault();
+        captureStage(event);
+      }
+
+      panX.value = originX + dx;
+      panY.value = originY + dy;
     },
     () => {
       panning.value = false;
@@ -362,7 +401,7 @@ function pathD(edge) {
   <div ref="widgetRef" class="dsw" :class="{ 'dsw--fs': isFullscreen }">
 
     <!-- ── Tabs ──────────────────────────────────────────────────────── -->
-    <div class="dsw__tabs" role="tablist">
+    <div class="dsw__tabs hide-scrollbar" role="tablist">
       <button
         v-for="tab in tabs"
         :key="tab.id"
@@ -394,6 +433,9 @@ function pathD(edge) {
           <AppIcon name="zoomOut" :size="13" :stroke-width="1.75" />
         </button>
         <span class="dsw__zoom-pct">{{ Math.round(zoom * 100) }}%</span>
+        <button type="button" class="dsw__ctrl" aria-label="Về vị trí gốc" @click="resetLayout">
+          <AppIcon name="refresh" :size="13" :stroke-width="1.75" />
+        </button>
       </div>
     </div>
 
@@ -745,6 +787,32 @@ function pathD(edge) {
 
 .dsw__pan-hint svg { flex-shrink: 0; color: var(--color-primary); }
 
+/* ── Responsive: tabs/bar/controls ───────────────────────────────────────── */
+@media (max-width: 768px) {
+  .dsw__tabs {
+    overflow-x: auto;
+    padding: 0 10px;
+  }
+
+  .dsw__tab {
+    flex-shrink: 0;
+    padding: 8px 11px;
+    font-size: 12.5px;
+  }
+
+  .dsw__bar {
+    padding: 8px 10px;
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dsw__bar-title { font-size: 13px; }
+  .dsw__bar-desc { display: none; }
+  .dsw__controls { gap: 0; }
+}
+
 /* ── Canvas wrap ──────────────────────────────────────────────────────────── */
 .dsw__canvas-wrap {
   position: relative;
@@ -917,26 +985,27 @@ function pathD(edge) {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 9px 12px;
   margin-top: 9px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: transparent;
-  color: var(--color-text);
-  font: 500 14px/1 var(--font-family-base);
+  border: 1px solid var(--color-primary-200);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font: 600 14px/1 var(--font-family-base);
   cursor: pointer;
   transition: background 120ms, border-color 120ms;
   width: 100%;
+  min-height: 38px;
 }
 
 .dsw-card-btn:hover {
-  background: var(--color-surface-muted);
-  border-color: var(--color-primary-200);
-  color: var(--color-primary);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
-.dsw-node--hl .dsw-card-btn { border-color: var(--color-primary-200); }
-.dsw-node--hl .dsw-card-btn:hover { background: var(--color-primary-surface); }
+.dsw-node--hl .dsw-card-btn { border-color: var(--color-primary-700); }
+.dsw-node--hl .dsw-card-btn:hover { background: var(--color-primary-900); border-color: var(--color-primary-900); }
 
 /* ── Group node ───────────────────────────────────────────────────────────── */
 .dsw-node--group {
