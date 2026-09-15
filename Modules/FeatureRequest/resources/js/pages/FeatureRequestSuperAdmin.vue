@@ -187,6 +187,12 @@ onMounted(load);
 
 <template>
   <div class="fr-page">
+    <img
+      src="/images/background/background-logo.png"
+      alt=""
+      class="fr-page__watermark"
+      aria-hidden="true"
+    />
     <PageHeader
       title="Ghi nhận yêu cầu tính năng"
       icon="alertTriangle"
@@ -422,6 +428,7 @@ onMounted(load);
 
 <style scoped>
 .fr-page {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -429,6 +436,28 @@ onMounted(load);
   min-height: 0;
   padding: var(--space-4);
   overflow: hidden;
+}
+
+/* Watermark nền: cùng ảnh logo họa tiết dùng ở trang Đăng nhập
+   (Login.vue::login__watermark), nhưng trang này nền sáng nên không invert
+   sang trắng — chỉ tint rất nhạt theo màu primary bằng opacity thấp, cố định
+   phía sau toàn bộ nội dung, không chặn thao tác (pointer-events: none). */
+.fr-page__watermark {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.05;
+  pointer-events: none;
+  user-select: none;
+}
+
+.fr-page > :not(.fr-page__watermark) {
+  position: relative;
+  z-index: 1;
 }
 
 /* Thẻ thống kê — cùng kiểu KPI với trang Chi tiết dự án (.pd__stat trong
