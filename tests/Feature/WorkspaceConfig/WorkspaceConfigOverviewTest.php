@@ -82,4 +82,82 @@ class WorkspaceConfigOverviewTest extends TestCase
             ->getJson('/api/workspace-config/overview')
             ->assertStatus(403);
     }
+
+    public function test_super_admin_lists_unassigned_members(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $assigned = $this->makeUser(['department_id' => $dept->id], ['member']);
+        $unassigned = $this->makeUser(['department_id' => null], ['member']);
+
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $response = $this->actingAs($admin)
+            ->getJson('/api/workspace-config/members/unassigned')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $unassigned->id]);
+
+        $ids = collect($response->json('members'))->pluck('id')->all();
+        $this->assertNotContains($assigned->id, $ids);
+    }
+
+    public function test_super_admin_assigns_department_to_unassigned_member(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $member = $this->makeUser(['department_id' => null], ['member']);
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $this->actingAs($admin)
+            ->putJson("/api/workspace-config/members/{$member->id}/department", [
+                'department_id' => $dept->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('member.department.id', $dept->id);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $member->id,
+            'department_id' => $dept->id,
+        ]);
+    }
+
+    public function test_assigning_department_clears_stale_team_from_previous_department(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $oldDept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $newDept = Department::query()->create(['code' => 'D2', 'name' => 'Dept 2', 'is_active' => true]);
+        $team = Team::query()->create(['department_id' => $oldDept->id, 'name' => 'Nhóm A']);
+        $member = $this->makeUser(['department_id' => $oldDept->id, 'team_id' => $team->id], ['member']);
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $this->actingAs($admin)
+            ->putJson("/api/workspace-config/members/{$member->id}/department", [
+                'department_id' => $newDept->id,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('users', [
+            'id' => $member->id,
+            'department_id' => $newDept->id,
+            'team_id' => null,
+        ]);
+    }
+
+    public function test_director_cannot_assign_department(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+        $member = $this->makeUser(['department_id' => null], ['member']);
+
+        $this->actingAs($director)
+            ->putJson("/api/workspace-config/members/{$member->id}/department", [
+                'department_id' => $dept->id,
+            ])
+            ->assertStatus(403);
+    }
 }
