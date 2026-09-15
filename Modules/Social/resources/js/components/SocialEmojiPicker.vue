@@ -345,6 +345,25 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: var(--space-3);
+  animation: emoji-picker-pop 0.16s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes emoji-picker-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emoji-picker {
+    animation: none;
+  }
 }
 
 .emoji-picker__modes {

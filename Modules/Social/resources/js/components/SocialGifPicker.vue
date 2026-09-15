@@ -121,23 +121,35 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
 }
 
 .gif-picker__search {
+  display: flex;
+  align-items: center;
   flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: box-shadow 0.16s ease;
+}
+
+.gif-picker__search:focus-within {
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 .gif-picker__input {
   width: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
+  border: none;
+  background: none;
   padding: var(--space-2) var(--space-3);
   font-family: inherit;
   font-size: 0.8125rem;
   color: var(--color-text);
-  background: var(--color-surface-muted);
 }
 
 .gif-picker__input:focus {
   outline: none;
-  border-color: var(--color-primary);
+}
+
+.gif-picker__input::placeholder {
+  color: var(--color-text-muted);
 }
 
 .gif-picker__grid {
@@ -150,6 +162,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
 }
 
 .gif-picker__tile {
+  position: relative;
   display: block;
   width: 100%;
   border: none;
@@ -160,6 +173,10 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
   cursor: pointer;
   background: var(--color-surface-muted);
   break-inside: avoid;
+  animation: gif-picker-tile-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition:
+    outline-color 0.14s ease,
+    transform 0.14s ease;
 }
 
 .gif-picker__tile img {
@@ -172,22 +189,45 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
 .gif-picker__tile:hover {
   outline: 2px solid var(--color-primary);
   outline-offset: -2px;
+  transform: scale(1.015);
+}
+
+.gif-picker__tile:active {
+  transform: scale(0.98);
 }
 
 .gif-picker__tile--busy {
   opacity: 0.6;
+  pointer-events: none;
+}
+
+@keyframes gif-picker-tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gif-picker__spinner-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, #000000 28%, transparent);
 }
 
 .gif-picker__spinner {
-  position: absolute;
-  inset: 0;
-  margin: auto;
   width: 1.25rem;
   height: 1.25rem;
   border-radius: var(--radius-full);
-  border: 2px solid var(--color-surface);
-  box-shadow: 0 0 0 2px var(--color-primary);
-  border-top-color: var(--color-primary);
+  border: 2px solid color-mix(in srgb, #ffffff 40%, transparent);
+  border-top-color: #fff;
   animation: gif-picker-spin 0.7s linear infinite;
 }
 
