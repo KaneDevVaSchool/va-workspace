@@ -92,6 +92,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
         type="button"
         class="gif-picker__tile"
         :class="{ 'gif-picker__tile--busy': downloadingId === item.id }"
+        :style="{ aspectRatio: item.preview_width && item.preview_height ? `${item.preview_width} / ${item.preview_height}` : '1 / 1' }"
         :disabled="downloadingId !== null"
         :aria-label="item.title || 'Chọn GIF này'"
         @click="pick(item)"
@@ -140,31 +141,31 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
 }
 
 .gif-picker__grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-1);
+  column-count: 2;
+  column-gap: var(--space-1);
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  align-content: start;
 }
 
 .gif-picker__tile {
-  position: relative;
+  display: block;
+  width: 100%;
   border: none;
   padding: 0;
+  margin: 0 0 var(--space-1);
   border-radius: var(--radius-md);
   overflow: hidden;
   cursor: pointer;
-  aspect-ratio: 1 / 1;
   background: var(--color-surface-muted);
+  break-inside: avoid;
 }
 
 .gif-picker__tile img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 
@@ -198,7 +199,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
 
 .gif-picker__empty,
 .gif-picker__loading {
-  grid-column: 1 / -1;
+  column-span: all;
   text-align: center;
   color: var(--color-text-muted);
   font-size: 0.8125rem;
@@ -219,9 +220,4 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
   font-size: 0.6875rem;
 }
 
-@media (max-width: 480px) {
-  .gif-picker__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 </style>

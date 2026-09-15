@@ -177,18 +177,7 @@ onMounted(load);
       title="Ghi nhận yêu cầu tính năng của tôi"
       icon="alertTriangle"
       :subtitle="`${overallCounts.total} ghi nhận`"
-    >
-      <template #actions>
-        <button
-          type="button"
-          class="frm-page__new-btn"
-          @click="resetForm(); selectedId = null;"
-        >
-          <AppIcon name="plus" :size="16" :stroke-width="2.25" />
-          Ghi nhận mới
-        </button>
-      </template>
-    </PageHeader>
+    />
 
     <div class="frm-page__stats" role="group" aria-label="Lọc theo trạng thái">
       <button
@@ -395,25 +384,6 @@ onMounted(load);
 .frm-page > :not(.frm-page__watermark) {
   position: relative;
   z-index: 1;
-}
-
-.frm-page__new-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-family: var(--font-family-base);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.frm-page__new-btn:hover {
-  background: var(--color-primary-hover);
 }
 
 .frm-page__stats {

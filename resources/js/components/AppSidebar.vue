@@ -198,6 +198,15 @@ const MENU_SECTIONS = [
         requiresPermission: 'feature_request.review',
       },
       {
+        // Trang đầy đủ cho MỌI nhân viên tự xem lịch sử ghi nhận yêu cầu
+        // tính năng của chính mình — khác mục review ở trên (chỉ hiện với
+        // người có quyền feature_request.review). Không cần permission gì
+        // vì route chỉ requiresAuth (xem router.js module FeatureRequest).
+        name: 'feature-requests.mine',
+        label: 'Ghi nhận của tôi',
+        icon: 'alertTriangle',
+      },
+      {
         // Quản lý tài khoản (Credential module) — chứa thông tin đăng nhập
         // dịch vụ dùng chung công ty (Google, Canva, Cursor, Claude, AWS,
         // VPS, database, IAM, domain...), không phải dữ liệu riêng của 1

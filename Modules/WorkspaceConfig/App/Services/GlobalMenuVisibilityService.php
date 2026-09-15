@@ -95,6 +95,12 @@ class GlobalMenuVisibilityService
             'icon' => 'alertTriangle',
             'audience' => 'Menu này hiện với người được cấp quyền xử lý ghi nhận yêu cầu tính năng, không chỉ riêng Super Admin.',
         ],
+        'feature-requests.mine' => [
+            'label' => 'Ghi nhận của tôi',
+            'section' => 'control',
+            'icon' => 'alertTriangle',
+            'audience' => 'Menu này hiện với mọi tài khoản đã đăng nhập, để tự xem lịch sử ghi nhận yêu cầu tính năng của chính mình.',
+        ],
         'manager.credential.index' => [
             'label' => 'Tài khoản',
             'section' => 'control',
