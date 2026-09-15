@@ -216,9 +216,12 @@ class SocialPostService
             ? $this->sanitizeAnonymousName($data['anonymous_name'] ?? null)
             : null;
 
-        // Thông báo quan trọng do người quản trị đăng → duyệt tự động, khỏi
-        // qua hàng chờ (họ đã là người có quyền duyệt cao nhất).
-        $reviewStatus = $asSystem ? SocialPost::REVIEW_APPROVED : SocialPost::REVIEW_PENDING;
+        // Chỉ bài đăng lên bảng tin chung mới cần chờ duyệt; bài đăng lên
+        // tường phòng ban/cá nhân/nhóm hoặc thông báo quan trọng của quản
+        // trị viên được đăng thẳng.
+        $reviewStatus = (! $asSystem && $destination['post_scope'] === self::POST_SCOPE_COMPANY)
+            ? SocialPost::REVIEW_PENDING
+            : SocialPost::REVIEW_APPROVED;
 
         $post = DB::transaction(function () use ($author, $data, $files, $asSystem, $destination, $visibility, $isAnonymous, $anonymousName, $reviewStatus) {
             $payload = [
@@ -347,6 +350,10 @@ class SocialPostService
     {
         $destination = $this->resolveDestination($sharer, $data);
 
+        $reviewStatus = $destination['post_scope'] === self::POST_SCOPE_COMPANY
+            ? SocialPost::REVIEW_PENDING
+            : SocialPost::REVIEW_APPROVED;
+
         $post = $this->posts->create([
             'user_id' => $sharer->id,
             'department_id' => $destination['department_id'],
@@ -354,6 +361,7 @@ class SocialPostService
             'group_id' => $destination['group_id'],
             'content' => $caption !== null ? $this->sanitizeContent($caption) : null,
             'shared_from_post_id' => $original->id,
+            'review_status' => $reviewStatus,
         ]);
 
         $this->mentions->notifyPost($sharer, $post);

@@ -859,8 +859,6 @@ onMounted(() => loadGroups(1));
 }
 
 .groups-page__empty {
-    position: relative;
-    isolation: isolate;
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -870,25 +868,6 @@ onMounted(() => loadGroups(1));
     text-align: center;
     color: var(--color-text-muted);
     padding: var(--space-8) var(--space-6);
-    overflow: hidden;
-    border-radius: var(--radius-lg);
-}
-
-.groups-page__empty::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    background: url("/images/background/background-logo.png") center / cover
-        no-repeat;
-    filter: url(#groups-watermark-boost);
-    opacity: 0.055;
-    pointer-events: none;
-}
-
-.groups-page__empty > * {
-    position: relative;
-    z-index: 1;
 }
 
 .groups-page__empty-mark {
