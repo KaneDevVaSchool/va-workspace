@@ -20,6 +20,14 @@ interface SocialCommentRepositoryInterface
     public function countForPost(int $postId): int;
 
     /**
+     * user_id => thời điểm bình luận gốc mới nhất (ISO 8601), dùng để xác định
+     * người đã từng tham gia thảo luận trong bài viết (không tính reply lồng).
+     *
+     * @return array<int, string>
+     */
+    public function latestCommentAtByAuthor(int $postId): array;
+
+    /**
      * Đặt/đổi/xoá reaction của user trên bình luận.
      * Trả ['action' => 'set'|'removed', 'reaction_type' => string|null].
      */

@@ -9,6 +9,7 @@ import {
   EMPLOYEE_TABLE_COLUMN_WIDTH_KEY,
 } from '../constants/departmentEmployeesTable';
 import { loadColumnWidths, loadVisibility, saveColumnWidths, saveVisibility } from '../utils/tableStorage';
+import EmployeeProjectsModal from './EmployeeProjectsModal.vue';
 
 const props = defineProps({
   rows: { type: Array, required: true },
@@ -58,8 +59,23 @@ function onSearchInput() {
   searchTimer = setTimeout(() => emit('search', searchTerm.value), 300);
 }
 
-function projectsText(row, key) {
-  return (row[key] ?? []).map((p) => p.name).join(', ') || '—';
+const projectsModalOpen = ref(false);
+const projectsModalTitle = ref('');
+const projectsModalList = ref([]);
+
+function openProjectsModal(row, key) {
+  projectsModalTitle.value = key === 'projects_leading' ? `Dự án đang phụ trách — ${row.name}` : `Dự án đang phối hợp — ${row.name}`;
+  projectsModalList.value = row[key] ?? [];
+  projectsModalOpen.value = true;
+}
+
+function closeProjectsModal() {
+  projectsModalOpen.value = false;
+}
+
+function projectsCountLabel(row, key) {
+  const count = (row[key] ?? []).length;
+  return count === 0 ? 'Chưa có' : `${count} dự án`;
 }
 
 function taskStatusSummary(row) {
@@ -69,7 +85,7 @@ function taskStatusSummary(row) {
 }
 
 function cellText(row, key) {
-  if (key === 'projects_leading' || key === 'projects_collaborating') return projectsText(row, key);
+  if (key === 'projects_leading' || key === 'projects_collaborating') return projectsCountLabel(row, key);
   if (key === 'tasks_status') return taskStatusSummary(row);
   if (key === 'average_progress_percent') return row.average_progress_percent === null ? 'Chưa có dữ liệu' : `${row.average_progress_percent}%`;
   if (key === 'team_name') return row.team_name ?? '—';
@@ -110,10 +126,7 @@ function columnContentWidth(key, fonts) {
   let maxW = measureText(label, fonts.header);
   for (const row of props.rows) {
     const text = cellText(row, key);
-    // Cột trạng thái việc cắt bớt lúc đo để tránh kéo bảng quá rộng — vẫn hiển thị full text, chỉ giới hạn độ rộng đo.
-    // Cột dự án (phụ trách/phối hợp) đo đủ toàn bộ nội dung để không bị cắt bởi ellipsis.
-    const capped = key === 'tasks_status' && text.length > 60 ? text.slice(0, 60) : text;
-    maxW = Math.max(maxW, measureText(capped, fonts.cell));
+    maxW = Math.max(maxW, measureText(text, fonts.cell));
   }
   return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA));
 }
@@ -283,6 +296,18 @@ if (typeof document !== 'undefined' && document.fonts?.ready) {
                   <span>{{ row.name }}</span>
                 </span>
               </template>
+              <template v-else-if="col.key === 'projects_leading' || col.key === 'projects_collaborating'">
+                <button
+                  v-if="(row[col.key] ?? []).length"
+                  type="button"
+                  class="employee-table__projects-chip"
+                  @click.stop="openProjectsModal(row, col.key)"
+                >
+                  <span class="employee-table__dot" aria-hidden="true"></span>
+                  <span>{{ cellText(row, col.key) }}</span>
+                </button>
+                <span v-else class="employee-table__muted">{{ cellText(row, col.key) }}</span>
+              </template>
               <span v-else>{{ cellText(row, col.key) }}</span>
             </td>
           </tr>
@@ -301,6 +326,13 @@ if (typeof document !== 'undefined' && document.fonts?.ready) {
       :per-page="perPage"
       @update:page="emit('update:page', $event)"
       @update:perPage="emit('update:perPage', $event)"
+    />
+
+    <EmployeeProjectsModal
+      :open="projectsModalOpen"
+      :title="projectsModalTitle"
+      :projects="projectsModalList"
+      @close="closeProjectsModal"
     />
   </div>
 </template>
@@ -440,5 +472,34 @@ if (typeof document !== 'undefined' && document.fonts?.ready) {
   color: var(--color-primary);
   font-weight: 700;
   font-size: 0.75rem;
+}
+
+.employee-table__projects-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.employee-table__projects-chip:hover span:last-child {
+  text-decoration: underline;
+}
+
+.employee-table__dot {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+}
+
+.employee-table__muted {
+  color: var(--color-text-muted);
 }
 </style>

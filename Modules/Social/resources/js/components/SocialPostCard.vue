@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { REACTIONS, reactionByType } from '../constants/reactions.js';
-import { formatSocialTime } from '../lib/formatSocialTime.js';
+import { formatSocialTime, isSocialTimeToday } from '../lib/formatSocialTime.js';
 import { applyOptimistic, cloneReactions, useReactionAction } from '../lib/useReactionAction.js';
 import { sanitizeSocialHtml } from '../lib/sanitizeSocialHtml.js';
 import { vSocialStickers } from '../lib/socialStickers.js';
@@ -131,6 +131,7 @@ const pinnedLabel = computed(() => {
   return 'Thông báo công ty';
 });
 const pinnedIcon = computed(() => (isSystemPin.value ? 'shield' : 'megaphone'));
+const isPostedToday = computed(() => isSocialTimeToday(props.post.created_at));
 const postedOnOtherWall = computed(() => (
   props.post.post_scope === 'personal'
   && props.post.wall_user
@@ -391,9 +392,15 @@ async function saveEdit() {
       </div>
 
       <div class="post-card__when">
-        <time class="post-card__time" :datetime="post.created_at">
-          {{ formatSocialTime(post.created_at) }}
-        </time>
+        <div class="post-card__time-row">
+          <span v-if="isPostedToday" class="post-card__today">
+            <span class="post-card__today-dot" aria-hidden="true"></span>
+            Hôm nay
+          </span>
+          <time class="post-card__time" :datetime="post.created_at">
+            {{ formatSocialTime(post.created_at) }}
+          </time>
+        </div>
         <button
           v-if="post.is_edited"
           type="button"
@@ -859,11 +866,36 @@ async function saveEdit() {
   background: var(--color-primary);
 }
 
+.post-card__time-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .post-card__time {
   flex-shrink: 0;
   font-size: 0.8125rem;
   color: var(--color-text-muted);
   white-space: nowrap;
+}
+
+.post-card__today {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+
+.post-card__today-dot {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
 }
 
 .post-card__when {

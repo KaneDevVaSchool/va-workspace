@@ -16,6 +16,14 @@ class NotificationService
 
     public const TYPE_MENTION_COMMENT = 'mention_comment';
 
+    public const TYPE_SOCIAL_COMMENT = 'social_comment';
+
+    public const TYPE_LIKE_POST = 'like_post';
+
+    public const TYPE_LIKE_COMMENT = 'like_comment';
+
+    public const TYPE_SHARE_POST = 'share_post';
+
     public const TYPE_GROUP_JOIN_REQUEST = 'group_join_request';
 
     public const TYPE_GROUP_JOIN_APPROVED = 'group_join_approved';

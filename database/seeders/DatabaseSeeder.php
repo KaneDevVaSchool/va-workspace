@@ -7,6 +7,7 @@ use Illuminate\Database\Seeder;
 use Modules\Identity\Database\Seeders\CnttSoftwareTeamSeeder;
 use Modules\Identity\Database\Seeders\DemoUserSeeder;
 use Modules\Identity\Database\Seeders\DepartmentSeeder;
+use Modules\Identity\Database\Seeders\HcnsTeamSeeder;
 use Modules\Identity\Database\Seeders\RoleSeeder;
 use Modules\Identity\Database\Seeders\SuperAdminSeeder;
 
@@ -43,6 +44,8 @@ class DatabaseSeeder extends Seeder
             // cứng) — PHẢI chạy sau SuperAdminSeeder (giữ nguyên department
             // CNTT mặc định của khoana@..., không còn bị NS ghi đè).
             CnttSoftwareTeamSeeder::class,
+            // Nhân sự THẬT phòng Hành chính Nhân sự (HCNS).
+            HcnsTeamSeeder::class,
         ]);
     }
 }

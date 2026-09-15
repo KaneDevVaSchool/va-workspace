@@ -16,6 +16,7 @@ class DepartmentSeeder extends Seeder
     {
         $departments = [
             ['code' => 'CNTT', 'name' => 'Phòng Công nghệ thông tin'],
+            ['code' => 'HCNS', 'name' => 'Phòng Hành chính Nhân sự'],
         ];
 
         foreach ($departments as $department) {

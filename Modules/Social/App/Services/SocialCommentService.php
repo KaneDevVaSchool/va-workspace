@@ -104,7 +104,8 @@ class SocialCommentService
             ]);
         }
 
-        $this->mentions->notifyComment($author, $post, $comment, $resolvedMentionId);
+        $mentionedIds = $this->mentions->notifyComment($author, $post, $comment, $resolvedMentionId);
+        $this->mentions->notifyPostComment($author, $post, $comment, $mentionedIds);
 
         return [
             'comment' => $this->present($comment, $author),
@@ -115,6 +116,10 @@ class SocialCommentService
     public function setReaction(SocialPostComment $comment, User $user, string $type): array
     {
         $result = $this->comments->setReaction($comment, $user->id, $type);
+
+        if ($result['action'] === 'set') {
+            $this->mentions->notifyLikeComment($user, $comment->post, $comment);
+        }
 
         return [
             'reactions' => $this->comments->reactionSummary($comment),

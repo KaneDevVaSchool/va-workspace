@@ -365,6 +365,7 @@ class SocialPostService
         ]);
 
         $this->mentions->notifyPost($sharer, $post);
+        $this->mentions->notifyShare($sharer, $original);
         $this->hashtags->syncForPost($post);
 
         return $post;
@@ -514,6 +515,10 @@ class SocialPostService
     public function setReaction(SocialPost $post, User $user, string $type): array
     {
         $result = $this->posts->setReaction($post, $user->id, $type);
+
+        if ($result['action'] === 'set') {
+            $this->mentions->notifyLikePost($user, $post);
+        }
 
         return [
             'reactions' => $this->posts->reactionSummary($post),

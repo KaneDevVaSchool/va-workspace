@@ -163,6 +163,7 @@ class SocialGroupService
             'invited_by' => $request->invitedBy ? [
                 'id' => $request->invitedBy->id,
                 'name' => $request->invitedBy->name,
+                'department' => $request->invitedBy->department?->name,
             ] : null,
             'created_at' => $request->created_at?->toIso8601String(),
         ];

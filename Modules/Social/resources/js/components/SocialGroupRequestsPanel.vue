@@ -62,8 +62,16 @@ onMounted(load);
 
     <ul v-else class="group-requests-panel__list">
       <li v-for="request in requests" :key="request.id" class="group-requests-panel__item">
+        <div class="group-requests-panel__avatar" aria-hidden="true">
+          <img v-if="request.user?.avatar_url" :src="request.user.avatar_url" alt="" />
+          <span v-else>{{ (request.user?.name || '?').trim().charAt(0).toUpperCase() }}</span>
+        </div>
         <div class="group-requests-panel__info">
           <p class="group-requests-panel__name">{{ request.user?.name }}</p>
+          <p v-if="request.user?.department" class="group-requests-panel__dept">
+            <AppIcon name="building" :size="12" :stroke-width="1.75" />
+            {{ request.user.department }}
+          </p>
           <p v-if="request.message" class="group-requests-panel__message">{{ request.message }}</p>
         </div>
         <div class="group-requests-panel__actions">
@@ -124,9 +132,10 @@ onMounted(load);
 
 .group-requests-panel__item {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: flex-start;
   gap: var(--space-2);
-  padding-top: var(--space-2);
+  padding-top: var(--space-3);
   box-shadow: 0 -1px 0 var(--color-border);
 }
 
@@ -135,11 +144,46 @@ onMounted(load);
   box-shadow: none;
 }
 
+.group-requests-panel__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+
+.group-requests-panel__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.group-requests-panel__info {
+  flex: 1;
+  min-width: 0;
+}
+
 .group-requests-panel__name {
   margin: 0;
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-text);
+}
+
+.group-requests-panel__dept {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
 }
 
 .group-requests-panel__message {
@@ -150,7 +194,10 @@ onMounted(load);
 
 .group-requests-panel__actions {
   display: flex;
+  flex-direction: column;
   gap: var(--space-2);
+  flex-shrink: 0;
+  width: 6rem;
 }
 
 .group-requests-panel__btn {

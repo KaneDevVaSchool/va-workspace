@@ -97,7 +97,7 @@ function actionLabel(group) {
 }
 
 function visibilityLabel(group) {
-    return group.visibility === "private" ? "Nhóm bảo mật" : "Nhóm công khai";
+    return group?.visibility === "private" ? "Nhóm bảo mật" : "Nhóm công khai";
 }
 
 async function onGroupAction(group) {
@@ -394,6 +394,21 @@ onMounted(() => loadGroups(1));
                                 <p class="groups-page__request-name">
                                     {{ request.group?.name }}
                                 </p>
+                                <p
+                                    class="groups-page__request-visibility"
+                                >
+                                    <AppIcon
+                                        :name="
+                                            request.group?.visibility ===
+                                            'private'
+                                                ? 'lock'
+                                                : 'globe'
+                                        "
+                                        :size="12"
+                                        :stroke-width="1.75"
+                                    />
+                                    {{ visibilityLabel(request.group) }}
+                                </p>
                                 <p class="groups-page__request-message">
                                     <template v-if="request.kind === 'invite'">
                                         {{
@@ -408,6 +423,20 @@ onMounted(() => loadGroups(1));
                                             "Đang chờ quản trị viên duyệt yêu cầu của bạn"
                                         }}
                                     </template>
+                                </p>
+                                <p
+                                    v-if="
+                                        request.kind === 'invite' &&
+                                        request.invited_by?.department
+                                    "
+                                    class="groups-page__request-dept"
+                                >
+                                    <AppIcon
+                                        name="building"
+                                        :size="12"
+                                        :stroke-width="1.75"
+                                    />
+                                    {{ request.invited_by.department }}
                                 </p>
                             </div>
                             <div class="groups-page__request-actions">
@@ -1194,10 +1223,29 @@ onMounted(() => loadGroups(1));
     color: var(--color-text);
 }
 
-.groups-page__request-message {
+.groups-page__request-visibility {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
     margin: 2px 0 0;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+.groups-page__request-message {
+    margin: 4px 0 0;
     font-size: 0.8125rem;
     color: var(--color-text-muted);
+}
+
+.groups-page__request-dept {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin: 4px 0 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-primary);
 }
 
 .groups-page__request-actions {

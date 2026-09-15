@@ -2,6 +2,7 @@
 
 namespace Modules\Social\App\Repositories;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Modules\Social\App\Models\SocialPostComment;
 use Modules\Social\App\Models\SocialPostLike;
@@ -63,6 +64,18 @@ class SocialCommentRepository implements SocialCommentRepositoryInterface
     public function countForPost(int $postId): int
     {
         return SocialPostComment::query()->where('post_id', $postId)->count();
+    }
+
+    public function latestCommentAtByAuthor(int $postId): array
+    {
+        return SocialPostComment::query()
+            ->where('post_id', $postId)
+            ->whereNull('parent_comment_id')
+            ->selectRaw('user_id, MAX(created_at) as latest_at')
+            ->groupBy('user_id')
+            ->get()
+            ->mapWithKeys(fn ($row) => [(int) $row->user_id => Carbon::parse($row->latest_at)->toIso8601String()])
+            ->all();
     }
 
     public function setReaction(SocialPostComment $comment, int $userId, string $type): array

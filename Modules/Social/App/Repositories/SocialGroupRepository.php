@@ -187,7 +187,7 @@ class SocialGroupRepository implements SocialGroupRepositoryInterface
         return SocialGroupJoinRequest::query()
             ->where('user_id', $userId)
             ->where('status', SocialGroupJoinRequest::STATUS_PENDING)
-            ->with(['group', 'invitedBy'])
+            ->with(['group', 'invitedBy.department'])
             ->orderByDesc('created_at')
             ->paginate($perPage, ['*'], 'page', $page);
     }
