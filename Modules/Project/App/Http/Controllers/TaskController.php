@@ -66,7 +66,7 @@ class TaskController extends Controller
     /** GET /api/project/{project}/tasks — cây WBS trong 1 project. */
     public function treeByProject(Request $request, int $project)
     {
-        $model = $this->projects->find($project);
+        $model = $this->projects->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -88,7 +88,7 @@ class TaskController extends Controller
     /** POST /api/project/{project}/tasks — tạo Task trong ngữ cảnh 1 project. */
     public function store(StoreTaskRequest $request, int $project)
     {
-        $model = $this->projects->find($project);
+        $model = $this->projects->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -120,7 +120,7 @@ class TaskController extends Controller
     /** POST /api/project/{project}/tasks/bulk — tạo nhiều công việc, mỗi dòng field riêng, cùng 1 dự án. */
     public function storeBulk(StoreBulkTasksRequest $request, int $project)
     {
-        $model = $this->projects->find($project);
+        $model = $this->projects->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -178,7 +178,7 @@ class TaskController extends Controller
             return response()->json(['message' => 'Loại cấu trúc không hợp lệ.'], 404);
         }
 
-        $model = $this->projects->find($project);
+        $model = $this->projects->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -215,7 +215,7 @@ class TaskController extends Controller
         $projectId = $request->validated()['project_id'] ?? null;
         $project = null;
         if ($projectId !== null) {
-            $project = $this->projects->find((int) $projectId);
+            $project = $this->projects->find((int) $projectId, $request->user());
             if ($project === null) {
                 return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
             }

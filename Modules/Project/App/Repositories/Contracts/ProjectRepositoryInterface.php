@@ -33,6 +33,9 @@ interface ProjectRepositoryInterface
 
     public function find(int $id): ?Project;
 
+    /** Như find(), nhưng chỉ trả về nếu viewer được phép xem (áp forViewer()) — dùng cho mọi thao tác xem/sửa 1 dự án theo ID từ Controller. */
+    public function findForViewer(int $id, User $viewer): ?Project;
+
     /** Tra dự án theo Mã dự án (không phân biệt hoa/thường) — dùng cho nhập Excel cập nhật. */
     public function findByCode(string $code): ?Project;
 

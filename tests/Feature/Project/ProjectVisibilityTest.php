@@ -15,7 +15,9 @@ use Tests\TestCase;
  *  - user phòng ban A KHÔNG thấy dự án phòng ban B (không liên quan gì)
  *  - user phòng ban A THẤY dự án khi executing_department_id = phòng ban A
  *  - user THẤY dự án khi có mặt trong project_members
- *  - user THẤY dự án khi có mặt trong project_followers
+ *  - user THẤY dự án khi có mặt trong project_followers (nhưng phải đã xem
+ *    được dự án — thuộc phòng giao/thực hiện/thành viên — mới follow được;
+ *    user hoàn toàn ngoài phạm vi bị chặn 404 khi gọi API follow)
  */
 class ProjectVisibilityTest extends TestCase
 {
@@ -124,19 +126,45 @@ class ProjectVisibilityTest extends TestCase
         $userA = $this->makeUser(['department_id' => $deptA->id], ['team_lead']);
         $creatorB = $this->makeUser(['department_id' => $deptB->id], ['department_director']);
 
+        // userA đã có quyền xem qua project_members — chỉ còn kiểm tra
+        // follow có hoạt động và giữ được visibility sau khi gỡ member.
         $project = $this->makeProject([
             'owner_department_id' => $deptB->id,
             'created_by' => $creatorB->id,
         ]);
+        $project->members()->attach($userA->id);
 
         // Theo dõi qua chính API follow (mục B) thay vì thao tác DB trực tiếp
         // để test luôn cả luồng thật.
         $this->actingAs($userA)->postJson("/api/project/{$project->id}/follow")->assertOk();
+
+        // Gỡ khỏi project_members — vẫn thấy được nhờ đang follow.
+        $project->members()->detach($userA->id);
 
         $response = $this->actingAs($userA)->getJson('/api/project');
         $response->assertOk();
         $ids = collect($response->json('projects'))->pluck('id')->all();
 
         $this->assertContains($project->id, $ids);
+    }
+
+    public function test_user_cannot_follow_unrelated_department_project(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $deptA = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
+        $deptB = Department::query()->create(['code' => 'B', 'name' => 'Phòng B', 'is_active' => true]);
+
+        $userA = $this->makeUser(['department_id' => $deptA->id], ['team_lead']);
+        $creatorB = $this->makeUser(['department_id' => $deptB->id], ['department_director']);
+
+        $unrelated = $this->makeProject([
+            'owner_department_id' => $deptB->id,
+            'created_by' => $creatorB->id,
+        ]);
+
+        // Không thuộc phòng giao/thực hiện, không phải thành viên — không
+        // được phép xem, nên cũng không follow được (404, không lộ dữ liệu).
+        $this->actingAs($userA)->postJson("/api/project/{$unrelated->id}/follow")->assertNotFound();
     }
 }

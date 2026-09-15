@@ -6,11 +6,13 @@ use App\Models\User;
 use Illuminate\Support\Collection;
 use Modules\Identity\App\Models\Role;
 use Modules\Identity\App\Models\Team;
+use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\RoleRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\TeamRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Services\TeamService;
+use Modules\WorkspaceConfig\App\Exceptions\MemberDepartmentNotAssignable;
 use Modules\WorkspaceConfig\App\Exceptions\MemberTeamNotAssignable;
 use Modules\WorkspaceConfig\App\Exceptions\RoleNotAssignable;
 
@@ -35,6 +37,7 @@ class WorkspaceConfigMemberService
         private readonly TeamService $teamService,
         private readonly RoleRepositoryInterface $roles,
         private readonly DepartmentSidebarConfigRepositoryInterface $sidebarConfigs,
+        private readonly DepartmentRepositoryInterface $departments,
     ) {}
 
     public function forDepartment(int $departmentId): Collection
@@ -46,7 +49,7 @@ class WorkspaceConfigMemberService
 
     public function presentMember(User $user): array
     {
-        $user->loadMissing(['team', 'roles']);
+        $user->loadMissing(['department', 'team', 'roles']);
 
         return [
             'id' => $user->id,
@@ -54,6 +57,10 @@ class WorkspaceConfigMemberService
             'email' => $user->email,
             'avatar_url' => $user->avatar_url,
             'status' => $user->status,
+            'department' => $user->department ? [
+                'id' => $user->department->id,
+                'name' => $user->department->name,
+            ] : null,
             'team' => $user->team ? [
                 'id' => $user->team->id,
                 'name' => $user->team->name,
@@ -266,6 +273,44 @@ class WorkspaceConfigMemberService
         return $this->presentDirector(
             $this->users->departmentDirectorsByDepartmentIds([$departmentId])->get($departmentId),
         );
+    }
+
+    /**
+     * Tài khoản chưa gắn phòng ban nào — thường là mới đăng nhập Google lần
+     * đầu, chờ super_admin gán tay cho tới khi có API HRM (mục "Nhân sự
+     * chưa gán phòng ban" ở /superadmin/workspace-config).
+     */
+    public function unassignedMembers(): Collection
+    {
+        return $this->users->allUnassigned()
+            ->map(fn (User $user) => $this->presentMember($user))
+            ->values();
+    }
+
+    /**
+     * super_admin gán/đổi phòng ban cho 1 tài khoản — CHỈ gán department_id,
+     * không đụng tới vai trò/nhóm (trưởng phòng tự gán vai trò sau khi
+     * user đã có phòng ban, xem assignRole()).
+     *
+     * @throws MemberDepartmentNotAssignable
+     */
+    public function assignDepartment(int $userId, int $departmentId): User
+    {
+        $user = $this->users->findById($userId);
+        if ($user === null) {
+            throw new MemberDepartmentNotAssignable('Không tìm thấy tài khoản.');
+        }
+
+        $department = $this->departments->find($departmentId);
+        if ($department === null) {
+            throw new MemberDepartmentNotAssignable('Không tìm thấy phòng ban.');
+        }
+
+        if ((int) $user->department_id !== $departmentId) {
+            $this->users->update($user, ['department_id' => $departmentId, 'team_id' => null]);
+        }
+
+        return $user->fresh(['department', 'team', 'roles']) ?? $user;
     }
 
     private function presentDirector(?User $user): ?array

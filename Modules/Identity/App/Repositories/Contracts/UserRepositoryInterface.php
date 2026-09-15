@@ -83,4 +83,13 @@ interface UserRepositoryInterface
      * @return \Illuminate\Support\Collection<int, User>
      */
     public function allActiveSuperAdmins(): \Illuminate\Support\Collection;
+
+    /**
+     * User chưa gắn phòng ban nào (department_id NULL) — tài khoản mới đăng
+     * nhập Google lần đầu, chờ gán tay cho tới khi có API HRM. Dùng cho
+     * trang superadmin gán phòng ban.
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public function allUnassigned(): \Illuminate\Support\Collection;
 }

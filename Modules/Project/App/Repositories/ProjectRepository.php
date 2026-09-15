@@ -146,6 +146,14 @@ class ProjectRepository implements ProjectRepositoryInterface
         return Project::query()->with(Project::WITH_PRESENT)->find($id);
     }
 
+    public function findForViewer(int $id, User $viewer): ?Project
+    {
+        $query = Project::query()->with(Project::WITH_PRESENT)->whereKey($id);
+        $this->forViewer($query, $viewer);
+
+        return $query->first();
+    }
+
     public function findByCode(string $code): ?Project
     {
         $code = trim($code);

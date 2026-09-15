@@ -24,6 +24,11 @@ Route::middleware(['auth', 'permission:workspace_config.view_all'])
     ->group(function () {
         Route::get('/overview', [WorkspaceConfigOverviewController::class, 'index'])->name('overview');
         Route::get('/departments/{department}', [WorkspaceConfigOverviewController::class, 'showDepartment'])->name('department-detail');
+        // Ngoại lệ duy nhất được ghi ở khu vực này: department_id là điều
+        // kiện tiên quyết để department_director thấy được trang cấu hình
+        // phòng ban của chính họ (xem WorkspaceConfigMemberController::departmentIdOrFail()).
+        Route::get('/members/unassigned', [WorkspaceConfigOverviewController::class, 'unassignedMembers'])->name('members.unassigned');
+        Route::put('/members/{user}/department', [WorkspaceConfigOverviewController::class, 'assignDepartment'])->name('members.assign-department');
     });
 
 /*

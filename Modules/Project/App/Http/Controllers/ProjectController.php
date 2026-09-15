@@ -70,7 +70,7 @@ class ProjectController extends Controller
 
     public function show(Request $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -81,7 +81,7 @@ class ProjectController extends Controller
     /** Cấu hình bật/tắt tab tuỳ chọn riêng cho dự án (menu "Thao tác"). */
     public function updateTabConfig(UpdateProjectTabConfigRequest $request, int $project): JsonResponse
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -169,7 +169,7 @@ class ProjectController extends Controller
 
     public function update(UpdateProjectRequest $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -191,9 +191,9 @@ class ProjectController extends Controller
         return response()->json(['project' => $this->service->present($result, $request->user())]);
     }
 
-    public function destroy(int $project)
+    public function destroy(Request $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -214,7 +214,7 @@ class ProjectController extends Controller
 
     public function duplicate(Request $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -247,7 +247,7 @@ class ProjectController extends Controller
 
     public function quickItemsIndex(Request $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -260,7 +260,7 @@ class ProjectController extends Controller
 
     public function quickItemsStore(StoreProjectQuickItemRequest $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -280,7 +280,7 @@ class ProjectController extends Controller
 
     public function uploadAttachment(UploadProjectAttachmentRequest $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -308,9 +308,9 @@ class ProjectController extends Controller
         return response()->json(['attachment' => $this->service->presentAttachment($result)], 201);
     }
 
-    public function destroyAttachment(int $project, int $attachment)
+    public function destroyAttachment(Request $request, int $project, int $attachment)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -330,14 +330,14 @@ class ProjectController extends Controller
         return response()->json(['message' => 'Đã xoá tệp đính kèm.']);
     }
 
-    public function documents(int $project)
+    public function documents(Request $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
 
-        $folderId = request()->filled('folder_id') ? (int) request()->input('folder_id') : null;
+        $folderId = $request->filled('folder_id') ? (int) $request->input('folder_id') : null;
         $result = $this->service->listDocuments($model, $folderId);
         if (isset($result['error'])) {
             return response()->json(['message' => $result['error']], 404);
@@ -348,7 +348,7 @@ class ProjectController extends Controller
 
     public function storeFolder(StoreProjectFolderRequest $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -377,7 +377,7 @@ class ProjectController extends Controller
 
     public function updateFolder(UpdateProjectFolderRequest $request, int $project, int $folder)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -398,9 +398,9 @@ class ProjectController extends Controller
         return response()->json(['folder' => $this->service->presentFolder($result, true)]);
     }
 
-    public function destroyFolder(int $project, int $folder)
+    public function destroyFolder(Request $request, int $project, int $folder)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -422,7 +422,7 @@ class ProjectController extends Controller
 
     public function updateAttachment(UpdateProjectAttachmentRequest $request, int $project, int $attachment)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -443,9 +443,9 @@ class ProjectController extends Controller
         return response()->json(['attachment' => $this->service->presentAttachment($result)]);
     }
 
-    public function taskAttachments(int $project)
+    public function taskAttachments(Request $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -455,7 +455,7 @@ class ProjectController extends Controller
 
     public function uploadAvatar(UploadProjectAvatarRequest $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -475,7 +475,7 @@ class ProjectController extends Controller
 
     public function destroyAvatar(Request $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -537,7 +537,7 @@ class ProjectController extends Controller
 
     public function follow(Request $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }
@@ -549,7 +549,7 @@ class ProjectController extends Controller
 
     public function unfollow(Request $request, int $project)
     {
-        $model = $this->service->find($project);
+        $model = $this->service->find($project, $request->user());
         if ($model === null) {
             return response()->json(['message' => 'Không tìm thấy dự án.'], 404);
         }

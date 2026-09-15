@@ -8,6 +8,7 @@
 // và tiêu chí đánh giá là cấu hình của cả phòng ban nên nằm ở 2 tab riêng.
 //
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
@@ -36,12 +37,62 @@ const AVATAR_EXTRA = 40;
 let measureCtx = null;
 let wrapObserver = null;
 
+const route = useRoute();
 const hub = inject('workspaceConfigDeptDetailHub', null);
 const allMembers = computed(() => hub?.members?.value ?? []);
 const loading = computed(() => hub?.loading?.value ?? false);
 
 const selected = ref(null);
 const brokenAvatarIds = ref(new Set());
+
+const departmentOptions = ref([]);
+const departmentAssignId = ref('');
+const departmentAssignSaving = ref(false);
+
+const departmentAssignUnchanged = computed(() => {
+  if (!selected.value) return true;
+  const current = selected.value.department?.id ?? '';
+  const next = departmentAssignId.value === '' ? '' : Number(departmentAssignId.value);
+  return current === next;
+});
+
+async function loadDepartmentOptions() {
+  try {
+    const { data } = await window.axios.get('/api/workspace-config/overview');
+    departmentOptions.value = (data.departments ?? []).map((item) => ({ id: item.id, name: item.name }));
+  } catch {
+    // Không chặn trang nếu tải danh sách phòng ban thất bại — chỉ ảnh hưởng dropdown chuyển phòng ban.
+  }
+}
+
+async function saveMemberDepartment() {
+  if (!selected.value || departmentAssignUnchanged.value || departmentAssignId.value === '') return;
+
+  departmentAssignSaving.value = true;
+  try {
+    const { data } = await window.axios.put(
+      `/api/workspace-config/members/${selected.value.id}/department`,
+      { department_id: Number(departmentAssignId.value) },
+    );
+    const member = data.member;
+    if (Number(route.params.departmentId) === member.department?.id) {
+      const index = allMembers.value.findIndex((item) => item.id === member.id);
+      if (index >= 0) allMembers.value[index] = member;
+      selected.value = member;
+    } else {
+      // Chuyển sang phòng ban khác — không còn thuộc danh sách đang xem.
+      selected.value = null;
+      const index = allMembers.value.findIndex((item) => item.id === member.id);
+      if (index >= 0) allMembers.value.splice(index, 1);
+    }
+    showClientToast('success', `Đã chuyển "${member.name}" sang phòng ban "${member.department?.name ?? ''}".`);
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không chuyển được phòng ban. Vui lòng thử lại.');
+  } finally {
+    departmentAssignSaving.value = false;
+  }
+}
 
 const query = ref('');
 const teamId = ref('');
@@ -180,6 +231,7 @@ function clearFilters() {
 
 function inspect(member) {
   selected.value = member;
+  departmentAssignId.value = member?.department?.id != null ? String(member.department.id) : '';
 }
 
 function usesPhoto(member) {
@@ -398,6 +450,7 @@ watch(filteredMembers, (rows) => {
 
 onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown);
+  loadDepartmentOptions();
   nextTick(() => {
     fitColumnsToContent();
     if (tableWrap.value) {
@@ -648,6 +701,30 @@ onBeforeUnmount(() => {
           <div class="wc-detail__row">
             <span class="wc-detail__row-label">Email</span>
             <span class="wc-detail__row-value">{{ selected.email || '—' }}</span>
+          </div>
+          <div class="wc-detail__row wc-detail__row--dept">
+            <span class="wc-detail__row-label wc-detail__row-label--dept">Phòng ban</span>
+            <div class="wc-detail__row-dept">
+              <select
+                id="wc-detail-dept-assign"
+                v-model="departmentAssignId"
+                class="wc-detail__input wc-detail__input--side"
+                :disabled="departmentAssignSaving"
+              >
+                <option value="" disabled>Chọn phòng ban</option>
+                <option v-for="item in departmentOptions" :key="item.id" :value="String(item.id)">
+                  {{ item.name }}
+                </option>
+              </select>
+              <button
+                type="button"
+                class="wc-detail__side-btn"
+                :disabled="departmentAssignSaving || departmentAssignUnchanged"
+                @click="saveMemberDepartment"
+              >
+                {{ departmentAssignSaving ? 'Đang lưu…' : 'Chuyển' }}
+              </button>
+            </div>
           </div>
           <div class="wc-detail__row">
             <span class="wc-detail__row-label">Nhóm</span>
@@ -999,6 +1076,52 @@ onBeforeUnmount(() => {
   font-style: italic;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.wc-detail__row--dept {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.wc-detail__row-label--dept {
+  flex-shrink: initial;
+}
+
+.wc-detail__row-dept {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.wc-detail__input--side {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8125rem;
+}
+
+.wc-detail__side-btn {
+  flex-shrink: 0;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wc-detail__side-btn:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.wc-detail__side-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1024px) {

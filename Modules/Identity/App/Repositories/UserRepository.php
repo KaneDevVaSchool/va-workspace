@@ -119,6 +119,15 @@ class UserRepository implements UserRepositoryInterface
             ->get();
     }
 
+    public function allUnassigned(): \Illuminate\Support\Collection
+    {
+        return User::query()
+            ->whereNull('department_id')
+            ->with('roles')
+            ->orderBy('name')
+            ->get();
+    }
+
     public function create(array $data): User
     {
         return User::query()->create($data);

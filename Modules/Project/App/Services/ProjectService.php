@@ -54,9 +54,15 @@ class ProjectService
         return $this->projects->paginate($filters, $perPage, $page, $viewer);
     }
 
-    public function find(int $id): ?Project
+    /**
+     * Chỉ trả về dự án nếu $viewer được phép xem: thuộc phòng ban giao, phòng
+     * ban thực hiện, hoặc đang tham gia (phụ trách/tạo/thành viên/theo dõi) —
+     * xem ProjectRepository::forViewer(). Dùng cho mọi thao tác xem/sửa 1 dự
+     * án theo ID (show/update/destroy/tài liệu/đính kèm/...).
+     */
+    public function find(int $id, User $viewer): ?Project
     {
-        return $this->projects->find($id);
+        return $this->projects->findForViewer($id, $viewer);
     }
 
     /** Có quyền toàn cục bypass mọi bộ lọc phòng ban (super_admin hoặc được cấp project.* / '*'). */

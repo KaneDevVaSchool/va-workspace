@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Modules\Evaluation\App\Services\EvaluationCriteriaService;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
+use Modules\Identity\App\Services\ActivityLogService;
+use Modules\WorkspaceConfig\App\Exceptions\MemberDepartmentNotAssignable;
+use Modules\WorkspaceConfig\App\Http\Requests\AssignWorkspaceConfigMemberDepartmentRequest;
 use Modules\WorkspaceConfig\App\Services\DepartmentSidebarConfigService;
 use Modules\WorkspaceConfig\App\Services\WorkspaceConfigMemberService;
 
@@ -13,7 +16,11 @@ use Modules\WorkspaceConfig\App\Services\WorkspaceConfigMemberService;
  * superadmin/workspace-config — xem TỔNG HỢP workspace của mọi phòng ban:
  * 1 bảng liệt kê + bấm vào 1 dòng xem chi tiết. Chỉ xem, super_admin
  * không sửa thay department_director (sửa sidebar chỉ làm được ở
- * WorkspaceConfigSidebarController, scope đúng phòng ban của user đó).
+ * WorkspaceConfigSidebarController, scope đúng phòng ban của user đó) —
+ * NGOẠI LỆ DUY NHẤT: gán department_id cho tài khoản (assignDepartment),
+ * vì đây là bước chặn trước khi department_director có thể làm bất cứ gì
+ * (chưa có phòng ban thì không thấy nút gán vai trò) — xem
+ * WorkspaceConfigMemberService::assignDepartment().
  */
 class WorkspaceConfigOverviewController extends Controller
 {
@@ -22,6 +29,7 @@ class WorkspaceConfigOverviewController extends Controller
         private readonly WorkspaceConfigMemberService $members,
         private readonly DepartmentSidebarConfigService $sidebarConfigs,
         private readonly EvaluationCriteriaService $evaluationCriteria,
+        private readonly ActivityLogService $activityLogs,
     ) {}
 
     public function index(): JsonResponse
@@ -51,5 +59,42 @@ class WorkspaceConfigOverviewController extends Controller
             'sidebar_sections' => $this->sidebarConfigs->sectionsForDepartment($model->id),
             'evaluation_criteria' => $this->evaluationCriteria->listForDepartment($model->id),
         ]);
+    }
+
+    /** Tài khoản chưa gắn phòng ban nào — chờ super_admin gán tay. */
+    public function unassignedMembers(): JsonResponse
+    {
+        return response()->json([
+            'members' => $this->members->unassignedMembers(),
+            'departments' => $this->departments->all()->map(fn ($d) => [
+                'id' => $d->id,
+                'name' => $d->name,
+            ])->values(),
+        ]);
+    }
+
+    /** Gán/đổi phòng ban cho 1 tài khoản — bước chặn trước khi vào cấu hình phòng ban. */
+    public function assignDepartment(AssignWorkspaceConfigMemberDepartmentRequest $request, int $user): JsonResponse
+    {
+        $data = $request->validated();
+
+        try {
+            $member = $this->members->assignDepartment($user, (int) $data['department_id']);
+        } catch (MemberDepartmentNotAssignable $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $presented = $this->members->presentMember($member);
+
+        $this->activityLogs->record(
+            'member.department.assign',
+            'Gán phòng ban '.($presented['department']['name'] ?? '').' cho '.$member->name,
+            $request->user(),
+            'user',
+            $member->id,
+            ['department_id' => $data['department_id']],
+        );
+
+        return response()->json(['member' => $presented]);
     }
 }

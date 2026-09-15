@@ -118,6 +118,11 @@ class GlobalMenuVisibilityService
             'section' => 'superadmin-workspace-config',
             'icon' => 'eyeOff',
         ],
+        'superadmin.workspace-config.unassigned' => [
+            'label' => 'Nhân sự chưa gán phòng ban',
+            'section' => 'superadmin-workspace-config',
+            'icon' => 'userX',
+        ],
     ];
 
     /** @var array<string, string> section_key => nhãn mặc định */

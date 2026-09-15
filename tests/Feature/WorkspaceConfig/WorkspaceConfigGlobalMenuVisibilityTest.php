@@ -44,7 +44,7 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
             ->assertOk()
             ->assertJsonPath('menus.0.menu_key', 'dashboard.me')
             ->assertJsonPath('menus.0.is_hidden', false)
-            ->assertJsonCount(19, 'menus')
+            ->assertJsonCount(20, 'menus')
             ->assertJsonFragment(['menu_key' => 'manager.project.index', 'default_label' => 'Dự án'])
             ->assertJsonFragment(['menu_key' => 'manager.project.tasks', 'default_label' => 'Công việc'])
             ->assertJsonFragment(['menu_key' => 'manager.evaluation-score-kit.index', 'default_label' => 'Khung điểm'])
