@@ -23,6 +23,12 @@ class GlobalMenuVisibilityService
      */
     public const CATALOG = [
         // section: general (Tổng quan)
+        'dashboard.me' => [
+            'label' => 'Của tôi',
+            'section' => 'general',
+            'icon' => 'target',
+            'audience' => 'Menu này hiện với hầu hết mọi tài khoản, kể cả người chỉ có quyền xem cơ bản.',
+        ],
         'home' => ['label' => 'Quy trình', 'section' => 'general', 'icon' => 'gitBranch'],
         'dashboard.company' => [
             'label' => 'Tổng công ty',
@@ -83,6 +89,12 @@ class GlobalMenuVisibilityService
             'audience' => 'Menu này hiện với người được cấp quyền duyệt bài viết, không chỉ riêng Super Admin.',
         ],
         'superadmin.activity' => ['label' => 'Nhật ký', 'section' => 'control', 'icon' => 'clock'],
+        'superadmin.feature-requests.index' => [
+            'label' => 'Ghi nhận yêu cầu tính năng',
+            'section' => 'control',
+            'icon' => 'alertTriangle',
+            'audience' => 'Menu này hiện với người được cấp quyền xử lý ghi nhận yêu cầu tính năng, không chỉ riêng Super Admin.',
+        ],
         'manager.credential.index' => [
             'label' => 'Tài khoản',
             'section' => 'control',

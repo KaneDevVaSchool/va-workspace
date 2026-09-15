@@ -42,9 +42,9 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
         $this->actingAs($superAdmin)
             ->getJson('/api/workspace-config/global-menu')
             ->assertOk()
-            ->assertJsonPath('menus.0.menu_key', 'home')
+            ->assertJsonPath('menus.0.menu_key', 'dashboard.me')
             ->assertJsonPath('menus.0.is_hidden', false)
-            ->assertJsonCount(16, 'menus')
+            ->assertJsonCount(18, 'menus')
             ->assertJsonFragment(['menu_key' => 'manager.project.index', 'default_label' => 'Dự án'])
             ->assertJsonFragment(['menu_key' => 'manager.project.tasks', 'default_label' => 'Công việc'])
             ->assertJsonFragment(['menu_key' => 'manager.evaluation-score-kit.index', 'default_label' => 'Khung điểm'])
@@ -267,8 +267,8 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
             ->json('menus.*.menu_key');
 
         $this->assertSame($catalogKeys, $before);
-        $this->assertSame('social.feed', $before[3]);
-        $this->assertSame('manager.evaluation.view', $before[4]);
+        $this->assertSame('social.feed', $before[4]);
+        $this->assertSame('manager.evaluation.view', $before[5]);
 
         $this->actingAs($superAdmin)
             ->putJson('/api/workspace-config/global-menu', [
@@ -326,7 +326,7 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
             ->assertJsonPath('menus.0.menu_key', 'manager.project.tasks')
             ->assertJsonPath('menus.0.section', 'general')
             ->assertJsonPath('menus.0.sort_order', 0)
-            ->assertJsonPath('menus.1.menu_key', 'home');
+            ->assertJsonPath('menus.1.menu_key', 'dashboard.me');
 
         $me = $this->actingAs($superAdmin)
             ->getJson('/api/me')
@@ -335,6 +335,7 @@ class WorkspaceConfigGlobalMenuVisibilityTest extends TestCase
 
         $this->assertSame(0, $me['global_menu_order']['manager.project.tasks']);
         $this->assertSame('general', $me['global_menu_item_sections']['manager.project.tasks']);
-        $this->assertSame(1, $me['global_menu_order']['home']);
+        $this->assertSame(1, $me['global_menu_order']['dashboard.me']);
+        $this->assertSame(2, $me['global_menu_order']['home']);
     }
 }

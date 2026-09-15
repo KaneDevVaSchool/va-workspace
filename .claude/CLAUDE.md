@@ -172,6 +172,29 @@ nằm trong viewport, được phép gần full screen. Mẫu vàng: modal Thêm
 trong `Modules/Evaluation/resources/js/pages/WorkspaceConfigEvaluation.vue`.
 Chi tiết: `.cursor/rules/form-modal.mdc` + skill `form-modal`.
 
+## 16. Phát sinh trang/mục menu mới → cập nhật đôi bên
+
+Mỗi khi thêm (hoặc đổi tên/route) một mục điều hướng mới vào
+`resources/js/components/AppSidebar.vue` (mảng `MENU_SECTIONS`), **PHẢI**
+đồng bộ thủ công cùng lúc với các nguồn liệt kê menu khác — không được chỉ
+sửa 1 bên rồi coi là xong:
+
+- `Modules/WorkspaceConfig/App/Services/GlobalMenuVisibilityService.php`
+  (hằng số `CATALOG`) — bắt buộc với **mọi** mục mới, để superadmin
+  ẩn/hiện/đổi tên/sắp xếp được ở trang
+  `/superadmin/workspace-config/global-menu`. Thiếu bước này khiến mục mới
+  "vô hình" trước trang cấu hình toàn hệ thống dù đã lên sidebar thật.
+- `Modules/WorkspaceConfig/App/Services/DepartmentSidebarConfigService.php`
+  (hằng số `CONFIGURABLE_MENUS` + `MENU_DEFAULT_SECTIONS`) — chỉ bắt buộc
+  nếu mục mới có gắn cờ `configurableByDepartment: true` trong
+  `AppSidebar.vue` (cho phép trưởng/phó phòng tự ẩn-hiện/đổi nhóm riêng).
+
+Sau khi sửa, rà lại `tests/Feature/WorkspaceConfig/WorkspaceConfigGlobalMenuVisibilityTest.php`
+và `WorkspaceConfigSidebarTest.php` — các test này có assertion cứng theo
+**số lượng** (`assertJsonCount`) và **vị trí** (`menus.0`, `$before[N]`) của
+danh sách CATALOG/CONFIGURABLE_MENUS, nên thêm/bớt một mục ở đầu hoặc giữa
+danh sách làm lệch index và cần cập nhật lại con số trong test cho khớp.
+
 ---
 
 Skill riêng cho dự án (quy trình tạo module mới, checklist route, v.v.):
