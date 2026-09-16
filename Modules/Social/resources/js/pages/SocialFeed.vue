@@ -36,6 +36,18 @@ const openCommentsPostId = ref(null);
 const suppressFeedReload = ref(false);
 const hashtagTotal = ref(0);
 
+const LEFT_RAIL_COLLAPSE_KEY = "va-social-left-rail-collapsed";
+const leftRailCollapsed = ref(
+    typeof localStorage !== "undefined" &&
+        localStorage.getItem(LEFT_RAIL_COLLAPSE_KEY) === "1",
+);
+watch(leftRailCollapsed, (value) => {
+    localStorage.setItem(LEFT_RAIL_COLLAPSE_KEY, value ? "1" : "0");
+});
+function toggleLeftRail() {
+    leftRailCollapsed.value = !leftRailCollapsed.value;
+}
+
 const activeHashtag = computed(() => {
     const raw = route.query.hashtag;
     const value = Array.isArray(raw) ? raw[0] : raw;
@@ -427,15 +439,39 @@ onMounted(async () => {
             </template>
         </PageHeader>
 
-        <div class="social-page__body hide-scrollbar">
+        <div
+            class="social-page__body hide-scrollbar"
+            :class="{
+                'social-page__body--left-collapsed': leftRailCollapsed,
+            }"
+        >
             <aside
                 class="social-page__rail social-page__rail--left hide-scrollbar"
+                :class="{
+                    'social-page__rail--left-collapsed': leftRailCollapsed,
+                }"
             >
+                <button
+                    type="button"
+                    class="social-page__rail-toggle"
+                    :aria-label="
+                        leftRailCollapsed ? 'Mở rộng khung bên trái' : 'Thu gọn khung bên trái'
+                    "
+                    :aria-expanded="!leftRailCollapsed"
+                    @click="toggleLeftRail"
+                >
+                    <AppIcon
+                        :name="leftRailCollapsed ? 'chevronRight' : 'chevronLeft'"
+                        :size="16"
+                    />
+                </button>
+
                 <SocialProfilePanel
                     ref="profilePanel"
                     :scope="feedScope"
                     :post-scope="postScope"
                     :wall-profile="wallProfile"
+                    :collapsed="leftRailCollapsed"
                     @update:scope="onScopeChange"
                     @update:post-scope="onTabChange"
                     @open-wall="openPersonalWall"
@@ -921,8 +957,37 @@ onMounted(async () => {
 }
 
 .social-page__rail--left {
+    position: relative;
     display: none;
     grid-area: left;
+    min-width: 0;
+}
+
+.social-page__rail--left-collapsed {
+    overflow: visible;
+}
+
+.social-page__rail-toggle {
+    position: absolute;
+    top: 0;
+    right: -0.75rem;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: none;
+    border-radius: var(--radius-full);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+}
+
+.social-page__rail-toggle:hover {
+    color: var(--color-primary);
+    background: var(--color-primary-surface);
 }
 
 .social-page__rail--right {
@@ -1101,6 +1166,11 @@ onMounted(async () => {
     .social-page__body {
         grid-template-columns: 16.5rem minmax(0, 1fr) 17rem;
         grid-template-areas: "left main right";
+        transition: grid-template-columns 0.2s ease;
+    }
+
+    .social-page__body--left-collapsed {
+        grid-template-columns: var(--spacing-sidebar-rail) minmax(0, 1fr) 17rem;
     }
 
     .social-page__rail--left {

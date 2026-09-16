@@ -7,6 +7,7 @@ use Modules\Identity\App\Services\NotificationService;
 use Modules\Social\App\Models\SocialPost;
 use Modules\Social\App\Models\SocialPostComment;
 use Modules\Social\App\Repositories\Contracts\SocialCommentRepositoryInterface;
+use Modules\Social\App\Repositories\Contracts\SocialGroupRepositoryInterface;
 
 class SocialMentionService
 {
@@ -14,6 +15,7 @@ class SocialMentionService
         private readonly SocialContentSanitizer $sanitizer,
         private readonly NotificationService $notifications,
         private readonly SocialCommentRepositoryInterface $comments,
+        private readonly SocialGroupRepositoryInterface $groups,
     ) {}
 
     /**
@@ -90,6 +92,31 @@ class SocialMentionService
             null,
             '/social?post='.$original->id,
             ['post_id' => $original->id],
+        );
+    }
+
+    /** Báo cho các thành viên còn lại của nhóm khi có bài viết mới đăng trong nhóm. */
+    public function notifyGroupPost(User $actor, SocialPost $post): void
+    {
+        if ($post->group_id === null) {
+            return;
+        }
+
+        $recipientIds = $this->groups->memberIds($post->group_id);
+        if ($recipientIds === []) {
+            return;
+        }
+
+        $excerpt = $this->sanitizer->excerpt((string) ($post->content ?? ''));
+
+        $this->notifications->notifyUsers(
+            $recipientIds,
+            $actor,
+            NotificationService::TYPE_GROUP_POST,
+            $actor->name.' đã đăng bài mới trong nhóm '.$post->group->name,
+            $excerpt !== '' ? $excerpt : null,
+            '/social?post='.$post->id,
+            ['post_id' => $post->id, 'group_id' => $post->group_id],
         );
     }
 

@@ -38,6 +38,9 @@ interface SocialGroupRepositoryInterface
     /** @return list<int> */
     public function ownerAndAdminIds(int $groupId): array;
 
+    /** @return list<int> Toàn bộ thành viên nhóm (kể cả owner/admin). */
+    public function memberIds(int $groupId): array;
+
     public function findPendingJoinRequest(int $groupId, int $userId, ?string $kind = null): ?SocialGroupJoinRequest;
 
     public function createJoinRequest(array $data): SocialGroupJoinRequest;

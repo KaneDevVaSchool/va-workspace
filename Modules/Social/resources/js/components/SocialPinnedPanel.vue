@@ -497,7 +497,7 @@ defineExpose({ load });
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  max-height: 22rem;
+  max-height: 30rem;
   overflow-y: auto;
 }
 

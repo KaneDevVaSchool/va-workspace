@@ -41,6 +41,7 @@ let editor = null;
 
 const LINK_PREVIEW_HOST_PATTERN = /(youtube\.com|youtu\.be|facebook\.com|fb\.watch|tiktok\.com)/i;
 const linkPreviews = new Map();
+const dismissedLinkPreviews = new Set();
 let linkPreviewTimer = null;
 
 function emitLinkPreviews() {
@@ -53,12 +54,16 @@ function detectLinkPreviews(html) {
     const urls = Array.from(html.matchAll(/https?:\/\/[^\s<>"]+/gi))
       .map((m) => m[0].replace(/[.,;:!?)'"]+$/, ''))
       .filter((url) => LINK_PREVIEW_HOST_PATTERN.test(url));
+    const urlSet = new Set(urls);
 
     for (const url of new Set([...linkPreviews.keys()])) {
-      if (!urls.includes(url)) linkPreviews.delete(url);
+      if (!urlSet.has(url)) linkPreviews.delete(url);
+    }
+    for (const url of new Set([...dismissedLinkPreviews])) {
+      if (!urlSet.has(url)) dismissedLinkPreviews.delete(url);
     }
 
-    const newUrls = urls.filter((url) => !linkPreviews.has(url));
+    const newUrls = urls.filter((url) => !linkPreviews.has(url) && !dismissedLinkPreviews.has(url));
     if (newUrls.length === 0) {
       emitLinkPreviews();
       return;
@@ -78,6 +83,7 @@ function detectLinkPreviews(html) {
 
 function removeLinkPreview(url) {
   linkPreviews.delete(url);
+  dismissedLinkPreviews.add(url);
   emitLinkPreviews();
 }
 
@@ -355,6 +361,7 @@ watch(
     if (!value) {
       clearTimeout(linkPreviewTimer);
       linkPreviews.clear();
+      dismissedLinkPreviews.clear();
       emitLinkPreviews();
     }
   },

@@ -245,7 +245,7 @@ defineExpose({ load, loadTop });
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 18rem;
+  max-height: 26rem;
   overflow-y: auto;
 }
 

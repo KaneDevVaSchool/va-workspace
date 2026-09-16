@@ -140,6 +140,15 @@ class SocialGroupRepository implements SocialGroupRepositoryInterface
             ->all();
     }
 
+    public function memberIds(int $groupId): array
+    {
+        return SocialGroupMember::query()
+            ->where('group_id', $groupId)
+            ->pluck('user_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
     public function findPendingJoinRequest(int $groupId, int $userId, ?string $kind = null): ?SocialGroupJoinRequest
     {
         $query = SocialGroupJoinRequest::query()

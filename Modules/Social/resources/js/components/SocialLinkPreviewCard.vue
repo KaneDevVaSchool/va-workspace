@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 
 const props = defineProps({
@@ -16,6 +16,11 @@ const PROVIDER_LABELS = {
   facebook: 'Facebook',
   tiktok: 'TikTok',
 };
+
+// TikTok nhúng theo khung dọc tự nhiên (9:16, giống clip TikTok thật) —
+// YouTube/Facebook giữ khung ngang chuẩn (16:9). Ép chung 1 tỉ lệ làm
+// video TikTok bị bó méo/cắt hai bên.
+const isVertical = computed(() => props.preview.provider === 'tiktok');
 
 function providerLabel() {
   return PROVIDER_LABELS[props.preview.provider] || props.preview.provider;
@@ -36,7 +41,13 @@ function onRemove(event) {
 </script>
 
 <template>
-  <div class="link-preview">
+  <div
+    class="link-preview"
+    :class="[
+      `link-preview--${preview.provider}`,
+      { 'link-preview--vertical': isVertical, 'link-preview--playing': playing },
+    ]"
+  >
     <button
       v-if="removable"
       type="button"
@@ -55,6 +66,7 @@ function onRemove(event) {
         allow="autoplay; encrypted-media; picture-in-picture"
         allowfullscreen
       ></iframe>
+
       <button
         v-else
         type="button"
@@ -68,24 +80,32 @@ function onRemove(event) {
           alt=""
           class="link-preview__thumb-img"
         />
-        <span v-else class="link-preview__thumb-fallback">
-          <AppIcon name="video" :size="28" />
+        <span v-else class="link-preview__thumb-fallback" aria-hidden="true">
+          <AppIcon name="video" :size="32" />
         </span>
-        <span v-if="preview.embed_url" class="link-preview__play">
-          <AppIcon name="play" :size="20" />
+
+        <span class="link-preview__scrim" aria-hidden="true"></span>
+
+        <span v-if="preview.embed_url" class="link-preview__play" aria-hidden="true">
+          <AppIcon name="play" :size="26" />
+        </span>
+
+        <span v-if="preview.is_live" class="link-preview__live-tag">
+          <span class="link-preview__live-dot" aria-hidden="true"></span>
+          Trực tiếp
+        </span>
+
+        <span class="link-preview__provider-tag" :class="`link-preview__provider-tag--${preview.provider}`">
+          <AppIcon :name="preview.provider === 'youtube' ? 'video' : 'globe'" :size="12" />
+          {{ providerLabel() }}
         </span>
       </button>
     </div>
 
     <div class="link-preview__body">
-      <p v-if="preview.is_live" class="link-preview__live">
-        <span class="link-preview__live-dot" aria-hidden="true"></span>
-        Đang phát trực tiếp
-      </p>
       <p class="link-preview__title">{{ preview.title || preview.url }}</p>
-      <p class="link-preview__meta">
-        {{ providerLabel() }}
-        <template v-if="!preview.embed_url"> · Mở ở {{ providerLabel() }} để xem</template>
+      <p v-if="!preview.embed_url" class="link-preview__meta">
+        Không xem trước được &middot; mở ở {{ providerLabel() }} để xem
       </p>
     </div>
   </div>
@@ -93,21 +113,46 @@ function onRemove(event) {
 
 <style scoped>
 .link-preview {
+  --lp-accent: var(--color-primary);
+
   position: relative;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl, var(--radius-lg));
   overflow: hidden;
   background: var(--color-surface);
+  box-shadow: var(--shadow-md);
   max-width: 28rem;
+  transition:
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+
+.link-preview:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+.link-preview--vertical {
+  max-width: 16rem;
+}
+
+.link-preview--youtube {
+  --lp-accent: #ff2d2d;
+}
+
+.link-preview--facebook {
+  --lp-accent: #1877f2;
+}
+
+.link-preview--tiktok {
+  --lp-accent: #25f4ee;
 }
 
 .link-preview__remove {
   position: absolute;
   top: var(--space-2);
   right: var(--space-2);
-  z-index: 2;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -115,16 +160,32 @@ function onRemove(event) {
   height: 1.75rem;
   border: none;
   border-radius: var(--radius-full);
-  background: color-mix(in srgb, black 55%, transparent);
+  background: var(--color-sidebar-overlay);
   color: white;
   cursor: pointer;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.link-preview__remove:hover {
+  background: color-mix(in srgb, black 75%, transparent);
+  transform: scale(1.08);
 }
 
 .link-preview__media {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  background: var(--color-surface-muted);
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--lp-accent) 18%, var(--color-surface-muted)),
+    var(--color-surface-muted)
+  );
+}
+
+.link-preview--vertical .link-preview__media {
+  aspect-ratio: 9 / 16;
 }
 
 .link-preview__frame {
@@ -145,6 +206,7 @@ function onRemove(event) {
   padding: 0;
   background: none;
   cursor: pointer;
+  overflow: hidden;
 }
 
 .link-preview__thumb-img {
@@ -152,6 +214,11 @@ function onRemove(event) {
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 0.4s ease;
+}
+
+.link-preview__thumb-btn:hover .link-preview__thumb-img {
+  transform: scale(1.04);
 }
 
 .link-preview__thumb-fallback {
@@ -160,7 +227,23 @@ function onRemove(event) {
   justify-content: center;
   width: 100%;
   height: 100%;
-  color: var(--color-text-muted);
+  color: color-mix(in srgb, var(--lp-accent) 55%, var(--color-text-muted));
+}
+
+.link-preview__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, black 55%, transparent) 0%,
+    transparent 45%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.link-preview__thumb-btn:hover .link-preview__scrim {
+  opacity: 1;
 }
 
 .link-preview__play {
@@ -169,39 +252,95 @@ function onRemove(event) {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin: auto;
+  width: 3.75rem;
+  height: 3.75rem;
+  border-radius: var(--radius-full);
   color: white;
-  background: color-mix(in srgb, black 25%, transparent);
+  background: color-mix(in srgb, black 35%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, white 25%, transparent) inset;
+  backdrop-filter: blur(2px);
+  transition:
+    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.25s ease;
+}
+
+.link-preview__play :deep(svg) {
+  margin-left: 3px;
+}
+
+.link-preview__thumb-btn:hover .link-preview__play {
+  transform: scale(1.1);
+  background: var(--lp-accent);
+}
+
+.link-preview__provider-tag {
+  position: absolute;
+  left: var(--space-2);
+  bottom: var(--space-2);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, black 45%, transparent);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(2px);
+}
+
+.link-preview__provider-tag :deep(svg) {
+  color: var(--lp-accent);
+}
+
+.link-preview__live-tag {
+  position: absolute;
+  right: var(--space-2);
+  top: var(--space-2);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, black 45%, transparent);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  backdrop-filter: blur(2px);
+}
+
+.link-preview--vertical .link-preview__live-tag {
+  right: calc(var(--space-2) + 1.75rem + var(--space-2));
+}
+
+.link-preview__live-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: var(--radius-full);
+  background: var(--color-danger, #ff3b3b);
+  flex-shrink: 0;
+  animation: link-preview-pulse 1.6s ease-in-out infinite;
 }
 
 .link-preview__body {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.25rem;
   padding: var(--space-3);
-}
-
-.link-preview__live {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-danger);
-}
-
-.link-preview__live-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: var(--radius-full);
-  background: var(--color-danger);
-  flex-shrink: 0;
+  box-shadow: inset 0 1px 0 var(--color-border);
 }
 
 .link-preview__title {
   margin: 0;
   font-size: 0.875rem;
   font-weight: 600;
+  line-height: 1.35;
   color: var(--color-text);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -215,8 +354,36 @@ function onRemove(event) {
   color: var(--color-text-muted);
 }
 
+@keyframes link-preview-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.45;
+    transform: scale(0.75);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link-preview,
+  .link-preview__remove,
+  .link-preview__thumb-img,
+  .link-preview__scrim,
+  .link-preview__play {
+    transition: none;
+  }
+
+  .link-preview__live-dot {
+    animation: none;
+  }
+}
+
 @media (max-width: 480px) {
-  .link-preview {
+  .link-preview,
+  .link-preview--vertical {
     max-width: 100%;
   }
 }

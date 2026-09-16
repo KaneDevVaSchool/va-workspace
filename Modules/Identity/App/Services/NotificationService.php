@@ -24,6 +24,8 @@ class NotificationService
 
     public const TYPE_SHARE_POST = 'share_post';
 
+    public const TYPE_GROUP_POST = 'group_post';
+
     public const TYPE_GROUP_JOIN_REQUEST = 'group_join_request';
 
     public const TYPE_GROUP_JOIN_APPROVED = 'group_join_approved';

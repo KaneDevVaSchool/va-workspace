@@ -9,6 +9,7 @@ const props = defineProps({
     scope: { type: String, default: "all" },
     postScope: { type: String, default: "company" },
     wallProfile: { type: Object, default: null },
+    collapsed: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["update:scope", "update:postScope", "open-wall"]);
@@ -137,9 +138,9 @@ watch(() => props.wallProfile, loadStats);
 </script>
 
 <template>
-    <div class="profile-panel">
+    <div class="profile-panel" :class="{ 'profile-panel--collapsed': collapsed }">
         <section class="profile-card" :aria-label="`Hồ sơ ${displayName}`">
-            <div class="profile-card__banner" aria-hidden="true">
+            <div v-if="!collapsed" class="profile-card__banner" aria-hidden="true">
                 <span
                     class="profile-card__banner-orb profile-card__banner-orb--a"
                 />
@@ -165,99 +166,101 @@ watch(() => props.wallProfile, loadStats);
                     </div>
                 </div>
 
-                <p class="profile-card__hello">
-                    {{
-                        viewingOther
-                            ? `Tường của ${firstName}`
-                            : `${greeting}, ${firstName}`
-                    }}
-                </p>
-                <button
-                    v-if="!viewingOther"
-                    type="button"
-                    class="profile-card__name profile-card__name-btn"
-                    @click="openOwnWall"
-                >
-                    {{ displayName }}
-                </button>
-                <h2 v-else class="profile-card__name">{{ displayName }}</h2>
-
-                <button
-                    v-if="departmentName && !viewingOther"
-                    type="button"
-                    class="profile-card__meta profile-card__meta--link"
-                    :aria-current="
-                        props.postScope === 'department' ? 'page' : undefined
-                    "
-                    @click="setPostScope('department')"
-                >
-                    <AppIcon name="building" :size="14" />
-                    <span>Tường {{ departmentName }}</span>
-                </button>
-                <p v-else-if="departmentName" class="profile-card__meta">
-                    <AppIcon name="building" :size="14" />
-                    <span>{{ departmentName }}</span>
-                </p>
-
-                <button
-                    v-if="userEmail"
-                    type="button"
-                    class="profile-card__email"
-                    :aria-label="`Sao chép email ${userEmail}`"
-                    @click="copyEmail"
-                >
-                    <AppIcon name="mail" :size="14" />
-                    <span>{{ userEmail }}</span>
-                </button>
-
-                <div class="profile-card__stats" aria-label="Thống kê bảng tin">
+                <template v-if="!collapsed">
+                    <p class="profile-card__hello">
+                        {{
+                            viewingOther
+                                ? `Tường của ${firstName}`
+                                : `${greeting}, ${firstName}`
+                        }}
+                    </p>
                     <button
+                        v-if="!viewingOther"
                         type="button"
-                        class="profile-card__stat"
-                        :class="{
-                            'profile-card__stat--active':
-                                props.scope === 'mine',
-                        }"
-                        @click="setScope('mine')"
+                        class="profile-card__name profile-card__name-btn"
+                        @click="openOwnWall"
                     >
-                        <span class="profile-card__stat-value">
-                            {{
-                                statsLoaded
-                                    ? formatCount(stats.posts_count)
-                                    : "—"
-                            }}
-                        </span>
-                        <span class="profile-card__stat-label">Bài viết</span>
+                        {{ displayName }}
                     </button>
+                    <h2 v-else class="profile-card__name">{{ displayName }}</h2>
+
                     <button
+                        v-if="departmentName && !viewingOther"
                         type="button"
-                        class="profile-card__stat"
-                        :class="{
-                            'profile-card__stat--active':
-                                props.scope === 'reacted',
-                        }"
-                        @click="setScope('reacted')"
+                        class="profile-card__meta profile-card__meta--link"
+                        :aria-current="
+                            props.postScope === 'department' ? 'page' : undefined
+                        "
+                        @click="setPostScope('department')"
                     >
-                        <span class="profile-card__stat-value">
-                            {{
-                                statsLoaded
-                                    ? formatCount(stats.reactions_received)
-                                    : "—"
-                            }}
-                        </span>
-                        <span class="profile-card__stat-label">Tương tác</span>
+                        <AppIcon name="building" :size="14" />
+                        <span>Tường {{ departmentName }}</span>
                     </button>
-                    <div class="profile-card__stat profile-card__stat--static">
-                        <span class="profile-card__stat-value">
-                            {{
-                                statsLoaded
-                                    ? formatCount(stats.comments_count)
-                                    : "—"
-                            }}
-                        </span>
-                        <span class="profile-card__stat-label">Bình luận</span>
+                    <p v-else-if="departmentName" class="profile-card__meta">
+                        <AppIcon name="building" :size="14" />
+                        <span>{{ departmentName }}</span>
+                    </p>
+
+                    <button
+                        v-if="userEmail"
+                        type="button"
+                        class="profile-card__email"
+                        :aria-label="`Sao chép email ${userEmail}`"
+                        @click="copyEmail"
+                    >
+                        <AppIcon name="mail" :size="14" />
+                        <span>{{ userEmail }}</span>
+                    </button>
+
+                    <div class="profile-card__stats" aria-label="Thống kê bảng tin">
+                        <button
+                            type="button"
+                            class="profile-card__stat"
+                            :class="{
+                                'profile-card__stat--active':
+                                    props.scope === 'mine',
+                            }"
+                            @click="setScope('mine')"
+                        >
+                            <span class="profile-card__stat-value">
+                                {{
+                                    statsLoaded
+                                        ? formatCount(stats.posts_count)
+                                        : "—"
+                                }}
+                            </span>
+                            <span class="profile-card__stat-label">Bài viết</span>
+                        </button>
+                        <button
+                            type="button"
+                            class="profile-card__stat"
+                            :class="{
+                                'profile-card__stat--active':
+                                    props.scope === 'reacted',
+                            }"
+                            @click="setScope('reacted')"
+                        >
+                            <span class="profile-card__stat-value">
+                                {{
+                                    statsLoaded
+                                        ? formatCount(stats.reactions_received)
+                                        : "—"
+                                }}
+                            </span>
+                            <span class="profile-card__stat-label">Tương tác</span>
+                        </button>
+                        <div class="profile-card__stat profile-card__stat--static">
+                            <span class="profile-card__stat-value">
+                                {{
+                                    statsLoaded
+                                        ? formatCount(stats.comments_count)
+                                        : "—"
+                                }}
+                            </span>
+                            <span class="profile-card__stat-label">Bình luận</span>
+                        </div>
                     </div>
-                </div>
+                </template>
             </div>
         </section>
 
@@ -273,12 +276,13 @@ watch(() => props.wallProfile, loadStats);
                 class="profile-nav__btn"
                 :class="{ 'profile-nav__btn--active': isWallActive(item.id) }"
                 :aria-current="isWallActive(item.id) ? 'page' : undefined"
+                :aria-label="collapsed ? item.label : null"
                 @click="setPostScope(item.id)"
             >
                 <span class="profile-nav__icon" aria-hidden="true">
                     <AppIcon :name="item.icon" :size="16" />
                 </span>
-                <span class="profile-nav__label">{{ item.label }}</span>
+                <span v-if="!collapsed" class="profile-nav__label">{{ item.label }}</span>
             </button>
         </nav>
 
@@ -290,18 +294,24 @@ watch(() => props.wallProfile, loadStats);
                     'profile-nav__btn--active': isWallActive('personal'),
                 }"
                 :aria-current="isWallActive('personal') ? 'page' : undefined"
+                :aria-label="collapsed ? 'Tường của tôi' : null"
                 @click="setPostScope('personal')"
             >
                 <span class="profile-nav__icon" aria-hidden="true">
                     <AppIcon name="user" :size="16" />
                 </span>
-                <span class="profile-nav__label">Tường của tôi</span>
+                <span v-if="!collapsed" class="profile-nav__label">Tường của tôi</span>
             </button>
-            <button type="button" class="profile-nav__btn" @click="openGroups">
+            <button
+                type="button"
+                class="profile-nav__btn"
+                :aria-label="collapsed ? 'Nhóm của tôi' : null"
+                @click="openGroups"
+            >
                 <span class="profile-nav__icon" aria-hidden="true">
                     <AppIcon name="users" :size="16" />
                 </span>
-                <span class="profile-nav__label">Nhóm của tôi</span>
+                <span v-if="!collapsed" class="profile-nav__label">Nhóm của tôi</span>
             </button>
         </nav>
     </div>
@@ -376,10 +386,23 @@ watch(() => props.wallProfile, loadStats);
     text-align: center;
 }
 
+.profile-panel--collapsed .profile-card__body {
+    padding: var(--space-2);
+}
+
 .profile-card__avatar-wrap {
     position: relative;
     z-index: 1;
     margin-top: -2.5rem;
+}
+
+.profile-panel--collapsed .profile-card__avatar-wrap {
+    margin-top: 0;
+}
+
+.profile-panel--collapsed .profile-card__avatar {
+    width: 2.25rem;
+    height: 2.25rem;
 }
 
 .profile-card__avatar {
@@ -558,6 +581,11 @@ watch(() => props.wallProfile, loadStats);
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: background 0.2s ease;
+}
+
+.profile-panel--collapsed .profile-nav__btn {
+    justify-content: center;
+    padding-left: var(--space-2);
 }
 
 .profile-nav__btn::before {

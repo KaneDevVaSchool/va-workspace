@@ -270,6 +270,9 @@ class SocialPostService
         });
 
         $this->mentions->notifyPost($author, $post);
+        if ($destination['post_scope'] === self::POST_SCOPE_GROUP) {
+            $this->mentions->notifyGroupPost($author, $post);
+        }
         $this->hashtags->syncForPost($post);
         $this->linkPreviews->syncForPost($post);
 
