@@ -13,6 +13,11 @@ use Illuminate\Support\Facades\Storage;
  */
 class SocialAttachmentUploader
 {
+    /**
+     * Không đặt ACL 'public' theo object — bucket dùng bucket policy để cho
+     * đọc public trong prefix social/ (xem docs/s3-bucket-policy.json), vì
+     * bucket bật Block Public Access chặn ACL public theo object.
+     */
     public function upload(UploadedFile $file, string $destDir = 'social/attachments'): array
     {
         $path = $file->store($this->prefixed($destDir), 's3');
