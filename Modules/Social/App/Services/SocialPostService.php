@@ -705,15 +705,14 @@ class SocialPostService
     {
         $imageMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-        return collect($files)->map(function (UploadedFile $file) use ($imageMimes) {
-            $uploaded = $this->attachmentUploader->upload($file);
+        return collect($files)->map(function (UploadedFile $file) use ($imageMimes, $postId) {
+            $uploaded = $this->attachmentUploader->upload($file, 'social/'.$postId);
 
             return [
                 'type' => in_array($file->getMimeType(), $imageMimes, true) ? 'image' : 'file',
                 'name' => $file->getClientOriginalName(),
                 'size' => $uploaded['size'],
-                'url' => $uploaded['url'],
-                's3_key' => $uploaded['key'],
+                'path' => $uploaded['path'],
             ];
         })->all();
     }
