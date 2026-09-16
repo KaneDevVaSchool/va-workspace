@@ -8,7 +8,9 @@ const props = defineProps({
   compact: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['remove']);
+const emit = defineEmits(['remove', 'replace']);
+
+const rotating = ref(new Set());
 
 const previewUrls = shallowRef(new Map());
 const lightboxOpen = ref(false);
@@ -113,6 +115,44 @@ function removeAt(index, event) {
   emit('remove', index);
 }
 
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function rotateAt(item, event) {
+  event.stopPropagation();
+  if (rotating.value.has(item.index)) return;
+
+  rotating.value = new Set(rotating.value).add(item.index);
+  try {
+    const img = await loadImage(item.url);
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalHeight;
+    canvas.height = img.naturalWidth;
+
+    const ctx = canvas.getContext('2d');
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+
+    const type = item.file.type || 'image/jpeg';
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, type, 0.92));
+    if (!blob) return;
+
+    const rotatedFile = new File([blob], item.file.name, { type });
+    emit('replace', item.index, rotatedFile);
+  } finally {
+    const next = new Set(rotating.value);
+    next.delete(item.index);
+    rotating.value = next;
+  }
+}
+
 watch(
   () => imageItems.value.length,
   (count) => {
@@ -154,6 +194,16 @@ watch(
             <span class="upload-cards__filename">{{ item.name }}</span>
             <span v-if="item.sizeLabel" class="upload-cards__size">{{ item.sizeLabel }}</span>
           </span>
+        </button>
+        <button
+          type="button"
+          class="upload-cards__rotate"
+          :class="{ 'upload-cards__rotate--busy': rotating.has(item.index) }"
+          :disabled="rotating.has(item.index)"
+          aria-label="Xoay ảnh 90 độ"
+          @click="rotateAt(item, $event)"
+        >
+          <AppIcon name="rotateCw" :size="compact ? 12 : 14" />
         </button>
         <button
           type="button"
@@ -345,10 +395,10 @@ watch(
   opacity: 0.84;
 }
 
-.upload-cards__remove {
+.upload-cards__remove,
+.upload-cards__rotate {
   position: absolute;
   top: 0.45rem;
-  right: 0.45rem;
   z-index: 2;
   display: flex;
   align-items: center;
@@ -366,9 +416,33 @@ watch(
     transform 0.2s ease;
 }
 
-.upload-cards__remove:hover {
+.upload-cards__remove {
+  right: 0.45rem;
+}
+
+.upload-cards__rotate {
+  right: 2.4rem;
+}
+
+.upload-cards__remove:hover,
+.upload-cards__rotate:hover {
   background: color-mix(in srgb, #000000 78%, transparent);
   transform: scale(1.06);
+}
+
+.upload-cards__rotate--busy {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.upload-cards__rotate--busy :deep(svg) {
+  animation: upload-cards-spin 0.8s linear infinite;
+}
+
+@keyframes upload-cards-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .upload-cards__open:hover .upload-cards__image,
@@ -471,11 +545,19 @@ watch(
   grid-template-columns: repeat(auto-fill, minmax(5.75rem, 1fr));
 }
 
-.upload-cards--compact .upload-cards__remove {
+.upload-cards--compact .upload-cards__remove,
+.upload-cards--compact .upload-cards__rotate {
   width: 1.5rem;
   height: 1.5rem;
   top: 0.35rem;
+}
+
+.upload-cards--compact .upload-cards__remove {
   right: 0.35rem;
+}
+
+.upload-cards--compact .upload-cards__rotate {
+  right: 2.1rem;
 }
 
 .upload-cards--compact .upload-cards__caption {

@@ -3,7 +3,7 @@ import { computed, nextTick, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
-import { MAX_POST_ATTACHMENTS } from '../constants/attachments.js';
+import { MAX_ATTACHMENT_SIZE_BYTES, MAX_POST_ATTACHMENTS } from '../constants/attachments.js';
 import SocialDepartmentVisibilityPicker from './SocialDepartmentVisibilityPicker.vue';
 import SocialEmojiPicker from './SocialEmojiPicker.vue';
 import SocialPollDialog from './SocialPollDialog.vue';
@@ -179,14 +179,24 @@ function onFilesChosen(event) {
   const chosen = Array.from(event.target.files ?? []);
   if (files.value.length + chosen.length > MAX_POST_ATTACHMENTS) {
     showClientToast('error', `Chỉ được đính kèm tối đa ${MAX_POST_ATTACHMENTS} tệp mỗi bài viết.`);
+    event.target.value = '';
     return;
   }
-  files.value = [...files.value, ...chosen];
+  const oversized = chosen.filter((file) => file.size > MAX_ATTACHMENT_SIZE_BYTES);
+  if (oversized.length > 0) {
+    showClientToast('error', `${oversized.map((f) => f.name).join(', ')} vượt quá 10MB, vui lòng chọn tệp nhỏ hơn.`);
+  }
+  const accepted = chosen.filter((file) => file.size <= MAX_ATTACHMENT_SIZE_BYTES);
+  files.value = [...files.value, ...accepted];
   event.target.value = '';
 }
 
 function removeFile(index) {
   files.value = files.value.filter((_, i) => i !== index);
+}
+
+function replaceFile(index, nextFile) {
+  files.value = files.value.map((file, i) => (i === index ? nextFile : file));
 }
 
 async function submit() {
@@ -307,6 +317,7 @@ defineExpose({ expand });
         v-if="files.length > 0"
         :files="files"
         @remove="removeFile"
+        @replace="replaceFile"
       />
 
       <div v-if="gifAttachments.length > 0" class="composer__gifs">

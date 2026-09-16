@@ -107,6 +107,7 @@ const PATHS = {
   pin: 'M12 17v5M8 3h8l-1 6 3 3v2H6v-2l3-3-1-6Z',
   gantt: 'M3 5h18M3 9h18M8 5v14M11 12h8v2h-8zM11 16h5v3h-5z',
   alertTriangle: 'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0ZM12 9v4M12 17h.01',
+  rotateCw: 'M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6',
 };
 
 const STROKE_ICONS = [
@@ -199,6 +200,7 @@ const STROKE_ICONS = [
   'folderPlus',
   'gantt',
   'alertTriangle',
+  'rotateCw',
 ];
 
 defineProps({
