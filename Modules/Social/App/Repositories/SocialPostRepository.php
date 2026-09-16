@@ -19,10 +19,12 @@ class SocialPostRepository implements SocialPostRepositoryInterface
                 'pinnedBy',
                 'reviewedBy',
                 'sharedFrom.user',
+                'sharedFrom.linkPreviews',
                 'wallUser.department',
                 'group',
                 'departmentVisibilities.department',
                 'hashtags',
+                'linkPreviews',
                 'poll.options' => fn ($query) => $query
                     ->withCount('votes')
                     ->orderBy('position')

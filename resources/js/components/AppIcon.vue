@@ -108,6 +108,8 @@ const PATHS = {
   gantt: 'M3 5h18M3 9h18M8 5v14M11 12h8v2h-8zM11 16h5v3h-5z',
   alertTriangle: 'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0ZM12 9v4M12 17h.01',
   rotateCw: 'M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6',
+  video: 'M23 7l-7 5 7 5V7zM14 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z',
+  play: 'M6 4l14 8-14 8V4z',
 };
 
 const STROKE_ICONS = [
@@ -201,6 +203,7 @@ const STROKE_ICONS = [
   'gantt',
   'alertTriangle',
   'rotateCw',
+  'video',
 ];
 
 defineProps({

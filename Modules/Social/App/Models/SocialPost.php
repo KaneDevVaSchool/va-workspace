@@ -151,4 +151,9 @@ class SocialPost extends Model
     {
         return $this->belongsToMany(SocialHashtag::class, 'social_hashtag_post', 'post_id', 'hashtag_id');
     }
+
+    public function linkPreviews(): HasMany
+    {
+        return $this->hasMany(SocialLinkPreview::class, 'post_id')->orderBy('position');
+    }
 }

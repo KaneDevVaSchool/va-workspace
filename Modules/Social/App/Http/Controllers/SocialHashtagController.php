@@ -42,6 +42,30 @@ class SocialHashtagController
         ]);
     }
 
+    public function top(Request $request): JsonResponse
+    {
+        if ($this->groupAccessDenied($request, $this->requestedGroupId($request))) {
+            return response()->json(['message' => 'Bạn không có quyền xem nhóm này.'], 403);
+        }
+
+        $wall = $this->resolveWall($request);
+        if ($wall === false) {
+            return response()->json(['message' => 'Bạn chưa thuộc phòng ban nào.'], 422);
+        }
+
+        $limit = min(max((int) $request->query('limit', 5), 1), 30);
+
+        return response()->json([
+            'hashtags' => $this->hashtags->topUsedForViewer(
+                $request->user(),
+                $wall['department_id'],
+                $wall['wall_user_id'],
+                $wall['group_id'],
+                $limit,
+            ),
+        ]);
+    }
+
     /**
      * @return array{department_id: int|null, wall_user_id: int|null, group_id: int|null}|false
      */

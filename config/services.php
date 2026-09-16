@@ -72,4 +72,14 @@ return [
         'api_key' => env('GIPHY_API_KEY'),
     ],
 
+    /*
+    | YouTube Data API v3 (metadata + trạng thái livestream cho preview
+    | link trong bảng tin) — Modules/Social. Không bắt buộc: nếu trống,
+    | preview YouTube tự rơi về oEmbed công khai (không biết được live).
+    | Tạo key miễn phí tại console.cloud.google.com (bật "YouTube Data API v3").
+    */
+    'youtube' => [
+        'key' => env('YOUTUBE_API_KEY'),
+    ],
+
 ];

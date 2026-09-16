@@ -152,6 +152,51 @@ class SocialHashtagService
             ->all();
     }
 
+    /**
+     * @return list<array{name: string, label: string, usage_count: int, last_used_at: string|null}>
+     */
+    public function topUsedForViewer(
+        User $viewer,
+        ?int $departmentId,
+        ?int $wallUserId,
+        ?int $groupId,
+        int $limit = 5,
+    ): array {
+        $limit = min(max($limit, 1), 30);
+
+        return SocialHashtag::query()
+            ->whereHas('posts', function ($postQuery) use ($viewer, $departmentId, $wallUserId, $groupId) {
+                $this->posts->constrainVisibleFeed(
+                    $postQuery,
+                    $departmentId,
+                    $wallUserId,
+                    $groupId,
+                    $viewer->department_id,
+                );
+            })
+            ->withCount(['posts as usage_count' => function ($postQuery) use ($viewer, $departmentId, $wallUserId, $groupId) {
+                $this->posts->constrainVisibleFeed(
+                    $postQuery,
+                    $departmentId,
+                    $wallUserId,
+                    $groupId,
+                    $viewer->department_id,
+                );
+            }])
+            ->orderByDesc('usage_count')
+            ->orderBy('name')
+            ->limit($limit)
+            ->get()
+            ->map(fn (SocialHashtag $hashtag) => [
+                'name' => $hashtag->name,
+                'label' => $hashtag->label,
+                'usage_count' => (int) $hashtag->usage_count,
+                'last_used_at' => $hashtag->last_used_at?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+    }
+
     private function recount(int $hashtagId): void
     {
         $count = (int) DB::table('social_hashtag_post')->where('hashtag_id', $hashtagId)->count();

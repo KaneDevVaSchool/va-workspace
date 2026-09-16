@@ -17,6 +17,9 @@ const loading = ref(false);
 const query = ref('');
 let searchTimer = null;
 
+const topTags = ref([]);
+const topLoading = ref(false);
+
 const wallParams = computed(() => {
   const params = { post_scope: props.postScope, limit: 12 };
   if (props.postScope === 'personal' && props.wallUserId) {
@@ -43,6 +46,19 @@ async function load(search = query.value) {
   }
 }
 
+async function loadTop() {
+  topLoading.value = true;
+  try {
+    const params = { ...wallParams.value, limit: 5 };
+    const { data } = await window.axios.get('/api/social/hashtags/top', { params });
+    topTags.value = data.hashtags ?? [];
+  } catch {
+    topTags.value = [];
+  } finally {
+    topLoading.value = false;
+  }
+}
+
 function onQueryInput(event) {
   query.value = event.target.value;
   clearTimeout(searchTimer);
@@ -55,16 +71,43 @@ function isActive(tag) {
 
 watch(
   () => [props.postScope, props.wallUserId, props.groupId],
-  () => load(),
+  () => {
+    load();
+    loadTop();
+  },
   { immediate: true },
 );
 
 onBeforeUnmount(() => clearTimeout(searchTimer));
 
-defineExpose({ load });
+defineExpose({ load, loadTop });
 </script>
 
 <template>
+  <section v-if="topTags.length > 0" class="hashtag-panel">
+    <h2 class="hashtag-panel__title">
+      <span class="hashtag-panel__icon" aria-hidden="true">
+        <AppIcon name="trendingUp" :size="16" />
+      </span>
+      <span class="hashtag-panel__title-text">5 hashtag dùng nhiều nhất</span>
+    </h2>
+
+    <ul class="hashtag-panel__list">
+      <li v-for="tag in topTags" :key="tag.name">
+        <button
+          type="button"
+          class="hashtag-panel__item"
+          :class="{ 'hashtag-panel__item--active': isActive(tag) }"
+          :aria-current="isActive(tag) ? 'true' : undefined"
+          @click="emit('select', tag.name)"
+        >
+          <span class="hashtag-panel__name">#{{ tag.label || tag.name }}</span>
+          <span class="hashtag-panel__usage">{{ usageLabel(tag.usage_count) }}</span>
+        </button>
+      </li>
+    </ul>
+  </section>
+
   <section class="hashtag-panel">
     <h2 class="hashtag-panel__title">
       <span class="hashtag-panel__icon" aria-hidden="true">

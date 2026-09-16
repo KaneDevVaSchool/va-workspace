@@ -12,6 +12,7 @@ use Modules\Identity\App\Services\PermissionService;
 use Modules\Identity\App\Services\ViewAsService;
 use Modules\Social\App\Models\SocialGroupMember;
 use Modules\Social\App\Models\SocialHashtag;
+use Modules\Social\App\Models\SocialLinkPreview;
 use Modules\Social\App\Models\SocialPost;
 use Modules\Social\App\Models\SocialPostDepartmentVisibility;
 use Modules\Social\App\Models\SocialPostLike;
@@ -55,6 +56,7 @@ class SocialPostService
         private readonly SocialGroupRepositoryInterface $groups,
         private readonly SocialHashtagService $hashtags,
         private readonly SocialAttachmentUploader $attachmentUploader,
+        private readonly SocialLinkPreviewService $linkPreviews,
     ) {}
 
     public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?string $hashtag = null): array
@@ -269,6 +271,7 @@ class SocialPostService
 
         $this->mentions->notifyPost($author, $post);
         $this->hashtags->syncForPost($post);
+        $this->linkPreviews->syncForPost($post);
 
         return $post;
     }
@@ -307,6 +310,7 @@ class SocialPostService
 
         $this->mentions->notifyPost($editor, $post, $oldContent);
         $this->hashtags->syncForPost($post);
+        $this->linkPreviews->syncForPost($post);
 
         return $post;
     }
@@ -609,6 +613,17 @@ class SocialPostService
                 ])
                 ->values()
                 ->all(),
+            'link_previews' => $post->linkPreviews
+                ->map(fn (SocialLinkPreview $preview) => [
+                    'url' => $preview->url,
+                    'provider' => $preview->provider,
+                    'title' => $preview->title,
+                    'thumbnail_url' => $preview->thumbnail_url,
+                    'embed_url' => $preview->embed_url,
+                    'is_live' => $preview->is_live,
+                ])
+                ->values()
+                ->all(),
             'attachments' => collect($post->attachments ?? [])->map(fn (array $a) => [
                 'type' => $a['type'],
                 'name' => $a['name'],
@@ -646,6 +661,17 @@ class SocialPostService
                     'avatar_url' => $post->sharedFrom->user->avatar_url,
                 ],
                 'anonymous_name' => $post->sharedFrom->is_anonymous ? $post->sharedFrom->anonymous_name : null,
+                'link_previews' => $post->sharedFrom->linkPreviews
+                    ->map(fn (SocialLinkPreview $preview) => [
+                        'url' => $preview->url,
+                        'provider' => $preview->provider,
+                        'title' => $preview->title,
+                        'thumbnail_url' => $preview->thumbnail_url,
+                        'embed_url' => $preview->embed_url,
+                        'is_live' => $preview->is_live,
+                    ])
+                    ->values()
+                    ->all(),
             ] : null,
             'reactions' => $this->posts->reactionSummary($post),
             'my_reaction' => $this->posts->myReaction($post, $viewer->id),

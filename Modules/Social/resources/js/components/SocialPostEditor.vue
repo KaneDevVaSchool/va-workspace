@@ -24,7 +24,7 @@ const props = defineProps({
   hashtagParams: { type: Object, default: null },
 });
 
-const emit = defineEmits(['update:modelValue', 'isEmpty', 'close']);
+const emit = defineEmits(['update:modelValue', 'isEmpty', 'close', 'update:linkPreviews']);
 const instanceId = `se-${Math.random().toString(36).slice(2, 8)}`;
 
 const mentionOpen = ref(false);
@@ -38,6 +38,48 @@ const hashtagTags = ref([]);
 const hashtagIndex = ref(0);
 let hashtagTimer = null;
 let editor = null;
+
+const LINK_PREVIEW_HOST_PATTERN = /(youtube\.com|youtu\.be|facebook\.com|fb\.watch|tiktok\.com)/i;
+const linkPreviews = new Map();
+let linkPreviewTimer = null;
+
+function emitLinkPreviews() {
+  emit('update:linkPreviews', Array.from(linkPreviews.values()));
+}
+
+function detectLinkPreviews(html) {
+  clearTimeout(linkPreviewTimer);
+  linkPreviewTimer = setTimeout(async () => {
+    const urls = Array.from(html.matchAll(/https?:\/\/[^\s<>"]+/gi))
+      .map((m) => m[0].replace(/[.,;:!?)'"]+$/, ''))
+      .filter((url) => LINK_PREVIEW_HOST_PATTERN.test(url));
+
+    for (const url of new Set([...linkPreviews.keys()])) {
+      if (!urls.includes(url)) linkPreviews.delete(url);
+    }
+
+    const newUrls = urls.filter((url) => !linkPreviews.has(url));
+    if (newUrls.length === 0) {
+      emitLinkPreviews();
+      return;
+    }
+
+    for (const url of newUrls) {
+      try {
+        const { data } = await window.axios.post('/api/social/link-preview', { url });
+        if (data.preview) linkPreviews.set(url, { ...data.preview, url });
+      } catch {
+        // Bỏ qua — không chặn việc soạn bài nếu preview lỗi/timeout.
+      }
+    }
+    emitLinkPreviews();
+  }, 500);
+}
+
+function removeLinkPreview(url) {
+  linkPreviews.delete(url);
+  emitLinkPreviews();
+}
 
 function closeMention() {
   mentionOpen.value = false;
@@ -292,9 +334,11 @@ editor = new Editor({
     handleKeyDown: (_view, event) => handleInlineKeydown(event),
   },
   onUpdate: ({ editor: e }) => {
-    emit('update:modelValue', e.getHTML());
+    const html = e.getHTML();
+    emit('update:modelValue', html);
     emit('isEmpty', e.isEmpty);
     detectInline();
+    detectLinkPreviews(html);
   },
   onSelectionUpdate: () => {
     detectInline();
@@ -308,6 +352,11 @@ watch(
   (value) => {
     if (value === editor.getHTML()) return;
     editor.commands.setContent(value ?? '', false);
+    if (!value) {
+      clearTimeout(linkPreviewTimer);
+      linkPreviews.clear();
+      emitLinkPreviews();
+    }
   },
 );
 
@@ -324,7 +373,7 @@ function focusEditor() {
   editor.chain().focus().run();
 }
 
-defineExpose({ insertContent, insertSticker, insertMention, focus: focusEditor });
+defineExpose({ insertContent, insertSticker, insertMention, focus: focusEditor, removeLinkPreview });
 
 function toggleColorPicker() {
   sizePickerOpen.value = false;
@@ -413,6 +462,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick, true);
   clearTimeout(mentionTimer);
   clearTimeout(hashtagTimer);
+  clearTimeout(linkPreviewTimer);
   editor.destroy();
 });
 </script>

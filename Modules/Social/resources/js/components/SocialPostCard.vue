@@ -12,6 +12,7 @@ import { hashtagFromEvent } from '../lib/hashtagClick.js';
 import SocialCommentList from './SocialCommentList.vue';
 import SocialHistoryDialog from './SocialHistoryDialog.vue';
 import SocialImageGrid from './SocialImageGrid.vue';
+import SocialLinkPreviewCard from './SocialLinkPreviewCard.vue';
 import SocialPollBlock from './SocialPollBlock.vue';
 import SocialPostEditor from './SocialPostEditor.vue';
 import SocialReactionBursts from './SocialReactionBursts.vue';
@@ -474,6 +475,14 @@ async function saveEdit() {
       @click="onContentClick"
     ></div>
 
+    <div v-if="post.link_previews?.length && !editing" class="post-card__link-previews">
+      <SocialLinkPreviewCard
+        v-for="preview in post.link_previews"
+        :key="preview.url"
+        :preview="preview"
+      />
+    </div>
+
     <ul v-if="post.hashtags?.length && !editing" class="post-card__hashtags" aria-label="Hashtag của bài viết">
       <li v-for="tag in post.hashtags" :key="tag.name">
         <button type="button" class="post-card__hashtag-chip" @click="emit('open-hashtag', tag.name)">
@@ -507,6 +516,13 @@ async function saveEdit() {
         v-social-stickers
         @click="onContentClick"
       ></div>
+      <div v-if="post.shared_from.link_previews?.length" class="post-card__link-previews">
+        <SocialLinkPreviewCard
+          v-for="preview in post.shared_from.link_previews"
+          :key="preview.url"
+          :preview="preview"
+        />
+      </div>
     </div>
 
     <div v-if="imageAttachments.length > 0" class="post-card__images">
@@ -1115,6 +1131,13 @@ async function saveEdit() {
 }
 
 .post-card__images {
+  min-width: 0;
+}
+
+.post-card__link-previews {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   min-width: 0;
 }
 

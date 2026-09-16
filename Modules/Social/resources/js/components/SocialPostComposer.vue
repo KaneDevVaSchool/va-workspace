@@ -6,6 +6,7 @@ import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { MAX_ATTACHMENT_SIZE_BYTES, MAX_POST_ATTACHMENTS } from '../constants/attachments.js';
 import SocialDepartmentVisibilityPicker from './SocialDepartmentVisibilityPicker.vue';
 import SocialEmojiPicker from './SocialEmojiPicker.vue';
+import SocialLinkPreviewCard from './SocialLinkPreviewCard.vue';
 import SocialPollDialog from './SocialPollDialog.vue';
 import SocialPostEditor from './SocialPostEditor.vue';
 import SocialUploadCards from './SocialUploadCards.vue';
@@ -25,6 +26,7 @@ const emit = defineEmits(['posted']);
 const auth = useAuthStore();
 const content = ref('');
 const editorEmpty = ref(true);
+const linkPreviews = ref([]);
 const files = ref([]);
 const gifAttachments = ref([]);
 const submitting = ref(false);
@@ -131,6 +133,10 @@ function removeGif(index) {
   gifAttachments.value = gifAttachments.value.filter((_, i) => i !== index);
 }
 
+function removeLinkPreview(url) {
+  editorRef.value?.removeLinkPreview(url);
+}
+
 function resetDeptVisibility() {
   deptVisibilityOpen.value = false;
   deptVisibilityMode.value = 'all';
@@ -139,6 +145,7 @@ function resetDeptVisibility() {
 
 function closeComposer() {
   content.value = '';
+  linkPreviews.value = [];
   files.value = [];
   gifAttachments.value = [];
   pickerOpen.value = false;
@@ -314,7 +321,18 @@ defineExpose({ expand });
         :hashtag-params="hashtagParams"
         @is-empty="editorEmpty = $event"
         @close="closeComposer"
+        @update:link-previews="linkPreviews = $event"
       />
+
+      <div v-if="linkPreviews.length > 0" class="composer__link-previews">
+        <SocialLinkPreviewCard
+          v-for="preview in linkPreviews"
+          :key="preview.url"
+          :preview="preview"
+          removable
+          @remove="removeLinkPreview(preview.url)"
+        />
+      </div>
 
       <SocialUploadCards
         v-if="files.length > 0"
@@ -563,6 +581,12 @@ defineExpose({ expand });
 .composer__author-name {
   font-weight: 600;
   color: var(--color-text);
+}
+
+.composer__link-previews {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .composer__gifs {
