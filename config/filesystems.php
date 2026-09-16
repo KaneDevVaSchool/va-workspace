@@ -53,11 +53,24 @@ return [
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
-            'root' => env('S3_BASE_PATH', ''),
             'throw' => false,
         ],
 
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | S3 Base Path
+    |--------------------------------------------------------------------------
+    |
+    | Tiền tố thư mục trong bucket S3 dùng riêng cho app này (bucket có thể
+    | dùng chung nhiều dự án). Nối thủ công vào path thay vì dùng `root` của
+    | disk config vì PathPrefixer nối bằng DIRECTORY_SEPARATOR của OS, gây
+    | lẫn dấu "\" vào S3 key khi chạy trên Windows.
+    |
+    */
+
+    's3_base_path' => env('S3_BASE_PATH', ''),
 
     /*
     |--------------------------------------------------------------------------

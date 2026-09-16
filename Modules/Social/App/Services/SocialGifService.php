@@ -126,7 +126,7 @@ class SocialGifService
                 continue;
             }
 
-            $destPath = $destDir.'/gif-'.$token.'.gif';
+            $destPath = self::s3Prefixed($destDir).'/gif-'.$token.'.gif';
             $s3Disk->put($destPath, $tempDisk->get($sourcePath));
             $tempDisk->delete($sourcePath);
 
@@ -139,6 +139,13 @@ class SocialGifService
         }
 
         return $attachments;
+    }
+
+    private static function s3Prefixed(string $destDir): string
+    {
+        $base = trim((string) config('filesystems.s3_base_path'), '/');
+
+        return $base === '' ? $destDir : $base.'/'.$destDir;
     }
 
     private function isAllowedGiphyUrl(string $url): bool

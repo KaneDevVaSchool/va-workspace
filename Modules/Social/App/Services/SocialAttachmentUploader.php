@@ -15,12 +15,19 @@ class SocialAttachmentUploader
 {
     public function upload(UploadedFile $file, string $destDir = 'social/attachments'): array
     {
-        $path = $file->store($destDir, 's3');
+        $path = $file->store($this->prefixed($destDir), 's3');
 
         return [
             'path' => $path,
             'url' => Storage::disk('s3')->url($path),
             'size' => $file->getSize(),
         ];
+    }
+
+    private function prefixed(string $destDir): string
+    {
+        $base = trim((string) config('filesystems.s3_base_path'), '/');
+
+        return $base === '' ? $destDir : $base.'/'.$destDir;
     }
 }
