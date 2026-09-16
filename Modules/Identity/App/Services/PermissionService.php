@@ -3,10 +3,12 @@
 namespace Modules\Identity\App\Services;
 
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Modules\Identity\App\Exceptions\PermissionKeyReserved;
 use Modules\Identity\App\Exceptions\ScopeNotFound;
 use Modules\Identity\App\Repositories\Contracts\PermissionGrantRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\TeamRepositoryInterface;
+use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 
 /**
  * RBAC engine — kiểm tra quyền granular theo pattern `module.action`.
@@ -38,6 +40,7 @@ class PermissionService
         private readonly ViewAsService $viewAs,
         private readonly PermissionGrantRepositoryInterface $grants,
         private readonly TeamRepositoryInterface $teams,
+        private readonly UserRepositoryInterface $users,
     ) {}
 
     /**
@@ -129,6 +132,22 @@ class PermissionService
         }
 
         return false;
+    }
+
+    /**
+     * Toàn bộ user đang hoạt động có quyền $key (global scope) — dùng để báo
+     * (chuông + push) cho đúng người khi phát sinh việc cần quyền đó xử lý
+     * (vd. bài viết chờ duyệt cần `social.review`). Duyệt qua user active vì
+     * quyền có thể đến từ role mặc định (config) hoặc override DB theo role,
+     * không tra ngược được bằng 1 câu query đơn giản.
+     *
+     * @return Collection<int, User>
+     */
+    public function usersWithPermission(string $key): Collection
+    {
+        return $this->users->allActiveWithRoles()
+            ->filter(fn (User $user) => $this->allows($user, $key))
+            ->values();
     }
 
     /**

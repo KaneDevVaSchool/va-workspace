@@ -133,7 +133,11 @@ function onRemove(event) {
 }
 
 .link-preview--vertical {
-  max-width: 16rem;
+  max-width: 22rem;
+}
+
+.link-preview--vertical.link-preview--playing {
+  max-width: 26rem;
 }
 
 .link-preview--youtube {
@@ -188,11 +192,21 @@ function onRemove(event) {
   aspect-ratio: 9 / 16;
 }
 
+.link-preview--vertical.link-preview--playing .link-preview__media {
+  padding: var(--space-2);
+  background: var(--color-surface-muted);
+}
+
 .link-preview__frame {
   width: 100%;
   height: 100%;
   border: none;
   display: block;
+}
+
+.link-preview--vertical.link-preview--playing .link-preview__frame {
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 1px var(--color-border);
 }
 
 .link-preview__thumb-btn {

@@ -119,6 +119,15 @@ class UserRepository implements UserRepositoryInterface
             ->get();
     }
 
+    public function allActiveWithRoles(): \Illuminate\Support\Collection
+    {
+        return User::query()
+            ->where('status', 'active')
+            ->with('roles')
+            ->orderBy('name')
+            ->get();
+    }
+
     public function allUnassigned(): \Illuminate\Support\Collection
     {
         return User::query()

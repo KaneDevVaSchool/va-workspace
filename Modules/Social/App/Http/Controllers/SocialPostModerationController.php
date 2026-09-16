@@ -32,6 +32,12 @@ class SocialPostModerationController extends Controller
         return response()->json($this->service->pendingList($request->user(), $perPage, $page));
     }
 
+    /** Số bài chờ duyệt — sidebar poll để hiện số cạnh mục "Duyệt bài". */
+    public function pendingCount(): JsonResponse
+    {
+        return response()->json(['count' => $this->service->pendingCount()]);
+    }
+
     public function approve(Request $request, int $postId): JsonResponse
     {
         $post = $this->pendingPost($postId);

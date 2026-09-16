@@ -85,6 +85,16 @@ interface UserRepositoryInterface
     public function allActiveSuperAdmins(): \Illuminate\Support\Collection;
 
     /**
+     * Toàn bộ user đang hoạt động, kèm sẵn roles — dùng khi cần lọc theo
+     * quyền granular (PermissionService::usersWithPermission) vì quyền có
+     * thể đến từ role mặc định hoặc override DB, không tra ngược bằng 1
+     * câu query đơn giản.
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public function allActiveWithRoles(): \Illuminate\Support\Collection;
+
+    /**
      * User chưa gắn phòng ban nào (department_id NULL) — tài khoản mới đăng
      * nhập Google lần đầu, chờ gán tay cho tới khi có API HRM. Dùng cho
      * trang superadmin gán phòng ban.

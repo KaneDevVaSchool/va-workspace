@@ -241,6 +241,7 @@ async function submit() {
 
     emit('posted', data.post);
     content.value = '';
+    linkPreviews.value = [];
     files.value = [];
     gifAttachments.value = [];
     pickerOpen.value = false;

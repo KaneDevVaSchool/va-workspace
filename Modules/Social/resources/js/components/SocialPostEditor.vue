@@ -356,8 +356,9 @@ emit('isEmpty', editor.isEmpty);
 watch(
   () => props.modelValue,
   (value) => {
-    if (value === editor.getHTML()) return;
+    if ((value || '') === editor.getHTML()) return;
     editor.commands.setContent(value ?? '', false);
+    emit('isEmpty', editor.isEmpty);
     if (!value) {
       clearTimeout(linkPreviewTimer);
       linkPreviews.clear();

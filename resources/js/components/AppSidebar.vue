@@ -8,7 +8,7 @@
 // - Tablet/mobile (<1280px): sidebar ẩn mặc định, mở dạng off-canvas qua
 //   prop `open` (điều khiển từ AppLayout) + lớp phủ để đóng khi bấm ra ngoài.
 //
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AppIcon from './AppIcon.vue';
@@ -22,6 +22,48 @@ const emit = defineEmits(['close']);
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+
+// Số bài chờ duyệt — hiện cạnh mục "Duyệt bài" (manager.social.moderation).
+// Poll cùng nhịp với chuông thông báo (HeaderNotifications) để không lệch
+// quá lâu so với thực tế khi có người khác vừa duyệt/đăng bài.
+const MODERATION_POLL_MS = 25000;
+const pendingModerationCount = ref(0);
+let moderationPollTimer = null;
+
+async function loadPendingModerationCount() {
+  if (!auth.can('social.review')) {
+    pendingModerationCount.value = 0;
+    return;
+  }
+  try {
+    const { data } = await window.axios.get('/api/social/moderation/pending-count');
+    pendingModerationCount.value = data.count ?? 0;
+  } catch {
+    // im lặng — sidebar không được vỡ vì lỗi đếm badge
+  }
+}
+
+function startModerationPoll() {
+  stopModerationPoll();
+  moderationPollTimer = window.setInterval(loadPendingModerationCount, MODERATION_POLL_MS);
+}
+
+function stopModerationPoll() {
+  if (moderationPollTimer) {
+    window.clearInterval(moderationPollTimer);
+    moderationPollTimer = null;
+  }
+}
+
+const badgeCounts = computed(() => ({
+  'manager.social.moderation': pendingModerationCount.value,
+}));
+
+function badgeLabel(item) {
+  const count = badgeCounts.value[item.name] || 0;
+  if (count <= 0) return '';
+  return count > 99 ? '99+' : String(count);
+}
 
 watch(
   () => props.open,
@@ -42,10 +84,15 @@ function handleKeydown(event) {
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown);
+  loadPendingModerationCount();
+  startModerationPoll();
+  window.addEventListener('focus', loadPendingModerationCount);
 });
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown);
   document.body.style.overflow = '';
+  stopModerationPoll();
+  window.removeEventListener('focus', loadPendingModerationCount);
 });
 
 // Nhóm theo mạch "kể chuyện" khi dùng workspace: bắt đầu từ tổng quan → theo
@@ -451,8 +498,12 @@ function closeDrawer() {
           >
             <span class="sidebar__link-icon">
               <AppIcon :name="item.icon" :size="18" />
+              <span v-if="collapsed && badgeLabel(item)" class="sidebar__badge sidebar__badge--icon">{{ badgeLabel(item) }}</span>
             </span>
-            <span v-if="!collapsed" class="sidebar__link-text">{{ itemLabel(item) }}</span>
+            <template v-if="!collapsed">
+              <span class="sidebar__link-text">{{ itemLabel(item) }}</span>
+              <span v-if="badgeLabel(item)" class="sidebar__badge">{{ badgeLabel(item) }}</span>
+            </template>
             <span v-else class="sidebar__flyout">{{ itemLabel(item) }}</span>
           </router-link>
         </section>
@@ -683,6 +734,7 @@ function closeDrawer() {
 }
 
 .sidebar__link-icon {
+  position: relative;
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -700,6 +752,31 @@ function closeDrawer() {
 .sidebar__link-text {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Số bài chờ xử lý (vd. bài chờ duyệt) — không phải badge trạng thái, chỉ
+   là số đếm nên vẫn dùng hình chấm tròn nhỏ nền đỏ, khác pill trạng thái
+   nền màu bị cấm ở mục 14 CLAUDE.md. */
+.sidebar__badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 0.25rem;
+  border-radius: var(--radius-full);
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1.05rem;
+  text-align: center;
+}
+
+.sidebar__badge--icon {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  margin-left: 0;
 }
 
 .sidebar__link:hover {

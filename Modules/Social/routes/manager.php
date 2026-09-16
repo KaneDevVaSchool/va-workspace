@@ -19,6 +19,7 @@ Route::middleware(['auth', 'permission:social.review', 'menu.not_hidden:manager.
     ->prefix('social/moderation')->name('social.moderation.')
     ->group(function () {
         Route::get('/', [SocialPostModerationController::class, 'index'])->name('index');
+        Route::get('/pending-count', [SocialPostModerationController::class, 'pendingCount'])->name('pending-count');
         Route::post('/{postId}/approve', [SocialPostModerationController::class, 'approve'])->name('approve');
         Route::post('/{postId}/reject', [SocialPostModerationController::class, 'reject'])->name('reject');
     });

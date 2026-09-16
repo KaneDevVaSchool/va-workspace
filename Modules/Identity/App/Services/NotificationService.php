@@ -18,6 +18,8 @@ class NotificationService
 
     public const TYPE_SOCIAL_COMMENT = 'social_comment';
 
+    public const TYPE_SOCIAL_POST_PENDING_REVIEW = 'social_post_pending_review';
+
     public const TYPE_LIKE_POST = 'like_post';
 
     public const TYPE_LIKE_COMMENT = 'like_comment';

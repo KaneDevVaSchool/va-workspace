@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
+use Modules\Identity\App\Services\NotificationService;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Identity\App\Services\ViewAsService;
 use Modules\Social\App\Models\SocialGroupMember;
@@ -57,6 +58,7 @@ class SocialPostService
         private readonly SocialHashtagService $hashtags,
         private readonly SocialAttachmentUploader $attachmentUploader,
         private readonly SocialLinkPreviewService $linkPreviews,
+        private readonly NotificationService $notifications,
     ) {}
 
     public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?string $hashtag = null): array
@@ -276,7 +278,29 @@ class SocialPostService
         $this->hashtags->syncForPost($post);
         $this->linkPreviews->syncForPost($post);
 
+        if ($reviewStatus === SocialPost::REVIEW_PENDING) {
+            $this->notifyReviewers($author, $post);
+        }
+
         return $post;
+    }
+
+    /** Báo (chuông + push) cho mọi người có quyền `social.review` khi có bài mới chờ duyệt. */
+    private function notifyReviewers(User $author, SocialPost $post): void
+    {
+        $reviewerIds = $this->permissions->usersWithPermission('social.review')
+            ->pluck('id')
+            ->all();
+
+        $this->notifications->notifyUsers(
+            $reviewerIds,
+            $author,
+            NotificationService::TYPE_SOCIAL_POST_PENDING_REVIEW,
+            'Có bài viết mới chờ duyệt',
+            ($post->is_anonymous ? 'Một bài viết ẩn danh' : $author->name).' vừa đăng bài lên bảng tin chung, đang chờ duyệt.',
+            '/manager/social/moderation',
+            ['post_id' => $post->id],
+        );
     }
 
     public function update(SocialPost $post, User $editor, array $data): SocialPost
