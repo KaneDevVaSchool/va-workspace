@@ -83,12 +83,12 @@ class ProjectService
 
     /**
      * true nếu user được chọn thẳng "phòng ban giao" (owner_department_id)
-     * lúc tạo dự án thay vì bị khoá theo phòng ban của chính mình — chỉ
-     * super_admin và giám đốc điều hành (mục C).
+     * lúc tạo dự án thay vì bị khoá theo phòng ban của chính mình — mọi
+     * người tạo dự án đều được chọn tự do, không giới hạn theo vai trò.
      */
     public function userCanChooseOwnerDepartment(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->hasRole('director_officer');
+        return true;
     }
 
     /**

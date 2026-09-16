@@ -338,13 +338,9 @@ class SocialPostService
 
     public function delete(SocialPost $post): void
     {
-        // Attachment cũ (trước khi chuyển sang lưu S3 qua va-pictures) vẫn còn
-        // 'path' local — dọn được. Attachment mới nằm trên S3 và va-pictures
-        // không có endpoint xoá theo key cho client ngoài nên không xoá được
-        // ở đây; chấp nhận còn rác trên S3 (không chặn thao tác xoá bài chính).
         foreach ($post->attachments ?? [] as $attachment) {
             if (isset($attachment['path'])) {
-                Storage::disk('public')->delete($attachment['path']);
+                Storage::disk('s3')->delete($attachment['path']);
             }
         }
 
@@ -617,7 +613,7 @@ class SocialPostService
                 'type' => $a['type'],
                 'name' => $a['name'],
                 'size' => $a['size'],
-                'url' => $a['url'] ?? (isset($a['path']) ? Storage::disk('public')->url($a['path']) : ''),
+                'url' => $a['url'] ?? (isset($a['path']) ? Storage::disk('s3')->url($a['path']) : ''),
             ])->all(),
             'author' => $post->is_anonymous ? null : $this->presentUser($post->user),
             'is_anonymous' => $post->is_anonymous,

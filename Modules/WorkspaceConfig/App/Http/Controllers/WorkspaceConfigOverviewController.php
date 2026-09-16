@@ -14,13 +14,14 @@ use Modules\WorkspaceConfig\App\Services\WorkspaceConfigMemberService;
 
 /**
  * superadmin/workspace-config — xem TỔNG HỢP workspace của mọi phòng ban:
- * 1 bảng liệt kê + bấm vào 1 dòng xem chi tiết. Chỉ xem, super_admin
- * không sửa thay department_director (sửa sidebar chỉ làm được ở
- * WorkspaceConfigSidebarController, scope đúng phòng ban của user đó) —
- * NGOẠI LỆ DUY NHẤT: gán department_id cho tài khoản (assignDepartment),
- * vì đây là bước chặn trước khi department_director có thể làm bất cứ gì
- * (chưa có phòng ban thì không thấy nút gán vai trò) — xem
- * WorkspaceConfigMemberService::assignDepartment().
+ * 1 bảng liệt kê + bấm vào 1 dòng xem chi tiết. Phần lớn chỉ xem (sửa
+ * sidebar chỉ làm được ở WorkspaceConfigSidebarController, scope đúng
+ * phòng ban của user đó) — 2 NGOẠI LỆ super_admin được làm thay
+ * department_director: gán department_id cho tài khoản (assignDepartment,
+ * bước chặn trước khi department_director có thể làm bất cứ gì — chưa có
+ * phòng ban thì không thấy nút gán vai trò), và gán vai trò phòng ban cho
+ * thành viên bất kỳ phòng ban nào (xem
+ * WorkspaceConfigMemberController::assignRoleForDepartment()).
  */
 class WorkspaceConfigOverviewController extends Controller
 {
@@ -58,6 +59,7 @@ class WorkspaceConfigOverviewController extends Controller
             'sidebar_menus' => $this->sidebarConfigs->forDepartment($model->id),
             'sidebar_sections' => $this->sidebarConfigs->sectionsForDepartment($model->id),
             'evaluation_criteria' => $this->evaluationCriteria->listForDepartment($model->id),
+            'assignable_roles' => $this->members->assignableRoles(),
         ]);
     }
 

@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\WorkspaceConfig\App\Http\Controllers\WorkspaceConfigGlobalMenuController;
+use Modules\WorkspaceConfig\App\Http\Controllers\WorkspaceConfigMemberController;
 use Modules\WorkspaceConfig\App\Http\Controllers\WorkspaceConfigOverviewController;
 use Modules\WorkspaceConfig\App\Http\Requests\ReorderGlobalMenuLayoutRequest;
 use Modules\WorkspaceConfig\App\Http\Requests\UpdateGlobalMenuSectionRequest;
@@ -12,8 +13,9 @@ use Modules\WorkspaceConfig\App\Http\Requests\UpdateGlobalMenuSectionRequest;
 |--------------------------------------------------------------------------
 | Xem tổng hợp workspace của TẤT CẢ phòng ban (chỉ super_admin, key
 | workspace_config.view_all, reserved) — 1 bảng liệt kê phòng ban + số
-| liệu tóm tắt, bấm vào 1 dòng để xem chi tiết phòng ban đó. Chỉ xem,
-| không sửa thay department_director.
+| liệu tóm tắt, bấm vào 1 dòng để xem chi tiết phòng ban đó. Phần lớn chỉ
+| xem, riêng gán vai trò (roles.assign) super_admin được làm thay
+| department_director cho bất kỳ phòng ban nào.
 |
 | Prefix thật: /api/workspace-config/* (ServiceProvider), tách khỏi trang
 | Vue /superadmin/workspace-config và /superadmin/workspace-config/departments/:id.
@@ -29,6 +31,12 @@ Route::middleware(['auth', 'permission:workspace_config.view_all'])
         // phòng ban của chính họ (xem WorkspaceConfigMemberController::departmentIdOrFail()).
         Route::get('/members/unassigned', [WorkspaceConfigOverviewController::class, 'unassignedMembers'])->name('members.unassigned');
         Route::put('/members/{user}/department', [WorkspaceConfigOverviewController::class, 'assignDepartment'])->name('members.assign-department');
+        // super_admin gán vai trò thay department_director cho 1 phòng ban
+        // bất kỳ (department lấy từ route param, không phải phòng ban của
+        // chính super_admin) — dùng ở tab "Thành viên" trong hub chi tiết
+        // phòng ban, xem WorkspaceConfigMemberController::assignRoleForDepartment().
+        Route::post('/departments/{department}/members/roles', [WorkspaceConfigMemberController::class, 'assignRoleForDepartment'])
+            ->name('departments.members.roles.assign');
     });
 
 /*

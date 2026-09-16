@@ -224,7 +224,7 @@ class SocialCommentService
                 'type' => $a['type'],
                 'name' => $a['name'],
                 'size' => $a['size'],
-                'url' => $a['url'] ?? (isset($a['path']) ? Storage::disk('public')->url($a['path']) : ''),
+                'url' => $a['url'] ?? (isset($a['path']) ? Storage::disk('s3')->url($a['path']) : ''),
             ])->all(),
             'author' => [
                 'id' => $comment->user->id,
@@ -303,7 +303,7 @@ class SocialCommentService
     {
         foreach ($attachments as $attachment) {
             if (isset($attachment['path'])) {
-                Storage::disk('public')->delete($attachment['path']);
+                Storage::disk('s3')->delete($attachment['path']);
             }
         }
     }

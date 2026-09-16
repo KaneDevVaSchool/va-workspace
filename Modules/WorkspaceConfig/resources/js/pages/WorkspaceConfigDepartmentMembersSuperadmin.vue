@@ -6,6 +6,9 @@
 // WorkspaceConfigDepartmentDetailHub qua inject, không tự gọi API riêng.
 // Panel chi tiết chỉ hiện thông tin của thành viên đang chọn — menu hiển thị
 // và tiêu chí đánh giá là cấu hình của cả phòng ban nên nằm ở 2 tab riêng.
+// Super_admin được gán vai trò thay department_director ở đây (nút "Gán vai
+// trò" trên header, đăng ký qua hub.setPrimaryAction) — xem
+// WorkspaceConfigMemberController::assignRoleForDepartment().
 //
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
@@ -14,6 +17,7 @@ import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useDragScroll } from '@/composables/useDragScroll';
 import StatusBadge from '../components/StatusBadge.vue';
+import WorkspaceConfigPicker from '../components/WorkspaceConfigPicker.vue';
 import {
   COLUMN_STORAGE_KEY,
   COLUMN_WIDTH_KEY,
@@ -41,6 +45,7 @@ const route = useRoute();
 const hub = inject('workspaceConfigDeptDetailHub', null);
 const allMembers = computed(() => hub?.members?.value ?? []);
 const loading = computed(() => hub?.loading?.value ?? false);
+const assignableRoles = computed(() => hub?.assignableRoles?.value ?? []);
 
 const selected = ref(null);
 const brokenAvatarIds = ref(new Set());
@@ -48,6 +53,190 @@ const brokenAvatarIds = ref(new Set());
 const departmentOptions = ref([]);
 const departmentAssignId = ref('');
 const departmentAssignSaving = ref(false);
+
+const roleDialogOpen = ref(false);
+const roleDialogTab = ref('create');
+const roleFormSaving = ref(false);
+const roleForm = reactive({ user_id: '', role_code: '' });
+const roleListFilter = ref('');
+
+const assignableRoleCodes = computed(() => new Set(assignableRoles.value.map((item) => item.code)));
+
+function isRoleEligible(member) {
+  if (member.status !== 'active') return false;
+  return memberRoles(member).every((item) => !item.code || assignableRoleCodes.value.has(item.code));
+}
+
+function hasAssignableRole(member) {
+  return memberRoles(member).some((item) => assignableRoleCodes.value.has(item.code));
+}
+
+function sortMembers(members) {
+  return members.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'vi'));
+}
+
+const assignCandidates = computed(() =>
+  sortMembers(allMembers.value.filter((member) => isRoleEligible(member) && !hasAssignableRole(member))),
+);
+
+const editRoleCandidates = computed(() =>
+  sortMembers(allMembers.value.filter((member) => isRoleEligible(member) && hasAssignableRole(member))),
+);
+
+const roleTabCandidates = computed(() =>
+  roleDialogTab.value === 'edit' ? editRoleCandidates.value : assignCandidates.value,
+);
+
+function toMemberPickerItems(members) {
+  return members.map((member) => ({
+    id: member.id,
+    label: member.name,
+    sublabel: member.email || '',
+    meta: memberRolesText(member) === '—' ? member.team?.name || '' : memberRolesText(member),
+    avatar_url: member.avatar_url,
+  }));
+}
+
+const rolePickerItems = computed(() => toMemberPickerItems(roleTabCandidates.value));
+
+function matchesRoleFilter(item) {
+  const q = roleListFilter.value.trim().toLowerCase();
+  if (!q) return true;
+  return `${item.label ?? ''} ${item.sublabel ?? ''} ${item.meta ?? ''}`.toLowerCase().includes(q);
+}
+
+const visibleRoleItems = computed(() => rolePickerItems.value.filter(matchesRoleFilter));
+
+const selectedRoleMember = computed(() =>
+  allMembers.value.find((member) => member.id === Number(roleForm.user_id)) ?? null,
+);
+
+const selectedRoleOption = computed(
+  () => assignableRoles.value.find((item) => item.code === roleForm.role_code) ?? null,
+);
+
+function currentAssignableRole(member) {
+  const match = memberRoles(member).find((item) => assignableRoleCodes.value.has(item.code));
+  return match?.code ?? '';
+}
+
+const currentRoleOfSelected = computed(() => {
+  const member = selectedRoleMember.value;
+  if (!member) return null;
+  return memberRoles(member).find((item) => assignableRoleCodes.value.has(item.code)) ?? null;
+});
+
+const roleUnchanged = computed(
+  () =>
+    roleDialogTab.value === 'edit' &&
+    Boolean(currentRoleOfSelected.value?.code) &&
+    currentRoleOfSelected.value.code === roleForm.role_code,
+);
+
+const roleDialogTitle = computed(() => (roleDialogTab.value === 'edit' ? 'Sửa vai trò' : 'Gán vai trò'));
+
+const roleSubmitLabel = computed(() => {
+  if (roleFormSaving.value) return 'Đang lưu…';
+  return roleDialogTab.value === 'edit' ? 'Lưu vai trò' : 'Gán vai trò';
+});
+
+const roleEmptyMessage = computed(() =>
+  roleDialogTab.value === 'edit'
+    ? 'Chưa có thành viên nào có vai trò phòng ban để sửa. Gán vai trò trước ở tab Gán.'
+    : 'Không có thành viên nào có thể gán vai trò. Chỉ gán được cho nhân sự đang hoạt động, chưa có vai trò phòng ban.',
+);
+
+function focusRoleDialog() {
+  if (roleDialogTab.value === 'edit') return;
+  document.getElementById('wc-dept-role-user')?.focus();
+}
+
+function openRoleDialog() {
+  const selectedId = selected.value?.id;
+  const inEdit = selectedId && editRoleCandidates.value.some((member) => member.id === selectedId);
+  const inAssign = selectedId && assignCandidates.value.some((member) => member.id === selectedId);
+
+  if (inEdit) {
+    roleDialogTab.value = 'edit';
+  } else if (inAssign) {
+    roleDialogTab.value = 'create';
+  } else if (assignCandidates.value.length === 0 && editRoleCandidates.value.length > 0) {
+    roleDialogTab.value = 'edit';
+  } else {
+    roleDialogTab.value = 'create';
+  }
+
+  const seed = inEdit || inAssign ? selected.value : null;
+  roleListFilter.value = '';
+  roleForm.user_id = seed ? seed.id : '';
+  roleForm.role_code = seed && inEdit ? currentAssignableRole(seed) : '';
+  roleDialogOpen.value = true;
+  nextTick(focusRoleDialog);
+}
+
+function setRoleDialogTab(tab) {
+  if (roleFormSaving.value || roleDialogTab.value === tab) return;
+  roleDialogTab.value = tab;
+  roleListFilter.value = '';
+  roleForm.user_id = '';
+  roleForm.role_code = '';
+  nextTick(focusRoleDialog);
+}
+
+function closeRoleDialog() {
+  if (roleFormSaving.value) return;
+  roleDialogOpen.value = false;
+}
+
+async function submitRoleForm() {
+  if (roleForm.user_id === '' || roleForm.user_id == null) {
+    showClientToast('error', 'Vui lòng chọn thành viên.');
+    return;
+  }
+  if (!roleForm.role_code) {
+    showClientToast('error', 'Vui lòng chọn vai trò.');
+    return;
+  }
+  if (roleUnchanged.value) {
+    showClientToast('warning', 'Vai trò mới trùng với vai trò hiện tại.');
+    return;
+  }
+
+  roleFormSaving.value = true;
+  try {
+    const { data } = await window.axios.post(
+      `/api/workspace-config/departments/${route.params.departmentId}/members/roles`,
+      { user_id: Number(roleForm.user_id), role_code: roleForm.role_code },
+    );
+    const member = data.member;
+    const index = allMembers.value.findIndex((item) => item.id === member.id);
+    if (index >= 0) allMembers.value[index] = member;
+    if (selected.value?.id === member.id) selected.value = member;
+
+    const memberName = member?.name || 'thành viên';
+    const roleName = memberRolesText(member);
+    roleDialogOpen.value = false;
+    showClientToast(
+      'success',
+      roleDialogTab.value === 'edit'
+        ? `Đã đổi vai trò của ${memberName} thành ${roleName}.`
+        : `Đã gán vai trò ${roleName} cho ${memberName}.`,
+    );
+  } catch (error) {
+    const message = error?.response?.data?.message;
+    showClientToast('error', message || 'Không lưu được vai trò. Vui lòng thử lại.');
+  } finally {
+    roleFormSaving.value = false;
+  }
+}
+
+function registerPrimaryAction() {
+  hub?.setPrimaryAction?.({
+    label: 'Gán vai trò',
+    icon: 'userPlus',
+    onClick: openRoleDialog,
+  });
+}
 
 const departmentAssignUnchanged = computed(() => {
   if (!selected.value) return true;
@@ -408,6 +597,10 @@ function onFilterToggle(key, checked) {
 
 function handleDocumentKeydown(event) {
   if (event.key !== 'Escape') return;
+  if (roleDialogOpen.value) {
+    closeRoleDialog();
+    return;
+  }
   if (selected.value) {
     selected.value = null;
   }
@@ -451,6 +644,7 @@ watch(filteredMembers, (rows) => {
 onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown);
   loadDepartmentOptions();
+  registerPrimaryAction();
   nextTick(() => {
     fitColumnsToContent();
     if (tableWrap.value) {
@@ -469,6 +663,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleDocumentKeydown);
+  hub?.clearPrimaryAction?.();
   wrapObserver?.disconnect();
 });
 </script>
@@ -730,9 +925,20 @@ onBeforeUnmount(() => {
             <span class="wc-detail__row-label">Nhóm</span>
             <span class="wc-detail__row-value">{{ selected.team?.name || 'Chưa thuộc nhóm nào' }}</span>
           </div>
-          <div class="wc-detail__row">
-            <span class="wc-detail__row-label">Vai trò</span>
-            <span class="wc-detail__row-value">{{ memberRolesText(selected) }}</span>
+          <div class="wc-detail__row wc-detail__row--dept">
+            <span class="wc-detail__row-label wc-detail__row-label--dept">Vai trò</span>
+            <div class="wc-detail__row-dept">
+              <span class="wc-detail__input wc-detail__input--side wc-detail__role-readonly">
+                {{ memberRolesText(selected) }}
+              </span>
+              <button
+                type="button"
+                class="wc-detail__side-btn"
+                @click="openRoleDialog"
+              >
+                {{ hasAssignableRole(selected) ? 'Sửa' : 'Gán' }}
+              </button>
+            </div>
           </div>
           <div class="wc-detail__row">
             <span class="wc-detail__row-label">Trạng thái</span>
@@ -750,6 +956,202 @@ onBeforeUnmount(() => {
         </div>
       </aside>
     </div>
+
+    <Teleport to="body">
+      <Transition name="wc-dialog-fade">
+        <div
+          v-if="roleDialogOpen"
+          class="wc-dialog"
+          role="presentation"
+          @mousedown.self="closeRoleDialog"
+        >
+          <div
+            class="wc-dialog__panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wc-dept-role-form-title"
+          >
+            <div class="wc-dialog__head">
+              <span class="wc-dialog__icon" aria-hidden="true">
+                <AppIcon :name="roleDialogTab === 'edit' ? 'pencil' : 'shield'" :size="22" :stroke-width="1.75" />
+              </span>
+              <div class="wc-dialog__head-copy">
+                <h2 id="wc-dept-role-form-title" class="wc-dialog__title">{{ roleDialogTitle }}</h2>
+              </div>
+              <button
+                type="button"
+                class="wc-dialog__close"
+                aria-label="Đóng"
+                :disabled="roleFormSaving"
+                @click="closeRoleDialog"
+              >
+                <AppIcon name="close" :size="16" />
+              </button>
+            </div>
+
+            <div class="wc-dialog__tabs" role="tablist" aria-label="Gán hoặc sửa vai trò">
+              <button
+                type="button"
+                class="wc-dialog__tab"
+                :class="{ 'wc-dialog__tab--active': roleDialogTab === 'create' }"
+                role="tab"
+                :aria-selected="roleDialogTab === 'create' ? 'true' : 'false'"
+                :disabled="roleFormSaving"
+                @click="setRoleDialogTab('create')"
+              >
+                Gán
+              </button>
+              <button
+                type="button"
+                class="wc-dialog__tab"
+                :class="{ 'wc-dialog__tab--active': roleDialogTab === 'edit' }"
+                role="tab"
+                :aria-selected="roleDialogTab === 'edit' ? 'true' : 'false'"
+                :disabled="roleFormSaving"
+                @click="setRoleDialogTab('edit')"
+              >
+                Sửa
+              </button>
+            </div>
+
+            <div class="wc-dialog__body" :class="{ 'wc-dialog__body--edit': roleDialogTab === 'edit' }">
+              <div v-if="roleDialogTab === 'edit'" class="wc-dialog__list-panel">
+                <label class="wc-dialog__label" for="wc-dept-role-list-q">Thành viên</label>
+                <input
+                  id="wc-dept-role-list-q"
+                  v-model="roleListFilter"
+                  type="search"
+                  class="wc-dialog__input"
+                  placeholder="Lọc theo tên hoặc email…"
+                  autocomplete="off"
+                  :disabled="roleFormSaving || editRoleCandidates.length === 0"
+                />
+                <ul class="wc-dialog__list hide-scrollbar" role="listbox" aria-label="Thành viên có vai trò">
+                  <li v-if="editRoleCandidates.length === 0" class="wc-dialog__list-empty">
+                    {{ roleEmptyMessage }}
+                  </li>
+                  <li v-else-if="visibleRoleItems.length === 0" class="wc-dialog__list-empty">
+                    Không tìm thấy thành viên khớp.
+                  </li>
+                  <li
+                    v-for="item in visibleRoleItems"
+                    :key="item.id"
+                    class="wc-dialog__list-item"
+                    :class="{ 'wc-dialog__list-item--active': String(roleForm.user_id) === String(item.id) }"
+                    role="option"
+                    :aria-selected="String(roleForm.user_id) === String(item.id) ? 'true' : 'false'"
+                    @click="roleForm.user_id = item.id"
+                  >
+                    <span class="wc-detail__avatar" aria-hidden="true">
+                      <img
+                        v-if="usesPhoto(item)"
+                        :src="item.avatar_url"
+                        alt=""
+                        class="wc-detail__avatar-img"
+                        referrerpolicy="no-referrer"
+                        @error="onAvatarError(item.id)"
+                      />
+                      <img
+                        v-else
+                        :src="FALLBACK_AVATAR_SRC"
+                        :srcset="FALLBACK_AVATAR_SRCSET"
+                        alt=""
+                        class="wc-detail__avatar-fallback"
+                      />
+                    </span>
+                    <span class="wc-dialog__list-copy">
+                      <span class="wc-dialog__list-name">{{ item.label }}</span>
+                      <span v-if="item.sublabel" class="wc-dialog__list-sub">{{ item.sublabel }}</span>
+                    </span>
+                    <span v-if="item.meta" class="wc-dialog__list-meta">{{ item.meta }}</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="wc-dialog__stack">
+                <div v-if="roleDialogTab === 'create'" class="wc-dialog__field">
+                  <label class="wc-dialog__label" for="wc-dept-role-user">
+                    Thành viên <span class="wc-dialog__req" aria-hidden="true">*</span>
+                  </label>
+                  <WorkspaceConfigPicker
+                    id="wc-dept-role-user"
+                    :key="`role-user-${roleDialogTab}`"
+                    v-model="roleForm.user_id"
+                    :items="rolePickerItems"
+                    placeholder="Gõ tên hoặc email để tìm…"
+                    empty-text="Không tìm thấy thành viên khớp."
+                    show-avatar
+                    :disabled="roleFormSaving || assignCandidates.length === 0"
+                  />
+                </div>
+
+                <p v-if="roleDialogTab === 'create' && assignCandidates.length === 0" class="wc-dialog__empty">
+                  {{ roleEmptyMessage }}
+                </p>
+
+                <div class="wc-dialog__field">
+                  <span class="wc-dialog__label" id="wc-dept-role-code-label">
+                    {{ roleDialogTab === 'edit' ? 'Vai trò mới' : 'Vai trò' }}
+                    <span class="wc-dialog__req" aria-hidden="true">*</span>
+                  </span>
+                  <div class="wc-dialog__roles" role="listbox" aria-labelledby="wc-dept-role-code-label">
+                    <button
+                      v-for="item in assignableRoles"
+                      :key="item.code"
+                      type="button"
+                      class="wc-dialog__role"
+                      :class="{ 'wc-dialog__role--active': roleForm.role_code === item.code }"
+                      role="option"
+                      :aria-selected="roleForm.role_code === item.code ? 'true' : 'false'"
+                      :disabled="roleFormSaving || !roleForm.user_id"
+                      @click="roleForm.role_code = item.code"
+                    >
+                      <span class="wc-dialog__role-name">{{ item.name }}</span>
+                      <span v-if="item.description" class="wc-dialog__role-desc">{{ item.description }}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <p
+                  v-if="selectedRoleMember && selectedRoleOption && !roleUnchanged"
+                  class="wc-dialog__summary"
+                >
+                  <template v-if="roleDialogTab === 'edit'">
+                    Đổi vai trò của <strong>{{ selectedRoleMember.name }}</strong>
+                    từ {{ currentRoleOfSelected?.name || '—' }}
+                    sang {{ selectedRoleOption.name }}.
+                  </template>
+                  <template v-else>
+                    Gán vai trò <strong>{{ selectedRoleOption.name }}</strong>
+                    cho {{ selectedRoleMember.name }}.
+                  </template>
+                </p>
+              </div>
+            </div>
+
+            <div class="wc-dialog__actions">
+              <button type="button" class="wc-dialog__btn wc-dialog__btn--ghost" :disabled="roleFormSaving" @click="closeRoleDialog">
+                Huỷ
+              </button>
+              <button
+                type="button"
+                class="wc-dialog__btn wc-dialog__btn--primary"
+                :disabled="
+                  roleFormSaving ||
+                  roleTabCandidates.length === 0 ||
+                  !roleForm.user_id ||
+                  !roleForm.role_code ||
+                  roleUnchanged
+                "
+                @click="submitRoleForm"
+              >
+                {{ roleSubmitLabel }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -1102,6 +1504,13 @@ onBeforeUnmount(() => {
   font-size: 0.8125rem;
 }
 
+.wc-detail__role-readonly {
+  display: flex;
+  align-items: center;
+  color: var(--color-text);
+  background: var(--color-surface-muted);
+}
+
 .wc-detail__side-btn {
   flex-shrink: 0;
   padding: 0.375rem 0.75rem;
@@ -1146,6 +1555,426 @@ onBeforeUnmount(() => {
 @media (max-width: 480px) {
   .wc-detail__filters {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.wc-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: var(--color-sidebar-overlay);
+}
+
+.wc-dialog__panel {
+  width: min(48rem, 100%);
+  max-height: min(46rem, calc(100vh - 2.5rem));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 1.5rem 1.75rem 1.25rem;
+  overflow: auto;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.wc-dialog__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.wc-dialog__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.wc-dialog__head-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.wc-dialog__title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.wc-dialog__close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.wc-dialog__close:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.wc-dialog__close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wc-dialog__tabs {
+  display: flex;
+  gap: var(--space-2);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.wc-dialog__tab {
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 0 2px 0 transparent;
+  cursor: pointer;
+}
+
+.wc-dialog__tab--active {
+  color: var(--color-primary);
+  box-shadow: 0 2px 0 var(--color-primary);
+}
+
+.wc-dialog__tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.wc-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.wc-dialog__body--edit {
+  display: grid;
+  grid-template-columns: minmax(16rem, 18.5rem) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.wc-dialog__list-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.wc-dialog__list {
+  flex: 1;
+  min-height: 12rem;
+  max-height: 22rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.wc-dialog__list-empty {
+  padding: 0.875rem 0.75rem;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.wc-dialog__list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.wc-dialog__list-item:hover {
+  background: var(--color-surface-muted);
+}
+
+.wc-dialog__list-item--active {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+.wc-dialog__list-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.wc-dialog__list-name,
+.wc-dialog__list-sub,
+.wc-dialog__list-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wc-dialog__list-name {
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.wc-dialog__list-sub,
+.wc-dialog__list-meta {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.wc-dialog__list-meta {
+  flex-shrink: 0;
+  max-width: 6.5rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.wc-dialog__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.wc-dialog__field {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  column-gap: 0.875rem;
+  row-gap: 0.375rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.wc-dialog__label {
+  padding-top: 0.65rem;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.wc-dialog__field > :not(.wc-dialog__label) {
+  min-width: 0;
+}
+
+.wc-dialog__req {
+  color: var(--color-primary);
+}
+
+.wc-dialog__input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.9375rem;
+}
+
+.wc-dialog__input:focus {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.wc-dialog__input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.wc-dialog__input:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background: var(--color-surface-muted);
+}
+
+.wc-dialog__roles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.wc-dialog__role {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.wc-dialog__role:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.wc-dialog__role--active {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.wc-dialog__role:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.wc-dialog__role-name {
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.wc-dialog__role-desc {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.wc-dialog__empty,
+.wc-dialog__summary {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.wc-dialog__stack > .wc-dialog__empty,
+.wc-dialog__stack > .wc-dialog__summary {
+  margin-left: calc(7.5rem + 0.875rem);
+}
+
+.wc-dialog__list-panel > .wc-dialog__label {
+  padding-top: 0;
+}
+
+.wc-dialog__summary strong {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.wc-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.wc-dialog__btn {
+  padding: 0.625rem 1.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wc-dialog__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wc-dialog__btn--primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.wc-dialog__btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.wc-dialog__btn--ghost {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.wc-dialog__btn--ghost:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.wc-dialog-fade-enter-active,
+.wc-dialog-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.wc-dialog-fade-enter-from,
+.wc-dialog-fade-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 640px) {
+  .wc-dialog {
+    padding: var(--space-4);
+    align-items: flex-end;
+  }
+
+  .wc-dialog__panel {
+    max-width: 100%;
+    max-height: min(92vh, 46rem);
+    padding: var(--space-4);
+  }
+
+  .wc-dialog__body--edit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wc-dialog__field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wc-dialog__label {
+    padding-top: 0;
+  }
+
+  .wc-dialog__stack > .wc-dialog__empty,
+  .wc-dialog__stack > .wc-dialog__summary {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-dialog-fade-enter-active,
+  .wc-dialog-fade-leave-active {
+    transition: none;
   }
 }
 </style>

@@ -160,4 +160,39 @@ class WorkspaceConfigOverviewTest extends TestCase
             ])
             ->assertStatus(403);
     }
+
+    public function test_super_admin_assigns_role_for_any_department(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $member = $this->makeUser(['department_id' => $dept->id], ['member']);
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $this->actingAs($admin)
+            ->postJson("/api/workspace-config/departments/{$dept->id}/members/roles", [
+                'user_id' => $member->id,
+                'role_code' => 'team_lead',
+            ])
+            ->assertOk()
+            ->assertJsonPath('member.id', $member->id);
+
+        $this->assertTrue($member->fresh()->roles()->where('code', 'team_lead')->exists());
+    }
+
+    public function test_director_cannot_assign_role_via_superadmin_route(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+        $member = $this->makeUser(['department_id' => $dept->id], ['member']);
+
+        $this->actingAs($director)
+            ->postJson("/api/workspace-config/departments/{$dept->id}/members/roles", [
+                'user_id' => $member->id,
+                'role_code' => 'team_lead',
+            ])
+            ->assertStatus(403);
+    }
 }

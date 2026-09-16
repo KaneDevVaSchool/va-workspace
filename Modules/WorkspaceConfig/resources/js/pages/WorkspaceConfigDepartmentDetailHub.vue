@@ -3,8 +3,9 @@
 // superadmin/workspace-config/departments/:departmentId — hub workspace của
 // 1 phòng ban, mở từ WorkspaceConfigOverviewSuperadmin. Load 1 lần dữ liệu
 // phòng ban (menu hiển thị + thành viên + tiêu chí đánh giá) rồi cấp cho 3
-// tab con qua provide/inject — tránh mỗi tab tự gọi lại API. Chỉ xem — super_admin
-// không sửa thay department_director (không có thao tác ghi ở tab nào).
+// tab con qua provide/inject — tránh mỗi tab tự gọi lại API. Phần lớn chỉ
+// xem — riêng tab "Thành viên" cho phép super_admin gán vai trò thay
+// department_director (xem WorkspaceConfigDepartmentMembersSuperadmin.vue).
 // Tab "Menu hiển thị" luôn đứng đầu.
 //
 import { computed, provide, ref, watch } from 'vue';
@@ -27,9 +28,12 @@ const members = ref([]);
 const sidebarMenus = ref([]);
 const sidebarSections = ref([]);
 const evaluationCriteria = ref([]);
+const assignableRoles = ref([]);
 const loading = ref(false);
+const primaryAction = ref(null);
 
 const activeTab = computed(() => route.name);
+const headerPrimaryAction = computed(() => primaryAction.value);
 
 const directorSubtitle = computed(() => {
   const director = department.value?.director;
@@ -37,13 +41,22 @@ const directorSubtitle = computed(() => {
   return director.email ? `${director.name} · ${director.email}` : director.name;
 });
 
+// Tab "Thành viên" đặt primary action (Gán vai trò) qua inject này — các
+// tab khác (menu hiển thị, tiêu chí đánh giá) vẫn chỉ xem, không gọi.
 provide('workspaceConfigDeptDetailHub', {
   department,
   members,
   sidebarMenus,
   sidebarSections,
   evaluationCriteria,
+  assignableRoles,
   loading,
+  setPrimaryAction(action) {
+    primaryAction.value = action;
+  },
+  clearPrimaryAction() {
+    primaryAction.value = null;
+  },
 });
 
 async function loadDetail() {
@@ -57,12 +70,14 @@ async function loadDetail() {
     sidebarMenus.value = data.sidebar_menus ?? [];
     sidebarSections.value = data.sidebar_sections ?? [];
     evaluationCriteria.value = data.evaluation_criteria ?? [];
+    assignableRoles.value = data.assignable_roles ?? [];
   } catch (error) {
     department.value = null;
     members.value = [];
     sidebarMenus.value = [];
     sidebarSections.value = [];
     evaluationCriteria.value = [];
+    assignableRoles.value = [];
     const message = error?.response?.data?.message;
     showClientToast('error', message || 'Không tải được chi tiết phòng ban.');
   } finally {
@@ -87,6 +102,14 @@ watch(
   },
   { immediate: true },
 );
+
+// Rời tab "Thành viên" thì bỏ primary action của tab đó khỏi header ngay,
+// tránh nút "Gán vai trò" còn treo lại khi đang xem menu hiển thị / tiêu chí.
+watch(activeTab, (name) => {
+  if (name !== 'superadmin.workspace-config.department-detail.members') {
+    primaryAction.value = null;
+  }
+});
 </script>
 
 <template>
@@ -100,6 +123,7 @@ watch(
         { label: 'Cấu hình Workspace', to: { name: 'superadmin.workspace-config.overview' } },
         { label: department ? department.name : '' },
       ]"
+      :primary-action="headerPrimaryAction"
     >
       <template #actions>
         <button type="button" class="wc-dept-hub__header-btn" :disabled="loading" @click="loadDetail">

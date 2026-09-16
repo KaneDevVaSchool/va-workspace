@@ -103,15 +103,17 @@ class SocialGifService
     }
 
     /**
-     * Chuyển các GIF đã tải sẵn (qua download(), nằm ở social/gif-tmp/) vào
-     * thư mục đích (bài viết hoặc bình luận). Bỏ qua token không hợp lệ/đã
-     * dọn dẹp. Dùng chung cho SocialPostService và SocialCommentService.
+     * Chuyển các GIF đã tải sẵn (qua download(), nằm tạm ở local disk
+     * `public`/social/gif-tmp/) lên S3 vào thư mục đích (bài viết hoặc bình
+     * luận), rồi xoá file tạm local. Bỏ qua token không hợp lệ/đã dọn dẹp.
+     * Dùng chung cho SocialPostService và SocialCommentService.
      *
      * @param array<int, string> $tokens
      */
     public static function movePendingAttachments(array $tokens, string $destDir): array
     {
-        $disk = Storage::disk('public');
+        $tempDisk = Storage::disk('public');
+        $s3Disk = Storage::disk('s3');
         $attachments = [];
 
         foreach ($tokens as $token) {
@@ -120,17 +122,18 @@ class SocialGifService
             }
 
             $sourcePath = self::TEMP_DIR.'/'.$token.'.gif';
-            if (! $disk->exists($sourcePath)) {
+            if (! $tempDisk->exists($sourcePath)) {
                 continue;
             }
 
             $destPath = $destDir.'/gif-'.$token.'.gif';
-            $disk->move($sourcePath, $destPath);
+            $s3Disk->put($destPath, $tempDisk->get($sourcePath));
+            $tempDisk->delete($sourcePath);
 
             $attachments[] = [
                 'type' => 'image',
                 'name' => 'gif-'.$token.'.gif',
-                'size' => $disk->size($destPath),
+                'size' => $s3Disk->size($destPath),
                 'path' => $destPath,
             ];
         }

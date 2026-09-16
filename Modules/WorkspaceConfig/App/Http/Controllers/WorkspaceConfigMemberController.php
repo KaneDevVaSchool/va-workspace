@@ -30,6 +30,12 @@ use Modules\WorkspaceConfig\App\Services\WorkspaceConfigMemberService;
  *
  * Path JSON khác path trang Vue /manager/workspace-config/members để F5
  * không bị Laravel trả JSON.
+ *
+ * superadmin JSON (routes/superadmin.php):
+ *   POST /api/workspace-config/departments/{department}/members/roles —
+ *        assignRoleForDepartment(), super_admin gán vai trò thay
+ *        department_director cho bất kỳ phòng ban nào (department lấy từ
+ *        route param).
  */
 class WorkspaceConfigMemberController extends Controller
 {
@@ -149,6 +155,47 @@ class WorkspaceConfigMemberController extends Controller
         try {
             $member = $this->service->assignRole(
                 $departmentId,
+                (int) $request->user()->id,
+                (int) $data['user_id'],
+                (string) $data['role_code'],
+            );
+        } catch (RoleNotAssignable $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $presented = $this->service->presentMember($member);
+        $roleName = collect($presented['roles'])->pluck('name')->implode(', ') ?: $data['role_code'];
+
+        $this->activityLogs->record(
+            'role.assign',
+            'Gán vai trò '.$roleName.' cho '.$member->name,
+            $request->user(),
+            'user',
+            $member->id,
+            ['role_code' => $data['role_code']],
+        );
+
+        return response()->json(['member' => $presented]);
+    }
+
+    /**
+     * super_admin gán vai trò thay department_director — department lấy
+     * từ route param (phòng ban bất kỳ, KHÔNG phải phòng ban của chính
+     * super_admin, khác assignRole() ở trên dùng cho manager). Middleware
+     * route đã giới hạn quyền workspace_config.view_all, permission bên
+     * dưới bypass sẵn cho super_admin thật (PermissionService::allows()).
+     */
+    public function assignRoleForDepartment(AssignWorkspaceConfigRoleRequest $request, int $department): JsonResponse
+    {
+        if (! $this->permissions->allows($request->user(), 'workspace_config.assign_role_department', 'department', $department)) {
+            return response()->json(['message' => 'Bạn không có quyền gán vai trò trong phòng ban này.'], 403);
+        }
+
+        $data = $request->validated();
+
+        try {
+            $member = $this->service->assignRole(
+                $department,
                 (int) $request->user()->id,
                 (int) $data['user_id'],
                 (string) $data['role_code'],
