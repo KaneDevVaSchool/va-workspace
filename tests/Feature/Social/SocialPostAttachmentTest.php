@@ -19,7 +19,7 @@ class SocialPostAttachmentTest extends TestCase
 
     public function test_post_accepts_up_to_ten_images(): void
     {
-        Storage::fake('public');
+        Storage::fake('s3');
         $user = $this->makeUser();
         $files = [];
         for ($i = 1; $i <= 10; $i++) {
@@ -37,7 +37,7 @@ class SocialPostAttachmentTest extends TestCase
 
     public function test_post_rejects_more_than_ten_attachments(): void
     {
-        Storage::fake('public');
+        Storage::fake('s3');
         $user = $this->makeUser();
         $files = [];
         for ($i = 1; $i <= 11; $i++) {

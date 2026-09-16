@@ -41,7 +41,23 @@ function applyPlainCsrfHeader(config) {
     return config;
 }
 
+/** FormData cần boundary do trình duyệt tự gắn — không set Content-Type thủ công. */
+function allowMultipartBoundary(config) {
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+        config.headers = config.headers ?? {};
+        if (typeof config.headers.delete === 'function') {
+            config.headers.delete('Content-Type');
+            config.headers.delete('content-type');
+        } else {
+            delete config.headers['Content-Type'];
+            delete config.headers['content-type'];
+        }
+    }
+    return config;
+}
+
 window.axios.interceptors.request.use(applyPlainCsrfHeader);
+window.axios.interceptors.request.use(allowMultipartBoundary);
 
 let csrfRefreshPromise = null;
 

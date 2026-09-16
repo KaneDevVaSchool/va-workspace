@@ -260,7 +260,10 @@ async function submit() {
     }
     showClientToast('success', successMessage);
   } catch (error) {
-    const message = error?.response?.data?.message ?? 'Không thể đăng bài viết.';
+    const message =
+      error?.response?.data?.message
+      || Object.values(error?.response?.data?.errors || {})[0]?.[0]
+      || 'Không thể đăng bài viết.';
     showClientToast('error', message);
   } finally {
     submitting.value = false;

@@ -4,6 +4,7 @@ namespace Modules\Social\App\Services;
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Lưu ảnh/tệp đính kèm bài viết và bình luận lên Amazon S3 (disk `s3`,
@@ -20,13 +21,40 @@ class SocialAttachmentUploader
      */
     public function upload(UploadedFile $file, string $destDir = 'social/attachments'): array
     {
+        $this->ensureS3Configured();
+
+        $disk = Storage::disk('s3');
         $path = $file->store($this->prefixed($destDir), 's3');
+
+        if (! is_string($path) || $path === '' || ! $disk->exists($path)) {
+            throw ValidationException::withMessages([
+                'attachments' => ['Không thể tải tệp lên lúc này. Vui lòng thử lại sau hoặc liên hệ quản trị nếu lỗi lặp lại.'],
+            ]);
+        }
 
         return [
             'path' => $path,
-            'url' => Storage::disk('s3')->url($path),
+            'url' => $disk->url($path),
             'size' => $file->getSize(),
         ];
+    }
+
+    private function ensureS3Configured(): void
+    {
+        $missing = collect([
+            'AWS_ACCESS_KEY_ID' => config('filesystems.disks.s3.key'),
+            'AWS_SECRET_ACCESS_KEY' => config('filesystems.disks.s3.secret'),
+            'AWS_BUCKET' => config('filesystems.disks.s3.bucket'),
+            'AWS_DEFAULT_REGION' => config('filesystems.disks.s3.region'),
+        ])->filter(fn ($value) => ! filled($value));
+
+        if ($missing->isEmpty()) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'attachments' => ['Máy chủ chưa cấu hình lưu trữ ảnh (S3). Vui lòng liên hệ quản trị hệ thống.'],
+        ]);
     }
 
     private function prefixed(string $destDir): string

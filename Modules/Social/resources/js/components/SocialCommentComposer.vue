@@ -162,7 +162,11 @@ async function submit() {
       editorRef.value?.insertMention(props.mentionedUser, { replaceQuery: false, suffix: ': ' });
     }
   } catch (error) {
-    showClientToast('error', error?.response?.data?.message ?? 'Không thể gửi bình luận.');
+    const message =
+      error?.response?.data?.message
+      || Object.values(error?.response?.data?.errors || {})[0]?.[0]
+      || 'Không thể gửi bình luận.';
+    showClientToast('error', message);
   } finally {
     submitting.value = false;
   }
