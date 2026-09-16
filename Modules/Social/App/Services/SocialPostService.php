@@ -54,6 +54,7 @@ class SocialPostService
         private readonly SocialMentionService $mentions,
         private readonly SocialGroupRepositoryInterface $groups,
         private readonly SocialHashtagService $hashtags,
+        private readonly SocialAttachmentUploader $attachmentUploader,
     ) {}
 
     public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?string $hashtag = null): array
@@ -337,6 +338,10 @@ class SocialPostService
 
     public function delete(SocialPost $post): void
     {
+        // Attachment cũ (trước khi chuyển sang lưu S3 qua va-pictures) vẫn còn
+        // 'path' local — dọn được. Attachment mới nằm trên S3 và va-pictures
+        // không có endpoint xoá theo key cho client ngoài nên không xoá được
+        // ở đây; chấp nhận còn rác trên S3 (không chặn thao tác xoá bài chính).
         foreach ($post->attachments ?? [] as $attachment) {
             if (isset($attachment['path'])) {
                 Storage::disk('public')->delete($attachment['path']);
@@ -612,7 +617,7 @@ class SocialPostService
                 'type' => $a['type'],
                 'name' => $a['name'],
                 'size' => $a['size'],
-                'url' => Storage::disk('public')->url($a['path']),
+                'url' => $a['url'] ?? (isset($a['path']) ? Storage::disk('public')->url($a['path']) : ''),
             ])->all(),
             'author' => $post->is_anonymous ? null : $this->presentUser($post->user),
             'is_anonymous' => $post->is_anonymous,
@@ -700,14 +705,15 @@ class SocialPostService
     {
         $imageMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-        return collect($files)->map(function (UploadedFile $file) use ($postId, $imageMimes) {
-            $path = $file->store('social/'.$postId, 'public');
+        return collect($files)->map(function (UploadedFile $file) use ($imageMimes) {
+            $uploaded = $this->attachmentUploader->upload($file);
 
             return [
                 'type' => in_array($file->getMimeType(), $imageMimes, true) ? 'image' : 'file',
                 'name' => $file->getClientOriginalName(),
-                'size' => $file->getSize(),
-                'path' => $path,
+                'size' => $uploaded['size'],
+                'url' => $uploaded['url'],
+                's3_key' => $uploaded['key'],
             ];
         })->all();
     }

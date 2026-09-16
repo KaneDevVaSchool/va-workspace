@@ -72,4 +72,16 @@ return [
         'api_key' => env('GIPHY_API_KEY'),
     ],
 
+    /*
+    | VA Pictures (service Go riêng, upload ảnh lên Amazon S3) — dùng để lưu
+    | ảnh/tệp đính kèm bài viết Social thay vì lưu local disk, tránh giới hạn
+    | client_max_body_size/upload_max_filesize của web server chính.
+    | Xem C:\Users\ASUS\Desktop\vaschools-app\va-pictures (docs/API.md, mục
+    | POST /api/v1/upload).
+    */
+    'va_pictures' => [
+        'base_url' => env('VA_PICTURES_BASE_URL', 'https://pictures.vaschools.edu.vn'),
+        'api_key' => env('VA_PICTURES_API_KEY'),
+    ],
+
 ];

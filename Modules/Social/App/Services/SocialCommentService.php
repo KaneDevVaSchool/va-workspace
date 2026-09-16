@@ -22,6 +22,7 @@ class SocialCommentService
         private readonly SocialContentSanitizer $sanitizer,
         private readonly UserRepositoryInterface $users,
         private readonly SocialMentionService $mentions,
+        private readonly SocialAttachmentUploader $attachmentUploader,
     ) {}
 
     public function listForPost(SocialPost $post, User $viewer): array
@@ -223,7 +224,7 @@ class SocialCommentService
                 'type' => $a['type'],
                 'name' => $a['name'],
                 'size' => $a['size'],
-                'url' => Storage::disk('public')->url($a['path']),
+                'url' => $a['url'] ?? (isset($a['path']) ? Storage::disk('public')->url($a['path']) : ''),
             ])->all(),
             'author' => [
                 'id' => $comment->user->id,
@@ -286,14 +287,15 @@ class SocialCommentService
     {
         $imageMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-        return collect($files)->map(function (UploadedFile $file) use ($commentId, $imageMimes) {
-            $path = $file->store('social/comments/'.$commentId, 'public');
+        return collect($files)->map(function (UploadedFile $file) use ($imageMimes) {
+            $uploaded = $this->attachmentUploader->upload($file);
 
             return [
                 'type' => in_array($file->getMimeType(), $imageMimes, true) ? 'image' : 'file',
                 'name' => $file->getClientOriginalName(),
-                'size' => $file->getSize(),
-                'path' => $path,
+                'size' => $uploaded['size'],
+                'url' => $uploaded['url'],
+                's3_key' => $uploaded['key'],
             ];
         })->all();
     }
