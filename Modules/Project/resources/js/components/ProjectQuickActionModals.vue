@@ -1935,9 +1935,10 @@ watch(
 
 .proj-qa__structure-row--phase {
   /* Tên phase chiếm trọn hàng đầu (đủ chỗ gõ tên dài), nút xoá đặt cạnh
-     luôn ở hàng đó — Bắt đầu | Kết thúc | Cách tính tiến độ chia đều 3 cột
-     ở hàng dưới, Mô tả xuống hàng cuối (field--full). */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+     luôn ở hàng đó — Bắt đầu | Kết thúc | Cách tính tiến độ ở hàng dưới,
+     cột "Cách tính tiến độ" rộng hơn (1.6fr) vì nhãn option dài, Mô tả
+     xuống hàng cuối (field--full). */
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 0.85fr) minmax(0, 1.6fr) auto;
   row-gap: var(--space-2);
 }
 
@@ -2108,6 +2109,23 @@ watch(
 
   .proj-qa__task-row-index {
     grid-row: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  /* Ngày bắt đầu / Ngày kết thúc / Cách tính tiến độ chuyển 2 cột trước khi
+     rớt hết về 1 cột ở 768px, tránh select "Cách tính tiến độ" (nhãn dài)
+     bị bóp quá hẹp ở vùng tablet. */
+  .proj-qa__structure-row--phase {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+
+  .proj-qa__structure-row--phase .proj-qa__field--full:first-child {
+    grid-column: 1 / -2;
+  }
+
+  .proj-qa__structure-row--phase .proj-qa__field:nth-child(4) {
+    grid-column: 1 / -2;
   }
 }
 

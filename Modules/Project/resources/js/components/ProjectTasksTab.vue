@@ -1009,7 +1009,7 @@ watch(tableZoom, (value) => {
           </colgroup>
           <thead>
             <tr>
-              <th v-for="col in shownColumns" :key="col.key">
+              <th v-for="col in shownColumns" :key="col.key" :class="{ 'ptasks__th--name': col.key === 'title' }">
                 <span>{{ col.label }}</span>
                 <button
                   type="button"
@@ -1097,7 +1097,7 @@ watch(tableZoom, (value) => {
           </colgroup>
           <thead>
             <tr>
-              <th v-for="col in shownColumns" :key="col.key">
+              <th v-for="col in shownColumns" :key="col.key" :class="{ 'ptasks__th--name': col.key === 'title' }">
                 <span>{{ col.label }}</span>
                 <button
                   type="button"
@@ -1772,9 +1772,13 @@ watch(tableZoom, (value) => {
   color: var(--color-text-muted);
   font-weight: 600;
   font-size: calc(0.75rem * var(--table-zoom, 1));
-  text-align: left;
+  text-align: center;
   white-space: nowrap;
   box-shadow: 0 1px 0 var(--color-border);
+}
+
+.ptasks__th--name {
+  text-align: left;
 }
 
 .ptasks__resize {

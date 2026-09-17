@@ -103,22 +103,48 @@ class SocialPostService
 
     public function approve(SocialPost $post, User $reviewer): SocialPost
     {
-        return $this->posts->update($post, [
+        $post = $this->posts->update($post, [
             'review_status' => SocialPost::REVIEW_APPROVED,
             'reviewed_by' => $reviewer->id,
             'reviewed_at' => now(),
             'review_reject_reason' => null,
         ]);
+
+        $this->notifications->notify(
+            $post->user,
+            $reviewer,
+            NotificationService::TYPE_SOCIAL_POST_APPROVED,
+            'Bài viết của bạn đã được duyệt',
+            $this->sanitizer->excerpt((string) ($post->content ?? '')),
+            '/social?post='.$post->id,
+            ['post_id' => $post->id],
+        );
+
+        return $post;
     }
 
     public function reject(SocialPost $post, User $reviewer, ?string $reason = null): SocialPost
     {
-        return $this->posts->update($post, [
+        $post = $this->posts->update($post, [
             'review_status' => SocialPost::REVIEW_REJECTED,
             'reviewed_by' => $reviewer->id,
             'reviewed_at' => now(),
             'review_reject_reason' => $reason,
         ]);
+
+        $this->notifications->notify(
+            $post->user,
+            $reviewer,
+            NotificationService::TYPE_SOCIAL_POST_REJECTED,
+            'Bài viết của bạn đã bị từ chối',
+            $reason !== null && trim($reason) !== ''
+                ? $reason
+                : $this->sanitizer->excerpt((string) ($post->content ?? '')),
+            '/social?post='.$post->id,
+            ['post_id' => $post->id],
+        );
+
+        return $post;
     }
 
     private function normalizeFeedScope(string $scope): string
