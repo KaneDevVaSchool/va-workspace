@@ -102,13 +102,19 @@ export function useDragScroll(wrapRef, options = {}) {
   watch(
     wrapRef,
     (el, prev) => {
+      prev?.classList.remove('drag-scroll-active');
       prev?.removeEventListener('mousedown', onMouseDown);
+      // Đánh dấu vùng có kéo-cuộn thật (xem .drag-scroll-active trong
+      // app.css) — chỉ những nơi gọi useDragScroll mới hiện con trỏ bàn
+      // tay, không áp dụng tràn lan cho mọi phần tử `.hide-scrollbar`.
+      el?.classList.add('drag-scroll-active');
       el?.addEventListener('mousedown', onMouseDown);
     },
     { immediate: true, flush: 'post' },
   );
 
   onBeforeUnmount(() => {
+    wrapRef.value?.classList.remove('drag-scroll-active');
     wrapRef.value?.removeEventListener('mousedown', onMouseDown);
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('mouseup', onMouseUp);

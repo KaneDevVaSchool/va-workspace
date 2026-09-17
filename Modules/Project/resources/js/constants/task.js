@@ -321,6 +321,11 @@ export function flattenProjectTasks(nodes, { parentsOnly = false, filter = 'all'
  * chứa nó trong cây WBS — task dưới category lồng trong phase vẫn tính
  * vào phase đó. Task không nằm dưới phase nào (trực tiếp dưới category
  * hoặc gốc dự án) gom vào nhóm cuối "Chưa thuộc giai đoạn nào".
+ *
+ * Công việc con (subtask) đi theo phase của việc cha và giữ nguyên
+ * depth/hasChildren như bảng phẳng (flattenProjectTasks) để hiện thụt lề +
+ * nút thu gọn ngay trong nhóm giai đoạn — tránh việc con bị liệt kê rời
+ * rạc ngang hàng với việc cha, khó biết đang thuộc việc nào.
  */
 export function groupProjectTasksByPhase(nodes, { filter = 'all', query = '' } = {}) {
   const q = String(query || '').trim().toLowerCase();
@@ -340,23 +345,29 @@ export function groupProjectTasksByPhase(nodes, { filter = 'all', query = '' } =
     return groups.get(key);
   };
 
-  const walk = (list, phaseNode) => {
+  const walk = (list, phaseNode, depth) => {
     for (const node of list || []) {
       const nextPhaseNode = node.type === 'phase' ? node : phaseNode;
+      const kids = node.children || [];
       if (node.type === 'task') {
         if (matchesProjectTaskFilter(node, filter)) {
           const hay = `${node.title || ''} ${node.code || ''}`.toLowerCase();
           if (!q || hay.includes(q)) {
             const key = nextPhaseNode ? `phase-${nextPhaseNode.id}` : noPhaseKey;
-            ensureGroup(key, nextPhaseNode).tasks.push({ ...node, depth: 0, hasChildren: false });
+            ensureGroup(key, nextPhaseNode).tasks.push({
+              ...node,
+              depth,
+              hasChildren: kids.some((child) => child.type === 'task'),
+            });
           }
         }
       }
-      walk(node.children, nextPhaseNode);
+      const nextDepth = node.type === 'task' ? depth + 1 : depth;
+      walk(kids, nextPhaseNode, nextDepth);
     }
   };
 
-  walk(nodes, null);
+  walk(nodes, null, 0);
 
   const out = Array.from(groups.values()).filter((group) => group.tasks.length > 0);
   out.sort((a, b) => {

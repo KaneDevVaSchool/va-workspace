@@ -735,14 +735,14 @@ function pathD(edge) {
   background: var(--color-surface-muted);
   touch-action: none;
   user-select: none;
-  cursor: grab;
+  cursor: var(--cursor-grab);
   overscroll-behavior: none;
   isolation: isolate;
 }
 
 .dsw__stage--panning,
 .dsw__stage--dragging {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 /* ── Watermark nền ────────────────────────────────────────────────────────── */
@@ -833,11 +833,11 @@ function pathD(edge) {
   min-width: 100%;
   min-height: 100%;
   will-change: transform;
-  cursor: grab;
+  cursor: var(--cursor-grab);
 }
 
 .dsw__stage--panning .dsw__canvas-wrap {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 /* ── SVG ──────────────────────────────────────────────────────────────────── */
@@ -851,14 +851,14 @@ function pathD(edge) {
 /* ── Base node ────────────────────────────────────────────────────────────── */
 .dsw-node {
   position: absolute;
-  cursor: grab;
+  cursor: var(--cursor-grab);
   touch-action: none;
   user-select: none;
 }
 
 .dsw-node--dragging {
   z-index: 4;
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 .dsw-node--dragging.dsw-node--card,

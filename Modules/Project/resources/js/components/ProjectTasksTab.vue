@@ -177,7 +177,24 @@ const kanbanSourceTasks = computed(() => {
 
 const phaseGroups = computed(() => {
   if (!isPhaseGroup.value) return [];
-  return groupProjectTasksByPhase(props.tree, { filter: props.filter, query: query.value });
+  const groups = groupProjectTasksByPhase(props.tree, { filter: props.filter, query: query.value });
+  // Ẩn hẳn công việc con của 1 việc cha đang thu gọn (giống cách viewMode
+  // 'all' xử lý ở visibleTasks) thay vì chỉ v-show — tránh cuộn qua hàng
+  // đã thu gọn.
+  return groups.map((group) => {
+    const ids = new Set(group.tasks.map((task) => task.id));
+    const collapsedAncestor = new Set();
+    const tasks = group.tasks.filter((task) => {
+      const parentKey = ids.has(task.parent_id) ? task.parent_id : null;
+      if (parentKey != null && collapsedAncestor.has(parentKey)) {
+        collapsedAncestor.add(task.id);
+        return false;
+      }
+      if (collapsedIds.value.has(task.id)) collapsedAncestor.add(task.id);
+      return true;
+    });
+    return { ...group, tasks };
+  });
 });
 const phaseGroupTotal = computed(() => phaseGroups.value.reduce((sum, group) => sum + group.tasks.length, 0));
 
@@ -726,7 +743,6 @@ function startKanbanDrag(event) {
   kanbanDrag.x = rect.left;
   kanbanDrag.y = rect.top;
   document.body.style.userSelect = 'none';
-  document.body.style.cursor = 'grabbing';
   document.body.classList.add('ptasks-kanban-dragging');
   event.preventDefault();
   if (!kanbanScrollRaf) kanbanScrollRaf = requestAnimationFrame(runKanbanAutoScroll);
@@ -1777,6 +1793,12 @@ watch(tableZoom, (value) => {
   box-shadow: 0 1px 0 var(--color-border);
 }
 
+.ptasks__table thead th > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .ptasks__th--name {
   text-align: left;
 }
@@ -2044,7 +2066,7 @@ watch(tableZoom, (value) => {
 }
 
 .ptasks-kanban--dragging {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 .ptasks-kanban--spread {
@@ -2187,7 +2209,7 @@ watch(tableZoom, (value) => {
 
 .ptasks-kanban__card--movable {
   touch-action: none;
-  cursor: grab;
+  cursor: var(--cursor-grab);
 }
 
 .ptasks-kanban__card--slot {
@@ -2439,7 +2461,7 @@ watch(tableZoom, (value) => {
 }
 
 :global(body.ptasks-kanban-dragging) {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 @media (prefers-reduced-motion: reduce) {

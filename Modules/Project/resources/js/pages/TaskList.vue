@@ -1725,7 +1725,6 @@ function startKanbanDrag(event) {
   kanbanDrag.x = rect.left;
   kanbanDrag.y = rect.top;
   document.body.style.userSelect = 'none';
-  document.body.style.cursor = 'grabbing';
   document.body.classList.add('task-kanban-dragging');
   event.preventDefault();
   if (!kanbanScrollRaf) kanbanScrollRaf = requestAnimationFrame(runKanbanAutoScroll);
@@ -3995,7 +3994,7 @@ onBeforeUnmount(() => {
 }
 
 .task-kanban--dragging {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 .task-kanban--fill {
@@ -4238,7 +4237,7 @@ onBeforeUnmount(() => {
 
 .task-kanban__card--movable {
   touch-action: none;
-  cursor: grab;
+  cursor: var(--cursor-grab);
 }
 
 .task-kanban__card--slot {
@@ -4540,7 +4539,7 @@ onBeforeUnmount(() => {
 }
 
 :global(body.task-kanban-dragging) {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 @media (max-width: 1279px) {

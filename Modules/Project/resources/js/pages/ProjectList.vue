@@ -627,7 +627,6 @@ function startKanbanDrag(event) {
   kanbanDrag.x = rect.left;
   kanbanDrag.y = rect.top;
   document.body.style.userSelect = 'none';
-  document.body.style.cursor = 'grabbing';
   document.body.classList.add('proj-kanban-dragging');
   event.preventDefault();
   if (!kanbanScrollRaf) kanbanScrollRaf = requestAnimationFrame(runKanbanAutoScroll);
@@ -3564,7 +3563,7 @@ onBeforeUnmount(() => {
 }
 
 .proj-kanban--dragging {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 /* Lọc 1 trạng thái: ẩn cột trống, trải thẻ theo hàng ngang cho kín khung. */
@@ -3871,11 +3870,11 @@ onBeforeUnmount(() => {
 
 .proj-kanban__card--movable {
   touch-action: none;
-  cursor: grab;
+  cursor: var(--cursor-grab);
 }
 
 .proj-kanban--dragging .proj-kanban__card--movable {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 .proj-kanban--dragging .proj-kanban__card:hover {
@@ -3887,7 +3886,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: color-mix(in srgb, var(--col-accent) 12%, var(--color-surface-muted));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--col-accent) 26%, transparent);
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 .proj-kanban__card--slot:hover {
@@ -4278,7 +4277,7 @@ onBeforeUnmount(() => {
 }
 
 :global(body.proj-kanban-dragging) {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 .proj-page__name-cell {

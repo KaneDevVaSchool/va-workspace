@@ -293,7 +293,10 @@ function onHandlePointerDown(event, menu) {
   dropTarget.value = { sectionId: fromSection?.id || menu.section, index: fromIndex };
 
   document.body.style.userSelect = 'none';
-  document.body.style.cursor = 'grabbing';
+  // Đọc lại --cursor-grabbing (theme.css) thay vì gán thẳng 'grabbing' —
+  // icon grabbing mặc định của hệ điều hành chỉ có viền mảnh màu trắng,
+  // biến mất trên nền sáng của app.
+  document.body.style.cursor = getComputedStyle(document.documentElement).getPropertyValue('--cursor-grabbing');
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
   window.addEventListener('pointercancel', onPointerCancel);
@@ -859,7 +862,7 @@ onBeforeUnmount(() => {
 
 .wc-menu__item--sortable {
   grid-template-columns: 1.75rem 2.5rem minmax(0, 1fr) auto;
-  cursor: grab;
+  cursor: var(--cursor-grab);
 }
 
 .wc-menu__item--sortable .wc-menu__title-input {
@@ -892,7 +895,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-muted);
-  cursor: grab;
+  cursor: var(--cursor-grab);
   user-select: none;
   touch-action: none;
 }
@@ -909,7 +912,7 @@ onBeforeUnmount(() => {
 
 .wc-menu--dragging,
 .wc-menu--dragging * {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 .wc-menu__drop-empty {

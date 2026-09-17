@@ -1183,7 +1183,10 @@ onBeforeUnmount(() => {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  cursor: grab;
+  /* Con trỏ tự vẽ --cursor-grab (theme.css) — không dùng `grab` mặc định
+     của hệ điều hành vì icon đó chỉ có viền mảnh màu trắng, biến mất trên
+     nền sáng của app. */
+  cursor: var(--cursor-grab);
   scrollbar-width: none;
 }
 
@@ -1221,7 +1224,7 @@ onBeforeUnmount(() => {
 }
 
 .task-cal__cell-list.drag-scrolling {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
   user-select: none;
 }
 

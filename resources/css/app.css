@@ -78,13 +78,19 @@ svg {
 }
 
 /* Kéo bằng nắm chuột (giữ + kéo) khi bảng tràn ngang — máy bàn không vuốt
-   được, xem `useDragScroll` + .cursor/rules/data-table.mdc */
-.hide-scrollbar {
-  cursor: grab;
+   được, xem `useDragScroll` + .cursor/rules/data-table.mdc.
+   Chỉ áp dụng con trỏ trên vùng đã gọi useDragScroll (lớp
+   `.drag-scroll-active` do composable tự gắn) — tránh hiện icon "kéo được"
+   tràn lan trên mọi phần tử chỉ ẩn scrollbar nhưng không kéo được gì.
+   Icon dùng --cursor-grab/--cursor-grabbing (theme.css) thay vì
+   grab/grabbing mặc định của hệ điều hành vì icon mặc định chỉ có viền
+   mảnh màu trắng, biến mất trên nền sáng của app. */
+.hide-scrollbar.drag-scroll-active {
+  cursor: var(--cursor-grab);
 }
 
-.hide-scrollbar.drag-scrolling {
-  cursor: grabbing;
+.hide-scrollbar.drag-scroll-active.drag-scrolling {
+  cursor: var(--cursor-grabbing);
   user-select: none;
 }
 
