@@ -125,6 +125,10 @@ const emit = defineEmits(['open', 'context-menu', 'toggle-collapse']);
 
 .ptasks__row td {
   text-align: center;
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  vertical-align: middle;
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
 .ptasks__td--name {

@@ -1982,13 +1982,13 @@ onBeforeUnmount(() => {
   background: var(--color-border);
 }
 
-.ptasks__table tbody td {
+.ptasks__table tbody :deep(td) {
   padding: var(--space-3) var(--space-4);
   color: var(--color-text);
   vertical-align: middle;
   white-space: nowrap;
   overflow: visible;
-  box-shadow: inset 0 -1px 0 var(--color-border);
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
 .ptasks__table :deep(td.ptasks__td--name),
