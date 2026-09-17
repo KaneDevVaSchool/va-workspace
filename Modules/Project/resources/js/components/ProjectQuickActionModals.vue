@@ -1122,31 +1122,35 @@ watch(
             <p v-if="listsLoading" class="proj-qa__muted">Đang tải…</p>
             <div v-else class="proj-qa__structure-list">
               <div v-for="row in structureRows" :key="row.key" class="proj-qa__structure-row proj-qa__structure-row--phase">
-                <label class="proj-qa__field proj-qa__field--full">
-                  <span class="proj-qa__label">Tên phase</span>
-                  <input v-model="row.title" class="proj-qa__input" maxlength="255" placeholder="Ví dụ: Giai đoạn khởi tạo">
-                </label>
-                <label class="proj-qa__field">
-                  <span class="proj-qa__label">Ngày bắt đầu</span>
-                  <input v-model="row.start_date" type="date" class="proj-qa__input">
-                </label>
-                <label class="proj-qa__field">
-                  <span class="proj-qa__label">Ngày kết thúc</span>
-                  <input v-model="row.end_date" type="date" class="proj-qa__input">
-                </label>
-                <label class="proj-qa__field">
-                  <span class="proj-qa__label">Cách tính tiến độ</span>
-                  <select v-model="row.progress_type" class="proj-qa__input" required>
-                    <option v-for="opt in PROGRESS_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                  </select>
-                </label>
+                <div class="proj-qa__structure-row__head">
+                  <label class="proj-qa__field proj-qa__field--full">
+                    <span class="proj-qa__label">Tên phase</span>
+                    <input v-model="row.title" class="proj-qa__input" maxlength="255" placeholder="Ví dụ: Giai đoạn khởi tạo">
+                  </label>
+                  <button type="button" class="proj-qa__row-remove" aria-label="Xoá dòng" @click="removeStructureRow(row)">
+                    <AppIcon name="close" :size="14" />
+                  </button>
+                </div>
+                <div class="proj-qa__structure-row__fields">
+                  <label class="proj-qa__field">
+                    <span class="proj-qa__label">Ngày bắt đầu</span>
+                    <input v-model="row.start_date" type="date" class="proj-qa__input">
+                  </label>
+                  <label class="proj-qa__field">
+                    <span class="proj-qa__label">Ngày kết thúc</span>
+                    <input v-model="row.end_date" type="date" class="proj-qa__input">
+                  </label>
+                  <label class="proj-qa__field">
+                    <span class="proj-qa__label">Cách tính tiến độ</span>
+                    <select v-model="row.progress_type" class="proj-qa__input" required>
+                      <option v-for="opt in PROGRESS_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                    </select>
+                  </label>
+                </div>
                 <label class="proj-qa__field proj-qa__field--full">
                   <span class="proj-qa__label">Mô tả</span>
                   <input v-model="row.description" class="proj-qa__input" maxlength="5000" placeholder="Mô tả ngắn cho phase này (tuỳ chọn)">
                 </label>
-                <button type="button" class="proj-qa__row-remove" aria-label="Xoá dòng" @click="removeStructureRow(row)">
-                  <AppIcon name="close" :size="14" />
-                </button>
               </div>
               <button type="button" class="proj-qa__add-row" @click="addStructureRow">
                 <AppIcon name="plus" :size="14" />
@@ -1162,38 +1166,42 @@ watch(
             <p v-if="listsLoading" class="proj-qa__muted">Đang tải…</p>
             <p v-else-if="!phases.length" class="proj-qa__muted">Dự án chưa có giai đoạn nào — tạo phase trước khi thêm sprint.</p>
             <div v-else class="proj-qa__structure-list">
-              <div v-for="row in sprintRows" :key="row.key" class="proj-qa__structure-row proj-qa__structure-row--phase">
-                <label class="proj-qa__field proj-qa__field--full">
-                  <span class="proj-qa__label">Tên sprint</span>
-                  <input v-model="row.name" class="proj-qa__input" maxlength="255" placeholder="Ví dụ: Sprint 1">
-                </label>
-                <label class="proj-qa__field">
-                  <span class="proj-qa__label">Giai đoạn</span>
-                  <select v-model="row.phase_id" class="proj-qa__input" required>
-                    <option v-for="item in phases" :key="item.id" :value="item.id">{{ item.title }}</option>
-                  </select>
-                </label>
-                <label class="proj-qa__field">
-                  <span class="proj-qa__label">Trạng thái</span>
-                  <select v-model="row.status" class="proj-qa__input" required>
-                    <option v-for="s in SPRINT_STATUSES" :key="s" :value="s">{{ sprintStatusLabel(s) }}</option>
-                  </select>
-                </label>
-                <label class="proj-qa__field">
-                  <span class="proj-qa__label">Ngày bắt đầu</span>
-                  <input v-model="row.start_date" type="date" class="proj-qa__input">
-                </label>
-                <label class="proj-qa__field">
-                  <span class="proj-qa__label">Ngày kết thúc</span>
-                  <input v-model="row.end_date" type="date" class="proj-qa__input">
-                </label>
+              <div v-for="row in sprintRows" :key="row.key" class="proj-qa__structure-row proj-qa__structure-row--phase proj-qa__sprint-row">
+                <div class="proj-qa__structure-row__head">
+                  <label class="proj-qa__field proj-qa__field--full">
+                    <span class="proj-qa__label">Tên sprint</span>
+                    <input v-model="row.name" class="proj-qa__input" maxlength="255" placeholder="Ví dụ: Sprint 1">
+                  </label>
+                  <button type="button" class="proj-qa__row-remove" aria-label="Xoá dòng" @click="removeSprintRow(row)">
+                    <AppIcon name="close" :size="14" />
+                  </button>
+                </div>
+                <div class="proj-qa__structure-row__fields">
+                  <label class="proj-qa__field">
+                    <span class="proj-qa__label">Giai đoạn</span>
+                    <select v-model="row.phase_id" class="proj-qa__input" required>
+                      <option v-for="item in phases" :key="item.id" :value="item.id">{{ item.title }}</option>
+                    </select>
+                  </label>
+                  <label class="proj-qa__field">
+                    <span class="proj-qa__label">Trạng thái</span>
+                    <select v-model="row.status" class="proj-qa__input" required>
+                      <option v-for="s in SPRINT_STATUSES" :key="s" :value="s">{{ sprintStatusLabel(s) }}</option>
+                    </select>
+                  </label>
+                  <label class="proj-qa__field">
+                    <span class="proj-qa__label">Ngày bắt đầu</span>
+                    <input v-model="row.start_date" type="date" class="proj-qa__input">
+                  </label>
+                  <label class="proj-qa__field">
+                    <span class="proj-qa__label">Ngày kết thúc</span>
+                    <input v-model="row.end_date" type="date" class="proj-qa__input">
+                  </label>
+                </div>
                 <label class="proj-qa__field proj-qa__field--full">
                   <span class="proj-qa__label">Mô tả</span>
                   <input v-model="row.description" class="proj-qa__input" maxlength="5000" placeholder="Mô tả ngắn cho sprint này (tuỳ chọn)">
                 </label>
-                <button type="button" class="proj-qa__row-remove" aria-label="Xoá dòng" @click="removeSprintRow(row)">
-                  <AppIcon name="close" :size="14" />
-                </button>
               </div>
               <button type="button" class="proj-qa__add-row" @click="addSprintRow">
                 <AppIcon name="plus" :size="14" />
@@ -2080,20 +2088,37 @@ watch(
 }
 
 .proj-qa__structure-row--phase {
-  /* Tên phase chiếm trọn hàng đầu (đủ chỗ gõ tên dài), nút xoá đặt cạnh
-     luôn ở hàng đó — Bắt đầu | Kết thúc | Cách tính tiến độ ở hàng dưới,
-     cột "Cách tính tiến độ" rộng hơn (1.6fr) vì nhãn option dài, Mô tả
-     xuống hàng cuối (field--full). */
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 0.85fr) minmax(0, 1.6fr) auto;
-  row-gap: var(--space-2);
+  /* Card 1 cột: hàng đầu (tên + nút xoá) → hàng field phụ (ngày bắt đầu/kết
+     thúc luôn cạnh nhau) → mô tả cuối cùng, tách rời khỏi phần field phụ
+     bằng box-shadow (không dùng border-*, xem mục 2 CLAUDE.md). */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
-.proj-qa__structure-row--phase .proj-qa__field--full:first-child {
-  grid-column: 1 / -2;
+.proj-qa__structure-row__head {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.proj-qa__structure-row__fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+/* Sprint có 4 field phụ (Giai đoạn, Trạng thái, Ngày bắt đầu, Ngày kết
+   thúc) — xếp 2x2 để Ngày bắt đầu/Ngày kết thúc luôn nằm cạnh nhau ở cùng
+   1 hàng, thay vì rơi lệch hàng như grid 3 cột dùng chung với phase. */
+.proj-qa__sprint-row .proj-qa__structure-row__fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .proj-qa__structure-row--phase .proj-qa__row-remove {
-  grid-row: 1;
+  flex-shrink: 0;
 }
 
 .proj-qa__field--grow {
@@ -2212,28 +2237,33 @@ watch(
 }
 
 @media (max-width: 900px) {
-  /* Ngày bắt đầu / Ngày kết thúc / Cách tính tiến độ chuyển 2 cột trước khi
-     rớt hết về 1 cột ở 768px, tránh select "Cách tính tiến độ" (nhãn dài)
-     bị bóp quá hẹp ở vùng tablet. */
-  .proj-qa__structure-row--phase {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  /* Tablet: field phụ của phase rớt còn 2 cột — Ngày bắt đầu/Ngày kết thúc
+     luôn ở chung 1 hàng (cạnh nhau), Cách tính tiến độ xuống hàng dưới
+     chiếm trọn hàng. Sprint đã sẵn 2 cột (2x2) nên không cần đổi. */
+  .proj-qa__structure-row--phase:not(.proj-qa__sprint-row) .proj-qa__structure-row__fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
-  .proj-qa__structure-row--phase .proj-qa__field--full:first-child {
-    grid-column: 1 / -2;
-  }
-
-  .proj-qa__structure-row--phase .proj-qa__field:nth-child(4) {
-    grid-column: 1 / -2;
+  .proj-qa__structure-row--phase:not(.proj-qa__sprint-row) .proj-qa__structure-row__fields > label:nth-child(3) {
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 768px) {
   .proj-qa__grid,
   .proj-qa__dates-row,
-  .proj-qa__structure-row,
-  .proj-qa__structure-row--phase {
+  .proj-qa__structure-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .proj-qa__structure-row__fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  /* Ngày bắt đầu/Ngày kết thúc vẫn giữ cạnh nhau (2 cột) trên mobile; field
+     đơn còn lại (Cách tính tiến độ, chỉ có ở phase) chiếm trọn hàng riêng. */
+  .proj-qa__structure-row--phase:not(.proj-qa__sprint-row) .proj-qa__structure-row__fields > label:nth-child(3) {
+    grid-column: 1 / -1;
   }
 
   /* Hàng tiêu đề vẫn giữ 2 cột (tên công việc + nút xoá cùng hàng) —
@@ -2252,19 +2282,9 @@ watch(
 
   .proj-qa__field--wide,
   .proj-qa__field--full,
-  .proj-qa__field--parent,
-  .proj-qa__structure-row--phase .proj-qa__field--full:first-child {
+  .proj-qa__field--parent {
     grid-column: 1 / -1;
     max-width: none;
-  }
-
-  .proj-qa__structure-row--phase .proj-qa__row-remove {
-    grid-row: auto;
-  }
-
-  .proj-qa__row-remove {
-    align-self: start;
-    justify-self: end;
   }
 
   .proj-qa__task-row-index {

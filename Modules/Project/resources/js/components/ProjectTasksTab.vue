@@ -1289,6 +1289,7 @@ watch(tableZoom, (value) => {
       :filter="filter"
       :filter-label="filterLabel"
       :query="query"
+      :can-edit="canEdit"
     />
 
     <ProjectPlanTab
