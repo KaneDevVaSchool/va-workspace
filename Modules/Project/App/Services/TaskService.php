@@ -1032,6 +1032,10 @@ class TaskService
             'parent' => $task->relationLoaded('parent') && $task->parent !== null
                 ? ['id' => $task->parent->id, 'code' => $task->parent->code, 'title' => $task->parent->title]
                 : null,
+            'sprint_id' => $task->sprint_id,
+            'sprint' => $task->relationLoaded('sprint') && $task->sprint !== null
+                ? ['id' => $task->sprint->id, 'name' => $task->sprint->name, 'phase_id' => $task->sprint->phase_id]
+                : null,
             'code' => $task->code,
             'type' => $task->type,
             'title' => $task->title,

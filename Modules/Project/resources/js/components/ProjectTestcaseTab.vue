@@ -18,6 +18,7 @@ const FilePreviewDialog = defineAsyncComponent(() => import('./FilePreviewDialog
 
 const props = defineProps({
   project: { type: Object, required: true },
+  tree: { type: Array, default: () => [] },
   canManage: { type: Boolean, default: false },
 });
 
@@ -59,9 +60,44 @@ const form = reactive({
   actual_result: '',
   link_url: '',
   assignee_id: '',
+  phase_id: '',
 });
 
 const endpoint = computed(() => `/api/project/${props.project.id}/test-cases`);
+
+// Danh sách giai đoạn (tasks.type=phase) của dự án — dùng để chọn khi
+// tạo/sửa testcase và để nhóm bảng testcase theo giai đoạn, tổng hợp
+// testcase theo module/tính năng thay vì liệt kê rời rạc.
+const phases = computed(() => (props.tree || []).filter((node) => node.type === 'phase'));
+
+const NO_PHASE_KEY = '__no_phase__';
+const collapsedPhaseKeys = ref(new Set());
+
+function toggleCollapsePhase(key) {
+  const next = new Set(collapsedPhaseKeys.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  collapsedPhaseKeys.value = next;
+}
+
+const phaseGroups = computed(() => {
+  const groups = new Map();
+  const ensure = (key, title) => {
+    if (!groups.has(key)) groups.set(key, { key, title, tests: [] });
+    return groups.get(key);
+  };
+  for (const tc of testCases.value) {
+    const key = tc.phase ? `phase-${tc.phase.id}` : NO_PHASE_KEY;
+    ensure(key, tc.phase ? tc.phase.title : 'Chưa gắn giai đoạn').tests.push(tc);
+  }
+  const out = Array.from(groups.values());
+  out.sort((a, b) => {
+    if (a.key === NO_PHASE_KEY) return 1;
+    if (b.key === NO_PHASE_KEY) return -1;
+    return 0;
+  });
+  return out;
+});
 
 async function load() {
   loading.value = true;
@@ -96,6 +132,7 @@ function resetForm() {
   form.actual_result = '';
   form.link_url = '';
   form.assignee_id = '';
+  form.phase_id = '';
   editingId.value = null;
 }
 
@@ -115,6 +152,7 @@ async function openEdit(testCase) {
   form.actual_result = testCase.actual_result || '';
   form.link_url = testCase.link_url || '';
   form.assignee_id = testCase.assignee?.id || '';
+  form.phase_id = testCase.phase?.id || '';
   formOpen.value = true;
 }
 
@@ -141,6 +179,7 @@ async function submit() {
       actual_result: form.actual_result || null,
       link_url: form.link_url || null,
       assignee_id: form.assignee_id || null,
+      phase_id: form.phase_id || null,
     };
     if (editingId.value) {
       const { data } = await window.axios.put(`/api/project/test-cases/${editingId.value}`, payload);
@@ -310,51 +349,70 @@ defineExpose({ openCreate });
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="tc in testCases"
-              :key="tc.id"
-              class="tct__row"
-              :class="{ 'tct__row--active': selected?.id === tc.id }"
-              @click="selectRow(tc)"
-            >
-              <td class="tct__cell-title">{{ tc.title }}</td>
-              <td>{{ tc.assignee?.name || '—' }}</td>
-              <td>
-                <span class="tct__status">
-                  <span class="tct__status-dot" :class="`tct__status-dot--${checkMeta(tc.check1.status).tone}`" />
-                  {{ checkMeta(tc.check1.status).label }}
-                </span>
-              </td>
-              <td>
-                <span class="tct__status">
-                  <span class="tct__status-dot" :class="`tct__status-dot--${checkMeta(tc.check2.status).tone}`" />
-                  {{ checkMeta(tc.check2.status).label }}
-                </span>
-              </td>
-              <td>
-                <span class="tct__quick-links">
-                  <button
-                    v-if="tc.link_url"
-                    type="button"
-                    class="tct__quick-link"
-                    aria-label="Xem trước đường dẫn"
-                    @click.stop="openLinkPreview(tc)"
-                  >
-                    <AppIcon name="link" :size="14" />
-                  </button>
-                  <button
-                    v-if="tc.attachment_url"
-                    type="button"
-                    class="tct__quick-link"
-                    aria-label="Xem ảnh đính kèm"
-                    @click.stop="openImagePreview(tc)"
-                  >
-                    <AppIcon name="camera" :size="14" />
-                  </button>
-                </span>
-              </td>
-              <td>{{ formatDate(tc.updated_at) }}</td>
-            </tr>
+            <template v-for="group in phaseGroups" :key="group.key">
+              <tr class="tct__group-row" @click="toggleCollapsePhase(group.key)">
+                <td colspan="6">
+                  <span class="tct__group-toggle">
+                    <span class="tct__group-head">
+                      <AppIcon
+                        name="chevronRight"
+                        :size="14"
+                        class="tct__group-chevron"
+                        :class="{ 'tct__group-chevron--open': !collapsedPhaseKeys.has(group.key) }"
+                      />
+                      <span class="tct__group-label">{{ group.title }}</span>
+                    </span>
+                    <span class="tct__group-count">{{ group.tests.length }} testcase</span>
+                  </span>
+                </td>
+              </tr>
+              <tr
+                v-for="tc in group.tests"
+                v-show="!collapsedPhaseKeys.has(group.key)"
+                :key="tc.id"
+                class="tct__row"
+                :class="{ 'tct__row--active': selected?.id === tc.id }"
+                @click="selectRow(tc)"
+              >
+                <td class="tct__cell-title">{{ tc.title }}</td>
+                <td>{{ tc.assignee?.name || '—' }}</td>
+                <td>
+                  <span class="tct__status">
+                    <span class="tct__status-dot" :class="`tct__status-dot--${checkMeta(tc.check1.status).tone}`" />
+                    {{ checkMeta(tc.check1.status).label }}
+                  </span>
+                </td>
+                <td>
+                  <span class="tct__status">
+                    <span class="tct__status-dot" :class="`tct__status-dot--${checkMeta(tc.check2.status).tone}`" />
+                    {{ checkMeta(tc.check2.status).label }}
+                  </span>
+                </td>
+                <td>
+                  <span class="tct__quick-links">
+                    <button
+                      v-if="tc.link_url"
+                      type="button"
+                      class="tct__quick-link"
+                      aria-label="Xem trước đường dẫn"
+                      @click.stop="openLinkPreview(tc)"
+                    >
+                      <AppIcon name="link" :size="14" />
+                    </button>
+                    <button
+                      v-if="tc.attachment_url"
+                      type="button"
+                      class="tct__quick-link"
+                      aria-label="Xem ảnh đính kèm"
+                      @click.stop="openImagePreview(tc)"
+                    >
+                      <AppIcon name="camera" :size="14" />
+                    </button>
+                  </span>
+                </td>
+                <td>{{ formatDate(tc.updated_at) }}</td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -370,6 +428,10 @@ defineExpose({ openCreate });
       </header>
 
       <div class="tct__fields">
+        <div class="tct__field-row">
+          <span class="tct__field-label">Giai đoạn</span>
+          <span class="tct__field-value">{{ selected.phase?.title || 'Chưa gắn giai đoạn' }}</span>
+        </div>
         <div class="tct__field-row">
           <span class="tct__field-label">Người phụ trách</span>
           <span class="tct__field-value">{{ selected.assignee?.name || '—' }}</span>
@@ -531,6 +593,13 @@ defineExpose({ openCreate });
                 />
               </div>
               <label class="tct-modal__field">
+                <span class="tct-modal__label">Giai đoạn</span>
+                <select v-model="form.phase_id" class="tct-modal__input">
+                  <option value="">Chưa gắn giai đoạn</option>
+                  <option v-for="phase in phases" :key="phase.id" :value="phase.id">{{ phase.title }}</option>
+                </select>
+              </label>
+              <label class="tct-modal__field">
                 <span class="tct-modal__label">Đường dẫn tham khảo</span>
                 <input
                   v-model="form.link_url"
@@ -688,6 +757,77 @@ defineExpose({ openCreate });
 
 .tct__cell-title {
   font-weight: 600;
+}
+
+.tct__group-row {
+  cursor: pointer;
+}
+
+.tct__group-row td {
+  position: relative;
+  width: 100%;
+  padding: var(--space-2) var(--space-4) var(--space-2) calc(var(--space-4) + 3px + var(--space-2)) !important;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  box-shadow: inset 0 -2px 0 var(--color-border) !important;
+}
+
+.tct__group-row td::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  background: var(--color-gold);
+}
+
+.tct__group-row:hover td {
+  background: color-mix(in srgb, var(--color-gold) 6%, var(--color-surface));
+}
+
+.tct__group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+}
+
+.tct__group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.tct__group-chevron {
+  flex-shrink: 0;
+  color: var(--color-gold);
+  transition: transform 0.15s ease;
+}
+
+.tct__group-chevron--open {
+  transform: rotate(90deg);
+}
+
+.tct__group-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tct__group-count {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .tct__row {

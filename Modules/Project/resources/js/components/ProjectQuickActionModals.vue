@@ -7,6 +7,7 @@ import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { showClientToast } from '@/lib/clientToast';
+import { SPRINT_STATUSES, sprintStatusLabel } from '../constants/sprint.js';
 import { TASK_PROGRESS_METHOD_OPTIONS } from '../constants/task.js';
 import ProjectMemberPicker from './ProjectMemberPicker.vue';
 import ProjectUserPicker from './ProjectUserPicker.vue';
@@ -31,6 +32,7 @@ const KIND_META = {
   category: { title: 'Cập nhật danh mục công việc', icon: 'listChecks', tone: 'gold' },
   task: { title: 'Thêm công việc', icon: 'plus', tone: 'info' },
   phase: { title: 'Cập nhật phase', icon: 'flag', tone: 'secondary' },
+  sprint: { title: 'Cập nhật sprint', icon: 'layoutGrid', tone: 'info' },
   baseline: { title: 'Chốt baseline', icon: 'flag', tone: 'warning' },
   dates: { title: 'Cập nhật thời gian dự án', icon: 'calendar', tone: 'info' },
   description: { title: 'Cập nhật mô tả dự án', icon: 'fileText', tone: 'violet' },
@@ -76,6 +78,8 @@ const listsLoading = ref(false);
 const assignableUsers = ref([]);
 const categories = ref([]);
 const phases = ref([]);
+const sprintRows = ref([]);
+const deletedSprintIds = ref([]);
 const baselines = ref([]);
 const itemCounts = ref({ work_items: 0, baseline: 0, task: 0, task_category: 0, phase: 0 });
 const startInput = ref(null);
@@ -201,7 +205,7 @@ const panelClass = computed(() => {
   if (props.kind === 'task' && isTaskListVariant.value) {
     return 'proj-qa__panel--xxl';
   }
-  if (props.kind === 'members' || props.kind === 'task' || props.kind === 'description' || props.kind === 'category' || props.kind === 'phase') {
+  if (props.kind === 'members' || props.kind === 'task' || props.kind === 'description' || props.kind === 'category' || props.kind === 'phase' || props.kind === 'sprint') {
     return 'proj-qa__panel--xl';
   }
   if (props.kind === 'baseline' || props.kind === 'dates') {
@@ -211,7 +215,7 @@ const panelClass = computed(() => {
 });
 
 const primaryLabel = computed(() => {
-  if (props.kind === 'members' || props.kind === 'dates' || props.kind === 'description' || props.kind === 'baseline' || props.kind === 'category' || props.kind === 'phase' || props.kind === 'tabs_config') {
+  if (props.kind === 'members' || props.kind === 'dates' || props.kind === 'description' || props.kind === 'baseline' || props.kind === 'category' || props.kind === 'phase' || props.kind === 'sprint' || props.kind === 'tabs_config') {
     return 'Cập nhật';
   }
   return 'Thêm';
@@ -225,6 +229,20 @@ function emptyStructureRow(overrides = {}) {
     progress_type: 'average',
     start_date: props.project?.start_date || '',
     end_date: props.project?.end_date || '',
+    description: '',
+    ...overrides,
+  };
+}
+
+function emptySprintRow(overrides = {}) {
+  return {
+    key: nextRowKey(),
+    id: null,
+    phase_id: phases.value[0]?.id || '',
+    name: '',
+    status: 'planned',
+    start_date: '',
+    end_date: '',
     description: '',
     ...overrides,
   };
@@ -254,6 +272,16 @@ function removeStructureRow(row) {
   structureRows.value = structureRows.value.filter((r) => r.key !== row.key);
   if (row.id) deletedStructureIds.value.push(row.id);
   if (!structureRows.value.length) addStructureRow();
+}
+
+function addSprintRow() {
+  sprintRows.value.push(emptySprintRow());
+}
+
+function removeSprintRow(row) {
+  sprintRows.value = sprintRows.value.filter((r) => r.key !== row.key);
+  if (row.id) deletedSprintIds.value.push(row.id);
+  if (!sprintRows.value.length) addSprintRow();
 }
 
 function addBulkRow() {
@@ -367,6 +395,8 @@ function resetForms(p) {
   descriptionForm.description = p.description || '';
   structureRows.value = [];
   deletedStructureIds.value = [];
+  sprintRows.value = [];
+  deletedSprintIds.value = [];
   taskForm.title = '';
   taskForm.description = '';
   taskForm.start_date = p.start_date || '';
@@ -423,6 +453,7 @@ watch(
     const needLists =
       kind === 'category' ||
       kind === 'phase' ||
+      kind === 'sprint' ||
       kind === 'baseline' ||
       (kind === 'task' && (taskVariant.value === 'by_category' || taskVariant.value === 'by_phase'));
 
@@ -433,6 +464,7 @@ watch(
       if (
         kind === 'category' ||
         kind === 'phase' ||
+        kind === 'sprint' ||
         (kind === 'task' && (taskVariant.value === 'by_category' || taskVariant.value === 'by_phase'))
       ) {
         const flat = await loadTaskTree();
@@ -464,6 +496,22 @@ watch(
           deletedStructureIds.value = [];
         }
       }
+      if (kind === 'sprint') {
+        const { data } = await window.axios.get(`/api/project/${p.id}/sprints`);
+        const existing = data.sprints ?? [];
+        sprintRows.value = existing.length
+          ? existing.map((item) => emptySprintRow({
+            id: item.id,
+            phase_id: item.phase_id,
+            name: item.name || '',
+            status: item.status || 'planned',
+            start_date: item.start_date || '',
+            end_date: item.end_date || '',
+            description: item.description || '',
+          }))
+          : [emptySprintRow()];
+        deletedSprintIds.value = [];
+      }
       if (kind === 'baseline') {
         const data = await loadQuick();
         itemCounts.value = data.counts ?? itemCounts.value;
@@ -475,6 +523,9 @@ watch(
       baselines.value = [];
       if (kind === 'category' || kind === 'phase') {
         structureRows.value = [emptyStructureRow()];
+      }
+      if (kind === 'sprint') {
+        sprintRows.value = [emptySprintRow()];
       }
     } finally {
       listsLoading.value = false;
@@ -596,6 +647,53 @@ async function submit() {
       else phases.value = data.tasks ?? [];
       emit('tasks-changed');
       showClientToast('success', type === 'category' ? 'Đã cập nhật danh mục công việc.' : 'Đã cập nhật phase.');
+      emit('close');
+      return;
+    }
+    if (props.kind === 'sprint') {
+      const filled = sprintRows.value.filter((row) => row.name.trim());
+      if (!filled.length && !deletedSprintIds.value.length) {
+        showClientToast('error', 'Nhập ít nhất một sprint.');
+        return;
+      }
+      for (const row of filled) {
+        if (!row.phase_id) {
+          showClientToast('error', 'Chọn giai đoạn cho mọi sprint.');
+          return;
+        }
+        const err = dateRangeError(row.start_date, row.end_date);
+        if (err) {
+          showClientToast('error', err);
+          return;
+        }
+      }
+      // Sprint là bảng riêng có API CRUD riêng (không phải syncStructure trên
+      // bảng tasks) — gọi tuần tự từng dòng thay vì 1 request batch.
+      try {
+        for (const row of filled) {
+          const payload = {
+            phase_id: row.phase_id,
+            name: row.name.trim(),
+            status: row.status || 'planned',
+            start_date: row.start_date || null,
+            end_date: row.end_date || null,
+            description: row.description?.trim() || null,
+          };
+          if (row.id) {
+            await window.axios.put(`/api/project/sprints/${row.id}`, payload);
+          } else {
+            await window.axios.post(`/api/project/${props.project.id}/sprints`, payload);
+          }
+        }
+        for (const id of deletedSprintIds.value) {
+          await window.axios.delete(`/api/project/sprints/${id}`);
+        }
+      } catch (error) {
+        showClientToast('error', error?.response?.data?.message || 'Không lưu được sprint.');
+        return;
+      }
+      emit('tasks-changed');
+      showClientToast('success', 'Đã cập nhật sprint.');
       emit('close');
       return;
     }
@@ -870,73 +968,74 @@ watch(
                 v-for="(row, index) in bulkRows"
                 :key="row.key"
                 class="proj-qa__task-row"
-                :class="{ 'proj-qa__task-row--with-parent': taskVariant !== 'bulk' && perRowParent, 'proj-qa__task-row--with-hours': showHourFields }"
               >
                 <span class="proj-qa__task-row-index">{{ index + 1 }}</span>
                 <label class="proj-qa__field">
                   <span class="proj-qa__label">Tên công việc</span>
                   <input v-model="row.title" class="proj-qa__input" maxlength="255" placeholder="Ví dụ: Lập hồ sơ mời thầu">
                 </label>
-                <label v-if="taskVariant === 'by_category' && perRowParent" class="proj-qa__field">
-                  <span class="proj-qa__label">Danh mục</span>
-                  <select v-model="row.parent_id" class="proj-qa__input">
-                    <option value="">Chọn danh mục</option>
-                    <option v-for="item in categories" :key="item.id" :value="item.id">{{ item.title }}</option>
-                  </select>
-                </label>
-                <label v-if="taskVariant === 'by_phase' && perRowParent" class="proj-qa__field">
-                  <span class="proj-qa__label">Phase</span>
-                  <select v-model="row.parent_id" class="proj-qa__input">
-                    <option value="">Chọn phase</option>
-                    <option v-for="item in phases" :key="item.id" :value="item.id">{{ item.title }}</option>
-                  </select>
-                </label>
-                <div class="proj-qa__field">
-                  <span class="proj-qa__label">Người thực hiện</span>
-                  <ProjectUserPicker
-                    v-model="row.assignee_id"
-                    :users="assignableUsers"
-                    :preferred-department-ids="preferredDeptIds"
-                    search-label="Tìm người thực hiện"
-                    placeholder="Chọn người thực hiện"
-                  />
-                </div>
-                <label class="proj-qa__field">
-                  <span class="proj-qa__label">Ngày bắt đầu</span>
-                  <input v-model="row.start_date" type="date" class="proj-qa__input">
-                </label>
-                <label class="proj-qa__field">
-                  <span class="proj-qa__label">Ngày kết thúc</span>
-                  <input v-model="row.end_date" type="date" class="proj-qa__input">
-                </label>
-                <template v-if="showHourFields">
-                  <label class="proj-qa__field">
-                    <span class="proj-qa__label">Giờ bắt đầu</span>
-                    <input v-model="row.start_time" type="time" class="proj-qa__input">
-                  </label>
-                  <label class="proj-qa__field">
-                    <span class="proj-qa__label">Giờ hạn</span>
-                    <input v-model="row.due_time" type="time" class="proj-qa__input">
-                  </label>
-                  <label class="proj-qa__field">
-                    <span class="proj-qa__label">Dự kiến (giờ)</span>
-                    <input
-                      v-model="row.estimated_hours"
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      class="proj-qa__input"
-                      placeholder="Vd. 8"
-                    >
-                  </label>
-                </template>
-                <label class="proj-qa__field proj-qa__field--desc">
-                  <span class="proj-qa__label">Mô tả</span>
-                  <input v-model="row.description" class="proj-qa__input" maxlength="5000" placeholder="Mô tả ngắn (tuỳ chọn)">
-                </label>
                 <button type="button" class="proj-qa__row-remove" aria-label="Xoá dòng" @click="removeBulkRow(row)">
                   <AppIcon name="close" :size="14" />
                 </button>
+                <div class="proj-qa__task-row__extra">
+                  <label v-if="taskVariant === 'by_category' && perRowParent" class="proj-qa__field">
+                    <span class="proj-qa__label">Danh mục</span>
+                    <select v-model="row.parent_id" class="proj-qa__input">
+                      <option value="">Chọn danh mục</option>
+                      <option v-for="item in categories" :key="item.id" :value="item.id">{{ item.title }}</option>
+                    </select>
+                  </label>
+                  <label v-if="taskVariant === 'by_phase' && perRowParent" class="proj-qa__field">
+                    <span class="proj-qa__label">Phase</span>
+                    <select v-model="row.parent_id" class="proj-qa__input">
+                      <option value="">Chọn phase</option>
+                      <option v-for="item in phases" :key="item.id" :value="item.id">{{ item.title }}</option>
+                    </select>
+                  </label>
+                  <div class="proj-qa__field">
+                    <span class="proj-qa__label">Người thực hiện</span>
+                    <ProjectUserPicker
+                      v-model="row.assignee_id"
+                      :users="assignableUsers"
+                      :preferred-department-ids="preferredDeptIds"
+                      search-label="Tìm người thực hiện"
+                      placeholder="Chọn người thực hiện"
+                    />
+                  </div>
+                  <label class="proj-qa__field">
+                    <span class="proj-qa__label">Ngày bắt đầu</span>
+                    <input v-model="row.start_date" type="date" class="proj-qa__input">
+                  </label>
+                  <label class="proj-qa__field">
+                    <span class="proj-qa__label">Ngày kết thúc</span>
+                    <input v-model="row.end_date" type="date" class="proj-qa__input">
+                  </label>
+                  <template v-if="showHourFields">
+                    <label class="proj-qa__field">
+                      <span class="proj-qa__label">Giờ bắt đầu</span>
+                      <input v-model="row.start_time" type="time" class="proj-qa__input">
+                    </label>
+                    <label class="proj-qa__field">
+                      <span class="proj-qa__label">Giờ hạn</span>
+                      <input v-model="row.due_time" type="time" class="proj-qa__input">
+                    </label>
+                    <label class="proj-qa__field">
+                      <span class="proj-qa__label">Dự kiến (giờ)</span>
+                      <input
+                        v-model="row.estimated_hours"
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        class="proj-qa__input"
+                        placeholder="Vd. 8"
+                      >
+                    </label>
+                  </template>
+                  <label class="proj-qa__field proj-qa__field--desc">
+                    <span class="proj-qa__label">Mô tả</span>
+                    <input v-model="row.description" class="proj-qa__input" maxlength="5000" placeholder="Mô tả ngắn (tuỳ chọn)">
+                  </label>
+                </div>
               </div>
             </div>
             <button type="button" class="proj-qa__add-row" @click="addBulkRow">
@@ -1052,6 +1151,53 @@ watch(
               <button type="button" class="proj-qa__add-row" @click="addStructureRow">
                 <AppIcon name="plus" :size="14" />
                 Thêm phase
+              </button>
+            </div>
+          </div>
+
+          <div v-else-if="kind === 'sprint'" class="proj-qa__structure">
+            <p class="proj-qa__hint">
+              Sprint là đợt chạy nước rút bên trong 1 giai đoạn. Mỗi sprint phải thuộc 1 giai đoạn, và nên nằm trong khoảng thời gian của giai đoạn đó.
+            </p>
+            <p v-if="listsLoading" class="proj-qa__muted">Đang tải…</p>
+            <p v-else-if="!phases.length" class="proj-qa__muted">Dự án chưa có giai đoạn nào — tạo phase trước khi thêm sprint.</p>
+            <div v-else class="proj-qa__structure-list">
+              <div v-for="row in sprintRows" :key="row.key" class="proj-qa__structure-row proj-qa__structure-row--phase">
+                <label class="proj-qa__field proj-qa__field--full">
+                  <span class="proj-qa__label">Tên sprint</span>
+                  <input v-model="row.name" class="proj-qa__input" maxlength="255" placeholder="Ví dụ: Sprint 1">
+                </label>
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">Giai đoạn</span>
+                  <select v-model="row.phase_id" class="proj-qa__input" required>
+                    <option v-for="item in phases" :key="item.id" :value="item.id">{{ item.title }}</option>
+                  </select>
+                </label>
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">Trạng thái</span>
+                  <select v-model="row.status" class="proj-qa__input" required>
+                    <option v-for="s in SPRINT_STATUSES" :key="s" :value="s">{{ sprintStatusLabel(s) }}</option>
+                  </select>
+                </label>
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">Ngày bắt đầu</span>
+                  <input v-model="row.start_date" type="date" class="proj-qa__input">
+                </label>
+                <label class="proj-qa__field">
+                  <span class="proj-qa__label">Ngày kết thúc</span>
+                  <input v-model="row.end_date" type="date" class="proj-qa__input">
+                </label>
+                <label class="proj-qa__field proj-qa__field--full">
+                  <span class="proj-qa__label">Mô tả</span>
+                  <input v-model="row.description" class="proj-qa__input" maxlength="5000" placeholder="Mô tả ngắn cho sprint này (tuỳ chọn)">
+                </label>
+                <button type="button" class="proj-qa__row-remove" aria-label="Xoá dòng" @click="removeSprintRow(row)">
+                  <AppIcon name="close" :size="14" />
+                </button>
+              </div>
+              <button type="button" class="proj-qa__add-row" @click="addSprintRow">
+                <AppIcon name="plus" :size="14" />
+                Thêm sprint
               </button>
             </div>
           </div>
@@ -2026,63 +2172,28 @@ watch(
   overflow-y: auto;
 }
 
+/* 2 hàng thay vì nhồi hết field vào 1 hàng ngang: hàng đầu là số thứ tự +
+   Tên công việc (chiếm phần lớn chiều rộng) + nút xoá; hàng dưới
+   (.proj-qa__task-row__extra) chứa các field phụ (danh mục/phase, người
+   thực hiện, ngày giờ, mô tả) chia đều bằng auto-fit — không bị bóp méo
+   khi số field phụ đổi theo biến thể (bulk/by_category/by_phase, có/không
+   giờ cụ thể). */
 .proj-qa__task-row {
   position: relative;
   display: grid;
   align-items: start;
-  grid-template-columns
-    : 1.25rem
-      minmax(0, 1.4fr)
-      minmax(0, 1fr)
-      minmax(0, 0.85fr)
-      minmax(0, 0.85fr)
-      minmax(0, 1.4fr)
-      auto;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto;
   gap: var(--space-3);
   padding: var(--space-3);
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
 }
 
-.proj-qa__task-row--with-parent {
-  grid-template-columns
-    : 1.25rem
-      minmax(0, 1.2fr)
-      minmax(0, 1fr)
-      minmax(0, 1fr)
-      minmax(0, 0.8fr)
-      minmax(0, 0.8fr)
-      minmax(0, 1.2fr)
-      auto;
-}
-
-.proj-qa__task-row--with-hours {
-  grid-template-columns
-    : 1.25rem
-      minmax(0, 1.2fr)
-      minmax(0, 1fr)
-      minmax(0, 0.8fr)
-      minmax(0, 0.8fr)
-      minmax(0, 0.7fr)
-      minmax(0, 0.7fr)
-      minmax(0, 0.7fr)
-      minmax(0, 1.1fr)
-      auto;
-}
-
-.proj-qa__task-row--with-parent.proj-qa__task-row--with-hours {
-  grid-template-columns
-    : 1.25rem
-      minmax(0, 1.1fr)
-      minmax(0, 0.9fr)
-      minmax(0, 0.9fr)
-      minmax(0, 0.7fr)
-      minmax(0, 0.7fr)
-      minmax(0, 0.65fr)
-      minmax(0, 0.65fr)
-      minmax(0, 0.65fr)
-      minmax(0, 1fr)
-      auto;
+.proj-qa__task-row__extra {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: var(--space-3);
 }
 
 .proj-qa__task-row-index {
@@ -2097,19 +2208,7 @@ watch(
 
 .proj-qa__field--desc {
   min-width: 0;
-}
-
-@media (max-width: 1280px) {
-  .proj-qa__task-row,
-  .proj-qa__task-row--with-parent,
-  .proj-qa__task-row--with-hours,
-  .proj-qa__task-row--with-parent.proj-qa__task-row--with-hours {
-    grid-template-columns: 1.25rem repeat(2, minmax(0, 1fr)) auto;
-  }
-
-  .proj-qa__task-row-index {
-    grid-row: 1;
-  }
+  grid-column: span 2;
 }
 
 @media (max-width: 900px) {
@@ -2133,12 +2232,22 @@ watch(
   .proj-qa__grid,
   .proj-qa__dates-row,
   .proj-qa__structure-row,
-  .proj-qa__structure-row--phase,
-  .proj-qa__task-row,
-  .proj-qa__task-row--with-parent,
-  .proj-qa__task-row--with-hours,
-  .proj-qa__task-row--with-parent.proj-qa__task-row--with-hours {
+  .proj-qa__structure-row--phase {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Hàng tiêu đề vẫn giữ 2 cột (tên công việc + nút xoá cùng hàng) —
+     chỉ hàng field phụ bên dưới rớt về 1 cột trên mobile. */
+  .proj-qa__task-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .proj-qa__task-row__extra {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .proj-qa__task-row__extra .proj-qa__field--desc {
+    grid-column: 1 / -1;
   }
 
   .proj-qa__field--wide,
@@ -2153,8 +2262,7 @@ watch(
     grid-row: auto;
   }
 
-  .proj-qa__row-remove,
-  .proj-qa__task-row .proj-qa__row-remove {
+  .proj-qa__row-remove {
     align-self: start;
     justify-self: end;
   }

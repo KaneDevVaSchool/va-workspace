@@ -47,6 +47,8 @@ import {
 } from '../constants/task.js';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import ProjectGanttTab from './ProjectGanttTab.vue';
+import ProjectPlanTab from './ProjectPlanTab.vue';
+import ProjectSprintBoard from './ProjectSprintBoard.vue';
 import ProjectTaskViewModeMenu from './ProjectTaskViewModeMenu.vue';
 import TaskRowContextMenu from './TaskRowContextMenu.vue';
 import TaskQuickActionModals from './TaskQuickActionModals.vue';
@@ -141,8 +143,10 @@ useDragScroll(kanbanWrap, { axis: 'x', isBlocked: () => kanbanDrag.active });
 
 const isList = computed(() => viewMode.value === 'all' || viewMode.value === 'parents');
 const isPhaseGroup = computed(() => viewMode.value === 'phase');
+const isSprintBoard = computed(() => viewMode.value === 'sprint');
 const isKanban = computed(() => viewMode.value === 'kanban');
 const isGantt = computed(() => viewMode.value === 'gantt');
+const isPlan = computed(() => viewMode.value === 'plan');
 const isTableLike = computed(() => isList.value || isPhaseGroup.value);
 
 const triggerMeta = computed(() => {
@@ -940,7 +944,7 @@ watch(tableZoom, (value) => {
         @select-kanban="chooseKanban"
       />
       <h3 class="ptasks__filter">{{ filterLabel }}</h3>
-      <label v-if="!isGantt" class="ptasks__search" :class="{ 'ptasks__search--with-export': isList }">
+      <label v-if="!isGantt && !isPlan" class="ptasks__search" :class="{ 'ptasks__search--with-export': isList }">
         <AppIcon name="search" :size="15" />
         <input v-model="query" type="search" placeholder="Tìm theo tên công việc…" />
       </label>
@@ -1276,6 +1280,23 @@ watch(tableZoom, (value) => {
         </div>
       </div>
     </div>
+
+    <ProjectSprintBoard
+      v-else-if="isSprintBoard"
+      :tree="tree"
+      :loading="loading"
+      :project="project"
+      :filter="filter"
+      :filter-label="filterLabel"
+      :query="query"
+    />
+
+    <ProjectPlanTab
+      v-else-if="isPlan"
+      :tree="tree"
+      :loading="loading"
+      :project="project"
+    />
 
     <ProjectGanttTab
       v-else

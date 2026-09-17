@@ -14,7 +14,7 @@ class ProjectTestCaseRepository implements ProjectTestCaseRepositoryInterface
     public function listForProject(int $projectId): Collection
     {
         return ProjectTestCase::query()
-            ->with(['assignee', 'creator'])
+            ->with(['assignee', 'creator', 'phase'])
             ->where('project_id', $projectId)
             ->orderBy('sort_order')
             ->orderBy('created_at')
@@ -23,14 +23,14 @@ class ProjectTestCaseRepository implements ProjectTestCaseRepositoryInterface
 
     public function find(int $id): ?ProjectTestCase
     {
-        return ProjectTestCase::query()->with(['assignee', 'creator'])->find($id);
+        return ProjectTestCase::query()->with(['assignee', 'creator', 'phase'])->find($id);
     }
 
     public function create(array $data): ProjectTestCase
     {
         $testCase = ProjectTestCase::query()->create($data);
 
-        return $testCase->fresh(['assignee', 'creator']);
+        return $testCase->fresh(['assignee', 'creator', 'phase']);
     }
 
     public function update(ProjectTestCase $testCase, array $data): ProjectTestCase
@@ -38,7 +38,7 @@ class ProjectTestCaseRepository implements ProjectTestCaseRepositoryInterface
         $testCase->fill($data);
         $testCase->save();
 
-        return $testCase->fresh(['assignee', 'creator']);
+        return $testCase->fresh(['assignee', 'creator', 'phase']);
     }
 
     public function delete(ProjectTestCase $testCase): bool

@@ -834,6 +834,10 @@ const performers = computed(() => {
                 <span class="pd__action-icon"><AppIcon name="flag" :size="15" :stroke-width="1.75" /></span>
                 <span class="pd__action-label">Thêm phase</span>
               </button>
+              <button type="button" class="pd__action" @click="openAction('sprint')">
+                <span class="pd__action-icon"><AppIcon name="layoutGrid" :size="15" :stroke-width="1.75" /></span>
+                <span class="pd__action-label">Thêm sprint</span>
+              </button>
             </div>
 
             <div v-else-if="showDocActions" class="pd__action-group" aria-label="Tài liệu">
@@ -1258,7 +1262,7 @@ const performers = computed(() => {
 
           <!-- Tab: Testcase -->
           <template v-else-if="activeTab === 'test_case'">
-            <ProjectTestcaseTab ref="testcaseTab" :project="project" :can-manage="canEdit" @count-changed="testCaseCount = $event" />
+            <ProjectTestcaseTab ref="testcaseTab" :project="project" :tree="taskTree" :can-manage="canEdit" @count-changed="testCaseCount = $event" />
           </template>
 
           <!-- Tab: Phản hồi -->

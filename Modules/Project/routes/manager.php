@@ -5,6 +5,7 @@ use Modules\Project\App\Http\Controllers\CommentController;
 use Modules\Project\App\Http\Controllers\ProjectController;
 use Modules\Project\App\Http\Controllers\ProjectFeedbackController;
 use Modules\Project\App\Http\Controllers\ProjectTestCaseController;
+use Modules\Project\App\Http\Controllers\SprintController;
 use Modules\Project\App\Http\Controllers\TaskAttachmentController;
 use Modules\Project\App\Http\Controllers\TaskController;
 use Modules\Project\App\Http\Controllers\TaskScoreController;
@@ -226,6 +227,16 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
         Route::put('/test-cases/{testCase}/check2', [ProjectTestCaseController::class, 'updateCheck2'])->name('test-cases.check2');
         Route::post('/test-cases/{testCase}/attachment', [ProjectTestCaseController::class, 'uploadAttachment'])->name('test-cases.attachment.store');
         Route::delete('/test-cases/{testCase}/attachment', [ProjectTestCaseController::class, 'destroyAttachment'])->name('test-cases.attachment.destroy');
+    });
+
+    // ---------- Sprint (1 Phase có nhiều Sprint — Modules/Project/App/Models/Sprint.php) ----------
+    Route::middleware('permission:task.view|task.view_assigned')
+        ->get('/{project}/sprints', [SprintController::class, 'index'])
+        ->name('sprints.index');
+    Route::middleware('permission:task.create')->group(function () {
+        Route::post('/{project}/sprints', [SprintController::class, 'store'])->name('sprints.store');
+        Route::put('/sprints/{sprint}', [SprintController::class, 'update'])->name('sprints.update');
+        Route::delete('/sprints/{sprint}', [SprintController::class, 'destroy'])->name('sprints.destroy');
     });
 
     // ---------- Phản hồi/đánh giá dự án (tab tuỳ chọn) ----------

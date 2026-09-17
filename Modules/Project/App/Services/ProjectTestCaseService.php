@@ -41,6 +41,7 @@ class ProjectTestCaseService
             'actual_result' => $data['actual_result'] ?? null,
             'link_url' => $data['link_url'] ?? null,
             'assignee_id' => $data['assignee_id'] ?? null,
+            'phase_id' => $data['phase_id'] ?? null,
             'check1_status' => 'pending',
             'check2_status' => 'pending',
             'created_by' => $actor->id,
@@ -59,7 +60,7 @@ class ProjectTestCaseService
     {
         $payload = ['updated_by' => $actor->id];
 
-        foreach (['title', 'steps', 'expected_result', 'actual_result', 'assignee_id', 'link_url'] as $field) {
+        foreach (['title', 'steps', 'expected_result', 'actual_result', 'assignee_id', 'link_url', 'phase_id'] as $field) {
             if (array_key_exists($field, $data)) {
                 $payload[$field] = $field === 'title' ? trim($data[$field]) : $data[$field];
             }
@@ -169,6 +170,11 @@ class ProjectTestCaseService
                 'at' => $testCase->check2_at?->toIso8601String(),
             ],
             'assignee' => $this->presentUser($testCase->assignee),
+            'phase' => $testCase->phase ? [
+                'id' => $testCase->phase->id,
+                'title' => $testCase->phase->title,
+                'code' => $testCase->phase->code,
+            ] : null,
             'creator' => $testCase->creator ? [
                 'id' => $testCase->creator->id,
                 'name' => $testCase->creator->name,

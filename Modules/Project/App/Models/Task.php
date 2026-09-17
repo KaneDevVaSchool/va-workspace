@@ -21,6 +21,7 @@ use Modules\Identity\App\Models\Department;
  * @property int $id
  * @property int|null $project_id
  * @property int|null $parent_id
+ * @property int|null $sprint_id sprint gán cho task (quan hệ phẳng, không qua parent_id)
  * @property string|null $code
  * @property string $type task | phase | category
  * @property string $title
@@ -62,6 +63,7 @@ class Task extends Model
         'project.ownerDepartment',
         'project.executingDepartment',
         'parent',
+        'sprint',
         'assignee.department',
         'manager',
         'acceptedBy',
@@ -80,6 +82,7 @@ class Task extends Model
     protected $fillable = [
         'project_id',
         'parent_id',
+        'sprint_id',
         'code', // sinh tự động — TaskService::createSingle() set qua ProjectRepository::nextTaskCode()
         'type',
         'title',
@@ -164,6 +167,11 @@ class Task extends Model
     public function children(): HasMany
     {
         return $this->hasMany(Task::class, 'parent_id')->orderBy('sort_order');
+    }
+
+    public function sprint(): BelongsTo
+    {
+        return $this->belongsTo(Sprint::class, 'sprint_id');
     }
 
     public function assignee(): BelongsTo

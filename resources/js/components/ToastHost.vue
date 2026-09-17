@@ -187,7 +187,9 @@ onBeforeUnmount(() => {
 .toast-host {
   position: fixed;
   inset: 0 0 auto 0;
-  z-index: 400;
+  /* Phải luôn nổi trên mọi modal/dialog (cao nhất hiện dùng ~1401, xem
+     ProjectRowContextMenu/TaskRowContextMenu) để lỗi form không bị che. */
+  z-index: 2000;
   display: flex;
   justify-content: flex-end;
   padding: var(--space-3);

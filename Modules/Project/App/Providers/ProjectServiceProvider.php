@@ -15,6 +15,7 @@ use Modules\Project\App\Repositories\Contracts\CommentRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\ProjectFeedbackRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\ProjectTestCaseRepositoryInterface;
+use Modules\Project\App\Repositories\Contracts\SprintRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\TaskAttachmentRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\TaskScoreRepositoryInterface;
@@ -22,6 +23,7 @@ use Modules\Project\App\Repositories\Contracts\TaskWorklogRepositoryInterface;
 use Modules\Project\App\Repositories\ProjectFeedbackRepository;
 use Modules\Project\App\Repositories\ProjectRepository;
 use Modules\Project\App\Repositories\ProjectTestCaseRepository;
+use Modules\Project\App\Repositories\SprintRepository;
 use Modules\Project\App\Repositories\TaskAttachmentRepository;
 use Modules\Project\App\Repositories\TaskRepository;
 use Modules\Project\App\Repositories\TaskScoreRepository;
@@ -69,6 +71,11 @@ class ProjectServiceProvider extends ServiceProvider
         $this->app->bind(
             ProjectFeedbackRepositoryInterface::class,
             ProjectFeedbackRepository::class,
+        );
+
+        $this->app->bind(
+            SprintRepositoryInterface::class,
+            SprintRepository::class,
         );
     }
 

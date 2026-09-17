@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Modules\Project\App\Enums\TaskEnums;
+use Modules\Project\App\Models\Sprint;
 use Modules\Project\App\Services\TaskImportanceOptions;
 
 class StoreTaskRequest extends FormRequest
@@ -22,6 +23,7 @@ class StoreTaskRequest extends FormRequest
 
         return [
             'parent_id' => ['nullable', 'integer', 'exists:tasks,id'],
+            'sprint_id' => ['nullable', 'integer', $this->sprintRule()],
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
             'type' => ['nullable', 'string', 'in:'.implode(',', TaskEnums::TYPES)],
             'title' => [$needsTitle ? 'required' : 'nullable', 'string', 'max:255'],
@@ -131,6 +133,22 @@ class StoreTaskRequest extends FormRequest
             'weight.min' => 'Tỷ trọng tối thiểu là 0%.',
             'weight.max' => 'Tỷ trọng tối đa là 100%.',
         ];
+    }
+
+    private function sprintRule(): Closure
+    {
+        $projectId = $this->filled('project_id')
+            ? (int) $this->input('project_id')
+            : ($this->route('project') !== null ? (int) $this->route('project') : null);
+
+        return function (string $attribute, mixed $value, Closure $fail) use ($projectId) {
+            if ($value === null || $value === '') {
+                return;
+            }
+            if (! Sprint::query()->where('id', $value)->where('project_id', $projectId)->exists()) {
+                $fail('Sprint không thuộc dự án này.');
+            }
+        };
     }
 
     private function priorityRule(): Closure

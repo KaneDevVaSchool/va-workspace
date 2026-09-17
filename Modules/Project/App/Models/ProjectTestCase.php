@@ -29,6 +29,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $link_url
  * @property string|null $attachment_path
  * @property int|null $assignee_id
+ * @property int|null $phase_id giai đoạn (tasks.type=phase) cùng dự án — tổng hợp testcase theo module
  * @property int $sort_order
  * @property int|null $created_by
  * @property int|null $updated_by
@@ -52,6 +53,7 @@ class ProjectTestCase extends Model
         'link_url',
         'attachment_path',
         'assignee_id',
+        'phase_id',
         'sort_order',
         'created_by',
         'updated_by',
@@ -70,6 +72,11 @@ class ProjectTestCase extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assignee_id');
+    }
+
+    public function phase(): BelongsTo
+    {
+        return $this->belongsTo(Task::class, 'phase_id');
     }
 
     public function creator(): BelongsTo
