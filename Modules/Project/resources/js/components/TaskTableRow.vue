@@ -10,6 +10,8 @@ import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import { computeExpectedProgress } from '@/lib/progress';
 import {
   formatTaskDate,
+  formatTaskDateTime,
+  formatTaskVarianceDays,
   taskCellText as cellText,
   taskPriorityLabel as priorityLabel,
   taskPriorityTone as priorityTone,
@@ -26,7 +28,6 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['open', 'context-menu', 'toggle-collapse']);
-const formatDate = formatTaskDate;
 </script>
 
 <template>
@@ -71,10 +72,10 @@ const formatDate = formatTaskDate;
         <span class="ptasks__dot" :class="`ptasks__dot--${priorityTone(task.priority)}`" />
         {{ priorityLabel(task.priority) }}
       </span>
-      <span v-else-if="col.key === 'start_date'" class="ptasks__pill ptasks__pill--date">{{ formatDate(task.start_date) }}</span>
-      <span v-else-if="col.key === 'end_date'" class="ptasks__pill ptasks__pill--date">{{ formatDate(task.end_date) }}</span>
-      <span v-else-if="col.key === 'actual_start_date'" class="ptasks__pill ptasks__pill--date">{{ formatDate(task.actual_start_date) }}</span>
-      <span v-else-if="col.key === 'actual_end_date'" class="ptasks__pill ptasks__pill--date">{{ formatDate(task.actual_end_date) }}</span>
+      <span v-else-if="col.key === 'start_date'" class="ptasks__pill ptasks__pill--date">{{ formatTaskDate(task.start_date) }}</span>
+      <span v-else-if="col.key === 'end_date'" class="ptasks__pill ptasks__pill--date">{{ formatTaskDate(task.end_date) }}</span>
+      <span v-else-if="col.key === 'actual_start_date'" class="ptasks__pill ptasks__pill--date">{{ formatTaskDate(task.actual_start_date) }}</span>
+      <span v-else-if="col.key === 'actual_end_date'" class="ptasks__pill ptasks__pill--date">{{ formatTaskDate(task.actual_end_date) }}</span>
       <span v-else-if="col.key === 'progress_percent'" class="ptasks__progress">
         <DualProgressBar
           v-if="task.progress_percent != null"
@@ -91,8 +92,8 @@ const formatDate = formatTaskDate;
         <UserAvatarTip v-if="task.creator" :user="task.creator" label="Người tạo" />
         <span v-else>—</span>
       </span>
-      <span v-else-if="col.key === 'created_at'">{{ formatDateTime(task.created_at) }}</span>
-      <span v-else-if="col.key === 'updated_at'">{{ formatDateTime(task.updated_at) }}</span>
+      <span v-else-if="col.key === 'created_at'">{{ formatTaskDateTime(task.created_at) }}</span>
+      <span v-else-if="col.key === 'updated_at'">{{ formatTaskDateTime(task.updated_at) }}</span>
       <span v-else-if="col.key === 'parent'">{{ task.parent?.title || '—' }}</span>
       <span v-else-if="col.key === 'attachments_count'">{{ task.attachments_count || 0 }}</span>
       <span v-else-if="col.key === 'estimated_hours'">{{ task.estimated_hours ?? '—' }}</span>
@@ -107,7 +108,7 @@ const formatDate = formatTaskDate;
         <span class="ptasks__dot" :class="`ptasks__dot--${task.is_overdue ? 'danger' : 'success'}`" />
         {{ task.is_overdue ? 'Quá hạn' : 'Đúng hạn' }}
       </span>
-      <span v-else-if="col.key === 'variance_days'">{{ formatVarianceDays(task.variance_days) }}</span>
+      <span v-else-if="col.key === 'variance_days'">{{ formatTaskVarianceDays(task.variance_days) }}</span>
       <span v-else>{{ cellText(task, col.key) }}</span>
     </td>
   </tr>
