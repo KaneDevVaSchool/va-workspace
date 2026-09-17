@@ -90,7 +90,19 @@ const KANBAN_GROUP_LABELS = {
   type: 'Theo loại',
 };
 const MIN_COL_PX = 72;
+const CELL_PAD_X = 32;
+const COL_EXTRA = 24;
+const ASSIGNEE_AVATAR_EXTRA = 42;
+const STATUS_DOT_EXTRA = 28;
+const PILL_PAD_EXTRA = 20;
+const TITLE_TREE_EXTRA = 22;
+const TITLE_DEPTH_PX = 20;
+const PROGRESS_EXTRA = 64;
 const KANBAN_DRAG_THRESHOLD = 7;
+
+let measureCtx = null;
+let wrapObserver = null;
+const contentMinWidths = {};
 
 const viewMode = ref(loadView());
 const kanbanGroupBy = ref(loadKanbanGroup());
@@ -539,6 +551,117 @@ const cellText = taskCellText;
 function colWidthStyle(key) {
   return columnWidths[key] ? `${columnWidths[key]}px` : undefined;
 }
+
+function measureText(text, font) {
+  if (!measureCtx) {
+    measureCtx = document.createElement('canvas').getContext('2d');
+  }
+  measureCtx.font = font;
+  return measureCtx.measureText(String(text ?? '')).width;
+}
+
+function fontOf(el, fallback) {
+  if (!el) return fallback;
+  const style = getComputedStyle(el);
+  return `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+}
+
+function readTableFonts() {
+  const table = tableWrap.value?.querySelector('.ptasks__table');
+  return {
+    header: fontOf(table?.querySelector('thead th'), '600 12px "Be Vietnam Pro", sans-serif'),
+    cell: fontOf(table?.querySelector('tbody td'), '400 14px "Be Vietnam Pro", sans-serif'),
+    title: fontOf(table?.querySelector('.ptasks__link'), '400 14px "Be Vietnam Pro", sans-serif'),
+  };
+}
+
+function tasksForMeasure() {
+  if (isPhaseGroup.value) return phaseGroups.value.flatMap((group) => group.tasks);
+  return visibleTasks.value;
+}
+
+function columnContentWidth(key, fonts) {
+  const label = PROJECT_TASK_COLUMNS.find((col) => col.key === key)?.label ?? '';
+  const valueFont = key === 'title' ? fonts.title : fonts.cell;
+  let maxW = measureText(label, fonts.header);
+  for (const task of tasksForMeasure()) {
+    if (key === 'title') {
+      const indent = (Number(task.depth) || 0) * TITLE_DEPTH_PX + (task.hasChildren ? TITLE_TREE_EXTRA : 0);
+      maxW = Math.max(maxW, measureText(task.title || '—', fonts.title) + indent);
+    } else if (key === 'assignee' || key === 'creator' || key === 'manager') {
+      // Ô chỉ hiện avatar; bề rộng tối thiểu lấy theo nhãn cột.
+    } else {
+      maxW = Math.max(maxW, measureText(cellText(task, key), valueFont));
+    }
+  }
+  let extra = 0;
+  if (key === 'assignee' || key === 'creator' || key === 'manager') extra = ASSIGNEE_AVATAR_EXTRA;
+  if (key === 'status' || key === 'priority' || key === 'is_overdue') extra = STATUS_DOT_EXTRA + PILL_PAD_EXTRA;
+  if (key === 'type' || key === 'code' || key === 'start_date' || key === 'end_date' || key === 'actual_start_date' || key === 'actual_end_date') {
+    extra = PILL_PAD_EXTRA;
+  }
+  if (key === 'progress_percent') extra = PROGRESS_EXTRA;
+  return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
+}
+
+function distributeExtraWidth(widths, keys, available) {
+  const sum = keys.reduce((total, key) => total + widths[key], 0);
+  if (sum <= 0 || available <= sum) return widths;
+
+  const extra = available - sum;
+  const next = { ...widths };
+  let used = 0;
+  keys.forEach((key, index) => {
+    if (index === keys.length - 1) {
+      next[key] = available - used;
+      return;
+    }
+    next[key] = widths[key] + Math.floor((widths[key] / sum) * extra);
+    used += next[key];
+  });
+  return next;
+}
+
+function fitColumnsToContent() {
+  const wrap = tableWrap.value;
+  const keys = shownColumns.value.map((col) => col.key);
+  if (!wrap || keys.length === 0 || resizing.value || !isTableLike.value) return;
+
+  const fonts = readTableFonts();
+  const measured = {};
+  for (const key of keys) {
+    measured[key] = columnContentWidth(key, fonts);
+    contentMinWidths[key] = measured[key];
+  }
+
+  const next = distributeExtraWidth(measured, keys, wrap.clientWidth);
+  for (const key of keys) {
+    columnWidths[key] = next[key];
+  }
+  persistWidths();
+}
+
+function scheduleFit() {
+  nextTick(() => {
+    attachWrapObserver();
+    fitColumnsToContent();
+  });
+}
+
+function attachWrapObserver() {
+  wrapObserver?.disconnect();
+  wrapObserver = null;
+  const wrap = tableWrap.value;
+  if (!wrap) return;
+  let lastWrapWidth = wrap.clientWidth;
+  wrapObserver = new ResizeObserver((entries) => {
+    const width = Math.round(entries[0]?.contentRect?.width || 0);
+    if (!width || width === lastWrapWidth || resizing.value) return;
+    lastWrapWidth = width;
+    fitColumnsToContent();
+  });
+  wrapObserver.observe(wrap);
+}
 function toggleCol(key, on) {
   const col = PROJECT_TASK_COLUMNS.find((item) => item.key === key);
   if (!col || col.always) return;
@@ -612,14 +735,17 @@ function startResize(event, key) {
   const index = keys.indexOf(key);
   const neighbor = keys[index + 1] ?? keys[index - 1];
   if (index < 0 || !neighbor || neighbor === key) return;
+  const towardNext = keys.indexOf(neighbor) > index;
   const startX = event.clientX;
   const startA = Number(columnWidths[key]) || MIN_COL_PX;
   const startB = Number(columnWidths[neighbor]) || MIN_COL_PX;
+  const minA = contentMinWidths[key] || MIN_COL_PX;
+  const minB = contentMinWidths[neighbor] || MIN_COL_PX;
   resizing.value = true;
   function onMove(moveEvent) {
-    const delta = moveEvent.clientX - startX;
-    const nextA = Math.max(MIN_COL_PX, startA + delta);
-    const nextB = Math.max(MIN_COL_PX, startA + startB - nextA);
+    const delta = (moveEvent.clientX - startX) * (towardNext ? 1 : -1);
+    const nextA = Math.max(minA, startA + delta);
+    const nextB = Math.max(minB, startA + startB - nextA);
     columnWidths[key] = nextA;
     columnWidths[neighbor] = nextB;
   }
@@ -894,39 +1020,38 @@ async function commitKanbanDrop(taskId, targetKey) {
   }
 }
 
-/** Gán độ rộng mặc định cho cột chưa có width — chạy lại mỗi khi danh sách
- *  cột hiển thị đổi (bật/tắt checkbox cột), không chỉ lúc mount. Thiếu bước
- *  này thì cột mới bật không có width trong <colgroup>, table-layout: fixed
- *  sẽ co giãn sai làm vỡ format khi bật nhiều cột. */
-function ensureColumnWidths() {
-  for (const col of shownColumns.value) {
-    if (!columnWidths[col.key]) {
-      columnWidths[col.key] = col.key === 'title' ? 280 : 140;
-    }
-  }
-}
-
-watch(shownColumns, () => nextTick(ensureColumnWidths));
-
-onMounted(() => {
-  document.addEventListener('mousedown', onDocClick);
-  document.addEventListener('keydown', onKeydown);
-  nextTick(ensureColumnWidths);
+watch(shownColumns, () => scheduleFit());
+watch(isTableLike, (on) => {
+  if (on) scheduleFit();
 });
-
-onBeforeUnmount(() => {
-  clearKanbanDrag();
-  window.clearTimeout(kanbanJustMovedTimer);
-  document.removeEventListener('mousedown', onDocClick);
-  document.removeEventListener('keydown', onKeydown);
+watch([viewMode, query, () => props.filter], () => scheduleFit());
+watch(() => props.tree, () => scheduleFit());
+watch(() => props.loading, (busy) => {
+  if (!busy) scheduleFit();
 });
-
 watch(tableZoom, (value) => {
   try {
     localStorage.setItem(PROJECT_TASK_ZOOM_KEY, String(value));
   } catch {
     // Bỏ qua.
   }
+  scheduleFit();
+});
+
+onMounted(() => {
+  document.addEventListener('mousedown', onDocClick);
+  document.addEventListener('keydown', onKeydown);
+  scheduleFit();
+  document.fonts?.ready?.then(() => scheduleFit());
+});
+
+onBeforeUnmount(() => {
+  wrapObserver?.disconnect();
+  wrapObserver = null;
+  clearKanbanDrag();
+  window.clearTimeout(kanbanJustMovedTimer);
+  document.removeEventListener('mousedown', onDocClick);
+  document.removeEventListener('keydown', onKeydown);
 });
 </script>
 
@@ -1805,7 +1930,7 @@ watch(tableZoom, (value) => {
   position: sticky;
   top: 0;
   z-index: 2;
-  overflow: hidden;
+  overflow: visible;
   padding: var(--space-3) var(--space-4);
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
@@ -1818,8 +1943,7 @@ watch(tableZoom, (value) => {
 
 .ptasks__table thead th > span {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ptasks__th--name {
@@ -1855,13 +1979,13 @@ watch(tableZoom, (value) => {
   color: var(--color-text);
   vertical-align: middle;
   white-space: nowrap;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: inset 0 -1px 0 var(--color-border);
 }
 
 .ptasks__td--name {
   overflow: visible;
-  white-space: normal;
+  white-space: nowrap;
 }
 
 .ptasks__td--avatar {
@@ -1878,8 +2002,10 @@ watch(tableZoom, (value) => {
 
 .ptasks__name-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.25rem;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .ptasks__tree {
@@ -1912,6 +2038,7 @@ watch(tableZoom, (value) => {
   color: inherit;
   font: inherit;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -1921,14 +2048,16 @@ watch(tableZoom, (value) => {
 
 .ptasks__pill {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 0.375rem;
-  max-width: 100%;
+  max-width: none;
   padding: 0.1875rem 0.5625rem;
   background: var(--pill-bg, var(--color-surface-muted));
   color: var(--pill-fg, var(--color-text));
   font-size: calc(0.75rem * var(--table-zoom, 1));
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .ptasks__pill--primary { --pill-bg: var(--color-primary-50); --pill-fg: var(--color-primary-900); }

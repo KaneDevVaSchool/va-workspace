@@ -1389,6 +1389,7 @@ const performers = computed(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  padding-bottom: 0;
 }
 
 .pd__header-btn {
@@ -1448,6 +1449,7 @@ const performers = computed(() => {
 .pd--fill .pd__page {
   flex: 1;
   min-height: 0;
+  gap: 0;
   grid-template-rows: auto minmax(0, 1fr);
 }
 
@@ -1920,6 +1922,8 @@ const performers = computed(() => {
 .pd--fill .pd__layout {
   min-height: 0;
   align-items: stretch;
+  margin-left: calc(var(--space-5) * -1);
+  margin-right: calc(var(--space-5) * -1);
 }
 
 .pd--fill .pd__col {
@@ -1959,6 +1963,8 @@ const performers = computed(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .pd__card--lead {
@@ -2562,7 +2568,16 @@ const performers = computed(() => {
     padding: 0 var(--space-3) var(--space-3);
   }
 
+  .pd--fill {
+    padding-bottom: 0;
+  }
+
   .pd__chrome {
+    margin-left: calc(var(--space-3) * -1);
+    margin-right: calc(var(--space-3) * -1);
+  }
+
+  .pd--fill .pd__layout {
     margin-left: calc(var(--space-3) * -1);
     margin-right: calc(var(--space-3) * -1);
   }

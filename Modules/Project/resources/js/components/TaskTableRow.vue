@@ -129,7 +129,7 @@ const emit = defineEmits(['open', 'context-menu', 'toggle-collapse']);
 
 .ptasks__td--name {
   overflow: visible;
-  white-space: normal;
+  white-space: nowrap;
   text-align: left;
 }
 
@@ -139,8 +139,10 @@ const emit = defineEmits(['open', 'context-menu', 'toggle-collapse']);
 
 .ptasks__name-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.25rem;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .ptasks__tree {
@@ -173,6 +175,7 @@ const emit = defineEmits(['open', 'context-menu', 'toggle-collapse']);
   color: inherit;
   font: inherit;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -182,14 +185,16 @@ const emit = defineEmits(['open', 'context-menu', 'toggle-collapse']);
 
 .ptasks__pill {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 0.375rem;
-  max-width: 100%;
+  max-width: none;
   padding: 0.1875rem 0.5625rem;
   background: var(--pill-bg, var(--color-surface-muted));
   color: var(--pill-fg, var(--color-text));
   font-size: calc(0.75rem * var(--table-zoom, 1));
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .ptasks__pill--primary { --pill-bg: var(--color-primary-50); --pill-fg: var(--color-primary-900); }
