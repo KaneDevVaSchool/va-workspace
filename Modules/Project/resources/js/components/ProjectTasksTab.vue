@@ -97,6 +97,7 @@ const STATUS_DOT_EXTRA = 28;
 const PILL_PAD_EXTRA = 20;
 const TITLE_TREE_EXTRA = 22;
 const TITLE_DEPTH_PX = 20;
+const TITLE_MIN_PX = 420;
 const PROGRESS_EXTRA = 64;
 const KANBAN_DRAG_THRESHOLD = 7;
 
@@ -584,13 +585,15 @@ function columnContentWidth(key, fonts) {
   const label = PROJECT_TASK_COLUMNS.find((col) => col.key === key)?.label ?? '';
   const valueFont = key === 'title' ? fonts.title : fonts.cell;
   let maxW = measureText(label, fonts.header);
-  for (const task of tasksForMeasure()) {
-    if (key === 'title') {
-      const indent = (Number(task.depth) || 0) * TITLE_DEPTH_PX + (task.hasChildren ? TITLE_TREE_EXTRA : 0);
-      maxW = Math.max(maxW, measureText(task.title || '—', fonts.title) + indent);
-    } else if (key === 'assignee' || key === 'creator' || key === 'manager') {
-      // Ô chỉ hiện avatar; bề rộng tối thiểu lấy theo nhãn cột.
-    } else {
+  if (key === 'title') {
+    // Cột tên rộng và cho xuống dòng — không đo full 1 hàng (sẽ kéo bảng vô hạn).
+    maxW = Math.max(maxW, TITLE_MIN_PX);
+  } else {
+    for (const task of tasksForMeasure()) {
+      if (key === 'assignee' || key === 'creator' || key === 'manager') {
+        // Ô chỉ hiện avatar; bề rộng tối thiểu lấy theo nhãn cột.
+        continue;
+      }
       maxW = Math.max(maxW, measureText(cellText(task, key), valueFont));
     }
   }
@@ -601,6 +604,7 @@ function columnContentWidth(key, fonts) {
     extra = PILL_PAD_EXTRA;
   }
   if (key === 'progress_percent') extra = PROGRESS_EXTRA;
+  if (key === 'title') extra = TITLE_TREE_EXTRA + TITLE_DEPTH_PX;
   return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
 }
 
@@ -610,6 +614,10 @@ function distributeExtraWidth(widths, keys, available) {
 
   const extra = available - sum;
   const next = { ...widths };
+  if (keys.includes('title')) {
+    next.title = widths.title + extra;
+    return next;
+  }
   let used = 0;
   keys.forEach((key, index) => {
     if (index === keys.length - 1) {
@@ -1983,9 +1991,12 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 -1px 0 var(--color-border);
 }
 
+.ptasks__table :deep(td.ptasks__td--name),
 .ptasks__td--name {
   overflow: visible;
-  white-space: nowrap;
+  white-space: normal;
+  vertical-align: top;
+  text-align: left;
 }
 
 .ptasks__td--avatar {
@@ -2002,10 +2013,10 @@ onBeforeUnmount(() => {
 
 .ptasks__name-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.25rem;
   min-width: 0;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .ptasks__tree {
@@ -2032,13 +2043,17 @@ onBeforeUnmount(() => {
 }
 
 .ptasks__link {
+  flex: 1;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
+  line-height: 1.35;
   text-align: left;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 

@@ -129,7 +129,8 @@ const emit = defineEmits(['open', 'context-menu', 'toggle-collapse']);
 
 .ptasks__td--name {
   overflow: visible;
-  white-space: nowrap;
+  white-space: normal;
+  vertical-align: top;
   text-align: left;
 }
 
@@ -137,12 +138,18 @@ const emit = defineEmits(['open', 'context-menu', 'toggle-collapse']);
   overflow: visible;
 }
 
+.ptasks__name {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
 .ptasks__name-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.25rem;
   min-width: 0;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .ptasks__tree {
@@ -169,13 +176,17 @@ const emit = defineEmits(['open', 'context-menu', 'toggle-collapse']);
 }
 
 .ptasks__link {
+  flex: 1;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
+  line-height: 1.35;
   text-align: left;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
