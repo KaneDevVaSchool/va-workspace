@@ -8,6 +8,7 @@ use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\Role;
 use Modules\Identity\Database\Seeders\RoleSeeder;
 use Modules\Project\App\Models\Project;
+use Modules\Project\App\Models\Sprint;
 use Modules\Project\App\Models\Task;
 use Tests\TestCase;
 
@@ -235,5 +236,71 @@ class ProjectStructureAndBulkTasksTest extends TestCase
         $this->actingAs($member)->postJson('/api/project/'.$project->id.'/tasks/bulk', [
             'items' => [['title' => 'Không có quyền']],
         ])->assertForbidden();
+    }
+
+    public function test_bulk_create_assigns_sprint_and_rejects_foreign_sprint(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
+        $editor = $this->makeUser(['department_id' => $dept->id]);
+        $project = $this->makeProject($editor);
+        $other = $this->makeProject($editor, ['code' => 'PRJ'.random_int(1000, 999999), 'name' => 'Khác']);
+
+        $phase = $this->makeTask($project, [
+            'type' => 'phase',
+            'title' => 'Phase 1',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-06-30',
+        ]);
+        $sprint = Sprint::query()->create([
+            'project_id' => $project->id,
+            'phase_id' => $phase->id,
+            'name' => 'Sprint 1',
+            'status' => 'planned',
+            'created_by' => $editor->id,
+        ]);
+        $foreignPhase = $this->makeTask($other, [
+            'type' => 'phase',
+            'title' => 'Phase khác',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-06-30',
+        ]);
+        $foreignSprint = Sprint::query()->create([
+            'project_id' => $other->id,
+            'phase_id' => $foreignPhase->id,
+            'name' => 'Sprint khác',
+            'status' => 'planned',
+            'created_by' => $editor->id,
+        ]);
+
+        $ok = $this->actingAs($editor)->postJson('/api/project/'.$project->id.'/tasks/bulk', [
+            'items' => [
+                [
+                    'title' => 'Việc sprint',
+                    'sprint_id' => $sprint->id,
+                    'start_date' => '2026-02-01',
+                    'end_date' => '2026-02-10',
+                ],
+            ],
+        ]);
+        $ok->assertCreated();
+        $ok->assertJsonPath('tasks.0.sprint_id', $sprint->id);
+        $this->assertDatabaseHas('tasks', [
+            'project_id' => $project->id,
+            'title' => 'Việc sprint',
+            'sprint_id' => $sprint->id,
+        ]);
+
+        $bad = $this->actingAs($editor)->postJson('/api/project/'.$project->id.'/tasks/bulk', [
+            'items' => [
+                ['title' => 'Sprint sai dự án', 'sprint_id' => $foreignSprint->id],
+            ],
+        ]);
+        $bad->assertStatus(422);
+        $this->assertDatabaseMissing('tasks', [
+            'project_id' => $project->id,
+            'title' => 'Sprint sai dự án',
+        ]);
     }
 }

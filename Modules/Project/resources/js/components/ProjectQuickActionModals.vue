@@ -25,6 +25,7 @@ const TASK_TITLES = {
   bulk: 'Thêm nhiều công việc thường',
   by_category: 'Thêm công việc theo danh mục',
   by_phase: 'Thêm công việc theo phase',
+  by_sprint: 'Thêm công việc theo sprint',
 };
 
 const KIND_META = {
@@ -80,6 +81,7 @@ const categories = ref([]);
 const phases = ref([]);
 const sprintRows = ref([]);
 const deletedSprintIds = ref([]);
+const sprints = ref([]);
 const baselines = ref([]);
 const itemCounts = ref({ work_items: 0, baseline: 0, task: 0, task_category: 0, phase: 0 });
 const startInput = ref(null);
@@ -112,15 +114,16 @@ const taskForm = reactive({
   assignee_id: '',
   category_id: '',
   phase_id: '',
+  sprint_id: '',
 });
 // Đặt giờ cụ thể (giờ bắt đầu/hạn + thời gian dự kiến) là tuỳ chọn, ẩn mặc
 // định cho gọn — bật 1 checkbox chung để hiện thêm các ô giờ ở form thêm
 // công việc (đơn) và từng dòng trong danh sách nhiều dòng (bulk/theo danh
-// mục/theo phase).
+// mục/theo phase/theo sprint).
 const showHourFields = ref(false);
 const bulkRows = ref([]);
-// by_category/by_phase: mặc định nhiều dòng dùng chung 1 danh mục/phase chọn
-// ở đầu form; bật checkbox này để mỗi dòng tự chọn danh mục/phase riêng.
+// by_category/by_phase/by_sprint: mặc định nhiều dòng dùng chung 1 danh
+// mục/phase/sprint chọn ở đầu form; bật checkbox này để mỗi dòng tự chọn riêng.
 const perRowParent = ref(false);
 const baselineForm = reactive({ title: '' });
 const tabsConfigForm = reactive(
@@ -197,9 +200,10 @@ const plannedRangeInvalid = computed(() => Boolean(datesForm.start_date && dates
 const actualRangeInvalid = computed(() => Boolean(datesForm.actual_start_date && datesForm.actual_end_date && !actualDaysCompact.value));
 const isActualFocus = computed(() => dateFocus.value === 'actual' || dateFocus.value === 'actual_end');
 const taskDurationLabel = computed(() => daysBetween(taskForm.start_date, taskForm.end_date));
-// bulk/by_category/by_phase đều hiện danh sách nhiều dòng công việc — cần
-// panel rộng hơn hẳn (gần full màn hình) để mỗi dòng đủ chỗ cho các cột.
-const isTaskListVariant = computed(() => ['bulk', 'by_category', 'by_phase'].includes(taskVariant.value));
+// bulk/by_category/by_phase/by_sprint đều hiện danh sách nhiều dòng công
+// việc — cần panel rộng hơn hẳn (gần full màn hình) để mỗi dòng đủ chỗ.
+const isTaskListVariant = computed(() => ['bulk', 'by_category', 'by_phase', 'by_sprint'].includes(taskVariant.value));
+const isGroupedTaskVariant = computed(() => ['by_category', 'by_phase', 'by_sprint'].includes(taskVariant.value));
 
 const panelClass = computed(() => {
   if (props.kind === 'task' && isTaskListVariant.value) {
@@ -259,6 +263,7 @@ function emptyBulkRow(overrides = {}) {
     estimated_hours: '',
     assignee_id: '',
     parent_id: '',
+    sprint_id: '',
     description: '',
     ...overrides,
   };
@@ -323,6 +328,10 @@ function formatWhen(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleString('vi-VN');
+}
+
+function sprintOptionLabel(sprint) {
+  return sprint.phase?.title ? `${sprint.phase.title} · ${sprint.name}` : (sprint.name || '');
 }
 
 function close() {
@@ -397,6 +406,7 @@ function resetForms(p) {
   deletedStructureIds.value = [];
   sprintRows.value = [];
   deletedSprintIds.value = [];
+  sprints.value = [];
   taskForm.title = '';
   taskForm.description = '';
   taskForm.start_date = p.start_date || '';
@@ -407,6 +417,7 @@ function resetForms(p) {
   taskForm.assignee_id = '';
   taskForm.category_id = '';
   taskForm.phase_id = '';
+  taskForm.sprint_id = '';
   showHourFields.value = false;
   perRowParent.value = false;
   bulkRows.value = [emptyBulkRow()];
@@ -455,7 +466,7 @@ watch(
       kind === 'phase' ||
       kind === 'sprint' ||
       kind === 'baseline' ||
-      (kind === 'task' && (taskVariant.value === 'by_category' || taskVariant.value === 'by_phase'));
+      (kind === 'task' && (taskVariant.value === 'by_category' || taskVariant.value === 'by_phase' || taskVariant.value === 'by_sprint'));
 
     if (!needLists) return;
 
@@ -496,21 +507,27 @@ watch(
           deletedStructureIds.value = [];
         }
       }
-      if (kind === 'sprint') {
+      if (kind === 'sprint' || (kind === 'task' && taskVariant.value === 'by_sprint')) {
         const { data } = await window.axios.get(`/api/project/${p.id}/sprints`);
         const existing = data.sprints ?? [];
-        sprintRows.value = existing.length
-          ? existing.map((item) => emptySprintRow({
-            id: item.id,
-            phase_id: item.phase_id,
-            name: item.name || '',
-            status: item.status || 'planned',
-            start_date: item.start_date || '',
-            end_date: item.end_date || '',
-            description: item.description || '',
-          }))
-          : [emptySprintRow()];
-        deletedSprintIds.value = [];
+        sprints.value = existing;
+        if (kind === 'sprint') {
+          sprintRows.value = existing.length
+            ? existing.map((item) => emptySprintRow({
+              id: item.id,
+              phase_id: item.phase_id,
+              name: item.name || '',
+              status: item.status || 'planned',
+              start_date: item.start_date || '',
+              end_date: item.end_date || '',
+              description: item.description || '',
+            }))
+            : [emptySprintRow()];
+          deletedSprintIds.value = [];
+        }
+        if (kind === 'task' && props.extra?.sprint_id) {
+          taskForm.sprint_id = props.extra.sprint_id;
+        }
       }
       if (kind === 'baseline') {
         const data = await loadQuick();
@@ -520,6 +537,7 @@ watch(
     } catch {
       categories.value = [];
       phases.value = [];
+      sprints.value = [];
       baselines.value = [];
       if (kind === 'category' || kind === 'phase') {
         structureRows.value = [emptyStructureRow()];
@@ -701,6 +719,10 @@ async function submit() {
       const variant = taskVariant.value;
 
       if (isTaskListVariant.value) {
+        if (variant === 'by_sprint' && !perRowParent.value && !taskForm.sprint_id) {
+          showClientToast('error', 'Chọn sprint.');
+          return;
+        }
         if ((variant === 'by_category' || variant === 'by_phase') && !perRowParent.value && !taskForm[variant === 'by_category' ? 'category_id' : 'phase_id']) {
           showClientToast('error', variant === 'by_category' ? 'Chọn danh mục công việc.' : 'Chọn phase.');
           return;
@@ -716,17 +738,23 @@ async function submit() {
             showClientToast('error', rowErr);
             return;
           }
-          if (variant !== 'bulk' && perRowParent.value && !row.parent_id) {
+          if (variant === 'by_sprint' && perRowParent.value && !row.sprint_id) {
+            showClientToast('error', 'Chọn sprint cho từng dòng.');
+            return;
+          }
+          if (variant !== 'bulk' && variant !== 'by_sprint' && perRowParent.value && !row.parent_id) {
             showClientToast('error', variant === 'by_category' ? 'Chọn danh mục cho từng dòng.' : 'Chọn phase cho từng dòng.');
             return;
           }
         }
         const sharedParentId = variant === 'by_category' ? taskForm.category_id : variant === 'by_phase' ? taskForm.phase_id : null;
+        const sharedSprintId = variant === 'by_sprint' ? taskForm.sprint_id : null;
         await window.axios.post(`/api/project/${props.project.id}/tasks/bulk`, {
           items: rows.map((row) => ({
             title: row.title.trim(),
             description: row.description?.trim() || null,
-            parent_id: variant === 'bulk' ? null : (perRowParent.value ? row.parent_id : sharedParentId) || null,
+            parent_id: variant === 'bulk' || variant === 'by_sprint' ? null : (perRowParent.value ? row.parent_id : sharedParentId) || null,
+            sprint_id: variant === 'by_sprint' ? (perRowParent.value ? row.sprint_id : sharedSprintId) || null : null,
             start_date: row.start_date || null,
             end_date: row.end_date || null,
             start_time: showHourFields.value ? row.start_time || null : null,
@@ -937,14 +965,25 @@ watch(
           </div>
 
           <div v-else-if="kind === 'task' && isTaskListVariant" class="proj-qa__task-list">
+            <p v-if="taskVariant === 'by_sprint' && listsLoading" class="proj-qa__muted">Đang tải…</p>
+            <p v-else-if="taskVariant === 'by_sprint' && !sprints.length" class="proj-qa__muted">
+              Dự án chưa có sprint nào — tạo sprint trước khi thêm công việc theo sprint.
+            </p>
+            <template v-else>
             <div class="proj-qa__task-list-toolbar">
               <label class="proj-qa__check">
                 <input v-model="showHourFields" type="checkbox">
                 <span>Đặt giờ cụ thể (giờ bắt đầu/hạn, thời gian dự kiến)</span>
               </label>
-              <label v-if="taskVariant === 'by_category' || taskVariant === 'by_phase'" class="proj-qa__check">
+              <label v-if="isGroupedTaskVariant" class="proj-qa__check">
                 <input v-model="perRowParent" type="checkbox">
-                <span>{{ taskVariant === 'by_category' ? 'Mỗi công việc thuộc danh mục khác nhau' : 'Mỗi công việc thuộc phase khác nhau' }}</span>
+                <span>{{
+                  taskVariant === 'by_category'
+                    ? 'Mỗi công việc thuộc danh mục khác nhau'
+                    : taskVariant === 'by_phase'
+                      ? 'Mỗi công việc thuộc phase khác nhau'
+                      : 'Mỗi công việc thuộc sprint khác nhau'
+                }}</span>
               </label>
             </div>
 
@@ -960,6 +999,13 @@ watch(
               <select v-model="taskForm.phase_id" class="proj-qa__input" required>
                 <option value="">Chọn phase</option>
                 <option v-for="item in phases" :key="item.id" :value="item.id">{{ item.title }}</option>
+              </select>
+            </label>
+            <label v-if="taskVariant === 'by_sprint' && !perRowParent" class="proj-qa__field proj-qa__field--parent">
+              <span class="proj-qa__label">Sprint áp dụng cho tất cả công việc bên dưới</span>
+              <select v-model="taskForm.sprint_id" class="proj-qa__input" required>
+                <option value="">Chọn sprint</option>
+                <option v-for="item in sprints" :key="item.id" :value="item.id">{{ sprintOptionLabel(item) }}</option>
               </select>
             </label>
 
@@ -990,6 +1036,13 @@ watch(
                     <select v-model="row.parent_id" class="proj-qa__input">
                       <option value="">Chọn phase</option>
                       <option v-for="item in phases" :key="item.id" :value="item.id">{{ item.title }}</option>
+                    </select>
+                  </label>
+                  <label v-if="taskVariant === 'by_sprint' && perRowParent" class="proj-qa__field">
+                    <span class="proj-qa__label">Sprint</span>
+                    <select v-model="row.sprint_id" class="proj-qa__input">
+                      <option value="">Chọn sprint</option>
+                      <option v-for="item in sprints" :key="item.id" :value="item.id">{{ sprintOptionLabel(item) }}</option>
                     </select>
                   </label>
                   <div class="proj-qa__field">
@@ -1042,6 +1095,7 @@ watch(
               <AppIcon name="plus" :size="14" />
               Thêm dòng công việc
             </button>
+            </template>
           </div>
 
           <div v-else-if="kind === 'task'" class="proj-qa__grid">
@@ -1357,7 +1411,12 @@ watch(
           <button type="button" class="proj-qa__btn proj-qa__btn--ghost" :disabled="saving" @click="close">
             Huỷ bỏ
           </button>
-          <button type="button" class="proj-qa__btn proj-qa__btn--primary" :disabled="saving" @click="submit">
+          <button
+            type="button"
+            class="proj-qa__btn proj-qa__btn--primary"
+            :disabled="saving || (kind === 'task' && taskVariant === 'by_sprint' && !sprints.length)"
+            @click="submit"
+          >
             {{ saving ? 'Đang lưu…' : primaryLabel }}
           </button>
         </div>
@@ -2165,9 +2224,10 @@ watch(
   background: var(--color-secondary-surface);
 }
 
-/* Danh sách nhiều dòng công việc (bulk / theo danh mục / theo phase) —
-   panel --xxl gần full màn hình, toolbar cố định trên đầu, phần dòng cuộn
-   riêng (hide-scrollbar) để nút "Thêm dòng" luôn thấy được ở cuối. */
+/* Danh sách nhiều dòng công việc (bulk / theo danh mục / theo phase /
+   theo sprint) — panel --xxl gần full màn hình, toolbar cố định trên
+   đầu, phần dòng cuộn riêng (hide-scrollbar) để nút "Thêm dòng" luôn
+   thấy được ở cuối. */
 .proj-qa__task-list {
   display: flex;
   flex: 1;
@@ -2201,7 +2261,7 @@ watch(
    Tên công việc (chiếm phần lớn chiều rộng) + nút xoá; hàng dưới
    (.proj-qa__task-row__extra) chứa các field phụ (danh mục/phase, người
    thực hiện, ngày giờ, mô tả) chia đều bằng auto-fit — không bị bóp méo
-   khi số field phụ đổi theo biến thể (bulk/by_category/by_phase, có/không
+   khi số field phụ đổi theo biến thể (bulk/by_category/by_phase/by_sprint, có/không
    giờ cụ thể). */
 .proj-qa__task-row {
   position: relative;

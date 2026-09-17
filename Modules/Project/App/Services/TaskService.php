@@ -15,6 +15,7 @@ use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\Task;
 use Modules\Project\App\Models\TaskScore;
 use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
+use Modules\Project\App\Repositories\Contracts\SprintRepositoryInterface;
 use Modules\Project\App\Repositories\Contracts\TaskRepositoryInterface;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -36,6 +37,7 @@ class TaskService
         private readonly TaskExcelExporter $exporter,
         private readonly TaskExcelImporter $importer,
         private readonly NotificationService $notifications,
+        private readonly SprintRepositoryInterface $sprints,
     ) {}
 
     /** @param  array<string, mixed>  $filters */
@@ -431,6 +433,20 @@ class TaskService
         }
     }
 
+    private function validateSprintBelongsToProject(?int $projectId, int $sprintId): ?string
+    {
+        if ($projectId === null) {
+            return 'Sprint chỉ dùng cho công việc thuộc dự án.';
+        }
+
+        $sprint = $this->sprints->find($sprintId);
+        if ($sprint === null || $sprint->project_id !== $projectId) {
+            return 'Sprint không thuộc dự án này.';
+        }
+
+        return null;
+    }
+
     /** Khi dự án bật ràng buộc ngày — task/phase phải nằm trong khoảng dự án. */
     private function validateAgainstProjectDates(Project $project, array $data): ?string
     {
@@ -514,6 +530,13 @@ class TaskService
             $dateError = $this->validateChildDateRange($parent, $data);
             if ($dateError !== null) {
                 return ['error' => $dateError];
+            }
+        }
+
+        if (array_key_exists('sprint_id', $data) && $data['sprint_id'] !== null && $data['sprint_id'] !== '') {
+            $sprintError = $this->validateSprintBelongsToProject($project?->id, (int) $data['sprint_id']);
+            if ($sprintError !== null) {
+                return ['error' => $sprintError];
             }
         }
 
@@ -616,6 +639,13 @@ class TaskService
             ]);
             if ($dateError !== null) {
                 return ['error' => $dateError];
+            }
+        }
+
+        if (array_key_exists('sprint_id', $data) && $data['sprint_id'] !== null && $data['sprint_id'] !== '') {
+            $sprintError = $this->validateSprintBelongsToProject($task->project_id, (int) $data['sprint_id']);
+            if ($sprintError !== null) {
+                return ['error' => $sprintError];
             }
         }
 

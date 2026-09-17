@@ -63,7 +63,7 @@ const props = defineProps({
   canEdit: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['tasks-changed']);
+const emit = defineEmits(['tasks-changed', 'add-tasks']);
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -1290,6 +1290,7 @@ watch(tableZoom, (value) => {
       :filter-label="filterLabel"
       :query="query"
       :can-edit="canEdit"
+      @add-tasks="emit('add-tasks', $event)"
     />
 
     <ProjectPlanTab

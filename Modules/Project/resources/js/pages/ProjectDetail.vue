@@ -49,6 +49,7 @@ const TASK_ADD_VARIANTS = [
   { key: 'bulk', label: 'Thêm nhiều công việc thường', icon: 'layoutList' },
   { key: 'by_category', label: 'Thêm công việc theo danh mục', icon: 'listChecks' },
   { key: 'by_phase', label: 'Thêm công việc theo phase', icon: 'flag' },
+  { key: 'by_sprint', label: 'Thêm công việc theo sprint', icon: 'layoutGrid' },
 ];
 
 const RULE_DEFS = [
@@ -1230,6 +1231,7 @@ const performers = computed(() => {
                 :filter-label="activeStatCard.label"
                 :can-edit="canCreateTask"
                 @tasks-changed="onTasksChanged"
+                @add-tasks="openAction('task', { variant: 'by_sprint', sprint_id: $event.sprintId })"
               />
             </section>
           </template>

@@ -2,9 +2,11 @@
 
 namespace Modules\Project\App\Http\Requests;
 
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Modules\Project\App\Enums\TaskEnums;
+use Modules\Project\App\Models\Sprint;
 
 /**
  * Tạo nhiều công việc trong 1 transaction — mỗi dòng có field riêng
@@ -24,6 +26,7 @@ class StoreBulkTasksRequest extends FormRequest
             'items.*.title' => ['required', 'string', 'max:255'],
             'items.*.description' => ['nullable', 'string', 'max:5000'],
             'items.*.parent_id' => ['nullable', 'integer', 'exists:tasks,id'],
+            'items.*.sprint_id' => ['nullable', 'integer', $this->sprintRule()],
             // project_id: chỉ dùng khi tạo từ trang "Tất cả công việc" (không có
             // {project} cố định trên route) — mỗi dòng tự chọn dự án, để trống =
             // việc thường xuyên. Route /{project}/tasks/bulk bỏ qua field này.
@@ -65,11 +68,37 @@ class StoreBulkTasksRequest extends FormRequest
             'items.*.title.required' => 'Tên công việc không được để trống.',
             'items.*.title.max' => 'Tên công việc không được vượt quá 255 ký tự.',
             'items.*.parent_id.exists' => 'Công việc cha không tồn tại.',
+            'items.*.sprint_id.integer' => 'Sprint không hợp lệ.',
             'items.*.project_id.exists' => 'Dự án không tồn tại.',
             'items.*.assignee_id.exists' => 'Người thực hiện không tồn tại.',
             'items.*.start_time.date_format' => 'Giờ bắt đầu không hợp lệ (định dạng HH:MM).',
             'items.*.due_time.date_format' => 'Giờ hạn không hợp lệ (định dạng HH:MM).',
             'items.*.estimated_hours.min' => 'Thời gian dự kiến không được âm.',
         ];
+    }
+
+    private function sprintRule(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) {
+            if ($value === null || $value === '') {
+                return;
+            }
+
+            $index = explode('.', $attribute)[1] ?? null;
+            $routeProject = $this->route('project');
+            $projectId = $routeProject !== null
+                ? (int) (is_object($routeProject) ? $routeProject->id : $routeProject)
+                : (int) ($this->input("items.{$index}.project_id") ?: 0);
+
+            if ($projectId <= 0) {
+                $fail('Sprint chỉ dùng cho công việc thuộc dự án.');
+
+                return;
+            }
+
+            if (! Sprint::query()->where('id', $value)->where('project_id', $projectId)->exists()) {
+                $fail('Sprint không thuộc dự án này.');
+            }
+        };
     }
 }

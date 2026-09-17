@@ -38,6 +38,7 @@ const props = defineProps({
   canEdit: { type: Boolean, default: false },
 });
 
+const emit = defineEmits(['add-tasks']);
 const router = useRouter();
 const sprints = ref([]);
 const sprintsLoading = ref(false);
@@ -166,10 +167,31 @@ async function changeTaskStatus(task, status) {
           </span>
           <span class="psb__progress-value">{{ col.avgProgress }}%</span>
         </span>
+
+        <button
+          v-if="canEdit && col.id"
+          type="button"
+          class="psb__add"
+          @click.stop="emit('add-tasks', { sprintId: col.id })"
+        >
+          <AppIcon name="plus" :size="14" />
+          Thêm việc
+        </button>
       </header>
 
       <div v-show="!isCollapsed(col.id ?? 'no-sprint')" class="psb__body">
-        <p v-if="!col.tasks.length" class="psb__col-empty">Không có công việc nào.</p>
+        <p v-if="!col.tasks.length" class="psb__col-empty">
+          Không có công việc nào.
+          <button
+            v-if="canEdit && col.id"
+            type="button"
+            class="psb__add psb__add--inline"
+            @click="emit('add-tasks', { sprintId: col.id })"
+          >
+            <AppIcon name="plus" :size="14" />
+            Thêm việc
+          </button>
+        </p>
         <div v-else class="psb__table-wrap hide-scrollbar">
           <table class="psb__table">
             <thead>
@@ -402,6 +424,31 @@ async function changeTaskStatus(task, status) {
   color: var(--color-text-muted);
 }
 
+.psb__add {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3125rem 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.psb__add:hover {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.psb__add--inline {
+  margin-left: 0.5rem;
+}
+
 .psb__body {
   flex-shrink: 0;
   box-shadow: 0 1px 0 var(--color-border);
@@ -410,6 +457,11 @@ async function changeTaskStatus(task, status) {
 .psb__col-empty {
   margin: 0;
   padding: 0.875rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   text-align: center;
   font-size: 0.8125rem;
   color: var(--color-text-muted);
