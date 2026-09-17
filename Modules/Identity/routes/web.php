@@ -29,7 +29,11 @@ Route::middleware('throttle:20,1')->group(function () {
 // Named `login` — Laravel auth middleware / Exception Handler gọi route('login')
 // khi guest hit route có `auth`. Trang thật là Vue SPA (cùng view `app`).
 Route::get('/login', function () {
-    return view('app');
+    return response()
+        ->view('app')
+        ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        ->header('Pragma', 'no-cache')
+        ->header('Expires', '0');
 })->name('login');
 
 // Plaintext CSRF — luôn chạy middleware web (cùng session với POST /logout).

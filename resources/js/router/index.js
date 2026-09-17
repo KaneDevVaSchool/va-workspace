@@ -47,6 +47,44 @@ const router = createRouter({
     routes,
 });
 
+const STALE_CHUNK_RELOAD_KEY = 'va-stale-chunk-reload';
+
+function isStaleChunkError(error) {
+    const message = String(error?.message || error || '');
+    return (
+        error?.name === 'ChunkLoadError'
+        || /Failed to fetch dynamically imported module/i.test(message)
+        || /Importing a module script failed/i.test(message)
+        || /Loading chunk [\w-]+ failed/i.test(message)
+        || /Expected a JavaScript-or-Wasm module script/i.test(message)
+    );
+}
+
+// Vite đổi hash file mỗi lần build. Tab đang mở vẫn import chunk cũ →
+// Laravel fallback trả HTML → MIME text/html. Tải lại full page một lần.
+router.onError((error, to) => {
+    if (typeof window === 'undefined' || !isStaleChunkError(error)) return;
+    const target = to?.fullPath || `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    try {
+        if (sessionStorage.getItem(STALE_CHUNK_RELOAD_KEY) === target) return;
+        sessionStorage.setItem(STALE_CHUNK_RELOAD_KEY, target);
+    } catch {
+        window.location.reload();
+        return;
+    }
+    window.location.assign(target);
+});
+
+router.afterEach((to) => {
+    try {
+        if (sessionStorage.getItem(STALE_CHUNK_RELOAD_KEY) === to.fullPath) {
+            sessionStorage.removeItem(STALE_CHUNK_RELOAD_KEY);
+        }
+    } catch {
+        // sessionStorage có thể bị chặn
+    }
+});
+
 // Guard đăng nhập: route có meta.requiresAuth cần auth.isAuthenticated,
 // ngược lại route meta.guestOnly (vd. /login) tự chuyển vào app nếu đã
 // đăng nhập. Store lazy-import để tránh phụ thuộc vòng lúc khởi tạo Pinia.

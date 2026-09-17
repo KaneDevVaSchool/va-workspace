@@ -16,9 +16,13 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', function () {
-    return view('app');
-});
+$spaView = static fn () => response()
+    ->view('app')
+    ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+    ->header('Pragma', 'no-cache')
+    ->header('Expires', '0');
+
+Route::get('/', $spaView);
 
 Route::get('/pdfjs-worker.mjs', function () {
     $path = public_path('vendor/pdfjs/pdf.worker.min.mjs');
@@ -64,6 +68,4 @@ Route::get('/manifest.json', function () {
 | Đặt cuối cùng để không nuốt route thật (VD callback GET /auth/google
 | đăng ký ở Modules/Identity/routes/web.php vẫn được match trước).
 */
-Route::fallback(function () {
-    return view('app');
-});
+Route::fallback($spaView);
