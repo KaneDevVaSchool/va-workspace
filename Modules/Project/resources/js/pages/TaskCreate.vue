@@ -38,7 +38,7 @@ const formErrors = ref({});
 
 const form = reactive({
   project_id: route.query.project_id ? String(route.query.project_id) : '',
-  parent_id: '',
+  parent_id: route.query.parent_id ? String(route.query.parent_id) : '',
   title: '',
   description: '',
   start_date: toYmd(new Date()),

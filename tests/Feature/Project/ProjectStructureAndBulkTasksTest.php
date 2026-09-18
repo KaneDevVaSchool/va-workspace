@@ -400,6 +400,7 @@ class ProjectStructureAndBulkTasksTest extends TestCase
             'status' => 'completed',
             'priority' => 'important',
             'weight' => 35,
+            'assignee_id' => $editor->id,
         ]);
 
         $response = $this->actingAs($editor)->getJson('/api/project/tasks/'.$parent->id);
@@ -408,6 +409,62 @@ class ProjectStructureAndBulkTasksTest extends TestCase
         $response->assertJsonPath('task.children.0.title', 'Việc nhỏ');
         $response->assertJsonPath('task.children.0.status', 'completed');
         $response->assertJsonPath('task.children.0.priority', 'important');
+        $response->assertJsonPath('task.children.0.assignee_id', $editor->id);
         $this->assertEquals(35.0, (float) $response->json('task.children.0.weight'));
+    }
+
+    public function test_show_child_includes_parent_status_and_priority(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
+        $editor = $this->makeUser(['department_id' => $dept->id]);
+        $project = $this->makeProject($editor);
+        $parent = $this->makeTask($project, [
+            'title' => 'Việc cha',
+            'status' => 'in_progress',
+            'priority' => 'strategic',
+        ]);
+        $child = $this->makeTask($project, [
+            'title' => 'Việc con',
+            'parent_id' => $parent->id,
+            'priority' => 'important',
+        ]);
+
+        $response = $this->actingAs($editor)->getJson('/api/project/tasks/'.$child->id);
+
+        $response->assertOk();
+        $response->assertJsonPath('task.parent.id', $parent->id);
+        $response->assertJsonPath('task.parent.title', 'Việc cha');
+        $response->assertJsonPath('task.parent.status', 'in_progress');
+        $response->assertJsonPath('task.parent.priority', 'strategic');
+        $response->assertJsonPath('task.parent.priority_label', 'Chiến lược / Sống còn');
+    }
+
+    public function test_update_child_priority(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
+        $editor = $this->makeUser(['department_id' => $dept->id]);
+        $project = $this->makeProject($editor);
+        $parent = $this->makeTask($project, ['title' => 'Việc cha']);
+        $child = $this->makeTask($project, [
+            'title' => 'Việc con',
+            'parent_id' => $parent->id,
+            'priority' => 'support',
+        ]);
+
+        $response = $this->actingAs($editor)->putJson('/api/project/tasks/'.$child->id, [
+            'priority' => 'high_priority',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('task.priority', 'high_priority');
+        $this->assertDatabaseHas('tasks', [
+            'id' => $child->id,
+            'parent_id' => $parent->id,
+            'priority' => 'high_priority',
+        ]);
     }
 }

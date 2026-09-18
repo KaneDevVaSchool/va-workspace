@@ -432,6 +432,73 @@ function goEdit() {
   router.push({ name: 'manager.project.tasks.edit', params: { id: task.value.id } });
 }
 
+const FALLBACK_DIFFICULTY = [
+  { value: 'support', label: 'Phụ trợ' },
+  { value: 'assist', label: 'Hỗ trợ' },
+  { value: 'important', label: 'Quan trọng' },
+  { value: 'high_priority', label: 'Ưu tiên cao' },
+  { value: 'strategic', label: 'Chiến lược / Sống còn' },
+];
+const childDifficultySaving = ref({});
+const difficultyChoices = computed(() => (
+  importanceOptions.value.length ? importanceOptions.value : FALLBACK_DIFFICULTY
+));
+
+function relatedTitle(item) {
+  if (!item) return '--';
+  return item.code ? `${item.code} - ${item.title}` : (item.title || '--');
+}
+
+function childDifficultyLocked(child) {
+  return lockDifficulty.value
+    && Boolean(child.assignee_id || child.assignee?.id)
+    && Boolean(child.priority);
+}
+
+function childDifficultyChoices(child) {
+  const rows = difficultyChoices.value.map((opt) => ({ value: opt.value, label: opt.label }));
+  if (child.priority && !rows.some((opt) => opt.value === child.priority)) {
+    rows.unshift({
+      value: child.priority,
+      label: child.priority_label || priorityLabel(child.priority) || child.priority,
+    });
+  }
+  return rows;
+}
+
+function goCreateChild() {
+  if (!task.value) return;
+  const query = { parent_id: String(task.value.id) };
+  if (task.value.project_id) query.project_id = String(task.value.project_id);
+  router.push({ name: 'manager.project.tasks.create', query });
+}
+
+async function changeChildDifficulty(child, value) {
+  if (!task.value || !canEdit.value || childDifficultySaving.value[child.id]) return;
+  if (!value || value === child.priority) return;
+  childDifficultySaving.value = { ...childDifficultySaving.value, [child.id]: true };
+  try {
+    const { data } = await window.axios.put(`/api/project/tasks/${child.id}`, { priority: value });
+    const nextPriority = data.task?.priority ?? value;
+    const nextLabel = data.task?.priority_label || priorityLabel(nextPriority);
+    applyTask({
+      ...task.value,
+      children: (task.value.children || []).map((item) => (
+        item.id === child.id
+          ? { ...item, priority: nextPriority, priority_label: nextLabel }
+          : item
+      )),
+    });
+    showClientToast('success', `Đã gán độ khó ${nextLabel} cho công việc con.`);
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không gán được độ khó cho công việc con.');
+  } finally {
+    const next = { ...childDifficultySaving.value };
+    delete next[child.id];
+    childDifficultySaving.value = next;
+  }
+}
+
 async function changeStatus(nextStatus) {
   if (!task.value || !canEdit.value || statusSaving.value) return;
   statusMenuOpen.value = false;
@@ -1091,8 +1158,12 @@ onBeforeUnmount(() => {
           <UserAvatarTip :user="task.assignee" label="Người thực hiện" />
           {{ task.assignee.name }}
         </span>
+        <span v-if="task.parent" class="task-detail__summary-item">
+          <AppIcon name="gitBranch" :size="14" />
+          Việc cha: {{ task.parent.title }}
+        </span>
         <span v-if="task.children?.length" class="task-detail__summary-item">
-          {{ task.children.length }} việc nhỏ
+          {{ task.children.length }} công việc con
         </span>
       </div>
 
@@ -1218,7 +1289,7 @@ onBeforeUnmount(() => {
                 <dd class="task-detail__value">{{ task.department?.name || '--' }}</dd>
               </div>
               <div class="task-detail__kv-cell">
-                <dt class="task-detail__label">Ưu tiên</dt>
+                <dt class="task-detail__label">Độ khó</dt>
                 <dd class="task-detail__value">
                   <span class="task-detail__priority">
                     <AppIcon name="flag" :size="14" :class="`task-detail__flag--${priorityTone(task.priority)}`" />
@@ -1227,51 +1298,110 @@ onBeforeUnmount(() => {
                 </dd>
               </div>
             </div>
-            <div v-if="task.parent" class="task-detail__kv-row task-detail__kv-row--span">
-              <dt class="task-detail__label">Công việc cha</dt>
-              <dd class="task-detail__value">
-                <router-link
-                  class="task-detail__link"
-                  :to="{ name: 'manager.project.tasks.detail', params: { id: task.parent.id } }"
-                >
-                  {{ task.parent.code ? `${task.parent.code} - ${task.parent.title}` : task.parent.title }}
-                </router-link>
-              </dd>
-            </div>
             <div class="task-detail__kv-row task-detail__kv-row--span">
               <dt class="task-detail__label">Mô tả</dt>
               <dd class="task-detail__value">{{ task.description || '--' }}</dd>
             </div>
-            <div v-if="task.children?.length" class="task-detail__kv-row task-detail__kv-row--span">
-              <dt class="task-detail__label">Công việc nhỏ</dt>
+            <div class="task-detail__kv-row task-detail__kv-row--stack">
+              <dt class="task-detail__label">Công việc cha</dt>
               <dd class="task-detail__value">
-                <ul class="task-detail__children">
-                  <li v-for="child in task.children" :key="child.id" class="task-detail__child">
-                    <router-link
-                      class="task-detail__link task-detail__child-title"
-                      :to="{ name: 'manager.project.tasks.detail', params: { id: child.id } }"
+                <article v-if="task.parent" class="task-detail__related-card">
+                  <router-link
+                    class="task-detail__related-title"
+                    :to="{ name: 'manager.project.tasks.detail', params: { id: task.parent.id } }"
+                  >
+                    {{ relatedTitle(task.parent) }}
+                  </router-link>
+                  <span class="task-detail__related-meta">
+                    <span
+                      class="task-detail__chip"
+                      :class="`task-detail__chip--${TASK_STATUS_TONES[task.parent.status] || 'tertiary'}`"
                     >
-                      <span v-if="child.code" class="task-detail__child-code">{{ child.code }}</span>
-                      {{ child.title }}
-                    </router-link>
-                    <span class="task-detail__child-meta">
-                      <span
-                        class="task-detail__chip"
-                        :class="`task-detail__chip--${TASK_STATUS_TONES[child.status] || 'tertiary'}`"
-                      >
-                        {{ statusLabel(child.status) }}
-                      </span>
-                      <span class="task-detail__child-stat">
-                        {{ child.priority_label || priorityLabel(child.priority) || 'Chưa phân loại' }}
-                      </span>
-                      <span class="task-detail__child-stat">Tỷ trọng {{ formatWeight(child.weight) }}</span>
-                      <span v-if="child.progress_percent != null" class="task-detail__child-stat">
-                        {{ child.progress_percent }}%
-                      </span>
-                      <span v-if="child.assignee" class="task-detail__child-stat">{{ child.assignee.name }}</span>
+                      {{ statusLabel(task.parent.status) }}
                     </span>
-                  </li>
-                </ul>
+                    <span class="task-detail__priority">
+                      <AppIcon name="flag" :size="14" :class="`task-detail__flag--${priorityTone(task.parent.priority)}`" />
+                      {{ task.parent.priority_label || priorityLabel(task.parent.priority) }}
+                    </span>
+                    <span v-if="task.parent.assignee" class="task-detail__child-stat">{{ task.parent.assignee.name }}</span>
+                  </span>
+                </article>
+                <p v-else class="task-detail__related-empty">Không có — đây là việc gốc.</p>
+              </dd>
+            </div>
+            <div class="task-detail__kv-row task-detail__kv-row--stack">
+              <dt class="task-detail__label">Công việc con</dt>
+              <dd class="task-detail__value">
+                <div class="task-detail__related">
+                  <div v-if="canEdit" class="task-detail__related-toolbar">
+                    <button type="button" class="task-detail__related-add" @click="goCreateChild">
+                      <AppIcon name="plus" :size="14" :stroke-width="1.75" />
+                      Thêm công việc con
+                    </button>
+                  </div>
+                  <div v-if="task.children?.length" class="task-detail__child-table" role="table">
+                    <div class="task-detail__child-head" role="row">
+                      <span role="columnheader">Tên công việc</span>
+                      <span role="columnheader">Trạng thái</span>
+                      <span role="columnheader">Độ khó</span>
+                      <span role="columnheader">Người làm</span>
+                      <span role="columnheader">Tiến độ</span>
+                    </div>
+                    <div
+                      v-for="child in task.children"
+                      :key="child.id"
+                      class="task-detail__child-row"
+                      role="row"
+                    >
+                      <router-link
+                        class="task-detail__link task-detail__child-title"
+                        role="cell"
+                        :to="{ name: 'manager.project.tasks.detail', params: { id: child.id } }"
+                      >
+                        <span v-if="child.code" class="task-detail__child-code">{{ child.code }}</span>
+                        {{ child.title }}
+                      </router-link>
+                      <span class="task-detail__child-cell" role="cell">
+                        <span
+                          class="task-detail__chip"
+                          :class="`task-detail__chip--${TASK_STATUS_TONES[child.status] || 'tertiary'}`"
+                        >
+                          {{ statusLabel(child.status) }}
+                        </span>
+                      </span>
+                      <span class="task-detail__child-cell" role="cell">
+                        <select
+                          v-if="canEdit && !childDifficultyLocked(child)"
+                          class="task-detail__child-select"
+                          :value="child.priority || ''"
+                          :disabled="Boolean(childDifficultySaving[child.id])"
+                          :aria-label="`Độ khó của ${child.title}`"
+                          @change="changeChildDifficulty(child, $event.target.value)"
+                        >
+                          <option value="">Chưa chọn</option>
+                          <option
+                            v-for="opt in childDifficultyChoices(child)"
+                            :key="opt.value"
+                            :value="opt.value"
+                          >
+                            {{ opt.label }}
+                          </option>
+                        </select>
+                        <span v-else class="task-detail__priority">
+                          <AppIcon name="flag" :size="14" :class="`task-detail__flag--${priorityTone(child.priority)}`" />
+                          {{ child.priority_label || priorityLabel(child.priority) || 'Chưa chọn' }}
+                        </span>
+                      </span>
+                      <span class="task-detail__child-cell task-detail__child-stat" role="cell">
+                        {{ child.assignee?.name || '--' }}
+                      </span>
+                      <span class="task-detail__child-cell task-detail__child-stat" role="cell">
+                        {{ child.progress_percent != null ? `${child.progress_percent}%` : '--' }}
+                      </span>
+                    </div>
+                  </div>
+                  <p v-else class="task-detail__related-empty">Chưa có công việc con.</p>
+                </div>
               </dd>
             </div>
           </template>
@@ -2778,7 +2908,10 @@ onBeforeUnmount(() => {
 }
 
 .task-detail__value:has(.task-detail__eval-progress),
-.task-detail__value:has(.task-detail__rules) {
+.task-detail__value:has(.task-detail__rules),
+.task-detail__value:has(.task-detail__related),
+.task-detail__value:has(.task-detail__related-card),
+.task-detail__value:has(.task-detail__related-empty) {
   flex-direction: column;
   align-items: stretch;
 }
@@ -2838,34 +2971,127 @@ onBeforeUnmount(() => {
   color: var(--color-tertiary);
 }
 
-.task-detail__children {
+.task-detail__related {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: var(--space-3);
   width: 100%;
 }
 
-.task-detail__child {
+.task-detail__related-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.task-detail__related-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.task-detail__related-add:hover,
+.task-detail__related-add:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.task-detail__related-card {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem 1rem;
-  padding: 0.5rem 0;
+  width: 100%;
+  padding: 0.75rem 0.875rem;
+  padding-left: calc(var(--space-2) + 3px + 0.875rem);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.task-detail__related-card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-tertiary);
+}
+
+.task-detail__related-title {
+  min-width: 0;
+  flex: 1 1 12rem;
+  color: var(--color-tertiary-600);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.task-detail__related-title:hover {
+  text-decoration: underline;
+}
+
+.task-detail__related-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.task-detail__related-empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.task-detail__child-table {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.task-detail__child-head,
+.task-detail__child-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 2fr) 8.5rem minmax(9rem, 1fr) minmax(7rem, 1fr) 4.5rem;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  min-width: 0;
+  padding: 0.625rem 0.75rem;
+}
+
+.task-detail__child-head {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.task-detail__child-row {
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.task-detail__child:last-child {
+.task-detail__child-row:last-child {
   box-shadow: none;
-  padding-bottom: 0;
 }
 
 .task-detail__child-title {
   min-width: 0;
-  flex: 1 1 12rem;
 }
 
 .task-detail__child-code {
@@ -2874,11 +3100,27 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
 }
 
-.task-detail__child-meta {
-  display: inline-flex;
-  flex-wrap: wrap;
+.task-detail__child-cell {
+  display: flex;
+  min-width: 0;
   align-items: center;
-  gap: 0.5rem 0.75rem;
+}
+
+.task-detail__child-select {
+  width: 100%;
+  max-width: 12rem;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.8125rem;
+}
+
+.task-detail__child-select:disabled {
+  opacity: 0.7;
 }
 
 .task-detail__child-stat {
@@ -3592,6 +3834,16 @@ onBeforeUnmount(() => {
 @media (max-width: 720px) {
   .task-detail__kv--cols .task-detail__kv-row:not(.task-detail__kv-row--span) {
     grid-template-columns: 1fr;
+  }
+
+  .task-detail__child-head {
+    display: none;
+  }
+
+  .task-detail__child-head,
+  .task-detail__child-row {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
   }
 
   .task-detail__kv-cell + .task-detail__kv-cell {

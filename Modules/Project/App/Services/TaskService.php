@@ -1101,7 +1101,7 @@ class TaskService
             'department' => $this->presentDept($this->resolveTaskDepartment($task)),
             'parent_id' => $task->parent_id,
             'parent' => $task->relationLoaded('parent') && $task->parent !== null
-                ? ['id' => $task->parent->id, 'code' => $task->parent->code, 'title' => $task->parent->title]
+                ? $this->presentLinkedTask($task->parent)
                 : null,
             'sprint_id' => $task->sprint_id,
             'sprint' => $task->relationLoaded('sprint') && $task->sprint !== null
@@ -1186,9 +1186,37 @@ class TaskService
     }
 
     /**
+     * Việc cha / việc con trên trang chi tiết — cùng bộ field để liệt kê
+     * trạng thái, độ khó, người làm. Không đệ quy để payload không phình
+     * theo cả cây WBS.
+     *
+     * @return array<string, mixed>
+     */
+    private function presentLinkedTask(Task $task): array
+    {
+        $overdue = $this->computeOverdue($task);
+
+        return [
+            'id' => $task->id,
+            'code' => $task->code,
+            'title' => $task->title,
+            'type' => $task->type,
+            'status' => $task->status,
+            'priority' => $task->priority,
+            'priority_label' => TaskEnums::priorityLabel($task->priority),
+            'weight' => $task->weight,
+            'progress_percent' => $task->progress_percent,
+            'start_date' => $task->start_date?->toDateString(),
+            'end_date' => $task->end_date?->toDateString(),
+            'assignee_id' => $task->assignee_id,
+            'assignee' => $this->presentUser($task->relationLoaded('assignee') ? $task->assignee : null),
+            'is_overdue' => $overdue['is_overdue'],
+        ];
+    }
+
+    /**
      * Việc con trực tiếp — trang chi tiết việc cha cần thấy trạng thái, tỷ
-     * trọng và phân loại độ khó của từng việc nhỏ. Không đệ quy để payload
-     * không phình theo cả cây WBS.
+     * trọng và phân loại độ khó của từng việc nhỏ.
      *
      * @return list<array<string, mixed>>
      */
@@ -1201,24 +1229,7 @@ class TaskService
             ->get();
 
         return $children
-            ->map(function (Task $child) {
-                $overdue = $this->computeOverdue($child);
-
-                return [
-                    'id' => $child->id,
-                    'code' => $child->code,
-                    'title' => $child->title,
-                    'status' => $child->status,
-                    'priority' => $child->priority,
-                    'priority_label' => TaskEnums::priorityLabel($child->priority),
-                    'weight' => $child->weight,
-                    'progress_percent' => $child->progress_percent,
-                    'start_date' => $child->start_date?->toDateString(),
-                    'end_date' => $child->end_date?->toDateString(),
-                    'assignee' => $this->presentUser($child->assignee),
-                    'is_overdue' => $overdue['is_overdue'],
-                ];
-            })
+            ->map(fn (Task $child) => $this->presentLinkedTask($child))
             ->values()
             ->all();
     }

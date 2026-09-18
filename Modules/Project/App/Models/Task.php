@@ -62,7 +62,7 @@ class Task extends Model
     public const WITH_PRESENT = [
         'project.ownerDepartment',
         'project.executingDepartment',
-        'parent',
+        'parent.assignee',
         'sprint',
         'assignee.department',
         'manager',
