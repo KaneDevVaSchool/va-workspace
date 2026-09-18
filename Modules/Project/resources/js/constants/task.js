@@ -49,6 +49,10 @@ export const TASK_PRIORITY_LABELS = {
   medium: 'Trung bình',
   high: 'Cao',
   urgent: 'Khẩn cấp',
+  RK: 'Rất khó',
+  KH: 'Khó',
+  TB: 'Trung bình',
+  DE: 'Dễ',
 };
 
 export const TASK_PRIORITY_TONES = {
@@ -61,6 +65,10 @@ export const TASK_PRIORITY_TONES = {
   medium: 'info',
   high: 'gold',
   urgent: 'danger',
+  RK: 'danger',
+  KH: 'gold',
+  TB: 'tertiary',
+  DE: 'neutral',
 };
 
 export const TASK_DELEGATION_STATUS_LABELS = {
@@ -135,10 +143,11 @@ export const TASK_COLUMNS = [
   { key: 'project', label: 'Dự án', defaultOn: true },
   { key: 'assignee', label: 'Người thực hiện', defaultOn: true },
   { key: 'status', label: 'Trạng thái', defaultOn: true },
-  { key: 'priority', label: 'Mức độ quan trọng', defaultOn: true },
+  { key: 'priority', label: 'Độ khó', defaultOn: true },
   { key: 'start_date', label: 'Ngày bắt đầu', defaultOn: true },
   { key: 'end_date', label: 'Ngày kết thúc', defaultOn: true },
   { key: 'progress_percent', label: 'Tiến độ', defaultOn: true },
+  { key: 'quality', label: 'Chất lượng', defaultOn: true },
   { key: 'type', label: 'Loại', defaultOn: false },
   { key: 'actual_start_date', label: 'Bắt đầu thực tế', defaultOn: false },
   { key: 'actual_end_date', label: 'Kết thúc thực tế', defaultOn: false },
@@ -156,12 +165,12 @@ export const TASK_COLUMNS = [
   { key: 'variance_days', label: 'Chênh lệch (ngày)', defaultOn: false },
 ];
 
-export const COLUMN_STORAGE_KEY = 'va-task-columns-v2';
+export const COLUMN_STORAGE_KEY = 'va-task-columns-v3';
 export const COLUMN_WIDTH_KEY = 'va-task-column-widths-v2';
 export const ZOOM_STORAGE_KEY = 'va-task-zoom-v1';
 export const VIEW_MODE_KEY = 'va-task-view-mode';
 export const PROJECT_TASK_VIEW_KEY = 'va-project-task-view';
-export const PROJECT_TASK_COL_KEY = 'va-project-task-columns-v1';
+export const PROJECT_TASK_COL_KEY = 'va-project-task-columns-v3';
 export const PROJECT_TASK_WIDTH_KEY = 'va-project-task-column-widths-v2';
 export const PROJECT_TASK_ZOOM_KEY = 'va-project-task-zoom-v1';
 export const PROJECT_TASK_KANBAN_GROUP_KEY = 'va-project-task-kanban-group';
@@ -425,6 +434,15 @@ export function formatTaskVarianceDays(value) {
   if (value < 0) return `Sớm ${Math.abs(value)} ngày`;
   return 'Đúng hạn';
 }
+export function taskQualityLabel(task) {
+  const label = task?.task_score?.rating_result;
+  return label ? String(label) : '—';
+}
+export function taskQualityTone(task) {
+  if (task?.task_score?.is_passed === false) return 'danger';
+  if (task?.task_score?.is_passed === true) return 'success';
+  return task?.task_score?.rating_result ? 'gold' : 'neutral';
+}
 export function taskCellText(task, key) {
   if (key === 'code') return task.code || '—';
   if (key === 'title') return task.title || '—';
@@ -434,6 +452,7 @@ export function taskCellText(task, key) {
   if (key === 'progress_percent') return task.progress_percent == null ? '—' : `${task.progress_percent}%`;
   if (key === 'type') return taskTypeLabel(task.type);
   if (key === 'priority') return taskPriorityLabel(task.priority);
+  if (key === 'quality') return task.task_score?.rating_result || '—';
   if (key === 'assignee') return task.assignee?.name || '—';
   if (key === 'status') return taskStatusLabel(task.status);
   if (key === 'creator') return task.creator?.name || '—';

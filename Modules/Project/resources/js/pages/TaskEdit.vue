@@ -25,6 +25,8 @@ const formErrors = ref({});
 const users = ref([]);
 const importanceOptions = ref([]);
 const importanceCriterion = ref(null);
+const lockDifficulty = ref(false);
+const scoreKitMode = ref('');
 const selectedParent = ref(null);
 const task = ref(null);
 
@@ -151,6 +153,8 @@ async function loadMeta() {
     users.value = usersRes.data.users ?? [];
     importanceOptions.value = optionsRes.data.importance ?? [];
     importanceCriterion.value = optionsRes.data.criterion ?? null;
+    lockDifficulty.value = Boolean(optionsRes.data.lock_difficulty);
+    scoreKitMode.value = optionsRes.data.mode || '';
     applyTask(taskRes.data.task);
   } catch (err) {
     if (err?.response?.status === 404) {
@@ -289,6 +293,8 @@ onMounted(loadMeta);
           :users="users"
           :importance-options="importanceOptions"
           :importance-criterion="importanceCriterion"
+          :lock-difficulty="lockDifficulty"
+          :score-kit-mode="scoreKitMode"
           :disabled="saving"
           :duration-days="durationDays"
           :selected-parent="selectedParent"

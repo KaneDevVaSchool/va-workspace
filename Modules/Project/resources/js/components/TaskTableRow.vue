@@ -15,6 +15,8 @@ import {
   taskCellText as cellText,
   taskPriorityLabel as priorityLabel,
   taskPriorityTone as priorityTone,
+  taskQualityLabel as qualityLabel,
+  taskQualityTone as qualityTone,
   taskStatusLabel as statusLabel,
   taskStatusTone as statusTone,
   taskTypeLabel as typeLabel,
@@ -71,6 +73,10 @@ const emit = defineEmits(['open', 'context-menu', 'toggle-collapse']);
       <span v-else-if="col.key === 'priority'" class="ptasks__pill" :class="`ptasks__pill--${priorityTone(task.priority)}`">
         <span class="ptasks__dot" :class="`ptasks__dot--${priorityTone(task.priority)}`" />
         {{ priorityLabel(task.priority) }}
+      </span>
+      <span v-else-if="col.key === 'quality'" class="ptasks__pill" :class="`ptasks__pill--${qualityTone(task)}`">
+        <span class="ptasks__dot" :class="`ptasks__dot--${qualityTone(task)}`" />
+        {{ qualityLabel(task) }}
       </span>
       <span v-else-if="col.key === 'start_date'" class="ptasks__pill ptasks__pill--date">{{ formatTaskDate(task.start_date) }}</span>
       <span v-else-if="col.key === 'end_date'" class="ptasks__pill ptasks__pill--date">{{ formatTaskDate(task.end_date) }}</span>

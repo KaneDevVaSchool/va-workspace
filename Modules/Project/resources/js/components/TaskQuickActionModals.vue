@@ -6,6 +6,8 @@
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import GuideHelp from '@/components/GuideHelp.vue';
+import { SCORE_FACTOR_GUIDES } from '@/constants/scoreFactorGuides.js';
 import { showClientToast } from '@/lib/clientToast';
 import { TASK_SCORE_RESULT_SUGGESTIONS, TASK_STATUS_LABELS, TASK_STATUS_TONES } from '../constants/task.js';
 import ProjectMemberPicker from './ProjectMemberPicker.vue';
@@ -512,7 +514,24 @@ const primaryLabel = computed(() => {
             <AppIcon :name="dialogMeta.icon" :size="22" :stroke-width="1.75" />
           </span>
           <div class="task-qa__head-copy">
-            <h2 :id="`task-qa-title-${kind}`" class="task-qa__title">{{ dialogMeta.title }}</h2>
+            <h2 :id="`task-qa-title-${kind}`" class="task-qa__title">
+              {{ dialogMeta.title }}
+              <GuideHelp
+                v-if="kind === 'evaluate'"
+                :guide="SCORE_FACTOR_GUIDES.quality"
+                tone="gold"
+              />
+              <GuideHelp
+                v-else-if="kind === 'dates'"
+                :guide="SCORE_FACTOR_GUIDES.progress"
+                tone="secondary"
+              />
+              <GuideHelp
+                v-else-if="kind === 'progress'"
+                :guide="SCORE_FACTOR_GUIDES.progress"
+                tone="secondary"
+              />
+            </h2>
             <p class="task-qa__sub">{{ taskLabel }}</p>
           </div>
           <button type="button" class="task-qa__close" aria-label="Đóng" :disabled="saving" @click="close">
@@ -751,7 +770,10 @@ const primaryLabel = computed(() => {
               <input v-model="scoreForm.rating_score" type="number" min="0" step="0.1" class="task-qa__input" placeholder="Ví dụ: 8.5">
             </label>
             <label class="task-qa__field task-qa__field--full">
-              <span class="task-qa__label">Kết quả đánh giá</span>
+              <span class="task-qa__label">
+                Kết quả đánh giá
+                <GuideHelp :guide="SCORE_FACTOR_GUIDES.quality" tone="gold" />
+              </span>
               <select v-if="scoreQualityLevels.length" v-model="scoreForm.rating_result" class="task-qa__input">
                 <option value="">Chưa chọn mức</option>
                 <option v-for="level in scoreQualityLevels" :key="level.code || level.label" :value="level.label || level.code">
@@ -944,6 +966,9 @@ const primaryLabel = computed(() => {
 }
 
 .task-qa__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0;
   color: var(--color-text);
   font-size: 1.125rem;

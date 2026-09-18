@@ -10,6 +10,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
+import GuideHelp from '@/components/GuideHelp.vue';
+import { SCORE_FACTOR_GUIDES } from '@/constants/scoreFactorGuides.js';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -51,6 +53,8 @@ import {
   calendarOverlapRange,
   loadVisibility,
   saveVisibility,
+  taskQualityLabel,
+  taskQualityTone,
 } from '../constants/task.js';
 
 const route = useRoute();
@@ -947,6 +951,14 @@ function priorityTone(value) {
   return TASK_PRIORITY_TONES[value] || 'neutral';
 }
 
+function qualityLabel(task) {
+  return taskQualityLabel(task);
+}
+
+function qualityTone(task) {
+  return taskQualityTone(task);
+}
+
 function progressTone(percent) {
   if (percent == null) return 'neutral';
   if (percent >= 80) return 'success';
@@ -1458,6 +1470,7 @@ function cellText(task, key) {
   if (key === 'progress_percent') return task.progress_percent == null ? '—' : `${task.progress_percent}%`;
   if (key === 'type') return typeLabel(task.type);
   if (key === 'priority') return priorityLabel(task.priority);
+  if (key === 'quality') return qualityLabel(task);
   return '—';
 }
 
@@ -1526,7 +1539,7 @@ function columnContentWidth(key, fonts) {
   }
   let extra = 0;
   if (key === 'assignee') extra = ASSIGNEE_AVATAR_EXTRA;
-  if (key === 'status' || key === 'priority') extra = STATUS_DOT_EXTRA;
+  if (key === 'status' || key === 'priority' || key === 'quality') extra = STATUS_DOT_EXTRA;
   if (key === 'progress_percent') extra = 64;
   return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
 }
@@ -1944,6 +1957,7 @@ onBeforeUnmount(() => {
       <template #title>
         <span class="task-page__title">
           Tất cả công việc
+          <GuideHelp :guide="SCORE_FACTOR_GUIDES.taskList" />
         </span>
       </template>
       <template #actions>
@@ -2226,6 +2240,10 @@ onBeforeUnmount(() => {
                     <span v-else-if="col.key === 'priority'" class="task-page__pill" :class="`task-page__pill--${priorityTone(task.priority)}`">
                       <span class="task-page__dot" :class="`task-page__dot--${priorityTone(task.priority)}`" />
                       {{ priorityLabel(task.priority) }}
+                    </span>
+                    <span v-else-if="col.key === 'quality'" class="task-page__pill" :class="`task-page__pill--${qualityTone(task)}`">
+                      <span class="task-page__dot" :class="`task-page__dot--${qualityTone(task)}`" />
+                      {{ qualityLabel(task) }}
                     </span>
                     <span v-else-if="col.key === 'start_date'" class="task-page__pill task-page__pill--date">{{ formatDate(task.start_date) }}</span>
                     <span v-else-if="col.key === 'end_date'" class="task-page__pill task-page__pill--date">{{ formatDate(task.end_date) }}</span>

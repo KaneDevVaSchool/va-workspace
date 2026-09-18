@@ -290,6 +290,26 @@ class EvaluationCriteriaService
     }
 
     /**
+     * Gán tiêu chí làm nguồn độ khó / loại công việc trên form tạo việc.
+     * Idempotent: đã gắn thì không ghi lại.
+     */
+    public function assignAsTaskType(int $criterionId, int $departmentId, ?int $updatedBy = null): void
+    {
+        $criterion = $this->criteria->findByDepartment($criterionId, $departmentId);
+        if (! $criterion instanceof EvaluationCriteria) {
+            return;
+        }
+        if ($criterion->use_for_task_type) {
+            return;
+        }
+        if ($criterion->type !== 'scale') {
+            return;
+        }
+
+        $this->criteria->assignUseForTaskType($criterion, true, $updatedBy);
+    }
+
+    /**
      * @param  list<string>  $codes
      */
     public function setTaskScoreLevelCodes(

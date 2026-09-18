@@ -6,6 +6,8 @@
 import { computed, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import AppDatePicker from '@/components/AppDatePicker.vue';
+import GuideHelp from '@/components/GuideHelp.vue';
+import { SCORE_FACTOR_GUIDES } from '@/constants/scoreFactorGuides.js';
 import ProjectMemberPicker from './ProjectMemberPicker.vue';
 import ProjectUserPicker from './ProjectUserPicker.vue';
 import TaskParentPicker from './TaskParentPicker.vue';
@@ -38,6 +40,10 @@ const PRIORITY_COLOR = {
   medium: 'tertiary',
   high: 'gold',
   urgent: 'primary',
+  RK: 'primary',
+  KH: 'gold',
+  TB: 'secondary',
+  DE: 'umber',
 };
 
 const RULE_DEFS = [
@@ -133,6 +139,8 @@ const props = defineProps({
   users: { type: Array, required: true },
   importanceOptions: { type: Array, default: () => [] },
   importanceCriterion: { type: Object, default: null },
+  lockDifficulty: { type: Boolean, default: false },
+  scoreKitMode: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
   step: { type: Number, default: 0 },
   durationDays: { type: [Number, null], default: null },
@@ -210,8 +218,10 @@ function priorityColor(value) {
 }
 
 const importanceTitle = computed(
-  () => props.importanceCriterion?.name || 'Loại công việc',
+  () => props.importanceCriterion?.name || (props.scoreKitMode === 'weighted_task' ? 'Độ khó' : 'Loại công việc'),
 );
+
+const importanceLocked = computed(() => props.lockDifficulty && Boolean(props.form.assignee_id) && Boolean(props.form.priority));
 
 const importanceRows = computed(() => {
   const rows = (props.importanceOptions || []).map((opt) => ({
@@ -527,12 +537,16 @@ const importanceRows = computed(() => {
         <span class="proj-form__section-icon proj-form__section-icon--secondary">
           <AppIcon name="settings" :size="16" :stroke-width="1.75" />
         </span>
-        <h2 class="proj-form__section-title">Loại, mức độ quan trọng và tiến độ</h2>
+        <h2 class="proj-form__section-title">Loại, độ khó và tiến độ</h2>
+        <GuideHelp :guide="SCORE_FACTOR_GUIDES.kitWeight" tone="gold" />
       </header>
 
       <div class="proj-form__grid">
         <div class="proj-form__field proj-form__field--wide">
-          <span id="task-form-type-label" class="proj-form__label">{{ importanceTitle }}</span>
+          <span id="task-form-type-label" class="proj-form__label">
+            {{ importanceTitle }}
+            <GuideHelp :guide="SCORE_FACTOR_GUIDES.difficulty" tone="gold" />
+          </span>
           <div class="proj-form__importance" role="radiogroup" aria-labelledby="task-form-type-label">
             <button
               v-for="opt in importanceRows"
@@ -545,7 +559,7 @@ const importanceRows = computed(() => {
               ]"
               role="radio"
               :aria-checked="form.priority === opt.value ? 'true' : 'false'"
-              :disabled="disabled"
+              :disabled="disabled || importanceLocked"
               @click="set('priority', opt.value)"
             >
               <span class="proj-form__importance-dot" aria-hidden="true" />
@@ -553,13 +567,16 @@ const importanceRows = computed(() => {
                 <template v-if="opt.code">{{ opt.code }} </template>{{ opt.label }}
               </span>
               <span class="proj-form__importance-desc">{{ opt.description }}</span>
-              <span v-if="opt.weight" class="proj-form__importance-weight">Trọng số x{{ opt.weight }}</span>
+              <span v-if="opt.weight" class="proj-form__importance-weight">Hệ số ×{{ opt.weight }}</span>
             </button>
           </div>
         </div>
 
         <div class="proj-form__field proj-form__field--wide">
-          <span id="task-form-progress-label" class="proj-form__label">Cách tính tiến độ dự án</span>
+          <span id="task-form-progress-label" class="proj-form__label">
+            Cách tính tiến độ công việc
+            <GuideHelp :guide="SCORE_FACTOR_GUIDES.progress" tone="secondary" />
+          </span>
           <OptionPicker
             :model-value="form.progress_type"
             :options="TASK_PROGRESS_METHOD_OPTIONS"

@@ -97,14 +97,17 @@ class EvaluationScoreKitController extends Controller
             return response()->json(['message' => 'Thiếu department_id.'], 422);
         }
 
-        $kit = $this->kits->findByDepartment($departmentId);
-        $isWeightedTask = $kit?->mode === EvaluationScoreKit::MODE_WEIGHTED_TASK;
-        $levels = $isWeightedTask && is_array($kit->quality_levels) ? $kit->quality_levels : [];
+        $kitScales = $this->service->taskScalesForDepartment($departmentId);
+        $isWeightedTask = $kitScales['mode'] === EvaluationScoreKit::MODE_WEIGHTED_TASK;
 
         return response()->json([
             'department_id' => $departmentId,
-            'mode' => $kit?->mode,
-            'quality_levels' => array_values($levels),
+            'mode' => $kitScales['mode'],
+            'lock_difficulty' => $kitScales['lock_difficulty'],
+            'formula' => $kitScales['formula'],
+            'difficulty_levels' => $isWeightedTask ? $kitScales['difficulty_levels'] : [],
+            'progress_levels' => $isWeightedTask ? $kitScales['progress_levels'] : [],
+            'quality_levels' => $isWeightedTask ? $kitScales['quality_levels'] : [],
         ]);
     }
 

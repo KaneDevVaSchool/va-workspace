@@ -15,7 +15,9 @@ import {
 import { onBeforeRouteLeave } from "vue-router";
 import AppIcon from "@/components/AppIcon.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import GuideHelp from "@/components/GuideHelp.vue";
 import PageHeader from "@/components/PageHeader.vue";
+import { SCORE_FACTOR_GUIDES } from "@/constants/scoreFactorGuides.js";
 import { showClientToast } from "@/lib/clientToast";
 import { useAuthStore } from "@modules/Identity/resources/js/stores/auth.js";
 
@@ -214,6 +216,16 @@ const currentModeTitle = computed(
         MODES.find((mode) => mode.id === viewMode.value)?.title ||
         "cách tính hiện tại",
 );
+const formulaGuide = computed(() =>
+    viewMode.value === "base_adjust"
+        ? SCORE_FACTOR_GUIDES.kitCount
+        : SCORE_FACTOR_GUIDES.kitWeight,
+);
+const activeScaleGuide = computed(() => {
+    if (scaleView.value === "progress") return SCORE_FACTOR_GUIDES.progress;
+    if (scaleView.value === "quality") return SCORE_FACTOR_GUIDES.quality;
+    return SCORE_FACTOR_GUIDES.difficulty;
+});
 const changedFieldLabels = computed(() => {
     if (!savedSnapshot.value) return [];
     const current = kitPayload();
@@ -1276,6 +1288,12 @@ onBeforeRouteLeave(() => {
                 { label: 'Khung chấm điểm' },
             ]"
         >
+            <template #title>
+                <span class="kit-title">
+                    Khung chấm điểm
+                    <GuideHelp :guide="SCORE_FACTOR_GUIDES.kitOverview" />
+                </span>
+            </template>
             <template #actions>
                 <button
                     v-if="canManage && hasDepartment"
@@ -1344,7 +1362,17 @@ onBeforeRouteLeave(() => {
                     "
                     aria-label="Công thức tính điểm"
                 >
-                    <h2 class="kit-formula__title">Công thức</h2>
+                    <div class="kit-formula__heading">
+                        <h2 class="kit-formula__title">Công thức</h2>
+                        <GuideHelp
+                            :guide="formulaGuide"
+                            :tone="
+                                viewMode === 'base_adjust'
+                                    ? 'primary'
+                                    : 'secondary'
+                            "
+                        />
+                    </div>
                     <div class="kit-formula__body" aria-live="polite">
                         <p class="kit-formula__method">
                             {{
@@ -2660,6 +2688,14 @@ onBeforeRouteLeave(() => {
                                 <div class="kit-panel__heading">
                                     <h2 class="kit-panel__title">
                                         {{ activeScale.title }}
+                                        <GuideHelp
+                                            :guide="activeScaleGuide"
+                                            :tone="
+                                                scaleView === 'progress'
+                                                    ? 'secondary'
+                                                    : 'gold'
+                                            "
+                                        />
                                     </h2>
                                     <div class="kit-source">
                                         <select
@@ -3056,6 +3092,12 @@ onBeforeRouteLeave(() => {
     overflow: hidden;
 }
 
+.kit-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
 .kit-header-btn {
     display: inline-flex;
     align-items: center;
@@ -3413,6 +3455,12 @@ onBeforeRouteLeave(() => {
     background: var(--color-secondary);
 }
 
+.kit-formula__heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.2rem;
+}
+
 .kit-formula__title {
     margin: 0;
     padding-top: 0.1rem;
@@ -3623,6 +3671,9 @@ onBeforeRouteLeave(() => {
 }
 
 .kit-tile__name {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     margin: 0;
     color: var(--color-text);
     font-size: 0.8125rem;
@@ -3794,6 +3845,9 @@ onBeforeRouteLeave(() => {
 
 
 .kit-panel__head--scale .kit-panel__title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
     font-size: 0.875rem;
     font-weight: 600;
     line-height: 1.25;
@@ -4171,6 +4225,9 @@ onBeforeRouteLeave(() => {
 }
 
 .kit-contrib__name {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     font-size: 0.8125rem;
     font-weight: 400;
 }

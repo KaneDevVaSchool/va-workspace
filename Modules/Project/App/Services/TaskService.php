@@ -38,6 +38,7 @@ class TaskService
         private readonly TaskExcelImporter $importer,
         private readonly NotificationService $notifications,
         private readonly SprintRepositoryInterface $sprints,
+        private readonly TaskImportanceOptions $importanceOptions,
     ) {}
 
     /** @param  array<string, mixed>  $filters */
@@ -657,6 +658,10 @@ class TaskService
 
         $data = $this->applyQuantityProgress($data, $task);
         if (array_key_exists('priority', $data)) {
+            $locked = $this->lockedDifficultyError($task, $data, $editor);
+            if ($locked !== null) {
+                return ['error' => $locked];
+            }
             $data['priority'] = TaskEnums::normalizePriority($data['priority'] ?? null);
         }
         $data = $this->applyAcceptedTracking($task, $data);
@@ -700,6 +705,42 @@ class TaskService
         }
 
         return $result;
+    }
+
+    /**
+     * Khung điểm bật "Khóa độ khó sau khi giao việc" → không đổi priority
+     * khi việc đã có người thực hiện, trừ người cấu hình khung điểm phòng.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function lockedDifficultyError(Task $task, array $data, User $editor): ?string
+    {
+        $next = TaskEnums::normalizePriority($data['priority'] ?? null);
+        if ($next === $task->priority) {
+            return null;
+        }
+        if ($task->assignee_id === null || $task->priority === null || $task->priority === '') {
+            return null;
+        }
+
+        $deptId = $task->origin_department_id
+            ?? $task->delegated_to_department_id
+            ?? $this->resolveTaskDepartment($task)?->id
+            ?? $editor->department_id;
+        if (! $deptId) {
+            return null;
+        }
+
+        $ctx = $this->importanceOptions->forDepartment((int) $deptId);
+        if (empty($ctx['lock_difficulty'])) {
+            return null;
+        }
+
+        if ($this->permissions->allows($editor, 'evaluation.manage_department', 'department', (int) $deptId)) {
+            return null;
+        }
+
+        return 'Độ khó đã khóa sau khi giao việc. Chỉ người cấu hình khung điểm của phòng mới đổi được.';
     }
 
     /**

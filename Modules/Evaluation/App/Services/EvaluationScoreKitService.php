@@ -34,9 +34,61 @@ class EvaluationScoreKitService
     }
 
     /**
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
+     * Bộ thang CHỈ ĐỌC cho form công việc / chấm điểm — không cần quyền
+     * evaluation.manage_department.
+     *
+     * @return array{
+     *     department_id: int,
+     *     mode: string|null,
+     *     lock_difficulty: bool,
+     *     formula: array{weight: string, progress: string, quality: string},
+     *     difficulty_levels: list<array{code: string, label: string, score: float}>,
+     *     progress_levels: list<array{code: string, label: string, score: float}>,
+     *     quality_levels: list<array{code: string, label: string, score: float}>
+     * }
      */
+    public function taskScalesForDepartment(int $departmentId): array
+    {
+        $kit = $this->kits->findByDepartment($departmentId);
+        $formula = EvaluationScoreKit::normalizeFormula($kit?->formula);
+        $weighted = $kit?->mode === EvaluationScoreKit::MODE_WEIGHTED_TASK;
+
+        $difficulty = [];
+        $progress = [];
+        $quality = [];
+
+        if ($weighted && $kit !== null) {
+            $difficultySource = ! $kit->difficulty_use_default && $kit->difficultyCriterion
+                ? $kit->difficultyCriterion->levels
+                : $kit->weighted_task_levels;
+            $progressSource = ! $kit->progress_use_default && $kit->progressCriterion
+                ? $kit->progressCriterion->levels
+                : $kit->progress_levels;
+            $qualitySource = ! $kit->quality_use_default && $kit->qualityCriterion
+                ? $kit->qualityCriterion->levels
+                : $kit->quality_levels;
+
+            $difficulty = EvaluationScoreKit::convertCriterionLevelsToFactors($difficultySource, 'difficulty');
+            $progress = EvaluationScoreKit::convertCriterionLevelsToFactors($progressSource, 'progress');
+            $quality = EvaluationScoreKit::convertCriterionLevelsToFactors($qualitySource, 'quality');
+        }
+
+        return [
+            'department_id' => $departmentId,
+            'mode' => $kit?->mode,
+            'lock_difficulty' => $weighted && ($formula['lock_difficulty'] ?? 'off') === 'on',
+            'formula' => [
+                'weight' => $formula['weight'],
+                'progress' => $formula['progress'],
+                'quality' => $formula['quality'],
+            ],
+            'difficulty_criterion_id' => $kit?->difficulty_criterion_id,
+            'difficulty_levels' => $difficulty,
+            'progress_levels' => $progress,
+            'quality_levels' => $quality,
+        ];
+    }
+
     public function upsert(int $departmentId, int $userId, array $data): array
     {
         $payload = $this->normalizedPayload($data);
@@ -52,9 +104,31 @@ class EvaluationScoreKitService
             $kit = $this->kits->update($existing, $payload);
         }
 
+        $this->syncDifficultyToTaskType($kit, $userId);
+
         $criteria = $this->criteriaService->listForDepartment($departmentId);
 
         return $this->present($kit, $departmentId, $criteria);
+    }
+
+    /**
+     * Cách 2 + đã chọn tiêu chí nguồn độ khó → cùng tiêu chí đó là option
+     * trên form công việc, để lúc giao việc và lúc chấm kỳ nói cùng một thang.
+     */
+    private function syncDifficultyToTaskType(EvaluationScoreKit $kit, int $userId): void
+    {
+        if ($kit->mode !== EvaluationScoreKit::MODE_WEIGHTED_TASK) {
+            return;
+        }
+        if ($kit->difficulty_use_default || ! $kit->difficulty_criterion_id) {
+            return;
+        }
+
+        $this->criteriaService->assignAsTaskType(
+            (int) $kit->difficulty_criterion_id,
+            (int) $kit->department_id,
+            $userId,
+        );
     }
 
     /**

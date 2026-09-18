@@ -5,6 +5,7 @@ namespace Tests\Feature\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
+use Modules\Evaluation\App\Models\EvaluationScoreKit;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\Role;
 use Modules\Identity\Database\Seeders\RoleSeeder;
@@ -99,6 +100,38 @@ class TaskPriorityValidationTest extends TestCase
             'Mức độ ưu tiên không hợp lệ.',
             $response->json('errors.priority.0'),
         );
+    }
+
+    public function test_create_accepts_kit_default_difficulty_code(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D', 'name' => 'Phòng D', 'is_active' => true]);
+        $user = $this->makeDirector($dept);
+
+        EvaluationScoreKit::query()->create([
+            'department_id' => $dept->id,
+            'mode' => EvaluationScoreKit::MODE_WEIGHTED_TASK,
+            'difficulty_use_default' => true,
+        ]);
+
+        $options = $this->actingAs($user)
+            ->getJson('/api/project/tasks/options')
+            ->assertOk()
+            ->assertJsonPath('source', 'kit_difficulty')
+            ->assertJsonPath('importance.0.value', 'RK');
+
+        $this->assertSame('Rất khó', $options->json('importance.0.label'));
+
+        $this->actingAs($user)->postJson('/api/project/tasks', [
+            'title' => 'Soạn đề thi',
+            'start_date' => '2026-08-30',
+            'end_date' => '2026-09-05',
+            'priority' => 'RK',
+            'type' => 'task',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('task.priority', 'RK');
     }
 
     private function makeDirector(Department $dept): User

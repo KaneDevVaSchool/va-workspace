@@ -4,12 +4,15 @@ import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import GuideHelp from '@/components/GuideHelp.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
+import { SCORE_FACTOR_GUIDES } from '@/constants/scoreFactorGuides.js';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import CommentList from '../components/CommentList.vue';
 import ProjectMemberPicker from '../components/ProjectMemberPicker.vue';
 import ProjectUserPicker from '../components/ProjectUserPicker.vue';
+import TaskEvalFactors from '../components/TaskEvalFactors.vue';
 import {
   TASK_DELEGATION_STATUS_LABELS,
   TASK_PRIORITY_LABELS,
@@ -78,6 +81,9 @@ const attachments = ref([]);
 const worklogs = ref([]);
 const users = ref([]);
 const importanceOptions = ref([]);
+const lockDifficulty = ref(false);
+const scoreKitMode = ref('');
+const progressLevels = ref([]);
 
 const deleting = ref(false);
 const confirmingDelete = ref(false);
@@ -385,6 +391,9 @@ async function loadOptions() {
     ]);
     users.value = usersRes.data.users ?? [];
     importanceOptions.value = optionsRes.data.importance ?? [];
+    lockDifficulty.value = Boolean(optionsRes.data.lock_difficulty);
+    scoreKitMode.value = optionsRes.data.mode || '';
+    progressLevels.value = optionsRes.data.progress_levels ?? [];
   } catch {
     users.value = [];
   }
@@ -947,6 +956,10 @@ onBeforeUnmount(() => {
         { label: task?.title || 'Chi tiết' },
       ]"
     >
+      <template #title>
+        {{ task?.title || 'Chi tiết công việc' }}
+        <GuideHelp :guide="SCORE_FACTOR_GUIDES.taskList" />
+      </template>
       <template #actions>
         <button type="button" class="task-detail__header-btn" @click="goBack">
           <AppIcon name="chevronLeft" :size="16" />
@@ -1082,6 +1095,18 @@ onBeforeUnmount(() => {
           {{ task.children.length }} việc nhỏ
         </span>
       </div>
+
+      <TaskEvalFactors
+        :task="task"
+        :difficulty-label="priorityLabel(task.priority)"
+        :difficulty-locked="lockDifficulty && Boolean(task.assignee_id)"
+        :progress-levels="progressLevels"
+        :can-approve="canApprove"
+        :can-edit="canEdit"
+        :weighted="scoreKitMode === 'weighted_task'"
+        @evaluate="openScoreForm"
+        @edit-difficulty="goEdit"
+      />
 
       <div class="task-detail__layout">
         <div class="task-detail__col">
@@ -1560,6 +1585,7 @@ onBeforeUnmount(() => {
                 <AppIcon name="starFilled" :size="14" :stroke-width="1.75" />
               </span>
               <h3 class="task-detail__section-title">Kết quả đánh giá</h3>
+              <GuideHelp :guide="SCORE_FACTOR_GUIDES.quality" tone="gold" />
               <button
                 v-if="canApprove"
                 type="button"
@@ -1781,7 +1807,7 @@ onBeforeUnmount(() => {
                 <input v-model="scoreForm.rating_score" type="number" min="0" step="0.1" placeholder="Ví dụ: 8.5" />
               </label>
               <label class="task-detail__field task-detail__field--wide">
-                <span>Kết quả đánh giá</span>
+                <span>Kết quả đánh giá <GuideHelp :guide="SCORE_FACTOR_GUIDES.quality" tone="gold" /></span>
                 <select v-if="scoreQualityLevels.length" v-model="scoreForm.rating_result">
                   <option value="">Chưa chọn mức</option>
                   <option v-for="level in scoreQualityLevels" :key="level.code || level.label" :value="level.label || level.code">

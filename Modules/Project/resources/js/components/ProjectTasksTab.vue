@@ -8,6 +8,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import DualProgressBar from '@/components/DualProgressBar.vue';
+import GuideHelp from '@/components/GuideHelp.vue';
+import { SCORE_FACTOR_GUIDES } from '@/constants/scoreFactorGuides.js';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
 import { useDragScroll } from '@/composables/useDragScroll';
@@ -1076,7 +1078,10 @@ onBeforeUnmount(() => {
         @select="setViewMode"
         @select-kanban="chooseKanban"
       />
-      <h3 class="ptasks__filter">{{ filterLabel }}</h3>
+      <h3 class="ptasks__filter">
+        {{ filterLabel }}
+        <GuideHelp :guide="SCORE_FACTOR_GUIDES.taskList" />
+      </h3>
       <label v-if="!isGantt && !isPlan" class="ptasks__search" :class="{ 'ptasks__search--with-export': isList }">
         <AppIcon name="search" :size="15" />
         <input v-model="query" type="search" :placeholder="isSprintBoard ? 'Tìm việc theo tên hoặc mã…' : 'Tìm theo tên công việc…'" />
@@ -1589,6 +1594,7 @@ onBeforeUnmount(() => {
   margin: 0;
   display: flex;
   align-items: center;
+  gap: 0.35rem;
   padding: 0 0.75rem;
   color: var(--color-text);
   font-size: 0.8125rem;

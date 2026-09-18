@@ -593,4 +593,59 @@ class EvaluationScoreKitTest extends TestCase
             ->assertJsonPath('kit.task_type_criterion_id', $scale->id)
             ->assertJsonPath('kit.task_type_criterion.name', 'Mức độ quan trọng');
     }
+
+    public function test_saving_weighted_difficulty_criterion_assigns_task_type(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $dept = Department::query()->create(['code' => 'IT', 'name' => 'CNTT', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+        $oldType = $this->makeScale($dept, 'Mức độ cũ', true);
+        $difficulty = $this->makeScale($dept, 'Độ khó phòng');
+
+        $this->actingAs($director)
+            ->putJson('/api/evaluation/score-kit', [
+                'mode' => 'weighted_task',
+                'difficulty_criterion_id' => $difficulty->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('kit.mode', 'weighted_task')
+            ->assertJsonPath('kit.difficulty_criterion_id', $difficulty->id)
+            ->assertJsonPath('kit.task_type_criterion_id', $difficulty->id)
+            ->assertJsonPath('kit.weighted_task_levels.0.code', 'M1')
+            ->assertJsonPath('kit.weighted_task_levels.0.label', 'Khá');
+
+        $this->assertTrue($difficulty->fresh()->use_for_task_type);
+        $this->assertFalse($oldType->fresh()->use_for_task_type);
+    }
+
+    public function test_task_options_and_quality_levels_follow_weighted_kit(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $dept = Department::query()->create(['code' => 'IT', 'name' => 'CNTT', 'is_active' => true]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+        $difficulty = $this->makeScale($dept, 'Độ khó phòng');
+
+        $this->actingAs($director)
+            ->putJson('/api/evaluation/score-kit', [
+                'mode' => 'weighted_task',
+                'difficulty_criterion_id' => $difficulty->id,
+            ])
+            ->assertOk();
+
+        $this->actingAs($director)
+            ->getJson('/api/project/tasks/options')
+            ->assertOk()
+            ->assertJsonPath('source', 'kit_difficulty')
+            ->assertJsonPath('mode', 'weighted_task')
+            ->assertJsonPath('importance.0.value', 'M1')
+            ->assertJsonPath('importance.0.label', 'Khá')
+            ->assertJsonPath('quality_levels.0.label', 'Xuất sắc');
+
+        $this->actingAs($director)
+            ->getJson('/api/evaluation/score-kit/quality-levels?department_id='.$dept->id)
+            ->assertOk()
+            ->assertJsonPath('mode', 'weighted_task')
+            ->assertJsonPath('difficulty_levels.0.code', 'M1')
+            ->assertJsonPath('quality_levels.0.label', 'Xuất sắc');
+    }
 }

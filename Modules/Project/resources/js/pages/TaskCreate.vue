@@ -31,6 +31,8 @@ const stepDirection = ref(1);
 const users = ref([]);
 const importanceOptions = ref([]);
 const importanceCriterion = ref(null);
+const lockDifficulty = ref(false);
+const scoreKitMode = ref('');
 const selectedParent = ref(null);
 const formErrors = ref({});
 
@@ -213,8 +215,10 @@ function applyDefaultWatcher() {
 
 function applyDefaultImportance() {
   if (form.priority && importanceOptions.value.some((opt) => opt.value === form.priority)) return;
-  const preferred = importanceOptions.value.find((opt) => opt.value === 'important');
-  form.priority = preferred?.value || importanceOptions.value[0]?.value || 'important';
+  const preferred = importanceOptions.value.find((opt) => opt.value === 'TB' || opt.value === 'important')
+    || importanceOptions.value.find((opt) => Number(opt.weight) === 1)
+    || importanceOptions.value[0];
+  form.priority = preferred?.value || 'important';
 }
 
 async function loadImportance(departmentId) {
@@ -222,6 +226,8 @@ async function loadImportance(departmentId) {
   const { data } = await window.axios.get('/api/project/tasks/options', { params });
   importanceOptions.value = data.importance ?? [];
   importanceCriterion.value = data.criterion ?? null;
+  lockDifficulty.value = Boolean(data.lock_difficulty);
+  scoreKitMode.value = data.mode || '';
   applyDefaultImportance();
 }
 
@@ -441,6 +447,8 @@ onMounted(loadMeta);
                   :users="users"
                   :importance-options="importanceOptions"
                   :importance-criterion="importanceCriterion"
+                  :lock-difficulty="lockDifficulty"
+                  :score-kit-mode="scoreKitMode"
                   :disabled="saving"
                   :step="step"
                   :duration-days="durationDays"
