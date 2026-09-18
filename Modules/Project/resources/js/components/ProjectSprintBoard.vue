@@ -1,32 +1,34 @@
 <script setup>
 //
 // Chế độ xem "Theo Sprint" trên tab Công việc — mỗi Sprint là 1 khối gập/mở,
-// bên trong là bảng công việc (nhóm phụ theo danh mục cha gần nhất nếu có,
-// ví dụ "Development"). Sprint là bảng riêng (Modules/Project/App/Models/
-// Sprint.php), tự fetch qua API, không nằm trong cây WBS như phase.
+// bên trong là bảng công việc (nhóm phụ theo danh mục cha gần nhất nếu có).
+// Việc con thụt lề dưới cha, sắp theo lịch; mã nằm trên tên.
 //
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import DualProgressBar from '@/components/DualProgressBar.vue';
 import UserAvatarTip from '@/components/UserAvatarTip.vue';
+import { useDragScroll } from '@/composables/useDragScroll';
 import { computeExpectedProgress } from '@/lib/progress';
 import { showClientToast } from '@/lib/clientToast';
 import {
+  formatTaskScheduleRange,
   groupProjectTasksBySprint,
   groupSprintTasksByCategory,
   sprintStatusLabel,
   sprintStatusTone,
+  taskRangeInSprint,
 } from '../constants/sprint.js';
 import {
   TASK_STATUSES,
-  formatTaskDate,
   taskPriorityLabel,
   taskPriorityTone,
   taskStatusLabel,
   taskStatusTone,
-  taskTypeLabel,
 } from '../constants/task.js';
+
+const COL_COUNT = 8;
 
 const props = defineProps({
   tree: { type: Array, default: () => [] },
@@ -40,11 +42,16 @@ const props = defineProps({
 
 const emit = defineEmits(['add-tasks']);
 const router = useRouter();
+const boardRef = ref(null);
 const sprints = ref([]);
 const sprintsLoading = ref(false);
 const collapsedSprints = ref(new Set());
+const collapsedIds = ref(new Set());
 const statusUpdatingIds = ref(new Set());
 const statusOptions = TASK_STATUSES.filter((item) => item.value);
+const actionMenu = reactive({ id: null, top: 0, left: 0 });
+
+useDragScroll(boardRef, { axis: 'x', closest: '.psb__table-wrap' });
 
 async function loadSprints() {
   if (!props.project?.id) return;
@@ -61,22 +68,32 @@ async function loadSprints() {
 
 defineExpose({ reload: loadSprints });
 
-onMounted(loadSprints);
+onMounted(() => {
+  loadSprints();
+  document.addEventListener('pointerdown', onDocPointerDown, true);
+  document.addEventListener('keydown', onDocKeydown);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocPointerDown, true);
+  document.removeEventListener('keydown', onDocKeydown);
+});
 watch(() => props.project?.id, loadSprints);
-// Cây WBS được tải lại sau mỗi lần thêm/sửa sprint (ProjectDetail.vue
-// onTasksChanged) — nhân tiện làm mới luôn danh sách sprint để board cập
-// nhật cột mới mà không cần props riêng báo hiệu.
 watch(() => props.tree, loadSprints);
 
 const columns = computed(() =>
   groupProjectTasksBySprint(props.tree, sprints.value, { filter: props.filter, query: props.query }),
 );
 
-function isCollapsed(key) {
-  return collapsedSprints.value.has(key);
+function sprintKey(col) {
+  return col.id ?? 'no-sprint';
 }
 
-function toggleSprint(key) {
+function isCollapsed(col) {
+  return collapsedSprints.value.has(sprintKey(col));
+}
+
+function toggleSprint(col) {
+  const key = sprintKey(col);
   const next = new Set(collapsedSprints.value);
   if (next.has(key)) next.delete(key);
   else next.add(key);
@@ -84,21 +101,72 @@ function toggleSprint(key) {
 }
 
 function categoryGroups(col) {
-  return groupSprintTasksByCategory(col.tasks);
+  return groupSprintTasksByCategory(col.tasks, collapsedIds.value);
+}
+
+function toggleTaskCollapse(id) {
+  const next = new Set(collapsedIds.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  collapsedIds.value = next;
 }
 
 function openTask(task) {
   if (!task?.id) return;
+  closeActionMenu();
   router.push({ name: 'manager.project.tasks.detail', params: { id: task.id } });
 }
 
-function formatDate(value) {
-  return formatTaskDate(value) === '—' ? '' : formatTaskDate(value);
+function addTasks(col, parent = null) {
+  if (!col?.id) return;
+  closeActionMenu();
+  emit('add-tasks', {
+    sprintId: col.id,
+    parentId: parent?.id || null,
+    parent: parent || null,
+  });
+}
+
+function findActionContext() {
+  const id = actionMenu.id;
+  if (!id) return null;
+  const col = columns.value.find((item) => item.tasks.some((task) => task.id === id));
+  const task = col?.tasks.find((item) => item.id === id);
+  if (!col || !task) return null;
+  return { col, task };
+}
+
+const actionCanAddChild = computed(() => Boolean(props.canEdit && findActionContext()?.col?.id));
+
+function addChildFromMenu() {
+  const ctx = findActionContext();
+  if (!ctx?.col?.id) return;
+  addTasks(ctx.col, ctx.task);
 }
 
 function dateRangeLabel(item) {
-  if (!item.start_date && !item.end_date) return '';
-  return `${formatDate(item.start_date) || '—'} – ${formatDate(item.end_date) || '—'}`;
+  return formatTaskScheduleRange(item);
+}
+
+function hoursPlan(task) {
+  return task.estimated_hours == null || task.estimated_hours === '' ? '' : `${task.estimated_hours} giờ`;
+}
+
+function hoursActual(task) {
+  return `${task.worklog_hours || 0} giờ`;
+}
+
+function onRowClick(event, task) {
+  if (event.target.closest('button, a, input, select, textarea, .user-avatar-tip')) return;
+  openTask(task);
+}
+
+function scheduleLabel(task) {
+  return formatTaskScheduleRange(task);
+}
+
+function scheduleSpan(task, col) {
+  return taskRangeInSprint(task, col);
 }
 
 async function changeTaskStatus(task, status) {
@@ -121,77 +189,124 @@ async function changeTaskStatus(task, status) {
     statusUpdatingIds.value = next;
   }
 }
+
+function closeActionMenu() {
+  actionMenu.id = null;
+}
+
+function toggleActionMenu(task, event) {
+  event.stopPropagation();
+  if (actionMenu.id === task.id) {
+    closeActionMenu();
+    return;
+  }
+  const rect = event.currentTarget.getBoundingClientRect();
+  const width = 176;
+  const left = Math.min(Math.max(8, rect.right - width), window.innerWidth - width - 8);
+  actionMenu.id = task.id;
+  actionMenu.left = left;
+  actionMenu.top = rect.bottom + 4;
+  nextTick(() => {
+    const menu = document.querySelector('.psb__menu');
+    if (!menu) return;
+    if (rect.bottom + 4 + menu.offsetHeight > window.innerHeight - 8) {
+      actionMenu.top = Math.max(8, rect.top - menu.offsetHeight - 4);
+    }
+  });
+}
+
+function onDocPointerDown(event) {
+  if (!actionMenu.id) return;
+  if (event.target?.closest?.('.psb__menu, .psb__more')) return;
+  closeActionMenu();
+}
+
+function onDocKeydown(event) {
+  if (event.key === 'Escape' && actionMenu.id) closeActionMenu();
+}
 </script>
 
 <template>
-  <div class="psb hide-scrollbar">
-    <p v-if="loading || sprintsLoading" class="psb__empty">Đang tải…</p>
-    <p v-else-if="!columns.length" class="psb__empty">Dự án chưa có sprint nào.</p>
-    <section v-else v-for="col in columns" :key="col.id ?? 'no-sprint'" class="psb__sprint">
-      <header class="psb__head" @click="toggleSprint(col.id ?? 'no-sprint')">
+  <div ref="boardRef" class="psb hide-scrollbar">
+    <p v-if="(loading || sprintsLoading) && !columns.length" class="psb__empty">Đang tải danh sách đợt làm việc…</p>
+    <div v-else-if="!loading && !sprintsLoading && !columns.length" class="psb__empty-box">
+      <p class="psb__empty-title">Chưa có đợt làm việc</p>
+      <p class="psb__empty-copy">Bấm nút Thêm đợt làm việc ở thanh trên để tạo đợt đầu tiên, rồi thêm việc vào đợt đó.</p>
+    </div>
+    <template v-else>
+    <p class="psb__guide">Mỗi khung là một đợt làm việc. Bấm tên việc (chữ gạch chân) để xem chi tiết. Nút Thao tác để thêm việc nhỏ.</p>
+    <section
+      v-for="col in columns"
+      :key="sprintKey(col)"
+      class="psb__sprint"
+      :class="`psb__sprint--${col.status ? sprintStatusTone(col.status) : 'neutral'}`"
+    >
+      <header class="psb__head" @click="toggleSprint(col)">
         <button
           type="button"
           class="psb__toggle"
-          :aria-label="isCollapsed(col.id ?? 'no-sprint') ? 'Mở rộng sprint' : 'Thu gọn sprint'"
-          @click.stop="toggleSprint(col.id ?? 'no-sprint')"
+          @click.stop="toggleSprint(col)"
         >
           <AppIcon
             name="chevronRight"
             :size="16"
             class="psb__toggle-icon"
-            :class="{ 'psb__toggle-icon--open': !isCollapsed(col.id ?? 'no-sprint') }"
+            :class="{ 'psb__toggle-icon--open': !isCollapsed(col) }"
           />
+          <span>{{ isCollapsed(col) ? 'Hiện việc' : 'Ẩn việc' }}</span>
         </button>
 
         <div class="psb__head-main">
-          <span v-if="col.phase?.title" class="psb__phase">{{ col.phase.title }}</span>
+          <span v-if="col.phase?.title" class="psb__phase">Giai đoạn: {{ col.phase.title }}</span>
           <span class="psb__title">{{ col.name }}</span>
         </div>
 
-        <span v-if="col.status" class="psb__status">
-          <span class="psb__dot" :class="`psb__dot--${sprintStatusTone(col.status)}`" />
-          {{ sprintStatusLabel(col.status) }}
-        </span>
-
-        <span v-if="dateRangeLabel(col)" class="psb__range">{{ dateRangeLabel(col) }}</span>
-
-        <span class="psb__count">{{ col.tasks.length }} công việc</span>
-
-        <span v-if="col.estimatedHours || col.worklogHours" class="psb__hours">
-          Kế hoạch {{ col.estimatedHours || 0 }}h · Thực tế {{ col.worklogHours || 0 }}h
-        </span>
-
-        <span v-if="col.avgProgress != null" class="psb__progress">
-          <span class="psb__mini">
-            <span class="psb__mini-fill" :style="{ width: `${col.avgProgress}%` }" />
+        <div class="psb__meta">
+          <span v-if="col.status" class="psb__status">
+            <span class="psb__dot" :class="`psb__dot--${sprintStatusTone(col.status)}`" />
+            {{ sprintStatusLabel(col.status) }}
           </span>
-          <span class="psb__progress-value">{{ col.avgProgress }}%</span>
-        </span>
+          <span v-if="dateRangeLabel(col)" class="psb__range">{{ dateRangeLabel(col) }}</span>
+          <span class="psb__count">{{ col.tasks.length }} việc</span>
+          <span v-if="col.childCount" class="psb__count">{{ col.childCount }} việc nhỏ</span>
+          <span v-if="col.estimatedHours || col.worklogHours" class="psb__hours">
+            Dự kiến {{ col.estimatedHours || 0 }} giờ · Đã làm {{ col.worklogHours || 0 }} giờ
+          </span>
+        </div>
 
-        <button
-          v-if="canEdit && col.id"
-          type="button"
-          class="psb__add"
-          @click.stop="emit('add-tasks', { sprintId: col.id })"
-        >
-          <AppIcon name="plus" :size="14" />
-          Thêm việc
-        </button>
-      </header>
-
-      <div v-show="!isCollapsed(col.id ?? 'no-sprint')" class="psb__body">
-        <p v-if="!col.tasks.length" class="psb__col-empty">
-          Không có công việc nào.
+        <div class="psb__head-end">
+          <span v-if="col.avgProgress != null" class="psb__progress">
+            <span class="psb__mini">
+              <span class="psb__mini-fill" :style="{ width: `${col.avgProgress}%` }" />
+            </span>
+            <span class="psb__progress-value">{{ col.avgProgress }}% hoàn thành</span>
+          </span>
           <button
-            v-if="canEdit && col.id"
+            v-if="canEdit && col.id && col.tasks.length"
             type="button"
-            class="psb__add psb__add--inline"
-            @click="emit('add-tasks', { sprintId: col.id })"
+            class="psb__add"
+            @click.stop="addTasks(col)"
           >
             <AppIcon name="plus" :size="14" />
             Thêm việc
           </button>
-        </p>
+        </div>
+      </header>
+
+      <div v-show="!isCollapsed(col)" class="psb__body">
+        <div v-if="!col.tasks.length" class="psb__col-empty">
+          <p class="psb__empty-title">Đợt này chưa có việc</p>
+          <p class="psb__empty-copy">Thêm việc để mọi người biết cần làm gì trong đợt này.</p>
+          <button
+            v-if="canEdit && col.id"
+            type="button"
+            class="psb__add"
+            @click="addTasks(col)"
+          >
+            <AppIcon name="plus" :size="14" />
+            Thêm việc đầu tiên
+          </button>
+        </div>
         <div v-else class="psb__table-wrap hide-scrollbar">
           <table class="psb__table">
             <thead>
@@ -200,31 +315,62 @@ async function changeTaskStatus(task, status) {
                 <th>Người làm</th>
                 <th>Trạng thái</th>
                 <th>Ưu tiên</th>
-                <th>Bắt đầu</th>
-                <th>Hạn</th>
-                <th>Giờ KH</th>
-                <th>Giờ TT</th>
+                <th class="psb__th--time">Thời gian</th>
+                <th>Giờ làm</th>
                 <th>Tiến độ</th>
+                <th class="psb__th--action">Thao tác</th>
               </tr>
             </thead>
             <tbody>
               <template v-for="group in categoryGroups(col)" :key="group.key">
                 <tr v-if="group.title" class="psb__group-row">
-                  <td colspan="9">{{ group.title }}</td>
+                  <td :colspan="COL_COUNT">Nhóm: {{ group.title }}</td>
                 </tr>
                 <tr
                   v-for="task in group.tasks"
                   :key="task.id"
                   class="psb__row"
-                  @dblclick="openTask(task)"
+                  :class="{ 'psb__row--child': task.depth > 0 }"
+                  @click="onRowClick($event, task)"
                 >
                   <td class="psb__td--name">
-                    <span v-if="task.code" class="psb__code">{{ task.code }}</span>
-                    <button type="button" class="psb__link" @click="openTask(task)">{{ task.title }}</button>
+                    <div class="psb__task" :style="task.depth ? { paddingLeft: `${task.depth * 1.25}rem` } : undefined">
+                      <button
+                        v-if="task.hasChildren"
+                        type="button"
+                        class="psb__tree"
+                        :aria-label="collapsedIds.has(task.id) ? 'Hiện việc nhỏ' : 'Ẩn việc nhỏ'"
+                        @click.stop="toggleTaskCollapse(task.id)"
+                      >
+                        <AppIcon
+                          name="chevronRight"
+                          :size="12"
+                          class="psb__tree-icon"
+                          :class="{ 'psb__tree-icon--open': !collapsedIds.has(task.id) }"
+                        />
+                      </button>
+                      <span v-else class="psb__tree-spacer" />
+                      <div class="psb__task-copy">
+                        <span v-if="task.code" class="psb__code">{{ task.code }}</span>
+                        <button type="button" class="psb__link" @click.stop="openTask(task)">{{ task.title }}</button>
+                        <button
+                          v-if="task.hasChildren"
+                          type="button"
+                          class="psb__child-n"
+                          @click.stop="toggleTaskCollapse(task.id)"
+                        >
+                          {{ collapsedIds.has(task.id) ? `Hiện ${task.childCount} việc nhỏ` : 'Ẩn việc nhỏ' }}
+                        </button>
+                        <span v-else-if="task.depth > 0" class="psb__child-n">Việc nhỏ</span>
+                      </div>
+                    </div>
                   </td>
                   <td>
-                    <UserAvatarTip v-if="task.assignee" :user="task.assignee" label="Người thực hiện" />
-                    <span v-else>—</span>
+                    <span v-if="task.assignee" class="psb__person">
+                      <UserAvatarTip :user="task.assignee" label="Người thực hiện" />
+                      <span class="psb__person-name">{{ task.assignee.name }}</span>
+                    </span>
+                    <span v-else class="psb__muted">Chưa giao</span>
                   </td>
                   <td>
                     <select
@@ -233,6 +379,7 @@ async function changeTaskStatus(task, status) {
                       :class="`psb__status-select--${taskStatusTone(task.status)}`"
                       :disabled="statusUpdatingIds.has(task.id)"
                       :value="task.status"
+                      aria-label="Đổi trạng thái"
                       @click.stop
                       @change="changeTaskStatus(task, $event.target.value)"
                     >
@@ -248,12 +395,33 @@ async function changeTaskStatus(task, status) {
                       <span class="psb__dot" :class="`psb__dot--${taskPriorityTone(task.priority)}`" />
                       {{ taskPriorityLabel(task.priority) }}
                     </span>
-                    <span v-else>—</span>
+                    <span v-else class="psb__muted">Chưa chọn</span>
                   </td>
-                  <td>{{ formatDate(task.start_date) || '—' }}</td>
-                  <td>{{ formatDate(task.end_date) || '—' }}</td>
-                  <td>{{ task.estimated_hours ?? '—' }}</td>
-                  <td>{{ task.worklog_hours || 0 }}</td>
+                  <td class="psb__td--time">
+                    <div v-if="scheduleLabel(task)" class="psb__time">
+                      <span class="psb__time-label" :class="{ 'psb__time-label--overdue': task.is_overdue }">
+                        {{ scheduleLabel(task) }}
+                      </span>
+                      <span v-if="task.is_overdue" class="psb__overdue">Quá hạn</span>
+                      <span v-if="scheduleSpan(task, col)" class="psb__track" aria-hidden="true">
+                        <span
+                          class="psb__track-fill"
+                          :class="{ 'psb__track-fill--overdue': task.is_overdue }"
+                          :style="{
+                            marginLeft: `${scheduleSpan(task, col).left}%`,
+                            width: `${scheduleSpan(task, col).width}%`,
+                          }"
+                        />
+                      </span>
+                    </div>
+                    <span v-else class="psb__muted">Chưa đặt ngày</span>
+                  </td>
+                  <td class="psb__td--hours">
+                    <span class="psb__hours-stack">
+                      <span>Dự kiến: {{ hoursPlan(task) || 'chưa nhập' }}</span>
+                      <span>Đã làm: {{ hoursActual(task) }}</span>
+                    </span>
+                  </td>
                   <td>
                     <DualProgressBar
                       v-if="task.progress_percent != null"
@@ -261,7 +429,20 @@ async function changeTaskStatus(task, status) {
                       :expected="computeExpectedProgress(task.start_date, task.end_date)"
                       size="sm"
                     />
-                    <span v-else>—</span>
+                    <span v-else class="psb__muted">Chưa có</span>
+                  </td>
+                  <td class="psb__td--action" @click.stop>
+                    <button
+                      type="button"
+                      class="psb__more"
+                      :class="{ 'psb__more--open': actionMenu.id === task.id }"
+                      aria-haspopup="menu"
+                      :aria-expanded="actionMenu.id === task.id ? 'true' : 'false'"
+                      @click="toggleActionMenu(task, $event)"
+                    >
+                      <AppIcon name="moreVertical" :size="16" />
+                      <span>Thao tác</span>
+                    </button>
                   </td>
                 </tr>
               </template>
@@ -270,6 +451,32 @@ async function changeTaskStatus(task, status) {
         </div>
       </div>
     </section>
+    </template>
+
+    <Teleport to="body">
+      <div
+        v-if="actionMenu.id"
+        class="psb__menu"
+        role="menu"
+        aria-label="Thao tác công việc"
+        :style="{ top: `${actionMenu.top}px`, left: `${actionMenu.left}px` }"
+      >
+        <button type="button" class="psb__menu-item" role="menuitem" @click="openTask({ id: actionMenu.id })">
+          <AppIcon name="eye" :size="15" />
+          <span>Xem chi tiết</span>
+        </button>
+        <button
+          v-if="actionCanAddChild"
+          type="button"
+          class="psb__menu-item"
+          role="menuitem"
+          @click="addChildFromMenu"
+        >
+          <AppIcon name="gitBranch" :size="15" />
+          <span>Thêm việc nhỏ</span>
+        </button>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -282,7 +489,7 @@ async function changeTaskStatus(task, status) {
   gap: 0.75rem;
   padding: 0.75rem;
   overflow-y: auto;
-  background: var(--color-surface-muted, var(--color-surface));
+  background: var(--color-surface-muted);
 }
 
 .psb__empty {
@@ -291,23 +498,77 @@ async function changeTaskStatus(task, status) {
   font-size: 0.875rem;
 }
 
+.psb__guide {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0 0.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.psb__empty-box,
+.psb__col-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 1.5rem 1rem;
+  text-align: center;
+}
+
+.psb__empty-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.psb__empty-copy {
+  margin: 0 0 0.5rem;
+  max-width: 28rem;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
 .psb__sprint {
+  position: relative;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  padding-left: calc(var(--space-2) + 3px + var(--space-2));
   background: var(--color-surface);
-  border-radius: var(--radius-lg, 0.75rem);
-  box-shadow: 0 0 0 1px var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
+
+.psb__sprint::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.psb__sprint--primary::before { background: var(--color-primary); }
+.psb__sprint--success::before { background: var(--color-success); }
+.psb__sprint--info::before { background: var(--color-info); }
+.psb__sprint--neutral::before { background: var(--color-text-muted); }
+.psb__sprint--umber::before { background: var(--color-umber); }
 
 .psb__head {
   flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.625rem 0.875rem;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem 0.875rem 0.75rem 0.5rem;
   cursor: pointer;
 }
 
@@ -315,15 +576,22 @@ async function changeTaskStatus(task, status) {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
+  gap: 0.25rem;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.5rem 0.25rem 0.25rem;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  font-weight: 600;
   cursor: pointer;
+}
+
+.psb__toggle:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
 }
 
 .psb__toggle-icon {
@@ -338,18 +606,28 @@ async function changeTaskStatus(task, status) {
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
-  min-width: 8rem;
+  min-width: 10rem;
 }
 
 .psb__phase {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--color-text-muted);
 }
 
 .psb__title {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--color-text);
+  line-height: 1.3;
+}
+
+.psb__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.75rem;
+  min-width: 0;
 }
 
 .psb__status,
@@ -379,33 +657,30 @@ async function changeTaskStatus(task, status) {
 .psb__dot--umber { background: var(--color-umber); }
 .psb__dot--neutral { background: var(--color-text-muted); }
 
-.psb__range {
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-
-.psb__count {
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-
+.psb__range,
+.psb__count,
 .psb__hours {
   font-size: 0.8125rem;
   color: var(--color-text-muted);
   white-space: nowrap;
 }
 
+.psb__head-end {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
 .psb__progress {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  margin-left: auto;
 }
 
 .psb__mini {
-  width: 6rem;
+  width: 5.5rem;
   height: 0.375rem;
   border-radius: var(--radius-full);
   background: var(--color-border);
@@ -419,9 +694,10 @@ async function changeTaskStatus(task, status) {
 }
 
 .psb__progress-value {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .psb__add {
@@ -429,7 +705,7 @@ async function changeTaskStatus(task, status) {
   flex-shrink: 0;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.3125rem 0.625rem;
+  padding: 0.375rem 0.75rem;
   border: none;
   border-radius: var(--radius-sm);
   background: var(--color-primary-surface);
@@ -445,26 +721,9 @@ async function changeTaskStatus(task, status) {
   color: var(--color-on-primary);
 }
 
-.psb__add--inline {
-  margin-left: 0.5rem;
-}
-
 .psb__body {
   flex-shrink: 0;
-  box-shadow: 0 1px 0 var(--color-border);
-}
-
-.psb__col-empty {
-  margin: 0;
-  padding: 0.875rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  text-align: center;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
+  box-shadow: 0 1px 0 var(--color-border) inset;
 }
 
 .psb__table-wrap {
@@ -473,26 +732,37 @@ async function changeTaskStatus(task, status) {
 
 .psb__table {
   width: 100%;
-  min-width: 52rem;
+  min-width: 58rem;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .psb__table thead th {
   padding: 0.5rem 0.75rem;
   color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   text-align: left;
   white-space: nowrap;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
 .psb__th--name {
-  min-width: 16rem;
+  width: 28%;
+}
+
+.psb__th--time {
+  width: 13rem;
+}
+
+.psb__th--action {
+  width: 7.5rem;
 }
 
 .psb__group-row td {
-  padding: 0.375rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   color: var(--color-text-muted);
   font-size: 0.75rem;
   font-weight: 700;
@@ -504,47 +774,201 @@ async function changeTaskStatus(task, status) {
 }
 
 .psb__row:hover td {
-  filter: brightness(0.97);
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
+}
+
+.psb__row--child td {
+  background: color-mix(in srgb, var(--color-surface-muted) 55%, var(--color-surface));
 }
 
 .psb__row td {
-  padding: 0.5rem 0.75rem;
+  padding: 0.5625rem 0.75rem;
   font-size: 0.8125rem;
   color: var(--color-text);
-  white-space: nowrap;
+  vertical-align: middle;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
 .psb__td--name {
+  overflow: hidden;
+}
+
+.psb__task {
   display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.psb__tree,
+.psb__tree-spacer {
+  flex-shrink: 0;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.2rem;
+}
+
+.psb__tree {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  white-space: normal;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.psb__tree-icon {
+  transition: transform 0.15s ease;
+}
+
+.psb__tree-icon--open {
+  transform: rotate(90deg);
+}
+
+.psb__task-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  min-width: 0;
 }
 
 .psb__code {
-  flex-shrink: 0;
   color: var(--color-text-muted);
-  font-size: 0.75rem;
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 0.6875rem;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .psb__link {
   padding: 0;
   border: 0;
   background: transparent;
-  color: inherit;
+  color: var(--color-primary);
   font: inherit;
   font-weight: 600;
+  line-height: 1.35;
   text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  white-space: normal;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
 .psb__link:hover {
+  color: var(--color-primary-hover);
+}
+
+.psb__child-n {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+button.psb__child-n {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-family-base);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.psb__child-n:hover {
   color: var(--color-primary);
 }
 
+.psb__muted {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.psb__person {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.psb__person-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.psb__td--time {
+  min-width: 10rem;
+}
+
+.psb__time {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  min-width: 8.5rem;
+}
+
+.psb__time-label {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.psb__time-label--overdue {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.psb__overdue {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.0625rem 0.375rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-tint-bg, var(--color-primary-surface));
+  color: var(--color-danger);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.psb__track {
+  display: block;
+  width: 100%;
+  height: 0.3125rem;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.psb__track-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary);
+}
+
+.psb__track-fill--overdue {
+  background: var(--color-danger);
+}
+
+.psb__td--hours {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.psb__hours-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  color: var(--color-text);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 .psb__status-select {
+  max-width: 100%;
   padding: 0.25rem 0.5rem;
   border: 0;
   border-radius: var(--radius-sm);
@@ -560,15 +984,77 @@ async function changeTaskStatus(task, status) {
   cursor: not-allowed;
 }
 
+.psb__td--action {
+  text-align: left;
+}
+
+.psb__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.psb__more:hover,
+.psb__more--open {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
+.psb__menu {
+  position: fixed;
+  z-index: 1200;
+  width: 12.5rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-lg);
+}
+
+.psb__menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.psb__menu-item:hover {
+  background: var(--color-surface-muted);
+}
+
 @media (max-width: 768px) {
   .psb {
     padding: 0.5rem;
   }
-  .psb__head {
-    gap: 0.5rem;
-  }
-  .psb__progress {
+  .psb__head-end {
     margin-left: 0;
+    width: 100%;
+    justify-content: space-between;
   }
 }
 

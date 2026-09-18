@@ -49,7 +49,7 @@ const TASK_ADD_VARIANTS = [
   { key: 'bulk', label: 'Thêm nhiều công việc thường', icon: 'layoutList' },
   { key: 'by_category', label: 'Thêm công việc theo danh mục', icon: 'listChecks' },
   { key: 'by_phase', label: 'Thêm công việc theo phase', icon: 'flag' },
-  { key: 'by_sprint', label: 'Thêm công việc theo sprint', icon: 'layoutGrid' },
+  { key: 'by_sprint', label: 'Thêm việc vào đợt làm việc', icon: 'layoutGrid' },
 ];
 
 const RULE_DEFS = [
@@ -837,7 +837,7 @@ const performers = computed(() => {
               </button>
               <button type="button" class="pd__action" @click="openAction('sprint')">
                 <span class="pd__action-icon"><AppIcon name="layoutGrid" :size="15" :stroke-width="1.75" /></span>
-                <span class="pd__action-label">Thêm sprint</span>
+                <span class="pd__action-label">Thêm đợt làm việc</span>
               </button>
             </div>
 
@@ -1231,7 +1231,12 @@ const performers = computed(() => {
                 :filter-label="activeStatCard.label"
                 :can-edit="canCreateTask"
                 @tasks-changed="onTasksChanged"
-                @add-tasks="openAction('task', { variant: 'by_sprint', sprint_id: $event.sprintId })"
+                @add-tasks="openAction('task', {
+                  variant: 'by_sprint',
+                  sprint_id: $event.sprintId,
+                  parent_id: $event.parentId || null,
+                  parent: $event.parent || null,
+                })"
               />
             </section>
           </template>

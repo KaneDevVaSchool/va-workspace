@@ -25,7 +25,7 @@ const TASK_TITLES = {
   bulk: 'Thêm nhiều công việc thường',
   by_category: 'Thêm công việc theo danh mục',
   by_phase: 'Thêm công việc theo phase',
-  by_sprint: 'Thêm công việc theo sprint',
+  by_sprint: 'Thêm việc vào đợt làm việc',
 };
 
 const KIND_META = {
@@ -33,7 +33,7 @@ const KIND_META = {
   category: { title: 'Cập nhật danh mục công việc', icon: 'listChecks', tone: 'gold' },
   task: { title: 'Thêm công việc', icon: 'plus', tone: 'info' },
   phase: { title: 'Cập nhật giai đoạn', icon: 'flag', tone: 'secondary' },
-  sprint: { title: 'Cập nhật sprint', icon: 'layoutGrid', tone: 'info' },
+  sprint: { title: 'Cập nhật đợt làm việc', icon: 'layoutGrid', tone: 'info' },
   baseline: { title: 'Chốt baseline', icon: 'flag', tone: 'warning' },
   dates: { title: 'Cập nhật thời gian dự án', icon: 'calendar', tone: 'info' },
   description: { title: 'Cập nhật mô tả dự án', icon: 'fileText', tone: 'violet' },
@@ -139,9 +139,20 @@ const isOpen = computed(() => Boolean(props.kind && props.project && props.kind 
 const taskVariant = computed(() => props.extra?.variant || 'normal');
 const dateFocus = computed(() => props.extra?.focus || 'range');
 
+const childParent = computed(() => (taskVariant.value === 'by_sprint' ? props.extra?.parent || null : null));
+const childParentId = computed(() => (taskVariant.value === 'by_sprint' ? props.extra?.parent_id || null : null));
+const childParentLabel = computed(() => {
+  const parent = childParent.value;
+  if (!parent) return '';
+  return parent.code ? `${parent.code} · ${parent.title}` : (parent.title || '');
+});
+
 const dialogMeta = computed(() => {
   const base = KIND_META[props.kind] || { title: '', icon: 'layers', tone: 'primary' };
   if (props.kind === 'task') {
+    if (childParentId.value) {
+      return { ...base, title: 'Thêm việc nhỏ vào việc này', icon: 'gitBranch' };
+    }
     return { ...base, title: TASK_TITLES[taskVariant.value] || base.title };
   }
   return base;
@@ -332,6 +343,13 @@ function addBulkRow() {
       if (sprint) {
         overrides.start_date = sprint.start_date || last?.start_date || props.project?.start_date || '';
         overrides.end_date = sprint.end_date || last?.end_date || props.project?.end_date || '';
+      }
+    }
+    if (childParentId.value) {
+      overrides.parent_id = childParentId.value;
+      if (childParent.value) {
+        overrides.start_date = String(childParent.value.start_date || overrides.start_date || '').slice(0, 10);
+        overrides.end_date = String(childParent.value.end_date || overrides.end_date || '').slice(0, 10);
       }
     }
   } else if (last) {
@@ -541,7 +559,7 @@ function focusFirst() {
 }
 
 watch(
-  () => [props.kind, props.project?.id, taskVariant.value],
+  () => [props.kind, props.project?.id, taskVariant.value, props.extra?.sprint_id, props.extra?.parent_id],
   async ([kind]) => {
     document.removeEventListener('keydown', onKeydown);
     if (!kind || kind === 'signature' || kind === 'duplicate' || !props.project) return;
@@ -623,6 +641,13 @@ watch(
           taskForm.sprint_id = props.extra.sprint_id;
           for (const row of bulkRows.value) {
             applySprintDatesToRow(row, props.extra.sprint_id);
+            if (childParentId.value) {
+              row.parent_id = childParentId.value;
+              if (childParent.value) {
+                row.start_date = String(childParent.value.start_date || row.start_date || '').slice(0, 10);
+                row.end_date = String(childParent.value.end_date || row.end_date || '').slice(0, 10);
+              }
+            }
           }
         }
       }
@@ -768,12 +793,12 @@ async function submit() {
     if (props.kind === 'sprint') {
       const filled = sprintRows.value.filter((row) => row.name.trim());
       if (!filled.length && !deletedSprintIds.value.length) {
-        showClientToast('error', 'Nhập ít nhất một sprint.');
+        showClientToast('error', 'Nhập ít nhất một đợt làm việc.');
         return;
       }
       for (const row of filled) {
         if (!row.phase_id) {
-          showClientToast('error', 'Chọn giai đoạn cho mọi sprint.');
+          showClientToast('error', 'Chọn giai đoạn cho mọi đợt làm việc.');
           return;
         }
         const err = dateRangeError(row.start_date, row.end_date);
@@ -804,11 +829,11 @@ async function submit() {
           await window.axios.delete(`/api/project/sprints/${id}`);
         }
       } catch (error) {
-        showClientToast('error', error?.response?.data?.message || 'Không lưu được sprint.');
+        showClientToast('error', error?.response?.data?.message || 'Không lưu được đợt làm việc.');
         return;
       }
       emit('tasks-changed');
-      showClientToast('success', 'Đã cập nhật sprint.');
+      showClientToast('success', 'Đã cập nhật đợt làm việc.');
       emit('close');
       return;
     }
@@ -817,7 +842,7 @@ async function submit() {
 
       if (isTaskListVariant.value) {
         if (variant === 'by_sprint' && !perRowParent.value && !taskForm.sprint_id) {
-          showClientToast('error', 'Chọn sprint.');
+          showClientToast('error', 'Chọn đợt làm việc.');
           return;
         }
         if ((variant === 'by_category' || variant === 'by_phase') && !perRowParent.value && !taskForm[variant === 'by_category' ? 'category_id' : 'phase_id']) {
@@ -836,7 +861,7 @@ async function submit() {
             return;
           }
           if (variant === 'by_sprint' && perRowParent.value && !row.sprint_id) {
-            showClientToast('error', 'Chọn sprint cho từng dòng.');
+            showClientToast('error', 'Chọn đợt làm việc cho từng dòng.');
             return;
           }
           if (variant !== 'bulk' && variant !== 'by_sprint' && perRowParent.value && !row.parent_id) {
@@ -850,7 +875,11 @@ async function submit() {
           items: rows.map((row) => ({
             title: row.title.trim(),
             description: row.description?.trim() || null,
-            parent_id: variant === 'bulk' || variant === 'by_sprint' ? null : (perRowParent.value ? row.parent_id : sharedParentId) || null,
+            parent_id: variant === 'by_sprint'
+              ? (childParentId.value || null)
+              : variant === 'bulk'
+                ? null
+                : (perRowParent.value ? row.parent_id : sharedParentId) || null,
             sprint_id: variant === 'by_sprint' ? (perRowParent.value ? row.sprint_id : sharedSprintId) || null : null,
             start_date: row.start_date || null,
             end_date: row.end_date || null,
@@ -1064,7 +1093,7 @@ watch(
           <div v-else-if="kind === 'task' && isTaskListVariant" class="proj-qa__task-list">
             <p v-if="taskVariant === 'by_sprint' && listsLoading" class="proj-qa__muted">Đang tải…</p>
             <div v-else-if="taskVariant === 'by_sprint' && !sprints.length" class="proj-qa__empty">
-              Chưa có sprint. Hãy tạo sprint trước khi thêm công việc.
+              Chưa có đợt làm việc. Hãy tạo đợt trước khi thêm việc.
             </div>
             <template v-else>
             <div class="proj-qa__task-list-toolbar">
@@ -1072,18 +1101,22 @@ watch(
                 <input v-model="showHourFields" type="checkbox">
                 <span>Đặt giờ cụ thể</span>
               </label>
-              <label v-if="isGroupedTaskVariant" class="proj-qa__check">
+              <label v-if="isGroupedTaskVariant && !childParentId" class="proj-qa__check">
                 <input v-model="perRowParent" type="checkbox">
                 <span>{{
                   taskVariant === 'by_category'
                     ? 'Mỗi công việc thuộc danh mục khác nhau'
                     : taskVariant === 'by_phase'
                       ? 'Mỗi công việc thuộc giai đoạn khác nhau'
-                      : 'Mỗi công việc thuộc sprint khác nhau'
+                      : 'Mỗi việc thuộc đợt khác nhau'
                 }}</span>
               </label>
             </div>
 
+            <label v-if="childParentId" class="proj-qa__field proj-qa__field--parent">
+              <span class="proj-qa__label">Việc cha</span>
+              <input class="proj-qa__input" :value="childParentLabel" disabled>
+            </label>
             <label v-if="taskVariant === 'by_category' && !perRowParent" class="proj-qa__field proj-qa__field--parent">
               <span class="proj-qa__label">Danh mục</span>
               <select v-model="taskForm.category_id" class="proj-qa__input" required>
@@ -1099,9 +1132,15 @@ watch(
               </select>
             </label>
             <label v-if="taskVariant === 'by_sprint' && !perRowParent" class="proj-qa__field proj-qa__field--parent">
-              <span class="proj-qa__label">Sprint</span>
-              <select v-model="taskForm.sprint_id" class="proj-qa__input" required @change="onSharedSprintChange">
-                <option value="">Chọn sprint</option>
+              <span class="proj-qa__label">Đợt làm việc</span>
+              <select
+                v-model="taskForm.sprint_id"
+                class="proj-qa__input"
+                required
+                :disabled="Boolean(childParentId)"
+                @change="onSharedSprintChange"
+              >
+                <option value="">Chọn đợt làm việc</option>
                 <option v-for="item in sprints" :key="item.id" :value="item.id">{{ sprintOptionLabel(item) }}</option>
               </select>
             </label>
@@ -1137,9 +1176,9 @@ watch(
                     </select>
                   </label>
                   <label v-if="taskVariant === 'by_sprint' && perRowParent" class="proj-qa__field proj-qa__field--wide">
-                    <span class="proj-qa__label">Sprint</span>
+                    <span class="proj-qa__label">Đợt làm việc</span>
                     <select v-model="row.sprint_id" class="proj-qa__input" @change="applySprintDatesToRow(row, row.sprint_id, { overwrite: true })">
-                      <option value="">Chọn sprint</option>
+                      <option value="">Chọn đợt làm việc</option>
                       <option v-for="item in sprints" :key="item.id" :value="item.id">{{ sprintOptionLabel(item) }}</option>
                     </select>
                   </label>
@@ -1341,15 +1380,15 @@ watch(
           <div v-else-if="kind === 'sprint'" class="proj-qa__structure">
             <p v-if="listsLoading" class="proj-qa__muted">Đang tải…</p>
             <div v-else-if="!phases.length" class="proj-qa__empty">
-              Chưa có giai đoạn. Hãy tạo giai đoạn trước khi thêm sprint.
+              Chưa có giai đoạn. Hãy tạo giai đoạn trước khi thêm đợt làm việc.
             </div>
             <div v-else class="proj-qa__structure-list">
               <div v-for="(row, index) in sprintRows" :key="row.key" class="proj-qa__structure-row proj-qa__structure-row--card">
                 <div class="proj-qa__structure-row__head">
                   <span class="proj-qa__row-index">{{ index + 1 }}</span>
                   <label class="proj-qa__field proj-qa__field--full">
-                    <span class="proj-qa__label">Tên sprint</span>
-                    <input v-model="row.name" class="proj-qa__input" maxlength="255" placeholder="Ví dụ: Sprint 1">
+                    <span class="proj-qa__label">Tên đợt làm việc</span>
+                    <input v-model="row.name" class="proj-qa__input" maxlength="255" placeholder="Ví dụ: Đợt 1 — UAT">
                   </label>
                   <button type="button" class="proj-qa__row-remove proj-qa__row-remove--label" aria-label="Xoá dòng" @click="removeSprintRow(row)">
                     <AppIcon name="close" :size="14" />
@@ -1397,7 +1436,7 @@ watch(
               </div>
               <button type="button" class="proj-qa__add-row proj-qa__add-row--block" @click="addSprintRow">
                 <AppIcon name="plus" :size="14" />
-                Thêm sprint
+                Thêm đợt làm việc
               </button>
             </div>
           </div>

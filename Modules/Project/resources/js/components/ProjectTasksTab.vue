@@ -1079,7 +1079,7 @@ onBeforeUnmount(() => {
       <h3 class="ptasks__filter">{{ filterLabel }}</h3>
       <label v-if="!isGantt && !isPlan" class="ptasks__search" :class="{ 'ptasks__search--with-export': isList }">
         <AppIcon name="search" :size="15" />
-        <input v-model="query" type="search" placeholder="Tìm theo tên công việc…" />
+        <input v-model="query" type="search" :placeholder="isSprintBoard ? 'Tìm việc theo tên hoặc mã…' : 'Tìm theo tên công việc…'" />
       </label>
       <div v-if="isList" id="project-task-export-menu" class="ptasks__export">
         <button

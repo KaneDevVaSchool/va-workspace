@@ -303,4 +303,54 @@ class ProjectStructureAndBulkTasksTest extends TestCase
             'title' => 'Sprint sai dự án',
         ]);
     }
+
+    public function test_bulk_create_can_nest_subtask_under_parent_in_sprint(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
+        $editor = $this->makeUser(['department_id' => $dept->id]);
+        $project = $this->makeProject($editor);
+        $phase = $this->makeTask($project, [
+            'type' => 'phase',
+            'title' => 'Phase 1',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-06-30',
+        ]);
+        $sprint = Sprint::query()->create([
+            'project_id' => $project->id,
+            'phase_id' => $phase->id,
+            'name' => 'Sprint 1',
+            'status' => 'planned',
+            'created_by' => $editor->id,
+        ]);
+        $parent = $this->makeTask($project, [
+            'title' => 'Việc cha',
+            'sprint_id' => $sprint->id,
+            'start_date' => '2026-02-01',
+            'end_date' => '2026-02-20',
+        ]);
+
+        $response = $this->actingAs($editor)->postJson('/api/project/'.$project->id.'/tasks/bulk', [
+            'items' => [
+                [
+                    'title' => 'Việc con',
+                    'parent_id' => $parent->id,
+                    'sprint_id' => $sprint->id,
+                    'start_date' => '2026-02-02',
+                    'end_date' => '2026-02-10',
+                ],
+            ],
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('tasks.0.parent_id', $parent->id);
+        $response->assertJsonPath('tasks.0.sprint_id', $sprint->id);
+        $this->assertDatabaseHas('tasks', [
+            'project_id' => $project->id,
+            'title' => 'Việc con',
+            'parent_id' => $parent->id,
+            'sprint_id' => $sprint->id,
+        ]);
+    }
 }

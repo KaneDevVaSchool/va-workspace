@@ -198,7 +198,7 @@ watch(
 <template>
   <div class="pplan">
     <div class="pplan__toolbar">
-      <span class="pplan__hint">Mỗi hàng là 1 giai đoạn hoặc 1 sprint — bấm mũi tên để xem chi tiết bên trong.</span>
+      <span class="pplan__hint">Mỗi hàng là 1 giai đoạn hoặc 1 đợt làm việc — bấm mũi tên để xem chi tiết bên trong.</span>
       <div class="pplan__zoom">
         <button type="button" class="pplan__zoom-btn" aria-label="Thu nhỏ" @click="zoomBy(-1)">
           <AppIcon name="minus" :size="14" />

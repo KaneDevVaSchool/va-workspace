@@ -40,7 +40,7 @@ const TASK_VARIANTS = [
   { key: 'bulk', label: 'Thêm nhiều công việc thường' },
   { key: 'by_category', label: 'Thêm công việc theo danh mục' },
   { key: 'by_phase', label: 'Thêm công việc theo phase' },
-  { key: 'by_sprint', label: 'Thêm công việc theo sprint' },
+  { key: 'by_sprint', label: 'Thêm việc vào đợt làm việc' },
 ];
 
 const TIME_VARIANTS = [
