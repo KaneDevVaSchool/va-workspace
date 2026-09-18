@@ -28,8 +28,9 @@ class SocialPostModerationController extends Controller
     {
         $perPage = min(max((int) $request->query('per_page', 20), 1), 50);
         $page = max((int) $request->query('page', 1), 1);
+        $status = (string) $request->query('status', SocialPost::REVIEW_PENDING);
 
-        return response()->json($this->service->pendingList($request->user(), $perPage, $page));
+        return response()->json($this->service->reviewQueue($request->user(), $perPage, $page, $status));
     }
 
     /** Số bài chờ duyệt — sidebar poll để hiện số cạnh mục "Duyệt bài". */
@@ -40,16 +41,18 @@ class SocialPostModerationController extends Controller
 
     public function approve(Request $request, int $postId): JsonResponse
     {
-        $post = $this->pendingPost($postId);
+        $post = $this->reviewablePost($postId);
         if (! $post) {
-            return response()->json(['message' => 'Không tìm thấy bài viết đang chờ duyệt.'], 404);
+            return response()->json(['message' => 'Không tìm thấy bài viết cần duyệt.'], 404);
         }
 
+        $wasRejected = $post->review_status === SocialPost::REVIEW_REJECTED;
+        $authorLabel = $post->is_anonymous ? 'ẩn danh' : $post->user->name;
         $post = $this->service->approve($post, $request->user());
 
         $this->activityLogs->record(
             'social_post.approve',
-            'Duyệt bài viết của "'.($post->is_anonymous ? 'ẩn danh' : $post->user->name).'" trên bảng tin',
+            ($wasRejected ? 'Duyệt lại bài viết đã từ chối của "' : 'Duyệt bài viết của "').$authorLabel.'" trên bảng tin',
             $request->user(),
             'social_post',
             $post->id,
@@ -84,5 +87,18 @@ class SocialPostModerationController extends Controller
         $post = $this->posts->find($postId);
 
         return $post && $post->review_status === SocialPost::REVIEW_PENDING ? $post : null;
+    }
+
+    /** Bài chờ duyệt hoặc đã từ chối — đều có thể duyệt (kể cả duyệt lại). */
+    private function reviewablePost(int $postId): ?SocialPost
+    {
+        $post = $this->posts->find($postId);
+        if (! $post) {
+            return null;
+        }
+
+        return in_array($post->review_status, [SocialPost::REVIEW_PENDING, SocialPost::REVIEW_REJECTED], true)
+            ? $post
+            : null;
     }
 }

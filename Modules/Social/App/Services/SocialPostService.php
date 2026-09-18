@@ -81,10 +81,17 @@ class SocialPostService
         return $this->posts->profileStats($user->id);
     }
 
-    /** Danh sách bài chờ duyệt, cũ nhất trước — dành cho trang duyệt bài. */
-    public function pendingList(User $reviewer, int $perPage, int $page): array
+    /**
+     * Hàng chờ duyệt hoặc danh sách bài đã từ chối (để xem xét lại).
+     *
+     * @param  'pending'|'rejected'  $status
+     */
+    public function reviewQueue(User $reviewer, int $perPage, int $page, string $status = SocialPost::REVIEW_PENDING): array
     {
-        $paginator = $this->posts->paginatePending($perPage, $page);
+        $status = $this->normalizeReviewQueueStatus($status);
+        $paginator = $status === SocialPost::REVIEW_REJECTED
+            ? $this->posts->paginateRejected($perPage, $page)
+            : $this->posts->paginatePending($perPage, $page);
 
         return [
             'posts' => collect($paginator->items())
@@ -93,6 +100,9 @@ class SocialPostService
             'current_page' => $paginator->currentPage(),
             'last_page' => $paginator->lastPage(),
             'total' => $paginator->total(),
+            'status' => $status,
+            'pending_count' => $this->posts->countPending(),
+            'rejected_count' => $this->posts->countRejected(),
         ];
     }
 
@@ -103,6 +113,8 @@ class SocialPostService
 
     public function approve(SocialPost $post, User $reviewer): SocialPost
     {
+        $wasRejected = $post->review_status === SocialPost::REVIEW_REJECTED;
+
         $post = $this->posts->update($post, [
             'review_status' => SocialPost::REVIEW_APPROVED,
             'reviewed_by' => $reviewer->id,
@@ -114,7 +126,7 @@ class SocialPostService
             $post->user,
             $reviewer,
             NotificationService::TYPE_SOCIAL_POST_APPROVED,
-            'Bài viết của bạn đã được duyệt',
+            $wasRejected ? 'Bài viết của bạn đã được duyệt lại' : 'Bài viết của bạn đã được duyệt',
             $this->sanitizer->excerpt((string) ($post->content ?? '')),
             '/social?post='.$post->id,
             ['post_id' => $post->id],
@@ -145,6 +157,13 @@ class SocialPostService
         );
 
         return $post;
+    }
+
+    private function normalizeReviewQueueStatus(string $status): string
+    {
+        return $status === SocialPost::REVIEW_REJECTED
+            ? SocialPost::REVIEW_REJECTED
+            : SocialPost::REVIEW_PENDING;
     }
 
     private function normalizeFeedScope(string $scope): string
