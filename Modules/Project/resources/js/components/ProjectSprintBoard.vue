@@ -246,17 +246,21 @@ function onDocKeydown(event) {
       <p class="psb__empty-copy">Bấm nút Thêm đợt làm việc ở thanh trên để tạo đợt đầu tiên, rồi thêm việc vào đợt đó.</p>
     </div>
     <template v-else>
-    <p class="psb__guide">Mỗi khung là một đợt làm việc. Bấm tên việc (chữ gạch chân) để xem chi tiết. Nút Thao tác để thêm việc nhỏ.</p>
     <section
       v-for="col in columns"
       :key="sprintKey(col)"
       class="psb__sprint"
       :class="`psb__sprint--${col.status ? sprintStatusTone(col.status) : 'neutral'}`"
     >
-      <header class="psb__head" @click="toggleSprint(col)">
+      <header
+        class="psb__head"
+        :class="{ 'psb__head--collapsed': isCollapsed(col) }"
+        @click="toggleSprint(col)"
+      >
         <button
           type="button"
           class="psb__toggle"
+          :aria-expanded="isCollapsed(col) ? 'false' : 'true'"
           @click.stop="toggleSprint(col)"
         >
           <AppIcon
@@ -269,30 +273,24 @@ function onDocKeydown(event) {
         </button>
 
         <div class="psb__head-main">
-          <span v-if="col.phase?.title" class="psb__phase">Giai đoạn: {{ col.phase.title }}</span>
+          <span v-if="col.phase?.title" class="psb__phase">{{ col.phase.title }}</span>
           <span class="psb__title">{{ col.name }}</span>
-        </div>
-
-        <div class="psb__meta">
-          <span v-if="col.status" class="psb__status">
-            <span class="psb__dot" :class="`psb__dot--${sprintStatusTone(col.status)}`" />
-            {{ sprintStatusLabel(col.status) }}
-          </span>
-          <span v-if="dateRangeLabel(col)" class="psb__range">{{ dateRangeLabel(col) }}</span>
-          <span class="psb__count">{{ col.tasks.length }} việc</span>
-          <span v-if="col.childCount" class="psb__count">{{ col.childCount }} việc nhỏ</span>
-          <span v-if="col.estimatedHours || col.worklogHours" class="psb__hours">
-            Dự kiến {{ col.estimatedHours || 0 }} giờ · Đã làm {{ col.worklogHours || 0 }} giờ
-          </span>
+          <div class="psb__meta">
+            <span v-if="col.status" class="psb__status">
+              <span class="psb__dot" :class="`psb__dot--${sprintStatusTone(col.status)}`" />
+              {{ sprintStatusLabel(col.status) }}
+            </span>
+            <span v-if="dateRangeLabel(col)" class="psb__range">{{ dateRangeLabel(col) }}</span>
+            <span class="psb__count">{{ col.tasks.length }} việc</span>
+            <span v-if="col.childCount" class="psb__count">{{ col.childCount }} việc nhỏ</span>
+            <span v-if="col.estimatedHours || col.worklogHours" class="psb__hours">
+              Dự kiến {{ col.estimatedHours || 0 }} giờ · Đã làm {{ col.worklogHours || 0 }} giờ
+            </span>
+          </div>
         </div>
 
         <div class="psb__head-end">
-          <span v-if="col.avgProgress != null" class="psb__progress">
-            <span class="psb__mini">
-              <span class="psb__mini-fill" :style="{ width: `${col.avgProgress}%` }" />
-            </span>
-            <span class="psb__progress-value">{{ col.avgProgress }}% hoàn thành</span>
-          </span>
+          <span v-if="col.avgProgress != null" class="psb__progress-value">{{ col.avgProgress }}%</span>
           <button
             v-if="canEdit && col.id && col.tasks.length"
             type="button"
@@ -303,6 +301,14 @@ function onDocKeydown(event) {
             Thêm việc
           </button>
         </div>
+
+        <span
+          v-if="col.avgProgress != null"
+          class="psb__rail"
+          aria-hidden="true"
+        >
+          <span class="psb__rail-fill" :style="{ width: `${col.avgProgress}%` }" />
+        </span>
       </header>
 
       <div v-show="!isCollapsed(col)" class="psb__body">
@@ -521,15 +527,6 @@ function onDocKeydown(event) {
   font-size: 0.875rem;
 }
 
-.psb__guide {
-  flex-shrink: 0;
-  margin: 0;
-  padding: 0 0.25rem;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-  line-height: 1.4;
-}
-
 .psb__empty-box,
 .psb__col-empty {
   display: flex;
@@ -557,6 +554,8 @@ function onDocKeydown(event) {
 }
 
 .psb__sprint {
+  --psb-accent: var(--color-text-muted);
+  --psb-accent-soft: var(--color-surface-muted);
   position: relative;
   flex-shrink: 0;
   display: flex;
@@ -576,23 +575,63 @@ function onDocKeydown(event) {
   left: var(--space-2);
   width: 3px;
   border-radius: 0;
-  background: var(--color-border);
+  background: var(--psb-accent);
 }
 
-.psb__sprint--primary::before { background: var(--color-primary); }
-.psb__sprint--success::before { background: var(--color-success); }
-.psb__sprint--info::before { background: var(--color-info); }
-.psb__sprint--neutral::before { background: var(--color-text-muted); }
-.psb__sprint--umber::before { background: var(--color-umber); }
+.psb__sprint--primary {
+  --psb-accent: var(--color-primary);
+  --psb-accent-soft: var(--color-primary-surface);
+}
+.psb__sprint--success {
+  --psb-accent: var(--color-success);
+  --psb-accent-soft: var(--color-success-tint-bg);
+}
+.psb__sprint--info {
+  --psb-accent: var(--color-info);
+  --psb-accent-soft: var(--color-info-tint-bg);
+}
+.psb__sprint--neutral {
+  --psb-accent: var(--color-text-muted);
+  --psb-accent-soft: var(--color-surface-muted);
+}
+.psb__sprint--umber {
+  --psb-accent: var(--color-umber);
+  --psb-accent-soft: var(--color-umber-tint-bg);
+}
 
 .psb__head {
+  position: relative;
   flex-shrink: 0;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.5rem 0.75rem;
-  padding: 0.75rem 0.875rem 0.75rem 0.5rem;
+  column-gap: 0.875rem;
+  row-gap: 0.375rem;
+  padding: 0.875rem 1rem 1rem 0.5rem;
+  background:
+    linear-gradient(
+      108deg,
+      color-mix(in srgb, var(--psb-accent) 12%, var(--color-surface)) 0%,
+      color-mix(in srgb, var(--psb-accent-soft) 42%, var(--color-surface)) 36%,
+      var(--color-surface) 100%
+    );
   cursor: pointer;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.psb__head:hover {
+  background:
+    linear-gradient(
+      108deg,
+      color-mix(in srgb, var(--psb-accent) 16%, var(--color-surface)) 0%,
+      color-mix(in srgb, var(--psb-accent-soft) 55%, var(--color-surface)) 40%,
+      var(--color-surface) 100%
+    );
+}
+
+.psb__head--collapsed {
+  padding-top: 1rem;
+  padding-bottom: 1.125rem;
 }
 
 .psb__toggle {
@@ -600,25 +639,29 @@ function onDocKeydown(event) {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  min-height: 1.75rem;
+  align-self: start;
+  min-height: 2rem;
+  margin-top: 0.125rem;
   padding: 0.25rem 0.5rem 0.25rem 0.25rem;
   border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
   color: var(--color-text);
   font-family: var(--font-family-base);
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--psb-accent) 18%, var(--color-border));
 }
 
 .psb__toggle:hover {
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
   color: var(--color-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--psb-accent) 40%, var(--color-border));
 }
 
 .psb__toggle-icon {
-  transition: transform 0.15s ease;
+  transition: transform 0.18s ease;
 }
 
 .psb__toggle-icon--open {
@@ -628,29 +671,33 @@ function onDocKeydown(event) {
 .psb__head-main {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
-  min-width: 10rem;
+  gap: 0.1875rem;
+  min-width: 0;
 }
 
 .psb__phase {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--psb-accent);
 }
 
 .psb__title {
-  font-size: 0.9375rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--color-text);
-  line-height: 1.3;
+  letter-spacing: -0.01em;
+  line-height: 1.28;
 }
 
 .psb__meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.375rem 0.75rem;
+  gap: 0.25rem 0.875rem;
   min-width: 0;
+  margin-top: 0.1875rem;
 }
 
 .psb__status,
@@ -692,35 +739,35 @@ function onDocKeydown(event) {
   display: flex;
   flex-shrink: 0;
   align-items: center;
+  align-self: start;
   gap: 0.75rem;
-  margin-left: auto;
-}
-
-.psb__progress {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.psb__mini {
-  width: 5.5rem;
-  height: 0.375rem;
-  border-radius: var(--radius-full);
-  background: var(--color-border);
-  overflow: hidden;
-}
-
-.psb__mini-fill {
-  display: block;
-  height: 100%;
-  background: var(--color-primary);
+  margin-top: 0.125rem;
 }
 
 .psb__progress-value {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--psb-accent);
   font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.psb__rail {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: color-mix(in srgb, var(--psb-accent) 16%, var(--color-border));
+  overflow: hidden;
+}
+
+.psb__rail-fill {
+  display: block;
+  height: 100%;
+  background: var(--psb-accent);
 }
 
 .psb__add {
@@ -746,7 +793,6 @@ function onDocKeydown(event) {
 
 .psb__body {
   flex-shrink: 0;
-  box-shadow: 0 1px 0 var(--color-border) inset;
 }
 
 .psb__table-wrap {
@@ -1074,23 +1120,22 @@ button.psb__child-n:hover {
   .psb {
     padding: 0.5rem;
   }
+  .psb__head {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
   .psb__head-end {
-    margin-left: 0;
-    width: 100%;
-    justify-content: space-between;
+    grid-column: 2;
+    justify-content: flex-start;
   }
 }
 
 @media (max-width: 480px) {
   .psb__head {
-    flex-direction: column;
-    align-items: flex-start;
+    grid-template-columns: minmax(0, 1fr);
   }
-  .psb__progress {
-    width: 100%;
-  }
-  .psb__mini {
-    flex: 1;
+  .psb__toggle,
+  .psb__head-end {
+    grid-column: 1;
   }
 }
 </style>

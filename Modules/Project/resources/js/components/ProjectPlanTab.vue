@@ -204,7 +204,6 @@ watch(
 <template>
   <div class="pplan">
     <div class="pplan__toolbar">
-      <span class="pplan__hint">Mỗi hàng là 1 giai đoạn hoặc 1 đợt làm việc — bấm mũi tên để xem chi tiết bên trong.</span>
       <div class="pplan__zoom">
         <button type="button" class="pplan__zoom-btn" aria-label="Thu nhỏ" @click="zoomBy(-1)">
           <AppIcon name="minus" :size="14" />
@@ -311,15 +310,10 @@ watch(
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 0.75rem;
   padding: 0.5rem 0.875rem;
   box-shadow: 0 1px 0 var(--color-border);
-}
-
-.pplan__hint {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
 }
 
 .pplan__zoom {
