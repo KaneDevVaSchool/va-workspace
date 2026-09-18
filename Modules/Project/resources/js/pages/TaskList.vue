@@ -2342,7 +2342,7 @@ onBeforeUnmount(() => {
                 data-no-drag-scroll
                 @pointerdown="onKanbanCardPointerDown($event, task)"
                 @click="!isKanbanDragGroup && openTaskDetail(task)"
-                @contextmenu.stop="openRowContextMenu($event, task)"
+                @contextmenu.prevent.stop="openRowContextMenu($event, task)"
               >
                 <span v-if="task.is_overdue" class="task-kanban__overdue-dot" aria-hidden="true" />
                 <header class="task-kanban__card-head">

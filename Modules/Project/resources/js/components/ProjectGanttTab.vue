@@ -70,6 +70,8 @@ const props = defineProps({
   fill: { type: Boolean, default: false },
 });
 
+const emit = defineEmits(['context-menu']);
+
 const leftHead = ref(null);
 const leftBody = ref(null);
 const rightHead = ref(null);
@@ -189,6 +191,11 @@ const weekendUnits = computed(() =>
 
 function colStyle(col) {
   return { width: `${col.width}px`, minWidth: `${col.width}px` };
+}
+
+function onTaskContextMenu(event, row) {
+  if (!row || row.type !== 'task') return;
+  emit('context-menu', event, row);
 }
 
 function statusChipTone(status) {
@@ -628,6 +635,7 @@ onBeforeUnmount(() => {
               :style="{ top: `${item.index * GANTT_ROW_HEIGHT}px`, height: `${GANTT_ROW_HEIGHT}px` }"
               @mouseenter="hoveredId = item.row.id"
               @mouseleave="hoveredId = null"
+              @contextmenu.prevent.stop="onTaskContextMenu($event, item.row)"
             >
               <div v-for="col in visibleCols" :key="col.key" class="gantt__cell" :class="`gantt__cell--${col.align || 'left'}`" :style="colStyle(col)">
                 <template v-if="col.key === 'deadline'">
@@ -789,6 +797,7 @@ onBeforeUnmount(() => {
               :style="{ top: `${item.index * GANTT_ROW_HEIGHT}px`, height: `${GANTT_ROW_HEIGHT}px` }"
               @mouseenter="hoveredId = item.row.id"
               @mouseleave="hoveredId = null"
+              @contextmenu.prevent.stop="onTaskContextMenu($event, item.row)"
             />
             <div
               v-if="todayVisible"
@@ -813,6 +822,7 @@ onBeforeUnmount(() => {
                 width: `${item.meta.width}px`,
                 height: `${GANTT_BAR_H}px`,
               } : {}"
+              @contextmenu.prevent.stop="onTaskContextMenu($event, item.row)"
             >
               <span v-if="item.meta" class="gantt-bar__fill" :style="{ width: `${item.meta.pct}%` }" />
               <span
@@ -871,6 +881,7 @@ onBeforeUnmount(() => {
           :key="task.id"
           :to="{ name: 'manager.project.tasks.detail', params: { id: task.id } }"
           class="gantt__unused-item"
+          @contextmenu.prevent.stop="onTaskContextMenu($event, task)"
         >
           {{ task.title }}
         </router-link>

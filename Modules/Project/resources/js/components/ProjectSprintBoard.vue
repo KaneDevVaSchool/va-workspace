@@ -40,7 +40,7 @@ const props = defineProps({
   canEdit: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['add-tasks']);
+const emit = defineEmits(['add-tasks', 'context-menu']);
 const router = useRouter();
 const boardRef = ref(null);
 const sprints = ref([]);
@@ -144,6 +144,13 @@ function addChildFromMenu() {
   addTasks(ctx.col, ctx.task);
 }
 
+function editTaskFromMenu() {
+  const ctx = findActionContext();
+  if (!ctx?.task?.id) return;
+  closeActionMenu();
+  router.push({ name: 'manager.project.tasks.edit', params: { id: ctx.task.id } });
+}
+
 function dateRangeLabel(item) {
   return formatTaskScheduleRange(item);
 }
@@ -159,6 +166,11 @@ function hoursActual(task) {
 function onRowClick(event, task) {
   if (event.target.closest('button, a, input, select, textarea, .user-avatar-tip')) return;
   openTask(task);
+}
+
+function onRowContextMenu(event, task) {
+  closeActionMenu();
+  emit('context-menu', event, task);
 }
 
 function scheduleLabel(task) {
@@ -332,6 +344,7 @@ function onDocKeydown(event) {
                   class="psb__row"
                   :class="{ 'psb__row--child': task.depth > 0 }"
                   @click="onRowClick($event, task)"
+                  @contextmenu.prevent.stop="onRowContextMenu($event, task)"
                 >
                   <td class="psb__td--name">
                     <div class="psb__task" :style="task.depth ? { paddingLeft: `${task.depth * 1.25}rem` } : undefined">
@@ -464,6 +477,16 @@ function onDocKeydown(event) {
         <button type="button" class="psb__menu-item" role="menuitem" @click="openTask({ id: actionMenu.id })">
           <AppIcon name="eye" :size="15" />
           <span>Xem chi tiết</span>
+        </button>
+        <button
+          v-if="canEdit && actionMenu.id"
+          type="button"
+          class="psb__menu-item"
+          role="menuitem"
+          @click="editTaskFromMenu"
+        >
+          <AppIcon name="pencil" :size="15" />
+          <span>Sửa công việc</span>
         </button>
         <button
           v-if="actionCanAddChild"

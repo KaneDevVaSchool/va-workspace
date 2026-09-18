@@ -32,6 +32,7 @@ const props = defineProps({
   project: { type: Object, default: null },
 });
 
+const emit = defineEmits(['context-menu']);
 const router = useRouter();
 const leftWidth = 260;
 const dayWidth = ref(GANTT_DEFAULT_DAY_WIDTH);
@@ -180,6 +181,11 @@ function openTask(task) {
   router.push({ name: 'manager.project.tasks.detail', params: { id: task.id } });
 }
 
+function onTaskContextMenu(event, task) {
+  if (!task?.id) return;
+  emit('context-menu', event, task);
+}
+
 onMounted(() => {
   // Mở sẵn giai đoạn đầu tiên để người dùng thấy ngay có sprint bên trong.
   if (phases.value[0]) togglePhase(phases.value[0]);
@@ -244,6 +250,7 @@ watch(
               class="pplan__row-title"
               :class="{ 'pplan__row-title--clickable': row.kind === 'task' }"
               @click="row.kind === 'task' && openTask(row.node)"
+              @contextmenu.prevent.stop="row.kind === 'task' && onTaskContextMenu($event, row.node)"
             >
               {{ row.node.title || row.node.name }}
             </span>
@@ -272,6 +279,7 @@ watch(
               :key="row.id"
               class="pplan__row"
               :style="{ top: `${index * GANTT_ROW_HEIGHT}px`, height: `${GANTT_ROW_HEIGHT}px` }"
+              @contextmenu.prevent.stop="row.kind === 'task' && onTaskContextMenu($event, row.node)"
             >
               <div
                 v-if="barFor(row)"

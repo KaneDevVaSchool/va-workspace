@@ -1357,7 +1357,7 @@ onBeforeUnmount(() => {
             data-no-drag-scroll
             @pointerdown="onKanbanCardPointerDown($event, task)"
             @click="!isKanbanDragGroup && openTask(task)"
-            @contextmenu.stop="openRowContextMenu($event, task)"
+            @contextmenu.prevent.stop="openRowContextMenu($event, task)"
           >
             <span v-if="task.is_overdue" class="ptasks-kanban__overdue" aria-hidden="true" />
             <header class="ptasks-kanban__card-head">
@@ -1424,6 +1424,7 @@ onBeforeUnmount(() => {
       :query="query"
       :can-edit="canEdit"
       @add-tasks="emit('add-tasks', $event)"
+      @context-menu="openRowContextMenu"
     />
 
     <ProjectPlanTab
@@ -1431,6 +1432,7 @@ onBeforeUnmount(() => {
       :tree="tree"
       :loading="loading"
       :project="project"
+      @context-menu="openRowContextMenu"
     />
 
     <ProjectGanttTab
@@ -1441,6 +1443,7 @@ onBeforeUnmount(() => {
       :project="project"
       :filter="filter"
       :filter-label="filterLabel"
+      @context-menu="openRowContextMenu"
     />
 
     <Teleport to="body">
