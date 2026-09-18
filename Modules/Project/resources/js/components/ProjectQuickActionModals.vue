@@ -82,6 +82,8 @@ const STATUS_LABELS = {
 const saving = ref(false);
 const listsLoading = ref(false);
 const assignableUsers = ref([]);
+const importanceOptions = ref([]);
+const importanceTitle = ref('Phân loại độ khó');
 const categories = ref([]);
 const phases = ref([]);
 const sprintRows = ref([]);
@@ -285,6 +287,8 @@ function emptyBulkRow(overrides = {}) {
     assignee_id: '',
     parent_id: '',
     sprint_id: '',
+    priority: '',
+    weight: '',
     description: '',
     ...overrides,
   };
@@ -458,6 +462,17 @@ function onKeydown(event) {
   }
 }
 
+async function ensureImportanceOptions() {
+  if (importanceOptions.value.length) return;
+  try {
+    const { data } = await window.axios.get('/api/project/tasks/options');
+    importanceOptions.value = data.importance ?? [];
+    importanceTitle.value = data.criterion?.name || 'Phân loại độ khó';
+  } catch {
+    importanceOptions.value = [];
+  }
+}
+
 async function ensureAssignableUsers() {
   if (assignableUsers.value.length) return;
   try {
@@ -571,6 +586,9 @@ watch(
 
     if (kind === 'members' || kind === 'task') {
       await ensureAssignableUsers();
+    }
+    if (kind === 'task') {
+      await ensureImportanceOptions();
     }
 
     const needLists =
@@ -887,6 +905,8 @@ async function submit() {
             due_time: showHourFields.value ? row.due_time || null : null,
             estimated_hours: showHourFields.value && row.estimated_hours !== '' ? row.estimated_hours : null,
             assignee_id: row.assignee_id || null,
+            priority: row.priority || null,
+            weight: row.weight === '' || row.weight == null ? null : Number(row.weight),
           })),
         });
         emit('tasks-changed');
@@ -1192,6 +1212,27 @@ watch(
                       placeholder="Chọn người thực hiện"
                     />
                   </div>
+                  <label class="proj-qa__field">
+                    <span class="proj-qa__label">{{ importanceTitle }}</span>
+                    <select v-model="row.priority" class="proj-qa__input">
+                      <option value="">Chưa chọn</option>
+                      <option v-for="opt in importanceOptions" :key="opt.value" :value="opt.value">
+                        {{ opt.label }}{{ opt.weight ? ` · x${opt.weight}` : '' }}
+                      </option>
+                    </select>
+                  </label>
+                  <label class="proj-qa__field proj-qa__field--days">
+                    <span class="proj-qa__label">Tỷ trọng (%)</span>
+                    <input
+                      v-model="row.weight"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      class="proj-qa__input"
+                      placeholder="Vd. 30"
+                    >
+                  </label>
                   <label class="proj-qa__field proj-qa__field--date">
                     <span class="proj-qa__label">Ngày bắt đầu</span>
                     <input v-model="row.start_date" type="date" class="proj-qa__input">

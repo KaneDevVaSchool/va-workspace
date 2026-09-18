@@ -1078,6 +1078,9 @@ onBeforeUnmount(() => {
           <UserAvatarTip :user="task.assignee" label="Người thực hiện" />
           {{ task.assignee.name }}
         </span>
+        <span v-if="task.children?.length" class="task-detail__summary-item">
+          {{ task.children.length }} việc nhỏ
+        </span>
       </div>
 
       <div class="task-detail__layout">
@@ -1213,6 +1216,38 @@ onBeforeUnmount(() => {
             <div class="task-detail__kv-row task-detail__kv-row--span">
               <dt class="task-detail__label">Mô tả</dt>
               <dd class="task-detail__value">{{ task.description || '--' }}</dd>
+            </div>
+            <div v-if="task.children?.length" class="task-detail__kv-row task-detail__kv-row--span">
+              <dt class="task-detail__label">Công việc nhỏ</dt>
+              <dd class="task-detail__value">
+                <ul class="task-detail__children">
+                  <li v-for="child in task.children" :key="child.id" class="task-detail__child">
+                    <router-link
+                      class="task-detail__link task-detail__child-title"
+                      :to="{ name: 'manager.project.tasks.detail', params: { id: child.id } }"
+                    >
+                      <span v-if="child.code" class="task-detail__child-code">{{ child.code }}</span>
+                      {{ child.title }}
+                    </router-link>
+                    <span class="task-detail__child-meta">
+                      <span
+                        class="task-detail__chip"
+                        :class="`task-detail__chip--${TASK_STATUS_TONES[child.status] || 'tertiary'}`"
+                      >
+                        {{ statusLabel(child.status) }}
+                      </span>
+                      <span class="task-detail__child-stat">
+                        {{ child.priority_label || priorityLabel(child.priority) || 'Chưa phân loại' }}
+                      </span>
+                      <span class="task-detail__child-stat">Tỷ trọng {{ formatWeight(child.weight) }}</span>
+                      <span v-if="child.progress_percent != null" class="task-detail__child-stat">
+                        {{ child.progress_percent }}%
+                      </span>
+                      <span v-if="child.assignee" class="task-detail__child-stat">{{ child.assignee.name }}</span>
+                    </span>
+                  </li>
+                </ul>
+              </dd>
             </div>
           </template>
           <template v-else>
@@ -2775,6 +2810,55 @@ onBeforeUnmount(() => {
 .task-detail__chip--tertiary {
   background: var(--color-tertiary-surface);
   color: var(--color-tertiary);
+}
+
+.task-detail__children {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+
+.task-detail__child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.task-detail__child:last-child {
+  box-shadow: none;
+  padding-bottom: 0;
+}
+
+.task-detail__child-title {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.task-detail__child-code {
+  margin-right: 0.375rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.task-detail__child-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.task-detail__child-stat {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-style: italic;
 }
 
 .task-detail__chip--danger {

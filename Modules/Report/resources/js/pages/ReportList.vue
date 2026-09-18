@@ -56,6 +56,7 @@ const exportingPdfId = ref(null);
 
 const query = ref('');
 const reportType = ref('');
+const periodType = ref('');
 const status = ref('');
 const departmentFilter = ref('');
 const creatorFilter = ref('');
@@ -91,6 +92,7 @@ const hasActiveFilters = computed(
   () =>
     Boolean(query.value.trim()) ||
     Boolean(reportType.value) ||
+    Boolean(periodType.value) ||
     Boolean(status.value) ||
     Boolean(departmentFilter.value) ||
     Boolean(creatorFilter.value),
@@ -138,7 +140,11 @@ const tableWidthPx = computed(() => {
 
 const groupedReports = computed(() => {
   const groups =
-    groupMode.value === 'report_type' ? buildTypeGroups(reports.value) : buildDateGroups(reports.value);
+    groupMode.value === 'report_type'
+      ? buildTypeGroups(reports.value)
+      : groupMode.value === 'period'
+        ? buildPeriodGroups(reports.value)
+        : buildDateGroups(reports.value);
 
   for (const group of groups) {
     group.typesSummary = groupMode.value === 'report_type' ? '' : groupTypesSummary(group.rows);
@@ -146,6 +152,57 @@ const groupedReports = computed(() => {
 
   return groups;
 });
+
+const reportStats = computed(() => {
+  const rows = rawReports.value;
+  return {
+    total: rows.length,
+    saved: rows.filter((row) => row.status === 'saved').length,
+    draft: rows.filter((row) => row.status === 'draft').length,
+    month: rows.filter((row) => row.period_type === 'month').length,
+    quarter: rows.filter((row) => row.period_type === 'quarter').length,
+    custom: rows.filter((row) => row.period_type === 'custom').length,
+  };
+});
+
+function buildPeriodGroups(rows) {
+  const order = [
+    { key: 'month', label: 'Theo tháng', icon: 'calendar' },
+    { key: 'quarter', label: 'Theo quý', icon: 'layers' },
+    { key: 'custom', label: 'Khoảng ngày', icon: 'clock' },
+  ];
+  const byKey = new Map();
+  for (const row of rows) {
+    const key = row.period_type || 'custom';
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(row);
+  }
+
+  const groups = [];
+  for (const item of order) {
+    const rowsOfType = byKey.get(item.key);
+    if (!rowsOfType) continue;
+    groups.push({
+      key: item.key,
+      label: item.label,
+      tone: groupTone(item.key),
+      icon: item.icon,
+      rows: rowsOfType,
+    });
+    byKey.delete(item.key);
+  }
+  for (const [key, rowsOfType] of byKey) {
+    groups.push({
+      key,
+      label: REPORT_PERIOD_TYPE_LABELS[key] ?? key,
+      tone: groupTone(key),
+      icon: 'calendar',
+      rows: rowsOfType,
+    });
+  }
+
+  return groups;
+}
 
 function buildDateGroups(rows) {
   const groups = [];
@@ -226,7 +283,8 @@ function groupTypesSummary(rows) {
 function loadGroupMode() {
   try {
     const raw = localStorage.getItem(REPORT_LIST_GROUP_MODE_KEY);
-    return raw === 'report_type' ? 'report_type' : 'date';
+    if (raw === 'report_type' || raw === 'period') return raw;
+    return 'date';
   } catch {
     return 'date';
   }
@@ -246,10 +304,22 @@ function setGroupMode(mode) {
 function filterHasValue(key) {
   if (key === 'q') return Boolean(query.value.trim());
   if (key === 'report_type') return Boolean(reportType.value);
+  if (key === 'period_type') return Boolean(periodType.value);
   if (key === 'status') return Boolean(status.value);
   if (key === 'department_name') return Boolean(departmentFilter.value);
   if (key === 'created_by_name') return Boolean(creatorFilter.value);
   return false;
+}
+
+function setQuickFilter(kind, value) {
+  closeActionMenu();
+  if (kind === 'status') {
+    status.value = status.value === value ? '' : value;
+    return;
+  }
+  if (kind === 'period_type') {
+    periodType.value = periodType.value === value ? '' : value;
+  }
 }
 
 function periodText(row) {
@@ -424,6 +494,9 @@ async function loadReports(page = 1) {
     if (status.value) {
       rows = rows.filter((row) => row.status === status.value);
     }
+    if (periodType.value) {
+      rows = rows.filter((row) => row.period_type === periodType.value);
+    }
     if (departmentFilter.value) {
       rows = rows.filter((row) => row.department_name === departmentFilter.value);
     }
@@ -454,6 +527,7 @@ function goPage(page) {
 function clearFilters() {
   query.value = '';
   reportType.value = '';
+  periodType.value = '';
   status.value = '';
   departmentFilter.value = '';
   creatorFilter.value = '';
@@ -760,7 +834,7 @@ watch(tableZoom, (value) => {
 });
 watch(selected, () => nextTick(fitColumnsToContent));
 watch(shownColumns, () => nextTick(fitColumnsToContent));
-watch([reportType, status, departmentFilter, creatorFilter, perPage], () => loadReports(1));
+watch([reportType, periodType, status, departmentFilter, creatorFilter, perPage], () => loadReports(1));
 
 onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown);
@@ -792,9 +866,9 @@ onBeforeUnmount(() => {
 <template>
   <section class="report-list">
     <PageHeader
-      title="Báo cáo đã lưu"
+      title="Báo cáo"
       icon="barChart"
-      description="Báo cáo đã tạo, nhóm theo ngày tạo. Bấm một dòng để xem đủ thông tin bên phải."
+      description="Tìm nhanh theo kỳ tháng, quý hoặc khoảng ngày. Bấm một dòng để xem đủ thông tin bên phải."
       :primary-action="canCreate ? { label: 'Tạo báo cáo', icon: 'plus', onClick: () => (showCreatePicker = true) } : null"
     >
       <template #actions>
@@ -840,6 +914,20 @@ onBeforeUnmount(() => {
               </select>
             </div>
 
+            <div v-if="visibleFilters.period_type" class="report-list__field">
+              <label class="report-list__label" for="report-period-type">Kiểu kỳ</label>
+              <select id="report-period-type" v-model="periodType" class="report-list__input">
+                <option value="">Tất cả kiểu kỳ</option>
+                <option
+                  v-for="(label, value) in REPORT_PERIOD_TYPE_LABELS"
+                  :key="value"
+                  :value="value"
+                >
+                  {{ label }}
+                </option>
+              </select>
+            </div>
+
             <div v-if="visibleFilters.status" class="report-list__field">
               <label class="report-list__label" for="report-status">Tình trạng</label>
               <select id="report-status" v-model="status" class="report-list__input">
@@ -874,6 +962,49 @@ onBeforeUnmount(() => {
               </select>
             </div>
           </div>
+        </div>
+
+        <div v-if="!loading && rawReports.length" class="report-list__stats" role="group" aria-label="Lọc nhanh">
+          <button
+            type="button"
+            class="report-list__stat"
+            :class="{ 'report-list__stat--on': status === 'saved' }"
+            @click="setQuickFilter('status', 'saved')"
+          >
+            {{ reportStats.saved }} đã lưu
+          </button>
+          <button
+            type="button"
+            class="report-list__stat"
+            :class="{ 'report-list__stat--on': status === 'draft' }"
+            @click="setQuickFilter('status', 'draft')"
+          >
+            {{ reportStats.draft }} bản nháp
+          </button>
+          <button
+            type="button"
+            class="report-list__stat"
+            :class="{ 'report-list__stat--on': periodType === 'month' }"
+            @click="setQuickFilter('period_type', 'month')"
+          >
+            {{ reportStats.month }} theo tháng
+          </button>
+          <button
+            type="button"
+            class="report-list__stat"
+            :class="{ 'report-list__stat--on': periodType === 'quarter' }"
+            @click="setQuickFilter('period_type', 'quarter')"
+          >
+            {{ reportStats.quarter }} theo quý
+          </button>
+          <button
+            type="button"
+            class="report-list__stat"
+            :class="{ 'report-list__stat--on': periodType === 'custom' }"
+            @click="setQuickFilter('period_type', 'custom')"
+          >
+            {{ reportStats.custom }} khoảng ngày
+          </button>
         </div>
 
         <TablePagesBar
@@ -931,6 +1062,14 @@ onBeforeUnmount(() => {
                 @click="setGroupMode('report_type')"
               >
                 Theo loại báo cáo
+              </button>
+              <button
+                type="button"
+                class="report-list__group-mode-btn"
+                :class="{ 'report-list__group-mode-btn--active': groupMode === 'period' }"
+                @click="setGroupMode('period')"
+              >
+                Theo kỳ
               </button>
             </div>
             <button
@@ -1004,9 +1143,25 @@ onBeforeUnmount(() => {
                     Không có báo cáo nào khớp với từ khoá hoặc bộ lọc đang chọn. Thử xoá lọc để xem lại toàn bộ.
                   </span>
                   <span v-else-if="canCreate">
-                    Phòng ban chưa có báo cáo nào. Bấm “Tạo báo cáo” ở góc trên để tạo báo cáo đầu tiên.
+                    Phòng ban chưa có báo cáo nào. Bấm “Tạo báo cáo” để lập báo cáo theo tháng, quý hoặc khoảng ngày.
                   </span>
                   <span v-else>Chưa có báo cáo nào được chia sẻ với bạn.</span>
+                  <button
+                    v-if="canCreate && !hasActiveFilters"
+                    type="button"
+                    class="report-list__empty-btn"
+                    @click="showCreatePicker = true"
+                  >
+                    Tạo báo cáo
+                  </button>
+                  <button
+                    v-else-if="hasActiveFilters"
+                    type="button"
+                    class="report-list__empty-btn"
+                    @click="clearFilters"
+                  >
+                    Xoá bộ lọc
+                  </button>
                 </td>
               </tr>
               <template v-for="group in groupedReports" v-else :key="group.key">
@@ -1049,7 +1204,15 @@ onBeforeUnmount(() => {
                 >
                   <td v-for="col in shownColumns" :key="col.key">
                     <span v-if="col.key === 'title'" class="report-list__title-cell">
-                      <span class="report-list__title">{{ row.title || '—' }}</span>
+                      <button
+                        v-if="canScoreReport(row)"
+                        type="button"
+                        class="report-list__title-btn"
+                        @click.stop="openScoring(row)"
+                      >
+                        {{ row.title || '—' }}
+                      </button>
+                      <span v-else class="report-list__title">{{ row.title || '—' }}</span>
                       <span class="report-list__muted">{{ periodText(row) }}</span>
                     </span>
                     <span v-else-if="col.key === 'report_type'" class="report-list__cell">
@@ -1503,7 +1666,7 @@ onBeforeUnmount(() => {
 
 .report-list__filters {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
   gap: var(--space-3);
   width: 100%;
 }
@@ -1897,6 +2060,70 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-lg);
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
+}
+
+.report-list__empty-btn {
+  margin-top: var(--space-3);
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-secondary);
+  color: var(--color-on-primary);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.report-list__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  margin: 0 0 var(--space-3);
+}
+
+.report-list__stat {
+  padding: 0.375rem 0.75rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.report-list__stat:hover {
+  background: color-mix(in srgb, var(--color-secondary) 12%, var(--color-surface-muted));
+}
+
+.report-list__stat--on {
+  background: var(--color-secondary-surface);
+  color: var(--color-secondary-700);
+}
+
+.report-list__title-btn {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.report-list__title-btn:hover {
+  color: var(--color-secondary-700);
+  text-decoration: underline;
 }
 
 .report-list__sr {

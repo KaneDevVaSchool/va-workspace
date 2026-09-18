@@ -82,7 +82,7 @@ class TaskController extends Controller
             return response()->json(['message' => 'Không tìm thấy công việc.'], 404);
         }
 
-        return response()->json(['task' => $this->service->present($model)]);
+        return response()->json(['task' => $this->service->present($model, true)]);
     }
 
     /** POST /api/project/{project}/tasks — tạo Task trong ngữ cảnh 1 project. */

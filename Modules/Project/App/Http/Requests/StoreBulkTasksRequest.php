@@ -7,6 +7,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Modules\Project\App\Enums\TaskEnums;
 use Modules\Project\App\Models\Sprint;
+use Modules\Project\App\Services\TaskImportanceOptions;
 
 /**
  * Tạo nhiều công việc trong 1 transaction — mỗi dòng có field riêng
@@ -38,6 +39,7 @@ class StoreBulkTasksRequest extends FormRequest
             'items.*.estimated_hours' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             'items.*.assignee_id' => ['nullable', 'integer', 'exists:users,id'],
             'items.*.progress_type' => ['nullable', 'string', 'in:'.implode(',', TaskEnums::PROGRESS_TYPES)],
+            'items.*.priority' => ['nullable', 'string', 'max:50', $this->priorityRule()],
             'items.*.weight' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'items.*.type' => ['nullable', 'string', Rule::in(['task'])],
         ];
@@ -74,7 +76,34 @@ class StoreBulkTasksRequest extends FormRequest
             'items.*.start_time.date_format' => 'Giờ bắt đầu không hợp lệ (định dạng HH:MM).',
             'items.*.due_time.date_format' => 'Giờ hạn không hợp lệ (định dạng HH:MM).',
             'items.*.estimated_hours.min' => 'Thời gian dự kiến không được âm.',
+            'items.*.priority.max' => 'Phân loại độ khó không hợp lệ.',
+            'items.*.weight.min' => 'Tỷ trọng tối thiểu là 0%.',
+            'items.*.weight.max' => 'Tỷ trọng tối đa là 100%.',
         ];
+    }
+
+    private function priorityRule(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) {
+            if ($value === null || $value === '') {
+                return;
+            }
+
+            $index = explode('.', $attribute)[1] ?? null;
+            $routeProject = $this->route('project');
+            $projectId = $routeProject !== null
+                ? (int) (is_object($routeProject) ? $routeProject->id : $routeProject)
+                : (int) ($this->input("items.{$index}.project_id") ?: 0);
+
+            $accepted = app(TaskImportanceOptions::class)->acceptedValuesForContext(
+                $projectId > 0 ? $projectId : null,
+                $this->user()?->department_id,
+            );
+
+            if (! TaskEnums::isAcceptedValue((string) $value, $accepted)) {
+                $fail('Phân loại độ khó không hợp lệ.');
+            }
+        };
     }
 
     private function sprintRule(): Closure

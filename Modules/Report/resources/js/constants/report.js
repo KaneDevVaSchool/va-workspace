@@ -90,10 +90,10 @@ export const REPORT_LIST_COLUMNS = [
   { key: 'title', label: 'Tên báo cáo', defaultOn: true },
   { key: 'report_type', label: 'Loại báo cáo', defaultOn: true },
   { key: 'period_type', label: 'Kiểu kỳ', defaultOn: true },
-  { key: 'department_name', label: 'Phòng ban', defaultOn: true },
-  { key: 'scope', label: 'Phạm vi nhân sự', defaultOn: true },
-  { key: 'viewer_count', label: 'Người được xem', defaultOn: true },
-  { key: 'revision', label: 'Số bản sửa', defaultOn: true },
+  { key: 'department_name', label: 'Phòng ban', defaultOn: false },
+  { key: 'scope', label: 'Phạm vi nhân sự', defaultOn: false },
+  { key: 'viewer_count', label: 'Người được xem', defaultOn: false },
+  { key: 'revision', label: 'Số bản sửa', defaultOn: false },
   { key: 'status', label: 'Tình trạng', defaultOn: true },
   { key: 'created_by', label: 'Người tạo', defaultOn: true },
   { key: 'updated_at', label: 'Cập nhật lúc', defaultOn: false },
@@ -103,14 +103,15 @@ export const REPORT_LIST_COLUMNS = [
 export const REPORT_LIST_FILTERS = [
   { key: 'q', label: 'Tìm kiếm', defaultOn: true },
   { key: 'report_type', label: 'Loại báo cáo', defaultOn: true },
+  { key: 'period_type', label: 'Kiểu kỳ', defaultOn: true },
   { key: 'status', label: 'Tình trạng', defaultOn: true },
   { key: 'department_name', label: 'Phòng ban', defaultOn: false },
   { key: 'created_by_name', label: 'Người tạo', defaultOn: false },
 ];
 
-export const REPORT_LIST_COLUMN_KEY = 'va-report-list-columns-v3';
-export const REPORT_LIST_FILTER_KEY = 'va-report-list-filters';
-export const REPORT_LIST_WIDTH_KEY = 'va-report-list-column-widths-v3';
+export const REPORT_LIST_COLUMN_KEY = 'va-report-list-columns-v4';
+export const REPORT_LIST_FILTER_KEY = 'va-report-list-filters-v2';
+export const REPORT_LIST_WIDTH_KEY = 'va-report-list-column-widths-v4';
 export const REPORT_LIST_ZOOM_KEY = 'va-report-list-zoom';
 export const REPORT_LIST_GROUP_KEY = 'va-report-list-collapsed-groups';
 export const REPORT_LIST_GROUP_MODE_KEY = 'va-report-list-group-mode';

@@ -353,4 +353,61 @@ class ProjectStructureAndBulkTasksTest extends TestCase
             'sprint_id' => $sprint->id,
         ]);
     }
+
+    public function test_bulk_create_child_accepts_priority_and_weight(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
+        $editor = $this->makeUser(['department_id' => $dept->id]);
+        $project = $this->makeProject($editor);
+        $parent = $this->makeTask($project, ['title' => 'Việc cha', 'start_date' => '2026-02-01', 'end_date' => '2026-02-28']);
+
+        $response = $this->actingAs($editor)->postJson('/api/project/'.$project->id.'/tasks/bulk', [
+            'items' => [
+                [
+                    'title' => 'Việc nhỏ có độ khó',
+                    'parent_id' => $parent->id,
+                    'priority' => 'high_priority',
+                    'weight' => 40,
+                    'start_date' => '2026-02-02',
+                    'end_date' => '2026-02-10',
+                ],
+            ],
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('tasks.0.priority', 'high_priority');
+        $this->assertEquals(40.0, (float) $response->json('tasks.0.weight'));
+        $this->assertDatabaseHas('tasks', [
+            'title' => 'Việc nhỏ có độ khó',
+            'parent_id' => $parent->id,
+            'priority' => 'high_priority',
+        ]);
+    }
+
+    public function test_show_parent_includes_child_status_weight_and_priority(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
+        $editor = $this->makeUser(['department_id' => $dept->id]);
+        $project = $this->makeProject($editor);
+        $parent = $this->makeTask($project, ['title' => 'Việc cha', 'status' => 'in_progress']);
+        $this->makeTask($project, [
+            'title' => 'Việc nhỏ',
+            'parent_id' => $parent->id,
+            'status' => 'completed',
+            'priority' => 'important',
+            'weight' => 35,
+        ]);
+
+        $response = $this->actingAs($editor)->getJson('/api/project/tasks/'.$parent->id);
+
+        $response->assertOk();
+        $response->assertJsonPath('task.children.0.title', 'Việc nhỏ');
+        $response->assertJsonPath('task.children.0.status', 'completed');
+        $response->assertJsonPath('task.children.0.priority', 'important');
+        $this->assertEquals(35.0, (float) $response->json('task.children.0.weight'));
+    }
 }

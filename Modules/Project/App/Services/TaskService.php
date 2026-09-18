@@ -1033,11 +1033,11 @@ class TaskService
         return $count;
     }
 
-    public function present(Task $task): array
+    public function present(Task $task, bool $withChildren = false): array
     {
         $overdue = $this->computeOverdue($task);
 
-        return [
+        $payload = [
             'id' => $task->id,
             'project_id' => $task->project_id,
             'project' => $task->relationLoaded('project') && $task->project !== null
@@ -1136,6 +1136,50 @@ class TaskService
             'created_at' => $task->created_at?->toIso8601String(),
             'updated_at' => $task->updated_at?->toIso8601String(),
         ];
+
+        if ($withChildren) {
+            $payload['children'] = $this->presentDirectChildren($task);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Việc con trực tiếp — trang chi tiết việc cha cần thấy trạng thái, tỷ
+     * trọng và phân loại độ khó của từng việc nhỏ. Không đệ quy để payload
+     * không phình theo cả cây WBS.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function presentDirectChildren(Task $task): array
+    {
+        $children = $task->children()
+            ->with(['assignee'])
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        return $children
+            ->map(function (Task $child) {
+                $overdue = $this->computeOverdue($child);
+
+                return [
+                    'id' => $child->id,
+                    'code' => $child->code,
+                    'title' => $child->title,
+                    'status' => $child->status,
+                    'priority' => $child->priority,
+                    'priority_label' => TaskEnums::priorityLabel($child->priority),
+                    'weight' => $child->weight,
+                    'progress_percent' => $child->progress_percent,
+                    'start_date' => $child->start_date?->toDateString(),
+                    'end_date' => $child->end_date?->toDateString(),
+                    'assignee' => $this->presentUser($child->assignee),
+                    'is_overdue' => $overdue['is_overdue'],
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**

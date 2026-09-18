@@ -181,19 +181,36 @@ function scheduleSpan(task, col) {
   return taskRangeInSprint(task, col);
 }
 
+function findTreeTask(nodes, id) {
+  for (const node of nodes || []) {
+    if (node.id === id) return node;
+    const found = findTreeTask(node.children, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function applyPresentedTask(node, presented) {
+  if (!node || !presented) return;
+  const children = node.children;
+  Object.assign(node, presented);
+  if (children) node.children = children;
+}
+
 async function changeTaskStatus(task, status) {
   if (!status || status === task.status) return;
-  const previous = task.status;
-  task.status = status;
+  const node = findTreeTask(props.tree, task.id) || task;
+  const previous = { ...node, children: node.children };
+  applyPresentedTask(node, { status });
   const busy = new Set(statusUpdatingIds.value);
   busy.add(task.id);
   statusUpdatingIds.value = busy;
   try {
     const { data } = await window.axios.put(`/api/project/tasks/${task.id}`, { status });
-    Object.assign(task, data.task);
+    applyPresentedTask(node, data.task);
     showClientToast('success', `Đã chuyển sang ${taskStatusLabel(status)}.`);
   } catch (error) {
-    task.status = previous;
+    applyPresentedTask(node, previous);
     showClientToast('error', error?.response?.data?.message || 'Không cập nhật được trạng thái.');
   } finally {
     const next = new Set(statusUpdatingIds.value);
