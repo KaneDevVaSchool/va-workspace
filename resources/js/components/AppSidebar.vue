@@ -110,7 +110,7 @@ const MENU_SECTIONS = [
       { name: 'dashboard.me', label: 'Của tôi', icon: 'target', requiresPermission: 'dashboard.view' },
       // configurableByDepartment: true — đồng bộ thủ công với
       // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
-      { name: 'home', label: 'Hướng dẫn', icon: 'gitBranch', configurableByDepartment: true },
+      { name: 'home', label: 'Quy trình', icon: 'gitBranch', configurableByDepartment: true },
       { name: 'dashboard.company', label: 'Tổng công ty', icon: 'dashboard', requiresPermission: 'dashboard.view_company' },
       {
         name: 'dashboard.department',

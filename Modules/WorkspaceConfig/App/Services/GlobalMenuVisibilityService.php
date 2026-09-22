@@ -29,7 +29,7 @@ class GlobalMenuVisibilityService
             'icon' => 'target',
             'audience' => 'Menu này hiện với hầu hết mọi tài khoản, kể cả người chỉ có quyền xem cơ bản.',
         ],
-        'home' => ['label' => 'Hướng dẫn', 'section' => 'general', 'icon' => 'gitBranch'],
+        'home' => ['label' => 'Quy trình', 'section' => 'general', 'icon' => 'gitBranch'],
         'dashboard.company' => [
             'label' => 'Tổng công ty',
             'section' => 'general',

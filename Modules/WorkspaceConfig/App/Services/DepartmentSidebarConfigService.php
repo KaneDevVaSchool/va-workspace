@@ -40,7 +40,7 @@ class DepartmentSidebarConfigService
 
     /** @var array<string, string> menu_key => nhãn tiếng Việt mặc định */
     private const CONFIGURABLE_MENUS = [
-        'home' => 'Hướng dẫn',
+        'home' => 'Quy trình',
         'social.feed' => 'Bảng tin',
         'manager.evaluation.view' => 'Tiêu chí',
         'dashboard.department' => 'Phòng ban',
