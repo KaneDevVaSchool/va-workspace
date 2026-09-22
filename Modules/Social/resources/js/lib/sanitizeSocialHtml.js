@@ -1,5 +1,4 @@
 import DOMPurify from 'dompurify';
-import { linkifyHashtags } from './linkifyHashtags.js';
 
 const STICKER_ID_RE = /^[0-9a-f]{2,8}(?:_[0-9a-f]{2,8}){0,12}$/;
 
@@ -29,7 +28,7 @@ export function sanitizeSocialHtml(html) {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
-    return linkifyHashtags(filterStickerIds(DOMPurify.sanitize(escaped.replace(/\n/g, '<br>'), SANITIZE_OPTIONS)));
+    return filterStickerIds(DOMPurify.sanitize(escaped.replace(/\n/g, '<br>'), SANITIZE_OPTIONS));
   }
-  return linkifyHashtags(filterStickerIds(DOMPurify.sanitize(trimmed, SANITIZE_OPTIONS)));
+  return filterStickerIds(DOMPurify.sanitize(trimmed, SANITIZE_OPTIONS));
 }

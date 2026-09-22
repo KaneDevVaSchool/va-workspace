@@ -221,12 +221,12 @@ const importanceTitle = computed(
   () => props.importanceCriterion?.name || (props.scoreKitMode === 'weighted_task' ? 'Độ khó' : 'Loại công việc'),
 );
 
-const importanceLocked = computed(() => props.lockDifficulty && Boolean(props.form.assignee_id) && Boolean(props.form.priority));
+const importanceLocked = computed(() => false);
 
 const importanceRows = computed(() => {
   const rows = (props.importanceOptions || []).map((opt) => ({
     value: opt.value,
-    label: opt.label,
+    label: opt.code && opt.label && !opt.label.startsWith(`${opt.code}-`) ? `${opt.code}-${opt.label}` : opt.label,
     description: opt.description || '',
     weight: opt.weight,
     code: opt.code || '',

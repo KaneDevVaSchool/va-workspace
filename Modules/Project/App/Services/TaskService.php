@@ -458,14 +458,48 @@ class TaskService
         $start = ! empty($data['start_date']) ? Carbon::parse($data['start_date'])->startOfDay() : null;
         $end = ! empty($data['end_date']) ? Carbon::parse($data['end_date'])->startOfDay() : null;
 
+        $range = $this->projectDateRangeText($project);
         if ($start !== null && $project->start_date !== null && $start->lt($project->start_date)) {
-            return 'Ngày bắt đầu phải nằm trong thời gian dự án.';
+            return "Ngày bắt đầu phải nằm trong thời gian dự án ({$range}).";
         }
         if ($end !== null && $project->end_date !== null && $end->gt($project->end_date)) {
-            return 'Ngày kết thúc phải nằm trong thời gian dự án.';
+            return "Ngày kết thúc phải nằm trong thời gian dự án ({$range}).";
         }
 
         return null;
+    }
+
+    private function projectDateRangeText(Project $project): string
+    {
+        $start = $project->start_date?->format('d/m/Y') ?? 'không giới hạn';
+        $end = $project->end_date?->format('d/m/Y') ?? 'không giới hạn';
+
+        return "bắt đầu {$start}, kết thúc {$end}";
+    }
+
+    private function duplicateTitleError(?int $projectId, ?int $parentId, string $title, ?int $ignoreTaskId = null): ?string
+    {
+        $normalized = mb_strtolower(trim($title));
+        if ($normalized === '') {
+            return null;
+        }
+
+        $query = Task::query()
+            ->where('project_id', $projectId)
+            ->when(
+                $parentId === null,
+                fn ($builder) => $builder->whereNull('parent_id'),
+                fn ($builder) => $builder->where('parent_id', $parentId),
+            )
+            ->whereRaw('LOWER(title) = ?', [$normalized]);
+
+        if ($ignoreTaskId !== null) {
+            $query->where('id', '!=', $ignoreTaskId);
+        }
+
+        return $query->exists()
+            ? 'Tên công việc đã tồn tại trong cùng dự án. Vui lòng kiểm tra lại.'
+            : null;
     }
 
     /**
@@ -539,6 +573,11 @@ class TaskService
             if ($sprintError !== null) {
                 return ['error' => $sprintError];
             }
+        }
+
+        $duplicateTitle = $this->duplicateTitleError($project?->id, $parent?->id, (string) ($data['title'] ?? ''));
+        if ($duplicateTitle !== null) {
+            return ['error' => $duplicateTitle];
         }
 
         if ($project !== null) {
@@ -640,6 +679,31 @@ class TaskService
             ]);
             if ($dateError !== null) {
                 return ['error' => $dateError];
+            }
+        }
+
+        if (array_key_exists('title', $data)) {
+            $duplicateTitle = $this->duplicateTitleError(
+                $task->project_id,
+                $effectiveParentId !== null ? (int) $effectiveParentId : null,
+                (string) $data['title'],
+                $task->id,
+            );
+            if ($duplicateTitle !== null) {
+                return ['error' => $duplicateTitle];
+            }
+        }
+
+        if ($task->project_id !== null && (array_key_exists('start_date', $data) || array_key_exists('end_date', $data))) {
+            $project = $task->relationLoaded('project') ? $task->project : $this->projects->find($task->project_id);
+            if ($project !== null) {
+                $projectDateError = $this->validateAgainstProjectDates($project, [
+                    'start_date' => array_key_exists('start_date', $data) ? $data['start_date'] : $task->start_date,
+                    'end_date' => array_key_exists('end_date', $data) ? $data['end_date'] : $task->end_date,
+                ]);
+                if ($projectDateError !== null) {
+                    return ['error' => $projectDateError];
+                }
             }
         }
 
@@ -1096,6 +1160,9 @@ class TaskService
                             ? $task->project->executingDepartment
                             : null
                     ),
+                    'start_date' => $task->project->start_date?->toDateString(),
+                    'end_date' => $task->project->end_date?->toDateString(),
+                    'constrain_task_dates_to_project' => (bool) $task->project->constrain_task_dates_to_project,
                 ]
                 : null,
             'department' => $this->presentDept($this->resolveTaskDepartment($task)),
@@ -1208,6 +1275,7 @@ class TaskService
             'progress_percent' => $task->progress_percent,
             'start_date' => $task->start_date?->toDateString(),
             'end_date' => $task->end_date?->toDateString(),
+            'children_count' => $task->children()->count(),
             'assignee_id' => $task->assignee_id,
             'assignee' => $this->presentUser($task->relationLoaded('assignee') ? $task->assignee : null),
             'is_overdue' => $overdue['is_overdue'],
@@ -1229,7 +1297,12 @@ class TaskService
             ->get();
 
         return $children
-            ->map(fn (Task $child) => $this->presentLinkedTask($child))
+            ->map(function (Task $child) {
+                $payload = $this->presentLinkedTask($child);
+                $payload['children'] = $this->presentDirectChildren($child);
+
+                return $payload;
+            })
             ->values()
             ->all();
     }

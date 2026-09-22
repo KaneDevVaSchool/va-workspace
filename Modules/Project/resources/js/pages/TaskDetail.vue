@@ -85,6 +85,7 @@ const users = ref([]);
 const importanceOptions = ref([]);
 const lockDifficulty = ref(false);
 const scoreKitMode = ref('');
+const collapsedChildIds = ref(new Set());
 const progressLevels = ref([]);
 
 const deleting = ref(false);
@@ -426,7 +427,35 @@ async function loadTask() {
 }
 
 function goBack() {
+  if (task.value?.project_id) {
+    router.push({
+      name: 'manager.project.detail',
+      params: { id: task.value.project_id },
+      query: { tab: 'tasks' },
+    });
+    return;
+  }
   router.push({ name: 'manager.project.tasks' });
+}
+
+function childRows(children, depth = 0) {
+  const rows = [];
+  for (const child of children || []) {
+    rows.push({ child, depth, hasChildren: (child.children_count || child.children?.length || 0) > 0 });
+    if (!collapsedChildIds.value.has(child.id) && child.children?.length) {
+      rows.push(...childRows(child.children, depth + 1));
+    }
+  }
+  return rows;
+}
+
+const visibleChildRows = computed(() => childRows(task.value?.children || []));
+
+function toggleChild(child) {
+  const next = new Set(collapsedChildIds.value);
+  if (next.has(child.id)) next.delete(child.id);
+  else next.add(child.id);
+  collapsedChildIds.value = next;
 }
 
 function goEdit() {
@@ -1429,40 +1458,50 @@ onBeforeUnmount(() => {
                       <span role="columnheader">Tiến độ</span>
                     </div>
                     <div
-                      v-for="child in task.children"
-                      :key="child.id"
+                      v-for="row in visibleChildRows"
+                      :key="row.child.id"
                       class="task-detail__child-row"
                       role="row"
-                      @contextmenu.prevent.stop="openChildContextMenu($event, child)"
+                      @contextmenu.prevent.stop="openChildContextMenu($event, row.child)"
                     >
-                      <router-link
-                        class="task-detail__link task-detail__child-title"
-                        role="cell"
-                        :to="{ name: 'manager.project.tasks.detail', params: { id: child.id } }"
-                      >
-                        <span v-if="child.code" class="task-detail__child-code">{{ child.code }}</span>
-                        {{ child.title }}
-                      </router-link>
+                      <span class="task-detail__child-title-wrap" role="cell" :style="{ paddingLeft: `${row.depth * 1.25}rem` }">
+                        <button
+                          v-if="row.hasChildren"
+                          type="button"
+                          class="task-detail__child-toggle"
+                          :aria-label="collapsedChildIds.has(row.child.id) ? 'Mở công việc con' : 'Thu gọn công việc con'"
+                          @click="toggleChild(row.child)"
+                        >
+                          <AppIcon :name="collapsedChildIds.has(row.child.id) ? 'chevronRight' : 'chevronDown'" :size="14" />
+                        </button>
+                        <router-link
+                          class="task-detail__link task-detail__child-title"
+                          :to="{ name: 'manager.project.tasks.detail', params: { id: row.child.id } }"
+                        >
+                          <span v-if="row.child.code" class="task-detail__child-code">{{ row.child.code }}</span>
+                          {{ row.child.title }}
+                        </router-link>
+                      </span>
                       <span class="task-detail__child-cell" role="cell">
                         <span
                           class="task-detail__chip"
-                          :class="`task-detail__chip--${TASK_STATUS_TONES[child.status] || 'tertiary'}`"
+                          :class="`task-detail__chip--${TASK_STATUS_TONES[row.child.status] || 'tertiary'}`"
                         >
-                          {{ statusLabel(child.status) }}
+                          {{ statusLabel(row.child.status) }}
                         </span>
                       </span>
                       <span class="task-detail__child-cell" role="cell">
                         <select
-                          v-if="canEdit && !childDifficultyLocked(child)"
+                          v-if="canEdit && !childDifficultyLocked(row.child)"
                           class="task-detail__child-select"
-                          :value="child.priority || ''"
-                          :disabled="Boolean(childDifficultySaving[child.id])"
-                          :aria-label="`Độ khó của ${child.title}`"
-                          @change="changeChildDifficulty(child, $event.target.value)"
+                          :value="row.child.priority || ''"
+                          :disabled="Boolean(childDifficultySaving[row.child.id])"
+                          :aria-label="`Độ khó của ${row.child.title}`"
+                          @change="changeChildDifficulty(row.child, $event.target.value)"
                         >
                           <option value="">Chưa chọn</option>
                           <option
-                            v-for="opt in childDifficultyChoices(child)"
+                            v-for="opt in childDifficultyChoices(row.child)"
                             :key="opt.value"
                             :value="opt.value"
                           >
@@ -1470,15 +1509,15 @@ onBeforeUnmount(() => {
                           </option>
                         </select>
                         <span v-else class="task-detail__priority">
-                          <AppIcon name="flag" :size="14" :class="`task-detail__flag--${priorityTone(child.priority)}`" />
-                          {{ child.priority_label || priorityLabel(child.priority) || 'Chưa chọn' }}
+                          <AppIcon name="flag" :size="14" :class="`task-detail__flag--${priorityTone(row.child.priority)}`" />
+                          {{ row.child.priority_label || priorityLabel(row.child.priority) || 'Chưa chọn' }}
                         </span>
                       </span>
                       <span class="task-detail__child-cell task-detail__child-stat" role="cell">
-                        {{ child.assignee?.name || '--' }}
+                        {{ row.child.assignee?.name || '--' }}
                       </span>
                       <span class="task-detail__child-cell task-detail__child-stat" role="cell">
-                        {{ child.progress_percent != null ? `${child.progress_percent}%` : '--' }}
+                        {{ row.child.progress_percent != null ? `${row.child.progress_percent}%` : '--' }}
                       </span>
                     </div>
                   </div>
@@ -3190,6 +3229,27 @@ onBeforeUnmount(() => {
 
 .task-detail__child-row:last-child {
   box-shadow: none;
+}
+
+.task-detail__child-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.task-detail__child-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--color-text);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
 }
 
 .task-detail__child-title {

@@ -5,7 +5,9 @@ namespace Tests\Feature\Social;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Modules\Social\App\Models\SocialLinkPreview;
 use Tests\TestCase;
 
 class SocialPostAttachmentTest extends TestCase
@@ -51,5 +53,48 @@ class SocialPostAttachmentTest extends TestCase
             ], ['Accept' => 'application/json'])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['attachments']);
+    }
+
+    public function test_shared_post_includes_original_attachments(): void
+    {
+        Storage::fake('s3');
+        $author = $this->makeUser();
+        $sharer = $this->makeUser();
+
+        $postId = $this->actingAs($author)
+            ->post('/api/social/posts', [
+                'content' => 'Bài có ảnh',
+                'attachments' => [UploadedFile::fake()->image('cover.jpg', 40, 40)],
+            ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->json('post.id');
+
+        $this->actingAs($sharer)
+            ->postJson("/api/social/posts/{$postId}/share", ['caption' => 'Chia sẻ kèm ảnh'])
+            ->assertCreated()
+            ->assertJsonPath('post.shared_from.attachments.0.type', 'image')
+            ->assertJsonPath('post.shared_from.attachments.0.name', 'cover.jpg');
+    }
+
+    public function test_dismissed_link_preview_is_not_recreated(): void
+    {
+        Http::fake([
+            'www.youtube.com/oembed*' => Http::response([
+                'title' => 'Video',
+                'thumbnail_url' => 'https://img.youtube.com/vi/abc/hqdefault.jpg',
+            ]),
+        ]);
+
+        $user = $this->makeUser();
+        $url = 'https://www.youtube.com/watch?v=abcdefghijk';
+
+        $this->actingAs($user)
+            ->postJson('/api/social/posts', [
+                'content' => "<p>Xem {$url}</p>",
+                'dismissed_link_previews' => [$url],
+            ])
+            ->assertCreated();
+
+        $this->assertSame(0, SocialLinkPreview::query()->count());
     }
 }

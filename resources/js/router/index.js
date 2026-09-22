@@ -23,7 +23,7 @@ const routes = [
         path: '/',
         name: 'home',
         component: () => import('../pages/Home.vue'),
-        meta: { requiresAuth: true, title: 'Quy trình' },
+        meta: { requiresAuth: true, title: 'Hướng dẫn sử dụng' },
     },
     ...identityRoutes,
     ...workspaceConfigRoutes,

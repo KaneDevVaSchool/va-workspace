@@ -1622,16 +1622,20 @@ onBeforeUnmount(() => {
 
                 <p v-else-if="loading" class="eval-page__empty">Đang tải…</p>
 
-                <p
+                <div
                     v-else-if="allCriteria.length === 0"
                     class="eval-page__empty"
                 >
-                    Phòng ban chưa có tiêu chí đánh giá nào.
-                    <template v-if="canManage">
-                        Bấm dấu <strong>+</strong> rồi chọn Thêm tiêu chí để bắt
-                        đầu.</template
+                    <p>Phòng ban chưa có tiêu chí đánh giá nào.</p>
+                    <button
+                        v-if="canManage"
+                        type="button"
+                        class="eval-page__empty-action"
+                        @click="openAdd"
                     >
-                </p>
+                        Thêm tiêu chí
+                    </button>
+                </div>
 
                 <p v-else-if="filtered.length === 0" class="eval-page__empty">
                     Không tìm thấy tiêu chí phù hợp.
@@ -4373,10 +4377,28 @@ onBeforeUnmount(() => {
 }
 
 .eval-page__empty {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-3);
     margin: 2rem auto;
     text-align: center;
     color: var(--color-text-muted);
     font-size: 0.875rem;
+}
+
+.eval-page__empty p {
+    margin: 0;
+}
+
+.eval-page__empty-action {
+    padding: 0.55rem 1rem;
+    color: var(--color-on-primary);
+    font: inherit;
+    font-weight: 700;
+    background: var(--color-primary);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
 }
 
 .eval-page__icon-btn {

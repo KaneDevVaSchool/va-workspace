@@ -178,9 +178,14 @@ class TaskImportanceOptions
                     ?? $value;
             }
 
+            $displayLabel = $label !== '' ? $label : $value;
+            if ($code !== '' && ! str_starts_with($displayLabel, $code.'-') && ! str_starts_with($displayLabel, $code.' ')) {
+                $displayLabel = $code.'-'.$displayLabel;
+            }
+
             $options[] = [
                 'value' => $value,
-                'label' => $label !== '' ? $label : $value,
+                'label' => $displayLabel,
                 'description' => trim((string) ($level['description'] ?? '')),
                 'weight' => $level['score'] ?? (ProjectEnums::IMPORTANCE_WEIGHTS[$value] ?? 0),
                 'code' => $code,

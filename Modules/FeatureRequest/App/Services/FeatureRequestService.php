@@ -102,16 +102,18 @@ class FeatureRequestService
             'status' => FeatureRequest::STATUS_PENDING,
         ]);
 
-        $superAdminIds = $this->users->allActiveSuperAdmins()->pluck('id')->map(fn ($id) => (int) $id)->all();
-
-        $this->notifications->notifyUsers(
-            $superAdminIds,
-            $user,
-            NotificationService::TYPE_FEATURE_REQUEST_CREATED,
-            'Có yêu cầu tính năng mới cần xem xét',
-            mb_substr($request->description, 0, 120),
-            '/superadmin/feature-requests',
-        );
+        $handler = $this->users->allActiveSuperAdmins()->sortBy('id')->first();
+        if ($handler !== null) {
+            $this->notifications->notify(
+                $handler,
+                $user,
+                NotificationService::TYPE_FEATURE_REQUEST_CREATED,
+                'Có yêu cầu tính năng mới cần xem xét',
+                mb_substr($request->description, 0, 120),
+                '/superadmin/feature-requests',
+                $this->notificationData($request),
+            );
+        }
 
         return $request;
     }
@@ -257,7 +259,18 @@ class FeatureRequestService
             $title,
             mb_substr($request->description, 0, 120),
             '/feature-requests/mine',
+            $this->notificationData($request, $actor),
         );
+    }
+
+    /** @return array<string, int|null> */
+    private function notificationData(FeatureRequest $request, ?User $reviewer = null): array
+    {
+        return [
+            'feature_request_id' => (int) $request->id,
+            'creator_id' => (int) $request->created_by,
+            'reviewer_id' => $reviewer ? (int) $reviewer->id : ($request->reviewed_by ? (int) $request->reviewed_by : null),
+        ];
     }
 
     private function assertOwnedAndPending(FeatureRequest $request, User $user): void

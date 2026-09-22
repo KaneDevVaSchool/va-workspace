@@ -27,6 +27,7 @@ const auth = useAuthStore();
 const content = ref('');
 const editorEmpty = ref(true);
 const linkPreviews = ref([]);
+const dismissedLinkPreviews = ref([]);
 const files = ref([]);
 const gifAttachments = ref([]);
 const submitting = ref(false);
@@ -146,6 +147,7 @@ function resetDeptVisibility() {
 function closeComposer() {
   content.value = '';
   linkPreviews.value = [];
+  dismissedLinkPreviews.value = [];
   files.value = [];
   gifAttachments.value = [];
   pickerOpen.value = false;
@@ -234,6 +236,7 @@ async function submit() {
     }
     files.value.forEach((file) => form.append('attachments[]', file));
     gifAttachments.value.forEach((gif) => form.append('gif_attachments[]', gif.token));
+    dismissedLinkPreviews.value.forEach((url) => form.append('dismissed_link_previews[]', url));
 
     const { data } = await window.axios.post('/api/social/posts', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -242,6 +245,7 @@ async function submit() {
     emit('posted', data.post);
     content.value = '';
     linkPreviews.value = [];
+    dismissedLinkPreviews.value = [];
     files.value = [];
     gifAttachments.value = [];
     pickerOpen.value = false;
@@ -323,6 +327,7 @@ defineExpose({ expand });
         @is-empty="editorEmpty = $event"
         @close="closeComposer"
         @update:link-previews="linkPreviews = $event"
+        @update:dismissed-link-previews="dismissedLinkPreviews = $event"
       />
 
       <div v-if="linkPreviews.length > 0" class="composer__link-previews">

@@ -376,7 +376,7 @@ return [
 
         // ---------- Dự án (project) ----------
         'project.*' => ['label' => 'Toàn bộ dự án', 'module' => 'Dự án', 'description' => 'Toàn quyền quản lý dự án', 'active' => true],
-        'project.view' => ['label' => 'Xem dự án', 'module' => 'Dự án', 'description' => 'Xem danh sách và chi tiết dự án', 'active' => true],
+        'project.view' => ['label' => 'Xem dự án', 'module' => 'Dự án', 'description' => 'Menu trái: Dự án. Xem danh sách và chi tiết dự án', 'active' => true],
         'project.create' => ['label' => 'Tạo dự án', 'module' => 'Dự án', 'description' => 'Tạo mới dự án', 'active' => true],
         'project.manage_department' => ['label' => 'Quản lý dự án phòng ban', 'module' => 'Dự án', 'description' => 'Quản lý toàn bộ dự án trong phòng ban', 'active' => true],
         'project.update_department' => ['label' => 'Sửa dự án phòng ban', 'module' => 'Dự án', 'description' => 'Cập nhật thông tin dự án thuộc phòng ban', 'active' => true],
@@ -384,8 +384,8 @@ return [
 
         // ---------- Công việc (task) ----------
         'task.*' => ['label' => 'Toàn bộ công việc', 'module' => 'Công việc', 'description' => 'Toàn quyền quản lý công việc/task', 'active' => true],
-        'task.view' => ['label' => 'Xem công việc', 'module' => 'Công việc', 'description' => 'Xem danh sách và chi tiết công việc', 'active' => true],
-        'task.view_assigned' => ['label' => 'Xem công việc được giao', 'module' => 'Công việc', 'description' => 'Chỉ xem công việc được giao cho bản thân', 'active' => true],
+        'task.view' => ['label' => 'Xem công việc', 'module' => 'Công việc', 'description' => 'Menu trái: Công việc. Xem danh sách và chi tiết công việc', 'active' => true],
+        'task.view_assigned' => ['label' => 'Xem công việc được giao', 'module' => 'Công việc', 'description' => 'Menu trái: Công việc. Chỉ xem công việc được giao cho bản thân', 'active' => true],
         'task.delegate' => ['label' => 'Uỷ quyền công việc', 'module' => 'Công việc', 'description' => 'Cho phép giao/chuyển task cho người khác thực hiện', 'active' => true],
         'task.create' => ['label' => 'Tạo công việc', 'module' => 'Công việc', 'description' => 'Tạo mới công việc/task', 'active' => true],
         'task.assign' => ['label' => 'Phân công công việc', 'module' => 'Công việc', 'description' => 'Giao task cho thành viên trong nhóm/phòng ban', 'active' => true],
@@ -407,8 +407,8 @@ return [
 
         // ---------- Dashboard ----------
         'dashboard.*' => ['label' => 'Toàn bộ Dashboard', 'module' => 'Dashboard', 'description' => 'Toàn quyền xem/tuỳ biến dashboard'],
-        'dashboard.view' => ['label' => 'Xem tổng quan', 'module' => 'Tổng quan', 'description' => 'Xem trang tổng quan sau khi đăng nhập', 'active' => true],
-        'dashboard.view_company' => ['label' => 'Xem dashboard tổng công ty', 'module' => 'Tổng quan', 'description' => 'Xem số liệu, biểu đồ tổng hợp toàn công ty (mọi phòng ban)', 'active' => true],
+        'dashboard.view' => ['label' => 'Xem tổng quan của tôi', 'module' => 'Tổng quan', 'description' => 'Menu trái: Của tôi. Xem trang tổng quan cá nhân sau khi đăng nhập', 'active' => true],
+        'dashboard.view_company' => ['label' => 'Xem tổng công ty', 'module' => 'Tổng quan', 'description' => 'Menu trái: Tổng công ty. Xem số liệu, biểu đồ tổng hợp toàn công ty (mọi phòng ban)', 'active' => true],
 
         // ---------- Phòng ban (department) ----------
         'department.*' => ['label' => 'Toàn bộ phòng ban', 'module' => 'Phòng ban', 'description' => 'Toàn quyền quản lý phòng ban', 'active' => true],
@@ -420,12 +420,12 @@ return [
 
         // ---------- Đánh giá (evaluation) ----------
         'evaluation.*' => ['label' => 'Toàn bộ đánh giá', 'module' => 'Đánh giá', 'description' => 'Toàn quyền quản lý đánh giá nhân sự', 'active' => true],
-        'evaluation.manage_department' => ['label' => 'Quản lý đánh giá phòng ban', 'module' => 'Đánh giá', 'description' => 'Tự tạo và quản lý tiêu chí đánh giá nhân sự trong phòng ban mình', 'active' => true],
+        'evaluation.manage_department' => ['label' => 'Quản lý đánh giá phòng ban', 'module' => 'Đánh giá', 'description' => 'Menu trái: Khung điểm. Tự tạo và quản lý tiêu chí đánh giá nhân sự trong phòng ban mình', 'active' => true],
 
         // ---------- Báo cáo (report) ----------
         'report.*' => ['label' => 'Toàn bộ báo cáo', 'module' => 'Báo cáo', 'description' => 'Toàn quyền quản lý báo cáo mọi phòng ban', 'active' => true],
-        'report.manage_department' => ['label' => 'Quản lý báo cáo phòng ban', 'module' => 'Báo cáo', 'description' => 'Tạo, sửa, xoá và xem báo cáo trong phòng ban mình', 'active' => true],
-        'report.view_assigned' => ['label' => 'Xem báo cáo được chia sẻ', 'module' => 'Báo cáo', 'description' => 'Xem báo cáo mà người tạo đã thêm mình vào danh sách người xem', 'active' => true],
+        'report.manage_department' => ['label' => 'Quản lý báo cáo phòng ban', 'module' => 'Báo cáo', 'description' => 'Menu trái: Báo cáo. Tạo, sửa, xoá và xem báo cáo trong phòng ban mình', 'active' => true],
+        'report.view_assigned' => ['label' => 'Xem báo cáo được chia sẻ', 'module' => 'Báo cáo', 'description' => 'Menu trái: Báo cáo. Xem báo cáo mà người tạo đã thêm mình vào danh sách người xem', 'active' => true],
 
         // ---------- Hợp đồng (contract) ----------
         'contract.*' => ['label' => 'Toàn bộ hợp đồng', 'module' => 'Hợp đồng', 'description' => 'Toàn quyền quản lý hợp đồng'],
@@ -434,7 +434,7 @@ return [
 
         // ---------- Quản lý tài khoản (credential) ----------
         'credential.*' => ['label' => 'Toàn bộ quản lý tài khoản', 'module' => 'Quản lý tài khoản', 'description' => 'Toàn quyền quản lý tài khoản dịch vụ (Google, Canva, Cursor, Claude, AWS, VPS, database, IAM, domain...)', 'active' => true],
-        'credential.view' => ['label' => 'Xem danh sách tài khoản', 'module' => 'Quản lý tài khoản', 'description' => 'Xem danh sách/chi tiết tài khoản dịch vụ (chỉ metadata — dữ liệu nhạy cảm chỉ người tạo/người được cấp mới xem được)', 'active' => true],
+        'credential.view' => ['label' => 'Xem danh sách tài khoản', 'module' => 'Quản lý tài khoản', 'description' => 'Menu trái: Tài khoản. Xem danh sách/chi tiết tài khoản dịch vụ (chỉ metadata — dữ liệu nhạy cảm chỉ người tạo/người được cấp mới xem được)', 'active' => true],
         'credential.manage' => ['label' => 'Quản lý tài khoản', 'module' => 'Quản lý tài khoản', 'description' => 'Tạo/sửa/xoá tài khoản dịch vụ và quản lý danh mục nhà cung cấp', 'active' => true],
 
         // ---------- Kho tri thức (knowledge_base) ----------
@@ -467,8 +467,8 @@ return [
 
         // ---------- Ghi nhận yêu cầu tính năng (feature_request) ----------
         'feature_request.*' => ['label' => 'Toàn bộ ghi nhận yêu cầu tính năng', 'module' => 'Ghi nhận yêu cầu tính năng', 'description' => 'Toàn quyền xử lý ghi nhận yêu cầu tính năng', 'active' => true],
-        'feature_request.create' => ['label' => 'Ghi nhận yêu cầu tính năng', 'module' => 'Ghi nhận yêu cầu tính năng', 'description' => 'Gửi ghi nhận yêu cầu tính năng mới ngay tại trang đang dùng, xem/sửa/xoá ghi nhận của bản thân', 'active' => true],
-        'feature_request.review' => ['label' => 'Xử lý ghi nhận yêu cầu tính năng', 'module' => 'Ghi nhận yêu cầu tính năng', 'description' => 'Xem toàn bộ theo phòng ban, duyệt/từ chối/cập nhật tiến độ', 'active' => true],
+        'feature_request.create' => ['label' => 'Ghi nhận yêu cầu tính năng', 'module' => 'Ghi nhận yêu cầu tính năng', 'description' => 'Menu trái: Ghi nhận của tôi. Gửi ghi nhận yêu cầu tính năng mới ngay tại trang đang dùng, xem/sửa/xoá ghi nhận của bản thân', 'active' => true],
+        'feature_request.review' => ['label' => 'Xử lý ghi nhận yêu cầu tính năng', 'module' => 'Ghi nhận yêu cầu tính năng', 'description' => 'Menu trái: Ghi nhận yêu cầu tính năng. Xem toàn bộ theo phòng ban, duyệt/từ chối/cập nhật tiến độ', 'active' => true],
 
         // ---------- Nhật ký công việc (worklog) ----------
         'worklog.*' => ['label' => 'Toàn bộ worklog', 'module' => 'Worklog', 'description' => 'Toàn quyền quản lý nhật ký công việc'],
@@ -478,7 +478,7 @@ return [
         // ---------- Hiệu suất (performance) ----------
         'performance.*' => ['label' => 'Toàn bộ hiệu suất', 'module' => 'Hiệu suất', 'description' => 'Toàn quyền xem/quản lý báo cáo hiệu suất'],
         'performance.view' => ['label' => 'Xem hiệu suất', 'module' => 'Hiệu suất', 'description' => 'Xem báo cáo hiệu suất'],
-        'performance.view_department' => ['label' => 'Xem hiệu suất phòng ban', 'module' => 'Hiệu suất', 'description' => 'Xem báo cáo hiệu suất của phòng ban'],
+        'performance.view_department' => ['label' => 'Xem tổng quan phòng ban', 'module' => 'Tổng quan', 'description' => 'Menu trái: Phòng ban. Xem số liệu phòng ban mình thuộc về', 'active' => true],
 
         // ---------- Quy trình (process) ----------
         'process.*' => ['label' => 'Toàn bộ quy trình', 'module' => 'Quy trình', 'description' => 'Toàn quyền quản lý quy trình'],
@@ -514,7 +514,7 @@ return [
         'workspace_config.manage_global_menu' => ['label' => 'Ẩn/hiện menu toàn hệ thống', 'module' => 'Hệ thống', 'description' => 'Ẩn/hiện bất kỳ mục menu sidebar nào cho toàn bộ tài khoản không phải super_admin (chỉ super_admin)', 'active' => true],
 
         // ---------- Cấu hình Workspace theo phòng ban (workspace_config) ----------
-        'workspace_config.view_department' => ['label' => 'Xem cấu hình phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Xem trang cấu hình workspace của phòng ban mình (thành viên, menu)', 'active' => true],
+        'workspace_config.view_department' => ['label' => 'Xem cấu hình phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Menu trái: Cấu hình phòng ban. Xem trang cấu hình workspace của phòng ban mình (thành viên, menu, tiêu chí)', 'active' => true],
         'workspace_config.manage_sidebar_department' => ['label' => 'Cấu hình menu phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Bật/tắt mục menu hiển thị cho phòng ban mình', 'active' => true],
         'workspace_config.assign_role_department' => ['label' => 'Gán vai trò phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Gán vai trò (phó phòng, trưởng bộ phận, trưởng nhóm, nhân viên, người xem) cho thành viên phòng ban mình', 'active' => true],
 
@@ -522,7 +522,7 @@ return [
         'social.*' => ['label' => 'Toàn bộ bảng tin', 'module' => 'Mạng nội bộ', 'description' => 'Toàn quyền quản lý bảng tin nội bộ', 'active' => true],
         'social.moderate' => ['label' => 'Kiểm duyệt bảng tin', 'module' => 'Mạng nội bộ', 'description' => 'Xoá bài viết/bình luận của người khác trong phòng ban quản lý', 'active' => true],
         'social.pin' => ['label' => 'Ghim thông báo', 'module' => 'Mạng nội bộ', 'description' => 'Đưa bài viết lên bảng Thông báo công ty. Thông báo quan trọng do người quản trị đăng riêng.', 'active' => true],
-        'social.review' => ['label' => 'Duyệt bài viết', 'module' => 'Mạng nội bộ', 'description' => 'Duyệt hoặc từ chối bài viết mới trước khi hiển thị công khai trên bảng tin, áp dụng toàn trường', 'active' => true],
+        'social.review' => ['label' => 'Duyệt bài viết', 'module' => 'Mạng nội bộ', 'description' => 'Menu trái: Duyệt bài. Duyệt hoặc từ chối bài viết mới trước khi hiển thị công khai trên bảng tin, áp dụng toàn trường', 'active' => true],
 
     ],
 

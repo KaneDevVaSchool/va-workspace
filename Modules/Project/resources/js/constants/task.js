@@ -436,8 +436,10 @@ export function taskTypeLabel(value) {
 export function taskTypeTone(value) {
   return TASK_TYPE_TONES[value] || 'neutral';
 }
-export function taskPriorityLabel(value) {
-  return value ? (TASK_PRIORITY_LABELS[value] || value) : '—';
+export function taskPriorityLabel(value, code = '') {
+  const label = value ? (TASK_PRIORITY_LABELS[value] || value) : '—';
+  if (!code || label === '—' || label.startsWith(`${code}-`) || label.startsWith(`${code} `)) return label;
+  return `${code}-${label}`;
 }
 export function taskPriorityTone(value) {
   return TASK_PRIORITY_TONES[value] || 'neutral';

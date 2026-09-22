@@ -28,6 +28,7 @@ const importanceCriterion = ref(null);
 const lockDifficulty = ref(false);
 const scoreKitMode = ref('');
 const selectedParent = ref(null);
+const selectedProject = ref(null);
 const task = ref(null);
 
 const form = reactive({
@@ -139,6 +140,14 @@ function applyTask(next) {
     report_attachment_requirement: next.report_attachment_requirement || 'none',
   });
   selectedParent.value = next.parent || null;
+  selectedProject.value = next.project || null;
+}
+
+function formatDate(value) {
+  if (!value) return '';
+  const [year, month, day] = String(value).slice(0, 10).split('-');
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
 }
 
 async function loadMeta() {
@@ -187,6 +196,17 @@ function validateBeforeSubmit() {
       (parent.end_date && form.end_date > parent.end_date))
   ) {
     showClientToast('error', 'Thời gian công việc con phải nằm trong khoảng thời gian của công việc cha.');
+    return false;
+  }
+  const project = selectedProject.value;
+  if (
+    project?.constrain_task_dates_to_project &&
+    ((project.start_date && form.start_date < project.start_date) ||
+      (project.end_date && form.end_date > project.end_date))
+  ) {
+    const start = formatDate(project.start_date) || 'không giới hạn';
+    const end = formatDate(project.end_date) || 'không giới hạn';
+    showClientToast('error', `Thời gian công việc phải nằm trong thời gian dự án. Dự án bắt đầu ${start}, kết thúc ${end}.`);
     return false;
   }
   if (isQuantity.value && Number(form.progress_total) <= 0) {

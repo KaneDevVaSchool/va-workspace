@@ -15,6 +15,8 @@ class UpdateSocialPostRequest extends FormRequest
     {
         return [
             'content' => ['nullable', 'string', 'max:8000'],
+            'dismissed_link_previews' => ['sometimes', 'array', 'max:20'],
+            'dismissed_link_previews.*' => ['string', 'url', 'max:2000'],
         ];
     }
 

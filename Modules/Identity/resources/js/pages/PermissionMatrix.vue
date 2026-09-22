@@ -906,6 +906,20 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <section class="perm-page__guide" aria-label="Cách đọc bảng phân quyền">
+          <h2>Bạn đang xem ma trận quyền của Super Admin</h2>
+          <p>
+            Mỗi cột là một vai trò. Dấu tick nghĩa là vai trò đó được làm việc tương ứng. Mô tả quyền ghi rõ mục menu trái mà quyền đó mở ra.
+          </p>
+          <dl>
+            <div><dt>Super Admin</dt><dd>Người quản trị cao nhất, vận hành toàn hệ thống. Không nằm trong bảng vì luôn có mọi quyền.</dd></div>
+            <div><dt>Admin</dt><dd>Quản trị nghiệp vụ toàn trường, không đổi cấu hình gốc của hệ thống.</dd></div>
+            <div><dt>Giám đốc điều hành</dt><dd>Xem xuyên các phòng ban, theo dõi dự án và báo cáo.</dd></div>
+            <div><dt>Trưởng phòng</dt><dd>Quản lý dự án, công việc, đánh giá và cấu hình của phòng mình.</dd></div>
+            <div><dt>Nhân viên</dt><dd>Xem và làm công việc được giao, gửi ghi nhận của mình.</dd></div>
+          </dl>
+        </section>
+
         <p v-if="!isLoading && permissions.length" class="perm-page__hint">
           Bấm 1 lần vào ô để xem chi tiết, bấm đúp để cấp/thu hồi ngay. Ở đầu mỗi nhóm module có nút cấp/thu hồi cả module cho từng vai trò.
         </p>
@@ -1297,6 +1311,44 @@ onBeforeUnmount(() => {
 .perm-page__note {
   flex-shrink: 0;
   margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.perm-page__guide {
+  flex-shrink: 0;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.perm-page__guide h2 {
+  margin: 0 0 var(--space-1);
+  font-size: 0.9375rem;
+}
+
+.perm-page__guide p {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.perm-page__guide dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.perm-page__guide dt {
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.perm-page__guide dd {
+  margin: 0;
   color: var(--color-text-muted);
   font-size: 0.75rem;
 }

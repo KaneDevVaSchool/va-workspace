@@ -321,7 +321,7 @@ class SocialPostService
             $this->mentions->notifyGroupPost($author, $post);
         }
         $this->hashtags->syncForPost($post);
-        $this->linkPreviews->syncForPost($post);
+        $this->linkPreviews->syncForPost($post, $this->dismissedLinkPreviews($data));
 
         if ($reviewStatus === SocialPost::REVIEW_PENDING) {
             $this->notifyReviewers($author, $post);
@@ -382,7 +382,7 @@ class SocialPostService
 
         $this->mentions->notifyPost($editor, $post, $oldContent);
         $this->hashtags->syncForPost($post);
-        $this->linkPreviews->syncForPost($post);
+        $this->linkPreviews->syncForPost($post, $this->dismissedLinkPreviews($data));
 
         return $post;
     }
@@ -696,12 +696,7 @@ class SocialPostService
                 ])
                 ->values()
                 ->all(),
-            'attachments' => collect($post->attachments ?? [])->map(fn (array $a) => [
-                'type' => $a['type'],
-                'name' => $a['name'],
-                'size' => $a['size'],
-                'url' => $a['url'] ?? (isset($a['path']) ? Storage::disk('s3')->url($a['path']) : ''),
-            ])->all(),
+            'attachments' => $this->presentAttachments($post),
             'author' => $post->is_anonymous ? null : $this->presentUser($post->user),
             'is_anonymous' => $post->is_anonymous,
             'anonymous_name' => $post->is_anonymous ? $post->anonymous_name : null,
@@ -733,6 +728,7 @@ class SocialPostService
                     'avatar_url' => $post->sharedFrom->user->avatar_url,
                 ],
                 'anonymous_name' => $post->sharedFrom->is_anonymous ? $post->sharedFrom->anonymous_name : null,
+                'attachments' => $this->presentAttachments($post->sharedFrom),
                 'link_previews' => $post->sharedFrom->linkPreviews
                     ->map(fn (SocialLinkPreview $preview) => [
                         'url' => $preview->url,
@@ -766,6 +762,17 @@ class SocialPostService
         ];
     }
 
+    /** @return list<array{type: string, name: string, size: mixed, url: string}> */
+    private function presentAttachments(SocialPost $post): array
+    {
+        return collect($post->attachments ?? [])->map(fn (array $a) => [
+            'type' => $a['type'],
+            'name' => $a['name'],
+            'size' => $a['size'],
+            'url' => $a['url'] ?? (isset($a['path']) ? Storage::disk('s3')->url($a['path']) : ''),
+        ])->all();
+    }
+
     /** @return array{id: int, name: string}[]|null null nếu bài không giới hạn phòng ban ('all'). */
     private function presentDepartmentVisibility(SocialPost $post): ?array
     {
@@ -778,6 +785,18 @@ class SocialPostService
                 'id' => $v->department->id,
                 'name' => $v->department->name,
             ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return list<string>
+     */
+    private function dismissedLinkPreviews(array $data): array
+    {
+        return collect($data['dismissed_link_previews'] ?? [])
+            ->filter(fn ($url) => is_string($url) && $url !== '')
             ->values()
             ->all();
     }

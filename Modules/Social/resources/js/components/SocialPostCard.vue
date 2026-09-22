@@ -38,6 +38,7 @@ const shareOpen = ref(false);
 const editing = ref(false);
 const savingEdit = ref(false);
 const draftContent = ref('');
+const dismissedLinkPreviews = ref([]);
 const editorEmpty = ref(true);
 const editorRef = ref(null);
 const showHistory = ref(false);
@@ -155,6 +156,12 @@ const imageAttachments = computed(() =>
 const fileAttachments = computed(() =>
   (props.post.attachments ?? []).filter((item) => item.type !== 'image'),
 );
+const sharedImageAttachments = computed(() =>
+  (props.post.shared_from?.attachments ?? []).filter((item) => item.type === 'image'),
+);
+const sharedFileAttachments = computed(() =>
+  (props.post.shared_from?.attachments ?? []).filter((item) => item.type !== 'image'),
+);
 
 async function setReaction(type, event) {
   const snapshot = {
@@ -257,6 +264,7 @@ async function startEdit() {
 function cancelEdit() {
   editing.value = false;
   draftContent.value = '';
+  dismissedLinkPreviews.value = [];
 }
 
 async function toggleHistory() {
@@ -290,6 +298,7 @@ async function saveEdit() {
   try {
     const { data } = await window.axios.put(`/api/social/posts/${props.post.id}`, {
       content: draftContent.value,
+      dismissed_link_previews: dismissedLinkPreviews.value,
     });
     emit('updated', data.post);
     editing.value = false;
@@ -455,6 +464,7 @@ async function saveEdit() {
         placeholder="Chỉnh sửa bài viết..."
         enable-mentions
         @is-empty="editorEmpty = $event"
+        @update:dismissed-link-previews="dismissedLinkPreviews = $event"
         @close="cancelEdit"
       />
       <div class="post-card__edit-actions">
@@ -522,6 +532,24 @@ async function saveEdit() {
           :key="preview.url"
           :preview="preview"
         />
+      </div>
+      <div v-if="sharedImageAttachments.length > 0" class="post-card__images">
+        <SocialImageGrid :images="sharedImageAttachments" />
+      </div>
+      <div v-if="sharedFileAttachments.length > 0" class="post-card__attachments">
+        <a
+          v-for="(attachment, index) in sharedFileAttachments"
+          :key="index"
+          :href="attachment.url"
+          target="_blank"
+          rel="noopener"
+          class="post-card__attachment"
+        >
+          <span class="post-card__attachment-file">
+            <AppIcon name="fileText" :size="16" />
+            {{ attachment.name }}
+          </span>
+        </a>
       </div>
     </div>
 
@@ -1068,9 +1096,7 @@ async function saveEdit() {
 }
 
 .post-card__content :deep(.mention),
-.post-card__shared-content :deep(.mention),
-.post-card__content :deep(.hashtag),
-.post-card__shared-content :deep(.hashtag) {
+.post-card__shared-content :deep(.mention) {
   color: var(--color-primary);
   font-weight: 600;
   cursor: pointer;

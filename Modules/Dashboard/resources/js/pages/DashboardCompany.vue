@@ -98,6 +98,10 @@ function toggleStatus(value) {
   loadTable();
 }
 
+function scrollToProjectList() {
+  document.getElementById('dashboard-project-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function toggleHealth(value) {
   healthFilter.value = healthFilter.value === value ? null : value;
   loadTable();
@@ -247,8 +251,8 @@ const tableRows = computed(() => asList(table.value?.data));
       />
     </div>
 
-    <div class="dashboard-company__grid dashboard-company__grid--top">
-      <section class="dashboard-company__panel dashboard-company__panel--wide">
+    <div class="dashboard-company__grid">
+      <section class="dashboard-company__panel">
         <div class="dashboard-company__panel-head">
           <h2>Dự án theo thời gian</h2>
           <div class="dashboard-company__tabs">
@@ -258,21 +262,6 @@ const tableRows = computed(() => asList(table.value?.data));
         </div>
         <DashboardSkeleton v-if="overviewLoading" height="260px" />
         <BarChart v-else :categories="timelineData.categories" :series="timelineData.series" :height="260" />
-      </section>
-
-      <section class="dashboard-company__panel">
-        <div class="dashboard-company__panel-head">
-          <h2>Sức khoẻ dự án</h2>
-        </div>
-        <DashboardSkeleton v-if="overviewLoading" height="220px" />
-        <ProjectHealth
-          v-else
-          :good="overview?.health?.good ?? 0"
-          :warning="overview?.health?.warning ?? 0"
-          :risk="overview?.health?.risk ?? 0"
-          :selected="healthFilter"
-          @select="toggleHealth"
-        />
       </section>
     </div>
 
@@ -320,7 +309,25 @@ const tableRows = computed(() => asList(table.value?.data));
       />
     </section>
 
-    <section class="dashboard-company__table-section">
+    <section class="dashboard-company__panel">
+      <div class="dashboard-company__panel-head">
+        <h2>Sức khoẻ dự án</h2>
+        <button type="button" class="dashboard-company__scroll-link" @click="scrollToProjectList">
+          Xem danh sách dự án
+        </button>
+      </div>
+      <DashboardSkeleton v-if="overviewLoading" height="220px" />
+      <ProjectHealth
+        v-else
+        :good="overview?.health?.good ?? 0"
+        :warning="overview?.health?.warning ?? 0"
+        :risk="overview?.health?.risk ?? 0"
+        :selected="healthFilter"
+        @select="toggleHealth"
+      />
+    </section>
+
+    <section id="dashboard-project-list" class="dashboard-company__table-section">
       <div class="dashboard-company__table-area">
         <h2 class="dashboard-company__table-title">Danh sách dự án</h2>
         <DashboardSkeleton v-if="tableLoading && tableRows.length === 0" :rows="6" />
@@ -428,6 +435,16 @@ const tableRows = computed(() => asList(table.value?.data));
   font-size: 0.9375rem;
   font-weight: 700;
   color: var(--color-text);
+}
+
+.dashboard-company__scroll-link {
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .dashboard-company__tabs {

@@ -644,6 +644,9 @@ class ProjectService
                 'name' => $project->name,
                 'owner_department' => $this->presentDepartment($project->ownerDepartment),
                 'executing_department' => $this->presentDepartment($project->executingDepartment),
+                'start_date' => $project->start_date?->toDateString(),
+                'end_date' => $project->end_date?->toDateString(),
+                'constrain_task_dates_to_project' => (bool) $project->constrain_task_dates_to_project,
             ])
             ->values()
             ->all();

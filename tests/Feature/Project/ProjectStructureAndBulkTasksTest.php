@@ -104,8 +104,53 @@ class ProjectStructureAndBulkTasksTest extends TestCase
         ]);
 
         $response->assertStatus(422);
+        $response->assertJsonPath('message', fn ($message) => str_contains((string) $message, '01/01/2026') && str_contains((string) $message, '31/12/2026'));
         $this->assertDatabaseMissing('tasks', ['project_id' => $project->id, 'title' => 'Hợp lệ']);
         $this->assertDatabaseMissing('tasks', ['project_id' => $project->id, 'title' => 'Ngoài khoảng']);
+    }
+
+    public function test_rejects_duplicate_task_title_in_the_same_project(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
+        $editor = $this->makeUser(['department_id' => $dept->id]);
+        $project = $this->makeProject($editor);
+
+        $this->actingAs($editor)->postJson('/api/project/tasks', [
+            'project_id' => $project->id,
+            'title' => 'ABC',
+            'start_date' => '2026-02-01',
+            'end_date' => '2026-02-10',
+        ])->assertCreated();
+
+        $this->actingAs($editor)->postJson('/api/project/tasks', [
+            'project_id' => $project->id,
+            'title' => 'abc',
+            'start_date' => '2026-03-01',
+            'end_date' => '2026-03-10',
+        ])->assertStatus(422);
+
+        $this->assertSame(1, Task::query()->where('project_id', $project->id)->whereRaw('LOWER(title) = ?', ['abc'])->count());
+    }
+
+    public function test_task_detail_includes_nested_children(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
+        $editor = $this->makeUser(['department_id' => $dept->id]);
+        $project = $this->makeProject($editor);
+        $parent = $this->makeTask($project, ['title' => 'Cha']);
+        $child = $this->makeTask($project, ['title' => 'Con', 'parent_id' => $parent->id]);
+        $this->makeTask($project, ['title' => 'Cháu', 'parent_id' => $child->id]);
+
+        $this->actingAs($editor)
+            ->getJson('/api/project/tasks/'.$parent->id)
+            ->assertOk()
+            ->assertJsonPath('task.children.0.title', 'Con')
+            ->assertJsonPath('task.children.0.children_count', 1)
+            ->assertJsonPath('task.children.0.children.0.title', 'Cháu');
     }
 
     public function test_create_task_under_category_and_rejects_wrong_project_parent(): void

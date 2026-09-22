@@ -37,9 +37,9 @@ class WorkspaceConfigSidebarTest extends TestCase
             ->getJson('/api/workspace-config/sidebar')
             ->assertOk()
             ->assertJsonPath('menus.0.menu_key', 'home')
-            ->assertJsonPath('menus.0.default_label', 'Quy trình')
+            ->assertJsonPath('menus.0.default_label', 'Hướng dẫn')
             ->assertJsonPath('menus.0.custom_label', null)
-            ->assertJsonPath('menus.0.label', 'Quy trình')
+            ->assertJsonPath('menus.0.label', 'Hướng dẫn')
             ->assertJsonPath('menus.0.is_visible', true)
             ->assertJsonPath('menus.0.section', 'general')
             ->assertJsonPath('sections.0.id', 'general')
@@ -83,7 +83,7 @@ class WorkspaceConfigSidebarTest extends TestCase
             ->assertJsonPath('menu.menu_key', 'home')
             ->assertJsonPath('menu.custom_label', 'Trang chủ phòng')
             ->assertJsonPath('menu.label', 'Trang chủ phòng')
-            ->assertJsonPath('menu.default_label', 'Quy trình')
+            ->assertJsonPath('menu.default_label', 'Hướng dẫn')
             ->assertJsonPath('menu.is_visible', true);
 
         $this->assertDatabaseHas('department_sidebar_configs', [
@@ -115,7 +115,7 @@ class WorkspaceConfigSidebarTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('menu.custom_label', null)
-            ->assertJsonPath('menu.label', 'Quy trình');
+            ->assertJsonPath('menu.label', 'Hướng dẫn');
     }
 
     public function test_cannot_toggle_unknown_menu_key(): void

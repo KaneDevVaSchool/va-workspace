@@ -31,6 +31,8 @@ class StoreSocialPostRequest extends FormRequest
             ],
             'gif_attachments' => ['sometimes', 'array', 'max:10'],
             'gif_attachments.*' => ['string', 'regex:/^[0-9a-f-]{36}$/i'],
+            'dismissed_link_previews' => ['sometimes', 'array', 'max:20'],
+            'dismissed_link_previews.*' => ['string', 'url', 'max:2000'],
             'poll' => ['sometimes', 'array'],
             'poll.title' => ['sometimes', 'nullable', 'string', 'max:200'],
             'poll.content' => ['sometimes', 'nullable', 'string', 'max:2000'],

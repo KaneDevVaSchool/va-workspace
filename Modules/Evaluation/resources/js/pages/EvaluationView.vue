@@ -10,12 +10,15 @@
 //   behavior — cộng/trừ theo hành vi (Đi muộn −1 / Hoàn thành sớm +2…)
 //
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useDragScroll } from '@/composables/useDragScroll';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
+
+const router = useRouter();
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -188,7 +191,10 @@ const emptyState = computed(() => {
     return {
       icon: 'clipboardCheck',
       title: 'Chưa có tiêu chí',
-      text: 'Phòng ban chưa có tiêu chí đánh giá nào.',
+      text: 'Nhấp vào cấu hình phòng ban để cài đặt tiêu chí phòng ban của Anh/Chị.',
+      action: auth.can('workspace_config.view_department')
+        ? { label: 'Cấu hình phòng ban', to: { name: 'manager.workspace-config.hub' } }
+        : null,
     };
   }
   if (filtered.value.length === 0) {
@@ -887,6 +893,14 @@ onBeforeUnmount(() => {
           </span>
           <strong class="eval-view__empty-title">{{ emptyState.title }}</strong>
           <span class="eval-view__empty-text">{{ emptyState.text }}</span>
+          <button
+            v-if="emptyState.action"
+            type="button"
+            class="eval-view__empty-action"
+            @click="router.push(emptyState.action.to)"
+          >
+            {{ emptyState.action.label }}
+          </button>
         </div>
 
         <table v-else class="eval-view__table" :style="{ minWidth: tableWidthPx }">
@@ -1649,6 +1663,19 @@ onBeforeUnmount(() => {
   max-width: 22rem;
   font-size: 0.8125rem;
   line-height: 1.45;
+}
+
+.eval-view__empty-action {
+  margin-top: var(--space-2);
+  padding: 0.45rem 0.8rem;
+  color: var(--color-on-primary);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
 }
 
 .eval-view__spin {

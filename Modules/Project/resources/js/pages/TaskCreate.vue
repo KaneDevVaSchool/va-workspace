@@ -34,6 +34,7 @@ const importanceCriterion = ref(null);
 const lockDifficulty = ref(false);
 const scoreKitMode = ref('');
 const selectedParent = ref(null);
+const selectedProject = ref(null);
 const formErrors = ref({});
 
 const form = reactive({
@@ -127,6 +128,19 @@ const showStep1ReadyNote = computed(
 
 function updateField(field, value) {
   form[field] = value;
+}
+
+function updateProjectItem(item) {
+  selectedProject.value = item;
+  onProjectItem(item);
+}
+
+function projectDateMessage() {
+  const project = selectedProject.value;
+  if (!project?.constrain_task_dates_to_project) return '';
+  const start = formatDate(project.start_date) || 'không giới hạn';
+  const end = formatDate(project.end_date) || 'không giới hạn';
+  return ` Dự án bắt đầu ${start}, kết thúc ${end}.`;
 }
 
 function updateParentItem(item) {
@@ -285,6 +299,16 @@ function validateBeforeSubmit() {
   ) {
     step.value = 1;
     showClientToast('error', 'Thời gian công việc con phải nằm trong khoảng thời gian của công việc cha.');
+    return false;
+  }
+  const project = selectedProject.value;
+  if (
+    project?.constrain_task_dates_to_project &&
+    ((project.start_date && form.start_date < project.start_date) ||
+      (project.end_date && form.end_date > project.end_date))
+  ) {
+    step.value = 1;
+    showClientToast('error', `Thời gian công việc phải nằm trong thời gian dự án.${projectDateMessage()}`);
     return false;
   }
   if (isQuantity.value && Number(form.progress_total) <= 0) {
@@ -460,7 +484,7 @@ onMounted(loadMeta);
                   :parent-date-range="parentDateRange"
                   @update:field="updateField"
                   @update:parent-item="updateParentItem"
-                  @update:project-item="onProjectItem"
+                  @update:project-item="updateProjectItem"
                 />
 
                 <p

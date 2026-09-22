@@ -24,7 +24,7 @@ const props = defineProps({
   hashtagParams: { type: Object, default: null },
 });
 
-const emit = defineEmits(['update:modelValue', 'isEmpty', 'close', 'update:linkPreviews']);
+const emit = defineEmits(['update:modelValue', 'isEmpty', 'close', 'update:linkPreviews', 'update:dismissedLinkPreviews']);
 const instanceId = `se-${Math.random().toString(36).slice(2, 8)}`;
 
 const mentionOpen = ref(false);
@@ -46,6 +46,7 @@ let linkPreviewTimer = null;
 
 function emitLinkPreviews() {
   emit('update:linkPreviews', Array.from(linkPreviews.values()));
+  emit('update:dismissedLinkPreviews', Array.from(dismissedLinkPreviews));
 }
 
 function detectLinkPreviews(html) {

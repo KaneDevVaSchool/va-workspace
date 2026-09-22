@@ -47,6 +47,11 @@ class SocialLinkPreviewService
         return $found;
     }
 
+    private function normalizePreviewUrl(string $url): string
+    {
+        return rtrim(trim($url), ".,;:!?)'\"");
+    }
+
     private function detectProvider(string $url): ?string
     {
         $host = parse_url($url, PHP_URL_HOST);
@@ -100,10 +105,20 @@ class SocialLinkPreviewService
         return $this->resolveOne($url);
     }
 
-    public function syncForPost(SocialPost $post): void
+    /**
+     * @param  list<string>  $dismissedUrls
+     */
+    public function syncForPost(SocialPost $post, array $dismissedUrls = []): void
     {
         $content = (string) ($post->content ?? '');
-        $links = $this->extractUrlsFromHtml($content);
+        $dismissed = collect($dismissedUrls)
+            ->map(fn ($url) => $this->normalizePreviewUrl((string) $url))
+            ->filter()
+            ->flip();
+        $links = collect($this->extractUrlsFromHtml($content))
+            ->reject(fn (array $link) => $dismissed->has($this->normalizePreviewUrl($link['url'])))
+            ->values()
+            ->all();
 
         $post->linkPreviews()->delete();
 

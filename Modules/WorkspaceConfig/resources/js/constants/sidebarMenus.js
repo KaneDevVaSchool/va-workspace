@@ -8,7 +8,7 @@ export const SIDEBAR_MENU_CATALOG = {
     icon: 'gitBranch',
     section: 'general',
     sectionLabel: 'Tổng quan',
-    description: 'Trang chủ sau khi đăng nhập. Ẩn thì thành viên không thấy mục Quy trình trên menu trái.',
+    description: 'Trang hướng dẫn sử dụng sau khi đăng nhập. Ẩn thì thành viên không thấy mục Hướng dẫn trên menu trái.',
   },
   'social.feed': {
     icon: 'megaphone',
