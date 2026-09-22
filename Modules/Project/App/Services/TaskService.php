@@ -974,8 +974,8 @@ class TaskService
             return in_array($task->project_id, $allowedProjectIds, true);
         }
 
-        if ($viewer->isSuperAdmin()
-            || $this->permissions->allows($viewer, 'project.*')
+        if ($this->permissions->allows($viewer, 'project.*')
+            || $this->permissions->allows($viewer, 'dashboard.view_company')
             || $this->permissions->allows($viewer, 'task.*')) {
             return true;
         }

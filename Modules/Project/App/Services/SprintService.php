@@ -130,9 +130,7 @@ class SprintService
 
     public function present(Sprint $sprint): array
     {
-        $withProgress = $sprint->relationLoaded('tasks')
-            ? $sprint->tasks->filter(fn ($task) => $task->progress_percent !== null)
-            : collect();
+        $tasks = $sprint->relationLoaded('tasks') ? $sprint->tasks : collect();
 
         return [
             'id' => $sprint->id,
@@ -150,9 +148,9 @@ class SprintService
             'start_date' => $sprint->start_date?->toDateString(),
             'end_date' => $sprint->end_date?->toDateString(),
             'sort_order' => $sprint->sort_order,
-            'task_count' => $sprint->relationLoaded('tasks') ? $sprint->tasks->count() : null,
-            'avg_progress' => $withProgress->isNotEmpty()
-                ? (int) round($withProgress->avg('progress_percent'))
+            'task_count' => $sprint->relationLoaded('tasks') ? $tasks->count() : null,
+            'avg_progress' => $tasks->isNotEmpty()
+                ? (int) round($tasks->avg(fn ($task) => $task->progress_percent ?? 0))
                 : null,
             'created_at' => $sprint->created_at?->toIso8601String(),
             'updated_at' => $sprint->updated_at?->toIso8601String(),

@@ -55,20 +55,21 @@ class ProjectService
     }
 
     /**
-     * Chỉ trả về dự án nếu $viewer được phép xem: thuộc phòng ban giao, phòng
-     * ban thực hiện, hoặc đang tham gia (phụ trách/tạo/thành viên/theo dõi) —
-     * xem ProjectRepository::forViewer(). Dùng cho mọi thao tác xem/sửa 1 dự
-     * án theo ID (show/update/destroy/tài liệu/đính kèm/...).
+     * Chỉ trả về dự án nếu $viewer được phép xem: dự án của phòng ban mình
+     * (sở hữu, phụ trách, hoặc được giao thực hiện). Super admin thật, admin
+     * và giám đốc điều hành xem mọi phòng ban — xem
+     * ProjectRepository::forViewer(). Dùng cho mọi thao tác xem/sửa 1 dự án
+     * theo ID (show/update/destroy/tài liệu/đính kèm/...).
      */
     public function find(int $id, User $viewer): ?Project
     {
         return $this->projects->findForViewer($id, $viewer);
     }
 
-    /** Có quyền toàn cục bypass mọi bộ lọc phòng ban (super_admin hoặc được cấp project.* / '*'). */
+    /** Có quyền toàn cục bypass mọi bộ lọc phòng ban (super_admin thật hoặc project.*). Tôn trọng xem thử vai trò. */
     public function hasGlobalBypass(User $user): bool
     {
-        return $user->isSuperAdmin() || $this->permissions->allows($user, 'project.*');
+        return $this->permissions->allows($user, 'project.*');
     }
 
     /** true nếu user có quyền tạo dự án — role sẵn có 'project.create' HOẶC nằm trong allowlist mở rộng (mục C). */

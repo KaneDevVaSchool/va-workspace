@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Broadcast;
+use Modules\Chat\App\Repositories\Contracts\ConversationRepositoryInterface;
 
 /*
 |--------------------------------------------------------------------------
@@ -15,4 +16,8 @@ use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
+});
+
+Broadcast::channel('chat.conversation.{conversationId}', function ($user, $conversationId) {
+    return app(ConversationRepositoryInterface::class)->isMember((int) $conversationId, (int) $user->id);
 });

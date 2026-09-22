@@ -15,6 +15,7 @@ import { showClientToast } from '@/lib/clientToast';
 import {
   formatTaskScheduleRange,
   groupProjectTasksBySprint,
+  groupSprintsByPhase,
   groupSprintTasksByCategory,
   sprintStatusLabel,
   sprintStatusTone,
@@ -83,6 +84,26 @@ watch(() => props.tree, loadSprints);
 const columns = computed(() =>
   groupProjectTasksBySprint(props.tree, sprints.value, { filter: props.filter, query: props.query }),
 );
+
+const phaseLayout = computed(() => groupSprintsByPhase(props.tree, columns.value));
+const boardSections = computed(() => {
+  const searching = Boolean(String(props.query || '').trim()) || (props.filter && props.filter !== 'all');
+  let sections = phaseLayout.value.bundles.map((bundle) => ({ ...bundle, kind: 'phase' }));
+  if (searching) {
+    sections = sections.filter((section) => section.sprints.length > 0);
+  }
+  if (phaseLayout.value.unphased.length) {
+    sections.push({
+      kind: 'loose',
+      key: '__unphased__',
+      id: null,
+      title: null,
+      sprints: phaseLayout.value.unphased,
+    });
+  }
+  return sections;
+});
+const hasBoard = computed(() => boardSections.value.length > 0);
 
 function sprintKey(col) {
   return col.id ?? 'no-sprint';
@@ -258,13 +279,34 @@ function onDocKeydown(event) {
 <template>
   <div ref="boardRef" class="psb hide-scrollbar">
     <p v-if="(loading || sprintsLoading) && !columns.length" class="psb__empty">Đang tải danh sách đợt làm việc…</p>
-    <div v-else-if="!loading && !sprintsLoading && !columns.length" class="psb__empty-box">
+    <div v-else-if="!loading && !sprintsLoading && !hasBoard" class="psb__empty-box">
       <p class="psb__empty-title">Chưa có đợt làm việc</p>
       <p class="psb__empty-copy">Bấm nút Thêm đợt làm việc ở thanh trên để tạo đợt đầu tiên, rồi thêm việc vào đợt đó.</p>
     </div>
     <template v-else>
+    <div
+      v-for="section in boardSections"
+      :key="section.key"
+      class="psb__phase"
+      :class="{ 'psb__phase--loose': section.kind === 'loose' }"
+    >
+      <header v-if="section.title" class="psb__phase-head">
+        <div class="psb__phase-copy">
+          <span v-if="section.code" class="psb__phase-code">{{ section.code }}</span>
+          <span class="psb__phase-title">{{ section.title }}</span>
+        </div>
+        <span class="psb__phase-meta">
+          {{ section.sprints.length ? `${section.sprints.length} đợt làm việc` : 'Chưa có đợt làm việc' }}
+        </span>
+      </header>
+
+      <div v-if="!section.sprints.length" class="psb__col-empty psb__col-empty--phase">
+        <p class="psb__empty-title">Giai đoạn này chưa có đợt làm việc</p>
+        <p class="psb__empty-copy">Tạo đợt làm việc cho giai đoạn này để xếp việc vào lịch.</p>
+      </div>
+
     <section
-      v-for="col in columns"
+      v-for="col in section.sprints"
       :key="sprintKey(col)"
       class="psb__sprint"
       :class="`psb__sprint--${col.status ? sprintStatusTone(col.status) : 'neutral'}`"
@@ -290,7 +332,7 @@ function onDocKeydown(event) {
         </button>
 
         <div class="psb__head-main">
-          <span v-if="col.phase?.title" class="psb__phase">{{ col.phase.title }}</span>
+          <span v-if="section.kind === 'loose' && col.phase?.title" class="psb__sprint-phase">{{ col.phase.title }}</span>
           <span class="psb__title">{{ col.name }}</span>
           <div class="psb__meta">
             <span v-if="col.status" class="psb__status">
@@ -347,7 +389,7 @@ function onDocKeydown(event) {
             <thead>
               <tr>
                 <th class="psb__th--name">Công việc</th>
-                <th>Người làm</th>
+                <th class="psb__th--person">Người làm</th>
                 <th>Trạng thái</th>
                 <th>Ưu tiên</th>
                 <th class="psb__th--time">Thời gian</th>
@@ -401,12 +443,9 @@ function onDocKeydown(event) {
                       </div>
                     </div>
                   </td>
-                  <td>
-                    <span v-if="task.assignee" class="psb__person">
-                      <UserAvatarTip :user="task.assignee" label="Người thực hiện" />
-                      <span class="psb__person-name">{{ task.assignee.name }}</span>
-                    </span>
-                    <span v-else class="psb__muted">Chưa giao</span>
+                  <td class="psb__td--person">
+                    <UserAvatarTip v-if="task.assignee" :user="task.assignee" label="Người thực hiện" />
+                    <span v-else class="psb__muted">—</span>
                   </td>
                   <td>
                     <select
@@ -473,11 +512,11 @@ function onDocKeydown(event) {
                       class="psb__more"
                       :class="{ 'psb__more--open': actionMenu.id === task.id }"
                       aria-haspopup="menu"
+                      aria-label="Thao tác"
                       :aria-expanded="actionMenu.id === task.id ? 'true' : 'false'"
                       @click="toggleActionMenu(task, $event)"
                     >
                       <AppIcon name="moreVertical" :size="16" />
-                      <span>Thao tác</span>
                     </button>
                   </td>
                 </tr>
@@ -487,6 +526,7 @@ function onDocKeydown(event) {
         </div>
       </div>
     </section>
+    </div>
     </template>
 
     <Teleport to="body">
@@ -553,6 +593,60 @@ function onDocKeydown(event) {
   margin: 0;
   padding: 1.5rem 1rem;
   text-align: center;
+}
+
+.psb__col-empty--phase {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.psb__phase {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.psb__phase-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.125rem 0.25rem;
+}
+
+.psb__phase-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.psb__phase-code {
+  color: var(--color-text-muted);
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.psb__phase-title {
+  min-width: 0;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.psb__phase-meta {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .psb__empty-title {
@@ -625,25 +719,13 @@ function onDocKeydown(event) {
   column-gap: 0.875rem;
   row-gap: 0.375rem;
   padding: 0.875rem 1rem 1rem 0.5rem;
-  background:
-    linear-gradient(
-      108deg,
-      color-mix(in srgb, var(--psb-accent) 12%, var(--color-surface)) 0%,
-      color-mix(in srgb, var(--psb-accent-soft) 42%, var(--color-surface)) 36%,
-      var(--color-surface) 100%
-    );
+  background: color-mix(in srgb, var(--psb-accent) 8%, var(--color-surface));
   cursor: pointer;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
 .psb__head:hover {
-  background:
-    linear-gradient(
-      108deg,
-      color-mix(in srgb, var(--psb-accent) 16%, var(--color-surface)) 0%,
-      color-mix(in srgb, var(--psb-accent-soft) 55%, var(--color-surface)) 40%,
-      var(--color-surface) 100%
-    );
+  background: color-mix(in srgb, var(--psb-accent) 12%, var(--color-surface));
 }
 
 .psb__head--collapsed {
@@ -692,7 +774,7 @@ function onDocKeydown(event) {
   min-width: 0;
 }
 
-.psb__phase {
+.psb__sprint-phase {
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -836,7 +918,12 @@ function onDocKeydown(event) {
 }
 
 .psb__th--name {
-  width: 28%;
+  width: 32%;
+}
+
+.psb__th--person {
+  width: 4.5rem;
+  text-align: center;
 }
 
 .psb__th--time {
@@ -844,7 +931,8 @@ function onDocKeydown(event) {
 }
 
 .psb__th--action {
-  width: 7.5rem;
+  width: 3.25rem;
+  text-align: center;
 }
 
 .psb__group-row td {
@@ -933,20 +1021,19 @@ function onDocKeydown(event) {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--color-primary);
+  color: var(--color-text);
   font: inherit;
   font-weight: 600;
   line-height: 1.35;
   text-align: left;
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
+  text-decoration: none;
   white-space: normal;
   overflow-wrap: anywhere;
   cursor: pointer;
 }
 
 .psb__link:hover {
-  color: var(--color-primary-hover);
+  color: var(--color-primary);
 }
 
 .psb__child-n {
@@ -972,17 +1059,9 @@ button.psb__child-n:hover {
   font-size: 0.8125rem;
 }
 
-.psb__person {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.psb__person-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.psb__td--person {
+  text-align: center;
+  overflow: visible;
 }
 
 .psb__td--time {
@@ -1071,30 +1150,27 @@ button.psb__child-n:hover {
 }
 
 .psb__td--action {
-  text-align: left;
+  text-align: center;
 }
 
 .psb__more {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  min-height: 1.75rem;
-  padding: 0.25rem 0.5rem;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-  font-family: var(--font-family-base);
-  font-size: 0.75rem;
-  font-weight: 600;
+  background: transparent;
+  color: var(--color-text-muted);
   cursor: pointer;
-  white-space: nowrap;
 }
 
 .psb__more:hover,
 .psb__more--open {
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
 }
 
 .psb__menu {

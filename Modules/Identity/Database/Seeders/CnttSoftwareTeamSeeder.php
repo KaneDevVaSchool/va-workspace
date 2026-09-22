@@ -75,6 +75,9 @@ class CnttSoftwareTeamSeeder extends Seeder
         $kieu = $this->upsertUser('kieunlt@hcm.vaschools.edu.vn', 'Nguyễn Lê Thanh Kiều', $department->id, $teamPhanMem->id);
         $this->assignRoles($kieu, $roles, ['member']);
 
+        $huong = $this->upsertUser('huongdt2@vaschools.edu.vn', 'Đỗ Thị Hương', $department->id, $teamPhanMem->id);
+        $this->assignRoles($huong, $roles, ['member']);
+
         if ((int) $teamPhanMem->team_lead_id !== (int) $khoa->id) {
             $teamPhanMem->team_lead_id = $khoa->id;
             $teamPhanMem->save();

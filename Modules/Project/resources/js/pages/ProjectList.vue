@@ -956,7 +956,9 @@ const exportSelectedColumns = ref(new Set(EXPORT_COLUMNS.map((c) => c.key)));
 // Phòng ban thực hiện — người chỉ thấy dự án của phòng ban mình thì mọi dòng
 // đều cùng 1 nhóm, nhóm lại chỉ gây rối chứ không giúp gì (xem yêu cầu người
 // dùng: "phòng ban nào chỉ thấy của phòng ban đó thì không group hàng ngang").
-const canViewAcrossDepartments = computed(() => auth.isSuperAdmin || auth.can('project.*'));
+const canViewAcrossDepartments = computed(
+  () => auth.can('project.*') || auth.can('dashboard.view_company'),
+);
 
 const colSpan = computed(() => Math.max(visibleColumns.value.length, 1));
 

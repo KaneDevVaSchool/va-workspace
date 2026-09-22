@@ -61,6 +61,8 @@ class NotificationService
 
     public const TYPE_FEATURE_REQUEST_DONE = 'feature_request_done';
 
+    public const TYPE_CHAT_MESSAGE = 'chat_message';
+
     public function __construct(
         private readonly UserNotificationRepositoryInterface $notifications,
         private readonly UserRepositoryInterface $users,

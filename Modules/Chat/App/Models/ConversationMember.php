@@ -1,0 +1,41 @@
+<?php
+
+namespace Modules\Chat\App\Models;
+
+use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+/**
+ * @property int $id
+ * @property int $conversation_id
+ * @property int $user_id
+ * @property \Illuminate\Support\Carbon $joined_at
+ * @property \Illuminate\Support\Carbon|null $last_read_at
+ */
+class ConversationMember extends Model
+{
+    protected $table = 'conversation_members';
+
+    protected $fillable = [
+        'conversation_id',
+        'user_id',
+        'joined_at',
+        'last_read_at',
+    ];
+
+    protected $casts = [
+        'joined_at' => 'datetime',
+        'last_read_at' => 'datetime',
+    ];
+
+    public function conversation(): BelongsTo
+    {
+        return $this->belongsTo(Conversation::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+}

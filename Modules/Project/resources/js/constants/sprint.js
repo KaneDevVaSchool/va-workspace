@@ -1,4 +1,4 @@
-import { matchesProjectTaskFilter } from './task.js';
+import { averageTaskProgress, collectPhaseNodes, matchesProjectTaskFilter } from './task.js';
 
 export const SPRINT_STATUS_LABELS = {
   planned: 'Chưa bắt đầu',
@@ -191,15 +191,49 @@ export function groupProjectTasksBySprint(nodes, sprints, { filter = 'all', quer
   });
 
   return out.map((group) => {
-    const withProgress = group.tasks.filter((task) => task.progress_percent != null);
-    const avgProgress = withProgress.length
-      ? Math.round(withProgress.reduce((sum, task) => sum + Number(task.progress_percent || 0), 0) / withProgress.length)
-      : null;
     const estimatedHours = group.tasks.reduce((sum, task) => sum + Number(task.estimated_hours || 0), 0);
     const worklogHours = group.tasks.reduce((sum, task) => sum + Number(task.worklog_hours || 0), 0);
     const childCount = group.tasks.filter((task) => group.tasks.some((item) => item.id === task.parent_id)).length;
-    return { ...group, avgProgress, estimatedHours, worklogHours, childCount };
+    return {
+      ...group,
+      avgProgress: averageTaskProgress(group.tasks),
+      estimatedHours,
+      worklogHours,
+      childCount,
+    };
   });
+}
+
+/**
+ * Gom đợt làm việc theo giai đoạn WBS. Phase không có sprint vẫn ra
+ * (sprints = []) để bảng "Theo đợt làm việc" hiện đủ giai đoạn.
+ * Sprint không khớp phase nào (hoặc việc chưa xếp đợt) trả về `unphased`.
+ */
+export function groupSprintsByPhase(nodes, sprintGroups) {
+  const bundles = [];
+  const byId = new Map();
+  for (const phase of collectPhaseNodes(nodes)) {
+    const bundle = {
+      key: `phase-${phase.id}`,
+      id: phase.id,
+      title: phase.title || 'Giai đoạn',
+      code: phase.code || null,
+      phase,
+      sprints: [],
+    };
+    byId.set(phase.id, bundle);
+    bundles.push(bundle);
+  }
+
+  const unphased = [];
+  for (const sprint of sprintGroups || []) {
+    const phaseId = sprint.phase_id ?? sprint.phase?.id ?? null;
+    const bundle = phaseId != null ? byId.get(phaseId) : null;
+    if (bundle) bundle.sprints.push(sprint);
+    else unphased.push(sprint);
+  }
+
+  return { bundles, unphased };
 }
 
 /**

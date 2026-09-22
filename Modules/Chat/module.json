@@ -1,0 +1,11 @@
+{
+    "name": "Chat",
+    "alias": "chat",
+    "description": "Trò chuyện 1-1 thời gian thực (Reverb) — dịch vụ nhắn tin dùng chung, các module khác có thể gọi cùng cách gọi NotificationService.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Chat\\App\\Providers\\ChatServiceProvider"
+    ],
+    "files": []
+}

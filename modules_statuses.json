@@ -8,5 +8,6 @@
     "Report": true,
     "Credential": true,
     "Dashboard": true,
-    "FeatureRequest": true
+    "FeatureRequest": true,
+    "Chat": true
 }

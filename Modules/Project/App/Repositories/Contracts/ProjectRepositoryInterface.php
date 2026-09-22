@@ -121,8 +121,8 @@ interface ProjectRepositoryInterface
     public function forViewer(Builder $query, User $viewer): Builder;
 
     /**
-     * Dự án được gắn khi tạo công việc: thuộc phòng ban viewer, hoặc viewer
-     * đang tham gia (phụ trách / tạo / thành viên) — không gồm người chỉ theo dõi.
+     * Dự án được gắn khi tạo công việc: cùng phạm vi forViewer() — dự án
+     * của phòng ban viewer, hoặc mọi phòng ban nếu viewer xem toàn cục.
      */
     public function forAssignableTaskProject(Builder $query, User $viewer): Builder;
 

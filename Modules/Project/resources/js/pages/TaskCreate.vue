@@ -340,7 +340,11 @@ async function submitForm() {
   try {
     const { data } = await window.axios.post('/api/project/tasks', payload);
     showClientToast('success', `Đã tạo công việc "${data.task.title}".`);
-    router.push({ name: 'manager.project.tasks' });
+    if (payload.parent_id) {
+      router.push({ name: 'manager.project.tasks.detail', params: { id: payload.parent_id } });
+    } else {
+      router.push({ name: 'manager.project.tasks' });
+    }
   } catch (error) {
     if (error?.response?.status === 422) {
       formErrors.value = error.response.data?.errors ?? {};

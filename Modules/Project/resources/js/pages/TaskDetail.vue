@@ -13,6 +13,8 @@ import CommentList from '../components/CommentList.vue';
 import ProjectMemberPicker from '../components/ProjectMemberPicker.vue';
 import ProjectUserPicker from '../components/ProjectUserPicker.vue';
 import TaskEvalFactors from '../components/TaskEvalFactors.vue';
+import TaskRowContextMenu from '../components/TaskRowContextMenu.vue';
+import TaskQuickActionModals from '../components/TaskQuickActionModals.vue';
 import {
   TASK_DELEGATION_STATUS_LABELS,
   TASK_PRIORITY_LABELS,
@@ -471,6 +473,85 @@ function goCreateChild() {
   const query = { parent_id: String(task.value.id) };
   if (task.value.project_id) query.project_id = String(task.value.project_id);
   router.push({ name: 'manager.project.tasks.create', query });
+}
+
+const childCtxMenu = reactive({ open: false, x: 0, y: 0, task: null });
+const childActionDialog = reactive({ kind: null, task: null, extra: {} });
+
+function openChildContextMenu(event, child) {
+  if (childActionDialog.kind) return;
+  childCtxMenu.open = true;
+  childCtxMenu.x = event.clientX;
+  childCtxMenu.y = event.clientY;
+  childCtxMenu.task = child;
+}
+
+function closeChildContextMenu() {
+  childCtxMenu.open = false;
+}
+
+function onChildContextAction({ type, task: child, status, variant }) {
+  closeChildContextMenu();
+  if (!child) return;
+  if (type === 'status') {
+    if (child.status !== status) {
+      changeChildStatus(child, status);
+    }
+    return;
+  }
+  if (type === 'details') {
+    if (variant === 'edit') {
+      router.push({ name: 'manager.project.tasks.edit', params: { id: child.id } });
+      return;
+    }
+    if (variant === 'blank') {
+      window.open(router.resolve({ name: 'manager.project.tasks.detail', params: { id: child.id } }).href, '_blank');
+      return;
+    }
+    router.push({ name: 'manager.project.tasks.detail', params: { id: child.id } });
+    return;
+  }
+  childActionDialog.kind = type;
+  childActionDialog.task = child;
+  childActionDialog.extra = { variant };
+}
+
+function closeChildActionDialog() {
+  childActionDialog.kind = null;
+  childActionDialog.task = null;
+  childActionDialog.extra = {};
+}
+
+function applyChildUpdate(updated) {
+  if (!updated?.id || !task.value) return;
+  applyTask({
+    ...task.value,
+    children: (task.value.children || []).map((item) => (
+      item.id === updated.id ? { ...item, ...updated } : item
+    )),
+  });
+  if (childCtxMenu.task?.id === updated.id) childCtxMenu.task = { ...childCtxMenu.task, ...updated };
+  if (childActionDialog.task?.id === updated.id) childActionDialog.task = { ...childActionDialog.task, ...updated };
+}
+
+async function changeChildStatus(child, status) {
+  try {
+    const { data } = await window.axios.put(`/api/project/tasks/${child.id}`, { status });
+    applyChildUpdate(data.task ?? { id: child.id, status });
+    showClientToast('success', `Đã chuyển sang ${statusLabel(status)}.`);
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không đổi được trạng thái.');
+  }
+}
+
+function onChildTaskDuplicated() {
+  closeChildActionDialog();
+  loadTask();
+}
+
+function onChildTaskDeleted() {
+  closeChildActionDialog();
+  loadTask();
 }
 
 async function changeChildDifficulty(child, value) {
@@ -1352,6 +1433,7 @@ onBeforeUnmount(() => {
                       :key="child.id"
                       class="task-detail__child-row"
                       role="row"
+                      @contextmenu.prevent.stop="openChildContextMenu($event, child)"
                     >
                       <router-link
                         class="task-detail__link task-detail__child-title"
@@ -2210,6 +2292,26 @@ onBeforeUnmount(() => {
       danger
       @confirm="confirmDeleteWorklog"
       @update:open="confirmingDeleteWorklog = $event ? confirmingDeleteWorklog : null"
+    />
+    <TaskRowContextMenu
+      :open="childCtxMenu.open"
+      :x="childCtxMenu.x"
+      :y="childCtxMenu.y"
+      :task="childCtxMenu.task"
+      :can-edit="canEdit"
+      :can-approve="canApprove"
+      :can-duplicate="canEdit"
+      @close="closeChildContextMenu"
+      @action="onChildContextAction"
+    />
+    <TaskQuickActionModals
+      :kind="childActionDialog.kind"
+      :task="childActionDialog.task"
+      :extra="childActionDialog.extra"
+      @close="closeChildActionDialog"
+      @updated="applyChildUpdate"
+      @duplicated="onChildTaskDuplicated"
+      @deleted="onChildTaskDeleted"
     />
   </section>
 </template>

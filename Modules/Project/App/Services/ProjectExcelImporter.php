@@ -474,7 +474,7 @@ class ProjectExcelImporter
     /** true nếu người xem có quyền quản lý phòng ban của dự án (đúng rule ProjectService::userCanManageDepartment). */
     private function canManageDepartment(User $viewer, Project $project): bool
     {
-        if ($viewer->isSuperAdmin() || $this->permissions->allows($viewer, 'project.*')) {
+        if ($this->permissions->allows($viewer, 'project.*')) {
             return true;
         }
 

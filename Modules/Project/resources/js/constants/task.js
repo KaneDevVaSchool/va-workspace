@@ -178,6 +178,7 @@ export const PROJECT_TASK_VIEWS = [
   { key: 'all', label: 'Tất cả công việc', icon: 'layoutList' },
   { key: 'parents', label: 'Công việc cha', icon: 'listNumbered' },
   { key: 'phase', label: 'Theo giai đoạn', icon: 'flag' },
+  { key: 'phase_board', label: 'Bảng giai đoạn (kéo-thả)', icon: 'layoutGrid' },
   { key: 'sprint', label: 'Theo đợt làm việc', icon: 'layoutGrid' },
   { key: 'kanban', label: 'Kanban', icon: 'layoutGrid' },
   { key: 'gantt', label: 'Gantt', icon: 'gantt' },
@@ -291,6 +292,27 @@ export function matchesProjectTaskFilter(task, filter) {
   return task.status === filter;
 }
 
+/** Trung bình tiến độ: việc chưa nhập % tính 0 — không bỏ qua nên nhóm không bị 100% khi còn việc dở. */
+export function averageTaskProgress(tasks) {
+  const list = tasks || [];
+  if (!list.length) return null;
+  const sum = list.reduce((acc, task) => acc + Number(task?.progress_percent || 0), 0);
+  return Math.round(sum / list.length);
+}
+
+/** Mọi node type=phase trong cây WBS, theo thứ tự duyệt. */
+export function collectPhaseNodes(nodes) {
+  const out = [];
+  const walk = (list) => {
+    for (const node of list || []) {
+      if (node.type === 'phase') out.push(node);
+      if (node.children?.length) walk(node.children);
+    }
+  };
+  walk(nodes);
+  return out;
+}
+
 /**
  * Phẳng cây WBS thành danh sách công việc (type=task).
  * parentsOnly: chỉ việc không nằm dưới một công việc khác (việc cha / gốc).
@@ -330,8 +352,9 @@ export function flattenProjectTasks(nodes, { parentsOnly = false, filter = 'all'
 /**
  * Nhóm công việc (type=task) theo giai đoạn (node type=phase) gần nhất
  * chứa nó trong cây WBS — task dưới category lồng trong phase vẫn tính
- * vào phase đó. Task không nằm dưới phase nào (trực tiếp dưới category
- * hoặc gốc dự án) gom vào nhóm cuối "Chưa thuộc giai đoạn nào".
+ * vào phase đó. Phase không có việc vẫn hiện (0 công việc). Task không nằm
+ * dưới phase nào gom vào nhóm cuối "Chưa thuộc giai đoạn nào" — nhóm này
+ * ẩn khi trống.
  *
  * Công việc con (subtask) đi theo phase của việc cha và giữ nguyên
  * depth/hasChildren như bảng phẳng (flattenProjectTasks) để hiện thụt lề +
@@ -355,6 +378,10 @@ export function groupProjectTasksByPhase(nodes, { filter = 'all', query = '' } =
     }
     return groups.get(key);
   };
+
+  for (const phase of collectPhaseNodes(nodes)) {
+    ensureGroup(`phase-${phase.id}`, phase);
+  }
 
   const walk = (list, phaseNode, depth) => {
     for (const node of list || []) {
@@ -380,20 +407,19 @@ export function groupProjectTasksByPhase(nodes, { filter = 'all', query = '' } =
 
   walk(nodes, null, 0);
 
-  const out = Array.from(groups.values()).filter((group) => group.tasks.length > 0);
+  const filtering = Boolean(q) || (filter && filter !== 'all');
+  const out = Array.from(groups.values()).filter((group) => {
+    if (group.key === noPhaseKey) return group.tasks.length > 0;
+    if (filtering) return group.tasks.length > 0;
+    return true;
+  });
   out.sort((a, b) => {
     if (a.key === noPhaseKey) return 1;
     if (b.key === noPhaseKey) return -1;
     return 0;
   });
 
-  return out.map((group) => {
-    const withProgress = group.tasks.filter((task) => task.progress_percent != null);
-    const avgProgress = withProgress.length
-      ? Math.round(withProgress.reduce((sum, task) => sum + Number(task.progress_percent || 0), 0) / withProgress.length)
-      : null;
-    return { ...group, avgProgress };
-  });
+  return out.map((group) => ({ ...group, avgProgress: averageTaskProgress(group.tasks) }));
 }
 
 /** Nhãn/tone hiển thị 1 công việc — dùng chung giữa bảng phẳng, bảng nhóm

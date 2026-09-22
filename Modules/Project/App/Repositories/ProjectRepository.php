@@ -465,43 +465,57 @@ class ProjectRepository implements ProjectRepositoryInterface
 
     public function forViewer(Builder $query, User $viewer): Builder
     {
-        if ($viewer->isSuperAdmin() || app(PermissionService::class)->allows($viewer, 'project.*')) {
+        if ($this->seesEveryDepartment($viewer)) {
             return $query;
         }
 
-        return $query->where(function (Builder $sub) use ($viewer) {
-            $sub->where('owner_department_id', $viewer->department_id)
-                ->orWhere('executing_department_id', $viewer->department_id)
-                ->orWhereHas('executingDepartments', function (Builder $d) use ($viewer) {
-                    $d->where('departments.id', $viewer->department_id);
-                })
-                ->orWhere('lead_user_id', $viewer->id)
-                ->orWhere('created_by', $viewer->id)
-                ->orWhereHas('members', function (Builder $m) use ($viewer) {
-                    $m->where('users.id', $viewer->id);
-                })
-                ->orWhereHas('followers', function (Builder $f) use ($viewer) {
-                    $f->where('users.id', $viewer->id);
-                });
-        });
+        return $this->whereViewerDepartment($query, $viewer);
     }
 
     public function forAssignableTaskProject(Builder $query, User $viewer): Builder
     {
-        if ($viewer->isSuperAdmin() || app(PermissionService::class)->allows($viewer, 'project.*')) {
+        if ($this->seesEveryDepartment($viewer)) {
             return $query;
         }
 
-        return $query->where(function (Builder $sub) use ($viewer) {
-            $sub->where('owner_department_id', $viewer->department_id)
-                ->orWhere('executing_department_id', $viewer->department_id)
-                ->orWhereHas('executingDepartments', function (Builder $d) use ($viewer) {
-                    $d->where('departments.id', $viewer->department_id);
+        return $this->whereViewerDepartment($query, $viewer);
+    }
+
+    /**
+     * Xem mọi phòng ban: super admin thật, admin (project.*), giám đốc điều
+     * hành (dashboard.view_company). PermissionService tôn trọng "xem thử",
+     * nên đổi vai trò trưởng phòng không còn lộ dự án phòng khác.
+     */
+    private function seesEveryDepartment(User $viewer): bool
+    {
+        $permissions = app(PermissionService::class);
+
+        return $permissions->allows($viewer, 'project.*')
+            || $permissions->allows($viewer, 'dashboard.view_company');
+    }
+
+    /**
+     * Dự án của đúng phòng ban viewer: sở hữu, phụ trách, hoặc được giao
+     * thực hiện. Không mở theo tư cách cá nhân (thành viên, theo dõi, người
+     * tạo) nếu dự án thuộc phòng ban khác.
+     */
+    private function whereViewerDepartment(Builder $query, User $viewer): Builder
+    {
+        $departmentId = $viewer->department_id ? (int) $viewer->department_id : null;
+        if ($departmentId === null) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        return $query->where(function (Builder $sub) use ($departmentId) {
+            $sub->where('owner_department_id', $departmentId)
+                ->orWhere('lead_department_id', $departmentId)
+                ->orWhere('executing_department_id', $departmentId)
+                ->orWhereHas('executingDepartments', function (Builder $d) use ($departmentId) {
+                    $d->where('departments.id', $departmentId);
                 })
-                ->orWhere('lead_user_id', $viewer->id)
-                ->orWhere('created_by', $viewer->id)
-                ->orWhereHas('members', function (Builder $m) use ($viewer) {
-                    $m->where('users.id', $viewer->id);
+                ->orWhereHas('scopes', function (Builder $scope) use ($departmentId) {
+                    $scope->where('scope_type', 'department')
+                        ->where('department_id', $departmentId);
                 });
         });
     }

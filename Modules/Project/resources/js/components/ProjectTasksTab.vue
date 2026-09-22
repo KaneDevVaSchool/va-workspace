@@ -1296,6 +1296,9 @@ onBeforeUnmount(() => {
                   </span>
                 </td>
               </tr>
+              <tr v-if="!group.tasks.length && !collapsedPhaseKeys.has(group.key)">
+                <td :colspan="colSpan" class="ptasks__empty">Giai đoạn này chưa có công việc.</td>
+              </tr>
               <TaskTableRow
                 v-for="task in group.tasks"
                 v-show="!collapsedPhaseKeys.has(group.key)"

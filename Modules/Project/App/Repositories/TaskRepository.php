@@ -267,7 +267,10 @@ class TaskRepository implements TaskRepositoryInterface
 
     private function hasGlobalProjectAccess(User $viewer): bool
     {
-        return $viewer->isSuperAdmin() || app(PermissionService::class)->allows($viewer, 'project.*');
+        $permissions = app(PermissionService::class);
+
+        return $permissions->allows($viewer, 'project.*')
+            || $permissions->allows($viewer, 'dashboard.view_company');
     }
 
     public function find(int $id): ?Task

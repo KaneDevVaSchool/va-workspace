@@ -981,13 +981,45 @@ onMounted(async () => {
     border-radius: var(--radius-full);
     background: var(--color-surface);
     color: var(--color-text-muted);
-    box-shadow: var(--shadow-sm);
+    box-shadow:
+        0 0 0 1px var(--color-border),
+        var(--shadow-sm);
     cursor: pointer;
+    opacity: 0;
+    transform: scale(0.8);
+    transition:
+        opacity 0.25s ease,
+        transform 0.3s cubic-bezier(0.22, 1.4, 0.36, 1),
+        color 0.2s ease,
+        background 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.social-page__rail--left:hover .social-page__rail-toggle,
+.social-page__rail-toggle:focus-visible {
+    opacity: 1;
+    transform: scale(1);
 }
 
 .social-page__rail-toggle:hover {
     color: var(--color-primary);
     background: var(--color-primary-surface);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, transparent),
+        var(--shadow-md);
+}
+
+.social-page__rail-toggle:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .social-page__rail-toggle {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
 }
 
 .social-page__rail--right {

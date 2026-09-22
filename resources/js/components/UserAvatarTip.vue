@@ -14,8 +14,18 @@ const cardRef = ref(null);
 const photoBroken = ref(false);
 const cardStyle = ref({});
 
+const AVATAR_TONES = ['primary', 'secondary', 'tertiary', 'gold', 'success', 'info', 'warning'];
+
+function hashAvatarTone(user) {
+  const key = String(user?.id ?? user?.email ?? user?.name ?? '');
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) | 0;
+  return AVATAR_TONES[Math.abs(hash) % AVATAR_TONES.length];
+}
+
 const displayName = computed(() => props.user?.name || '—');
 const initial = computed(() => displayName.value.trim().charAt(0).toUpperCase() || '?');
+const tone = computed(() => hashAvatarTone(props.user));
 const hasPhoto = computed(() => Boolean(props.user?.avatar_url) && !photoBroken.value);
 const departmentName = computed(() => props.user?.department?.name || '');
 const triggerLabel = computed(
@@ -135,7 +145,7 @@ onBeforeUnmount(() => {
       :aria-label="triggerLabel"
       @click.stop="toggle"
     >
-      <span class="user-avatar-tip__avatar" aria-hidden="true">
+      <span class="user-avatar-tip__avatar" :class="`user-avatar-tip__avatar--${tone}`" aria-hidden="true">
         <img
           v-if="hasPhoto"
           :src="user.avatar_url"
@@ -158,7 +168,7 @@ onBeforeUnmount(() => {
         :style="cardStyle"
         @click.stop
       >
-        <span class="user-avatar-tip__card-avatar" aria-hidden="true">
+        <span class="user-avatar-tip__card-avatar" :class="`user-avatar-tip__avatar--${tone}`" aria-hidden="true">
           <img
             v-if="hasPhoto"
             :src="user.avatar_url"
@@ -227,11 +237,48 @@ onBeforeUnmount(() => {
   height: 2rem;
   overflow: hidden;
   border-radius: var(--radius-full);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
   font-size: 0.75rem;
   font-weight: 700;
   line-height: 1;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.user-avatar-tip__avatar--primary {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+.user-avatar-tip__avatar--secondary {
+  background: var(--color-secondary-surface);
+  color: var(--color-secondary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-secondary) 22%, transparent);
+}
+.user-avatar-tip__avatar--tertiary {
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-tertiary) 22%, transparent);
+}
+.user-avatar-tip__avatar--gold {
+  background: var(--color-gold-surface);
+  color: var(--color-gold-700);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-gold) 28%, transparent);
+}
+.user-avatar-tip__avatar--success {
+  background: var(--color-success-tint-bg);
+  color: var(--color-success);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-success) 22%, transparent);
+}
+.user-avatar-tip__avatar--info {
+  background: var(--color-info-tint-bg);
+  color: var(--color-info);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-info) 22%, transparent);
+}
+.user-avatar-tip__avatar--warning {
+  background: var(--color-warning-tint-bg);
+  color: var(--color-warning);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-warning) 22%, transparent);
 }
 
 .user-avatar-tip__img {
@@ -266,8 +313,6 @@ onBeforeUnmount(() => {
   margin-bottom: 0.25rem;
   overflow: hidden;
   border-radius: var(--radius-full);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
   font-size: 1.25rem;
   font-weight: 700;
   line-height: 1;
