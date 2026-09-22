@@ -15,7 +15,7 @@ function handleDocumentClick(event) {
 
 onMounted(() => {
   document.addEventListener('mousedown', handleDocumentClick);
-  store.fetchUnreadTotal().catch(() => {});
+  store.fetchConversations().catch(() => {});
 });
 
 onBeforeUnmount(() => {
