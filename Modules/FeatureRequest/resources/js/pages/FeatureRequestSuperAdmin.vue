@@ -33,6 +33,7 @@ const SENDER_AVATAR_EXTRA = 42;
 const ACTION_COL_PX = 56;
 const ACTION_MENU_WIDTH = 240;
 const MIN_COL_PX = 72;
+const DESC_MAX_PX = 420;
 
 let measureCtx = null;
 let wrapObserver = null;
@@ -419,7 +420,9 @@ function columnContentWidth(key, fonts) {
     }
   }
   const extra = key === 'sender' ? SENDER_AVATAR_EXTRA : 0;
-  return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
+  let width = Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
+  if (key === 'description') width = Math.min(width, DESC_MAX_PX);
+  return width;
 }
 
 function distributeExtraWidth(widths, keys, available) {
@@ -1155,6 +1158,7 @@ onBeforeUnmount(() => {
   letter-spacing: 0.02em;
   text-align: left;
   white-space: nowrap;
+  overflow: hidden;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
@@ -1191,6 +1195,8 @@ onBeforeUnmount(() => {
   color: var(--color-text);
   vertical-align: middle;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
@@ -1208,6 +1214,8 @@ onBeforeUnmount(() => {
 
 .fr-admin__cell {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1226,6 +1234,8 @@ onBeforeUnmount(() => {
 
 .fr-admin__person-text span {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1238,7 +1248,9 @@ onBeforeUnmount(() => {
 .fr-admin__status {
   display: inline-flex;
   align-items: center;
+  max-width: 100%;
   gap: 0.375rem;
+  overflow: hidden;
   white-space: nowrap;
 }
 

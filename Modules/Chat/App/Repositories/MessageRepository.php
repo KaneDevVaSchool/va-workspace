@@ -14,13 +14,13 @@ class MessageRepository implements MessageRepositoryInterface
     {
         $message = Message::create($data);
 
-        return $message->loadMissing(['sender', 'replyTo.sender']);
+        return $message->loadMissing(['sender', 'replyTo.sender', 'replyTo.attachments', 'attachments']);
     }
 
     public function findForConversation(int $conversationId, int $messageId): ?Message
     {
         return Message::query()
-            ->with(['sender', 'replyTo.sender'])
+            ->with(['sender', 'replyTo.sender', 'replyTo.attachments', 'attachments'])
             ->where('conversation_id', $conversationId)
             ->whereKey($messageId)
             ->first();
@@ -30,7 +30,7 @@ class MessageRepository implements MessageRepositoryInterface
     {
         $message->save();
 
-        return $message->load(['sender', 'replyTo.sender']);
+        return $message->load(['sender', 'replyTo.sender', 'replyTo.attachments', 'attachments']);
     }
 
     public function hideForUser(int $messageId, int $userId): void
@@ -44,7 +44,7 @@ class MessageRepository implements MessageRepositoryInterface
     public function paginateBefore(int $conversationId, int $viewerId, ?int $beforeId, int $perPage = 30): Collection
     {
         $query = Message::query()
-            ->with(['sender', 'replyTo.sender'])
+            ->with(['sender', 'replyTo.sender', 'replyTo.attachments', 'attachments'])
             ->where('conversation_id', $conversationId)
             ->whereDoesntHave('hides', fn ($q) => $q->where('user_id', $viewerId))
             ->orderByDesc('id');
@@ -92,6 +92,7 @@ class MessageRepository implements MessageRepositoryInterface
     public function latestVisibleForUser(int $conversationId, int $viewerId): ?Message
     {
         return Message::query()
+            ->with('attachments')
             ->where('conversation_id', $conversationId)
             ->whereDoesntHave('hides', fn ($q) => $q->where('user_id', $viewerId))
             ->orderByDesc('id')

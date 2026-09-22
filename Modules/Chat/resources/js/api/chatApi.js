@@ -13,9 +13,24 @@ export function listMessages(conversationId, beforeId = null) {
 }
 
 export function sendMessage(conversationId, payload) {
-  const body = typeof payload === 'string' ? { message: payload } : payload;
+  if (typeof payload === 'string' || !payload?.files?.length) {
+    const body = typeof payload === 'string' ? { message: payload } : { ...payload };
+    delete body.files;
+    return window.axios
+      .post(`/api/chat/conversations/${conversationId}/messages`, body)
+      .then((r) => r.data.message);
+  }
+
+  const form = new FormData();
+  if (payload.message) form.append('message', payload.message);
+  if (payload.reply_to_id) form.append('reply_to_id', String(payload.reply_to_id));
+  if (payload.message_type) form.append('message_type', payload.message_type);
+  if (payload.sticker_id) form.append('sticker_id', payload.sticker_id);
+  payload.files.forEach((file) => form.append('attachments[]', file));
   return window.axios
-    .post(`/api/chat/conversations/${conversationId}/messages`, body)
+    .post(`/api/chat/conversations/${conversationId}/messages`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
     .then((r) => r.data.message);
 }
 

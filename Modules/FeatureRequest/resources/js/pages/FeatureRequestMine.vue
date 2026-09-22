@@ -31,6 +31,7 @@ const COL_EXTRA = 24;
 const ACTION_COL_PX = 56;
 const ACTION_MENU_WIDTH = 200;
 const MIN_COL_PX = 72;
+const DESC_MAX_PX = 420;
 
 let measureCtx = null;
 let wrapObserver = null;
@@ -374,7 +375,9 @@ function columnContentWidth(key, fonts) {
       maxW = Math.max(maxW, measureText(item.reviewed_by_email, fonts.cell));
     }
   }
-  return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA));
+  let width = Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA));
+  if (key === 'description') width = Math.min(width, DESC_MAX_PX);
+  return width;
 }
 
 function distributeExtraWidth(widths, keys, available) {
@@ -1074,6 +1077,7 @@ onBeforeUnmount(() => {
   letter-spacing: 0.02em;
   text-align: left;
   white-space: nowrap;
+  overflow: hidden;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
@@ -1110,6 +1114,8 @@ onBeforeUnmount(() => {
   color: var(--color-text);
   vertical-align: middle;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
@@ -1128,6 +1134,8 @@ onBeforeUnmount(() => {
 .fr-mine__cell,
 .fr-mine__stack span {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

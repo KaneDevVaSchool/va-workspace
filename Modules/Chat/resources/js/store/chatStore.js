@@ -16,7 +16,14 @@ import {
 export function chatPreview(message) {
   if (message?.recalled_at) return 'Tin nhắn đã được thu hồi';
   if (message?.message_type === 'sticker') return 'Sticker';
-  return message?.message || '';
+  const text = (message?.message || '').trim();
+  if (text) return text;
+  const files = message?.attachments ?? [];
+  if (files.length === 0) return '';
+  if (files.every((file) => file.type === 'image')) {
+    return files.length > 1 ? `${files.length} ảnh` : 'Ảnh';
+  }
+  return files.length > 1 ? `${files.length} tệp đính kèm` : 'Tệp đính kèm';
 }
 
 function lastMessageFrom(message) {

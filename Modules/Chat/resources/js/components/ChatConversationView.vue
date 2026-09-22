@@ -13,8 +13,12 @@ const store = useChatStore();
 const auth = useAuthStore();
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '🎉', '🙏', '🔥'];
+const MAX_FILES = 5;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 const draft = ref('');
+const files = ref([]);
+const fileInput = ref(null);
 const sending = ref(false);
 const listRef = ref(null);
 const inputRef = ref(null);
@@ -28,7 +32,7 @@ const confirmMessage = ref(null);
 const confirming = ref(false);
 
 const otherUser = computed(() => store.activeConversation?.other_user ?? null);
-const canSend = computed(() => draft.value.trim() !== '' && !sending.value);
+const canSend = computed(() => !sending.value && (draft.value.trim() !== '' || (!editing.value && files.value.length > 0)));
 
 const confirmCopy = computed(() => {
   if (confirmKind.value === 'recall') {
@@ -95,6 +99,7 @@ watch(
   () => store.activeConversationId,
   () => {
     draft.value = '';
+    files.value = [];
     replyTo.value = null;
     editing.value = null;
     pickerOpen.value = false;
@@ -158,6 +163,7 @@ function startEdit(message) {
   if (!isMine(message) || message.recalled_at || message.message_type !== 'text') return;
   replyTo.value = null;
   editing.value = message;
+  files.value = [];
   draft.value = message.message || '';
   pickerOpen.value = false;
   menu.value = null;
@@ -237,7 +243,53 @@ function quoteText(message) {
   if (!message) return '';
   if (message.recalled_at || message.recalled) return 'Tin nhắn đã được thu hồi';
   if (message.message_type === 'sticker') return 'Sticker';
-  return message.message || '';
+  if ((message.message || '').trim()) return message.message;
+  return fileLabel(message.attachments);
+}
+
+function fileLabel(attachments) {
+  const list = attachments ?? [];
+  if (list.length === 0) return '';
+  if (list.every((file) => file.type === 'image')) return list.length > 1 ? `${list.length} ảnh` : 'Ảnh';
+  return list.length > 1 ? `${list.length} tệp đính kèm` : 'Tệp đính kèm';
+}
+
+function imageFiles(message) {
+  return (message.attachments ?? []).filter((file) => file.type === 'image');
+}
+
+function docFiles(message) {
+  return (message.attachments ?? []).filter((file) => file.type !== 'image');
+}
+
+function formatSize(bytes) {
+  const size = Number(bytes) || 0;
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function onFilesChosen(event) {
+  const chosen = Array.from(event.target.files ?? []);
+  event.target.value = '';
+  if (editing.value) return;
+  const next = [...files.value];
+  for (const file of chosen) {
+    if (next.length >= MAX_FILES) {
+      showClientToast('error', `Chỉ được đính kèm tối đa ${MAX_FILES} tệp mỗi tin nhắn.`);
+      break;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      showClientToast('error', `${file.name} vượt quá 10MB.`);
+      continue;
+    }
+    next.push(file);
+  }
+  files.value = next;
+}
+
+function removeFile(index) {
+  files.value = files.value.filter((_, i) => i !== index);
 }
 
 async function sendSticker(sticker) {
@@ -261,7 +313,8 @@ async function sendSticker(sticker) {
 
 async function send() {
   const text = draft.value.trim();
-  if (text === '' || sending.value) return;
+  if (sending.value) return;
+  if (text === '' && (editing.value || files.value.length === 0)) return;
   sending.value = true;
   try {
     if (editing.value) {
@@ -273,8 +326,10 @@ async function send() {
     await store.sendMessage(store.activeConversationId, {
       message: text,
       reply_to_id: replyTo.value?.id ?? null,
+      files: files.value,
     });
     draft.value = '';
+    files.value = [];
     replyTo.value = null;
   } catch (error) {
     showClientToast('error', error?.response?.data?.message ?? 'Không gửi được tin nhắn.');
@@ -323,7 +378,7 @@ function menuItems(message) {
   if (!recalled) {
     items.push({ key: 'reply', label: 'Trả lời', icon: 'reply', run: () => startReply(message) });
   }
-  if (mine && !recalled && message.message_type === 'text') {
+  if (mine && !recalled && message.message_type === 'text' && (message.message || '').trim() !== '') {
     items.push({ key: 'edit', label: 'Sửa', icon: 'pencil', run: () => startEdit(message) });
   }
   if (mine && !recalled) {
@@ -394,7 +449,35 @@ function menuItems(message) {
             <span v-else-if="row.message.message_type === 'sticker' && row.message.sticker_id" class="chat-sticker">
               <SocialAnimatedSticker :id="row.message.sticker_id" :emoji="row.message.message || ''" />
             </span>
-            <span v-else class="chat-bubble__text">{{ row.message.message }}</span>
+            <span v-else-if="row.message.message" class="chat-bubble__text">{{ row.message.message }}</span>
+            <div v-if="!row.message.recalled_at && imageFiles(row.message).length" class="chat-images">
+              <a
+                v-for="file in imageFiles(row.message)"
+                :key="file.id"
+                class="chat-images__link"
+                :href="file.url"
+                target="_blank"
+                rel="noopener"
+              >
+                <img :src="file.url" :alt="file.name" />
+              </a>
+            </div>
+            <div v-if="!row.message.recalled_at && docFiles(row.message).length" class="chat-docs">
+              <a
+                v-for="file in docFiles(row.message)"
+                :key="file.id"
+                class="chat-doc"
+                :href="file.url"
+                target="_blank"
+                rel="noopener"
+              >
+                <AppIcon name="fileText" :size="16" :stroke-width="1.75" />
+                <span class="chat-doc__copy">
+                  <span class="chat-doc__name">{{ file.name }}</span>
+                  <span class="chat-doc__size">{{ formatSize(file.size) }}</span>
+                </span>
+              </a>
+            </div>
 
             <span class="chat-bubble__meta">
               <span v-if="row.message.edited_at && !row.message.recalled_at">Đã sửa</span>
@@ -449,6 +532,23 @@ function menuItems(message) {
         <button
           type="button"
           class="chat-view__tool"
+          :disabled="Boolean(editing)"
+          aria-label="Đính kèm tệp"
+          @click="fileInput?.click()"
+        >
+          <AppIcon name="paperclip" :size="18" :stroke-width="1.75" />
+        </button>
+        <input
+          ref="fileInput"
+          class="chat-view__file-input"
+          type="file"
+          multiple
+          accept="image/*,.pdf,.doc,.docx,.xlsx,.xls,.ppt,.pptx,.txt,.csv,.zip"
+          @change="onFilesChosen"
+        />
+        <button
+          type="button"
+          class="chat-view__tool"
           :class="{ 'chat-view__tool--on': pickerOpen && pickerPanel === 'sticker' }"
           :disabled="Boolean(editing)"
           aria-label="Gửi sticker"
@@ -466,6 +566,15 @@ function menuItems(message) {
         >
           {{ emoji }}
         </button>
+      </div>
+      <div v-if="files.length" class="chat-pending">
+        <span v-for="(file, index) in files" :key="`${file.name}-${index}`" class="chat-pending__item">
+          <AppIcon :name="file.type.startsWith('image/') ? 'camera' : 'fileText'" :size="14" :stroke-width="1.75" />
+          <span class="chat-pending__name">{{ file.name }}</span>
+          <button type="button" class="chat-pending__remove" :aria-label="`Bỏ ${file.name}`" @click="removeFile(index)">
+            <AppIcon name="close" :size="12" :stroke-width="1.75" />
+          </button>
+        </span>
       </div>
       <div class="chat-view__input-row">
         <textarea
@@ -839,6 +948,108 @@ function menuItems(message) {
 
 .chat-view__quick:hover {
   background: var(--color-surface-muted);
+}
+
+.chat-view__file-input {
+  display: none;
+}
+
+.chat-pending {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chat-pending__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  padding: 0.2rem 0.35rem 0.2rem 0.45rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: 0.75rem;
+}
+
+.chat-pending__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 10rem;
+}
+
+.chat-pending__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.chat-images {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 7.5rem));
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.chat-images__link {
+  display: block;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.chat-images__link img {
+  display: block;
+  width: 100%;
+  height: 6.5rem;
+  object-fit: cover;
+}
+
+.chat-docs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
+.chat-doc {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.35rem 0.45rem;
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  text-decoration: none;
+}
+
+.chat-doc__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-doc__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 11rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.chat-doc__size {
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
 }
 
 .chat-view__input-row {

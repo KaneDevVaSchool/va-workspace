@@ -3,6 +3,8 @@
 namespace Modules\Chat\App\Services;
 
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Modules\Chat\App\Events\MessageRead;
@@ -20,6 +22,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 class ChatService
 {
     private const STICKER_ID_PATTERN = '/^[0-9a-f]{2,8}(?:_[0-9a-f]{2,8}){0,12}$/';
+
+    private const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
     public function __construct(
         private readonly ConversationRepositoryInterface $conversations,
@@ -92,6 +96,7 @@ class ChatService
 
         $body = trim((string) ($input['message'] ?? ''));
         $stickerId = $type === Message::TYPE_STICKER ? trim((string) ($input['sticker_id'] ?? '')) : null;
+        $files = $this->uploadedFiles($input['attachments'] ?? []);
 
         if ($type === Message::TYPE_STICKER) {
             if ($stickerId === '' || ! preg_match(self::STICKER_ID_PATTERN, $stickerId)) {
@@ -102,9 +107,10 @@ class ChatService
             if ($body === '') {
                 $body = '🙂';
             }
-        } elseif ($body === '') {
+            $files = [];
+        } elseif ($body === '' && $files === []) {
             throw ValidationException::withMessages([
-                'message' => ['Vui lòng nhập nội dung.'],
+                'message' => ['Vui lòng nhập nội dung hoặc chọn tệp.'],
             ]);
         }
 
@@ -127,6 +133,11 @@ class ChatService
             // Cột enum hiện có chưa gồm 'sticker' — sticker nhận diện bằng sticker_id.
             'message_type' => Message::TYPE_TEXT,
         ]);
+
+        if ($files !== []) {
+            $this->storeAttachments($message, $files);
+            $message = $this->messages->findForConversation($conversationId, $message->id) ?? $message;
+        }
 
         Conversation::where('id', $conversationId)->update(['updated_at' => now()]);
 
@@ -188,6 +199,7 @@ class ChatService
             ]);
         }
 
+        $this->deleteAttachments($message);
         $message->message = '';
         $message->sticker_id = null;
         $message->recalled_at = now();
@@ -257,6 +269,9 @@ class ChatService
         }
 
         $text = Str::limit(trim($message->message), 140);
+        if ($text === '' && $message->attachments->isNotEmpty()) {
+            return $this->attachmentLabel($message);
+        }
 
         if ($message->reply_to_id !== null) {
             return $text !== '' ? 'Đã trả lời: '.$text : 'Đã trả lời một tin nhắn';
@@ -298,7 +313,22 @@ class ChatService
             return 'Sticker';
         }
 
+        $text = trim($message->message);
+        if ($text === '' && $message->relationLoaded('attachments') && $message->attachments->isNotEmpty()) {
+            return $this->attachmentLabel($message);
+        }
+
         return $message->message;
+    }
+
+    private function attachmentLabel(Message $message): string
+    {
+        $attachments = $message->attachments;
+        if ($attachments->isNotEmpty() && $attachments->every(fn ($file) => $file->type === 'image')) {
+            return $attachments->count() > 1 ? $attachments->count().' ảnh' : 'Ảnh';
+        }
+
+        return $attachments->count() > 1 ? $attachments->count().' tệp đính kèm' : 'Tệp đính kèm';
     }
 
     private function presentOtherUser(?ConversationMember $member): ?array
@@ -322,9 +352,10 @@ class ChatService
         return [
             'id' => $message->id,
             'conversation_id' => $message->conversation_id,
-            'message' => $recalled ? null : $message->message,
+            'message' => $recalled || (! $this->isSticker($message) && trim($message->message) === '') ? null : $message->message,
             'message_type' => $recalled ? $message->message_type : $this->publicType($message),
             'sticker_id' => $recalled ? null : $message->sticker_id,
+            'attachments' => $recalled ? [] : $this->presentAttachments($message),
             'edited_at' => $message->edited_at?->toIso8601String(),
             'recalled_at' => $message->recalled_at?->toIso8601String(),
             'reply_to' => $this->presentReply($message->replyTo),
@@ -359,10 +390,78 @@ class ChatService
             'id' => $reply->id,
             'message' => $recalled
                 ? 'Tin nhắn đã được thu hồi'
-                : ($this->isSticker($reply) ? 'Sticker' : $reply->message),
+                : ($this->isSticker($reply) ? 'Sticker' : $this->replyExcerpt($reply)),
             'message_type' => $this->publicType($reply),
             'recalled' => $recalled,
             'sender_name' => $reply->sender?->name,
         ];
+    }
+
+    /** @param  mixed  $files
+     * @return list<UploadedFile>
+     */
+    private function uploadedFiles(mixed $files): array
+    {
+        if (! is_array($files)) {
+            return [];
+        }
+
+        return array_values(array_filter($files, fn ($file) => $file instanceof UploadedFile));
+    }
+
+    /** @param  list<UploadedFile>  $files */
+    private function storeAttachments(Message $message, array $files): void
+    {
+        foreach ($files as $file) {
+            $path = $file->store('chat/'.$message->id, 'public');
+            $mime = $file->getMimeType();
+            $message->attachments()->create([
+                'file_path' => $path,
+                'file_name' => $file->getClientOriginalName(),
+                'file_size' => $file->getSize() ?: 0,
+                'mime_type' => $mime,
+                'type' => in_array($mime, self::IMAGE_MIMES, true) ? 'image' : 'file',
+            ]);
+        }
+    }
+
+    private function deleteAttachments(Message $message): void
+    {
+        $message->loadMissing('attachments');
+        foreach ($message->attachments as $attachment) {
+            if ($attachment->file_path) {
+                Storage::disk('public')->delete($attachment->file_path);
+            }
+        }
+        $message->attachments()->delete();
+        $message->unsetRelation('attachments');
+    }
+
+    /** @return list<array{id: int, type: string, name: string, size: int, url: string}> */
+    private function presentAttachments(Message $message): array
+    {
+        $message->loadMissing('attachments');
+
+        return $message->attachments->map(fn ($file) => [
+            'id' => $file->id,
+            'type' => $file->type,
+            'name' => $file->file_name,
+            'size' => (int) $file->file_size,
+            'url' => Storage::disk('public')->url($file->file_path),
+        ])->values()->all();
+    }
+
+    private function replyExcerpt(Message $reply): string
+    {
+        $text = trim($reply->message);
+        if ($text !== '') {
+            return $text;
+        }
+
+        if ($reply->relationLoaded('attachments') && $reply->attachments->isNotEmpty()) {
+            return $this->attachmentLabel($reply);
+        }
+
+        return '';
     }
 }

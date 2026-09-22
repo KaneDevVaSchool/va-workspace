@@ -19,7 +19,7 @@ class SendChatMessageRequest extends FormRequest
 
         return [
             'message' => [
-                Rule::requiredIf($type !== Message::TYPE_STICKER),
+                Rule::requiredIf($type !== Message::TYPE_STICKER && ! $this->has('attachments')),
                 'nullable',
                 'string',
                 'max:5000',
@@ -32,15 +32,24 @@ class SendChatMessageRequest extends FormRequest
                 'max:64',
             ],
             'reply_to_id' => ['nullable', 'integer'],
+            'attachments' => ['nullable', 'array', 'max:5'],
+            'attachments.*' => [
+                'file',
+                'max:10240',
+                'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xlsx,xls,ppt,pptx,txt,csv,zip',
+            ],
         ];
     }
 
     public function messages(): array
     {
         return [
-            'message.required' => 'Vui lòng nhập nội dung.',
+            'message.required' => 'Vui lòng nhập nội dung hoặc chọn tệp.',
             'message.max' => 'Tin nhắn không được vượt quá 5000 ký tự.',
             'sticker_id.required' => 'Vui lòng chọn sticker.',
+            'attachments.max' => 'Chỉ được đính kèm tối đa 5 tệp mỗi tin nhắn.',
+            'attachments.*.max' => 'Mỗi tệp không được vượt quá 10MB.',
+            'attachments.*.mimes' => 'Chỉ chấp nhận ảnh, PDF, Word, Excel, PowerPoint, TXT, CSV hoặc ZIP.',
         ];
     }
 }

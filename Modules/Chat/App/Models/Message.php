@@ -69,6 +69,11 @@ class Message extends Model
         return $this->hasMany(MessageHide::class, 'message_id');
     }
 
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(MessageAttachment::class, 'message_id');
+    }
+
     public function isRecalled(): bool
     {
         return $this->recalled_at !== null;

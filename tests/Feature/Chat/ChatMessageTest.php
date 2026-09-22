@@ -4,8 +4,11 @@ namespace Tests\Feature\Chat;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 use Modules\Chat\App\Events\MessageSent;
+use Modules\Chat\App\Models\MessageAttachment;
 use Tests\TestCase;
 
 class ChatMessageTest extends TestCase
@@ -214,6 +217,52 @@ class ChatMessageTest extends TestCase
             'type' => 'chat_message',
             'body' => 'Đã gửi một sticker',
         ]);
+    }
+
+    public function test_a_message_can_include_files_and_recall_removes_them(): void
+    {
+        Storage::fake('public');
+
+        $sender = $this->makeUser('Mai');
+        $recipient = $this->makeUser('Bình');
+        $conversationId = $this->openConversation($sender, $recipient);
+
+        $this->actingAs($sender)
+            ->post("/api/chat/conversations/{$conversationId}/messages", [
+                'message' => 'Kèm file',
+                'attachments' => [
+                    UploadedFile::fake()->create('bao-cao.pdf', 20, 'application/pdf'),
+                ],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('message.attachments.0.name', 'bao-cao.pdf')
+            ->assertJsonPath('message.attachments.0.type', 'file');
+
+        $image = $this->actingAs($sender)
+            ->post("/api/chat/conversations/{$conversationId}/messages", [
+                'attachments' => [
+                    UploadedFile::fake()->image('anh.png'),
+                ],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('message.message', null)
+            ->assertJsonPath('message.attachments.0.type', 'image');
+
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $recipient->id,
+            'type' => 'chat_message',
+            'body' => 'Ảnh',
+        ]);
+
+        $path = MessageAttachment::query()->where('file_name', 'anh.png')->value('file_path');
+        Storage::disk('public')->assertExists($path);
+
+        $this->actingAs($sender)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages/{$image->json('message.id')}/recall")
+            ->assertOk()
+            ->assertJsonPath('message.attachments', []);
+
+        Storage::disk('public')->assertMissing($path);
     }
 
     private function send(User $sender, int $conversationId, string $message): int
