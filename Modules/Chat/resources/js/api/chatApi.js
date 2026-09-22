@@ -12,10 +12,27 @@ export function listMessages(conversationId, beforeId = null) {
     .then((r) => r.data);
 }
 
-export function sendMessage(conversationId, message) {
+export function sendMessage(conversationId, payload) {
+  const body = typeof payload === 'string' ? { message: payload } : payload;
   return window.axios
-    .post(`/api/chat/conversations/${conversationId}/messages`, { message })
+    .post(`/api/chat/conversations/${conversationId}/messages`, body)
     .then((r) => r.data.message);
+}
+
+export function editMessage(conversationId, messageId, message) {
+  return window.axios
+    .patch(`/api/chat/conversations/${conversationId}/messages/${messageId}`, { message })
+    .then((r) => r.data.message);
+}
+
+export function recallMessage(conversationId, messageId) {
+  return window.axios
+    .post(`/api/chat/conversations/${conversationId}/messages/${messageId}/recall`)
+    .then((r) => r.data.message);
+}
+
+export function hideMessage(conversationId, messageId) {
+  return window.axios.delete(`/api/chat/conversations/${conversationId}/messages/${messageId}`);
 }
 
 export function markRead(conversationId) {

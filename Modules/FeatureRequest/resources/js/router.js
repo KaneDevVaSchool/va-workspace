@@ -1,10 +1,9 @@
 /**
  * Route Vue của module FeatureRequest — import/gộp vào resources/js/router/index.js.
  *
- * - /superadmin/feature-requests — danh sách ghi nhận theo phòng ban cho superadmin.
- * - /feature-requests/mine — trang chi tiết đầy đủ cho nhân viên tự xem lịch sử
- *   ghi nhận của mình (bổ sung cho drawer nhanh ở AppHeader
- *   HeaderFeatureRequestButton.vue, không thay thế).
+ * - /superadmin/feature-requests — bảng ghi nhận cho superadmin.
+ * - /feature-requests/mine — bảng lịch sử ghi nhận của chính nhân viên
+ *   (bổ sung cho drawer nhanh ở AppHeader HeaderFeatureRequestButton.vue).
  */
 export default [
   {

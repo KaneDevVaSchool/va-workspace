@@ -103,6 +103,124 @@ class ChatMessageTest extends TestCase
             'user_id' => $recipient->id,
             'actor_id' => $sender->id,
             'type' => 'chat_message',
+            'body' => 'Xin chào',
         ]);
+    }
+
+    public function test_sender_can_edit_own_message(): void
+    {
+        $sender = $this->makeUser('Mai');
+        $recipient = $this->makeUser('Bình');
+        $conversationId = $this->openConversation($sender, $recipient);
+        $messageId = $this->send($sender, $conversationId, 'Bản nháp');
+
+        $edited = $this->actingAs($sender)
+            ->patchJson("/api/chat/conversations/{$conversationId}/messages/{$messageId}", [
+                'message' => 'Bản đã sửa',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message.message', 'Bản đã sửa');
+
+        $this->assertIsString($edited->json('message.edited_at'));
+
+        $this->actingAs($recipient)
+            ->patchJson("/api/chat/conversations/{$conversationId}/messages/{$messageId}", [
+                'message' => 'Không được',
+            ])
+            ->assertStatus(403);
+    }
+
+    public function test_sender_can_recall_a_message_for_both_people(): void
+    {
+        $sender = $this->makeUser('Mai');
+        $recipient = $this->makeUser('Bình');
+        $conversationId = $this->openConversation($sender, $recipient);
+        $messageId = $this->send($sender, $conversationId, 'Nhầm người');
+
+        $this->actingAs($sender)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages/{$messageId}/recall")
+            ->assertOk()
+            ->assertJsonPath('message.message', null);
+
+        $listed = $this->actingAs($recipient)
+            ->getJson("/api/chat/conversations/{$conversationId}/messages")
+            ->assertOk()
+            ->assertJsonPath('messages.0.message', null);
+
+        $this->assertIsString($listed->json('messages.0.recalled_at'));
+
+        $this->assertDatabaseMissing('messages', [
+            'id' => $messageId,
+            'message' => 'Nhầm người',
+        ]);
+    }
+
+    public function test_delete_hides_the_message_only_for_the_actor(): void
+    {
+        $sender = $this->makeUser('Mai');
+        $recipient = $this->makeUser('Bình');
+        $conversationId = $this->openConversation($sender, $recipient);
+        $messageId = $this->send($sender, $conversationId, 'Chỉ mình tôi xoá');
+
+        $this->actingAs($recipient)
+            ->deleteJson("/api/chat/conversations/{$conversationId}/messages/{$messageId}")
+            ->assertOk();
+
+        $this->actingAs($recipient)
+            ->getJson("/api/chat/conversations/{$conversationId}/messages")
+            ->assertOk()
+            ->assertJsonCount(0, 'messages');
+
+        $this->actingAs($sender)
+            ->getJson("/api/chat/conversations/{$conversationId}/messages")
+            ->assertOk()
+            ->assertJsonPath('messages.0.message', 'Chỉ mình tôi xoá');
+    }
+
+    public function test_reply_and_sticker_are_stored_and_push_a_notification(): void
+    {
+        $sender = $this->makeUser('Mai');
+        $recipient = $this->makeUser('Bình');
+        $conversationId = $this->openConversation($sender, $recipient);
+        $parentId = $this->send($sender, $conversationId, 'Câu hỏi');
+
+        $this->actingAs($recipient)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages", [
+                'message' => 'Trả lời đây',
+                'reply_to_id' => $parentId,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('message.reply_to.id', $parentId)
+            ->assertJsonPath('message.reply_to.message', 'Câu hỏi');
+
+        $this->actingAs($sender)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages", [
+                'message' => '😀',
+                'message_type' => 'sticker',
+                'sticker_id' => '1f600',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('message.message_type', 'sticker')
+            ->assertJsonPath('message.sticker_id', '1f600');
+
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $sender->id,
+            'type' => 'chat_message',
+            'body' => 'Đã trả lời: Trả lời đây',
+        ]);
+
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $recipient->id,
+            'type' => 'chat_message',
+            'body' => 'Đã gửi một sticker',
+        ]);
+    }
+
+    private function send(User $sender, int $conversationId, string $message): int
+    {
+        return $this->actingAs($sender)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages", ['message' => $message])
+            ->assertCreated()
+            ->json('message.id');
     }
 }

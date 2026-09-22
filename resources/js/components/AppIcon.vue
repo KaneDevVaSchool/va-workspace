@@ -110,6 +110,9 @@ const PATHS = {
   rotateCw: 'M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6',
   video: 'M23 7l-7 5 7 5V7zM14 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z',
   play: 'M6 4l14 8-14 8V4z',
+  reply: 'M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11',
+  send: 'M22 2 11 13M22 2 15 22l-4-9-9-4 20-7z',
+  smile: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01',
 };
 
 const STROKE_ICONS = [
@@ -204,6 +207,9 @@ const STROKE_ICONS = [
   'alertTriangle',
   'rotateCw',
   'video',
+  'reply',
+  'send',
+  'smile',
 ];
 
 defineProps({

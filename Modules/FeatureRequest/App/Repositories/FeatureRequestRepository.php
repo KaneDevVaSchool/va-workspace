@@ -45,6 +45,7 @@ class FeatureRequestRepository implements FeatureRequestRepositoryInterface
     public function forCreator(int $userId): Collection
     {
         return FeatureRequest::query()
+            ->with(['creator', 'reviewer', 'department'])
             ->where('created_by', $userId)
             ->orderByDesc('created_at')
             ->get();

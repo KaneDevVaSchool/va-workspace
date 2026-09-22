@@ -19,7 +19,7 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'VA Workspace';
   const options = {
     body: data.body || '',
-    icon: '/images/favicon.png',
+    icon: data.icon || '/images/favicon.png',
     badge: '/images/favicon.png',
     tag: data.tag || 'va-workspace',
     data: { url: data.url || '/social' },

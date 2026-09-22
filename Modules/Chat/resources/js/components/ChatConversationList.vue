@@ -48,7 +48,11 @@ function open(conversationId) {
               {{ formatRelativeTime(conversation.last_message.created_at) }}
             </span>
           </span>
-          <span v-if="conversation.last_message" class="chat-item__excerpt">
+          <span
+            v-if="conversation.last_message"
+            class="chat-item__excerpt"
+            :class="{ 'chat-item__excerpt--muted': conversation.last_message.recalled || conversation.last_message.message_type === 'sticker' }"
+          >
             {{ conversation.last_message.message }}
           </span>
           <span v-else class="chat-item__excerpt chat-item__excerpt--muted">Chưa có tin nhắn</span>

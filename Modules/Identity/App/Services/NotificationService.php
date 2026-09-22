@@ -114,6 +114,10 @@ class NotificationService
             return null;
         }
 
+        $pushIcon = is_string($data['push_icon'] ?? null) ? $data['push_icon'] : null;
+        $pushTag = is_string($data['push_tag'] ?? null) ? $data['push_tag'] : null;
+        unset($data['push_icon'], $data['push_tag']);
+
         $notification = $this->notifications->create([
             'user_id' => $recipient->id,
             'actor_id' => $actor->id,
@@ -124,13 +128,18 @@ class NotificationService
             'data' => $data,
         ]);
 
+        $pushPayload = [
+            'title' => $title,
+            'body' => $body ?? '',
+            'url' => $url ?? '/social',
+            'tag' => $pushTag ?? ('va-n-'.$notification->id),
+        ];
+        if ($pushIcon !== null && $pushIcon !== '') {
+            $pushPayload['icon'] = $pushIcon;
+        }
+
         try {
-            $this->webPush->sendToUser($recipient->id, [
-                'title' => $title,
-                'body' => $body ?? '',
-                'url' => $url ?? '/social',
-                'tag' => 'va-n-'.$notification->id,
-            ]);
+            $this->webPush->sendToUser($recipient->id, $pushPayload);
         } catch (Throwable $e) {
             Log::warning('Web push failed.', [
                 'notification_id' => $notification->id,
