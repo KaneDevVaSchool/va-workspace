@@ -49,6 +49,7 @@ import {
 } from '../constants/task.js';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import ProjectGanttTab from './ProjectGanttTab.vue';
+import ProjectPhaseBoard from './ProjectPhaseBoard.vue';
 import ProjectPlanTab from './ProjectPlanTab.vue';
 import ProjectSprintBoard from './ProjectSprintBoard.vue';
 import ProjectTaskViewModeMenu from './ProjectTaskViewModeMenu.vue';
@@ -158,6 +159,7 @@ useDragScroll(kanbanWrap, { axis: 'x', isBlocked: () => kanbanDrag.active });
 
 const isList = computed(() => viewMode.value === 'all' || viewMode.value === 'parents');
 const isPhaseGroup = computed(() => viewMode.value === 'phase');
+const isPhaseBoard = computed(() => viewMode.value === 'phase_board');
 const isSprintBoard = computed(() => viewMode.value === 'sprint');
 const isKanban = computed(() => viewMode.value === 'kanban');
 const isGantt = computed(() => viewMode.value === 'gantt');
@@ -1421,6 +1423,18 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+
+    <ProjectPhaseBoard
+      v-else-if="isPhaseBoard"
+      :tree="tree"
+      :loading="loading"
+      :filter="filter"
+      :query="query"
+      :can-edit="canEdit"
+      @open="openTask"
+      @context-menu="openRowContextMenu"
+      @task-moved="emit('tasks-changed')"
+    />
 
     <ProjectSprintBoard
       v-else-if="isSprintBoard"
