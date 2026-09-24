@@ -1,16 +1,15 @@
-<script setup>
+﻿<script setup>
 import { computed, ref, watch } from 'vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import PageHeader from '../components/PageHeader.vue';
-import AppIcon from '../components/AppIcon.vue';
 
 const auth = useAuthStore();
 
 const tabs = [
     { id: 'super_admin', label: 'Super Admin' },
     { id: 'admin', label: 'Admin' },
-    { id: 'department_director', label: 'Trưởng phòng ban' },
-    { id: 'member', label: 'Nhân viên' },
+    { id: 'department_director', label: 'TrÆ°á»Ÿng phÃ²ng ban' },
+    { id: 'member', label: 'NhÃ¢n viÃªn' },
 ];
 
 const ROLE_TAB = {
@@ -23,196 +22,196 @@ const ROLE_TAB = {
 const flows = {
     super_admin: {
         title: 'Super Admin',
-        lead: 'Cấp quyền, cấu hình hệ thống, rồi giám sát. Việc hàng ngày do Admin và trưởng phòng đảm nhận.',
+        lead: 'LÃ m láº§n lÆ°á»£t tá»« trÃªn xuá»‘ng: cáº¥p quyá»n, cáº¥u hÃ¬nh, rá»“i giÃ¡m sÃ¡t. Viá»‡c hÃ ng ngÃ y Ä‘á»ƒ Admin vÃ  trÆ°á»Ÿng phÃ²ng lÃ m.',
         steps: [
             {
                 icon: 'shield',
-                title: 'Ma trận phân quyền',
-                teaser: 'Việc chỉ Super Admin làm được',
-                items: ['Gán vai trò cho từng người', 'Bật hoặc tắt quyền theo module', 'Khoá quyền nhạy cảm'],
-                button: { label: 'Vào ma trận phân quyền', to: { name: 'superadmin.permissions' } },
+                title: 'Cáº¥p quyá»n cho tá»«ng ngÆ°á»i',
+                teaser: 'Má»Ÿ ma tráº­n, gÃ¡n vai trÃ², báº­t quyá»n theo module, khoÃ¡ quyá»n nháº¡y cáº£m.',
+                items: ['Chá»‰ Super Admin lÃ m Ä‘Æ°á»£c bÆ°á»›c nÃ y', 'LÃ m xong rá»“i má»›i cáº¥u hÃ¬nh phÃ²ng ban'],
+                button: { label: 'Má»Ÿ ma tráº­n phÃ¢n quyá»n', to: { name: 'superadmin.permissions' } },
             },
             {
                 icon: 'building',
-                title: 'Cấu hình từng phòng ban',
-                teaser: 'Thiết lập ban đầu',
-                items: ['Bật hoặc tắt menu riêng từng phòng', 'Xem thành viên mỗi phòng', 'Xem cách chấm điểm mỗi phòng'],
-                button: { label: 'Cấu hình Workspace', to: { name: 'superadmin.workspace-config.overview' } },
+                title: 'Cáº¥u hÃ¬nh tá»«ng phÃ²ng ban',
+                teaser: 'Báº­t menu riÃªng, xem thÃ nh viÃªn vÃ  cÃ¡ch cháº¥m Ä‘iá»ƒm cá»§a tá»«ng phÃ²ng.',
+                items: ['LÃ m sau khi Ä‘Ã£ cáº¥p quyá»n'],
+                button: { label: 'Má»Ÿ cáº¥u hÃ¬nh Workspace', to: { name: 'superadmin.workspace-config.overview' } },
             },
             {
                 icon: 'layoutList',
-                title: 'Menu toàn hệ thống',
-                teaser: 'Áp dụng cho mọi phòng ban',
-                items: ['Ẩn hoặc hiện mục menu', 'Đặt mặc định trước khi tuỳ chỉnh riêng'],
-                button: { label: 'Ẩn hoặc hiện menu', to: { name: 'superadmin.workspace-config.global-menu' } },
+                title: 'Äáº·t menu cho cáº£ há»‡ thá»‘ng',
+                teaser: 'áº¨n hoáº·c hiá»‡n má»¥c menu. ÄÃ¢y lÃ  máº·c Ä‘á»‹nh, trÆ°á»›c khi tá»«ng phÃ²ng tá»± chá»‰nh.',
+                items: ['Ãp dá»¥ng cho má»i phÃ²ng ban'],
+                button: { label: 'áº¨n hoáº·c hiá»‡n menu', to: { name: 'superadmin.workspace-config.global-menu' } },
             },
             {
                 icon: 'search',
-                title: 'Nhật ký hoạt động',
-                teaser: 'Giám sát toàn hệ thống',
+                title: 'Xem ai Ä‘Ã£ lÃ m gÃ¬',
+                teaser: 'Má»Ÿ nháº­t kÃ½ Ä‘á»ƒ biáº¿t ngÆ°á»i nÃ o thao tÃ¡c lÃºc nÃ o, vÃ  phÃ¡t hiá»‡n viá»‡c báº¥t thÆ°á»ng.',
                 result: true,
-                items: ['Ai làm gì, lúc nào', 'Phát hiện thao tác bất thường'],
-                button: { label: 'Xem nhật ký', to: { name: 'superadmin.activity' } },
+                items: ['LÃ m thÆ°á»ng xuyÃªn sau khi há»‡ thá»‘ng Ä‘Ã£ cháº¡y'],
+                button: { label: 'Má»Ÿ nháº­t kÃ½', to: { name: 'superadmin.activity' } },
             },
         ],
         aside: {
-            title: 'Phần việc để lại cho người khác',
-            teaser: 'Admin điều hành nghiệp vụ. Trưởng phòng tự quản phòng mình.',
+            title: 'Viá»‡c khÃ´ng lÃ m á»Ÿ vai trÃ² nÃ y',
+            teaser: 'Giao láº¡i cho Ä‘Ãºng ngÆ°á»i, Ä‘á»«ng Ã´m háº¿t.',
             items: [
-                { icon: 'settings', label: 'Admin điều hành nghiệp vụ hàng ngày' },
-                { icon: 'building', label: 'Trưởng phòng tự quản lý phòng mình' },
-                { icon: 'eye', label: 'Super Admin giám sát và cấp quyền' },
+                { icon: 'settings', label: 'Admin Ä‘iá»u hÃ nh nghiá»‡p vá»¥ hÃ ng ngÃ y' },
+                { icon: 'building', label: 'TrÆ°á»Ÿng phÃ²ng tá»± quáº£n lÃ½ phÃ²ng mÃ¬nh' },
+                { icon: 'eye', label: 'Super Admin giÃ¡m sÃ¡t vÃ  cáº¥p quyá»n' },
             ],
         },
         more: [
-            { icon: 'shield', title: 'Vai trò trong hệ thống', teaser: 'Từ Super Admin đến Nhân viên' },
-            { icon: 'building', title: 'Tổng hợp mọi phòng ban', teaser: 'Tình hình chung' },
-            { icon: 'lock', title: 'Tài khoản dùng chung', teaser: 'Mật khẩu, tài khoản hạ tầng' },
+            { icon: 'shield', title: 'Vai trÃ² trong há»‡ thá»‘ng', teaser: 'Tá»« Super Admin Ä‘áº¿n NhÃ¢n viÃªn' },
+            { icon: 'building', title: 'Tá»•ng há»£p má»i phÃ²ng ban', teaser: 'TÃ¬nh hÃ¬nh chung' },
+            { icon: 'lock', title: 'TÃ i khoáº£n dÃ¹ng chung', teaser: 'Máº­t kháº©u, tÃ i khoáº£n háº¡ táº§ng' },
         ],
     },
     admin: {
         title: 'Admin',
-        lead: 'Điều hành nghiệp vụ toàn trường: thêm người, mở phòng ban, theo dõi việc và xem báo cáo.',
+        lead: 'LÃ m láº§n lÆ°á»£t: thÃªm ngÆ°á»i, má»Ÿ phÃ²ng ban, theo dÃµi viá»‡c, rá»“i xem bÃ¡o cÃ¡o.',
         steps: [
             {
                 icon: 'users',
-                title: 'Quản lý người dùng',
-                teaser: 'Toàn hệ thống',
-                items: ['Thêm người mới', 'Gắn vào phòng ban', 'Chọn vai trò phù hợp', 'Khoá hoặc xoá tài khoản'],
-                button: { label: 'Danh sách người dùng', to: { name: 'manager.workspace-config.members' } },
+                title: 'ThÃªm vÃ  sáº¯p ngÆ°á»i',
+                teaser: 'ThÃªm tÃ i khoáº£n, gáº¯n phÃ²ng ban, chá»n vai trÃ². KhoÃ¡ hoáº·c xoÃ¡ khi ngÆ°á»i nghá»‰.',
+                items: ['LÃ m trÆ°á»›c khi giao viá»‡c'],
+                button: { label: 'Má»Ÿ danh sÃ¡ch ngÆ°á»i dÃ¹ng', to: { name: 'manager.workspace-config.members' } },
             },
             {
                 icon: 'building',
-                title: 'Mở và cấu hình phòng ban',
-                teaser: 'Thiết lập ban đầu',
-                items: ['Cách chấm điểm của phòng', 'Menu riêng của phòng', 'Bổ nhiệm trưởng phòng'],
-                button: { label: 'Cấu hình phòng ban', to: { name: 'manager.workspace-config.hub' } },
+                title: 'Má»Ÿ phÃ²ng ban',
+                teaser: 'Chá»n cÃ¡ch cháº¥m Ä‘iá»ƒm, menu riÃªng, rá»“i bá»• nhiá»‡m trÆ°á»Ÿng phÃ²ng.',
+                items: ['LÃ m khi cÃ³ phÃ²ng má»›i hoáº·c Ä‘á»•i trÆ°á»Ÿng phÃ²ng'],
+                button: { label: 'Má»Ÿ cáº¥u hÃ¬nh phÃ²ng ban', to: { name: 'manager.workspace-config.hub' } },
             },
             {
                 icon: 'layers',
-                title: 'Theo dõi dự án và công việc',
-                teaser: 'Xuyên suốt các phòng ban',
-                items: ['Tiến độ mọi dự án', 'Việc chuyển giao giữa phòng', 'Điểm KPI từng phòng'],
-                button: { label: 'Xem dự án và công việc', to: { name: 'manager.project.index' } },
+                title: 'Theo dÃµi viá»‡c Ä‘ang cháº¡y',
+                teaser: 'Xem tiáº¿n Ä‘á»™ má»i dá»± Ã¡n, viá»‡c chuyá»ƒn giá»¯a cÃ¡c phÃ²ng, vÃ  Ä‘iá»ƒm KPI tá»«ng phÃ²ng.',
+                items: ['LÃ m trong tuáº§n, khÃ´ng chá» cuá»‘i thÃ¡ng'],
+                button: { label: 'Má»Ÿ dá»± Ã¡n vÃ  cÃ´ng viá»‡c', to: { name: 'manager.project.index' } },
             },
             {
                 icon: 'barChart',
-                title: 'Báo cáo tổng hợp',
-                teaser: 'Toàn hệ thống',
+                title: 'Äá»c bÃ¡o cÃ¡o tá»•ng há»£p',
+                teaser: 'Xem tá»· lá»‡ hoÃ n thÃ nh, Ä‘iá»ƒm cháº¥t lÆ°á»£ng vÃ  xu hÆ°á»›ng cá»§a cáº£ trÆ°á»ng.',
                 result: true,
-                items: ['Tỷ lệ hoàn thành theo phòng', 'Điểm chất lượng trung bình', 'Xu hướng hiệu suất'],
-                button: { label: 'Xem báo cáo', to: { name: 'manager.reports.index' } },
+                items: ['LÃ m sau khi cÃ¡c phÃ²ng Ä‘Ã£ cáº­p nháº­t viá»‡c'],
+                button: { label: 'Má»Ÿ bÃ¡o cÃ¡o', to: { name: 'manager.reports.index' } },
             },
         ],
         aside: {
-            title: 'Khi phát sinh',
-            teaser: 'Admin xử lý thêm các việc này.',
+            title: 'Khi cÃ³ viá»‡c phÃ¡t sinh',
+            teaser: 'Xá»­ lÃ½ cÃ¡c viá»‡c nÃ y ngoÃ i bá»‘n bÆ°á»›c trÃªn.',
             items: [
-                { icon: 'shield', label: 'Xử lý bài đăng vi phạm' },
-                { icon: 'lock', label: 'Cấp hoặc thu hồi tài khoản dùng chung' },
-                { icon: 'messageCircle', label: 'Hỗ trợ trưởng phòng khi vướng' },
+                { icon: 'shield', label: 'Xá»­ lÃ½ bÃ i Ä‘Äƒng vi pháº¡m' },
+                { icon: 'lock', label: 'Cáº¥p hoáº·c thu há»“i tÃ i khoáº£n dÃ¹ng chung' },
+                { icon: 'messageCircle', label: 'Há»— trá»£ trÆ°á»Ÿng phÃ²ng khi vÆ°á»›ng' },
             ],
         },
         more: [
-            { icon: 'lock', title: 'Tài khoản dùng chung', teaser: 'Mật khẩu hạ tầng' },
-            { icon: 'megaphone', title: 'Duyệt bài viết', teaser: 'Bảng tin nội bộ' },
-            { icon: 'activity', title: 'Nhật ký hoạt động', teaser: 'Thao tác gần đây' },
+            { icon: 'lock', title: 'TÃ i khoáº£n dÃ¹ng chung', teaser: 'Máº­t kháº©u háº¡ táº§ng' },
+            { icon: 'megaphone', title: 'Duyá»‡t bÃ i viáº¿t', teaser: 'Báº£ng tin ná»™i bá»™' },
+            { icon: 'activity', title: 'Nháº­t kÃ½ hoáº¡t Ä‘á»™ng', teaser: 'Thao tÃ¡c gáº§n Ä‘Ã¢y' },
         ],
     },
     department_director: {
-        title: 'Trưởng phòng ban',
-        lead: 'Nhận việc, giao cho người trong phòng, chấm điểm, rồi gửi báo cáo lên trên.',
+        title: 'TrÆ°á»Ÿng phÃ²ng ban',
+        lead: 'LÃ m láº§n lÆ°á»£t: thiáº¿t láº­p phÃ²ng, giao viá»‡c, cháº¥m Ä‘iá»ƒm, rá»“i gá»­i bÃ¡o cÃ¡o lÃªn trÃªn.',
         steps: [
             {
                 icon: 'settings',
-                title: 'Thiết lập phòng ban',
-                teaser: 'Trước khi giao việc',
-                items: ['Tiêu chí đánh giá riêng', 'Bật hoặc tắt tính năng của phòng', 'Phó phòng, trưởng nhóm hỗ trợ'],
-                button: { label: 'Cấu hình phòng ban', to: { name: 'manager.workspace-config.hub' } },
+                title: 'Thiáº¿t láº­p phÃ²ng trÆ°á»›c',
+                teaser: 'Chá»n tiÃªu chÃ­ Ä‘Ã¡nh giÃ¡, báº­t tÃ­nh nÄƒng cá»§a phÃ²ng, chá»‰ Ä‘á»‹nh phÃ³ phÃ²ng vÃ  trÆ°á»Ÿng nhÃ³m.',
+                items: ['LÃ m má»™t láº§n, rá»“i chá»‰ sá»­a khi Ä‘á»•i quy Æ°á»›c'],
+                button: { label: 'Má»Ÿ cáº¥u hÃ¬nh phÃ²ng ban', to: { name: 'manager.workspace-config.hub' } },
             },
             {
                 icon: 'userPlus',
-                title: 'Tạo và phân công',
-                teaser: 'Cho nhân viên trong phòng',
-                items: ['Tạo dự án hoặc công việc', 'Giao cho từng người', 'Đặt hạn hoàn thành', 'Chuyển việc sang phòng khác'],
-                button: { label: 'Tạo công việc mới', to: { name: 'manager.project.tasks.create' } },
+                title: 'Táº¡o viá»‡c vÃ  giao ngÆ°á»i',
+                teaser: 'Táº¡o dá»± Ã¡n hoáº·c cÃ´ng viá»‡c, chá»n ngÆ°á»i lÃ m, Ä‘áº·t háº¡n. Viá»‡c cá»§a phÃ²ng khÃ¡c thÃ¬ chuyá»ƒn giao.',
+                items: ['Giao rÃµ ngÆ°á»i vÃ  háº¡n trÆ°á»›c khi nhÃ¢n viÃªn báº¯t Ä‘áº§u'],
+                button: { label: 'Táº¡o cÃ´ng viá»‡c má»›i', to: { name: 'manager.project.tasks.create' } },
             },
             {
                 icon: 'clipboardCheck',
-                title: 'Theo dõi và chấm điểm',
-                teaser: 'Việc của cả phòng',
-                items: ['Tiến độ từng người', 'Chấm điểm chất lượng', 'Duyệt nhật ký ngày'],
-                button: { label: 'Xem công việc phòng', to: { name: 'manager.project.index' } },
+                title: 'Theo dÃµi rá»“i cháº¥m Ä‘iá»ƒm',
+                teaser: 'Xem tiáº¿n Ä‘á»™ tá»«ng ngÆ°á»i, duyá»‡t nháº­t kÃ½ ngÃ y, cháº¥m Ä‘iá»ƒm cháº¥t lÆ°á»£ng khi viá»‡c xong.',
+                items: ['Cháº¥m sau khi nhÃ¢n viÃªn Ä‘Ã£ cáº­p nháº­t tiáº¿n Ä‘á»™'],
+                button: { label: 'Má»Ÿ cÃ´ng viá»‡c cá»§a phÃ²ng', to: { name: 'manager.project.index' } },
             },
             {
                 icon: 'barChart',
-                title: 'Báo cáo phòng ban',
-                teaser: 'Gửi lên cấp trên',
+                title: 'Gá»­i bÃ¡o cÃ¡o lÃªn trÃªn',
+                teaser: 'Xem tá»· lá»‡ hoÃ n thÃ nh vÃ  Ä‘iá»ƒm KPI cá»§a phÃ²ng, rá»“i chá»n ai Ä‘Æ°á»£c xem bÃ¡o cÃ¡o.',
                 result: true,
-                items: ['Tỷ lệ hoàn thành cả phòng', 'Điểm KPI trung bình', 'Chọn ai được xem báo cáo'],
-                button: { label: 'Xem báo cáo', to: { name: 'manager.reports.index' } },
+                items: ['LÃ m khi Ä‘Ã£ cháº¥m Ä‘iá»ƒm xong'],
+                button: { label: 'Má»Ÿ bÃ¡o cÃ¡o', to: { name: 'manager.reports.index' } },
             },
         ],
         aside: {
-            title: 'Khi phát sinh',
-            teaser: 'Xử lý thêm trước khi tổng kết.',
+            title: 'Khi cÃ³ viá»‡c phÃ¡t sinh',
+            teaser: 'Xá»­ lÃ½ cÃ¡c viá»‡c nÃ y trÆ°á»›c khi gá»­i bÃ¡o cÃ¡o.',
             items: [
-                { icon: 'messageCircle', label: 'Trao đổi, xử lý vướng mắc' },
-                { icon: 'gitBranch', label: 'Nhận hoặc từ chối việc phòng khác chuyển tới' },
-                { icon: 'clipboardCheck', label: 'Xác nhận kết quả trước khi tổng kết' },
+                { icon: 'messageCircle', label: 'Trao Ä‘á»•i, xá»­ lÃ½ vÆ°á»›ng máº¯c' },
+                { icon: 'gitBranch', label: 'Nháº­n hoáº·c tá»« chá»‘i viá»‡c phÃ²ng khÃ¡c chuyá»ƒn tá»›i' },
+                { icon: 'clipboardCheck', label: 'XÃ¡c nháº­n káº¿t quáº£ trÆ°á»›c khi tá»•ng káº¿t' },
             ],
         },
         more: [
-            { icon: 'barChart', title: 'KPI phòng ban', teaser: 'Chỉ tiêu tháng này' },
-            { icon: 'layers', title: 'Sơ đồ và lịch dự án', teaser: 'Theo tiến độ' },
-            { icon: 'lock', title: 'Tài khoản dùng chung', teaser: 'Trong phạm vi phòng' },
+            { icon: 'barChart', title: 'KPI phÃ²ng ban', teaser: 'Chá»‰ tiÃªu thÃ¡ng nÃ y' },
+            { icon: 'layers', title: 'SÆ¡ Ä‘á»“ vÃ  lá»‹ch dá»± Ã¡n', teaser: 'Theo tiáº¿n Ä‘á»™' },
+            { icon: 'lock', title: 'TÃ i khoáº£n dÃ¹ng chung', teaser: 'Trong pháº¡m vi phÃ²ng' },
         ],
     },
     member: {
-        title: 'Nhân viên',
-        lead: 'Nhận việc được giao, cập nhật tiến độ, báo khi vướng, rồi xem kết quả của mình.',
+        title: 'NhÃ¢n viÃªn',
+        lead: 'LÃ m láº§n lÆ°á»£t: Ä‘á»c viá»‡c Ä‘Æ°á»£c giao, cáº­p nháº­t tiáº¿n Ä‘á»™, bÃ¡o khi vÆ°á»›ng, rá»“i xem káº¿t quáº£.',
         steps: [
             {
                 icon: 'users',
-                title: 'Được giao việc',
-                teaser: 'Từ trưởng nhóm hoặc trưởng phòng',
-                items: ['Tên và mô tả công việc', 'Hạn hoàn thành', 'Mức độ quan trọng'],
+                title: 'Äá»c viá»‡c Ä‘Æ°á»£c giao',
+                teaser: 'Má»Ÿ viá»‡c tá»« trÆ°á»Ÿng nhÃ³m hoáº·c trÆ°á»Ÿng phÃ²ng. Äá»c tÃªn, mÃ´ táº£, háº¡n vÃ  má»©c Ä‘á»™ quan trá»ng trÆ°á»›c khi lÃ m.',
+                items: ['ChÆ°a rÃµ mÃ´ táº£ thÃ¬ há»i láº¡i trÆ°á»›c khi báº¯t Ä‘áº§u'],
             },
             {
                 icon: 'fileText',
-                title: 'Cập nhật tiến độ',
-                teaser: 'Việc của tôi',
-                items: ['Phần trăm đã xong', 'Thời gian thực tế đã làm', 'Đính kèm tài liệu', 'Nhật ký ngày'],
-                button: { label: 'Nộp báo cáo tiến độ', to: { name: 'manager.project.tasks' } },
+                title: 'Cáº­p nháº­t tiáº¿n Ä‘á»™',
+                teaser: 'Ghi pháº§n trÄƒm Ä‘Ã£ xong, thá»i gian thá»±c táº¿, Ä‘Ã­nh kÃ¨m tÃ i liá»‡u vÃ  nháº­t kÃ½ ngÃ y.',
+                items: ['Cáº­p nháº­t trong ngÃ y, Ä‘á»«ng Ä‘á»ƒ cuá»‘i háº¡n'],
+                button: { label: 'Má»Ÿ viá»‡c cá»§a tÃ´i', to: { name: 'manager.project.tasks' } },
             },
             {
                 icon: 'messageCircle',
-                title: 'Báo vướng mắc',
-                teaser: 'Với người giao việc',
-                items: ['Bình luận trên việc', 'Báo khó khăn hoặc chậm tiến độ', 'Đề xuất chỉnh mô tả'],
+                title: 'BÃ¡o khi vÆ°á»›ng',
+                teaser: 'BÃ¬nh luáº­n trÃªn Ä‘Ãºng viá»‡c Ä‘Ã³: khÃ³ khÄƒn, cháº­m tiáº¿n Ä‘á»™, hoáº·c Ä‘á» xuáº¥t sá»­a mÃ´ táº£.',
+                items: ['BÃ¡o sá»›m cho ngÆ°á»i giao viá»‡c, Ä‘á»«ng chá» bá»‹ há»i'],
             },
             {
                 icon: 'star',
-                title: 'Kết quả của tôi',
-                teaser: 'Sau khi hoàn thành',
+                title: 'Xem káº¿t quáº£ cá»§a mÃ¬nh',
+                teaser: 'Sau khi xong, xem Ä‘iá»ƒm cháº¥t lÆ°á»£ng, tá»· lá»‡ Ä‘Ãºng háº¡n vÃ  Ä‘iá»ƒm KPI thÃ¡ng nÃ y.',
                 result: true,
-                items: ['Điểm chất lượng được chấm', 'Tỷ lệ hoàn thành đúng hạn', 'Điểm KPI tháng này'],
+                items: ['Chá»‰ xem Ä‘Æ°á»£c káº¿t quáº£ cá»§a chÃ­nh mÃ¬nh'],
             },
         ],
         aside: {
-            title: 'Việc khác trong ngày',
-            teaser: 'Ngoài công việc được giao.',
+            title: 'Viá»‡c khÃ¡c trong ngÃ y',
+            teaser: 'LÃ m thÃªm khi Ä‘Ã£ cáº­p nháº­t viá»‡c Ä‘Æ°á»£c giao.',
             items: [
-                { icon: 'megaphone', label: 'Đăng tin lên bảng tin nội bộ' },
-                { icon: 'eye', label: 'Xem báo cáo được chia sẻ' },
-                { icon: 'home', label: 'Xem tất cả việc của tôi' },
+                { icon: 'megaphone', label: 'ÄÄƒng tin lÃªn báº£ng tin ná»™i bá»™' },
+                { icon: 'eye', label: 'Xem bÃ¡o cÃ¡o Ä‘Æ°á»£c chia sáº»' },
+                { icon: 'home', label: 'Xem táº¥t cáº£ viá»‡c cá»§a tÃ´i' },
             ],
-            button: { label: 'Việc của tôi', to: { name: 'manager.project.tasks' } },
+            button: { label: 'Má»Ÿ viá»‡c cá»§a tÃ´i', to: { name: 'manager.project.tasks' } },
         },
         more: [
-            { icon: 'barChart', title: 'Điểm KPI', teaser: 'Điểm tháng này' },
-            { icon: 'calendar', title: 'Nhật ký ngày', teaser: 'Ghi chép hàng ngày' },
-            { icon: 'trendingUp', title: 'Tổng kết tuần', teaser: 'Kết quả 7 ngày qua' },
+            { icon: 'barChart', title: 'Äiá»ƒm KPI', teaser: 'Äiá»ƒm thÃ¡ng nÃ y' },
+            { icon: 'calendar', title: 'Nháº­t kÃ½ ngÃ y', teaser: 'Ghi chÃ©p hÃ ng ngÃ y' },
+            { icon: 'trendingUp', title: 'Tá»•ng káº¿t tuáº§n', teaser: 'Káº¿t quáº£ 7 ngÃ y qua' },
         ],
     },
 };
@@ -253,26 +252,26 @@ function selectTab(id) {
 <template>
     <section class="guide">
         <PageHeader
-            title="Quy trình"
+            title="HÆ°á»›ng dáº«n"
             icon="gitBranch"
-            description="Làm lần lượt theo vai trò. Mỗi ô là một bước, mũi tên chỉ bước tiếp theo."
-            :breadcrumbs="[{ label: 'Quy trình' }]"
+            description="Chá»n vai trÃ², Ä‘á»c tá»« bÆ°á»›c 1 xuá»‘ng. Má»—i bÆ°á»›c nÃ³i viá»‡c cáº§n lÃ m vÃ  chá»— má»Ÿ trong há»‡ thá»‘ng."
+            :breadcrumbs="[{ label: 'HÆ°á»›ng dáº«n' }]"
         />
 
         <div class="guide__body">
-            <div class="guide__tabs hide-scrollbar" role="tablist" aria-label="Vai trò">
+            <div class="guide__roles" role="tablist" aria-label="Vai trÃ²">
                 <button
                     v-for="tab in tabs"
                     :key="tab.id"
                     type="button"
                     role="tab"
-                    class="guide__tab"
-                    :class="{ 'guide__tab--active': activeTab === tab.id }"
+                    class="guide__role"
+                    :class="{ 'guide__role--active': activeTab === tab.id }"
                     :aria-selected="activeTab === tab.id"
                     @click="selectTab(tab.id)"
                 >
                     {{ tab.label }}
-                    <span v-if="mine === tab.id" class="guide__you">Bạn</span>
+                    <span v-if="mine === tab.id" class="guide__you">cá»§a báº¡n</span>
                 </button>
             </div>
 
@@ -281,74 +280,40 @@ function selectTab(id) {
                 <p>{{ current.lead }}</p>
             </header>
 
-            <ol class="rail" :aria-label="`Luồng ${current.title}`">
-                <li
-                    v-for="(step, index) in current.steps"
-                    :key="step.title"
-                    class="rail__stop"
-                    :class="{ 'rail__stop--result': step.result }"
-                >
-                    <div class="rail__track" aria-hidden="true">
-                        <span class="rail__dot">{{ index + 1 }}</span>
-                        <span v-if="index < current.steps.length - 1" class="rail__arrow">
-                            <AppIcon name="arrowRight" :size="16" :stroke-width="2" />
-                        </span>
-                    </div>
-
-                    <component
-                        :is="step.button ? 'router-link' : 'article'"
-                        class="node"
-                        :class="{ 'node--result': step.result, 'node--link': step.button }"
-                        :to="step.button?.to"
-                    >
-                        <div class="node__head">
-                            <span class="node__icon" aria-hidden="true">
-                                <AppIcon :name="step.icon" :size="16" :stroke-width="1.75" />
-                            </span>
-                            <span class="node__copy">
-                                <span class="node__title">{{ step.title }}</span>
-                                <em class="node__teaser">{{ step.teaser }}</em>
-                            </span>
-                        </div>
-                        <ul class="node__items">
+            <ol class="steps" :aria-label="`HÆ°á»›ng dáº«n ${current.title}`">
+                <li v-for="(step, index) in current.steps" :key="step.title" class="step">
+                    <span class="step__num" aria-hidden="true">{{ index + 1 }}</span>
+                    <div class="step__body">
+                        <h3>{{ step.title }}</h3>
+                        <p>{{ step.teaser }}</p>
+                        <ul>
                             <li v-for="item in step.items" :key="item">{{ item }}</li>
                         </ul>
-                        <span v-if="step.button" class="node__go">
+                        <router-link v-if="step.button" class="step__go" :to="step.button.to">
                             {{ step.button.label }}
-                            <AppIcon name="arrowRight" :size="14" :stroke-width="2" />
-                        </span>
-                    </component>
+                        </router-link>
+                    </div>
                 </li>
             </ol>
 
             <div class="guide__extra">
-                <section class="extra" aria-labelledby="guide-aside-title">
+                <section class="note" aria-labelledby="guide-aside-title">
                     <h3 id="guide-aside-title">{{ current.aside.title }}</h3>
                     <p>{{ current.aside.teaser }}</p>
                     <ul>
-                        <li v-for="item in current.aside.items" :key="item.label">
-                            <AppIcon :name="item.icon" :size="14" :stroke-width="1.75" />
-                            <span>{{ item.label }}</span>
-                        </li>
+                        <li v-for="item in current.aside.items" :key="item.label">{{ item.label }}</li>
                     </ul>
-                    <router-link v-if="current.aside.button" class="extra__go" :to="current.aside.button.to">
+                    <router-link v-if="current.aside.button" class="step__go" :to="current.aside.button.to">
                         {{ current.aside.button.label }}
-                        <AppIcon name="arrowRight" :size="14" :stroke-width="2" />
                     </router-link>
                 </section>
 
-                <section class="extra" aria-labelledby="guide-more-title">
-                    <h3 id="guide-more-title">Xem thêm</h3>
-                    <p>Các mục liên quan, mở từ menu bên trái khi cần.</p>
-                    <ul class="more">
+                <section class="note" aria-labelledby="guide-more-title">
+                    <h3 id="guide-more-title">Má»Ÿ tá»« menu khi cáº§n</h3>
+                    <p>CÃ¡c má»¥c nÃ y khÃ´ng náº±m trong bá»‘n bÆ°á»›c. VÃ o tá»« menu bÃªn trÃ¡i.</p>
+                    <ul>
                         <li v-for="item in current.more" :key="item.title">
-                            <span class="more__icon" aria-hidden="true">
-                                <AppIcon :name="item.icon" :size="14" :stroke-width="1.75" />
-                            </span>
-                            <span>
-                                <strong>{{ item.title }}</strong>
-                                <em>{{ item.teaser }}</em>
-                            </span>
+                            <strong>{{ item.title }}.</strong> {{ item.teaser }}
                         </li>
                     </ul>
                 </section>
@@ -362,8 +327,9 @@ function selectTab(id) {
     min-height: 100%;
     display: flex;
     flex-direction: column;
-    padding: var(--space-2) var(--space-3) var(--space-5);
-    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3) var(--space-6);
+    gap: var(--space-4);
+    color: var(--color-text);
 }
 
 .guide__body {
@@ -373,373 +339,148 @@ function selectTab(id) {
     min-width: 0;
 }
 
-.guide__tabs {
+.guide__roles {
     display: flex;
-    gap: var(--space-2);
-    overflow-x: auto;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    box-shadow: 0 1px 0 var(--color-border);
 }
 
-.guide__tab {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    flex-shrink: 0;
-    padding: 8px 14px;
+.guide__role {
+    margin: 0;
+    padding: 0 0 var(--space-2);
     border: none;
-    border-radius: var(--radius-full);
-    background: var(--color-surface-muted);
-    box-shadow: inset 0 0 0 1px var(--color-border);
+    border-radius: 0;
+    background: transparent;
     color: var(--color-text-muted);
-    font: 600 13px/1 var(--font-family-base);
+    font: 600 14px/1.3 var(--font-family-base);
     cursor: pointer;
+    box-shadow: inset 0 -2px 0 transparent;
 }
 
-.guide__tab--active {
-    background: var(--color-primary);
-    color: var(--color-on-primary);
-    box-shadow: none;
+.guide__role--active {
+    color: var(--color-text);
+    box-shadow: inset 0 -2px 0 var(--color-text);
 }
 
 .guide__you {
-    padding: 2px 6px;
-    border-radius: var(--radius-full);
-    background: var(--color-primary-surface);
-    color: var(--color-primary);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-}
-
-.guide__tab--active .guide__you {
-    background: color-mix(in srgb, var(--color-on-primary) 18%, transparent);
-    color: var(--color-on-primary);
+    margin-left: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-muted);
 }
 
 .guide__lead h2 {
     margin: 0;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 700;
-    letter-spacing: -0.01em;
     color: var(--color-text);
 }
 
 .guide__lead p {
+    margin: 6px 0 0;
+    max-width: 68ch;
+    color: var(--color-text-muted);
+    font-size: 15px;
+    line-height: 1.55;
+}
+
+.steps {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.step {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    gap: var(--space-3);
+    padding: var(--space-4) 0;
+    box-shadow: 0 1px 0 var(--color-border);
+}
+
+.step__num {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--color-text-muted);
+}
+
+.step__body h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--color-text);
+}
+
+.step__body p {
     margin: 4px 0 0;
-    max-width: 62ch;
+    max-width: 68ch;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--color-text);
+}
+
+.step__body ul {
+    margin: 8px 0 0;
+    padding-left: 1.1rem;
     color: var(--color-text-muted);
     font-size: 14px;
     line-height: 1.5;
 }
 
-.rail {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 18px;
-    margin: 0;
-    padding: var(--space-4);
-    list-style: none;
-    background: var(--color-surface-muted);
-    border-radius: var(--radius-lg);
-    box-shadow: inset 0 0 0 1px var(--color-border);
+.step__body li + li {
+    margin-top: 4px;
 }
 
-.rail__track {
-    position: relative;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 12px;
-}
-
-.rail__track::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: -9px;
-    right: -9px;
-    height: 2px;
-    background: var(--color-primary-200);
-    transform: translateY(-50%);
-}
-
-.rail__stop:first-child .rail__track::before {
-    left: 50%;
-}
-
-.rail__stop:last-child .rail__track::before {
-    right: 50%;
-}
-
-.rail__dot {
-    position: relative;
-    z-index: 1;
-    width: 32px;
-    height: 32px;
-    display: grid;
-    place-items: center;
-    border-radius: var(--radius-full);
-    background: var(--color-primary);
-    color: var(--color-on-primary);
-    font-size: 13px;
-    font-weight: 700;
-    box-shadow: 0 0 0 4px var(--color-surface-muted);
-}
-
-.rail__stop--result .rail__dot {
-    background: var(--color-primary-900);
-}
-
-.rail__arrow {
-    position: absolute;
-    z-index: 1;
-    right: -17px;
-    display: flex;
-    color: var(--color-primary);
-    background: var(--color-surface-muted);
-}
-
-.node {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-height: 100%;
-    padding: var(--space-4);
-    border-radius: var(--radius-md);
-    background: var(--color-surface);
-    box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
-    color: inherit;
-    text-decoration: none;
-}
-
-.node--result {
-    padding-left: calc(var(--space-2) + 3px + var(--space-3));
-    background: var(--color-primary-surface);
-    box-shadow: inset 0 0 0 1px var(--color-primary-200), var(--shadow-sm);
-}
-
-.node--result::before {
-    content: '';
-    position: absolute;
-    top: var(--space-2);
-    bottom: var(--space-2);
-    left: var(--space-2);
-    width: 3px;
-    border-radius: 0;
-    background: var(--color-primary);
-}
-
-.node--link:hover {
-    box-shadow: inset 0 0 0 1px var(--color-primary-200), var(--shadow-md);
-}
-
-.node--result.node--link:hover {
-    box-shadow: inset 0 0 0 1px var(--color-primary-300), var(--shadow-md);
-}
-
-.node__head {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-}
-
-.node__icon {
-    flex-shrink: 0;
-    width: 34px;
-    height: 34px;
-    display: grid;
-    place-items: center;
-    border-radius: 8px;
-    background: var(--color-primary);
-    color: var(--color-on-primary);
-}
-
-.node--result .node__icon {
-    background: var(--color-primary-900);
-}
-
-.node__copy {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.node__title {
-    font-size: 15px;
-    font-weight: 650;
-    line-height: 1.3;
+.step__go {
+    display: inline-block;
+    margin-top: 10px;
     color: var(--color-text);
-}
-
-.node__teaser {
-    font-size: 12.5px;
-    font-style: italic;
-    color: var(--color-text-muted);
-}
-
-.node__items {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.node__items li {
-    position: relative;
-    padding-left: 14px;
-    font-size: 13px;
-    line-height: 1.4;
-    color: var(--color-text-muted);
-}
-
-.node__items li::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0.55em;
-    width: 5px;
-    height: 5px;
-    border-radius: var(--radius-full);
-    background: var(--color-primary-300);
-}
-
-.node__go,
-.extra__go {
-    margin-top: auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 8px 10px;
-    border-radius: var(--radius-sm);
-    background: var(--color-primary-surface);
-    box-shadow: inset 0 0 0 1px var(--color-primary-200);
-    color: var(--color-primary);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 650;
-    text-decoration: none;
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
-.node--result .node__go {
-    background: var(--color-surface);
-}
-
-.node--link:hover .node__go,
-.extra__go:hover {
-    background: var(--color-primary);
-    color: var(--color-on-primary);
-    box-shadow: none;
+.step__go:hover {
+    color: var(--color-text-muted);
 }
 
 .guide__extra {
     display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-    gap: var(--space-3);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-6);
+    margin-top: var(--space-2);
 }
 
-.extra {
-    padding: var(--space-4);
-    border-radius: var(--radius-md);
-    background: var(--color-surface);
-    box-shadow: inset 0 0 0 1px var(--color-border);
-}
-
-.extra h3 {
+.note h3 {
     margin: 0;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--color-text);
 }
 
-.extra > p {
-    margin: 4px 0 12px;
-    font-size: 13px;
+.note > p {
+    margin: 4px 0 10px;
+    font-size: 14px;
+    line-height: 1.5;
     color: var(--color-text-muted);
 }
 
-.extra ul {
+.note ul {
     margin: 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.extra li {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    font-size: 13.5px;
-    line-height: 1.4;
+    padding-left: 1.1rem;
     color: var(--color-text);
+    font-size: 14px;
+    line-height: 1.5;
 }
 
-.extra li svg {
-    flex-shrink: 0;
-    margin-top: 2px;
-    color: var(--color-primary);
-}
-
-.extra__go {
-    margin-top: 14px;
-    width: 100%;
-}
-
-.more li {
-    align-items: center;
-    padding: 8px 10px;
-    border-radius: var(--radius-sm);
-    background: var(--color-surface-muted);
-}
-
-.more__icon {
-    width: 28px;
-    height: 28px;
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-    border-radius: 7px;
-    background: var(--color-primary);
-    color: var(--color-on-primary);
-}
-
-.more strong {
-    display: block;
-    font-size: 13.5px;
-    font-weight: 650;
-}
-
-.more em {
-    display: block;
-    margin-top: 1px;
-    font-size: 12px;
-    font-style: italic;
-    font-weight: 400;
-    color: var(--color-text-muted);
-}
-
-@media (max-width: 1100px) {
-    .rail {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        row-gap: 22px;
-    }
-
-    .rail__stop:nth-child(odd) .rail__track::before {
-        left: 50%;
-    }
-
-    .rail__stop:nth-child(even) .rail__track::before {
-        right: 50%;
-    }
-
-    .rail__stop:nth-child(even) .rail__arrow {
-        display: none;
-    }
+.note li + li {
+    margin-top: 6px;
 }
 
 @media (max-width: 720px) {
@@ -747,35 +488,9 @@ function selectTab(id) {
         padding: var(--space-2);
     }
 
-    .rail,
     .guide__extra {
         grid-template-columns: 1fr;
-    }
-
-    .rail {
-        gap: 0;
-    }
-
-    .rail__stop {
-        padding-bottom: 18px;
-    }
-
-    .rail__stop:nth-child(n) .rail__track::before {
-        left: 50%;
-        right: auto;
-        top: 16px;
-        bottom: -18px;
-        width: 2px;
-        height: auto;
-        transform: translateX(-50%);
-    }
-
-    .rail__stop:last-child .rail__track::before {
-        display: none;
-    }
-
-    .rail__arrow {
-        display: none;
+        gap: var(--space-5);
     }
 }
 </style>

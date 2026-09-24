@@ -271,15 +271,20 @@ watch(() => props.wallProfile, loadStats);
                         <span class="profile-card__name-text">{{ displayName }}</span>
                     </button>
                     <h2 v-else class="profile-card__name">{{ displayName }}</h2>
-                    <div v-if="viewingOther && !collapsed" class="profile-card__actions">
-                        <button type="button" class="profile-card__action" @click="messageThem">
-                            Nhắn tin
+                    <div
+                        v-if="viewingOther && !collapsed"
+                        class="profile-card__actions"
+                        role="group"
+                        aria-label="Thao tác trên tường"
+                    >
+                        <button type="button" class="profile-card__action" aria-label="Nhắn tin" @click="messageThem">
+                            <AppIcon name="messageCircle" :size="16" />
                         </button>
-                        <button type="button" class="profile-card__action" @click="copyWallLink">
-                            Sao chép liên kết
+                        <button type="button" class="profile-card__action" aria-label="Sao chép liên kết" @click="copyWallLink">
+                            <AppIcon name="link" :size="16" />
                         </button>
-                        <button type="button" class="profile-card__action" @click="setPostScope('company')">
-                            Về bảng tin
+                        <button type="button" class="profile-card__action" aria-label="Về bảng tin" @click="setPostScope('company')">
+                            <AppIcon name="megaphone" :size="16" />
                         </button>
                     </div>
 
@@ -711,27 +716,33 @@ watch(() => props.wallProfile, loadStats);
 
 .profile-card__actions {
     display: flex;
-    flex-wrap: wrap;
     justify-content: center;
-    gap: 0.35rem;
-    margin-top: 0.35rem;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
 }
 
 .profile-card__action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
     border: none;
-    background: var(--color-primary-surface);
-    color: var(--color-primary);
-    font-family: inherit;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.3rem 0.6rem;
     border-radius: var(--radius-full);
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: inset 0 0 0 1px var(--color-border);
     cursor: pointer;
 }
 
 .profile-card__action:hover {
-    background: var(--color-primary);
-    color: var(--color-on-primary);
+    background: var(--color-surface-muted);
+}
+
+.profile-card__action:focus-visible {
+    outline: 2px solid var(--color-text);
+    outline-offset: 2px;
 }
 
 .profile-card__name {
