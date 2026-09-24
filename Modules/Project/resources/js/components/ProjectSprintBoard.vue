@@ -397,7 +397,7 @@ function onDocKeydown(event) {
               <tr>
                 <th class="psb__th--name">Công việc</th>
                 <th class="psb__th--person">Người làm</th>
-                <th>Trạng thái</th>
+                <th class="psb__th--status">Trạng thái</th>
                 <th>Ưu tiên</th>
                 <th class="psb__th--time">Thời gian</th>
                 <th>Giờ làm</th>
@@ -454,7 +454,7 @@ function onDocKeydown(event) {
                     <UserAvatarTip v-if="task.assignee" :user="task.assignee" label="Người thực hiện" />
                     <span v-else class="psb__muted">—</span>
                   </td>
-                  <td>
+                  <td class="psb__td--status">
                     <select
                       v-if="canEdit"
                       class="psb__status-select"
@@ -907,7 +907,7 @@ function onDocKeydown(event) {
 
 .psb__table {
   width: 100%;
-  min-width: 58rem;
+  min-width: 72rem;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -933,8 +933,12 @@ function onDocKeydown(event) {
 }
 
 .psb__th--person {
-  width: 4.5rem;
+  width: 7rem;
   text-align: center;
+}
+
+.psb__th--status {
+  width: 11rem;
 }
 
 .psb__th--time {
@@ -1076,8 +1080,14 @@ button.psb__child-n:hover {
 }
 
 .psb__td--person {
+  width: 7rem;
   text-align: center;
-  overflow: visible;
+  overflow: hidden;
+}
+
+.psb__td--status {
+  width: 11rem;
+  overflow: hidden;
 }
 
 .psb__td--time {
@@ -1149,6 +1159,7 @@ button.psb__child-n:hover {
 }
 
 .psb__status-select {
+  width: 100%;
   max-width: 100%;
   padding: 0.25rem 0.5rem;
   border: 0;
