@@ -20,6 +20,9 @@ use Modules\Project\App\Models\Project;
  */
 class TaskImportanceOptions
 {
+    /** @var array<int, array<string, mixed>> */
+    private array $forDepartmentCache = [];
+
     public function __construct(
         private readonly EvaluationCriteriaRepositoryInterface $criteria,
         private readonly EvaluationScoreKitService $scoreKits,
@@ -103,9 +106,64 @@ class TaskImportanceOptions
     }
 
     /**
+     * Nhãn tiếng Việt của mã độ khó đã lưu. Mã phòng ban (CV-A, RK, …)
+     * đổi thành tên mức; không có tên thì giữ nhãn 5 bậc cứng.
+     *
+     * @param  list<int|string|null>  $departmentIds
+     */
+    public function labelForStoredPriority(?string $value, array $departmentIds = []): string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return '';
+        }
+
+        $lower = mb_strtolower($value);
+        $seen = [];
+        foreach ($departmentIds as $departmentId) {
+            $id = (int) $departmentId;
+            if ($id <= 0 || isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+
+            foreach ($this->forDepartment($id)['importance'] ?? [] as $opt) {
+                $candidates = [
+                    mb_strtolower(trim((string) ($opt['value'] ?? ''))),
+                    mb_strtolower(trim((string) ($opt['code'] ?? ''))),
+                ];
+                if (! in_array($lower, $candidates, true)) {
+                    continue;
+                }
+
+                return $this->readableLevelLabel(
+                    (string) ($opt['label'] ?? ''),
+                    (string) ($opt['code'] ?? ''),
+                    $value,
+                );
+            }
+        }
+
+        return TaskEnums::priorityLabel($value);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function forDepartment(?int $departmentId): array
+    {
+        $key = (int) ($departmentId ?? 0);
+        if (! array_key_exists($key, $this->forDepartmentCache)) {
+            $this->forDepartmentCache[$key] = $this->buildForDepartment($departmentId);
+        }
+
+        return $this->forDepartmentCache[$key];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildForDepartment(?int $departmentId): array
     {
         $scales = $departmentId
             ? $this->scoreKits->taskScalesForDepartment($departmentId)
@@ -207,6 +265,36 @@ class TaskImportanceOptions
                 'code' => '',
             ];
         }, ProjectEnums::options()['importance']);
+    }
+
+    private function readableLevelLabel(string $label, string $code, string $fallback): string
+    {
+        $label = trim($label);
+        $code = trim($code);
+        if ($label === '') {
+            return TaskEnums::priorityLabel($fallback);
+        }
+
+        foreach (array_unique(array_filter([$code, $fallback])) as $prefix) {
+            foreach (['-', ' '] as $separator) {
+                $head = $prefix.$separator;
+                if (str_starts_with($label, $head)) {
+                    $rest = trim(substr($label, strlen($head)));
+                    if ($rest !== '') {
+                        return $rest;
+                    }
+                }
+            }
+        }
+
+        if (mb_strtolower($label) === mb_strtolower($fallback) || ($code !== '' && mb_strtolower($label) === mb_strtolower($code))) {
+            $mapped = TaskEnums::priorityLabel($fallback);
+            if ($mapped !== '' && mb_strtolower($mapped) !== mb_strtolower($fallback)) {
+                return $mapped;
+            }
+        }
+
+        return $label;
     }
 
     /** @return array<string, mixed> */

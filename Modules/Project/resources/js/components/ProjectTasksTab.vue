@@ -40,6 +40,7 @@ import {
   loadVisibility,
   saveVisibility,
   taskCellText,
+  taskPriorityDisplay,
   taskPriorityLabel,
   taskPriorityTone,
   taskStatusLabel,
@@ -1376,7 +1377,7 @@ onBeforeUnmount(() => {
             <h3 class="ptasks-kanban__card-title">{{ task.title }}</h3>
             <div v-if="task.priority && task.priority !== 'low'" class="ptasks-kanban__labels">
               <span class="ptasks-kanban__prio" :class="`ptasks-kanban__prio--${priorityTone(task.priority)}`">
-                {{ priorityLabel(task.priority) }}
+                {{ taskPriorityDisplay(task) }}
               </span>
             </div>
             <dl v-if="task.assignee?.name || dateRangeLabel(task)" class="ptasks-kanban__facts">

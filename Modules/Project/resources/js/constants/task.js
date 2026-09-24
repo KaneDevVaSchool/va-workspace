@@ -440,6 +440,14 @@ export function taskPriorityLabel(value, code = '') {
   if (!code || label === '—' || label.startsWith(`${code}-`) || label.startsWith(`${code} `)) return label;
   return `${code}-${label}`;
 }
+
+/** Tên mức độ khó đọc được. Ưu tiên nhãn API (mã phòng ban → tên tiếng Việt). */
+export function taskPriorityDisplay(task) {
+  const value = String(task?.priority || '').trim();
+  const fromApi = String(task?.priority_label || '').trim();
+  if (fromApi && fromApi.toLowerCase() !== value.toLowerCase()) return fromApi;
+  return value ? taskPriorityLabel(value) : '—';
+}
 export function taskPriorityTone(value) {
   return TASK_PRIORITY_TONES[value] || 'neutral';
 }
@@ -478,7 +486,7 @@ export function taskCellText(task, key) {
   }
   if (key === 'progress_percent') return task.progress_percent == null ? '—' : `${task.progress_percent}%`;
   if (key === 'type') return taskTypeLabel(task.type);
-  if (key === 'priority') return taskPriorityLabel(task.priority);
+  if (key === 'priority') return taskPriorityDisplay(task);
   if (key === 'quality') return task.task_score?.rating_result || '—';
   if (key === 'assignee') return task.assignee?.name || '—';
   if (key === 'status') return taskStatusLabel(task.status);

@@ -197,7 +197,7 @@ class TaskService
             'title' => $task->title,
             'type_label' => TaskEnums::TYPE_LABELS[$task->type] ?? $task->type,
             'status_label' => TaskEnums::STATUS_LABELS[$task->status] ?? $task->status,
-            'priority_label' => TaskEnums::priorityLabel($task->priority),
+            'priority_label' => $this->priorityLabelFor($task),
             'assignee_email' => $task->assignee?->email ?? '',
             'manager_email' => $task->manager?->email ?? '',
             'start_date' => $task->start_date?->format('d/m/Y') ?? '',
@@ -1180,7 +1180,7 @@ class TaskService
             'description' => $task->description,
             'status' => $task->status,
             'priority' => $task->priority,
-            'priority_label' => TaskEnums::priorityLabel($task->priority),
+            'priority_label' => $this->priorityLabelFor($task),
             'start_date' => $task->start_date?->toDateString(),
             'start_time' => $task->start_time,
             'end_date' => $task->end_date?->toDateString(),
@@ -1270,7 +1270,7 @@ class TaskService
             'type' => $task->type,
             'status' => $task->status,
             'priority' => $task->priority,
-            'priority_label' => TaskEnums::priorityLabel($task->priority),
+            'priority_label' => $this->priorityLabelFor($task),
             'weight' => $task->weight,
             'progress_percent' => $task->progress_percent,
             'start_date' => $task->start_date?->toDateString(),
@@ -1385,6 +1385,20 @@ class TaskService
      * phòng gốc, phòng của người thực hiện, cuối cùng phòng thực hiện /
      * sở hữu của dự án.
      */
+    private function priorityLabelFor(Task $task): string
+    {
+        $assignee = $task->relationLoaded('assignee') ? $task->assignee : null;
+        $project = $task->relationLoaded('project') ? $task->project : null;
+
+        return $this->importanceOptions->labelForStoredPriority($task->priority, [
+            $task->origin_department_id,
+            $task->delegated_to_department_id,
+            $assignee?->department_id,
+            $project?->executing_department_id,
+            $project?->owner_department_id,
+        ]);
+    }
+
     private function resolveTaskDepartment(Task $task): ?Department
     {
         if ($task->relationLoaded('delegatedToDepartment') && $task->delegatedToDepartment) {

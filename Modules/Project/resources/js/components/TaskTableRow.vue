@@ -13,7 +13,7 @@ import {
   formatTaskDateTime,
   formatTaskVarianceDays,
   taskCellText as cellText,
-  taskPriorityLabel as priorityLabel,
+  taskPriorityDisplay as priorityLabel,
   taskPriorityTone as priorityTone,
   taskQualityLabel as qualityLabel,
   taskQualityTone as qualityTone,
@@ -72,7 +72,7 @@ const emit = defineEmits(['open', 'context-menu', 'toggle-collapse']);
       </span>
       <span v-else-if="col.key === 'priority'" class="ptasks__pill" :class="`ptasks__pill--${priorityTone(task.priority)}`">
         <span class="ptasks__dot" :class="`ptasks__dot--${priorityTone(task.priority)}`" />
-        {{ priorityLabel(task.priority) }}
+        {{ priorityLabel(task) }}
       </span>
       <span v-else-if="col.key === 'quality'" class="ptasks__pill" :class="`ptasks__pill--${qualityTone(task)}`">
         <span class="ptasks__dot" :class="`ptasks__dot--${qualityTone(task)}`" />

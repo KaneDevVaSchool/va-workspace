@@ -11,7 +11,7 @@ import TaskPeopleListModal from './TaskPeopleListModal.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { computeExpectedProgress } from '@/lib/progress';
 import {
-  TASK_PRIORITY_LABELS,
+  taskPriorityDisplay,
   TASK_PRIORITY_TONES,
   TASK_STATUS_LABELS,
   TASK_STATUS_TONES,
@@ -715,7 +715,7 @@ onBeforeUnmount(() => {
                 </template>
                 <template v-else-if="col.key === 'priority'">
                   <span v-if="item.row.priority" class="gantt__chip" :class="`gantt__chip--${TASK_PRIORITY_TONES[item.row.priority] || 'neutral'}`">
-                    {{ TASK_PRIORITY_LABELS[item.row.priority] || item.row.priority }}
+                    {{ taskPriorityDisplay(item.row) }}
                   </span>
                   <span v-else>—</span>
                 </template>

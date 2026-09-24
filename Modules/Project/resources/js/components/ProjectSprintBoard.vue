@@ -23,7 +23,7 @@ import {
 } from '../constants/sprint.js';
 import {
   TASK_STATUSES,
-  taskPriorityLabel,
+  taskPriorityDisplay,
   taskPriorityTone,
   taskStatusLabel,
   taskStatusTone,
@@ -475,7 +475,7 @@ function onDocKeydown(event) {
                   <td>
                     <span v-if="task.priority" class="psb__status-text">
                       <span class="psb__dot" :class="`psb__dot--${taskPriorityTone(task.priority)}`" />
-                      {{ taskPriorityLabel(task.priority) }}
+                      {{ taskPriorityDisplay(task) }}
                     </span>
                     <span v-else class="psb__muted">Chưa chọn</span>
                   </td>

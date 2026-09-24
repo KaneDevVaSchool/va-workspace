@@ -54,6 +54,7 @@ class TaskPriorityValidationTest extends TestCase
 
         $response->assertCreated();
         $response->assertJsonPath('task.priority', 'CV-A');
+        $response->assertJsonPath('task.priority_label', 'Việc thường');
         $this->assertDatabaseHas('tasks', [
             'title' => 'Soạn đề kiểm tra',
             'priority' => 'CV-A',
