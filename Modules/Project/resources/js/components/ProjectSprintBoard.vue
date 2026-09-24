@@ -921,6 +921,10 @@ function onDocKeydown(event) {
   text-transform: uppercase;
   text-align: left;
   white-space: nowrap;
+  box-shadow: inset -1px 0 0 var(--color-border), 0 1px 0 var(--color-border);
+}
+
+.psb__table thead th:last-child {
   box-shadow: 0 1px 0 var(--color-border);
 }
 
@@ -948,6 +952,7 @@ function onDocKeydown(event) {
   font-size: 0.75rem;
   font-weight: 700;
   background: var(--color-surface-muted);
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
 .psb__row {
@@ -967,6 +972,10 @@ function onDocKeydown(event) {
   font-size: 0.8125rem;
   color: var(--color-text);
   vertical-align: middle;
+  box-shadow: inset -1px 0 0 var(--color-border), 0 1px 0 var(--color-border);
+}
+
+.psb__row td:last-child {
   box-shadow: 0 1px 0 var(--color-border);
 }
 
