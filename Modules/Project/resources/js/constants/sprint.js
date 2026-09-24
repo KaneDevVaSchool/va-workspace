@@ -153,9 +153,17 @@ export function groupProjectTasksBySprint(nodes, sprints, { filter = 'all', quer
   const q = String(query || '').trim().toLowerCase();
   const noSprintKey = '__no_sprint__';
 
+  const sprintKeyOf = (id) => {
+    if (id == null || id === '') return null;
+    const key = Number(id);
+    return Number.isFinite(key) ? key : null;
+  };
+
   const groups = new Map();
   for (const sprint of sprints || []) {
-    groups.set(sprint.id, { ...sprint, tasks: [] });
+    const key = sprintKeyOf(sprint.id);
+    if (key == null) continue;
+    groups.set(key, { ...sprint, id: key, tasks: [] });
   }
   groups.set(noSprintKey, { id: null, name: 'Chưa xếp vào đợt nào', tasks: [] });
 
@@ -163,8 +171,9 @@ export function groupProjectTasksBySprint(nodes, sprints, { filter = 'all', quer
     for (const node of list || []) {
       const nextCategoryNode = node.type === 'category' ? node : categoryNode;
       if (node.type === 'task') {
-        const ownKey = node.sprint_id && groups.has(node.sprint_id) ? node.sprint_id : null;
-        const resolvedKey = ownKey || ancestorSprintKey || noSprintKey;
+        const ownKey = sprintKeyOf(node.sprint_id);
+        const matchedKey = ownKey != null && groups.has(ownKey) ? ownKey : null;
+        const resolvedKey = matchedKey || ancestorSprintKey || noSprintKey;
         if (matchesProjectTaskFilter(node, filter)) {
           const hay = `${node.title || ''} ${node.code || ''}`.toLowerCase();
           if (!q || hay.includes(q)) {
@@ -175,7 +184,7 @@ export function groupProjectTasksBySprint(nodes, sprints, { filter = 'all', quer
             });
           }
         }
-        walk(node.children, nextCategoryNode, node, ownKey || ancestorSprintKey);
+        walk(node.children, nextCategoryNode, node, matchedKey || ancestorSprintKey);
         continue;
       }
       walk(node.children, nextCategoryNode, ancestorTask, ancestorSprintKey);
@@ -221,14 +230,15 @@ export function groupSprintsByPhase(nodes, sprintGroups) {
       phase,
       sprints: [],
     };
-    byId.set(phase.id, bundle);
+    byId.set(Number(phase.id), bundle);
     bundles.push(bundle);
   }
 
   const unphased = [];
   for (const sprint of sprintGroups || []) {
-    const phaseId = sprint.phase_id ?? sprint.phase?.id ?? null;
-    const bundle = phaseId != null ? byId.get(phaseId) : null;
+    const rawPhaseId = sprint.phase_id ?? sprint.phase?.id ?? null;
+    const phaseId = rawPhaseId == null || rawPhaseId === '' ? null : Number(rawPhaseId);
+    const bundle = phaseId != null && Number.isFinite(phaseId) ? byId.get(phaseId) : null;
     if (bundle) bundle.sprints.push(sprint);
     else unphased.push(sprint);
   }

@@ -656,8 +656,9 @@ watch(
           deletedSprintIds.value = [];
         }
         if (kind === 'task' && props.extra?.sprint_id) {
-          taskForm.sprint_id = props.extra.sprint_id;
+          taskForm.sprint_id = String(props.extra.sprint_id);
           for (const row of bulkRows.value) {
+            row.sprint_id = String(props.extra.sprint_id);
             applySprintDatesToRow(row, props.extra.sprint_id);
             if (childParentId.value) {
               row.parent_id = childParentId.value;
@@ -859,7 +860,7 @@ async function submit() {
       const variant = taskVariant.value;
 
       if (isTaskListVariant.value) {
-        if (variant === 'by_sprint' && !perRowParent.value && !taskForm.sprint_id) {
+        if (variant === 'by_sprint' && !perRowParent.value && !taskForm.sprint_id && !props.extra?.sprint_id) {
           showClientToast('error', 'Chọn đợt làm việc.');
           return;
         }
@@ -888,7 +889,10 @@ async function submit() {
           }
         }
         const sharedParentId = variant === 'by_category' ? taskForm.category_id : variant === 'by_phase' ? taskForm.phase_id : null;
-        const sharedSprintId = variant === 'by_sprint' ? taskForm.sprint_id : null;
+        const lockedSprintId = variant === 'by_sprint' && props.extra?.sprint_id
+          ? String(props.extra.sprint_id)
+          : '';
+        const sharedSprintId = variant === 'by_sprint' ? (lockedSprintId || taskForm.sprint_id) : null;
         await window.axios.post(`/api/project/${props.project.id}/tasks/bulk`, {
           items: rows.map((row) => ({
             title: row.title.trim(),
@@ -898,7 +902,9 @@ async function submit() {
               : variant === 'bulk'
                 ? null
                 : (perRowParent.value ? row.parent_id : sharedParentId) || null,
-            sprint_id: variant === 'by_sprint' ? (perRowParent.value ? row.sprint_id : sharedSprintId) || null : null,
+            sprint_id: variant === 'by_sprint'
+              ? (lockedSprintId || (perRowParent.value ? row.sprint_id : sharedSprintId)) || null
+              : null,
             start_date: row.start_date || null,
             end_date: row.end_date || null,
             start_time: showHourFields.value ? row.start_time || null : null,
@@ -1121,7 +1127,7 @@ watch(
                 <input v-model="showHourFields" type="checkbox">
                 <span>Đặt giờ cụ thể</span>
               </label>
-              <label v-if="isGroupedTaskVariant && !childParentId" class="proj-qa__check">
+              <label v-if="isGroupedTaskVariant && !childParentId && !(taskVariant === 'by_sprint' && extra?.sprint_id)" class="proj-qa__check">
                 <input v-model="perRowParent" type="checkbox">
                 <span>{{
                   taskVariant === 'by_category'
@@ -1157,11 +1163,11 @@ watch(
                 v-model="taskForm.sprint_id"
                 class="proj-qa__input"
                 required
-                :disabled="Boolean(childParentId)"
+                :disabled="Boolean(childParentId) || Boolean(extra?.sprint_id)"
                 @change="onSharedSprintChange"
               >
                 <option value="">Chọn đợt làm việc</option>
-                <option v-for="item in sprints" :key="item.id" :value="item.id">{{ sprintOptionLabel(item) }}</option>
+                <option v-for="item in sprints" :key="item.id" :value="String(item.id)">{{ sprintOptionLabel(item) }}</option>
               </select>
             </label>
 
@@ -1199,7 +1205,7 @@ watch(
                     <span class="proj-qa__label">Đợt làm việc</span>
                     <select v-model="row.sprint_id" class="proj-qa__input" @change="applySprintDatesToRow(row, row.sprint_id, { overwrite: true })">
                       <option value="">Chọn đợt làm việc</option>
-                      <option v-for="item in sprints" :key="item.id" :value="item.id">{{ sprintOptionLabel(item) }}</option>
+                      <option v-for="item in sprints" :key="item.id" :value="String(item.id)">{{ sprintOptionLabel(item) }}</option>
                     </select>
                   </label>
                   <div class="proj-qa__field">
