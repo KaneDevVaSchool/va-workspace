@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, ref, watch } from 'vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import PageHeader from '../components/PageHeader.vue';
@@ -8,8 +8,8 @@ const auth = useAuthStore();
 const tabs = [
     { id: 'super_admin', label: 'Super Admin' },
     { id: 'admin', label: 'Admin' },
-    { id: 'department_director', label: 'TrÆ°á»Ÿng phÃ²ng ban' },
-    { id: 'member', label: 'NhÃ¢n viÃªn' },
+    { id: 'department_director', label: 'Trưởng phòng ban' },
+    { id: 'member', label: 'Nhân viên' },
 ];
 
 const ROLE_TAB = {
@@ -22,196 +22,196 @@ const ROLE_TAB = {
 const flows = {
     super_admin: {
         title: 'Super Admin',
-        lead: 'LÃ m láº§n lÆ°á»£t tá»« trÃªn xuá»‘ng: cáº¥p quyá»n, cáº¥u hÃ¬nh, rá»“i giÃ¡m sÃ¡t. Viá»‡c hÃ ng ngÃ y Ä‘á»ƒ Admin vÃ  trÆ°á»Ÿng phÃ²ng lÃ m.',
+        lead: 'Làm lần lượt từ trên xuống: cấp quyền, cấu hình, rồi giám sát. Việc hàng ngày để Admin và trưởng phòng làm.',
         steps: [
             {
                 icon: 'shield',
-                title: 'Cáº¥p quyá»n cho tá»«ng ngÆ°á»i',
-                teaser: 'Má»Ÿ ma tráº­n, gÃ¡n vai trÃ², báº­t quyá»n theo module, khoÃ¡ quyá»n nháº¡y cáº£m.',
-                items: ['Chá»‰ Super Admin lÃ m Ä‘Æ°á»£c bÆ°á»›c nÃ y', 'LÃ m xong rá»“i má»›i cáº¥u hÃ¬nh phÃ²ng ban'],
-                button: { label: 'Má»Ÿ ma tráº­n phÃ¢n quyá»n', to: { name: 'superadmin.permissions' } },
+                title: 'Cấp quyền cho từng người',
+                teaser: 'Mở ma trận, gán vai trò, bật quyền theo module, khoá quyền nhạy cảm.',
+                items: ['Chỉ Super Admin làm được bước này', 'Làm xong rồi mới cấu hình phòng ban'],
+                button: { label: 'Mở ma trận phân quyền', to: { name: 'superadmin.permissions' } },
             },
             {
                 icon: 'building',
-                title: 'Cáº¥u hÃ¬nh tá»«ng phÃ²ng ban',
-                teaser: 'Báº­t menu riÃªng, xem thÃ nh viÃªn vÃ  cÃ¡ch cháº¥m Ä‘iá»ƒm cá»§a tá»«ng phÃ²ng.',
-                items: ['LÃ m sau khi Ä‘Ã£ cáº¥p quyá»n'],
-                button: { label: 'Má»Ÿ cáº¥u hÃ¬nh Workspace', to: { name: 'superadmin.workspace-config.overview' } },
+                title: 'Cấu hình từng phòng ban',
+                teaser: 'Bật menu riêng, xem thành viên và cách chấm điểm của từng phòng.',
+                items: ['Làm sau khi đã cấp quyền'],
+                button: { label: 'Mở cấu hình Workspace', to: { name: 'superadmin.workspace-config.overview' } },
             },
             {
                 icon: 'layoutList',
-                title: 'Äáº·t menu cho cáº£ há»‡ thá»‘ng',
-                teaser: 'áº¨n hoáº·c hiá»‡n má»¥c menu. ÄÃ¢y lÃ  máº·c Ä‘á»‹nh, trÆ°á»›c khi tá»«ng phÃ²ng tá»± chá»‰nh.',
-                items: ['Ãp dá»¥ng cho má»i phÃ²ng ban'],
-                button: { label: 'áº¨n hoáº·c hiá»‡n menu', to: { name: 'superadmin.workspace-config.global-menu' } },
+                title: 'Đặt menu cho cả hệ thống',
+                teaser: 'Ẩn hoặc hiện mục menu. Đây là mặc định, trước khi từng phòng tự chỉnh.',
+                items: ['Áp dụng cho mọi phòng ban'],
+                button: { label: 'Ẩn hoặc hiện menu', to: { name: 'superadmin.workspace-config.global-menu' } },
             },
             {
                 icon: 'search',
-                title: 'Xem ai Ä‘Ã£ lÃ m gÃ¬',
-                teaser: 'Má»Ÿ nháº­t kÃ½ Ä‘á»ƒ biáº¿t ngÆ°á»i nÃ o thao tÃ¡c lÃºc nÃ o, vÃ  phÃ¡t hiá»‡n viá»‡c báº¥t thÆ°á»ng.',
+                title: 'Xem ai đã làm gì',
+                teaser: 'Mở nhật ký để biết người nào thao tác lúc nào, và phát hiện việc bất thường.',
                 result: true,
-                items: ['LÃ m thÆ°á»ng xuyÃªn sau khi há»‡ thá»‘ng Ä‘Ã£ cháº¡y'],
-                button: { label: 'Má»Ÿ nháº­t kÃ½', to: { name: 'superadmin.activity' } },
+                items: ['Làm thường xuyên sau khi hệ thống đã chạy'],
+                button: { label: 'Mở nhật ký', to: { name: 'superadmin.activity' } },
             },
         ],
         aside: {
-            title: 'Viá»‡c khÃ´ng lÃ m á»Ÿ vai trÃ² nÃ y',
-            teaser: 'Giao láº¡i cho Ä‘Ãºng ngÆ°á»i, Ä‘á»«ng Ã´m háº¿t.',
+            title: 'Việc không làm ở vai trò này',
+            teaser: 'Giao lại cho đúng người, đừng ôm hết.',
             items: [
-                { icon: 'settings', label: 'Admin Ä‘iá»u hÃ nh nghiá»‡p vá»¥ hÃ ng ngÃ y' },
-                { icon: 'building', label: 'TrÆ°á»Ÿng phÃ²ng tá»± quáº£n lÃ½ phÃ²ng mÃ¬nh' },
-                { icon: 'eye', label: 'Super Admin giÃ¡m sÃ¡t vÃ  cáº¥p quyá»n' },
+                { icon: 'settings', label: 'Admin điều hành nghiệp vụ hàng ngày' },
+                { icon: 'building', label: 'Trưởng phòng tự quản lý phòng mình' },
+                { icon: 'eye', label: 'Super Admin giám sát và cấp quyền' },
             ],
         },
         more: [
-            { icon: 'shield', title: 'Vai trÃ² trong há»‡ thá»‘ng', teaser: 'Tá»« Super Admin Ä‘áº¿n NhÃ¢n viÃªn' },
-            { icon: 'building', title: 'Tá»•ng há»£p má»i phÃ²ng ban', teaser: 'TÃ¬nh hÃ¬nh chung' },
-            { icon: 'lock', title: 'TÃ i khoáº£n dÃ¹ng chung', teaser: 'Máº­t kháº©u, tÃ i khoáº£n háº¡ táº§ng' },
+            { icon: 'shield', title: 'Vai trò trong hệ thống', teaser: 'Từ Super Admin đến Nhân viên' },
+            { icon: 'building', title: 'Tổng hợp mọi phòng ban', teaser: 'Tình hình chung' },
+            { icon: 'lock', title: 'Tài khoản dùng chung', teaser: 'Mật khẩu, tài khoản hạ tầng' },
         ],
     },
     admin: {
         title: 'Admin',
-        lead: 'LÃ m láº§n lÆ°á»£t: thÃªm ngÆ°á»i, má»Ÿ phÃ²ng ban, theo dÃµi viá»‡c, rá»“i xem bÃ¡o cÃ¡o.',
+        lead: 'Làm lần lượt: thêm người, mở phòng ban, theo dõi việc, rồi xem báo cáo.',
         steps: [
             {
                 icon: 'users',
-                title: 'ThÃªm vÃ  sáº¯p ngÆ°á»i',
-                teaser: 'ThÃªm tÃ i khoáº£n, gáº¯n phÃ²ng ban, chá»n vai trÃ². KhoÃ¡ hoáº·c xoÃ¡ khi ngÆ°á»i nghá»‰.',
-                items: ['LÃ m trÆ°á»›c khi giao viá»‡c'],
-                button: { label: 'Má»Ÿ danh sÃ¡ch ngÆ°á»i dÃ¹ng', to: { name: 'manager.workspace-config.members' } },
+                title: 'Thêm và sắp người',
+                teaser: 'Thêm tài khoản, gắn phòng ban, chọn vai trò. Khoá hoặc xoá khi người nghỉ.',
+                items: ['Làm trước khi giao việc'],
+                button: { label: 'Mở danh sách người dùng', to: { name: 'manager.workspace-config.members' } },
             },
             {
                 icon: 'building',
-                title: 'Má»Ÿ phÃ²ng ban',
-                teaser: 'Chá»n cÃ¡ch cháº¥m Ä‘iá»ƒm, menu riÃªng, rá»“i bá»• nhiá»‡m trÆ°á»Ÿng phÃ²ng.',
-                items: ['LÃ m khi cÃ³ phÃ²ng má»›i hoáº·c Ä‘á»•i trÆ°á»Ÿng phÃ²ng'],
-                button: { label: 'Má»Ÿ cáº¥u hÃ¬nh phÃ²ng ban', to: { name: 'manager.workspace-config.hub' } },
+                title: 'Mở phòng ban',
+                teaser: 'Chọn cách chấm điểm, menu riêng, rồi bổ nhiệm trưởng phòng.',
+                items: ['Làm khi có phòng mới hoặc đổi trưởng phòng'],
+                button: { label: 'Mở cấu hình phòng ban', to: { name: 'manager.workspace-config.hub' } },
             },
             {
                 icon: 'layers',
-                title: 'Theo dÃµi viá»‡c Ä‘ang cháº¡y',
-                teaser: 'Xem tiáº¿n Ä‘á»™ má»i dá»± Ã¡n, viá»‡c chuyá»ƒn giá»¯a cÃ¡c phÃ²ng, vÃ  Ä‘iá»ƒm KPI tá»«ng phÃ²ng.',
-                items: ['LÃ m trong tuáº§n, khÃ´ng chá» cuá»‘i thÃ¡ng'],
-                button: { label: 'Má»Ÿ dá»± Ã¡n vÃ  cÃ´ng viá»‡c', to: { name: 'manager.project.index' } },
+                title: 'Theo dõi việc đang chạy',
+                teaser: 'Xem tiến độ mọi dự án, việc chuyển giữa các phòng, và điểm KPI từng phòng.',
+                items: ['Làm trong tuần, không chờ cuối tháng'],
+                button: { label: 'Mở dự án và công việc', to: { name: 'manager.project.index' } },
             },
             {
                 icon: 'barChart',
-                title: 'Äá»c bÃ¡o cÃ¡o tá»•ng há»£p',
-                teaser: 'Xem tá»· lá»‡ hoÃ n thÃ nh, Ä‘iá»ƒm cháº¥t lÆ°á»£ng vÃ  xu hÆ°á»›ng cá»§a cáº£ trÆ°á»ng.',
+                title: 'Đọc báo cáo tổng hợp',
+                teaser: 'Xem tỷ lệ hoàn thành, điểm chất lượng và xu hướng của cả trường.',
                 result: true,
-                items: ['LÃ m sau khi cÃ¡c phÃ²ng Ä‘Ã£ cáº­p nháº­t viá»‡c'],
-                button: { label: 'Má»Ÿ bÃ¡o cÃ¡o', to: { name: 'manager.reports.index' } },
+                items: ['Làm sau khi các phòng đã cập nhật việc'],
+                button: { label: 'Mở báo cáo', to: { name: 'manager.reports.index' } },
             },
         ],
         aside: {
-            title: 'Khi cÃ³ viá»‡c phÃ¡t sinh',
-            teaser: 'Xá»­ lÃ½ cÃ¡c viá»‡c nÃ y ngoÃ i bá»‘n bÆ°á»›c trÃªn.',
+            title: 'Khi có việc phát sinh',
+            teaser: 'Xử lý các việc này ngoài bốn bước trên.',
             items: [
-                { icon: 'shield', label: 'Xá»­ lÃ½ bÃ i Ä‘Äƒng vi pháº¡m' },
-                { icon: 'lock', label: 'Cáº¥p hoáº·c thu há»“i tÃ i khoáº£n dÃ¹ng chung' },
-                { icon: 'messageCircle', label: 'Há»— trá»£ trÆ°á»Ÿng phÃ²ng khi vÆ°á»›ng' },
+                { icon: 'shield', label: 'Xử lý bài đăng vi phạm' },
+                { icon: 'lock', label: 'Cấp hoặc thu hồi tài khoản dùng chung' },
+                { icon: 'messageCircle', label: 'Hỗ trợ trưởng phòng khi vướng' },
             ],
         },
         more: [
-            { icon: 'lock', title: 'TÃ i khoáº£n dÃ¹ng chung', teaser: 'Máº­t kháº©u háº¡ táº§ng' },
-            { icon: 'megaphone', title: 'Duyá»‡t bÃ i viáº¿t', teaser: 'Báº£ng tin ná»™i bá»™' },
-            { icon: 'activity', title: 'Nháº­t kÃ½ hoáº¡t Ä‘á»™ng', teaser: 'Thao tÃ¡c gáº§n Ä‘Ã¢y' },
+            { icon: 'lock', title: 'Tài khoản dùng chung', teaser: 'Mật khẩu hạ tầng' },
+            { icon: 'megaphone', title: 'Duyệt bài viết', teaser: 'Bảng tin nội bộ' },
+            { icon: 'activity', title: 'Nhật ký hoạt động', teaser: 'Thao tác gần đây' },
         ],
     },
     department_director: {
-        title: 'TrÆ°á»Ÿng phÃ²ng ban',
-        lead: 'LÃ m láº§n lÆ°á»£t: thiáº¿t láº­p phÃ²ng, giao viá»‡c, cháº¥m Ä‘iá»ƒm, rá»“i gá»­i bÃ¡o cÃ¡o lÃªn trÃªn.',
+        title: 'Trưởng phòng ban',
+        lead: 'Làm lần lượt: thiết lập phòng, giao việc, chấm điểm, rồi gửi báo cáo lên trên.',
         steps: [
             {
                 icon: 'settings',
-                title: 'Thiáº¿t láº­p phÃ²ng trÆ°á»›c',
-                teaser: 'Chá»n tiÃªu chÃ­ Ä‘Ã¡nh giÃ¡, báº­t tÃ­nh nÄƒng cá»§a phÃ²ng, chá»‰ Ä‘á»‹nh phÃ³ phÃ²ng vÃ  trÆ°á»Ÿng nhÃ³m.',
-                items: ['LÃ m má»™t láº§n, rá»“i chá»‰ sá»­a khi Ä‘á»•i quy Æ°á»›c'],
-                button: { label: 'Má»Ÿ cáº¥u hÃ¬nh phÃ²ng ban', to: { name: 'manager.workspace-config.hub' } },
+                title: 'Thiết lập phòng trước',
+                teaser: 'Chọn tiêu chí đánh giá, bật tính năng của phòng, chỉ định phó phòng và trưởng nhóm.',
+                items: ['Làm một lần, rồi chỉ sửa khi đổi quy ước'],
+                button: { label: 'Mở cấu hình phòng ban', to: { name: 'manager.workspace-config.hub' } },
             },
             {
                 icon: 'userPlus',
-                title: 'Táº¡o viá»‡c vÃ  giao ngÆ°á»i',
-                teaser: 'Táº¡o dá»± Ã¡n hoáº·c cÃ´ng viá»‡c, chá»n ngÆ°á»i lÃ m, Ä‘áº·t háº¡n. Viá»‡c cá»§a phÃ²ng khÃ¡c thÃ¬ chuyá»ƒn giao.',
-                items: ['Giao rÃµ ngÆ°á»i vÃ  háº¡n trÆ°á»›c khi nhÃ¢n viÃªn báº¯t Ä‘áº§u'],
-                button: { label: 'Táº¡o cÃ´ng viá»‡c má»›i', to: { name: 'manager.project.tasks.create' } },
+                title: 'Tạo việc và giao người',
+                teaser: 'Tạo dự án hoặc công việc, chọn người làm, đặt hạn. Việc của phòng khác thì chuyển giao.',
+                items: ['Giao rõ người và hạn trước khi nhân viên bắt đầu'],
+                button: { label: 'Tạo công việc mới', to: { name: 'manager.project.tasks.create' } },
             },
             {
                 icon: 'clipboardCheck',
-                title: 'Theo dÃµi rá»“i cháº¥m Ä‘iá»ƒm',
-                teaser: 'Xem tiáº¿n Ä‘á»™ tá»«ng ngÆ°á»i, duyá»‡t nháº­t kÃ½ ngÃ y, cháº¥m Ä‘iá»ƒm cháº¥t lÆ°á»£ng khi viá»‡c xong.',
-                items: ['Cháº¥m sau khi nhÃ¢n viÃªn Ä‘Ã£ cáº­p nháº­t tiáº¿n Ä‘á»™'],
-                button: { label: 'Má»Ÿ cÃ´ng viá»‡c cá»§a phÃ²ng', to: { name: 'manager.project.index' } },
+                title: 'Theo dõi rồi chấm điểm',
+                teaser: 'Xem tiến độ từng người, duyệt nhật ký ngày, chấm điểm chất lượng khi việc xong.',
+                items: ['Chấm sau khi nhân viên đã cập nhật tiến độ'],
+                button: { label: 'Mở công việc của phòng', to: { name: 'manager.project.index' } },
             },
             {
                 icon: 'barChart',
-                title: 'Gá»­i bÃ¡o cÃ¡o lÃªn trÃªn',
-                teaser: 'Xem tá»· lá»‡ hoÃ n thÃ nh vÃ  Ä‘iá»ƒm KPI cá»§a phÃ²ng, rá»“i chá»n ai Ä‘Æ°á»£c xem bÃ¡o cÃ¡o.',
+                title: 'Gửi báo cáo lên trên',
+                teaser: 'Xem tỷ lệ hoàn thành và điểm KPI của phòng, rồi chọn ai được xem báo cáo.',
                 result: true,
-                items: ['LÃ m khi Ä‘Ã£ cháº¥m Ä‘iá»ƒm xong'],
-                button: { label: 'Má»Ÿ bÃ¡o cÃ¡o', to: { name: 'manager.reports.index' } },
+                items: ['Làm khi đã chấm điểm xong'],
+                button: { label: 'Mở báo cáo', to: { name: 'manager.reports.index' } },
             },
         ],
         aside: {
-            title: 'Khi cÃ³ viá»‡c phÃ¡t sinh',
-            teaser: 'Xá»­ lÃ½ cÃ¡c viá»‡c nÃ y trÆ°á»›c khi gá»­i bÃ¡o cÃ¡o.',
+            title: 'Khi có việc phát sinh',
+            teaser: 'Xử lý các việc này trước khi gửi báo cáo.',
             items: [
-                { icon: 'messageCircle', label: 'Trao Ä‘á»•i, xá»­ lÃ½ vÆ°á»›ng máº¯c' },
-                { icon: 'gitBranch', label: 'Nháº­n hoáº·c tá»« chá»‘i viá»‡c phÃ²ng khÃ¡c chuyá»ƒn tá»›i' },
-                { icon: 'clipboardCheck', label: 'XÃ¡c nháº­n káº¿t quáº£ trÆ°á»›c khi tá»•ng káº¿t' },
+                { icon: 'messageCircle', label: 'Trao đổi, xử lý vướng mắc' },
+                { icon: 'gitBranch', label: 'Nhận hoặc từ chối việc phòng khác chuyển tới' },
+                { icon: 'clipboardCheck', label: 'Xác nhận kết quả trước khi tổng kết' },
             ],
         },
         more: [
-            { icon: 'barChart', title: 'KPI phÃ²ng ban', teaser: 'Chá»‰ tiÃªu thÃ¡ng nÃ y' },
-            { icon: 'layers', title: 'SÆ¡ Ä‘á»“ vÃ  lá»‹ch dá»± Ã¡n', teaser: 'Theo tiáº¿n Ä‘á»™' },
-            { icon: 'lock', title: 'TÃ i khoáº£n dÃ¹ng chung', teaser: 'Trong pháº¡m vi phÃ²ng' },
+            { icon: 'barChart', title: 'KPI phòng ban', teaser: 'Chỉ tiêu tháng này' },
+            { icon: 'layers', title: 'Sơ đồ và lịch dự án', teaser: 'Theo tiến độ' },
+            { icon: 'lock', title: 'Tài khoản dùng chung', teaser: 'Trong phạm vi phòng' },
         ],
     },
     member: {
-        title: 'NhÃ¢n viÃªn',
-        lead: 'LÃ m láº§n lÆ°á»£t: Ä‘á»c viá»‡c Ä‘Æ°á»£c giao, cáº­p nháº­t tiáº¿n Ä‘á»™, bÃ¡o khi vÆ°á»›ng, rá»“i xem káº¿t quáº£.',
+        title: 'Nhân viên',
+        lead: 'Làm lần lượt: đọc việc được giao, cập nhật tiến độ, báo khi vướng, rồi xem kết quả.',
         steps: [
             {
                 icon: 'users',
-                title: 'Äá»c viá»‡c Ä‘Æ°á»£c giao',
-                teaser: 'Má»Ÿ viá»‡c tá»« trÆ°á»Ÿng nhÃ³m hoáº·c trÆ°á»Ÿng phÃ²ng. Äá»c tÃªn, mÃ´ táº£, háº¡n vÃ  má»©c Ä‘á»™ quan trá»ng trÆ°á»›c khi lÃ m.',
-                items: ['ChÆ°a rÃµ mÃ´ táº£ thÃ¬ há»i láº¡i trÆ°á»›c khi báº¯t Ä‘áº§u'],
+                title: 'Đọc việc được giao',
+                teaser: 'Mở việc từ trưởng nhóm hoặc trưởng phòng. Đọc tên, mô tả, hạn và mức độ quan trọng trước khi làm.',
+                items: ['Chưa rõ mô tả thì hỏi lại trước khi bắt đầu'],
             },
             {
                 icon: 'fileText',
-                title: 'Cáº­p nháº­t tiáº¿n Ä‘á»™',
-                teaser: 'Ghi pháº§n trÄƒm Ä‘Ã£ xong, thá»i gian thá»±c táº¿, Ä‘Ã­nh kÃ¨m tÃ i liá»‡u vÃ  nháº­t kÃ½ ngÃ y.',
-                items: ['Cáº­p nháº­t trong ngÃ y, Ä‘á»«ng Ä‘á»ƒ cuá»‘i háº¡n'],
-                button: { label: 'Má»Ÿ viá»‡c cá»§a tÃ´i', to: { name: 'manager.project.tasks' } },
+                title: 'Cập nhật tiến độ',
+                teaser: 'Ghi phần trăm đã xong, thời gian thực tế, đính kèm tài liệu và nhật ký ngày.',
+                items: ['Cập nhật trong ngày, đừng để cuối hạn'],
+                button: { label: 'Mở việc của tôi', to: { name: 'manager.project.tasks' } },
             },
             {
                 icon: 'messageCircle',
-                title: 'BÃ¡o khi vÆ°á»›ng',
-                teaser: 'BÃ¬nh luáº­n trÃªn Ä‘Ãºng viá»‡c Ä‘Ã³: khÃ³ khÄƒn, cháº­m tiáº¿n Ä‘á»™, hoáº·c Ä‘á» xuáº¥t sá»­a mÃ´ táº£.',
-                items: ['BÃ¡o sá»›m cho ngÆ°á»i giao viá»‡c, Ä‘á»«ng chá» bá»‹ há»i'],
+                title: 'Báo khi vướng',
+                teaser: 'Bình luận trên đúng việc đó: khó khăn, chậm tiến độ, hoặc đề xuất sửa mô tả.',
+                items: ['Báo sớm cho người giao việc, đừng chờ bị hỏi'],
             },
             {
                 icon: 'star',
-                title: 'Xem káº¿t quáº£ cá»§a mÃ¬nh',
-                teaser: 'Sau khi xong, xem Ä‘iá»ƒm cháº¥t lÆ°á»£ng, tá»· lá»‡ Ä‘Ãºng háº¡n vÃ  Ä‘iá»ƒm KPI thÃ¡ng nÃ y.',
+                title: 'Xem kết quả của mình',
+                teaser: 'Sau khi xong, xem điểm chất lượng, tỷ lệ đúng hạn và điểm KPI tháng này.',
                 result: true,
-                items: ['Chá»‰ xem Ä‘Æ°á»£c káº¿t quáº£ cá»§a chÃ­nh mÃ¬nh'],
+                items: ['Chỉ xem được kết quả của chính mình'],
             },
         ],
         aside: {
-            title: 'Viá»‡c khÃ¡c trong ngÃ y',
-            teaser: 'LÃ m thÃªm khi Ä‘Ã£ cáº­p nháº­t viá»‡c Ä‘Æ°á»£c giao.',
+            title: 'Việc khác trong ngày',
+            teaser: 'Làm thêm khi đã cập nhật việc được giao.',
             items: [
-                { icon: 'megaphone', label: 'ÄÄƒng tin lÃªn báº£ng tin ná»™i bá»™' },
-                { icon: 'eye', label: 'Xem bÃ¡o cÃ¡o Ä‘Æ°á»£c chia sáº»' },
-                { icon: 'home', label: 'Xem táº¥t cáº£ viá»‡c cá»§a tÃ´i' },
+                { icon: 'megaphone', label: 'Đăng tin lên bảng tin nội bộ' },
+                { icon: 'eye', label: 'Xem báo cáo được chia sẻ' },
+                { icon: 'home', label: 'Xem tất cả việc của tôi' },
             ],
-            button: { label: 'Má»Ÿ viá»‡c cá»§a tÃ´i', to: { name: 'manager.project.tasks' } },
+            button: { label: 'Mở việc của tôi', to: { name: 'manager.project.tasks' } },
         },
         more: [
-            { icon: 'barChart', title: 'Äiá»ƒm KPI', teaser: 'Äiá»ƒm thÃ¡ng nÃ y' },
-            { icon: 'calendar', title: 'Nháº­t kÃ½ ngÃ y', teaser: 'Ghi chÃ©p hÃ ng ngÃ y' },
-            { icon: 'trendingUp', title: 'Tá»•ng káº¿t tuáº§n', teaser: 'Káº¿t quáº£ 7 ngÃ y qua' },
+            { icon: 'barChart', title: 'Điểm KPI', teaser: 'Điểm tháng này' },
+            { icon: 'calendar', title: 'Nhật ký ngày', teaser: 'Ghi chép hàng ngày' },
+            { icon: 'trendingUp', title: 'Tổng kết tuần', teaser: 'Kết quả 7 ngày qua' },
         ],
     },
 };
@@ -252,14 +252,14 @@ function selectTab(id) {
 <template>
     <section class="guide">
         <PageHeader
-            title="HÆ°á»›ng dáº«n"
+            title="Hướng dẫn"
             icon="gitBranch"
-            description="Chá»n vai trÃ², Ä‘á»c tá»« bÆ°á»›c 1 xuá»‘ng. Má»—i bÆ°á»›c nÃ³i viá»‡c cáº§n lÃ m vÃ  chá»— má»Ÿ trong há»‡ thá»‘ng."
-            :breadcrumbs="[{ label: 'HÆ°á»›ng dáº«n' }]"
+            description="Chọn vai trò, đọc từ bước 1 xuống. Mỗi bước nói việc cần làm và chỗ mở trong hệ thống."
+            :breadcrumbs="[{ label: 'Hướng dẫn' }]"
         />
 
         <div class="guide__body">
-            <div class="guide__roles" role="tablist" aria-label="Vai trÃ²">
+            <div class="guide__roles" role="tablist" aria-label="Vai trò">
                 <button
                     v-for="tab in tabs"
                     :key="tab.id"
@@ -271,7 +271,7 @@ function selectTab(id) {
                     @click="selectTab(tab.id)"
                 >
                     {{ tab.label }}
-                    <span v-if="mine === tab.id" class="guide__you">cá»§a báº¡n</span>
+                    <span v-if="mine === tab.id" class="guide__you">của bạn</span>
                 </button>
             </div>
 
@@ -280,7 +280,7 @@ function selectTab(id) {
                 <p>{{ current.lead }}</p>
             </header>
 
-            <ol class="steps" :aria-label="`HÆ°á»›ng dáº«n ${current.title}`">
+            <ol class="steps" :aria-label="`Hướng dẫn ${current.title}`">
                 <li v-for="(step, index) in current.steps" :key="step.title" class="step">
                     <span class="step__num" aria-hidden="true">{{ index + 1 }}</span>
                     <div class="step__body">
@@ -309,8 +309,8 @@ function selectTab(id) {
                 </section>
 
                 <section class="note" aria-labelledby="guide-more-title">
-                    <h3 id="guide-more-title">Má»Ÿ tá»« menu khi cáº§n</h3>
-                    <p>CÃ¡c má»¥c nÃ y khÃ´ng náº±m trong bá»‘n bÆ°á»›c. VÃ o tá»« menu bÃªn trÃ¡i.</p>
+                    <h3 id="guide-more-title">Mở từ menu khi cần</h3>
+                    <p>Các mục này không nằm trong bốn bước. Vào từ menu bên trái.</p>
                     <ul>
                         <li v-for="item in current.more" :key="item.title">
                             <strong>{{ item.title }}.</strong> {{ item.teaser }}

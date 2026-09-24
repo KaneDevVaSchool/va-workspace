@@ -148,6 +148,11 @@ function addTasks(col, parent = null) {
   });
 }
 
+function addTasksBySprint() {
+  closeActionMenu();
+  emit('add-tasks', { sprintId: null, parentId: null, parent: null });
+}
+
 function findActionContext() {
   const id = actionMenu.id;
   if (!id) return null;
@@ -303,6 +308,15 @@ function onDocKeydown(event) {
       <div v-if="!section.sprints.length" class="psb__col-empty psb__col-empty--phase">
         <p class="psb__empty-title">Giai đoạn này chưa có đợt làm việc</p>
         <p class="psb__empty-copy">Tạo đợt làm việc cho giai đoạn này để xếp việc vào lịch.</p>
+        <button
+          v-if="canEdit"
+          type="button"
+          class="psb__add"
+          @click="addTasksBySprint"
+        >
+          <AppIcon name="plus" :size="14" />
+          Thêm việc vào đợt làm việc
+        </button>
       </div>
 
     <section
