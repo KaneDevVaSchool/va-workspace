@@ -178,7 +178,6 @@ export const PROJECT_TASK_VIEWS = [
   { key: 'all', label: 'Tất cả công việc', icon: 'layoutList' },
   { key: 'parents', label: 'Công việc cha', icon: 'listNumbered' },
   { key: 'phase', label: 'Theo giai đoạn', icon: 'flag' },
-  { key: 'phase_board', label: 'Bảng giai đoạn (kéo-thả)', icon: 'layoutGrid' },
   { key: 'sprint', label: 'Theo đợt làm việc', icon: 'layoutGrid' },
   { key: 'kanban', label: 'Kanban', icon: 'layoutGrid' },
   { key: 'gantt', label: 'Gantt', icon: 'gantt' },

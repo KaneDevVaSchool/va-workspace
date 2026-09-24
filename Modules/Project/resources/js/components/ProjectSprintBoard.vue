@@ -351,7 +351,7 @@ function onDocKeydown(event) {
         <div class="psb__head-end">
           <span v-if="col.avgProgress != null" class="psb__progress-value">{{ col.avgProgress }}%</span>
           <button
-            v-if="canEdit && col.id && col.tasks.length"
+            v-if="canEdit && col.id"
             type="button"
             class="psb__add"
             @click.stop="addTasks(col)"
@@ -373,16 +373,9 @@ function onDocKeydown(event) {
       <div v-show="!isCollapsed(col)" class="psb__body">
         <div v-if="!col.tasks.length" class="psb__col-empty">
           <p class="psb__empty-title">Đợt này chưa có việc</p>
-          <p class="psb__empty-copy">Thêm việc để mọi người biết cần làm gì trong đợt này.</p>
-          <button
-            v-if="canEdit && col.id"
-            type="button"
-            class="psb__add"
-            @click="addTasks(col)"
-          >
-            <AppIcon name="plus" :size="14" />
-            Thêm việc đầu tiên
-          </button>
+          <p class="psb__empty-copy">
+            {{ canEdit ? 'Dùng nút Thêm việc trên đầu đợt để giao việc cho đợt này.' : 'Chưa có việc nào trong đợt này.' }}
+          </p>
         </div>
         <div v-else class="psb__table-wrap hide-scrollbar">
           <table class="psb__table">

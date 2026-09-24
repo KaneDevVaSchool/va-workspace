@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { sendTyping, touchViewing } from '../api/chatApi';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { showClientToast } from '@/lib/clientToast';
@@ -32,6 +33,12 @@ const confirmMessage = ref(null);
 const confirming = ref(false);
 
 const otherUser = computed(() => store.activeConversation?.other_user ?? null);
+const peerTyping = computed(() => {
+  const until = store.typingByConversation[store.activeConversationId];
+  return Boolean(until && until > Date.now());
+});
+let typingTimer = null;
+let viewingTimer = null;
 const canSend = computed(() => !sending.value && (draft.value.trim() !== '' || (!editing.value && files.value.length > 0)));
 
 const confirmCopy = computed(() => {
@@ -87,6 +94,10 @@ function scrollToBottom() {
 }
 
 onMounted(scrollToBottom);
+onBeforeUnmount(() => {
+  clearTimeout(typingTimer);
+  clearInterval(viewingTimer);
+});
 
 watch(
   () => store.activeMessages.length,
@@ -97,15 +108,23 @@ watch(
 
 watch(
   () => store.activeConversationId,
-  () => {
+  (id) => {
     draft.value = '';
     files.value = [];
     replyTo.value = null;
     editing.value = null;
     pickerOpen.value = false;
     menu.value = null;
+    clearInterval(viewingTimer);
+    viewingTimer = null;
+    if (!id) return;
+    touchViewing(id).catch(() => {});
+    viewingTimer = window.setInterval(() => touchViewing(id).catch(() => {}), 20000);
   },
+  { immediate: true },
 );
+
+watch(draft, () => pingTyping());
 
 function onScroll() {
   if (listRef.value && listRef.value.scrollTop < 40) loadOlder();
@@ -124,6 +143,25 @@ async function loadOlder() {
 
 function isMine(message) {
   return message.sender?.id === auth.user?.id;
+}
+
+function showRead(message) {
+  if (!isMine(message) || message.recalled_at) return false;
+  const lastMine = [...store.activeMessages].reverse().find((item) => isMine(item) && !item.recalled_at);
+  if (!lastMine || lastMine.id !== message.id) return false;
+  const readAt = store.activeConversation?.other_read_at;
+  if (!readAt) return false;
+  return new Date(readAt).getTime() >= new Date(message.created_at).getTime();
+}
+
+function pingTyping() {
+  const id = store.activeConversationId;
+  if (!id || editing.value) return;
+  clearTimeout(typingTimer);
+  typingTimer = window.setTimeout(() => {
+    if (draft.value.trim() === '') return;
+    sendTyping(id).catch(() => {});
+  }, 400);
 }
 
 function insertEmoji(emoji) {
@@ -404,7 +442,8 @@ function menuItems(message) {
       <span v-else class="chat-view__avatar chat-view__avatar--placeholder">{{ initial(otherUser?.name) }}</span>
       <span class="chat-view__who">
         <span class="chat-view__title">{{ otherUser?.name || 'Trò chuyện' }}</span>
-        <span v-if="otherUser?.department" class="chat-view__dept">{{ otherUser.department }}</span>
+        <span v-if="peerTyping" class="chat-view__dept">Đang nhập…</span>
+        <span v-else-if="otherUser?.department" class="chat-view__dept">{{ otherUser.department }}</span>
       </span>
     </div>
 
@@ -482,6 +521,7 @@ function menuItems(message) {
             <span class="chat-bubble__meta">
               <span v-if="row.message.edited_at && !row.message.recalled_at">Đã sửa</span>
               <span>{{ formatTime(row.message.created_at) }}</span>
+              <span v-if="showRead(row.message)">Đã xem</span>
             </span>
           </div>
 

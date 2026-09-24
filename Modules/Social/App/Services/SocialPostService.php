@@ -61,10 +61,10 @@ class SocialPostService
         private readonly NotificationService $notifications,
     ) {}
 
-    public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?string $hashtag = null): array
+    public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?string $hashtag = null, ?string $search = null): array
     {
         $scope = $this->normalizeFeedScope($scope);
-        $paginator = $this->posts->paginate($perPage, $page, $scope, $viewer->id, $departmentId, $wallUserId, $groupId, $viewer->department_id, $hashtag);
+        $paginator = $this->posts->paginate($perPage, $page, $scope, $viewer->id, $departmentId, $wallUserId, $groupId, $viewer->department_id, $hashtag, $search);
 
         return [
             'posts' => collect($paginator->items())

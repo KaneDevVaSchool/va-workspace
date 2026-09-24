@@ -5,7 +5,9 @@ import AppIcon from "@/components/AppIcon.vue";
 import PageHeader from "@/components/PageHeader.vue";
 import { showClientToast } from "@/lib/clientToast";
 import { useAuthStore } from "@modules/Identity/resources/js/stores/auth.js";
+import { searchUsers } from "@modules/Chat/resources/js/api/chatApi";
 import SocialBirthdayPanel from "../components/SocialBirthdayPanel.vue";
+import SocialColleagueSearch from "../components/SocialColleagueSearch.vue";
 import SocialHashtagPanel from "../components/SocialHashtagPanel.vue";
 import SocialPinnedPanel from "../components/SocialPinnedPanel.vue";
 import SocialPostCard from "../components/SocialPostCard.vue";
@@ -27,6 +29,11 @@ const hashtagPanel = ref(null);
 const composer = ref(null);
 const profilePanel = ref(null);
 const searchQuery = ref("");
+const serverQuery = ref("");
+const peopleResults = ref([]);
+const peopleOpen = ref(false);
+const filterMenuOpen = ref(false);
+let searchTimer = null;
 const feedScope = ref("all");
 const postScope = ref("company");
 const wallUserId = ref(null);
@@ -76,28 +83,13 @@ const feedScopes = [
     { id: "reacted", label: "Đã tương tác" },
 ];
 
-const visiblePosts = computed(() => {
-    const needle = searchQuery.value.trim().toLowerCase();
-    if (!needle) return posts.value;
-
-    return posts.value.filter((post) => {
-        const hay = [
-            post.content,
-            post.author?.name,
-            post.author?.department,
-            post.shared_from?.content,
-            post.shared_from?.author?.name,
-            post.poll?.title,
-            post.poll?.content,
-            ...(post.poll?.options ?? []).map((option) => option.label),
-        ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-
-        return hay.includes(needle);
-    });
-});
+const visiblePosts = computed(() => posts.value);
+const viewingOtherWall = computed(
+    () => postScope.value === "personal" && wallProfile.value?.is_own === false,
+);
+const activeFilterLabel = computed(
+    () => feedScopes.find((item) => item.id === feedScope.value)?.label ?? "Bảng tin",
+);
 
 const firstUnpinnedIndex = computed(() =>
     visiblePosts.value.findIndex((post) => !post.is_pinned),
@@ -144,6 +136,7 @@ async function loadFeed(targetPage = 1) {
             params.wall_user_id = currentWallUserId.value;
         }
         if (activeHashtag.value) params.hashtag = activeHashtag.value;
+        if (serverQuery.value) params.q = serverQuery.value;
         const { data } = await window.axios.get("/api/social/posts", {
             params,
         });
@@ -172,6 +165,28 @@ function onScopeChange(scope) {
     feedScope.value = scope;
 }
 
+function wallIdFromQuery() {
+    const raw = route.query.wall;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    const id = Number(value);
+    return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+function replaceWallQuery(userId) {
+    const query = { ...route.query };
+    const own = Number(auth.user?.id);
+    const next = Number(userId);
+    if (next && next !== own) {
+        if (String(query.wall ?? "") === String(next)) return;
+        query.wall = String(next);
+    } else if (query.wall == null) {
+        return;
+    } else {
+        delete query.wall;
+    }
+    router.replace({ query });
+}
+
 function onTabChange(tab) {
     if (tab === "personal") {
         openPersonalWall(auth.user?.id);
@@ -181,6 +196,7 @@ function onTabChange(tab) {
     postScope.value = tab;
     wallUserId.value = null;
     wallProfile.value = null;
+    replaceWallQuery(null);
 }
 
 async function loadWallProfile(userId) {
@@ -193,18 +209,32 @@ async function loadWallProfile(userId) {
     }
 }
 
-async function openPersonalWall(userId) {
+async function openPersonalWall(userId, options = {}) {
     if (!userId) return;
     const switching =
         postScope.value !== "personal" || wallUserId.value !== userId;
     postScope.value = "personal";
     wallUserId.value = userId;
     await loadWallProfile(userId);
+    if (options.syncQuery !== false) replaceWallQuery(userId);
     if (!switching) {
         document
             .querySelector(".social-page__main")
             ?.scrollTo({ top: 0, behavior: "smooth" });
     }
+}
+
+function openColleagueWall(userId) {
+    peopleOpen.value = false;
+    searchQuery.value = "";
+    serverQuery.value = "";
+    peopleResults.value = [];
+    openPersonalWall(userId);
+}
+
+function focusColleagueSearch() {
+    leftRailCollapsed.value = false;
+    nextTick(() => profilePanel.value?.focusSearch?.());
 }
 
 function loadMore() {
@@ -378,6 +408,28 @@ function onOpenHashtag(name) {
     setActiveHashtag(name);
 }
 
+watch(searchQuery, (value) => {
+    clearTimeout(searchTimer);
+    const trimmed = value.trim();
+    searchTimer = window.setTimeout(async () => {
+        const next = trimmed.length >= 2 ? trimmed : "";
+        if (next !== serverQuery.value) {
+            serverQuery.value = next;
+            loadFeed(1);
+        }
+        if (trimmed.length < 2) {
+            peopleResults.value = [];
+            peopleOpen.value = false;
+            return;
+        }
+        try {
+            peopleResults.value = await searchUsers(trimmed);
+            peopleOpen.value = true;
+        } catch {
+            peopleResults.value = [];
+        }
+    }, 300);
+});
 watch(feedScope, () => loadFeed(1));
 watch(activeHashtag, () => loadFeed(1));
 watch([postScope, wallUserId], () => {
@@ -391,7 +443,24 @@ watch(
     () => [route.query.post, route.query.comment],
     () => applyFocusedPost(),
 );
+watch(
+    () => route.query.wall,
+    (value) => {
+        const id = wallIdFromQuery();
+        if (!id) return;
+        if (postScope.value === "personal" && Number(wallUserId.value) === id) return;
+        if (value == null) return;
+        openPersonalWall(id, { syncQuery: false });
+    },
+);
 onMounted(async () => {
+    const wall = wallIdFromQuery();
+    if (wall) {
+        suppressFeedReload.value = true;
+        postScope.value = "personal";
+        wallUserId.value = wall;
+        await loadWallProfile(wall);
+    }
     await loadFeed(1);
     await applyFocusedPost();
 });
@@ -426,15 +495,39 @@ onMounted(async () => {
                         Bảng tin
                         <span class="social-head-brand__sub">nội bộ</span>
                     </span>
-                    <label class="social-head-search">
-                        <AppIcon name="search" :size="16" />
-                        <input
-                            v-model="searchQuery"
-                            type="search"
-                            placeholder="Tìm bài viết..."
-                            aria-label="Tìm bài viết, người đăng"
-                        />
-                    </label>
+                    <div class="social-head-search-wrap">
+                        <label class="social-head-search">
+                            <AppIcon name="search" :size="16" />
+                            <input
+                                v-model="searchQuery"
+                                type="search"
+                                placeholder="Tìm bài viết..."
+                                aria-label="Tìm bài viết hoặc đồng nghiệp"
+                                @focus="peopleOpen = peopleResults.length > 0"
+                            />
+                        </label>
+                        <div
+                            v-if="peopleOpen && searchQuery.trim().length >= 2"
+                            class="social-head-people"
+                            role="listbox"
+                            aria-label="Đồng nghiệp"
+                        >
+                            <p class="social-head-people__label">Đồng nghiệp</p>
+                            <p v-if="peopleResults.length === 0" class="social-head-people__empty">
+                                Không có đồng nghiệp khớp tên.
+                            </p>
+                            <button
+                                v-for="user in peopleResults"
+                                :key="user.id"
+                                type="button"
+                                class="social-head-people__item"
+                                @click="openColleagueWall(user.id)"
+                            >
+                                <span>{{ user.name }}</span>
+                                <span v-if="user.department" class="social-head-people__dept">{{ user.department }}</span>
+                            </button>
+                        </div>
+                    </div>
                 </span>
             </template>
         </PageHeader>
@@ -475,6 +568,7 @@ onMounted(async () => {
                     @update:scope="onScopeChange"
                     @update:post-scope="onTabChange"
                     @open-wall="openPersonalWall"
+                    @focus-search="focusColleagueSearch"
                 />
             </aside>
 
@@ -542,28 +636,31 @@ onMounted(async () => {
                     >
                         Tường {{ wallUserName }}
                     </button>
-                </nav>
-
-                <nav
-                    class="social-page__scope-bar hide-scrollbar"
-                    aria-label="Lọc bảng tin"
-                >
-                    <button
-                        v-for="item in feedScopes"
-                        :key="item.id"
-                        type="button"
-                        class="social-page__scope-btn"
-                        :class="{
-                            'social-page__scope-btn--active':
-                                feedScope === item.id,
-                        }"
-                        :aria-current="
-                            feedScope === item.id ? 'page' : undefined
-                        "
-                        @click="onScopeChange(item.id)"
-                    >
-                        {{ item.label }}
-                    </button>
+                    <SocialColleagueSearch @select="openColleagueWall" />
+                    <div v-if="!viewingOtherWall" class="social-page__filter">
+                        <button
+                            type="button"
+                            class="social-page__scope-btn"
+                            aria-haspopup="menu"
+                            :aria-expanded="filterMenuOpen"
+                            @click="filterMenuOpen = !filterMenuOpen"
+                        >
+                            {{ activeFilterLabel }}
+                        </button>
+                        <div v-if="filterMenuOpen" class="social-page__filter-menu" role="menu">
+                            <button
+                                v-for="item in feedScopes"
+                                :key="item.id"
+                                type="button"
+                                role="menuitem"
+                                class="social-page__filter-item"
+                                :aria-current="feedScope === item.id ? 'true' : undefined"
+                                @click="onScopeChange(item.id); filterMenuOpen = false"
+                            >
+                                {{ item.label }}
+                            </button>
+                        </div>
+                    </div>
                 </nav>
 
                 <SocialPostComposer
@@ -871,6 +968,62 @@ onMounted(async () => {
     letter-spacing: 0.02em;
 }
 
+.social-head-search-wrap {
+    position: relative;
+    flex: 0 0 20rem;
+    width: 20rem;
+}
+
+.social-head-search-wrap .social-head-search {
+    width: 100%;
+    flex: 1 1 auto;
+}
+
+.social-head-people {
+    position: absolute;
+    z-index: 6;
+    top: calc(100% + 0.35rem);
+    left: 0;
+    right: 0;
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-lg), inset 0 0 0 1px var(--color-border);
+}
+
+.social-head-people__label,
+.social-head-people__empty {
+    margin: 0;
+    padding: 0.55rem 0.75rem;
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+}
+
+.social-head-people__item {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    box-shadow: 0 1px 0 var(--color-border);
+}
+
+.social-head-people__item:hover {
+    background: var(--color-surface-muted);
+}
+
+.social-head-people__dept {
+    color: var(--color-text-muted);
+    font-size: 0.6875rem;
+    font-weight: 500;
+}
+
 @keyframes social-head-in {
     from {
         opacity: 0;
@@ -1098,7 +1251,10 @@ onMounted(async () => {
     background: var(--color-surface);
     border-radius: var(--radius-full);
     box-shadow: var(--shadow-sm);
-    overflow-x: auto;
+    overflow: visible;
+    flex-wrap: wrap;
+    align-items: center;
+    border-radius: var(--radius-lg);
 }
 
 .social-page__scope-btn {
@@ -1123,6 +1279,43 @@ onMounted(async () => {
 .social-page__scope-btn--active {
     background: var(--color-primary);
     color: var(--color-on-primary);
+}
+
+.social-page__filter {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.social-page__filter-menu {
+    position: absolute;
+    z-index: 5;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    min-width: 10rem;
+    padding: 0.25rem;
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-lg), inset 0 0 0 1px var(--color-border);
+}
+
+.social-page__filter-item {
+    display: block;
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 0.45rem 0.7rem;
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.social-page__filter-item:hover,
+.social-page__filter-item[aria-current='true'] {
+    background: var(--color-primary-surface);
+    color: var(--color-primary);
 }
 
 .social-page__list {
@@ -1225,7 +1418,8 @@ onMounted(async () => {
         overflow-y: visible;
     }
 
-    .social-head-search {
+    .social-head-search,
+    .social-head-search-wrap {
         flex: 1 1 auto;
         width: auto;
         max-width: 22rem;
@@ -1245,7 +1439,8 @@ onMounted(async () => {
         padding-right: var(--space-2);
     }
 
-    .social-head-search {
+    .social-head-search,
+    .social-head-search-wrap {
         max-width: none;
     }
 }

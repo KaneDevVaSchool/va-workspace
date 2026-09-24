@@ -7,7 +7,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
+use Modules\Chat\App\Events\InboxUpdated;
 use Modules\Chat\App\Events\MessageSent;
+use Modules\Identity\App\Models\UserNotification;
 use Modules\Chat\App\Models\MessageAttachment;
 use Tests\TestCase;
 
@@ -108,6 +111,60 @@ class ChatMessageTest extends TestCase
             'type' => 'chat_message',
             'body' => 'Xin chào',
         ]);
+    }
+
+    public function test_first_message_dispatches_inbox_update_only_for_the_recipient(): void
+    {
+        Event::fake([InboxUpdated::class, MessageSent::class]);
+
+        $sender = $this->makeUser('Mai');
+        $recipient = $this->makeUser('Bình');
+        $conversationId = $this->openConversation($sender, $recipient);
+
+        $this->actingAs($sender)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages", ['message' => 'Xin chào'])
+            ->assertCreated();
+
+        Event::assertDispatched(InboxUpdated::class, fn (InboxUpdated $event) => $event->userId === $recipient->id);
+        Event::assertNotDispatched(InboxUpdated::class, fn (InboxUpdated $event) => $event->userId === $sender->id);
+    }
+
+    public function test_a_second_message_updates_the_same_unread_chat_notification(): void
+    {
+        $sender = $this->makeUser('Mai');
+        $recipient = $this->makeUser('Bình');
+        $conversationId = $this->openConversation($sender, $recipient);
+
+        $this->actingAs($sender)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages", ['message' => 'Tin một'])
+            ->assertCreated();
+        $this->actingAs($sender)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages", ['message' => 'Tin hai'])
+            ->assertCreated();
+
+        $rows = UserNotification::query()
+            ->where('user_id', $recipient->id)
+            ->where('type', 'chat_message')
+            ->whereNull('read_at')
+            ->get();
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('Tin hai', $rows->first()->body);
+    }
+
+    public function test_open_conversation_does_not_create_a_bell_notification(): void
+    {
+        $sender = $this->makeUser('Mai');
+        $recipient = $this->makeUser('Bình');
+        $conversationId = $this->openConversation($sender, $recipient);
+
+        Cache::put('chat.viewing.'.$recipient->id, $conversationId, now()->addMinute());
+
+        $this->actingAs($sender)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages", ['message' => 'Đang xem'])
+            ->assertCreated();
+
+        $this->assertSame(0, UserNotification::query()->where('type', 'chat_message')->count());
     }
 
     public function test_sender_can_edit_own_message(): void

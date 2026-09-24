@@ -15,7 +15,7 @@ interface SocialPostRepositoryInterface
      * @param  int|null  $groupId  null trừ khi tường nhóm
      * @param  int|null  $viewerDepartmentId  phòng ban của viewer, để lọc bài giới hạn hiển thị theo phòng ban trên bảng tin chung
      */
-    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?int $viewerDepartmentId = null, ?string $hashtag = null): LengthAwarePaginator;
+    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?int $viewerDepartmentId = null, ?string $hashtag = null, ?string $search = null): LengthAwarePaginator;
 
     /** Giới hạn bài viết theo tường / phòng ban / nhóm và quyền xem trên bảng tin chung. */
     public function constrainVisibleFeed($query, ?int $departmentId, ?int $wallUserId, ?int $groupId, ?int $viewerDepartmentId): void;

@@ -54,6 +54,18 @@ export function markRead(conversationId) {
   return window.axios.post(`/api/chat/conversations/${conversationId}/read`).then((r) => r.data);
 }
 
+export function touchViewing(conversationId) {
+  return window.axios.post(`/api/chat/conversations/${conversationId}/viewing`);
+}
+
+export function leaveViewing(conversationId) {
+  return window.axios.delete(`/api/chat/conversations/${conversationId}/viewing`);
+}
+
+export function sendTyping(conversationId) {
+  return window.axios.post(`/api/chat/conversations/${conversationId}/typing`);
+}
+
 export function fetchUnreadCount() {
   return window.axios.get('/api/chat/unread-count').then((r) => r.data.unread_total ?? 0);
 }

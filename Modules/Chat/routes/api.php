@@ -8,6 +8,9 @@ Route::middleware('auth')->prefix('chat')->name('chat.')->group(function () {
     Route::get('/conversations', [ChatConversationController::class, 'index'])->name('conversations.index');
     Route::post('/conversations', [ChatConversationController::class, 'store'])->name('conversations.store');
     Route::post('/conversations/{conversationId}/read', [ChatConversationController::class, 'markRead'])->name('conversations.read');
+    Route::post('/conversations/{conversationId}/typing', [ChatConversationController::class, 'typing'])->name('conversations.typing');
+    Route::post('/conversations/{conversationId}/viewing', [ChatConversationController::class, 'viewing'])->name('conversations.viewing');
+    Route::delete('/conversations/{conversationId}/viewing', [ChatConversationController::class, 'leaveViewing'])->name('conversations.viewing.leave');
     Route::get('/conversations/{conversationId}/messages', [ChatMessageController::class, 'index'])->name('messages.index');
     Route::post('/conversations/{conversationId}/messages', [ChatMessageController::class, 'store'])->name('messages.store');
     Route::patch('/conversations/{conversationId}/messages/{messageId}', [ChatMessageController::class, 'update'])->name('messages.update');

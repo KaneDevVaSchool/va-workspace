@@ -7,10 +7,12 @@ import {
   hideMessage as apiHideMessage,
   listConversations,
   listMessages,
+  leaveViewing,
   markRead as apiMarkRead,
   openConversation,
   recallMessage as apiRecallMessage,
   sendMessage as apiSendMessage,
+  touchViewing,
 } from '../api/chatApi';
 
 export function chatPreview(message) {
@@ -49,6 +51,9 @@ export const useChatStore = defineStore('chat', {
     loadingConversations: false,
     loadingMessages: false,
     subscribedChannels: new Set(),
+    inboxSubscribed: false,
+    freshConversationId: null,
+    typingByConversation: {},
   }),
 
   getters: {
@@ -64,9 +69,11 @@ export const useChatStore = defineStore('chat', {
     async fetchConversations() {
       this.loadingConversations = true;
       try {
-        this.conversations = await listConversations();
+        const remote = await listConversations();
+        this.conversations = this.mergeConversations(remote);
         this.recomputeUnreadTotal();
         this.subscribeToAllConversations();
+        this.subscribeInbox();
       } finally {
         this.loadingConversations = false;
       }
@@ -91,6 +98,24 @@ export const useChatStore = defineStore('chat', {
       return conversation;
     },
 
+    mergeConversations(remote) {
+      const byId = new Map(remote.map((conversation) => [conversation.id, conversation]));
+      for (const local of this.conversations) {
+        const server = byId.get(local.id);
+        if (!server) {
+          byId.set(local.id, local);
+          continue;
+        }
+        const localLast = local.last_message?.id ?? 0;
+        const serverLast = server.last_message?.id ?? 0;
+        if (localLast > serverLast) {
+          server.last_message = local.last_message;
+          server.unread_count = Math.max(server.unread_count || 0, local.unread_count || 0);
+        }
+      }
+      return [...byId.values()];
+    },
+
     async openConversationView(conversationId) {
       this.panelOpen = true;
       this.activeConversationId = conversationId;
@@ -99,11 +124,14 @@ export const useChatStore = defineStore('chat', {
         await this.fetchMessages(conversationId);
       }
       await this.markRead(conversationId);
+      touchViewing(conversationId).catch(() => {});
     },
 
     backToList() {
+      const leaving = this.activeConversationId;
       this.activeView = 'list';
       this.activeConversationId = null;
+      if (leaving) leaveViewing(leaving).catch(() => {});
     },
 
     async fetchMessages(conversationId, beforeId = null) {
@@ -197,7 +225,7 @@ export const useChatStore = defineStore('chat', {
       this.recomputeUnreadTotal();
     },
 
-    handleIncomingMessage(conversationId, payload) {
+    handleIncomingMessage(conversationId, payload, options = {}) {
       const existing = this.messagesByConversation[conversationId] ?? [];
       const known = existing.some((m) => m.id === payload.id);
       this.appendMessage(conversationId, payload);
@@ -213,11 +241,15 @@ export const useChatStore = defineStore('chat', {
 
       const auth = useAuthStore();
       if (payload.sender?.id && payload.sender.id !== auth.user?.id) {
-        const conversation = this.conversations.find((c) => c.id === conversationId);
-        if (conversation) {
-          conversation.unread_count = (conversation.unread_count || 0) + 1;
+        if (!options.fromInbox) {
+          const conversation = this.conversations.find((c) => c.id === conversationId);
+          if (conversation) {
+            conversation.unread_count = (conversation.unread_count || 0) + 1;
+          }
+          this.unreadTotal += 1;
+        } else {
+          this.recomputeUnreadTotal();
         }
-        this.unreadTotal += 1;
         const name = payload.sender?.name || 'Đồng nghiệp';
         showClientToast('info', `${name}: ${chatPreview(payload)}`, { duration: 5000 });
       }
@@ -237,8 +269,11 @@ export const useChatStore = defineStore('chat', {
         .listen('.message.updated', (payload) => {
           this.replaceMessage(conversationId, payload);
         })
-        .listen('.message.read', () => {
-          // Điểm mở rộng cho trạng thái "đã xem" ở phase sau.
+        .listen('.message.read', (payload) => {
+          this.applyReadReceipt(conversationId, payload);
+        })
+        .listen('.user.typing', (payload) => {
+          this.applyTyping(conversationId, payload);
         });
 
       this.subscribedChannels.add(conversationId);
@@ -252,7 +287,58 @@ export const useChatStore = defineStore('chat', {
     },
 
     closePanel() {
+      const leaving = this.activeView === 'conversation' ? this.activeConversationId : null;
       this.panelOpen = false;
+      if (leaving) leaveViewing(leaving).catch(() => {});
+    },
+
+    handleInbox(payload) {
+      const conversation = payload?.conversation;
+      const message = payload?.message;
+      if (!conversation?.id || !message?.id) return;
+
+      const known = this.conversations.some((item) => item.id === conversation.id);
+      if (known) return;
+
+      this.conversations = [conversation, ...this.conversations];
+      this.subscribeToConversation(conversation.id);
+      this.freshConversationId = conversation.id;
+      window.setTimeout(() => {
+        if (this.freshConversationId === conversation.id) this.freshConversationId = null;
+      }, 2400);
+      this.handleIncomingMessage(conversation.id, message, { fromInbox: true });
+    },
+
+    subscribeInbox() {
+      const auth = useAuthStore();
+      const userId = auth.user?.id;
+      if (!window.Echo || !userId || this.inboxSubscribed) return;
+
+      window.Echo.private(`chat.inbox.${userId}`).listen('.inbox.updated', (payload) => {
+        this.handleInbox(payload);
+      });
+      this.inboxSubscribed = true;
+    },
+
+    applyReadReceipt(conversationId, payload) {
+      const auth = useAuthStore();
+      if (!payload?.read_at || payload.user_id === auth.user?.id) return;
+      const conversation = this.conversations.find((item) => item.id === conversationId);
+      if (conversation) conversation.other_read_at = payload.read_at;
+    },
+
+    applyTyping(conversationId, payload) {
+      const auth = useAuthStore();
+      if (!payload?.user_id || payload.user_id === auth.user?.id) return;
+      const until = Date.now() + 3000;
+      this.typingByConversation = { ...this.typingByConversation, [conversationId]: until };
+      window.setTimeout(() => {
+        if (this.typingByConversation[conversationId] === until) {
+          const next = { ...this.typingByConversation };
+          delete next[conversationId];
+          this.typingByConversation = next;
+        }
+      }, 3000);
     },
   },
 });

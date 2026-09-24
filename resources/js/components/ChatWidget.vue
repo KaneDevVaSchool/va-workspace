@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ChatFloatingPanel from '@modules/Chat/resources/js/components/ChatFloatingPanel.vue';
 import ChatWidgetButton from '@modules/Chat/resources/js/components/ChatWidgetButton.vue';
@@ -30,19 +30,8 @@ watch(
   { immediate: true },
 );
 
-function handleDocumentClick(event) {
-  if (!store.panelOpen || !rootRef.value) return;
-  if (rootRef.value.contains(event.target)) return;
-  store.closePanel();
-}
-
 onMounted(() => {
-  document.addEventListener('mousedown', handleDocumentClick);
   store.fetchConversations().catch(() => {});
-});
-
-onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', handleDocumentClick);
 });
 </script>
 

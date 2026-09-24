@@ -43,6 +43,35 @@ class ChatConversationController extends Controller
         return response()->json(['unread_count' => 0]);
     }
 
+    public function typing(Request $request, int $conversationId): JsonResponse
+    {
+        if (! $this->service->isMember($request->user(), $conversationId)) {
+            return response()->json(['message' => 'Bạn không thuộc cuộc trò chuyện này.'], 403);
+        }
+
+        $this->service->broadcastTyping($request->user(), $conversationId);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function viewing(Request $request, int $conversationId): JsonResponse
+    {
+        if (! $this->service->isMember($request->user(), $conversationId)) {
+            return response()->json(['message' => 'Bạn không thuộc cuộc trò chuyện này.'], 403);
+        }
+
+        $this->service->touchViewing($request->user(), $conversationId);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function leaveViewing(Request $request, int $conversationId): JsonResponse
+    {
+        $this->service->clearViewing($request->user(), $conversationId);
+
+        return response()->json(['ok' => true]);
+    }
+
     public function unreadCount(Request $request): JsonResponse
     {
         return response()->json($this->service->unreadSummary($request->user()));

@@ -21,3 +21,7 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
 Broadcast::channel('chat.conversation.{conversationId}', function ($user, $conversationId) {
     return app(ConversationRepositoryInterface::class)->isMember((int) $conversationId, (int) $user->id);
 });
+
+Broadcast::channel('chat.inbox.{userId}', function ($user, $userId) {
+    return (int) $user->id === (int) $userId;
+});

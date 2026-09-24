@@ -29,7 +29,10 @@ function open(conversationId) {
         :key="conversation.id"
         type="button"
         class="chat-item"
-        :class="{ 'chat-item--unread': conversation.unread_count > 0 }"
+        :class="{
+          'chat-item--unread': conversation.unread_count > 0,
+          'chat-item--fresh': store.freshConversationId === conversation.id,
+        }"
         @click="open(conversation.id)"
       >
         <img
@@ -48,6 +51,9 @@ function open(conversationId) {
               {{ formatRelativeTime(conversation.last_message.created_at) }}
             </span>
           </span>
+          <span v-if="conversation.other_user?.department" class="chat-item__dept">
+            {{ conversation.other_user.department }}
+          </span>
           <span
             v-if="conversation.last_message"
             class="chat-item__excerpt"
@@ -57,7 +63,9 @@ function open(conversationId) {
           </span>
           <span v-else class="chat-item__excerpt chat-item__excerpt--muted">Chưa có tin nhắn</span>
         </span>
-        <span v-if="conversation.unread_count > 0" class="chat-item__unread-dot" aria-hidden="true" />
+        <span v-if="conversation.unread_count > 0" class="chat-item__count">
+          {{ conversation.unread_count > 99 ? '99+' : conversation.unread_count }}
+        </span>
       </button>
     </div>
   </div>
@@ -108,6 +116,17 @@ function open(conversationId) {
   background: var(--color-primary-surface);
 }
 
+.chat-item--fresh {
+  animation: chat-item-fresh 2.4s ease;
+}
+
+@keyframes chat-item-fresh {
+  0%,
+  40% {
+    background: var(--color-primary-surface);
+  }
+}
+
 .chat-item__avatar {
   width: 2.25rem;
   height: 2.25rem;
@@ -147,6 +166,11 @@ function open(conversationId) {
   font-weight: 600;
 }
 
+.chat-item__dept {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+}
+
 .chat-item__time {
   flex-shrink: 0;
   color: var(--color-text-muted);
@@ -165,12 +189,18 @@ function open(conversationId) {
   font-style: italic;
 }
 
-.chat-item__unread-dot {
+.chat-item__count {
   flex-shrink: 0;
-  width: 0.5rem;
-  height: 0.5rem;
-  margin-top: 0.4rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.2rem;
+  padding: 0 0.3rem;
   border-radius: var(--radius-full);
   background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.15rem;
+  text-align: center;
 }
 </style>

@@ -53,6 +53,8 @@ class SocialPostController extends Controller
             ? SocialHashtagService::normalize(ltrim(trim($hashtag), '#'))
             : null;
 
+        $search = trim((string) $request->query('q', ''));
+
         return response()->json(
             $this->service->listFeed(
                 $request->user(),
@@ -63,6 +65,7 @@ class SocialPostController extends Controller
                 $wall['wall_user_id'],
                 $wall['group_id'],
                 $hashtagNormalized,
+                $search !== '' ? $search : null,
             )
         );
     }

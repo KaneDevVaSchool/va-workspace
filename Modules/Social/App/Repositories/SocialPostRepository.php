@@ -41,7 +41,7 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         return $query;
     }
 
-    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?int $viewerDepartmentId = null, ?string $hashtag = null): LengthAwarePaginator
+    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?int $viewerDepartmentId = null, ?string $hashtag = null, ?string $search = null): LengthAwarePaginator
     {
         $query = $this->baseQuery($userId);
         $this->constrainVisibleFeed($query, $departmentId, $wallUserId, $groupId, $viewerDepartmentId);
@@ -60,6 +60,8 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         if ($hashtag !== null && $hashtag !== '') {
             $query->whereHas('hashtags', fn ($tags) => $tags->where('name', $hashtag));
         }
+
+        $this->applyFeedSearch($query, $search);
 
         return $query
             ->orderByDesc('is_pinned')
@@ -107,6 +109,27 @@ class SocialPostRepository implements SocialPostRepositoryInterface
             ->orderByDesc('pinned_at')
             ->orderByDesc('id')
             ->paginate($perPage, ['*'], 'page', $page);
+    }
+
+    private function applyFeedSearch($query, ?string $search): void
+    {
+        $needle = trim((string) $search);
+        if ($needle === '') {
+            return;
+        }
+
+        $like = '%'.addcslashes($needle, '%_\\').'%';
+
+        $query->where(function ($inner) use ($like) {
+            $inner->where('content', 'like', $like)
+                ->orWhereHas('user', fn ($users) => $users->where('name', 'like', $like))
+                ->orWhereHas('hashtags', fn ($tags) => $tags
+                    ->where('name', 'like', $like)
+                    ->orWhere('label', 'like', $like))
+                ->orWhereHas('poll', fn ($polls) => $polls
+                    ->where('title', 'like', $like)
+                    ->orWhere('content', 'like', $like));
+        });
     }
 
     private function applyPinnedSearch($query, ?string $search): void

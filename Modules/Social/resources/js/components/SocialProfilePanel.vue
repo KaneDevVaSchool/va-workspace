@@ -1,9 +1,11 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import AppIcon from "@/components/AppIcon.vue";
 import { showClientToast } from "@/lib/clientToast";
+import { useChatStore } from "@modules/Chat/resources/js/store/chatStore";
 import { useAuthStore } from "@modules/Identity/resources/js/stores/auth.js";
+import SocialColleagueSearch from "./SocialColleagueSearch.vue";
 
 const props = defineProps({
     scope: { type: String, default: "all" },
@@ -12,10 +14,13 @@ const props = defineProps({
     collapsed: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["update:scope", "update:postScope", "open-wall"]);
+const emit = defineEmits(["update:scope", "update:postScope", "open-wall", "focus-search"]);
 
 const auth = useAuthStore();
+const route = useRoute();
 const router = useRouter();
+const chat = useChatStore();
+const colleagueSearch = ref(null);
 const stats = ref({ posts_count: 0, reactions_received: 0, comments_count: 0 });
 const statsLoaded = ref(false);
 const emailCopied = ref(false);
@@ -96,9 +101,35 @@ function formatCount(value) {
 }
 
 function setScope(scope) {
-    if (!scope) return;
+    if (!scope || viewingOther.value) return;
     emit("update:scope", scope);
 }
+
+function messageThem() {
+    const id = profileUser.value?.id;
+    if (id) chat.openWithUser(id);
+}
+
+async function copyWallLink() {
+    const id = profileUser.value?.id;
+    if (!id) return;
+    const href = router.resolve({
+        name: "social.feed",
+        query: { ...route.query, wall: String(id) },
+    }).href;
+    try {
+        await navigator.clipboard.writeText(new URL(href, window.location.origin).toString());
+        showClientToast("success", "Đã sao chép liên kết tường.");
+    } catch {
+        showClientToast("error", "Không thể sao chép liên kết.");
+    }
+}
+
+function focusSearch() {
+    colleagueSearch.value?.focus();
+}
+
+defineExpose({ loadStats, focusSearch });
 
 function setPostScope(scope) {
     emit("update:postScope", scope);
@@ -163,7 +194,6 @@ async function loadStats() {
     }
 }
 
-defineExpose({ loadStats });
 onMounted(loadStats);
 onBeforeUnmount(() => {
     if (copiedTimer) clearTimeout(copiedTimer);
@@ -241,6 +271,17 @@ watch(() => props.wallProfile, loadStats);
                         <span class="profile-card__name-text">{{ displayName }}</span>
                     </button>
                     <h2 v-else class="profile-card__name">{{ displayName }}</h2>
+                    <div v-if="viewingOther && !collapsed" class="profile-card__actions">
+                        <button type="button" class="profile-card__action" @click="messageThem">
+                            Nhắn tin
+                        </button>
+                        <button type="button" class="profile-card__action" @click="copyWallLink">
+                            Sao chép liên kết
+                        </button>
+                        <button type="button" class="profile-card__action" @click="setPostScope('company')">
+                            Về bảng tin
+                        </button>
+                    </div>
 
                     <button
                         v-if="departmentName && !viewingOther"
@@ -281,7 +322,7 @@ watch(() => props.wallProfile, loadStats);
 
                     <div class="profile-card__stats" aria-label="Thống kê bảng tin">
                         <component
-                            :is="item.scope ? 'button' : 'div'"
+                            :is="item.scope && !viewingOther ? 'button' : 'div'"
                             v-for="item in statItems"
                             :key="item.id"
                             :type="item.scope ? 'button' : undefined"
@@ -383,6 +424,22 @@ watch(() => props.wallProfile, loadStats);
                     :size="14"
                 />
             </button>
+            <button
+                v-if="collapsed"
+                type="button"
+                class="profile-nav__btn"
+                aria-label="Tìm đồng nghiệp"
+                @click="emit('focus-search')"
+            >
+                <span class="profile-nav__icon" aria-hidden="true">
+                    <AppIcon name="users" :size="16" />
+                </span>
+            </button>
+            <SocialColleagueSearch
+                v-else
+                ref="colleagueSearch"
+                @select="emit('open-wall', $event)"
+            />
         </nav>
     </div>
 </template>
@@ -650,6 +707,31 @@ watch(() => props.wallProfile, loadStats);
 .profile-card__hello-icon {
     color: var(--color-gold-500);
     animation: profile-twinkle 3.2s ease-in-out infinite;
+}
+
+.profile-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+}
+
+.profile-card__action {
+    border: none;
+    background: var(--color-primary-surface);
+    color: var(--color-primary);
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+}
+
+.profile-card__action:hover {
+    background: var(--color-primary);
+    color: var(--color-on-primary);
 }
 
 .profile-card__name {

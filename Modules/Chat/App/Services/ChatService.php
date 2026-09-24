@@ -4,17 +4,21 @@ namespace Modules\Chat\App\Services;
 
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Modules\Chat\App\Events\InboxUpdated;
 use Modules\Chat\App\Events\MessageRead;
 use Modules\Chat\App\Events\MessageSent;
 use Modules\Chat\App\Events\MessageUpdated;
+use Modules\Chat\App\Events\UserTyping;
 use Modules\Chat\App\Models\Conversation;
 use Modules\Chat\App\Models\ConversationMember;
 use Modules\Chat\App\Models\Message;
 use Modules\Chat\App\Repositories\Contracts\ConversationRepositoryInterface;
 use Modules\Chat\App\Repositories\Contracts\MessageRepositoryInterface;
+use Modules\Identity\App\Models\UserNotification;
 use Modules\Identity\App\Services\NotificationService;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -148,21 +152,20 @@ class ChatService
         $recipient = $this->conversations->otherMember($conversationId, $actor->id);
 
         if ($recipient?->user) {
-            $avatar = $actor->avatar_url;
-            $this->notifications->notify(
-                recipient: $recipient->user,
-                actor: $actor,
-                type: NotificationService::TYPE_CHAT_MESSAGE,
-                title: "{$actor->name} đã gửi cho bạn một tin nhắn",
-                body: $this->notificationExcerpt($message),
-                url: '/?chat='.$conversationId,
-                data: [
-                    'conversation_id' => $conversationId,
-                    'message_id' => $message->id,
-                    'push_icon' => is_string($avatar) ? $avatar : null,
-                    'push_tag' => 'va-chat-'.$conversationId,
-                ],
-            );
+            $unread = $this->messages->unreadCountsForUser($recipient->user->id)[$conversationId] ?? 1;
+            $card = $this->presentConversation($this->requireConversation($conversationId), $recipient->user, $unread);
+            InboxUpdated::dispatch($recipient->user->id, $card, $presented);
+
+            if ((int) Cache::get($this->viewingKey($recipient->user->id)) !== $conversationId) {
+                $this->upsertChatNotification(
+                    $recipient->user,
+                    $actor,
+                    $conversationId,
+                    "{$actor->name} đã gửi cho bạn một tin nhắn",
+                    $this->notificationExcerpt($message),
+                    $actor->avatar_url,
+                );
+            }
         }
 
         return ['message' => $presented];
@@ -224,8 +227,29 @@ class ChatService
     public function markRead(User $actor, int $conversationId): void
     {
         $this->conversations->markRead($conversationId, $actor->id);
+        $this->markChatNotificationsRead($actor->id, $conversationId);
+        Cache::put($this->viewingKey($actor->id), $conversationId, now()->addSeconds(45));
 
         MessageRead::dispatch($conversationId, $actor->id, now()->toIso8601String());
+    }
+
+    public function touchViewing(User $actor, int $conversationId): void
+    {
+        Cache::put($this->viewingKey($actor->id), $conversationId, now()->addSeconds(45));
+    }
+
+    public function clearViewing(User $actor, int $conversationId): void
+    {
+        $key = $this->viewingKey($actor->id);
+        if ((int) Cache::get($key) === $conversationId) {
+            Cache::forget($key);
+        }
+    }
+
+    public function broadcastTyping(User $actor, int $conversationId): void
+    {
+        Cache::put($this->viewingKey($actor->id), $conversationId, now()->addSeconds(45));
+        UserTyping::dispatch($conversationId, $actor->id, $actor->name);
     }
 
     public function unreadSummary(User $actor): array
@@ -262,6 +286,72 @@ class ChatService
         return $message;
     }
 
+    private function viewingKey(int $userId): string
+    {
+        return 'chat.viewing.'.$userId;
+    }
+
+    private function requireConversation(int $conversationId): Conversation
+    {
+        $conversation = $this->conversations->find($conversationId);
+        if (! $conversation) {
+            throw new NotFoundHttpException('Không tìm thấy cuộc trò chuyện.');
+        }
+
+        return $conversation;
+    }
+
+    private function markChatNotificationsRead(int $userId, int $conversationId): void
+    {
+        UserNotification::query()
+            ->where('user_id', $userId)
+            ->where('type', NotificationService::TYPE_CHAT_MESSAGE)
+            ->whereNull('read_at')
+            ->where('data->conversation_id', $conversationId)
+            ->update(['read_at' => now()]);
+    }
+
+    private function upsertChatNotification(User $recipient, User $actor, int $conversationId, string $title, string $body, mixed $avatar): void
+    {
+        $data = [
+            'conversation_id' => $conversationId,
+            'push_icon' => is_string($avatar) ? $avatar : null,
+            'push_tag' => 'va-chat-'.$conversationId,
+        ];
+
+        $existing = UserNotification::query()
+            ->where('user_id', $recipient->id)
+            ->where('type', NotificationService::TYPE_CHAT_MESSAGE)
+            ->whereNull('read_at')
+            ->where('data->conversation_id', $conversationId)
+            ->first();
+
+        if ($existing) {
+            $existing->forceFill([
+                'actor_id' => $actor->id,
+                'title' => $title,
+                'body' => $body,
+                'url' => '/?chat='.$conversationId,
+                'data' => [
+                    'conversation_id' => $conversationId,
+                ],
+                'created_at' => now(),
+            ])->save();
+
+            return;
+        }
+
+        $this->notifications->notify(
+            recipient: $recipient,
+            actor: $actor,
+            type: NotificationService::TYPE_CHAT_MESSAGE,
+            title: $title,
+            body: $body,
+            url: '/?chat='.$conversationId,
+            data: $data,
+        );
+    }
+
     private function notificationExcerpt(Message $message): string
     {
         if ($this->isSticker($message)) {
@@ -291,6 +381,7 @@ class ChatService
         return [
             'id' => $conversation->id,
             'other_user' => $this->presentOtherUser($other),
+            'other_read_at' => $other?->last_read_at?->toIso8601String(),
             'last_message' => $latest ? [
                 'id' => $latest->id,
                 'message' => $this->previewText($latest),
