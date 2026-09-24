@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
+import AppIcon from '../components/AppIcon.vue';
 import PageHeader from '../components/PageHeader.vue';
 
 const auth = useAuthStore();
@@ -22,7 +23,7 @@ const ROLE_TAB = {
 const flows = {
     super_admin: {
         title: 'Super Admin',
-        lead: 'Làm lần lượt từ trên xuống: cấp quyền, cấu hình, rồi giám sát. Việc hàng ngày để Admin và trưởng phòng làm.',
+        lead: 'Làm lần lượt: cấp quyền, cấu hình, rồi giám sát. Việc hàng ngày để Admin và trưởng phòng làm.',
         steps: [
             {
                 icon: 'shield',
@@ -240,6 +241,15 @@ watch(
     { immediate: true },
 );
 
+const STEP_TONE = ['primary', 'tertiary', 'secondary', 'gold'];
+
+const ROLE_ICON = {
+    super_admin: 'shield',
+    admin: 'settings',
+    department_director: 'building',
+    member: 'user',
+};
+
 const current = computed(() => flows[activeTab.value]);
 const mine = computed(() => tabForUser(auth.user));
 
@@ -247,250 +257,620 @@ function selectTab(id) {
     chosen.value = true;
     activeTab.value = id;
 }
+
+function tone(index) {
+    return STEP_TONE[index] ?? 'primary';
+}
 </script>
 
 <template>
-    <section class="guide">
+    <section class="map">
         <PageHeader
             title="Hướng dẫn"
             icon="gitBranch"
-            description="Chọn vai trò, đọc từ bước 1 xuống. Mỗi bước nói việc cần làm và chỗ mở trong hệ thống."
+            description="Chọn vai trò. Đọc các bước nối với nhau, từ bước 1 đến kết quả."
             :breadcrumbs="[{ label: 'Hướng dẫn' }]"
         />
 
-        <div class="guide__body">
-            <div class="guide__roles" role="tablist" aria-label="Vai trò">
-                <button
-                    v-for="tab in tabs"
-                    :key="tab.id"
-                    type="button"
-                    role="tab"
-                    class="guide__role"
-                    :class="{ 'guide__role--active': activeTab === tab.id }"
-                    :aria-selected="activeTab === tab.id"
-                    @click="selectTab(tab.id)"
-                >
-                    {{ tab.label }}
-                    <span v-if="mine === tab.id" class="guide__you">của bạn</span>
-                </button>
+        <div class="map__canvas">
+            <div class="roles" role="tablist" aria-label="Vai trò">
+                <template v-for="(tab, index) in tabs" :key="tab.id">
+                    <button
+                        type="button"
+                        role="tab"
+                        class="role"
+                        :class="{ 'role--active': activeTab === tab.id }"
+                        :aria-selected="activeTab === tab.id"
+                        @click="selectTab(tab.id)"
+                    >
+                        <span class="role__mark" aria-hidden="true">
+                            <AppIcon :name="ROLE_ICON[tab.id]" :size="16" :stroke-width="1.75" />
+                        </span>
+                        <span class="role__copy">
+                            <span class="role__label">{{ tab.label }}</span>
+                            <span v-if="mine === tab.id" class="role__you">
+                                <span class="role__dot" aria-hidden="true"></span>
+                                của bạn
+                            </span>
+                        </span>
+                    </button>
+                    <span v-if="index < tabs.length - 1" class="role-wire" aria-hidden="true"></span>
+                </template>
             </div>
 
-            <header class="guide__lead">
+            <header class="map__lead">
                 <h2>{{ current.title }}</h2>
                 <p>{{ current.lead }}</p>
             </header>
 
-            <ol class="steps" :aria-label="`Hướng dẫn ${current.title}`">
-                <li v-for="(step, index) in current.steps" :key="step.title" class="step">
-                    <span class="step__num" aria-hidden="true">{{ index + 1 }}</span>
-                    <div class="step__body">
-                        <h3>{{ step.title }}</h3>
-                        <p>{{ step.teaser }}</p>
-                        <ul>
-                            <li v-for="item in step.items" :key="item">{{ item }}</li>
-                        </ul>
-                        <router-link v-if="step.button" class="step__go" :to="step.button.to">
-                            {{ step.button.label }}
-                        </router-link>
+            <div class="flow" role="list" :aria-label="`Hướng dẫn ${current.title}`">
+                <article
+                    v-for="(step, index) in current.steps"
+                    :key="step.title"
+                    class="node"
+                    :class="[`node--${tone(index)}`, { 'node--result': step.result }]"
+                    role="listitem"
+                >
+                    <span v-if="index > 0" class="port port--in" aria-hidden="true"></span>
+                    <span v-if="index < current.steps.length - 1" class="port port--out" aria-hidden="true"></span>
+                    <span v-if="index < current.steps.length - 1" class="wire" aria-hidden="true">
+                        <span class="wire__line"></span>
+                        <AppIcon name="chevronRight" :size="14" :stroke-width="2" />
+                    </span>
+
+                    <div class="node__top">
+                        <span class="node__icon" aria-hidden="true">
+                            <AppIcon :name="step.icon" :size="18" :stroke-width="1.75" />
+                        </span>
+                        <span class="node__step">{{ step.result ? 'Kết quả' : `Bước ${index + 1}` }}</span>
                     </div>
-                </li>
-            </ol>
-
-            <div class="guide__extra">
-                <section class="note" aria-labelledby="guide-aside-title">
-                    <h3 id="guide-aside-title">{{ current.aside.title }}</h3>
-                    <p>{{ current.aside.teaser }}</p>
+                    <h3>{{ step.title }}</h3>
+                    <p>{{ step.teaser }}</p>
                     <ul>
-                        <li v-for="item in current.aside.items" :key="item.label">{{ item.label }}</li>
+                        <li v-for="item in step.items" :key="item">{{ item }}</li>
                     </ul>
-                    <router-link v-if="current.aside.button" class="step__go" :to="current.aside.button.to">
-                        {{ current.aside.button.label }}
+                    <router-link v-if="step.button" class="node__go" :to="step.button.to">
+                        {{ step.button.label }}
+                        <AppIcon name="arrowRight" :size="14" :stroke-width="2" />
                     </router-link>
-                </section>
+                </article>
+            </div>
 
-                <section class="note" aria-labelledby="guide-more-title">
-                    <h3 id="guide-more-title">Mở từ menu khi cần</h3>
-                    <p>Các mục này không nằm trong bốn bước. Vào từ menu bên trái.</p>
-                    <ul>
-                        <li v-for="item in current.more" :key="item.title">
-                            <strong>{{ item.title }}.</strong> {{ item.teaser }}
+            <div class="fork">
+                <article class="branch">
+                    <span class="port port--top" aria-hidden="true"></span>
+                    <div class="node__top">
+                        <span class="node__icon node__icon--muted" aria-hidden="true">
+                            <AppIcon name="gitBranch" :size="18" :stroke-width="1.75" />
+                        </span>
+                        <span class="node__step">Nhánh phụ</span>
+                    </div>
+                    <h3>{{ current.aside.title }}</h3>
+                    <p>{{ current.aside.teaser }}</p>
+                    <ul class="branch__list">
+                        <li v-for="item in current.aside.items" :key="item.label">
+                            <AppIcon :name="item.icon" :size="15" :stroke-width="1.75" />
+                            <span>{{ item.label }}</span>
                         </li>
                     </ul>
-                </section>
+                    <router-link v-if="current.aside.button" class="node__go" :to="current.aside.button.to">
+                        {{ current.aside.button.label }}
+                        <AppIcon name="arrowRight" :size="14" :stroke-width="2" />
+                    </router-link>
+                </article>
+
+                <div class="leaves">
+                    <p class="leaves__label">Mở từ menu khi cần</p>
+                    <div class="leaves__row">
+                        <article v-for="item in current.more" :key="item.title" class="leaf">
+                            <span class="port port--top" aria-hidden="true"></span>
+                            <span class="leaf__icon" aria-hidden="true">
+                                <AppIcon :name="item.icon" :size="16" :stroke-width="1.75" />
+                            </span>
+                            <h3>{{ item.title }}</h3>
+                            <p>{{ item.teaser }}</p>
+                        </article>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
 </template>
 
 <style scoped>
-.guide {
+.map {
     min-height: 100%;
     display: flex;
     flex-direction: column;
     padding: var(--space-2) var(--space-3) var(--space-6);
-    gap: var(--space-4);
     color: var(--color-text);
 }
 
-.guide__body {
+.map__canvas {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-5);
+    min-width: 0;
+    padding: var(--space-5);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-surface-muted);
+    background-image: radial-gradient(circle, var(--color-border) 1.1px, transparent 1.2px);
+    background-size: 18px 18px;
+}
+
+.roles {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+}
+
+.role {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+    color: var(--color-text-muted);
+    font: 600 14px/1.2 var(--font-family-base);
+    text-align: left;
+    cursor: pointer;
+}
+
+.role:hover {
+    color: var(--color-text);
+    box-shadow: var(--shadow-md);
+}
+
+.role--active {
+    color: var(--color-text);
+    box-shadow: var(--shadow-md), 0 0 0 2px var(--color-primary-200);
+}
+
+.role:focus-visible,
+.node__go:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.role__mark,
+.node__icon,
+.leaf__icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+}
+
+.role__mark {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-muted);
+    color: var(--color-text-muted);
+}
+
+.role--active .role__mark {
+    background: var(--color-primary-surface);
+    color: var(--color-primary);
+}
+
+.role__copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     min-width: 0;
 }
 
-.guide__roles {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-4);
-    box-shadow: 0 1px 0 var(--color-border);
-}
-
-.guide__role {
-    margin: 0;
-    padding: 0 0 var(--space-2);
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    color: var(--color-text-muted);
-    font: 600 14px/1.3 var(--font-family-base);
-    cursor: pointer;
-    box-shadow: inset 0 -2px 0 transparent;
-}
-
-.guide__role--active {
-    color: var(--color-text);
-    box-shadow: inset 0 -2px 0 var(--color-text);
-}
-
-.guide__you {
-    margin-left: 6px;
+.role__you {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-size: 12px;
     font-weight: 500;
     color: var(--color-text-muted);
 }
 
-.guide__lead h2 {
+.role__dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: var(--radius-full);
+    background: var(--color-primary);
+}
+
+.role-wire {
+    width: 1.5rem;
+    height: 2px;
+    flex: 0 0 auto;
+    border-radius: var(--radius-full);
+    background: var(--color-border-strong);
+}
+
+.map__lead h2 {
     margin: 0;
     font-size: 20px;
     font-weight: 700;
-    color: var(--color-text);
+    letter-spacing: -0.01em;
 }
 
-.guide__lead p {
+.map__lead p {
     margin: 6px 0 0;
-    max-width: 68ch;
+    max-width: 72ch;
     color: var(--color-text-muted);
     font-size: 15px;
     line-height: 1.55;
 }
 
-.steps {
+.flow {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    column-gap: 2.25rem;
+    row-gap: var(--space-5);
+    margin: 0;
+    padding: var(--space-2) 6px 0;
+}
+
+.node,
+.branch,
+.leaf {
+    position: relative;
+    min-width: 0;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-md);
+}
+
+.node,
+.branch {
     display: flex;
     flex-direction: column;
+    gap: 8px;
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+}
+
+.node {
+    transition: box-shadow 180ms ease;
+}
+
+.node:hover,
+.branch:hover,
+.leaf:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+.node__top {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 2.25rem;
+}
+
+.node__icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--radius-md);
+}
+
+.node--primary .node__icon {
+    background: var(--color-primary-surface);
+    color: var(--color-primary);
+}
+
+.node--tertiary .node__icon {
+    background: var(--color-tertiary-surface);
+    color: var(--color-tertiary);
+}
+
+.node--secondary .node__icon {
+    background: var(--color-secondary-surface);
+    color: var(--color-secondary);
+}
+
+.node--gold .node__icon,
+.node--result .node__icon {
+    background: var(--color-gold-surface);
+    color: var(--color-gold-700);
+}
+
+.node__icon--muted {
+    background: var(--color-surface-muted);
+    color: var(--color-text);
+}
+
+.node__step {
+    font-size: 12px;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+    color: var(--color-text-muted);
+}
+
+.node h3,
+.branch h3,
+.leaf h3 {
     margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.step {
-    display: grid;
-    grid-template-columns: 2rem minmax(0, 1fr);
-    gap: var(--space-3);
-    padding: var(--space-4) 0;
-    box-shadow: 0 1px 0 var(--color-border);
-}
-
-.step__num {
     font-size: 15px;
     font-weight: 700;
-    line-height: 1.4;
-    color: var(--color-text-muted);
+    line-height: 1.35;
+    color: var(--color-text);
 }
 
-.step__body h3 {
+.node p,
+.branch > p,
+.leaf p {
     margin: 0;
-    font-size: 16px;
-    font-weight: 700;
-    line-height: 1.4;
-    color: var(--color-text);
-}
-
-.step__body p {
-    margin: 4px 0 0;
-    max-width: 68ch;
-    font-size: 14px;
-    line-height: 1.55;
-    color: var(--color-text);
-}
-
-.step__body ul {
-    margin: 8px 0 0;
-    padding-left: 1.1rem;
-    color: var(--color-text-muted);
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.5;
+    color: var(--color-text-muted);
 }
 
-.step__body li + li {
+.node ul {
+    margin: 0;
+    padding-left: 1.05rem;
+    color: var(--color-text);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.node li + li {
     margin-top: 4px;
 }
 
-.step__go {
-    display: inline-block;
-    margin-top: 10px;
+.node__go {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: auto;
+    padding-top: var(--space-1);
     color: var(--color-text);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 650;
     text-decoration: underline;
     text-underline-offset: 3px;
 }
 
-.step__go:hover {
-    color: var(--color-text-muted);
+.node__go:hover {
+    color: var(--color-primary);
 }
 
-.guide__extra {
+.port {
+    position: absolute;
+    z-index: 3;
+    width: 9px;
+    height: 9px;
+    border-radius: var(--radius-full);
+    background: var(--color-surface);
+    box-shadow: 0 0 0 2px var(--color-border-strong);
+}
+
+.port--in,
+.port--out {
+    top: calc(var(--space-4) + 1.125rem - 4.5px);
+}
+
+.port--in {
+    left: -5px;
+}
+
+.port--out {
+    right: -5px;
+}
+
+.port--top {
+    top: -5px;
+    left: calc(50% - 4.5px);
+}
+
+.wire {
+    position: absolute;
+    z-index: 2;
+    top: calc(var(--space-4) + 1.125rem - 7px);
+    left: calc(100% + 4px);
+    display: flex;
+    align-items: center;
+    width: calc(2.25rem - 8px);
+    color: var(--color-text-muted);
+    pointer-events: none;
+}
+
+.wire__line {
+    flex: 1;
+    height: 2px;
+    border-radius: var(--radius-full);
+    background: var(--color-border-strong);
+}
+
+.fork {
+    position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: var(--space-6);
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: var(--space-4);
     margin-top: var(--space-2);
+    padding-top: var(--space-6);
 }
 
-.note h3 {
+.fork::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 6%;
+    right: 6%;
+    height: 2px;
+    border-radius: var(--radius-full);
+    background: var(--color-border-strong);
+}
+
+.fork::after {
+    content: '';
+    position: absolute;
+    top: -1.15rem;
+    left: calc(50% - 1px);
+    width: 2px;
+    height: 1.15rem;
+    border-radius: var(--radius-full);
+    background: var(--color-border-strong);
+}
+
+.branch__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     margin: 0;
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--color-text);
+    padding: 0;
+    list-style: none;
 }
 
-.note > p {
-    margin: 4px 0 10px;
+.branch__list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: var(--color-text);
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.45;
+}
+
+.branch__list :deep(.app-icon) {
+    margin-top: 2px;
     color: var(--color-text-muted);
 }
 
-.note ul {
+.leaves {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-width: 0;
+}
+
+.leaves__label {
     margin: 0;
-    padding-left: 1.1rem;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--color-text-muted);
+}
+
+.leaves__row {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+    padding-top: var(--space-4);
+}
+
+.leaves__row::before {
+    content: '';
+    position: absolute;
+    top: 0.45rem;
+    left: 16%;
+    right: 16%;
+    height: 2px;
+    border-radius: var(--radius-full);
+    background: var(--color-border-strong);
+}
+
+.leaf {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    transition: box-shadow 180ms ease;
+}
+
+.leaf::after {
+    content: '';
+    position: absolute;
+    top: calc(var(--space-4) * -1 + 0.45rem);
+    left: calc(50% - 1px);
+    width: 2px;
+    height: calc(var(--space-4) - 0.45rem);
+    background: var(--color-border-strong);
+}
+
+.leaf__icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-muted);
     color: var(--color-text);
-    font-size: 14px;
-    line-height: 1.5;
 }
 
-.note li + li {
-    margin-top: 6px;
+@media (max-width: 1180px) {
+    .flow {
+        grid-template-columns: 1fr 1fr;
+        padding-right: 0;
+        padding-left: 0;
+    }
+
+    .wire,
+    .port--in,
+    .port--out {
+        display: none;
+    }
 }
 
-@media (max-width: 720px) {
-    .guide {
+@media (max-width: 900px) {
+    .fork {
+        grid-template-columns: 1fr;
+    }
+
+    .fork::before,
+    .fork::after,
+    .leaves__row::before,
+    .leaf::after,
+    .port--top {
+        display: none;
+    }
+
+    .leaves__row {
+        grid-template-columns: 1fr;
+        padding-top: 0;
+    }
+
+    .role-wire {
+        display: none;
+    }
+}
+
+@media (max-width: 680px) {
+    .map {
         padding: var(--space-2);
     }
 
-    .guide__extra {
+    .map__canvas {
+        padding: var(--space-3);
+        gap: var(--space-4);
+    }
+
+    .flow {
         grid-template-columns: 1fr;
-        gap: var(--space-5);
+        row-gap: var(--space-4);
+    }
+
+    .wire {
+        top: auto;
+        bottom: calc(var(--space-4) * -1);
+        left: 1.2rem;
+        display: flex;
+        flex-direction: column;
+        width: auto;
+        height: var(--space-4);
+    }
+
+    .wire__line {
+        width: 2px;
+        height: auto;
+        flex: 1;
+    }
+
+    .wire :deep(.app-icon) {
+        transform: rotate(90deg);
+    }
+
+    .port--in,
+    .port--out {
+        display: none;
     }
 }
 </style>
