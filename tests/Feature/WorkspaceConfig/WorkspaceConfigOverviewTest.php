@@ -5,6 +5,7 @@ namespace Tests\Feature\WorkspaceConfig;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\DepartmentSidebarConfig;
 use Modules\Identity\App\Models\Role;
@@ -69,6 +70,44 @@ class WorkspaceConfigOverviewTest extends TestCase
                 'id' => $configuredByMenu->id,
                 'is_active' => true,
                 'has_config' => true,
+            ]);
+    }
+
+    public function test_overview_includes_company_and_director(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $company = Company::query()->create([
+            'hrm_uuid' => 'co-test-1',
+            'code' => 'VAS',
+            'name' => 'VA Schools',
+            'is_active' => true,
+        ]);
+        $dept = Department::query()->create([
+            'code' => 'D1',
+            'name' => 'Dept 1',
+            'is_active' => true,
+            'company_id' => $company->id,
+        ]);
+        $director = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $this->actingAs($admin)
+            ->getJson('/api/workspace-config/overview')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $dept->id,
+                'company' => [
+                    'id' => $company->id,
+                    'code' => 'VAS',
+                    'name' => 'VA Schools',
+                ],
+                'director' => [
+                    'id' => $director->id,
+                    'name' => $director->name,
+                    'email' => $director->email,
+                    'avatar_url' => $director->avatar_url,
+                ],
             ]);
     }
 

@@ -246,6 +246,8 @@ class WorkspaceConfigMemberService
      */
     public function overviewRows(Collection $departments): Collection
     {
+        $departments->loadMissing('company');
+
         $ids = $departments->pluck('id')->all();
         $counts = $this->users->countByDepartmentIds($ids);
         $directors = $this->users->departmentDirectorsByDepartmentIds($ids);
@@ -259,6 +261,7 @@ class WorkspaceConfigMemberService
             'code' => $department->code,
             'name' => $department->name,
             'is_active' => (bool) $department->is_active,
+            'company' => $this->presentCompany($department->company),
             // Đã tạo nhóm hoặc đã lưu override menu sidebar.
             'has_config' => isset($configuredIds[$department->id]),
             'member_count' => (int) $counts->get($department->id, 0),
@@ -351,6 +354,20 @@ class WorkspaceConfigMemberService
             'name' => $user->name,
             'email' => $user->email,
             'avatar_url' => $user->avatar_url,
+        ];
+    }
+
+    /** @param  \Modules\Identity\App\Models\Company|null  $company */
+    private function presentCompany($company): ?array
+    {
+        if ($company === null) {
+            return null;
+        }
+
+        return [
+            'id' => $company->id,
+            'code' => $company->code,
+            'name' => $company->name,
         ];
     }
 }

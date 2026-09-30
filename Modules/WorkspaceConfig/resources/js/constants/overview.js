@@ -1,5 +1,6 @@
 export const OVERVIEW_COLUMNS = [
   { key: 'name', label: 'Phòng ban', defaultOn: true },
+  { key: 'company', label: 'Pháp nhân công ty', defaultOn: true },
   { key: 'is_active', label: 'Trạng thái', defaultOn: true },
   { key: 'has_config', label: 'Cấu hình', defaultOn: true },
   { key: 'director', label: 'Quản lý phòng ban', defaultOn: true },
@@ -34,7 +35,7 @@ export const CONFIG_FILTER_OPTIONS = [
   { value: 'no', label: 'Chưa có cấu hình' },
 ];
 
-export const COLUMN_STORAGE_KEY = 'va-wc-overview-columns-v3';
+export const COLUMN_STORAGE_KEY = 'va-wc-overview-columns-v4';
 export const FILTER_STORAGE_KEY = 'va-wc-overview-filters';
 export const COLUMN_WIDTH_KEY = 'va-wc-overview-column-widths';
 export const ZOOM_STORAGE_KEY = 'va-wc-overview-zoom';
@@ -45,6 +46,14 @@ export function directorName(department) {
 
 export function directorEmail(department) {
   return department?.director?.email || '';
+}
+
+export function companyName(department) {
+  return department?.company?.name || '';
+}
+
+export function companyCode(department) {
+  return department?.company?.code || '';
 }
 
 export function departmentStatusLabel(isActive) {

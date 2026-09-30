@@ -29,6 +29,8 @@ import {
   departmentStatusLabel,
   directorEmail,
   directorName,
+  companyCode,
+  companyName,
   loadVisibility,
   saveVisibility,
 } from '../constants/overview.js';
@@ -73,7 +75,7 @@ const filteredDepartments = computed(() => {
   const q = query.value.trim().toLowerCase();
   return allDepartments.value.filter((department) => {
     if (q) {
-      const hay = `${department.name ?? ''} ${department.code ?? ''} ${directorName(department)} ${directorEmail(department)}`.toLowerCase();
+      const hay = `${department.name ?? ''} ${department.code ?? ''} ${companyName(department)} ${companyCode(department)} ${directorName(department)} ${directorEmail(department)}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     if (isActive.value === 'yes' && !department.is_active) return false;
@@ -270,6 +272,7 @@ function handleTableScroll() {
 
 function cellText(department, key) {
   if (key === 'name') return department.name || '—';
+  if (key === 'company') return companyName(department) || '—';
   if (key === 'is_active') return departmentStatusLabel(department.is_active);
   if (key === 'has_config') return departmentConfigLabel(department.has_config);
   if (key === 'director') return directorName(department) || 'Chưa gán trưởng đơn vị';
@@ -339,6 +342,11 @@ function columnContentWidth(key, fonts) {
       maxW = Math.max(maxW, measureText(cellText(department, 'director'), fonts.cell));
       if (directorEmail(department)) {
         maxW = Math.max(maxW, measureText(directorEmail(department), fonts.muted));
+      }
+    } else if (key === 'company') {
+      maxW = Math.max(maxW, measureText(cellText(department, 'company'), fonts.cell));
+      if (companyCode(department)) {
+        maxW = Math.max(maxW, measureText(companyCode(department), fonts.muted));
       }
     } else {
       maxW = Math.max(maxW, measureText(cellText(department, key), fonts.cell));
@@ -600,7 +608,7 @@ onBeforeUnmount(() => {
                 v-model="query"
                 type="search"
                 class="wc-overview__input"
-                placeholder="Phòng ban, trưởng đơn vị, email…"
+                placeholder="Phòng ban, pháp nhân, quản lý phòng ban, email…"
                 @keydown.enter="page = 1"
               />
             </div>
@@ -729,9 +737,18 @@ onBeforeUnmount(() => {
                 @click="inspect(department)"
               >
                 <td v-for="col in shownColumns" :key="col.key">
-                  <template v-if="col.key === 'director'">
+                  <template v-if="col.key === 'company'">
+                    <span v-if="department.company" class="wc-overview__person-text">
+                      <span>{{ department.company.name }}</span>
+                      <span v-if="department.company.code" class="wc-overview__muted">
+                        {{ department.company.code }}
+                      </span>
+                    </span>
+                    <span v-else class="wc-overview__muted">—</span>
+                  </template>
+                  <template v-else-if="col.key === 'director'">
                     <span v-if="department.director" class="wc-overview__person">
-                      <UserAvatarTip :user="directorUser(department)" label="Trưởng đơn vị" />
+                      <UserAvatarTip :user="directorUser(department)" label="Quản lý phòng ban" />
                       <span class="wc-overview__person-text">
                         <span>{{ department.director.name }}</span>
                         <span v-if="department.director.email" class="wc-overview__muted">
@@ -842,6 +859,13 @@ onBeforeUnmount(() => {
             <span class="wc-overview__row-value">{{ selected.code || '—' }}</span>
           </div>
           <div class="wc-overview__row">
+            <span class="wc-overview__row-label">Pháp nhân công ty</span>
+            <span class="wc-overview__row-value">
+              {{ selected.company?.name || '—' }}
+              <template v-if="selected.company?.code"> ({{ selected.company.code }})</template>
+            </span>
+          </div>
+          <div class="wc-overview__row">
             <span class="wc-overview__row-label">Trạng thái</span>
             <span class="wc-overview__row-value">
               <StatusBadge
@@ -860,9 +884,9 @@ onBeforeUnmount(() => {
             </span>
           </div>
           <div class="wc-overview__row">
-            <span class="wc-overview__row-label">Trưởng đơn vị</span>
+            <span class="wc-overview__row-label">Quản lý phòng ban</span>
             <span class="wc-overview__row-value wc-overview__row-actor">
-              <UserAvatarTip v-if="selected.director" :user="directorUser(selected)" label="Trưởng đơn vị" />
+              <UserAvatarTip v-if="selected.director" :user="directorUser(selected)" label="Quản lý phòng ban" />
               <span>{{ selected.director?.name || 'Chưa gán' }}</span>
             </span>
           </div>
