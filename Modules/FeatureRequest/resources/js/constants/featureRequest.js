@@ -68,6 +68,42 @@ export const MINE_FILTERS = [
   { key: 'date_to', label: 'Đến ngày', defaultOn: true },
 ];
 
+// Thẻ thống kê trên trang superadmin — bấm vào thẻ để lọc nhanh theo trạng thái.
+export const ADMIN_STAT_CARDS = [
+  { key: 'total', label: 'Tổng ghi nhận', status: '', tone: 'primary' },
+  { key: 'pending', label: 'Chờ ghi nhận', status: 'pending', tone: 'neutral' },
+  { key: 'reviewing', label: 'Đang xem xét', status: 'reviewing', tone: 'warning' },
+  { key: 'approved', label: 'Đã duyệt', status: 'approved', tone: 'info' },
+  { key: 'done', label: 'Đã hoàn thành', status: 'done', tone: 'success' },
+  { key: 'rejected', label: 'Từ chối', status: 'rejected', tone: 'danger' },
+];
+
+// Cột có thể bấm tiêu đề để sắp xếp. Cột nội dung dài không cho sắp xếp vì
+// thứ tự chữ cái của cả đoạn văn không nói lên điều gì hữu ích.
+export const ADMIN_SORTABLE = {
+  created_at: 'time',
+  sender: 'text',
+  description: 'text',
+  status: 'status',
+  department: 'text',
+  page: 'text',
+  reviewer: 'text',
+  expected_done_at: 'time',
+  id: 'number',
+};
+
+// Thứ tự vòng đời để sắp xếp cột trạng thái theo tiến trình xử lý, không
+// theo chữ cái.
+export const STATUS_ORDER = {
+  pending: 1,
+  reviewing: 2,
+  approved: 3,
+  done: 4,
+  rejected: 5,
+};
+
+export const ADMIN_SORT_KEY = 'va-feature-request-admin-sort-v1';
+
 export const ADMIN_COLUMN_KEY = 'va-feature-request-admin-columns-v1';
 export const ADMIN_FILTER_KEY = 'va-feature-request-admin-filters-v1';
 export const ADMIN_WIDTH_KEY = 'va-feature-request-admin-widths-v1';

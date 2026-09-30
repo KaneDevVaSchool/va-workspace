@@ -13,6 +13,8 @@ use Modules\FeatureRequest\App\Http\Controllers\FeatureRequestController;
 
 Route::prefix('superadmin/feature-requests')->name('superadmin.feature_request.')->group(function () {
     Route::get('/', [FeatureRequestController::class, 'indexForSuperAdmin'])->name('index');
+    // Đặt trước /{id} để "export" không bị bắt làm id.
+    Route::get('/export', [FeatureRequestController::class, 'export'])->name('export');
     Route::get('/{id}', [FeatureRequestController::class, 'show'])->name('show');
     Route::patch('/{id}/approve', [FeatureRequestController::class, 'approve'])->name('approve');
     Route::patch('/{id}/reject', [FeatureRequestController::class, 'reject'])->name('reject');

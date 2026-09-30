@@ -9,6 +9,7 @@ use Modules\FeatureRequest\App\Models\FeatureRequest;
 use Modules\FeatureRequest\App\Repositories\Contracts\FeatureRequestRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Services\NotificationService;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Ghi nhận yêu cầu tính năng từ nhân viên và luồng xử lý của superadmin.
@@ -19,10 +20,14 @@ use Modules\Identity\App\Services\NotificationService;
  */
 class FeatureRequestService
 {
+    /** Trần số dòng mỗi lần xuất Excel, giống Nhật ký hoạt động. */
+    public const EXPORT_LIMIT = 10000;
+
     public function __construct(
         private readonly FeatureRequestRepositoryInterface $requests,
         private readonly UserRepositoryInterface $users,
         private readonly NotificationService $notifications,
+        private readonly FeatureRequestExcelExporter $exporter,
     ) {}
 
     public function find(int $id): ?FeatureRequest
@@ -73,6 +78,132 @@ class FeatureRequestService
         return [
             'groups' => $groupList,
             'overall_counts' => $this->countByStatus($all),
+        ];
+    }
+
+    /**
+     * Xuất Excel theo điều kiện lọc — lọc lại ở tầng Service bằng đúng logic
+     * mà bảng trên trang đang dùng, để file tải về khớp với những gì
+     * superadmin đang nhìn thấy.
+     *
+     * @param  array<string, string>  $filters
+     */
+    public function export(array $filters, string $exportKind, ?User $exportedBy): BinaryFileResponse
+    {
+        $all = $this->requests->allWithRelations(null);
+        $matching = $this->applyFilters($all, $filters);
+
+        $rows = $matching
+            ->take(self::EXPORT_LIMIT)
+            ->map(fn (FeatureRequest $r) => $this->present($r))
+            ->values()
+            ->all();
+
+        $filename = 'Ghi_nhan_yeu_cau_tinh_nang_'.now()->format('Ymd_His').'.xlsx';
+
+        return $this->exporter->download(
+            $rows,
+            $filters,
+            $this->filterLabels($filters, $all),
+            $this->countByStatus($all),
+            $exportKind,
+            $exportedBy,
+            $matching->count(),
+            self::EXPORT_LIMIT,
+            $filename,
+        );
+    }
+
+    /**
+     * Cùng điều kiện lọc với bảng trên trang superadmin: tìm kiếm theo nội
+     * dung/người gửi/trang/phòng ban, lọc trạng thái, phòng ban, khoảng ngày
+     * gửi (so theo ngày local, không theo giờ).
+     *
+     * @param  Collection<int, FeatureRequest>  $items
+     * @param  array<string, string>  $filters
+     * @return Collection<int, FeatureRequest>
+     */
+    private function applyFilters(Collection $items, array $filters): Collection
+    {
+        $needle = mb_strtolower(trim((string) ($filters['q'] ?? '')));
+        $status = (string) ($filters['status'] ?? '');
+        $departmentKey = (string) ($filters['department_id'] ?? '');
+        $from = (string) ($filters['date_from'] ?? '');
+        $to = (string) ($filters['date_to'] ?? '');
+
+        return $items->filter(function (FeatureRequest $request) use ($needle, $status, $departmentKey, $from, $to) {
+            if ($status !== '' && $request->status !== $status) {
+                return false;
+            }
+
+            if ($departmentKey !== '') {
+                $key = $request->department_id ? (string) $request->department_id : 'none';
+                if ($key !== $departmentKey) {
+                    return false;
+                }
+            }
+
+            $day = $request->created_at?->toDateString() ?? '';
+            if ($from !== '' && $day !== '' && $day < $from) {
+                return false;
+            }
+            if ($to !== '' && $day !== '' && $day > $to) {
+                return false;
+            }
+
+            if ($needle === '') {
+                return true;
+            }
+
+            foreach ([
+                $request->description,
+                $request->creator?->name,
+                $request->creator?->email,
+                $request->page_title,
+                $request->department?->name,
+            ] as $haystack) {
+                if ($haystack !== null && str_contains(mb_strtolower((string) $haystack), $needle)) {
+                    return true;
+                }
+            }
+
+            return false;
+        })->values();
+    }
+
+    /**
+     * Nhãn tiếng Việt của điều kiện lọc, để in ra sheet "Thông tin xuất".
+     *
+     * @param  array<string, string>  $filters
+     * @param  Collection<int, FeatureRequest>  $all
+     * @return array<string, string>
+     */
+    private function filterLabels(array $filters, Collection $all): array
+    {
+        $statusLabels = [
+            FeatureRequest::STATUS_PENDING => 'Chờ ghi nhận',
+            FeatureRequest::STATUS_REVIEWING => 'Đang xem xét',
+            FeatureRequest::STATUS_APPROVED => 'Đã duyệt',
+            FeatureRequest::STATUS_REJECTED => 'Từ chối',
+            FeatureRequest::STATUS_DONE => 'Đã hoàn thành',
+        ];
+
+        $status = (string) ($filters['status'] ?? '');
+        $departmentKey = (string) ($filters['department_id'] ?? '');
+
+        $departmentLabel = 'Tất cả';
+        if ($departmentKey === 'none') {
+            $departmentLabel = 'Chưa xác định';
+        } elseif ($departmentKey !== '') {
+            $match = $all->first(
+                fn (FeatureRequest $r) => (string) ($r->department_id ?? '') === $departmentKey,
+            );
+            $departmentLabel = $match?->department?->name ?? ('Phòng ban #'.$departmentKey);
+        }
+
+        return [
+            'status' => $status !== '' ? ($statusLabels[$status] ?? $status) : 'Tất cả',
+            'department' => $departmentLabel,
         ];
     }
 

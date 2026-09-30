@@ -119,6 +119,13 @@ class ActivityLogService
         'project_testcase.check' => 'Chấm check testcase',
         'project_testcase.attachment.upload' => 'Tải lên tệp đính kèm testcase',
         'project_testcase.attachment.delete' => 'Xoá tệp đính kèm testcase',
+        'feature_request.create' => 'Ghi nhận yêu cầu tính năng',
+        'feature_request.update' => 'Cập nhật ghi nhận yêu cầu tính năng',
+        'feature_request.delete' => 'Xoá ghi nhận yêu cầu tính năng',
+        'feature_request.approve' => 'Duyệt yêu cầu tính năng',
+        'feature_request.reject' => 'Từ chối yêu cầu tính năng',
+        'feature_request.done' => 'Hoàn thành yêu cầu tính năng',
+        'feature_request.export_excel' => 'Xuất ghi nhận yêu cầu tính năng (Excel)',
     ];
 
     /** @var array<string, string> */
@@ -144,6 +151,7 @@ class ActivityLogService
         'comment' => 'Bình luận',
         'project_label' => 'Nhãn dự án',
         'project_type' => 'Loại dự án',
+        'feature_request' => 'Ghi nhận yêu cầu tính năng',
     ];
 
     /** @var array<string, string> */

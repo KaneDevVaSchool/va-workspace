@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\FeatureRequest\App\Http\Requests\ApproveFeatureRequestRequest;
+use Modules\FeatureRequest\App\Http\Requests\ExportFeatureRequestRequest;
 use Modules\FeatureRequest\App\Http\Requests\RejectFeatureRequestRequest;
 use Modules\FeatureRequest\App\Http\Requests\StoreFeatureRequestRequest;
 use Modules\FeatureRequest\App\Http\Requests\UpdateFeatureRequestRequest;
@@ -13,6 +14,7 @@ use Modules\FeatureRequest\App\Models\FeatureRequest;
 use Modules\FeatureRequest\App\Services\FeatureRequestService;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * JSON dưới prefix /api:
@@ -25,6 +27,7 @@ use Modules\Identity\App\Services\PermissionService;
  *   PATCH  /api/superadmin/feature-requests/{id}/approve   — duyệt
  *   PATCH  /api/superadmin/feature-requests/{id}/reject    — từ chối
  *   PATCH  /api/superadmin/feature-requests/{id}/done      — đánh dấu hoàn thành
+ *   GET    /api/superadmin/feature-requests/export         — tải Excel danh sách
  */
 class FeatureRequestController extends Controller
 {
@@ -181,6 +184,27 @@ class FeatureRequestController extends Controller
         );
 
         return response()->json(['item' => $this->service->present($item)]);
+    }
+
+    /**
+     * Tải file Excel danh sách ghi nhận. Trả JSON 403 (không phải file) khi
+     * thiếu quyền — frontend đọc blob và hiện đúng thông báo.
+     */
+    public function export(ExportFeatureRequestRequest $request): BinaryFileResponse|JsonResponse
+    {
+        if (! $this->allowedReview($request)) {
+            return response()->json(['message' => 'Bạn không có quyền xuất ghi nhận yêu cầu tính năng.'], 403);
+        }
+
+        $this->activityLogs->record(
+            'feature_request.export_excel',
+            'Xuất danh sách ghi nhận yêu cầu tính năng (Excel)',
+            $request->user(),
+            'feature_request',
+            null,
+        );
+
+        return $this->service->export($request->filters(), $request->exportKind(), $request->user());
     }
 
     public function markDone(Request $request, int $id): JsonResponse

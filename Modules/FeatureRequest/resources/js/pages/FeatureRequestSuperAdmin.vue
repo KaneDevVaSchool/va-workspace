@@ -13,6 +13,9 @@ import {
   ADMIN_COLUMN_KEY,
   ADMIN_FILTERS,
   ADMIN_FILTER_KEY,
+  ADMIN_SORTABLE,
+  ADMIN_SORT_KEY,
+  ADMIN_STAT_CARDS,
   ADMIN_WIDTH_KEY,
   ADMIN_ZOOM_KEY,
   PROGRESS_NOTE_MAX,
@@ -20,6 +23,7 @@ import {
   STATUS_HINT,
   STATUS_LABEL,
   STATUS_OPTIONS,
+  STATUS_ORDER,
   STATUS_TONE,
   loadVisibility,
   localDateKey,
@@ -39,11 +43,20 @@ let measureCtx = null;
 let wrapObserver = null;
 
 const items = ref([]);
+const overallCounts = ref({ pending: 0, reviewing: 0, approved: 0, rejected: 0, done: 0, total: 0 });
 const loading = ref(false);
 const acting = ref(false);
+const exporting = ref(false);
 const selected = ref(null);
 const page = ref(1);
 const perPage = ref(20);
+
+const sort = reactive(loadSort());
+
+const exportDialog = ref(null); // 'date' | 'department' | null
+const exportDateFrom = ref('');
+const exportDateTo = ref('');
+const exportDepartmentId = ref('');
 
 const query = ref('');
 const appliedQuery = ref('');
@@ -109,8 +122,27 @@ const filteredItems = computed(() => {
   });
 });
 
+const sortedItems = computed(() => {
+  const key = sort.key;
+  if (!key || !ADMIN_SORTABLE[key]) return filteredItems.value;
+  const dir = sort.dir === 'desc' ? -1 : 1;
+  const kind = ADMIN_SORTABLE[key];
+
+  return [...filteredItems.value].sort((a, b) => {
+    const left = sortValue(a, key, kind);
+    const right = sortValue(b, key, kind);
+    // Dòng trống luôn xuống cuối, bất kể chiều sắp xếp — để người xem không
+    // phải cuộn qua một loạt ô gạch ngang trước khi tới dữ liệu thật.
+    if (left === null && right === null) return 0;
+    if (left === null) return 1;
+    if (right === null) return -1;
+    if (typeof left === 'number' && typeof right === 'number') return (left - right) * dir;
+    return String(left).localeCompare(String(right), 'vi') * dir;
+  });
+});
+
 const meta = computed(() => {
-  const total = filteredItems.value.length;
+  const total = sortedItems.value.length;
   const last = Math.max(1, Math.ceil(total / perPage.value) || 1);
   const current = Math.min(page.value, last);
   const from = total === 0 ? 0 : (current - 1) * perPage.value + 1;
@@ -120,8 +152,37 @@ const meta = computed(() => {
 
 const pageItems = computed(() => {
   const start = (meta.value.current_page - 1) * perPage.value;
-  return filteredItems.value.slice(start, start + perPage.value);
+  return sortedItems.value.slice(start, start + perPage.value);
 });
+
+const statCards = computed(() =>
+  ADMIN_STAT_CARDS.map((card) => ({
+    ...card,
+    value: Number(overallCounts.value[card.key] ?? 0),
+    active: statusFilter.value === card.status,
+  })),
+);
+
+const exportOptions = computed(() => [
+  {
+    key: 'excel-filter',
+    label: 'Xuất theo bộ lọc hiện tại',
+    description: 'Tải file Excel (.xlsx) đúng theo tìm kiếm và bộ lọc đang chọn trên trang.',
+    onSelect: () => exportCurrentFilters(),
+  },
+  {
+    key: 'excel-date',
+    label: 'Xuất theo khoảng ngày',
+    description: 'Chọn ngày bắt đầu và ngày kết thúc, rồi tải mọi ghi nhận gửi trong khoảng đó.',
+    onSelect: () => openExportDialog('date'),
+  },
+  {
+    key: 'excel-departments',
+    label: 'Xuất theo phòng ban',
+    description: 'Chọn một phòng ban và tải toàn bộ ghi nhận của phòng ban đó.',
+    onSelect: () => openExportDialog('department'),
+  },
+]);
 
 const hasActiveFilters = computed(
   () =>
@@ -159,6 +220,183 @@ function filterHasValue(key) {
   if (key === 'date_from') return Boolean(dateFrom.value);
   if (key === 'date_to') return Boolean(dateTo.value);
   return false;
+}
+
+/** Giá trị dùng để so sánh khi sắp xếp; null nghĩa là ô trống. */
+function sortValue(item, key, kind) {
+  if (kind === 'time') {
+    const raw = key === 'created_at' ? item.created_at : item.expected_done_at;
+    if (!raw) return null;
+    const time = new Date(raw).getTime();
+    return Number.isNaN(time) ? null : time;
+  }
+  if (kind === 'number') return Number(item.id) || null;
+  if (kind === 'status') return STATUS_ORDER[item.status] ?? 99;
+
+  const text = {
+    sender: item.created_by_name,
+    description: item.description,
+    department: item.department_name,
+    page: item.page_title,
+    reviewer: item.reviewed_by_name,
+  }[key];
+  const value = String(text ?? '').trim();
+  return value ? value.toLowerCase() : null;
+}
+
+function isSortable(key) {
+  return Boolean(ADMIN_SORTABLE[key]);
+}
+
+/**
+ * Bấm tiêu đề cột: lần 1 sắp xếp tăng, lần 2 giảm, lần 3 bỏ sắp xếp (về
+ * thứ tự mới nhất trước như ban đầu).
+ */
+function toggleSort(key) {
+  if (!isSortable(key)) return;
+  if (sort.key !== key) {
+    sort.key = key;
+    sort.dir = 'asc';
+  } else if (sort.dir === 'asc') {
+    sort.dir = 'desc';
+  } else {
+    sort.key = '';
+    sort.dir = 'asc';
+  }
+  page.value = 1;
+}
+
+function sortLabel(key) {
+  if (sort.key !== key) return 'Chưa sắp xếp';
+  return sort.dir === 'asc' ? 'Đang sắp xếp tăng dần' : 'Đang sắp xếp giảm dần';
+}
+
+function ariaSort(key) {
+  if (!isSortable(key) || sort.key !== key) return 'none';
+  return sort.dir === 'asc' ? 'ascending' : 'descending';
+}
+
+function loadSort() {
+  try {
+    const raw = localStorage.getItem(ADMIN_SORT_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && ADMIN_SORTABLE[parsed.key] && (parsed.dir === 'asc' || parsed.dir === 'desc')) {
+      return { key: parsed.key, dir: parsed.dir };
+    }
+  } catch {
+    // Bỏ qua.
+  }
+  return { key: '', dir: 'asc' };
+}
+
+/** Bấm thẻ thống kê để lọc nhanh theo trạng thái; bấm lại thì bỏ lọc. */
+function pickStat(card) {
+  statusFilter.value = statusFilter.value === card.status ? '' : card.status;
+  page.value = 1;
+}
+
+function currentFilterParams() {
+  return {
+    q: appliedQuery.value.trim() || undefined,
+    status: statusFilter.value || undefined,
+    department_id: departmentFilter.value || undefined,
+    date_from: dateFrom.value || undefined,
+    date_to: dateTo.value || undefined,
+  };
+}
+
+function openExportDialog(kind) {
+  exportDateFrom.value = dateFrom.value;
+  exportDateTo.value = dateTo.value;
+  exportDepartmentId.value = departmentFilter.value;
+  exportDialog.value = kind;
+}
+
+function closeExportDialog() {
+  if (exporting.value) return;
+  exportDialog.value = null;
+}
+
+async function exportCurrentFilters() {
+  await downloadExcel({ ...currentFilterParams(), export_kind: 'filter' });
+}
+
+async function confirmExportDate() {
+  if (!exportDateFrom.value || !exportDateTo.value) {
+    showClientToast('error', 'Vui lòng chọn đủ ngày bắt đầu và ngày kết thúc.');
+    return;
+  }
+  if (exportDateFrom.value > exportDateTo.value) {
+    showClientToast('error', 'Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.');
+    return;
+  }
+  const ok = await downloadExcel({
+    export_kind: 'date',
+    date_from: exportDateFrom.value,
+    date_to: exportDateTo.value,
+  });
+  if (ok) exportDialog.value = null;
+}
+
+async function confirmExportDepartment() {
+  if (!exportDepartmentId.value) {
+    showClientToast('error', 'Vui lòng chọn phòng ban cần xuất.');
+    return;
+  }
+  const ok = await downloadExcel({
+    export_kind: 'department',
+    department_id: exportDepartmentId.value,
+  });
+  if (ok) exportDialog.value = null;
+}
+
+async function downloadExcel(params) {
+  exporting.value = true;
+  try {
+    const response = await window.axios.get('/api/superadmin/feature-requests/export', {
+      params,
+      responseType: 'blob',
+    });
+    const blob = response.data;
+    if (blob.type && blob.type.includes('json')) {
+      const json = JSON.parse(await blob.text());
+      throw new Error(json.message || 'Không xuất được file.');
+    }
+
+    const disposition = response.headers['content-disposition'] || '';
+    const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const plainMatch = disposition.match(/filename="?([^"]+)"?/i);
+    const filename = decodeURIComponent(
+      utfMatch?.[1] || plainMatch?.[1] || 'Ghi_nhan_yeu_cau_tinh_nang.xlsx',
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showClientToast('success', 'Đã tải file Excel.');
+    return true;
+  } catch (error) {
+    let message = error?.message;
+    if (error?.response?.data instanceof Blob) {
+      try {
+        const json = JSON.parse(await error.response.data.text());
+        message = json.message || Object.values(json.errors || {})[0]?.[0];
+      } catch {
+        message = 'Không xuất được file Excel.';
+      }
+    } else {
+      message = error?.response?.data?.message || message;
+    }
+    showClientToast('error', message || 'Không xuất được file Excel.');
+    return false;
+  } finally {
+    exporting.value = false;
+  }
 }
 
 function senderUser(item) {
@@ -206,6 +444,15 @@ async function load() {
     }
     rows.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     items.value = rows;
+    overallCounts.value = {
+      pending: 0,
+      reviewing: 0,
+      approved: 0,
+      rejected: 0,
+      done: 0,
+      total: 0,
+      ...(data.overall_counts ?? {}),
+    };
     if (selected.value && !rows.some((row) => row.id === selected.value.id)) {
       selected.value = null;
     }
@@ -511,6 +758,10 @@ function handleDocumentKeydown(event) {
     closeDialog();
     return;
   }
+  if (exportDialog.value) {
+    closeExportDialog();
+    return;
+  }
   if (actionMenuId.value) {
     closeActionMenu();
     return;
@@ -518,6 +769,13 @@ function handleDocumentKeydown(event) {
   if (selected.value && !doneConfirmOpen.value) selected.value = null;
 }
 
+watch(sort, (value) => {
+  try {
+    localStorage.setItem(ADMIN_SORT_KEY, JSON.stringify({ key: value.key, dir: value.dir }));
+  } catch {
+    // Bỏ qua.
+  }
+}, { deep: true });
 watch(visibleColumns, (value) => saveVisibility(ADMIN_COLUMN_KEY, value), { deep: true });
 watch(visibleFilters, (value) => saveVisibility(ADMIN_FILTER_KEY, value), { deep: true });
 watch(columnWidths, (value) => saveVisibility(ADMIN_WIDTH_KEY, value), { deep: true });
@@ -569,6 +827,9 @@ onBeforeUnmount(() => {
       icon="alertTriangle"
       description="Xem và xử lý yêu cầu tính năng từ các phòng ban."
       :subtitle="`${items.length} ghi nhận`"
+      export-label="Xuất Excel"
+      :export-options="exportOptions"
+      :export-busy-key="exporting ? 'xlsx' : undefined"
     >
       <template #actions>
         <button type="button" class="fr-admin__header-btn" :disabled="loading" @click="load">
@@ -580,6 +841,24 @@ onBeforeUnmount(() => {
 
     <div class="fr-admin__body">
       <div class="fr-admin__main">
+        <div class="fr-admin__stats">
+          <button
+            v-for="card in statCards"
+            :key="card.key"
+            type="button"
+            class="fr-admin__stat"
+            :class="{ 'fr-admin__stat--active': card.active }"
+            :aria-pressed="card.active"
+            @click="pickStat(card)"
+          >
+            <span class="fr-admin__stat-top">
+              <span class="fr-admin__dot" :class="`fr-admin__dot--${card.tone}`" />
+              <span class="fr-admin__stat-label">{{ card.label }}</span>
+            </span>
+            <span class="fr-admin__stat-value">{{ card.value }}</span>
+          </button>
+        </div>
+
         <div v-if="hasVisibleFilterFields" class="fr-admin__toolbar">
           <div class="fr-admin__filters">
             <div v-if="visibleFilters.q" class="fr-admin__field">
@@ -678,8 +957,22 @@ onBeforeUnmount(() => {
             </colgroup>
             <thead>
               <tr>
-                <th v-for="col in shownColumns" :key="col.key">
-                  <span>{{ col.label }}</span>
+                <th v-for="col in shownColumns" :key="col.key" :aria-sort="ariaSort(col.key)">
+                  <button
+                    v-if="isSortable(col.key)"
+                    type="button"
+                    class="fr-admin__th-sort"
+                    @click.stop="toggleSort(col.key)"
+                  >
+                    <span>{{ col.label }}</span>
+                    <AppIcon
+                      v-if="sort.key === col.key"
+                      :name="sort.dir === 'asc' ? 'chevronsUp' : 'chevronsDown'"
+                      :size="12"
+                    />
+                    <span class="fr-admin__sr">{{ sortLabel(col.key) }}</span>
+                  </button>
+                  <span v-else>{{ col.label }}</span>
                   <button
                     type="button"
                     class="fr-admin__resize"
@@ -982,6 +1275,83 @@ onBeforeUnmount(() => {
       </Transition>
     </Teleport>
 
+    <Teleport to="body">
+      <Transition name="fr-admin-fade">
+        <div
+          v-if="exportDialog"
+          class="fr-admin__export"
+          role="presentation"
+          @mousedown.self="closeExportDialog"
+        >
+          <div
+            class="fr-admin__export-panel"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="exportDialog === 'date' ? 'Xuất theo khoảng ngày' : 'Xuất theo phòng ban'"
+          >
+            <template v-if="exportDialog === 'date'">
+              <h2 class="fr-admin__export-title">Xuất theo khoảng ngày</h2>
+              <p class="fr-admin__export-desc">
+                File Excel sẽ gồm mọi ghi nhận gửi trong khoảng ngày này, không phụ thuộc bộ lọc khác trên trang.
+              </p>
+              <div class="fr-admin__export-fields">
+                <div class="fr-admin__field">
+                  <label class="fr-admin__label" for="fr-export-from">Từ ngày</label>
+                  <input id="fr-export-from" v-model="exportDateFrom" type="date" class="fr-admin__input" />
+                </div>
+                <div class="fr-admin__field">
+                  <label class="fr-admin__label" for="fr-export-to">Đến ngày</label>
+                  <input id="fr-export-to" v-model="exportDateTo" type="date" class="fr-admin__input" />
+                </div>
+              </div>
+              <div class="fr-admin__export-actions">
+                <button
+                  type="button"
+                  class="fr-admin__btn fr-admin__btn--ghost"
+                  :disabled="exporting"
+                  @click="closeExportDialog"
+                >
+                  Huỷ
+                </button>
+                <button type="button" class="fr-admin__btn" :disabled="exporting" @click="confirmExportDate">
+                  {{ exporting ? 'Đang xuất…' : 'Tải file Excel' }}
+                </button>
+              </div>
+            </template>
+
+            <template v-else>
+              <h2 class="fr-admin__export-title">Xuất theo phòng ban</h2>
+              <p class="fr-admin__export-desc">
+                File Excel sẽ gồm mọi ghi nhận của phòng ban được chọn, không phụ thuộc bộ lọc khác trên trang.
+              </p>
+              <div class="fr-admin__field">
+                <label class="fr-admin__label" for="fr-export-dept">Phòng ban</label>
+                <select id="fr-export-dept" v-model="exportDepartmentId" class="fr-admin__input">
+                  <option value="">Chọn phòng ban</option>
+                  <option v-for="item in departmentOptions" :key="`export-${item.value}`" :value="item.value">
+                    {{ item.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="fr-admin__export-actions">
+                <button
+                  type="button"
+                  class="fr-admin__btn fr-admin__btn--ghost"
+                  :disabled="exporting"
+                  @click="closeExportDialog"
+                >
+                  Huỷ
+                </button>
+                <button type="button" class="fr-admin__btn" :disabled="exporting" @click="confirmExportDepartment">
+                  {{ exporting ? 'Đang xuất…' : 'Tải file Excel' }}
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <ConfirmDialog
       v-model:open="doneConfirmOpen"
       title="Đánh dấu hoàn thành"
@@ -1053,6 +1423,95 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.fr-admin__stats {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.fr-admin__stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  text-align: left;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
+}
+
+.fr-admin__stat:hover {
+  background: var(--color-surface-muted);
+}
+
+.fr-admin__stat--active {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.fr-admin__stat-top {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.fr-admin__stat-top .fr-admin__dot {
+  margin-top: 0;
+}
+
+.fr-admin__stat-label {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fr-admin__stat-value {
+  color: var(--color-text);
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.fr-admin__stat--active .fr-admin__stat-value {
+  color: var(--color-primary);
+}
+
+.fr-admin__th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fr-admin__th-sort:hover {
+  color: var(--color-primary);
+}
+
+.fr-admin__th-sort > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fr-admin__toolbar {
@@ -1689,6 +2148,57 @@ onBeforeUnmount(() => {
   color: var(--color-on-primary);
 }
 
+.fr-admin__export {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: var(--color-sidebar-overlay);
+}
+
+.fr-admin__export-panel {
+  width: min(32rem, calc(100vw - 2.5rem));
+  max-height: calc(100vh - 2.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.fr-admin__export-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.fr-admin__export-desc {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.fr-admin__export-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.fr-admin__export-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
 .fr-admin-fade-enter-active,
 .fr-admin-fade-leave-active {
   transition: opacity 0.15s ease;
@@ -1716,6 +2226,10 @@ onBeforeUnmount(() => {
   .fr-admin__filters {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .fr-admin__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
@@ -1725,6 +2239,24 @@ onBeforeUnmount(() => {
 
   .fr-admin__filters,
   .fr-admin__form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fr-admin__stat {
+    padding: var(--space-2);
+  }
+
+  .fr-admin__stat-value {
+    font-size: 1.125rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .fr-admin__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fr-admin__export-fields {
     grid-template-columns: minmax(0, 1fr);
   }
 }
