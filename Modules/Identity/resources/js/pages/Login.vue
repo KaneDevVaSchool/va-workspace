@@ -55,7 +55,7 @@ function loginWithHrmSso() {
                     class="login__logo"
                 />
                 <p class="login__system-name">
-                    Hệ thống quản trị và làm việc liên phòng ban
+                    Hệ thống Quản trị &amp; Làm việc liên phòng ban
                 </p>
             </header>
 
@@ -74,7 +74,7 @@ function loginWithHrmSso() {
                         @click="loginWithHrmSso"
                     >
                         <img
-                            src="/images/favicon.png"
+                            src="/images/google.png"
                             alt=""
                             class="login__hrm-icon"
                         />
