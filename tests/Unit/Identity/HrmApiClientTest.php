@@ -101,6 +101,29 @@ class HrmApiClientTest extends TestCase
         $this->assertSame('hrm-1', $claims['sub']);
     }
 
+    public function test_list_all_org_units_follows_cursor_pages(): void
+    {
+        Http::fake([
+            'https://hrm.test/api/v1/org-units?per_page=200' => Http::response([
+                'data' => [
+                    ['uuid' => 'ou-1', 'code' => 'CNTT', 'name' => 'Phòng CNTT', 'type' => 'department', 'status' => 'active'],
+                ],
+                'meta' => ['cursor' => ['next' => 'cursor-page-2', 'prev' => null, 'count' => 1, 'per_page' => 200]],
+            ], 200),
+            'https://hrm.test/api/v1/org-units?per_page=200&cursor=cursor-page-2' => Http::response([
+                'data' => [
+                    ['uuid' => 'ou-2', 'code' => 'HCNS', 'name' => 'Phòng HCNS', 'type' => 'department', 'status' => 'active'],
+                ],
+                'meta' => ['cursor' => ['next' => null, 'prev' => 'cursor-page-1', 'count' => 1, 'per_page' => 200]],
+            ], 200),
+        ]);
+
+        $items = (new HrmApiClient())->listAllOrgUnits();
+
+        $this->assertCount(2, $items);
+        $this->assertSame('ou-2', $items[1]['uuid']);
+    }
+
     public function test_verify_sso_token_throws_unavailable_when_api_client_lacks_ability(): void
     {
         Http::fake([

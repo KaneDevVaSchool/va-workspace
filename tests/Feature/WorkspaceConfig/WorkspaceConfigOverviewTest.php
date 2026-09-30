@@ -4,6 +4,7 @@ namespace Tests\Feature\WorkspaceConfig;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\DepartmentSidebarConfig;
 use Modules\Identity\App\Models\Role;
@@ -100,6 +101,77 @@ class WorkspaceConfigOverviewTest extends TestCase
 
         $ids = collect($response->json('members'))->pluck('id')->all();
         $this->assertNotContains($assigned->id, $ids);
+    }
+
+    public function test_super_admin_lists_members_grouped_by_department(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $assigned = $this->makeUser(['department_id' => $dept->id], ['member']);
+        $unassigned = $this->makeUser(['department_id' => null], ['member']);
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $response = $this->actingAs($admin)
+            ->getJson('/api/workspace-config/members/by-department')
+            ->assertOk();
+
+        $unassignedIds = collect($response->json('unassigned'))->pluck('id')->all();
+        $this->assertContains($unassigned->id, $unassignedIds);
+        $this->assertNotContains($assigned->id, $unassignedIds);
+
+        $group = collect($response->json('departments'))->firstWhere('id', $dept->id);
+        $this->assertNotNull($group);
+        $this->assertSame(1, $group['member_count']);
+        $this->assertContains($assigned->id, collect($group['members'])->pluck('id')->all());
+    }
+
+    public function test_unassigned_members_syncs_departments_from_hrm_org_units(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        config([
+            'services.hrm.api_base_url' => 'https://hrm.test',
+            'services.hrm.api_token' => 'test-token',
+        ]);
+
+        Http::fake([
+            'https://hrm.test/api/v1/org-units*' => Http::response([
+                'data' => [
+                    [
+                        'uuid' => 'ou-sync-1',
+                        'code' => 'PB01',
+                        'name' => 'Phòng Kế toán',
+                        'type' => 'department',
+                        'status' => 'active',
+                        'company' => ['uuid' => 'co-1', 'code' => 'VAS', 'name' => 'VA Schools'],
+                    ],
+                    [
+                        'uuid' => 'ou-sync-hq',
+                        'code' => 'HQ',
+                        'name' => 'Trụ sở',
+                        'type' => 'headquarter',
+                        'status' => 'active',
+                    ],
+                ],
+                'meta' => ['cursor' => ['next' => null, 'prev' => null, 'count' => 2, 'per_page' => 200]],
+            ], 200),
+        ]);
+
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $response = $this->actingAs($admin)
+            ->getJson('/api/workspace-config/members/unassigned')
+            ->assertOk();
+
+        $names = collect($response->json('departments'))->pluck('name')->all();
+        $this->assertContains('Phòng Kế toán', $names);
+        $this->assertNotContains('Trụ sở', $names);
+
+        $this->assertDatabaseHas('departments', [
+            'hrm_org_unit_uuid' => 'ou-sync-1',
+            'name' => 'Phòng Kế toán',
+        ]);
     }
 
     public function test_super_admin_assigns_department_to_unassigned_member(): void

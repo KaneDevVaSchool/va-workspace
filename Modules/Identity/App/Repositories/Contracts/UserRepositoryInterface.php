@@ -49,6 +49,14 @@ interface UserRepositoryInterface
     public function allByDepartment(int $departmentId): \Illuminate\Support\Collection;
 
     /**
+     * Toàn bộ user đã gắn phòng ban (department_id NOT NULL) — dùng gom
+     * roster theo phòng ban superadmin, tránh N+1 query từng department.
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public function allWithAssignedDepartment(): \Illuminate\Support\Collection;
+
+    /**
      * Số thành viên (kể cả inactive) theo department_id — bảng tổng hợp
      * workspace superadmin. Khi HRM thay repository, giữ cùng contract.
      *

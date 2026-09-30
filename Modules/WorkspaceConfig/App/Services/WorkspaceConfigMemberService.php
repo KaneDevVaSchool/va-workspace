@@ -288,6 +288,33 @@ class WorkspaceConfigMemberService
     }
 
     /**
+     * Toàn bộ nhân sự workspace đã có phòng ban — gom theo từng department
+     * (kể cả inactive), dùng cho superadmin xem roster một lần gọi API.
+     *
+     * @param  \Illuminate\Support\Collection<int, \Modules\Identity\App\Models\Department>  $departments
+     */
+    public function departmentRosterGroups(Collection $departments): Collection
+    {
+        $usersByDepartment = $this->users->allWithAssignedDepartment()
+            ->groupBy(fn (User $user) => (int) $user->department_id);
+
+        return $departments->map(function ($department) use ($usersByDepartment) {
+            $members = $usersByDepartment->get($department->id) ?? collect();
+
+            return [
+                'id' => $department->id,
+                'name' => $department->name,
+                'is_active' => (bool) $department->is_active,
+                'member_count' => $members->count(),
+                'members' => $members
+                    ->map(fn (User $user) => $this->presentMember($user))
+                    ->values()
+                    ->all(),
+            ];
+        })->values();
+    }
+
+    /**
      * super_admin gán/đổi phòng ban cho 1 tài khoản — CHỈ gán department_id,
      * không đụng tới vai trò/nhóm (trưởng phòng tự gán vai trò sau khi
      * user đã có phòng ban, xem assignRole()).

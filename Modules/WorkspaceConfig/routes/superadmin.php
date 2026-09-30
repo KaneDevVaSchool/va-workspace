@@ -30,6 +30,7 @@ Route::middleware(['auth', 'permission:workspace_config.view_all'])
         // kiện tiên quyết để department_director thấy được trang cấu hình
         // phòng ban của chính họ (xem WorkspaceConfigMemberController::departmentIdOrFail()).
         Route::get('/members/unassigned', [WorkspaceConfigOverviewController::class, 'unassignedMembers'])->name('members.unassigned');
+        Route::get('/members/by-department', [WorkspaceConfigOverviewController::class, 'membersByDepartment'])->name('members.by-department');
         Route::put('/members/{user}/department', [WorkspaceConfigOverviewController::class, 'assignDepartment'])->name('members.assign-department');
         // super_admin gán vai trò thay department_director cho 1 phòng ban
         // bất kỳ (department lấy từ route param, không phải phòng ban của

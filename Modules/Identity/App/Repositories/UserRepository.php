@@ -57,6 +57,15 @@ class UserRepository implements UserRepositoryInterface
             ->get();
     }
 
+    public function allWithAssignedDepartment(): \Illuminate\Support\Collection
+    {
+        return User::query()
+            ->whereNotNull('department_id')
+            ->with(['department', 'team', 'roles'])
+            ->orderBy('name')
+            ->get();
+    }
+
     public function countByDepartmentIds(array $departmentIds): \Illuminate\Support\Collection
     {
         if ($departmentIds === []) {

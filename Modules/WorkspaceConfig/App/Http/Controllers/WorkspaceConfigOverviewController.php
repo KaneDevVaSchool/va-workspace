@@ -5,6 +5,7 @@ namespace Modules\WorkspaceConfig\App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Modules\Evaluation\App\Services\EvaluationCriteriaService;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\WorkspaceConfig\App\Exceptions\MemberDepartmentNotAssignable;
@@ -31,10 +32,13 @@ class WorkspaceConfigOverviewController extends Controller
         private readonly DepartmentSidebarConfigService $sidebarConfigs,
         private readonly EvaluationCriteriaService $evaluationCriteria,
         private readonly ActivityLogService $activityLogs,
+        private readonly HrmDepartmentSyncService $hrmDepartmentSync,
     ) {}
 
     public function index(): JsonResponse
     {
+        $this->hrmDepartmentSync->syncDepartmentsFromHrm();
+
         return response()->json([
             'departments' => $this->members->overviewRows($this->departments->all()),
         ]);
@@ -66,9 +70,26 @@ class WorkspaceConfigOverviewController extends Controller
     /** Tài khoản chưa gắn phòng ban nào — chờ super_admin gán tay. */
     public function unassignedMembers(): JsonResponse
     {
+        $this->hrmDepartmentSync->syncDepartmentsFromHrm();
+
         return response()->json([
             'members' => $this->members->unassignedMembers(),
             'departments' => $this->departments->all()->map(fn ($d) => [
+                'id' => $d->id,
+                'name' => $d->name,
+            ])->values(),
+        ]);
+    }
+
+    /** Toàn bộ nhân sự workspace theo phòng ban + danh sách chưa gán. */
+    public function membersByDepartment(): JsonResponse
+    {
+        $departments = $this->departments->all();
+
+        return response()->json([
+            'unassigned' => $this->members->unassignedMembers(),
+            'departments' => $this->members->departmentRosterGroups($departments),
+            'department_options' => $departments->map(fn ($d) => [
                 'id' => $d->id,
                 'name' => $d->name,
             ])->values(),
