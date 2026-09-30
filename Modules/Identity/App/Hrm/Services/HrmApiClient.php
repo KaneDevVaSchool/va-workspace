@@ -10,7 +10,9 @@ use Modules\Identity\App\Hrm\Exceptions\HrmTokenInvalid;
 /**
  * Wrapper HTTP gọi API VA-HRM (GET /api/v1/employees/*, /companies,
  * /org-units) — Sanctum Bearer token của ApiClient va-workspace đã đăng
- * ký bên HRM (abilities: employees:read, org:read).
+ * ký bên HRM. Abilities tối thiểu: employees:read, org:read; khi JWKS chưa có
+ * trên HRM cần thêm quyền gọi POST /api/v1/auth/verify-token (tên ability
+ * do admin HRM cấp — thường dạng auth:verify-token / sso:verify).
  */
 class HrmApiClient
 {
@@ -74,10 +76,16 @@ class HrmApiClient
         }
 
         $status = $response->status();
-        if (in_array($status, [400, 401, 403, 422], true)) {
-            $message = $response->json('error.message') ?? 'token không hợp lệ';
+        $message = (string) ($response->json('error.message') ?? 'token không hợp lệ');
 
-            throw new HrmTokenInvalid((string) $message);
+        if ($status === 403 || $this->isVerifyTokenAbilityDenied($message, $response->json('error.code'))) {
+            throw new HrmApiUnavailable(
+                'ApiClient va-workspace thiếu ability gọi verify-token — cấp quyền trên admin HRM hoặc publish JWKS'
+            );
+        }
+
+        if (in_array($status, [400, 401, 422], true)) {
+            throw new HrmTokenInvalid($message);
         }
 
         throw new HrmApiUnavailable("HTTP {$status} khi gọi verify-token");
@@ -109,5 +117,16 @@ class HrmApiClient
     private function client(): \Illuminate\Http\Client\PendingRequest
     {
         return HrmOutboundHttp::client(withApiToken: true);
+    }
+
+    private function isVerifyTokenAbilityDenied(string $message, mixed $errorCode): bool
+    {
+        if (is_string($errorCode) && in_array($errorCode, ['FORBIDDEN', 'INSUFFICIENT_ABILITIES'], true)) {
+            return true;
+        }
+
+        $lower = mb_strtolower($message);
+
+        return str_contains($lower, 'ability') || str_contains($lower, 'quyền');
     }
 }

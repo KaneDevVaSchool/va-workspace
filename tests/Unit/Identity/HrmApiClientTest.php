@@ -100,4 +100,21 @@ class HrmApiClientTest extends TestCase
 
         $this->assertSame('hrm-1', $claims['sub']);
     }
+
+    public function test_verify_sso_token_throws_unavailable_when_api_client_lacks_ability(): void
+    {
+        Http::fake([
+            'https://hrm.test/api/v1/auth/verify-token' => Http::response([
+                'error' => [
+                    'code' => 'FORBIDDEN',
+                    'message' => 'Token không có quyền (ability) truy cập tài nguyên này.',
+                ],
+            ], 403),
+        ]);
+
+        $this->expectException(HrmApiUnavailable::class);
+        $this->expectExceptionMessage('verify-token');
+
+        (new HrmApiClient())->verifySsoToken('jwt-example');
+    }
 }

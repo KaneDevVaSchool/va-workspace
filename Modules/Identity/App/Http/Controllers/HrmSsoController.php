@@ -82,7 +82,7 @@ class HrmSsoController extends Controller
         } catch (HrmTokenInvalid $e) {
             Log::warning('hrm_sso.callback.token_invalid', ['reason' => $e->getMessage()]);
 
-            return $this->failLogin('Phiên đăng nhập không hợp lệ. Vui lòng thử lại.');
+            return $this->failLogin($this->loginErrorForTokenInvalid($e));
         }
 
         if (($claims['aud'] ?? null) !== config('services.hrm.sso_client_id')) {
@@ -123,6 +123,21 @@ class HrmSsoController extends Controller
     private function failLogin(string $message): RedirectResponse
     {
         return redirect()->to($this->frontendUrl('/login', ['error' => $message]));
+    }
+
+    private function loginErrorForTokenInvalid(HrmTokenInvalid $e): string
+    {
+        $reason = mb_strtolower($e->getMessage());
+
+        if (
+            str_contains($reason, 'ability')
+            || str_contains($reason, 'quyền')
+            || str_contains($reason, 'verify-token')
+        ) {
+            return 'Workspace chưa được cấp quyền xác thực SSO trên HRM. Quản trị HRM cần bổ sung ability verify-token cho ApiClient va-workspace, hoặc bật endpoint JWKS.';
+        }
+
+        return 'Phiên đăng nhập không hợp lệ. Vui lòng thử lại.';
     }
 
     /** @param array<string, string|null> $query */
