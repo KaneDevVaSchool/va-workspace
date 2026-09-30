@@ -738,13 +738,13 @@ onBeforeUnmount(() => {
               >
                 <td v-for="col in shownColumns" :key="col.key">
                   <template v-if="col.key === 'company'">
-                    <span v-if="department.company" class="wc-overview__person-text">
+                    <span v-if="department.company" class="wc-overview__company">
                       <span>{{ department.company.name }}</span>
-                      <span v-if="department.company.code" class="wc-overview__muted">
+                      <span v-if="department.company.code" class="wc-overview__company-code">
                         {{ department.company.code }}
                       </span>
                     </span>
-                    <span v-else class="wc-overview__muted">—</span>
+                    <span v-else class="wc-overview__cell-empty">—</span>
                   </template>
                   <template v-else-if="col.key === 'director'">
                     <span v-if="department.director" class="wc-overview__person">
@@ -756,7 +756,7 @@ onBeforeUnmount(() => {
                         </span>
                       </span>
                     </span>
-                    <span v-else class="wc-overview__muted">Chưa gán trưởng đơn vị</span>
+                    <span v-else class="wc-overview__cell-hint">Chưa gán quản lý phòng ban</span>
                   </template>
                   <template v-else-if="col.key === 'is_active'">
                     <StatusBadge
@@ -860,9 +860,11 @@ onBeforeUnmount(() => {
           </div>
           <div class="wc-overview__row">
             <span class="wc-overview__row-label">Pháp nhân công ty</span>
-            <span class="wc-overview__row-value">
-              {{ selected.company?.name || '—' }}
-              <template v-if="selected.company?.code"> ({{ selected.company.code }})</template>
+            <span class="wc-overview__row-value wc-overview__row-company">
+              <span>{{ selected.company?.name || '—' }}</span>
+              <span v-if="selected.company?.code" class="wc-overview__company-code">
+                {{ selected.company.code }}
+              </span>
             </span>
           </div>
           <div class="wc-overview__row">
@@ -981,7 +983,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
   border: none;
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -991,6 +993,33 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 0 0 1px transparent, var(--shadow-sm);
   cursor: pointer;
   transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.wc-overview__stat::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.wc-overview__stat--info::before {
+  background: var(--color-tertiary);
+}
+
+.wc-overview__stat--success::before {
+  background: var(--color-success);
+}
+
+.wc-overview__stat--warning::before {
+  background: var(--color-warning);
+}
+
+.wc-overview__stat--danger::before {
+  background: var(--color-danger);
 }
 
 .wc-overview__stat-icon {
@@ -1005,8 +1034,8 @@ onBeforeUnmount(() => {
 }
 
 .wc-overview__stat--info .wc-overview__stat-icon {
-  background: var(--color-info-tint-bg);
-  color: var(--color-info-tint-fg);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
 }
 
 .wc-overview__stat--success .wc-overview__stat-icon {
@@ -1036,8 +1065,27 @@ onBeforeUnmount(() => {
 }
 
 .wc-overview__stat--on {
-  background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+}
+
+.wc-overview__stat--on.wc-overview__stat--info {
+  background: var(--color-tertiary-surface);
+  box-shadow: inset 0 0 0 1px var(--color-tertiary-200), var(--shadow-sm);
+}
+
+.wc-overview__stat--on.wc-overview__stat--success {
+  background: var(--color-success-tint-bg);
+  box-shadow: inset 0 0 0 1px var(--color-success-tint-border), var(--shadow-sm);
+}
+
+.wc-overview__stat--on.wc-overview__stat--warning {
+  background: var(--color-warning-tint-bg);
+  box-shadow: inset 0 0 0 1px var(--color-warning-tint-border), var(--shadow-sm);
+}
+
+.wc-overview__stat--on.wc-overview__stat--danger {
+  background: var(--color-danger-tint-bg);
+  box-shadow: inset 0 0 0 1px var(--color-danger-tint-border), var(--shadow-sm);
 }
 
 .wc-overview__stat-value {
@@ -1231,6 +1279,10 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.wc-overview__table tbody td .wc-overview__company-code {
+  display: inline-flex;
+}
+
 .wc-overview__table tbody td :deep(.status-mark) {
   display: inline-flex;
 }
@@ -1252,6 +1304,38 @@ onBeforeUnmount(() => {
   margin-top: 0.125rem;
   color: var(--color-text-muted);
   font-size: 0.75rem;
+}
+
+.wc-overview__cell-empty {
+  color: var(--color-text-muted);
+}
+
+.wc-overview__cell-hint {
+  color: var(--color-warning-tint-fg);
+  font-size: 0.8125rem;
+}
+
+.wc-overview__company {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.wc-overview__company-code {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.125rem 0.4375rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-secondary-surface);
+  color: var(--color-secondary-700);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  box-shadow: inset 0 0 0 1px var(--color-secondary-200);
 }
 
 .wc-overview__table tbody td .wc-overview__person,
@@ -1384,14 +1468,42 @@ onBeforeUnmount(() => {
 }
 
 .wc-overview__side-lead {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
   margin: var(--space-3) 0 var(--space-4);
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
+}
+
+.wc-overview__side-lead::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.wc-overview__side-lead--success::before {
+  background: var(--color-success);
+}
+
+.wc-overview__side-lead--danger::before {
+  background: var(--color-danger);
+}
+
+.wc-overview__side-lead--info::before {
+  background: var(--color-info);
+}
+
+.wc-overview__side-lead--warning::before {
+  background: var(--color-warning);
 }
 
 .wc-overview__side-lead-icon {
@@ -1479,6 +1591,18 @@ onBeforeUnmount(() => {
 }
 
 .wc-overview__row-value :deep(.status-mark) {
+  font-style: normal;
+}
+
+.wc-overview__row-company {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.375rem;
+}
+
+.wc-overview__row-company .wc-overview__company-code {
   font-style: normal;
 }
 

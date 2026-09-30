@@ -29,8 +29,18 @@ class WorkspaceConfigOverviewTest extends TestCase
         return $user;
     }
 
+    /** Tránh overview/unassigned gọi HRM thật khi .env test có token. */
+    private function withoutHrmSync(): void
+    {
+        config([
+            'services.hrm.api_base_url' => null,
+            'services.hrm.api_token' => null,
+        ]);
+    }
+
     public function test_super_admin_overview_includes_inactive_and_config_flags(): void
     {
+        $this->withoutHrmSync();
         $this->seed(RoleSeeder::class);
 
         $active = Department::query()->create(['code' => 'D1', 'name' => 'Active Dept', 'is_active' => true]);
@@ -75,6 +85,7 @@ class WorkspaceConfigOverviewTest extends TestCase
 
     public function test_overview_includes_company_and_director(): void
     {
+        $this->withoutHrmSync();
         $this->seed(RoleSeeder::class);
 
         $company = Company::query()->create([
