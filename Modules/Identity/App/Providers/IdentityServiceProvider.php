@@ -54,6 +54,7 @@ class IdentityServiceProvider extends ServiceProvider
         $this->commands([
             \Modules\Identity\App\Console\EnsureSuperAdminCommand::class,
             \Modules\Identity\App\Console\GenerateVapidKeysCommand::class,
+            \Modules\Identity\App\Console\WarmHrmJwksCommand::class,
         ]);
     }
 

@@ -29,4 +29,9 @@ class DepartmentRepository implements DepartmentRepositoryInterface
     {
         return Department::query()->find($id);
     }
+
+    public function findByHrmOrgUnitUuid(string $hrmOrgUnitUuid): ?Department
+    {
+        return Department::query()->where('hrm_org_unit_uuid', $hrmOrgUnitUuid)->first();
+    }
 }

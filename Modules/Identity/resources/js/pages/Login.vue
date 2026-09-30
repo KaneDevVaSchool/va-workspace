@@ -1,8 +1,8 @@
 <script setup>
 //
-// Trang đăng nhập — chỉ Google Workspace SSO (không có form user/password).
-// Bấm nút -> điều hướng full-page (window.location) tới /auth/google vì
-// đây là OAuth redirect thật, không phải gọi API qua axios.
+// Trang đăng nhập — chỉ VA-HRM SSO (không có form user/password).
+// Bấm nút -> điều hướng full-page (window.location) tới /auth/hrm/redirect
+// vì đây là OAuth-like redirect thật, không phải gọi API qua axios.
 //
 // Bố cục port từ va-hrm (resources/js/Pages/Auth/Login.tsx — React/Tailwind)
 // sang CSS thuần theo theme.css của dự án này (không dùng Tailwind, xem
@@ -15,7 +15,7 @@ import { showClientToast } from "@/lib/clientToast";
 const route = useRoute();
 const router = useRouter();
 
-// Lỗi từ GoogleAuthController (redirect ?error=...) hiện qua toast thay vì
+// Lỗi từ HrmSsoController (redirect ?error=...) hiện qua toast thay vì
 // khối alert tĩnh trong card — xem resources/js/components/ToastHost.vue.
 // Xoá "error" khỏi URL ngay sau khi hiện để F5/back không hiện lại toast cũ.
 onMounted(() => {
@@ -27,17 +27,12 @@ onMounted(() => {
     }
 });
 
-// Đăng nhập khẩn cấp (break-glass) khi Google gặp sự cố — chưa có route
-// /auth/fallback ở va-workspace. Bật lại khi module đó được xây (xem
-// va-hrm: security.fallback_login.enabled).
-const fallbackEnabled = false;
-
-function loginWithGoogle() {
+function loginWithHrmSso() {
     const redirect =
         typeof route.query.redirect === "string" ? route.query.redirect : null;
     const url = redirect
-        ? `/auth/google?redirect=${encodeURIComponent(redirect)}`
-        : "/auth/google";
+        ? `/auth/hrm/redirect?redirect=${encodeURIComponent(redirect)}`
+        : "/auth/hrm/redirect";
     window.location.href = url;
 }
 </script>
@@ -71,22 +66,11 @@ function loginWithGoogle() {
                 <div class="login__actions">
                     <button
                         type="button"
-                        class="login__google-btn"
-                        aria-label="Đăng nhập bằng Google"
-                        @click="loginWithGoogle"
+                        class="login__hrm-btn"
+                        @click="loginWithHrmSso"
                     >
-                        <img
-                            src="/images/google.png"
-                            alt=""
-                            class="login__google-icon"
-                        />
+                        Đăng nhập bằng tài khoản VA-HRM
                     </button>
-                </div>
-
-                <div v-if="fallbackEnabled" class="login__fallback">
-                    <a href="/auth/fallback" class="login__fallback-link"
-                        >Google gặp sự cố? Đăng nhập khẩn cấp</a
-                    >
                 </div>
             </div>
         </div>
@@ -199,43 +183,25 @@ function loginWithGoogle() {
     gap: var(--space-3);
 }
 
-.login__google-btn {
+.login__hrm-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: var(--space-2);
+    width: 100%;
+    padding: var(--space-3) var(--space-5);
     border: 1px solid var(--login-border);
-    border-radius: var(--radius-full);
-    background: var(--login-card-bg);
+    border-radius: var(--radius-md);
+    background: var(--color-primary-900);
+    color: #ffffff;
+    font-size: 0.9375rem;
+    font-weight: 600;
     box-shadow: var(--shadow-md);
     cursor: pointer;
     transition: box-shadow 0.15s ease;
 }
 
-.login__google-btn:hover {
+.login__hrm-btn:hover {
     box-shadow: var(--shadow-lg);
-}
-
-.login__google-icon {
-    display: block;
-    width: 2.25rem;
-    height: 2.25rem;
-}
-
-.login__fallback {
-    margin-top: var(--space-6);
-    padding-top: var(--space-5);
-    box-shadow: 0 -1px 0 var(--login-border);
-}
-
-.login__fallback-link {
-    color: var(--login-text-muted);
-    font-size: 0.75rem;
-    text-decoration: none;
-}
-
-.login__fallback-link:hover {
-    color: var(--login-text);
 }
 
 @media (max-width: 480px) {

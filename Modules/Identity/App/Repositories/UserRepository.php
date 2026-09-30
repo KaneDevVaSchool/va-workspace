@@ -24,6 +24,16 @@ class UserRepository implements UserRepositoryInterface
         return User::query()->whereRaw('LOWER(email) = ?', [strtolower($email)])->first();
     }
 
+    public function findByHrmUserUuid(string $hrmUserUuid): ?User
+    {
+        return User::query()->where('hrm_user_uuid', $hrmUserUuid)->first();
+    }
+
+    public function findByHrmEmployeeUuid(string $hrmEmployeeUuid): ?User
+    {
+        return User::query()->where('hrm_employee_uuid', $hrmEmployeeUuid)->first();
+    }
+
     public function findById(int $id): ?User
     {
         return User::query()->find($id);

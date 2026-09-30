@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Identity\App\Http\Controllers\ActivityLogController;
 use Modules\Identity\App\Http\Controllers\GoogleAuthController;
+use Modules\Identity\App\Http\Controllers\HrmSsoController;
 use Modules\Identity\App\Http\Controllers\MeController;
 use Modules\Identity\App\Http\Controllers\NotificationController;
 use Modules\Identity\App\Http\Controllers\PermissionGrantController;
@@ -12,18 +13,22 @@ use Modules\Identity\App\Http\Controllers\ViewAsController;
 
 /*
 |--------------------------------------------------------------------------
-| Identity Module — Google Workspace SSO
+| Identity Module — VA-HRM SSO
 |--------------------------------------------------------------------------
 | Không đặt trong middleware `guest`: controller tự xử lý user đã đăng
-| nhập (GoogleAuthController::redirect()). throttle vì callback thực hiện
-| DB write (find-or-create user) mỗi lần gọi.
+| nhập (HrmSsoController::redirect()). throttle vì callback thực hiện DB
+| write (find-or-create user) mỗi lần gọi.
+|
+| Google login (GoogleAuthController) không còn được route tới — thay thế
+| hoàn toàn bằng VA-HRM SSO. Controller/Service Google giữ nguyên trong
+| codebase để tham khảo/rollback khẩn cấp, không xoá.
 */
 
 Route::middleware('throttle:20,1')->group(function () {
-    Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])
-        ->name('auth.google.redirect');
-    Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])
-        ->name('auth.google.callback');
+    Route::get('/auth/hrm/redirect', [HrmSsoController::class, 'redirect'])
+        ->name('auth.hrm.redirect');
+    Route::get('/auth/hrm/callback', [HrmSsoController::class, 'callback'])
+        ->name('auth.hrm.callback');
 });
 
 // Named `login` — Laravel auth middleware / Exception Handler gọi route('login')

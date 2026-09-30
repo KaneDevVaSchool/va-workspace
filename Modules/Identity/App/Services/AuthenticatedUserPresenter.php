@@ -26,7 +26,7 @@ class AuthenticatedUserPresenter
     {
         $this->superAdminBootstrap->ensureRolesForUser($user);
         $user->unsetRelation('roles');
-        $user->load(['department', 'roles']);
+        $user->load(['department', 'roles', 'company', 'concurrentPositions']);
 
         // Super admin (không đang xem thử) không mang ngữ cảnh phòng ban:
         // sidebar đi theo menu toàn hệ thống, không đè overlay per-department.
@@ -46,6 +46,21 @@ class AuthenticatedUserPresenter
                 'code' => $department->code,
                 'name' => $department->name,
             ] : null,
+            // Đồng bộ từ VA-HRM (Modules/Identity/App/Hrm) — chỉ hiển thị.
+            'employee_code' => $user->employee_code,
+            'job_title_name' => $user->job_title_name,
+            'company' => $user->company ? [
+                'id' => $user->company->id,
+                'code' => $user->company->code,
+                'name' => $user->company->name,
+            ] : null,
+            'manager_display_name' => $user->manager_display_name,
+            'concurrent_positions' => $user->concurrentPositions->map(fn ($position) => [
+                'job_title_name' => $position->job_title_name,
+                'company_name' => $position->company_name,
+                'org_unit_name' => $position->org_unit_name,
+            ])->values()->all(),
+            'hrm_terminated_at' => $user->hrm_terminated_at?->toIso8601String(),
             'roles' => $user->roles->pluck('code')->values()->all(),
             'active_role' => $this->viewAs->displayActiveRole($user),
             'is_impersonating' => $this->viewAs->isImpersonating(),

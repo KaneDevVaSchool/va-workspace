@@ -19,6 +19,12 @@ interface UserRepositoryInterface
 
     public function findByEmail(string $email): ?User;
 
+    /** Tìm theo `sub` (user uuid) trong JWT SSO của VA-HRM. */
+    public function findByHrmUserUuid(string $hrmUserUuid): ?User;
+
+    /** Tìm theo `employee_uuid` trong JWT SSO / API HRM. */
+    public function findByHrmEmployeeUuid(string $hrmEmployeeUuid): ?User;
+
     public function findById(int $id): ?User;
 
     public function create(array $data): User;

@@ -23,6 +23,10 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         // $schedule->command('inspire')->hourly();
+
+        // Làm nóng cache JWKS VA-HRM (SSO) — giảm khả năng cache-miss đúng
+        // lúc user đang login, xem Modules/Identity/App/Console/WarmHrmJwksCommand.
+        $schedule->command('identity:hrm-warm-jwks')->hourly();
     }
 
     /**

@@ -48,6 +48,21 @@ return [
     ],
 
     /*
+    | VA-HRM SSO + đồng bộ nhân sự (Modules/Identity/App/Hrm) — thay thế
+    | đăng nhập Google. sso_callback_url PHẢI khớp tuyệt đối byte-for-byte
+    | với 1 phần tử redirect_uris của ApiClient đã đăng ký bên HRM.
+    */
+    'hrm' => [
+        'api_base_url' => env('HRM_API_BASE_URL'),
+        'api_token' => env('HRM_API_TOKEN'),
+        'sso_client_id' => env('HRM_SSO_CLIENT_ID'),
+        'sso_issuer' => env('HRM_SSO_ISSUER'),
+        'sso_callback_url' => env('HRM_SSO_CALLBACK_URL'),
+        'jwks_cache_ttl' => (int) env('HRM_JWKS_CACHE_TTL', 21600),
+        'webhook_secret' => env('HRM_WEBHOOK_SECRET'),
+    ],
+
+    /*
     | Email super_admin mặc định (Modules/Identity/Database/Seeders/SuperAdminSeeder.php)
     | — gán đủ 7 role hệ thống cho user này khi seed. Fallback hard-code
     | trong seeder nếu env trống, để seeder luôn chạy được.

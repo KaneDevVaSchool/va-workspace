@@ -73,5 +73,7 @@ class Kernel extends HttpKernel
         'permission' => \App\Http\Middleware\EnsureHasPermission::class,
         // Menu bị superadmin ẩn TOÀN HỆ THỐNG: menu.not_hidden:manager.social.moderation
         'menu.not_hidden' => \App\Http\Middleware\EnsureMenuNotGloballyHidden::class,
+        // Xác thực chữ ký HMAC webhook VA-HRM (X-VA-HRM-Signature, raw body).
+        'hrm.webhook.signature' => \Modules\Identity\App\Http\Middleware\VerifyHrmWebhookSignature::class,
     ];
 }

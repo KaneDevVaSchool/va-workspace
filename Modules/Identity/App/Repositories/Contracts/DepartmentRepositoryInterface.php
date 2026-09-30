@@ -24,4 +24,7 @@ interface DepartmentRepositoryInterface
     public function all(): Collection;
 
     public function find(int $id): ?Department;
+
+    /** Tìm phòng ban đã map thủ công tới 1 OrgUnit của VA-HRM (qua UI Department). */
+    public function findByHrmOrgUnitUuid(string $hrmOrgUnitUuid): ?Department;
 }

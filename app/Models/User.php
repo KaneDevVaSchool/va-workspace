@@ -6,12 +6,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\Role;
 use Modules\Identity\App\Models\Team;
+use Modules\Identity\App\Models\UserConcurrentPosition;
 use Modules\Identity\App\Services\PermissionService;
 
 class User extends Authenticatable
@@ -34,6 +37,17 @@ class User extends Authenticatable
         'google_id',
         'avatar_url',
         'status',
+        // Đồng bộ từ VA-HRM, xem Modules/Identity/App/Hrm/Services/HrmEmployeeSyncService.php.
+        'hrm_employee_uuid',
+        'hrm_user_uuid',
+        'employee_code',
+        'job_title_name',
+        'job_position_level',
+        'company_id',
+        'manager_employee_uuid',
+        'manager_display_name',
+        'hrm_terminated_at',
+        'hrm_synced_at',
     ];
 
     /**
@@ -54,6 +68,8 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'hrm_terminated_at' => 'datetime',
+        'hrm_synced_at' => 'datetime',
     ];
 
     /**
@@ -72,6 +88,31 @@ class User extends Authenticatable
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /** Công ty đồng bộ từ VA-HRM — chỉ hiển thị, không dùng trong permission. */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /** Chức vụ kiêm nhiệm đồng bộ từ VA-HRM (AssignmentResource.is_primary=false). */
+    public function concurrentPositions(): HasMany
+    {
+        return $this->hasMany(UserConcurrentPosition::class);
+    }
+
+    /**
+     * Cấp trên trực tiếp — resolve runtime qua manager_employee_uuid (snapshot,
+     * không phải FK cứng: người này có thể chưa từng login workspace).
+     */
+    public function resolveManagerUser(): ?self
+    {
+        if ($this->manager_employee_uuid === null) {
+            return null;
+        }
+
+        return static::query()->where('hrm_employee_uuid', $this->manager_employee_uuid)->first();
     }
 
     public function isActive(): bool
