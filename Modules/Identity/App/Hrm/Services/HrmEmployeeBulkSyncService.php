@@ -3,6 +3,7 @@
 namespace Modules\Identity\App\Hrm\Services;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Modules\Identity\App\Hrm\Exceptions\HrmApiUnavailable;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
@@ -41,6 +42,32 @@ class HrmEmployeeBulkSyncService
             return;
         }
 
+        $ttlSeconds = max(60, (int) config('services.hrm.employee_bulk_sync_ttl', 900));
+        $doneKey = 'hrm:employee_bulk_sync:done';
+
+        if (Cache::has($doneKey)) {
+            return;
+        }
+
+        $lock = Cache::lock('hrm:employee_bulk_sync:lock', min(600, $ttlSeconds));
+        if (! $lock->get()) {
+            return;
+        }
+
+        try {
+            if (Cache::has($doneKey)) {
+                return;
+            }
+
+            $this->runBulkSync();
+            Cache::put($doneKey, true, $ttlSeconds);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function runBulkSync(): void
+    {
         try {
             $employees = $this->hrmApi->listAllEmployees();
         } catch (HrmApiUnavailable $e) {

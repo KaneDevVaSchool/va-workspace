@@ -63,6 +63,9 @@ return [
         // true | false | đường dẫn file PEM (CA nội bộ) — Guzzle verify TLS
         'http_verify' => env('HRM_HTTP_VERIFY', true),
         'webhook_secret' => env('HRM_WEBHOOK_SECRET'),
+        // Khoảng cách tối thiểu giữa 2 lần bulk sync nhân viên (giây) — tránh
+        // GET /members/by-department kéo HRM hàng nghìn request mỗi lần mở trang.
+        'employee_bulk_sync_ttl' => (int) env('HRM_EMPLOYEE_BULK_SYNC_TTL', 900),
     ],
 
     /*

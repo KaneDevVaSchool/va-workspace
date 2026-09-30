@@ -14,6 +14,7 @@ import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
+import { isTransientClientNetworkError } from '@/lib/networkError';
 import { useDragScroll } from '@/composables/useDragScroll';
 import StatusBadge from '../components/StatusBadge.vue';
 import {
@@ -171,7 +172,8 @@ function applyStatFilter(kind) {
   departmentId.value = kind === 'unassigned' ? 'none' : '';
 }
 
-async function load() {
+async function load(options = {}) {
+  const { silent = false } = options;
   loading.value = true;
   try {
     const { data } = await window.axios.get('/api/workspace-config/members/by-department');
@@ -182,11 +184,23 @@ async function load() {
       selected.value = null;
     }
     nextTick(fitColumnsToContent);
-  } catch {
-    showClientToast('error', 'Không tải được danh sách nhân sự theo phòng ban.');
+  } catch (error) {
+    if (isTransientClientNetworkError(error)) {
+      return;
+    }
+    if (!silent) {
+      showClientToast('error', 'Không tải được danh sách nhân sự theo phòng ban.');
+    }
   } finally {
     loading.value = false;
   }
+}
+
+function retryLoadWhenOnline() {
+  if (document.visibilityState !== 'visible' || loading.value) {
+    return;
+  }
+  load({ silent: true });
 }
 
 function goPage(nextPage) {
@@ -456,10 +470,14 @@ onMounted(() => {
     }
   });
   document.fonts?.ready?.then(() => nextTick(fitColumnsToContent));
+  document.addEventListener('visibilitychange', retryLoadWhenOnline);
+  window.addEventListener('online', retryLoadWhenOnline);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleDocumentKeydown);
+  document.removeEventListener('visibilitychange', retryLoadWhenOnline);
+  window.removeEventListener('online', retryLoadWhenOnline);
   wrapObserver?.disconnect();
 });
 </script>
