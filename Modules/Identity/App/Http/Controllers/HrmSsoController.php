@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Modules\Identity\App\Exceptions\AccountNotUsable;
 use Modules\Identity\App\Hrm\Exceptions\HrmApiUnavailable;
@@ -78,11 +79,18 @@ class HrmSsoController extends Controller
 
         try {
             $claims = $this->jwtVerifier->verify($token);
-        } catch (HrmTokenInvalid) {
+        } catch (HrmTokenInvalid $e) {
+            Log::warning('hrm_sso.callback.token_invalid', ['reason' => $e->getMessage()]);
+
             return $this->failLogin('Phiên đăng nhập không hợp lệ. Vui lòng thử lại.');
         }
 
         if (($claims['aud'] ?? null) !== config('services.hrm.sso_client_id')) {
+            Log::warning('hrm_sso.callback.audience_mismatch', [
+                'expected' => config('services.hrm.sso_client_id'),
+                'actual' => $claims['aud'] ?? null,
+            ]);
+
             return $this->failLogin('Phiên đăng nhập không hợp lệ. Vui lòng thử lại.');
         }
 
