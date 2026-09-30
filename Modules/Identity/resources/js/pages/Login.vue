@@ -54,6 +54,9 @@ function loginWithHrmSso() {
                     alt="Vietnam America Schools — Trường học của sự lắng nghe"
                     class="login__logo"
                 />
+                <p class="login__system-name">
+                    Hệ thống quản trị và làm việc liên phòng ban
+                </p>
             </header>
 
             <div class="login__card">
@@ -67,9 +70,14 @@ function loginWithHrmSso() {
                     <button
                         type="button"
                         class="login__hrm-btn"
+                        aria-label="Đăng nhập bằng tài khoản VA-HRM"
                         @click="loginWithHrmSso"
                     >
-                        Đăng nhập bằng tài khoản VA-HRM
+                        <img
+                            src="/images/favicon.png"
+                            alt=""
+                            class="login__hrm-icon"
+                        />
                     </button>
                 </div>
             </div>
@@ -151,6 +159,15 @@ function loginWithHrmSso() {
     filter: drop-shadow(var(--shadow-sm));
 }
 
+.login__system-name {
+    margin: var(--space-3) 0 0;
+    text-align: center;
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 600;
+    text-shadow: var(--shadow-sm);
+}
+
 .login__card {
     width: 100%;
     background: var(--login-card-bg);
@@ -187,14 +204,10 @@ function loginWithHrmSso() {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    padding: var(--space-3) var(--space-5);
+    padding: var(--space-2);
     border: 1px solid var(--login-border);
-    border-radius: var(--radius-md);
-    background: var(--color-primary-900);
-    color: #ffffff;
-    font-size: 0.9375rem;
-    font-weight: 600;
+    border-radius: var(--radius-full);
+    background: var(--login-card-bg);
     box-shadow: var(--shadow-md);
     cursor: pointer;
     transition: box-shadow 0.15s ease;
@@ -202,6 +215,12 @@ function loginWithHrmSso() {
 
 .login__hrm-btn:hover {
     box-shadow: var(--shadow-lg);
+}
+
+.login__hrm-icon {
+    display: block;
+    width: 2.25rem;
+    height: 2.25rem;
 }
 
 @media (max-width: 480px) {
