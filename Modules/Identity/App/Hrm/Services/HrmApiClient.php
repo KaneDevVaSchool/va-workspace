@@ -104,6 +104,60 @@ class HrmApiClient
     }
 
     /**
+     * Toàn bộ nhân viên VA-HRM (cursor paginate, ability employees:read).
+     * Dùng cho superadmin xem "Nhân sự workspace" — kéo hết 1 lần, không
+     * lọc theo `q`/`status` phía HRM (lọc client-side sau khi tải).
+     *
+     * @return list<array<string, mixed>>
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function listAllEmployees(): array
+    {
+        $items = [];
+        $cursor = null;
+
+        do {
+            $query = ['per_page' => 200];
+            if ($cursor !== null) {
+                $query['cursor'] = $cursor;
+            }
+
+            $page = $this->listEmployeesPage($query);
+            $items = array_merge($items, $page['items']);
+            $cursor = $page['next_cursor'];
+        } while ($cursor !== null && $cursor !== '');
+
+        return $items;
+    }
+
+    /**
+     * @param  array<string, scalar|null>  $query
+     * @return array{items: list<array<string, mixed>>, next_cursor: ?string}
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function listEmployeesPage(array $query = []): array
+    {
+        try {
+            $response = $this->client()->get('/api/v1/employees', $query);
+        } catch (ConnectionException $e) {
+            throw new HrmApiUnavailable('timeout/network lỗi khi gọi /api/v1/employees', $e);
+        }
+
+        if (! $response->successful()) {
+            throw new HrmApiUnavailable("HTTP {$response->status()} khi gọi /api/v1/employees");
+        }
+
+        $data = $response->json('data');
+
+        return [
+            'items' => is_array($data) ? $data : [],
+            'next_cursor' => $response->json('meta.cursor.next'),
+        ];
+    }
+
+    /**
      * Xác thực JWT SSO qua HRM (fallback khi JWKS không khả dụng).
      *
      * @return array<string, mixed> claims

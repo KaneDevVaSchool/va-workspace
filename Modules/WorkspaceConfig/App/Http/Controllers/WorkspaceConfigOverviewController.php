@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Modules\Evaluation\App\Services\EvaluationCriteriaService;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Identity\App\Hrm\Services\HrmEmployeeBulkSyncService;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\WorkspaceConfig\App\Exceptions\MemberDepartmentNotAssignable;
@@ -33,6 +34,7 @@ class WorkspaceConfigOverviewController extends Controller
         private readonly EvaluationCriteriaService $evaluationCriteria,
         private readonly ActivityLogService $activityLogs,
         private readonly HrmDepartmentSyncService $hrmDepartmentSync,
+        private readonly HrmEmployeeBulkSyncService $hrmEmployeeSync,
     ) {}
 
     public function index(): JsonResponse
@@ -84,6 +86,9 @@ class WorkspaceConfigOverviewController extends Controller
     /** Toàn bộ nhân sự workspace theo phòng ban + danh sách chưa gán. */
     public function membersByDepartment(): JsonResponse
     {
+        $this->hrmDepartmentSync->syncDepartmentsFromHrm();
+        $this->hrmEmployeeSync->syncEmployeesFromHrm();
+
         $departments = $this->departments->all();
 
         return response()->json([
