@@ -3,9 +3,9 @@
 namespace Modules\Identity\App\Hrm\Services;
 
 use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Support\Facades\Http;
 use Modules\Identity\App\Hrm\DTO\HrmEmployeeData;
 use Modules\Identity\App\Hrm\Exceptions\HrmApiUnavailable;
+use Modules\Identity\App\Hrm\Exceptions\HrmTokenInvalid;
 
 /**
  * Wrapper HTTP gọi API VA-HRM (GET /api/v1/employees/*, /companies,
@@ -49,6 +49,41 @@ class HrmApiClient
     }
 
     /**
+     * Xác thực JWT SSO qua HRM (fallback khi JWKS không khả dụng).
+     *
+     * @return array<string, mixed> claims
+     *
+     * @throws HrmApiUnavailable
+     * @throws HrmTokenInvalid
+     */
+    public function verifySsoToken(string $jwt): array
+    {
+        try {
+            $response = $this->client()->post('/api/v1/auth/verify-token', ['token' => $jwt]);
+        } catch (ConnectionException $e) {
+            throw new HrmApiUnavailable('timeout/network lỗi khi verify SSO token', $e);
+        }
+
+        if ($response->successful()) {
+            $data = $response->json('data');
+            if (! is_array($data) || $data === []) {
+                throw new HrmApiUnavailable('verify-token không trả data claims');
+            }
+
+            return $data;
+        }
+
+        $status = $response->status();
+        if (in_array($status, [400, 401, 403, 422], true)) {
+            $message = $response->json('error.message') ?? 'token không hợp lệ';
+
+            throw new HrmTokenInvalid((string) $message);
+        }
+
+        throw new HrmApiUnavailable("HTTP {$status} khi gọi verify-token");
+    }
+
+    /**
      * @return array<string, mixed>|null
      * @throws HrmApiUnavailable
      */
@@ -73,10 +108,6 @@ class HrmApiClient
 
     private function client(): \Illuminate\Http\Client\PendingRequest
     {
-        return Http::baseUrl((string) config('services.hrm.api_base_url'))
-            ->withToken((string) config('services.hrm.api_token'))
-            ->timeout(5)
-            ->retry(2, 200, throw: false)
-            ->acceptJson();
+        return HrmOutboundHttp::client(withApiToken: true);
     }
 }

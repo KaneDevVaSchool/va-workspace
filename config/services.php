@@ -58,7 +58,10 @@ return [
         'sso_client_id' => env('HRM_SSO_CLIENT_ID'),
         'sso_issuer' => env('HRM_SSO_ISSUER'),
         'sso_callback_url' => env('HRM_SSO_CALLBACK_URL'),
+        'jwks_path' => env('HRM_JWKS_PATH', '/.well-known/jwks.json'),
         'jwks_cache_ttl' => (int) env('HRM_JWKS_CACHE_TTL', 21600),
+        // true | false | đường dẫn file PEM (CA nội bộ) — Guzzle verify TLS
+        'http_verify' => env('HRM_HTTP_VERIFY', true),
         'webhook_secret' => env('HRM_WEBHOOK_SECRET'),
     ],
 

@@ -6,27 +6,53 @@ use Firebase\JWT\ExpiredException;
 use Firebase\JWT\JWK;
 use Firebase\JWT\JWT;
 use Firebase\JWT\SignatureInvalidException;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Modules\Identity\App\Hrm\Exceptions\HrmApiUnavailable;
 use Modules\Identity\App\Hrm\Exceptions\HrmTokenInvalid;
 use UnexpectedValueException;
 
 /**
- * Verify JWT SSO của VA-HRM offline bằng JWKS (RS256) — không gọi
- * POST /api/v1/auth/verify-token mỗi lần login, để giảm phụ thuộc mạng
- * vào HRM tại thời điểm callback (xem plan §4.1: JWKS offline được chọn
- * thay vì verify-token API).
+ * Verify JWT SSO của VA-HRM: ưu tiên JWKS offline (RS256); nếu JWKS không
+ * lấy được thì fallback POST /api/v1/auth/verify-token (Bearer ApiClient).
  */
 class HrmJwtVerifier
 {
     private const CACHE_KEY = 'hrm.jwks';
 
+    public function __construct(
+        private readonly HrmApiClient $hrmApi,
+    ) {}
+
     /**
      * @return array<string, mixed> claims đã xác thực
+     *
      * @throws HrmTokenInvalid
      */
     public function verify(string $jwt): array
+    {
+        try {
+            $claims = $this->verifyWithJwks($jwt);
+        } catch (HrmApiUnavailable $jwksError) {
+            $claims = $this->verifyWithApiFallback($jwt, $jwksError);
+        }
+
+        return $this->assertIssuer($claims);
+    }
+
+    /** Làm nóng cache JWKS chủ động (dùng bởi identity:hrm-warm-jwks). */
+    public function warmCache(): void
+    {
+        $this->jwks(forceRefresh: true);
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * @throws HrmTokenInvalid
+     * @throws HrmApiUnavailable
+     */
+    private function verifyWithJwks(string $jwt): array
     {
         $kid = $this->peekKid($jwt);
 
@@ -44,17 +70,45 @@ class HrmJwtVerifier
                 throw new HrmTokenInvalid("không tìm thấy khoá xác thực (kid={$kid})");
             }
 
-            $claims = (array) JWT::decode($jwt, $key);
+            return (array) JWT::decode($jwt, $key);
         } catch (ExpiredException) {
             throw new HrmTokenInvalid('token đã hết hạn');
         } catch (SignatureInvalidException) {
             throw new HrmTokenInvalid('chữ ký không hợp lệ');
         } catch (UnexpectedValueException|\DomainException $e) {
             throw new HrmTokenInvalid('token không đọc được: '.$e->getMessage());
-        } catch (HrmApiUnavailable $e) {
-            throw new HrmTokenInvalid('không lấy được khoá xác thực JWKS: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * @throws HrmTokenInvalid
+     */
+    private function verifyWithApiFallback(string $jwt, HrmApiUnavailable $jwksError): array
+    {
+        if (! filled(config('services.hrm.api_token'))) {
+            throw new HrmTokenInvalid('không lấy được khoá xác thực JWKS: '.$jwksError->getMessage());
         }
 
+        try {
+            return $this->hrmApi->verifySsoToken($jwt);
+        } catch (HrmTokenInvalid $e) {
+            throw $e;
+        } catch (HrmApiUnavailable $e) {
+            throw new HrmTokenInvalid('không xác thực được token SSO: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $claims
+     *
+     * @return array<string, mixed>
+     *
+     * @throws HrmTokenInvalid
+     */
+    private function assertIssuer(array $claims): array
+    {
         $issuer = (string) config('services.hrm.sso_issuer');
         if ($issuer !== '' && ($claims['iss'] ?? null) !== $issuer) {
             throw new HrmTokenInvalid('issuer không khớp');
@@ -79,14 +133,9 @@ class HrmJwtVerifier
         return (string) $header['kid'];
     }
 
-    /** Làm nóng cache JWKS chủ động (dùng bởi identity:hrm-warm-jwks). */
-    public function warmCache(): void
-    {
-        $this->jwks(forceRefresh: true);
-    }
-
     /**
      * @return array<string, mixed>
+     *
      * @throws HrmApiUnavailable
      */
     private function jwks(bool $forceRefresh = false): array
@@ -96,14 +145,12 @@ class HrmJwtVerifier
         }
 
         $ttl = (int) config('services.hrm.jwks_cache_ttl', 21600);
+        $path = (string) config('services.hrm.jwks_path', '/.well-known/jwks.json');
 
-        return Cache::remember(self::CACHE_KEY, $ttl, function () {
+        return Cache::remember(self::CACHE_KEY, $ttl, function () use ($path) {
             try {
-                $response = Http::baseUrl((string) config('services.hrm.api_base_url'))
-                    ->timeout(3)
-                    ->retry(2, 200, throw: false)
-                    ->get('/.well-known/jwks.json');
-            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                $response = HrmOutboundHttp::client(timeoutSeconds: 3)->get($path);
+            } catch (ConnectionException $e) {
                 throw new HrmApiUnavailable('không kết nối được JWKS endpoint', $e);
             }
 

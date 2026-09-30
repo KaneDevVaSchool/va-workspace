@@ -87,4 +87,17 @@ class HrmApiClientTest extends TestCase
 
         $this->assertNull((new HrmApiClient())->getEmployee('emp-missing'));
     }
+
+    public function test_verify_sso_token_returns_claims(): void
+    {
+        Http::fake([
+            'https://hrm.test/api/v1/auth/verify-token' => Http::response([
+                'data' => ['sub' => 'hrm-1', 'aud' => 'va-workspace', 'email' => 'a@vaschools.edu.vn'],
+            ], 200),
+        ]);
+
+        $claims = (new HrmApiClient())->verifySsoToken('jwt-example');
+
+        $this->assertSame('hrm-1', $claims['sub']);
+    }
 }

@@ -30,6 +30,7 @@ class HrmSsoTest extends TestCase
 
         config([
             'services.hrm.api_base_url' => 'https://hrm.test',
+            'services.hrm.api_token' => 'test-api-token',
             'services.hrm.sso_client_id' => 'va-workspace',
             'services.hrm.sso_issuer' => 'https://hrm.test',
             'services.hrm.sso_callback_url' => 'http://localhost/auth/hrm/callback',
@@ -176,6 +177,36 @@ class HrmSsoTest extends TestCase
         $response->assertRedirect();
         $this->assertStringContainsString('/login', $response->headers->get('Location'));
         $this->assertGuest();
+    }
+
+    public function test_callback_logs_in_via_verify_token_when_jwks_missing(): void
+    {
+        Http::fake([
+            'https://hrm.test/.well-known/jwks.json' => Http::response([], 404),
+            'https://hrm.test/api/v1/auth/verify-token' => function ($request) {
+                return Http::response([
+                    'data' => [
+                        'iss' => 'https://hrm.test',
+                        'aud' => 'va-workspace',
+                        'sub' => 'hrm-user-jwks-fallback',
+                        'email' => 'jwks-fallback@vaschools.edu.vn',
+                        'name' => 'JWKS Fallback',
+                        'employee_uuid' => null,
+                        'roles' => ['member'],
+                    ],
+                ], 200);
+            },
+        ]);
+
+        $this->get('/auth/hrm/redirect');
+        $state = session('hrm_sso.state');
+        $token = $this->makeToken(['sub' => 'hrm-user-jwks-fallback', 'email' => 'jwks-fallback@vaschools.edu.vn']);
+
+        $response = $this->get("/auth/hrm/callback?token={$token}&state={$state}");
+
+        $response->assertRedirect();
+        $this->assertAuthenticated();
+        $this->assertDatabaseHas('users', ['email' => 'jwks-fallback@vaschools.edu.vn']);
     }
 
     public function test_terminated_user_cannot_login(): void

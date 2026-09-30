@@ -26,6 +26,7 @@ class HrmJwtVerifierTest extends TestCase
 
         config([
             'services.hrm.api_base_url' => 'https://hrm.test',
+            'services.hrm.api_token' => 'test-api-token',
             'services.hrm.sso_issuer' => 'https://hrm.test',
             'services.hrm.jwks_cache_ttl' => 21600,
         ]);
@@ -77,7 +78,7 @@ class HrmJwtVerifierTest extends TestCase
     {
         $token = $this->makeToken();
 
-        $claims = (new HrmJwtVerifier())->verify($token);
+        $claims = app(HrmJwtVerifier::class)->verify($token);
 
         $this->assertSame('user-uuid-1', $claims['sub']);
         $this->assertSame('va-workspace', $claims['aud']);
@@ -97,7 +98,7 @@ class HrmJwtVerifierTest extends TestCase
         ], $otherKeyPair, 'RS256', $this->kid);
 
         $this->expectException(HrmTokenInvalid::class);
-        (new HrmJwtVerifier())->verify($token);
+        app(HrmJwtVerifier::class)->verify($token);
     }
 
     public function test_verify_rejects_expired_token(): void
@@ -105,7 +106,7 @@ class HrmJwtVerifierTest extends TestCase
         $token = $this->makeToken(['iat' => time() - 1200, 'exp' => time() - 600]);
 
         $this->expectException(HrmTokenInvalid::class);
-        (new HrmJwtVerifier())->verify($token);
+        app(HrmJwtVerifier::class)->verify($token);
     }
 
     public function test_verify_rejects_issuer_mismatch(): void
@@ -113,6 +114,30 @@ class HrmJwtVerifierTest extends TestCase
         $token = $this->makeToken(['iss' => 'https://someone-else.test']);
 
         $this->expectException(HrmTokenInvalid::class);
-        (new HrmJwtVerifier())->verify($token);
+        app(HrmJwtVerifier::class)->verify($token);
+    }
+
+    public function test_verify_falls_back_to_verify_token_when_jwks_unavailable(): void
+    {
+        Http::fake([
+            'https://hrm.test/.well-known/jwks.json' => Http::response([], 404),
+            'https://hrm.test/api/v1/auth/verify-token' => Http::response([
+                'data' => [
+                    'iss' => 'https://hrm.test',
+                    'aud' => 'va-workspace',
+                    'sub' => 'user-uuid-fallback',
+                    'email' => 'fallback@vaschools.edu.vn',
+                    'name' => 'Fallback User',
+                ],
+            ], 200),
+        ]);
+
+        $token = $this->makeToken(['sub' => 'user-uuid-fallback']);
+
+        $claims = app(HrmJwtVerifier::class)->verify($token);
+
+        $this->assertSame('user-uuid-fallback', $claims['sub']);
+        Http::assertSent(fn ($request) => $request->url() === 'https://hrm.test/api/v1/auth/verify-token'
+            && $request->method() === 'POST');
     }
 }
