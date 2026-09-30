@@ -9,25 +9,45 @@ export {
   saveVisibility,
 } from './members.js';
 
+//
+// Cột bảng nhân sự workspace. `sortable` = cho phép bấm đổi chiều sắp xếp
+// trên tiêu đề; `filterable` = có ô lọc "chứa" riêng ngay trên tiêu đề cột.
+//
 export const UNASSIGNED_COLUMNS = [
-  { key: 'person', label: 'Họ tên', defaultOn: true },
-  { key: 'department', label: 'Phòng ban', defaultOn: true },
-  { key: 'roles', label: 'Vai trò', defaultOn: true },
-  { key: 'status', label: 'Trạng thái', defaultOn: false },
-  { key: 'id', label: 'Mã thành viên', defaultOn: false },
+  { key: 'person', label: 'Nhân sự', defaultOn: true, sortable: true, filterable: true },
+  { key: 'email', label: 'Email', defaultOn: true, sortable: true, filterable: true },
+  { key: 'department', label: 'Phòng ban', defaultOn: true, sortable: true, filterable: true },
+  { key: 'team', label: 'Nhóm', defaultOn: false, sortable: true, filterable: true },
+  { key: 'roles', label: 'Vai trò', defaultOn: true, sortable: false, filterable: true },
+  { key: 'status', label: 'Trạng thái', defaultOn: true, sortable: true, filterable: false },
+  { key: 'id', label: 'Mã thành viên', defaultOn: false, sortable: true, filterable: false },
+  { key: 'actions', label: 'Thao tác', defaultOn: true, sortable: false, filterable: false },
 ];
 
 export const UNASSIGNED_FILTERS = [
-  { key: 'q', label: 'Tìm kiếm', defaultOn: true },
   { key: 'department_id', label: 'Phòng ban', defaultOn: true },
-  { key: 'status', label: 'Trạng thái', defaultOn: false },
+  { key: 'status', label: 'Trạng thái', defaultOn: true },
+  { key: 'role', label: 'Vai trò', defaultOn: false },
+  { key: 'sort', label: 'Sắp xếp', defaultOn: false },
 ];
 
-export const COLUMN_STORAGE_KEY = 'va-wc-unassigned-columns-v1';
-export const FILTER_STORAGE_KEY = 'va-wc-unassigned-filters';
-export const COLUMN_WIDTH_KEY = 'va-wc-unassigned-column-widths';
+export const SORT_OPTIONS = [
+  { value: 'name_asc', label: 'Tên A → Z' },
+  { value: 'name_desc', label: 'Tên Z → A' },
+  { value: 'department_asc', label: 'Phòng ban A → Z' },
+  { value: 'unassigned_first', label: 'Chưa gán phòng ban lên đầu' },
+  { value: 'id_desc', label: 'Mới thêm sau cùng' },
+];
+
+export const COLUMN_STORAGE_KEY = 'va-wc-unassigned-columns-v2';
+export const FILTER_STORAGE_KEY = 'va-wc-unassigned-filters-v2';
+export const COLUMN_WIDTH_KEY = 'va-wc-unassigned-column-widths-v2';
 export const ZOOM_STORAGE_KEY = 'va-wc-unassigned-zoom';
 
 export function departmentName(member) {
   return member?.department?.name || '';
+}
+
+export function teamName(member) {
+  return member?.team?.name || '';
 }

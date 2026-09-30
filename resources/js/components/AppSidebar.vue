@@ -306,8 +306,8 @@ const MENU_SECTIONS = [
         // phòng ban thì WorkspaceConfigMemberController::departmentIdOrFail()
         // trả lỗi và Members.vue ẩn hẳn nút "Thêm").
         name: 'superadmin.workspace-config.unassigned',
-        label: 'Nhân sự chưa gán phòng ban',
-        icon: 'userX',
+        label: 'Nhân sự workspace',
+        icon: 'users',
         requiresSuperAdmin: true,
       },
     ],

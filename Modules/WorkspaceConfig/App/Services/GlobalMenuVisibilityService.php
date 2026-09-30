@@ -119,9 +119,9 @@ class GlobalMenuVisibilityService
             'icon' => 'eyeOff',
         ],
         'superadmin.workspace-config.unassigned' => [
-            'label' => 'Nhân sự chưa gán phòng ban',
+            'label' => 'Nhân sự workspace',
             'section' => 'superadmin-workspace-config',
-            'icon' => 'userX',
+            'icon' => 'users',
         ],
     ];
 

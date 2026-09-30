@@ -1,13 +1,14 @@
 <script setup>
 //
-// superadmin/workspace-config/unassigned — TOÀN BỘ nhân sự workspace theo
-// phòng ban, cùng 1 bảng (mẫu vàng ActivityLog: filter, 2 thanh trang, kéo
-// cột, panel chi tiết đẩy ngang) — thay cho layout list/accordion cũ. Dải
-// thẻ tóm tắt đầu trang bấm được để lọc nhanh, giống EmployeeSummaryBar bên
-// va-hrm nhưng theo đúng token/quy tắc UI của dự án này (không badge nền
-// màu, gạch màu bằng ::before left/width, không border-left/right).
-// Panel chi tiết cho gán/đổi phòng ban ngay tại chỗ — endpoint trả về bản
-// ghi vừa đổi để patch thẳng vào state, không tải lại toàn bộ danh sách.
+// superadmin/workspace-config/unassigned — trang QUẢN LÝ NHÂN SỰ workspace,
+// dựng lại theo mẫu trang /employees của va-hrm nhưng bằng token + quy tắc UI
+// của dự án này:
+//   PageHeader → dải thẻ KPI bấm lọc nhanh → panel danh sách (tiêu đề +
+//   thanh công cụ: số dòng/trang, tìm kiếm, menu Bộ lọc, menu Cột) → bảng có
+//   lọc/sắp xếp ngay trên tiêu đề từng cột + chip bộ lọc đang áp dụng +
+//   chọn nhiều dòng để gán phòng ban hàng loạt → panel chi tiết đẩy ngang.
+// Không badge nền màu, không border theo hướng, không title/tooltip.
+// Endpoint gán phòng ban trả về bản ghi vừa đổi để patch thẳng vào state.
 //
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -17,6 +18,8 @@ import { showClientToast } from '@/lib/clientToast';
 import { isTransientClientNetworkError } from '@/lib/networkError';
 import { useDragScroll } from '@/composables/useDragScroll';
 import StatusBadge from '../components/StatusBadge.vue';
+import MemberKpiStrip from '../components/MemberKpiStrip.vue';
+import ColumnHeaderFilter from '../components/ColumnHeaderFilter.vue';
 import {
   COLUMN_STORAGE_KEY,
   COLUMN_WIDTH_KEY,
@@ -24,19 +27,23 @@ import {
   FALLBACK_AVATAR_SRCSET,
   FILTER_STORAGE_KEY,
   MEMBER_STATUS_OPTIONS,
+  SORT_OPTIONS,
   UNASSIGNED_COLUMNS,
   UNASSIGNED_FILTERS,
   ZOOM_STORAGE_KEY,
   departmentName,
   loadVisibility,
+  memberRoles,
   memberRolesText,
   memberStatusLabel,
   saveVisibility,
+  teamName,
 } from '../constants/unassignedMembers.js';
 
 const CELL_PAD_X = 32;
 const COL_EXTRA = 24;
-const AVATAR_EXTRA = 40;
+const AVATAR_EXTRA = 44;
+const SELECT_COL_PX = 44;
 let measureCtx = null;
 let wrapObserver = null;
 
@@ -49,17 +56,27 @@ const brokenAvatarIds = ref(new Set());
 const departmentAssignId = ref('');
 const departmentAssignSaving = ref(false);
 
+const selectedIds = ref(new Set());
+const bulkDepartmentId = ref('');
+const bulkSaving = ref(false);
+
 const query = ref('');
 const departmentId = ref('');
 const status = ref('');
+const roleCode = ref('');
+const sortKey = ref('name_asc');
 const page = ref(1);
 const perPage = ref(20);
+
+const headerFilters = reactive({});
+const headerSort = ref(null);
 
 const visibleColumns = reactive(loadVisibility(COLUMN_STORAGE_KEY, UNASSIGNED_COLUMNS));
 const visibleFilters = reactive(loadVisibility(FILTER_STORAGE_KEY, UNASSIGNED_FILTERS));
 
 const tableWrap = ref(null);
 const resizing = ref(false);
+const selectAllBox = ref(null);
 const MIN_COL_PX = 72;
 
 useDragScroll(tableWrap, { isBlocked: () => resizing.value });
@@ -68,16 +85,92 @@ const columnWidths = reactive(loadColumnWidths());
 const tableZoom = ref(loadZoom());
 
 const shownColumns = computed(() => UNASSIGNED_COLUMNS.filter((col) => visibleColumns[col.key]));
-const colSpan = computed(() => Math.max(shownColumns.value.length, 1));
+const colSpan = computed(() => Math.max(shownColumns.value.length, 1) + 1);
+
+/* ── Thống kê + lọc nhanh ──────────────────────────────────────────────── */
 
 const stats = computed(() => {
   const rows = allMembers.value;
   return {
     total: rows.length,
+    assigned: rows.filter((member) => member.department).length,
     unassigned: rows.filter((member) => !member.department).length,
+    inactive: rows.filter((member) => member.status !== 'active').length,
     departments: departmentOptions.value.length,
   };
 });
+
+const kpiCards = computed(() => [
+  {
+    key: 'total',
+    label: 'Tổng nhân sự',
+    value: fmtNumber(stats.value.total),
+    tone: 'brand',
+    icon: 'users',
+    filter: 'all',
+  },
+  {
+    key: 'assigned',
+    label: 'Đã có phòng ban',
+    value: fmtNumber(stats.value.assigned),
+    tone: 'success',
+    icon: 'userPlus',
+    filter: 'assigned',
+  },
+  {
+    key: 'unassigned',
+    label: 'Chưa gán phòng ban',
+    value: fmtNumber(stats.value.unassigned),
+    tone: 'warning',
+    icon: 'userX',
+    filter: 'unassigned',
+  },
+  {
+    key: 'inactive',
+    label: 'Ngừng hoạt động',
+    value: fmtNumber(stats.value.inactive),
+    tone: 'info',
+    icon: 'pauseCircle',
+    filter: 'inactive',
+  },
+  {
+    key: 'departments',
+    label: 'Phòng ban',
+    value: fmtNumber(stats.value.departments),
+    tone: 'teal',
+    icon: 'building',
+    filter: '',
+  },
+]);
+
+const activeQuickFilter = computed(() => {
+  if (query.value.trim() || roleCode.value) return '';
+  if (departmentId.value === 'none' && !status.value) return 'unassigned';
+  if (departmentId.value === 'any' && !status.value) return 'assigned';
+  if (status.value === 'inactive' && !departmentId.value) return 'inactive';
+  if (!departmentId.value && !status.value) return 'all';
+  return '';
+});
+
+function fmtNumber(value) {
+  return Number(value || 0).toLocaleString('vi-VN');
+}
+
+function onQuickFilter(filter) {
+  if (activeQuickFilter.value === filter) {
+    clearFilters();
+    return;
+  }
+  query.value = '';
+  roleCode.value = '';
+  status.value = filter === 'inactive' ? 'inactive' : '';
+  if (filter === 'unassigned') departmentId.value = 'none';
+  else if (filter === 'assigned') departmentId.value = 'any';
+  else departmentId.value = '';
+  page.value = 1;
+}
+
+/* ── Options cho bộ lọc ────────────────────────────────────────────────── */
 
 const departmentFilterOptions = computed(() =>
   [...departmentOptions.value]
@@ -85,32 +178,118 @@ const departmentFilterOptions = computed(() =>
     .sort((a, b) => a.label.localeCompare(b.label, 'vi')),
 );
 
+const roleFilterOptions = computed(() => {
+  const seen = new Map();
+  for (const member of allMembers.value) {
+    for (const role of memberRoles(member)) {
+      if (role.code && !seen.has(role.code)) seen.set(role.code, role.name);
+    }
+  }
+  return [...seen.entries()]
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+});
+
+/* ── Lọc + sắp xếp ─────────────────────────────────────────────────────── */
+
+function headerFilterText(member, key) {
+  if (key === 'person') return `${member.name ?? ''} ${member.email ?? ''}`;
+  if (key === 'email') return member.email ?? '';
+  if (key === 'department') return departmentName(member);
+  if (key === 'team') return teamName(member);
+  if (key === 'roles') return memberRolesText(member);
+  return '';
+}
+
+const activeHeaderFilterEntries = computed(() =>
+  Object.entries(headerFilters).filter(([, value]) => Boolean(value && value.trim())),
+);
+
 const filteredMembers = computed(() => {
   const q = query.value.trim().toLowerCase();
-  return allMembers.value.filter((member) => {
+  const entries = activeHeaderFilterEntries.value;
+
+  const rows = allMembers.value.filter((member) => {
     if (q) {
-      const hay = `${member.name ?? ''} ${member.email ?? ''} ${departmentName(member)}`.toLowerCase();
+      const hay = `${member.name ?? ''} ${member.email ?? ''} ${departmentName(member)} ${teamName(member)}`
+        .toLowerCase();
       if (!hay.includes(q)) return false;
     }
     if (departmentId.value === 'none') {
       if (member.department) return false;
+    } else if (departmentId.value === 'any') {
+      if (!member.department) return false;
     } else if (departmentId.value && String(member.department?.id) !== departmentId.value) {
       return false;
     }
     if (status.value === 'active' && member.status !== 'active') return false;
     if (status.value === 'inactive' && member.status === 'active') return false;
+    if (roleCode.value && !memberRoles(member).some((role) => role.code === roleCode.value)) {
+      return false;
+    }
+    for (const [key, needle] of entries) {
+      if (!headerFilterText(member, key).toLowerCase().includes(needle.trim().toLowerCase())) {
+        return false;
+      }
+    }
     return true;
   });
+
+  return sortMembers(rows);
 });
 
-const lastPage = computed(() => Math.max(1, Math.ceil(filteredMembers.value.length / perPage.value)));
+function compareBy(a, b, key) {
+  if (key === 'person') return (a.name ?? '').localeCompare(b.name ?? '', 'vi');
+  if (key === 'email') return (a.email ?? '').localeCompare(b.email ?? '', 'vi');
+  if (key === 'department') return departmentName(a).localeCompare(departmentName(b), 'vi');
+  if (key === 'team') return teamName(a).localeCompare(teamName(b), 'vi');
+  if (key === 'status') return (a.status ?? '').localeCompare(b.status ?? '');
+  if (key === 'id') return Number(a.id ?? 0) - Number(b.id ?? 0);
+  return 0;
+}
+
+function sortMembers(rows) {
+  const next = [...rows];
+
+  if (headerSort.value) {
+    const { key, dir } = headerSort.value;
+    next.sort((a, b) => compareBy(a, b, key) * (dir === 'desc' ? -1 : 1));
+    return next;
+  }
+
+  if (sortKey.value === 'name_desc') {
+    next.sort((a, b) => compareBy(b, a, 'person'));
+  } else if (sortKey.value === 'department_asc') {
+    next.sort((a, b) => compareBy(a, b, 'department') || compareBy(a, b, 'person'));
+  } else if (sortKey.value === 'unassigned_first') {
+    next.sort(
+      (a, b) => (a.department ? 1 : 0) - (b.department ? 1 : 0) || compareBy(a, b, 'person'),
+    );
+  } else if (sortKey.value === 'id_desc') {
+    next.sort((a, b) => compareBy(b, a, 'id'));
+  } else {
+    next.sort((a, b) => compareBy(a, b, 'person'));
+  }
+  return next;
+}
+
+const lastPage = computed(() =>
+  Math.max(1, Math.ceil(filteredMembers.value.length / perPage.value)),
+);
 
 const meta = computed(() => {
   const total = filteredMembers.value.length;
   const current = Math.min(Math.max(page.value, 1), lastPage.value);
   const from = total === 0 ? 0 : (current - 1) * perPage.value + 1;
   const to = Math.min(current * perPage.value, total);
-  return { current_page: current, last_page: lastPage.value, total, from, to, per_page: perPage.value };
+  return {
+    current_page: current,
+    last_page: lastPage.value,
+    total,
+    from,
+    to,
+    per_page: perPage.value,
+  };
 });
 
 const pageMembers = computed(() => {
@@ -119,58 +298,150 @@ const pageMembers = computed(() => {
 });
 
 const hasActiveFilters = computed(
-  () => Boolean(query.value.trim()) || Boolean(departmentId.value) || Boolean(status.value),
+  () =>
+    Boolean(query.value.trim()) ||
+    Boolean(departmentId.value) ||
+    Boolean(status.value) ||
+    Boolean(roleCode.value) ||
+    activeHeaderFilterEntries.value.length > 0 ||
+    Boolean(headerSort.value),
 );
 
-const hiddenActiveFilterLabels = computed(() =>
-  UNASSIGNED_FILTERS.filter((item) => !visibleFilters[item.key] && filterHasValue(item.key)).map(
-    (item) => item.label,
-  ),
+const hasVisibleFilterFields = computed(() =>
+  UNASSIGNED_FILTERS.some((item) => visibleFilters[item.key]),
 );
 
-const hasVisibleFilterFields = computed(() => UNASSIGNED_FILTERS.some((item) => visibleFilters[item.key]));
+/* ── Chip bộ lọc đang áp dụng ──────────────────────────────────────────── */
 
-const emptyTableMessage = computed(() =>
-  hasActiveFilters.value ? 'Không có nhân sự khớp bộ lọc.' : 'Workspace chưa có nhân sự nào.',
-);
+const filterChips = computed(() => {
+  const chips = [];
 
-const tableWidthPx = computed(() => {
-  const keys = shownColumns.value.map((col) => col.key);
-  const sum = keys.reduce((total, key) => total + (Number(columnWidths[key]) || 0), 0);
-  return sum > 0 ? `${sum}px` : '100%';
+  if (query.value.trim()) {
+    chips.push({ key: 'q', label: `Tìm: ${query.value.trim()}` });
+  }
+  if (departmentId.value === 'none') {
+    chips.push({ key: 'department_id', label: 'Chưa gán phòng ban' });
+  } else if (departmentId.value === 'any') {
+    chips.push({ key: 'department_id', label: 'Đã có phòng ban' });
+  } else if (departmentId.value) {
+    const name = departmentFilterOptions.value.find(
+      (item) => item.value === departmentId.value,
+    )?.label;
+    chips.push({ key: 'department_id', label: `Phòng ban: ${name ?? departmentId.value}` });
+  }
+  if (status.value) {
+    chips.push({ key: 'status', label: `Trạng thái: ${memberStatusLabel(status.value)}` });
+  }
+  if (roleCode.value) {
+    const name = roleFilterOptions.value.find((item) => item.value === roleCode.value)?.label;
+    chips.push({ key: 'role', label: `Vai trò: ${name ?? roleCode.value}` });
+  }
+  for (const [key, value] of activeHeaderFilterEntries.value) {
+    const label = UNASSIGNED_COLUMNS.find((col) => col.key === key)?.label ?? key;
+    chips.push({ key: `header:${key}`, label: `${label} chứa: ${value.trim()}` });
+  }
+  if (headerSort.value) {
+    const label = UNASSIGNED_COLUMNS.find((col) => col.key === headerSort.value.key)?.label ?? '';
+    chips.push({
+      key: 'sort',
+      label: `Sắp xếp: ${label} ${headerSort.value.dir === 'desc' ? 'giảm dần' : 'tăng dần'}`,
+    });
+  }
+
+  return chips;
 });
 
-const departmentAssignUnchanged = computed(() => {
-  if (!selected.value) return true;
-  const current = selected.value.department?.id ?? '';
-  const next = departmentAssignId.value === '' ? '' : Number(departmentAssignId.value);
-  return current === next;
-});
-
-function filterHasValue(key) {
-  if (key === 'q') return Boolean(query.value.trim());
-  if (key === 'department_id') return Boolean(departmentId.value);
-  if (key === 'status') return Boolean(status.value);
-  return false;
+function removeChip(key) {
+  if (key === 'q') query.value = '';
+  else if (key === 'department_id') departmentId.value = '';
+  else if (key === 'status') status.value = '';
+  else if (key === 'role') roleCode.value = '';
+  else if (key === 'sort') headerSort.value = null;
+  else if (key.startsWith('header:')) delete headerFilters[key.slice('header:'.length)];
 }
 
-function statIsActive(kind) {
-  if (kind === 'total') return !hasActiveFilters.value;
-  if (kind === 'unassigned') {
-    return !query.value.trim() && departmentId.value === 'none' && !status.value;
-  }
-  return false;
-}
-
-function applyStatFilter(kind) {
-  if (kind === 'unassigned' && statIsActive('unassigned')) {
-    clearFilters();
-    return;
-  }
+function clearFilters() {
   query.value = '';
+  departmentId.value = '';
   status.value = '';
-  departmentId.value = kind === 'unassigned' ? 'none' : '';
+  roleCode.value = '';
+  headerSort.value = null;
+  for (const key of Object.keys(headerFilters)) delete headerFilters[key];
+  page.value = 1;
 }
+
+function applyHeaderFilter(key, value) {
+  if (!value) delete headerFilters[key];
+  else headerFilters[key] = value;
+  page.value = 1;
+}
+
+function clearHeaderFilter(key) {
+  delete headerFilters[key];
+  page.value = 1;
+}
+
+function toggleHeaderSort(key) {
+  const current = headerSort.value;
+  if (!current || current.key !== key) {
+    headerSort.value = { key, dir: 'asc' };
+  } else if (current.dir === 'asc') {
+    headerSort.value = { key, dir: 'desc' };
+  } else {
+    headerSort.value = null;
+  }
+}
+
+function headerSortDir(key) {
+  return headerSort.value?.key === key ? headerSort.value.dir : '';
+}
+
+/* ── Chọn nhiều dòng ───────────────────────────────────────────────────── */
+
+const filteredIds = computed(() => filteredMembers.value.map((member) => member.id));
+
+const selectedCount = computed(() => selectedIds.value.size);
+
+const allFilteredSelected = computed(
+  () => filteredIds.value.length > 0 && filteredIds.value.every((id) => selectedIds.value.has(id)),
+);
+
+const someFilteredSelected = computed(
+  () => !allFilteredSelected.value && filteredIds.value.some((id) => selectedIds.value.has(id)),
+);
+
+const bulkDepartmentName = computed(
+  () =>
+    departmentOptions.value.find((item) => String(item.id) === bulkDepartmentId.value)?.name ?? '',
+);
+
+function isSelected(id) {
+  return selectedIds.value.has(id);
+}
+
+function toggleSelect(id) {
+  const next = new Set(selectedIds.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  selectedIds.value = next;
+}
+
+function toggleSelectFiltered() {
+  const next = new Set(selectedIds.value);
+  if (allFilteredSelected.value) {
+    for (const id of filteredIds.value) next.delete(id);
+  } else {
+    for (const id of filteredIds.value) next.add(id);
+  }
+  selectedIds.value = next;
+}
+
+function clearSelection() {
+  selectedIds.value = new Set();
+  bulkDepartmentId.value = '';
+}
+
+/* ── Tải dữ liệu ───────────────────────────────────────────────────────── */
 
 async function load(options = {}) {
   const { silent = false } = options;
@@ -183,6 +454,8 @@ async function load(options = {}) {
     if (selected.value && !allMembers.value.some((member) => member.id === selected.value.id)) {
       selected.value = null;
     }
+    const live = new Set(allMembers.value.map((member) => member.id));
+    selectedIds.value = new Set([...selectedIds.value].filter((id) => live.has(id)));
     nextTick(fitColumnsToContent);
   } catch (error) {
     if (isTransientClientNetworkError(error)) {
@@ -210,13 +483,6 @@ function goPage(nextPage) {
   page.value = nextPage;
 }
 
-function clearFilters() {
-  query.value = '';
-  departmentId.value = '';
-  status.value = '';
-  page.value = 1;
-}
-
 function inspect(member) {
   selected.value = member;
 }
@@ -232,20 +498,40 @@ function onAvatarError(id) {
   brokenAvatarIds.value = next;
 }
 
+/* ── Gán phòng ban ─────────────────────────────────────────────────────── */
+
+const departmentAssignUnchanged = computed(() => {
+  if (!selected.value) return true;
+  const current = selected.value.department?.id ?? '';
+  const next = departmentAssignId.value === '' ? '' : Number(departmentAssignId.value);
+  return current === next;
+});
+
+function patchMember(member) {
+  const index = allMembers.value.findIndex((item) => item.id === member.id);
+  if (index >= 0) allMembers.value[index] = member;
+  if (selected.value?.id === member.id) selected.value = member;
+}
+
+async function assignDepartment(memberId, nextDepartmentId) {
+  const { data } = await window.axios.put(
+    `/api/workspace-config/members/${memberId}/department`,
+    { department_id: Number(nextDepartmentId) },
+  );
+  patchMember(data.member);
+  return data.member;
+}
+
 async function saveMemberDepartment() {
   if (!selected.value || departmentAssignUnchanged.value || departmentAssignId.value === '') return;
 
   departmentAssignSaving.value = true;
   try {
-    const { data } = await window.axios.put(
-      `/api/workspace-config/members/${selected.value.id}/department`,
-      { department_id: Number(departmentAssignId.value) },
+    const member = await assignDepartment(selected.value.id, departmentAssignId.value);
+    showClientToast(
+      'success',
+      `Đã gán ${member.name} vào phòng ban ${member.department?.name ?? ''}.`,
     );
-    const member = data.member;
-    const index = allMembers.value.findIndex((item) => item.id === member.id);
-    if (index >= 0) allMembers.value[index] = member;
-    selected.value = member;
-    showClientToast('success', `Đã gán "${member.name}" vào phòng ban "${member.department?.name ?? ''}".`);
   } catch (error) {
     const message = error?.response?.data?.message;
     showClientToast('error', message || 'Không gán được phòng ban. Vui lòng thử lại.');
@@ -254,12 +540,48 @@ async function saveMemberDepartment() {
   }
 }
 
+async function saveBulkDepartment() {
+  if (bulkDepartmentId.value === '' || selectedCount.value === 0) return;
+
+  bulkSaving.value = true;
+  const ids = [...selectedIds.value];
+  const name = bulkDepartmentName.value;
+  let ok = 0;
+  let failed = 0;
+
+  try {
+    for (const id of ids) {
+      try {
+        await assignDepartment(id, bulkDepartmentId.value);
+        ok += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
+    if (ok > 0) {
+      showClientToast('success', `Đã gán ${ok} nhân sự vào phòng ban ${name}.`);
+    }
+    if (failed > 0) {
+      showClientToast('error', `Có ${failed} nhân sự không gán được phòng ban.`);
+    }
+    if (failed === 0) clearSelection();
+  } finally {
+    bulkSaving.value = false;
+  }
+}
+
+/* ── Bảng: đo cột, kéo đổi độ rộng ─────────────────────────────────────── */
+
 function cellText(member, key) {
   if (key === 'person') return member.name || '—';
+  if (key === 'email') return member.email || '—';
   if (key === 'department') return departmentName(member) || 'Chưa gán phòng ban';
+  if (key === 'team') return teamName(member) || '—';
   if (key === 'roles') return memberRolesText(member);
   if (key === 'status') return memberStatusLabel(member.status);
   if (key === 'id') return String(member.id ?? '—');
+  if (key === 'actions') return 'Xem chi tiết';
   return '—';
 }
 
@@ -291,6 +613,12 @@ function colWidthStyle(key) {
   return width ? `${width}px` : undefined;
 }
 
+const tableWidthPx = computed(() => {
+  const keys = shownColumns.value.map((col) => col.key);
+  const sum = keys.reduce((total, key) => total + (Number(columnWidths[key]) || 0), 0);
+  return sum > 0 ? `${sum + SELECT_COL_PX}px` : '100%';
+});
+
 function measureText(text, font) {
   if (!measureCtx) {
     measureCtx = document.createElement('canvas').getContext('2d');
@@ -306,29 +634,30 @@ function fontOf(el, fallback) {
 }
 
 function readTableFonts() {
-  const table = tableWrap.value?.querySelector('.wc-unassigned__table');
+  const table = tableWrap.value?.querySelector('.wc-people__table');
   return {
     header: fontOf(table?.querySelector('thead th'), '600 12px "Be Vietnam Pro", sans-serif'),
     cell: fontOf(table?.querySelector('tbody td'), '400 14px "Be Vietnam Pro", sans-serif'),
-    muted: fontOf(table?.querySelector('.wc-unassigned__muted'), '400 12px "Be Vietnam Pro", sans-serif'),
+    muted: fontOf(
+      table?.querySelector('.wc-people__muted'),
+      '400 12px "Be Vietnam Pro", sans-serif',
+    ),
   };
 }
 
 function columnContentWidth(key, fonts) {
-  const label = UNASSIGNED_COLUMNS.find((col) => col.key === key)?.label ?? '';
-  let maxW = measureText(label, fonts.header);
+  const col = UNASSIGNED_COLUMNS.find((item) => item.key === key);
+  const tools = (col?.sortable ? 22 : 0) + (col?.filterable ? 22 : 0);
+  let maxW = measureText(col?.label ?? '', fonts.header) + tools;
+
   for (const member of pageMembers.value) {
     if (key === 'person') {
-      maxW = Math.max(maxW, measureText(cellText(member, 'person'), fonts.cell));
-      if (member.email) {
-        maxW = Math.max(maxW, measureText(member.email, fonts.muted));
-      }
+      maxW = Math.max(maxW, measureText(cellText(member, 'person'), fonts.cell) + AVATAR_EXTRA);
     } else {
       maxW = Math.max(maxW, measureText(cellText(member, key), fonts.cell));
     }
   }
-  const extra = key === 'person' ? AVATAR_EXTRA : 0;
-  return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
+  return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA));
 }
 
 function distributeExtraWidth(widths, keys, available) {
@@ -360,7 +689,7 @@ function fitColumnsToContent() {
     measured[key] = columnContentWidth(key, fonts);
   }
 
-  const next = distributeExtraWidth(measured, keys, wrap.clientWidth);
+  const next = distributeExtraWidth(measured, keys, wrap.clientWidth - SELECT_COL_PX);
   for (const key of keys) {
     columnWidths[key] = next[key];
   }
@@ -402,7 +731,9 @@ function startResize(event, key) {
 
 function onColumnToggle(key, checked) {
   if (!checked) {
-    const remaining = UNASSIGNED_COLUMNS.filter((col) => visibleColumns[col.key] && col.key !== key).length;
+    const remaining = UNASSIGNED_COLUMNS.filter(
+      (col) => visibleColumns[col.key] && col.key !== key,
+    ).length;
     if (remaining < 1) {
       showClientToast('warning', 'Cần giữ ít nhất một cột trên bảng.');
       return;
@@ -422,6 +753,8 @@ function handleDocumentKeydown(event) {
   }
 }
 
+/* ── Watchers ──────────────────────────────────────────────────────────── */
+
 watch(visibleColumns, (value) => saveVisibility(COLUMN_STORAGE_KEY, value), { deep: true });
 watch(visibleFilters, (value) => saveVisibility(FILTER_STORAGE_KEY, value), { deep: true });
 watch(columnWidths, (value) => saveVisibility(COLUMN_WIDTH_KEY, value), { deep: true });
@@ -440,7 +773,11 @@ watch(selected, (member) => {
 watch(shownColumns, () => nextTick(fitColumnsToContent));
 watch(pageMembers, () => nextTick(fitColumnsToContent));
 
-watch([query, departmentId, status, perPage], () => {
+watch(someFilteredSelected, (value) => {
+  if (selectAllBox.value) selectAllBox.value.indeterminate = value;
+});
+
+watch([query, departmentId, status, roleCode, sortKey, perPage], () => {
   page.value = 1;
 });
 
@@ -483,259 +820,357 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="wc-unassigned">
+  <section class="wc-people">
     <PageHeader
-      title="Nhân sự workspace"
-      subtitle="Toàn bộ nhân sự theo phòng ban; gán phòng ban cho tài khoản chưa có đơn vị"
-      icon="userX"
+      title="Nhân sự"
+      subtitle="Danh sách toàn bộ nhân sự workspace và phòng ban đang phụ trách"
+      icon="users"
       :breadcrumbs="[
         { label: 'Trang chủ', to: { name: 'home' } },
         { label: 'Cấu hình Workspace', to: { name: 'superadmin.workspace-config.overview' } },
-        { label: 'Nhân sự workspace' },
+        { label: 'Nhân sự' },
       ]"
     >
       <template #actions>
-        <button type="button" class="wc-unassigned__header-btn" :disabled="loading" @click="load">
-          <AppIcon name="refresh" :size="16" :class="{ 'wc-unassigned__spin': loading }" />
+        <button type="button" class="wc-people__tool-btn" :disabled="loading" @click="load">
+          <AppIcon name="refresh" :size="16" :class="{ 'wc-people__spin': loading }" />
           Làm mới
         </button>
       </template>
     </PageHeader>
 
-    <div class="wc-unassigned__stats" aria-label="Tóm tắt nhân sự">
-      <button
-        type="button"
-        class="wc-unassigned__stat wc-unassigned__stat--info"
-        :class="{ 'wc-unassigned__stat--on': statIsActive('total') }"
-        @click="applyStatFilter('total')"
-      >
-        <span class="wc-unassigned__stat-icon">
-          <AppIcon name="users" :size="18" :stroke-width="1.75" />
-        </span>
-        <span class="wc-unassigned__stat-copy">
-          <span class="wc-unassigned__stat-value">{{ stats.total }}</span>
-          <span class="wc-unassigned__stat-label">Tổng nhân sự</span>
-        </span>
-      </button>
-      <button
-        type="button"
-        class="wc-unassigned__stat wc-unassigned__stat--warning"
-        :class="{ 'wc-unassigned__stat--on': statIsActive('unassigned') }"
-        @click="applyStatFilter('unassigned')"
-      >
-        <span class="wc-unassigned__stat-icon">
-          <AppIcon name="userX" :size="18" :stroke-width="1.75" />
-        </span>
-        <span class="wc-unassigned__stat-copy">
-          <span class="wc-unassigned__stat-value">{{ stats.unassigned }}</span>
-          <span class="wc-unassigned__stat-label">Chưa gán phòng ban</span>
-        </span>
-      </button>
-      <span class="wc-unassigned__stat wc-unassigned__stat--success" aria-hidden="true">
-        <span class="wc-unassigned__stat-icon">
-          <AppIcon name="building" :size="18" :stroke-width="1.75" />
-        </span>
-        <span class="wc-unassigned__stat-copy">
-          <span class="wc-unassigned__stat-value">{{ stats.departments }}</span>
-          <span class="wc-unassigned__stat-label">Phòng ban</span>
-        </span>
-      </span>
-    </div>
+    <MemberKpiStrip
+      :cards="kpiCards"
+      :active-filter="activeQuickFilter"
+      @quick-filter="onQuickFilter"
+    />
 
-    <div class="wc-unassigned__body">
-      <div class="wc-unassigned__main">
-        <div v-if="hasVisibleFilterFields" class="wc-unassigned__toolbar">
-          <div class="wc-unassigned__filters">
-            <div v-if="visibleFilters.q" class="wc-unassigned__field">
-              <label class="wc-unassigned__label" for="wc-unassigned-q">Tìm kiếm</label>
-              <input
-                id="wc-unassigned-q"
-                v-model="query"
-                type="search"
-                class="wc-unassigned__input"
-                placeholder="Họ tên, email, phòng ban…"
-                @keydown.enter="page = 1"
-              />
+    <div class="wc-people__body">
+      <div class="wc-people__main">
+        <section class="wc-people__panel" aria-label="Danh sách nhân sự">
+          <header class="wc-people__panel-head">
+            <div class="wc-people__panel-title">
+              <h2 class="wc-people__panel-heading">Danh sách nhân sự</h2>
+              <p class="wc-people__panel-count">{{ fmtNumber(meta.total) }} kết quả</p>
             </div>
 
-            <div v-if="visibleFilters.department_id" class="wc-unassigned__field">
-              <label class="wc-unassigned__label" for="wc-unassigned-dept">Phòng ban</label>
-              <select id="wc-unassigned-dept" v-model="departmentId" class="wc-unassigned__input">
+            <div class="wc-people__panel-search">
+              <label class="wc-people__label" for="wc-people-q">Tìm nhân sự</label>
+              <div class="wc-people__search-box">
+                <AppIcon name="search" :size="15" class="wc-people__search-icon" />
+                <input
+                  id="wc-people-q"
+                  v-model="query"
+                  type="search"
+                  class="wc-people__input wc-people__input--search"
+                  placeholder="Vd. Nguyễn Văn An, an.nguyen@vaschools.edu.vn"
+                />
+              </div>
+            </div>
+          </header>
+
+          <div v-if="hasVisibleFilterFields" class="wc-people__filters">
+            <div v-if="visibleFilters.department_id" class="wc-people__field">
+              <label class="wc-people__label" for="wc-people-dept">Phòng ban</label>
+              <select id="wc-people-dept" v-model="departmentId" class="wc-people__input">
                 <option value="">Tất cả phòng ban</option>
                 <option value="none">Chưa gán phòng ban</option>
+                <option value="any">Đã có phòng ban</option>
                 <option v-for="item in departmentFilterOptions" :key="item.value" :value="item.value">
                   {{ item.label }}
                 </option>
               </select>
             </div>
 
-            <div v-if="visibleFilters.status" class="wc-unassigned__field">
-              <label class="wc-unassigned__label" for="wc-unassigned-status">Trạng thái</label>
-              <select id="wc-unassigned-status" v-model="status" class="wc-unassigned__input">
+            <div v-if="visibleFilters.status" class="wc-people__field">
+              <label class="wc-people__label" for="wc-people-status">Trạng thái</label>
+              <select id="wc-people-status" v-model="status" class="wc-people__input">
                 <option v-for="item in MEMBER_STATUS_OPTIONS" :key="item.value || 'all'" :value="item.value">
                   {{ item.label }}
                 </option>
               </select>
             </div>
+
+            <div v-if="visibleFilters.role" class="wc-people__field">
+              <label class="wc-people__label" for="wc-people-role">Vai trò</label>
+              <select id="wc-people-role" v-model="roleCode" class="wc-people__input">
+                <option value="">Tất cả vai trò</option>
+                <option v-for="item in roleFilterOptions" :key="item.value" :value="item.value">
+                  {{ item.label }}
+                </option>
+              </select>
+            </div>
+
+            <div v-if="visibleFilters.sort" class="wc-people__field">
+              <label class="wc-people__label" for="wc-people-sort">Sắp xếp</label>
+              <select id="wc-people-sort" v-model="sortKey" class="wc-people__input">
+                <option v-for="item in SORT_OPTIONS" :key="item.value" :value="item.value">
+                  {{ item.label }}
+                </option>
+              </select>
+            </div>
           </div>
-        </div>
 
-        <TablePagesBar
-          placement="top"
-          :from="meta.from || 0"
-          :to="meta.to || 0"
-          :total="meta.total || 0"
-          :page="meta.current_page || 1"
-          :last-page="meta.last_page || 1"
-          :per-page="perPage"
-          :zoom="tableZoom"
-          show-search
-          :show-clear-filters="hasActiveFilters"
-          :filters-active="hasActiveFilters"
-          @search="page = 1"
-          @clear-filters="clearFilters"
-          @update:page="goPage"
-          @update:per-page="perPage = $event"
-          @update:zoom="tableZoom = $event"
-        >
-          <template #filters>
-            <label v-for="item in UNASSIGNED_FILTERS" :key="item.key" class="wc-unassigned__check">
-              <input
-                type="checkbox"
-                :checked="visibleFilters[item.key]"
-                @change="onFilterToggle(item.key, $event.target.checked)"
-              />
-              <span>{{ item.label }}</span>
-            </label>
-          </template>
-          <template #settings>
-            <label v-for="col in UNASSIGNED_COLUMNS" :key="col.key" class="wc-unassigned__check">
-              <input
-                type="checkbox"
-                :checked="visibleColumns[col.key]"
-                @change="onColumnToggle(col.key, $event.target.checked)"
-              />
-              <span>{{ col.label }}</span>
-            </label>
-          </template>
-        </TablePagesBar>
+          <TablePagesBar
+            placement="top"
+            :from="meta.from || 0"
+            :to="meta.to || 0"
+            :total="meta.total || 0"
+            :page="meta.current_page || 1"
+            :last-page="meta.last_page || 1"
+            :per-page="perPage"
+            :zoom="tableZoom"
+            :show-clear-filters="hasActiveFilters"
+            :filters-active="hasActiveFilters"
+            @clear-filters="clearFilters"
+            @update:page="goPage"
+            @update:per-page="perPage = $event"
+            @update:zoom="tableZoom = $event"
+          >
+            <template #filters>
+              <label v-for="item in UNASSIGNED_FILTERS" :key="item.key" class="wc-people__check">
+                <input
+                  type="checkbox"
+                  :checked="visibleFilters[item.key]"
+                  @change="onFilterToggle(item.key, $event.target.checked)"
+                />
+                <span>{{ item.label }}</span>
+              </label>
+            </template>
+            <template #settings>
+              <label v-for="col in UNASSIGNED_COLUMNS" :key="col.key" class="wc-people__check">
+                <input
+                  type="checkbox"
+                  :checked="visibleColumns[col.key]"
+                  @change="onColumnToggle(col.key, $event.target.checked)"
+                />
+                <span>{{ col.label }}</span>
+              </label>
+            </template>
+          </TablePagesBar>
 
-        <p v-if="hiddenActiveFilterLabels.length" class="wc-unassigned__note">
-          Đang lọc thêm theo: {{ hiddenActiveFilterLabels.join(', ') }} (bộ lọc đang ẩn).
-        </p>
+          <div v-if="filterChips.length" class="wc-people__chips">
+            <span class="wc-people__chips-label">Đang lọc</span>
+            <button
+              v-for="chip in filterChips"
+              :key="chip.key"
+              type="button"
+              class="wc-people__chip"
+              @click="removeChip(chip.key)"
+            >
+              <span>{{ chip.label }}</span>
+              <AppIcon name="close" :size="12" />
+            </button>
+            <button type="button" class="wc-people__chips-clear" @click="clearFilters">
+              Bỏ tất cả
+            </button>
+          </div>
 
-        <div
-          ref="tableWrap"
-          class="wc-unassigned__table-wrap hide-scrollbar"
-          :class="{ 'wc-unassigned__table-wrap--resizing': resizing }"
-          :style="{ '--table-zoom': tableZoom }"
-        >
-          <table class="wc-unassigned__table" :style="{ width: tableWidthPx }">
-            <colgroup>
-              <col
-                v-for="col in shownColumns"
-                :key="col.key"
-                :style="{ width: colWidthStyle(col.key) }"
-              />
-            </colgroup>
-            <thead>
-              <tr>
-                <th v-for="col in shownColumns" :key="col.key">
-                  <span>{{ col.label }}</span>
-                  <button
-                    type="button"
-                    class="wc-unassigned__resize"
-                    aria-label="Kéo để đổi độ rộng cột"
-                    @click.stop
-                    @mousedown.stop.prevent="startResize($event, col.key)"
-                  />
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="loading">
-                <td :colspan="colSpan" class="wc-unassigned__empty">Đang tải…</td>
-              </tr>
-              <tr v-else-if="pageMembers.length === 0">
-                <td :colspan="colSpan" class="wc-unassigned__empty">{{ emptyTableMessage }}</td>
-              </tr>
-              <tr
-                v-for="member in pageMembers"
-                v-else
-                :key="member.id"
-                :class="{ 'wc-unassigned__row--active': selected?.id === member.id }"
-                @click="inspect(member)"
+          <div v-if="selectedCount > 0" class="wc-people__bulk">
+            <p class="wc-people__bulk-text">
+              Đã chọn <strong>{{ fmtNumber(selectedCount) }}</strong> nhân sự
+            </p>
+            <div class="wc-people__bulk-actions">
+              <label class="wc-people__label" for="wc-people-bulk-dept">Gán vào phòng ban</label>
+              <select
+                id="wc-people-bulk-dept"
+                v-model="bulkDepartmentId"
+                class="wc-people__input wc-people__input--bulk"
+                :disabled="bulkSaving"
               >
-                <td v-for="col in shownColumns" :key="col.key">
-                  <template v-if="col.key === 'person'">
-                    <span class="wc-unassigned__person">
-                      <span class="wc-unassigned__avatar" aria-hidden="true">
-                        <img
-                          v-if="usesPhoto(member)"
-                          :src="member.avatar_url"
-                          alt=""
-                          class="wc-unassigned__avatar-img"
-                          referrerpolicy="no-referrer"
-                          @error="onAvatarError(member.id)"
-                        />
-                        <img
-                          v-else
-                          :src="FALLBACK_AVATAR_SRC"
-                          :srcset="FALLBACK_AVATAR_SRCSET"
-                          alt=""
-                          class="wc-unassigned__avatar-fallback"
-                        />
-                      </span>
-                      <span class="wc-unassigned__person-text">
-                        <span>{{ member.name }}</span>
-                        <span v-if="member.email" class="wc-unassigned__muted">{{ member.email }}</span>
-                      </span>
-                    </span>
-                  </template>
-                  <template v-else-if="col.key === 'department'">
-                    <span v-if="member.department">{{ member.department.name }}</span>
-                    <span v-else class="wc-unassigned__muted">Chưa gán phòng ban</span>
-                  </template>
-                  <template v-else-if="col.key === 'status'">
-                    <StatusBadge :on="member.status === 'active'" :label="memberStatusLabel(member.status)" />
-                  </template>
-                  <span v-else>{{ cellText(member, col.key) }}</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                <option value="">Chọn phòng ban</option>
+                <option v-for="item in departmentOptions" :key="item.id" :value="String(item.id)">
+                  {{ item.name }}
+                </option>
+              </select>
+              <button
+                type="button"
+                class="wc-people__btn wc-people__btn--primary"
+                :disabled="bulkSaving || bulkDepartmentId === ''"
+                @click="saveBulkDepartment"
+              >
+                {{ bulkSaving ? 'Đang gán…' : 'Gán phòng ban' }}
+              </button>
+              <button
+                type="button"
+                class="wc-people__btn"
+                :disabled="bulkSaving"
+                @click="clearSelection"
+              >
+                Bỏ chọn
+              </button>
+            </div>
+          </div>
 
-        <TablePagesBar
-          placement="bottom"
-          paging-only
-          :from="meta.from || 0"
-          :to="meta.to || 0"
-          :total="meta.total || 0"
-          :page="meta.current_page || 1"
-          :last-page="meta.last_page || 1"
-          :per-page="perPage"
-          @update:page="goPage"
-          @update:per-page="perPage = $event"
-        />
+          <div
+            ref="tableWrap"
+            class="wc-people__table-wrap hide-scrollbar"
+            :class="{ 'wc-people__table-wrap--resizing': resizing }"
+            :style="{ '--table-zoom': tableZoom }"
+          >
+            <table class="wc-people__table" :style="{ width: tableWidthPx }">
+              <colgroup>
+                <col :style="{ width: '44px' }" />
+                <col v-for="col in shownColumns" :key="col.key" :style="{ width: colWidthStyle(col.key) }" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th class="wc-people__th-select">
+                    <input
+                      ref="selectAllBox"
+                      type="checkbox"
+                      class="wc-people__checkbox"
+                      :checked="allFilteredSelected"
+                      :disabled="filteredIds.length === 0"
+                      aria-label="Chọn tất cả nhân sự đang lọc"
+                      @change="toggleSelectFiltered"
+                    />
+                  </th>
+                  <th v-for="col in shownColumns" :key="col.key">
+                    <ColumnHeaderFilter
+                      :label="col.label"
+                      :value="headerFilters[col.key] ?? ''"
+                      :filterable="col.filterable"
+                      :sortable="col.sortable"
+                      :sort-dir="headerSortDir(col.key)"
+                      @apply="applyHeaderFilter(col.key, $event)"
+                      @clear="clearHeaderFilter(col.key)"
+                      @toggle-sort="toggleHeaderSort(col.key)"
+                    />
+                    <button
+                      type="button"
+                      class="wc-people__resize"
+                      aria-label="Kéo để đổi độ rộng cột"
+                      @click.stop
+                      @mousedown.stop.prevent="startResize($event, col.key)"
+                    />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="loading">
+                  <td :colspan="colSpan" class="wc-people__empty">Đang tải…</td>
+                </tr>
+                <tr v-else-if="pageMembers.length === 0">
+                  <td :colspan="colSpan" class="wc-people__empty">
+                    <div class="wc-people__empty-box">
+                      <span class="wc-people__empty-icon" aria-hidden="true">
+                        <AppIcon name="users" :size="24" :stroke-width="1.5" />
+                      </span>
+                      <p class="wc-people__empty-title">
+                        {{ hasActiveFilters ? 'Không có nhân sự phù hợp' : 'Workspace chưa có nhân sự nào' }}
+                      </p>
+                      <p class="wc-people__empty-text">
+                        {{
+                          hasActiveFilters
+                            ? 'Thử xoá từ khoá tìm kiếm hoặc đặt lại các bộ lọc đang áp dụng.'
+                            : 'Nhân sự được đồng bộ từ hệ thống nhân sự VA-HRM, bấm Làm mới để tải lại.'
+                        }}
+                      </p>
+                      <button
+                        v-if="hasActiveFilters"
+                        type="button"
+                        class="wc-people__btn"
+                        @click="clearFilters"
+                      >
+                        Đặt lại bộ lọc
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                <tr
+                  v-for="member in pageMembers"
+                  v-else
+                  :key="member.id"
+                  :class="{ 'wc-people__row--active': selected?.id === member.id }"
+                  @click="inspect(member)"
+                >
+                  <td class="wc-people__td-select" @click.stop>
+                    <input
+                      type="checkbox"
+                      class="wc-people__checkbox"
+                      :checked="isSelected(member.id)"
+                      :aria-label="`Chọn ${member.name}`"
+                      @change="toggleSelect(member.id)"
+                    />
+                  </td>
+                  <td v-for="col in shownColumns" :key="col.key">
+                    <template v-if="col.key === 'person'">
+                      <span class="wc-people__person">
+                        <span class="wc-people__avatar" aria-hidden="true">
+                          <img
+                            v-if="usesPhoto(member)"
+                            :src="member.avatar_url"
+                            alt=""
+                            class="wc-people__avatar-img"
+                            referrerpolicy="no-referrer"
+                            @error="onAvatarError(member.id)"
+                          />
+                          <img
+                            v-else
+                            :src="FALLBACK_AVATAR_SRC"
+                            :srcset="FALLBACK_AVATAR_SRCSET"
+                            alt=""
+                            class="wc-people__avatar-fallback"
+                          />
+                        </span>
+                        <span class="wc-people__person-name">{{ member.name }}</span>
+                      </span>
+                    </template>
+                    <template v-else-if="col.key === 'department'">
+                      <span v-if="member.department">{{ member.department.name }}</span>
+                      <span v-else class="wc-people__muted">Chưa gán phòng ban</span>
+                    </template>
+                    <template v-else-if="col.key === 'status'">
+                      <StatusBadge :on="member.status === 'active'" :label="memberStatusLabel(member.status)" />
+                    </template>
+                    <template v-else-if="col.key === 'actions'">
+                      <button
+                        type="button"
+                        class="wc-people__row-btn"
+                        @click.stop="inspect(member)"
+                      >
+                        Xem chi tiết
+                      </button>
+                    </template>
+                    <span v-else>{{ cellText(member, col.key) }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <TablePagesBar
+            placement="bottom"
+            paging-only
+            :from="meta.from || 0"
+            :to="meta.to || 0"
+            :total="meta.total || 0"
+            :page="meta.current_page || 1"
+            :last-page="meta.last_page || 1"
+            :per-page="perPage"
+            @update:page="goPage"
+            @update:per-page="perPage = $event"
+          />
+        </section>
       </div>
 
-      <Transition name="wc-unassigned-side">
-        <aside v-if="selected" class="wc-unassigned__side" aria-label="Chi tiết nhân sự">
-          <div class="wc-unassigned__side-head">
-            <h2 class="wc-unassigned__side-title">Chi tiết nhân sự</h2>
-            <button type="button" class="wc-unassigned__icon-btn" aria-label="Đóng" @click="selected = null">
+      <Transition name="wc-people-side">
+        <aside v-if="selected" class="wc-people__side" aria-label="Chi tiết nhân sự">
+          <div class="wc-people__side-head">
+            <h2 class="wc-people__side-title">Chi tiết nhân sự</h2>
+            <button type="button" class="wc-people__icon-btn" aria-label="Đóng" @click="selected = null">
               <AppIcon name="close" :size="16" />
             </button>
           </div>
 
-          <div class="wc-unassigned__side-person">
-            <span class="wc-unassigned__avatar wc-unassigned__avatar--lg" aria-hidden="true">
+          <div class="wc-people__side-person">
+            <span class="wc-people__avatar wc-people__avatar--lg" aria-hidden="true">
               <img
                 v-if="usesPhoto(selected)"
                 :src="selected.avatar_url"
                 alt=""
-                class="wc-unassigned__avatar-img"
+                class="wc-people__avatar-img"
                 referrerpolicy="no-referrer"
                 @error="onAvatarError(selected.id)"
               />
@@ -744,55 +1179,68 @@ onBeforeUnmount(() => {
                 :src="FALLBACK_AVATAR_SRC"
                 :srcset="FALLBACK_AVATAR_SRCSET"
                 alt=""
-                class="wc-unassigned__avatar-fallback"
+                class="wc-people__avatar-fallback"
               />
             </span>
-            <p class="wc-unassigned__side-lead">{{ selected.name }}</p>
+            <span class="wc-people__side-person-text">
+              <span class="wc-people__side-lead">{{ selected.name }}</span>
+              <span v-if="selected.email" class="wc-people__muted">{{ selected.email }}</span>
+            </span>
           </div>
 
-          <div class="wc-unassigned__rows">
-            <div class="wc-unassigned__row">
-              <span class="wc-unassigned__row-label">Email</span>
-              <span class="wc-unassigned__row-value">{{ selected.email || '—' }}</span>
+          <div class="wc-people__rows">
+            <div class="wc-people__row">
+              <span class="wc-people__row-label">Email</span>
+              <span class="wc-people__row-value">{{ selected.email || '—' }}</span>
             </div>
-            <div class="wc-unassigned__row wc-unassigned__row--dept">
-              <span class="wc-unassigned__row-label wc-unassigned__row-label--dept">Phòng ban</span>
-              <div class="wc-unassigned__row-dept">
-                <select
-                  id="wc-unassigned-dept-assign"
-                  v-model="departmentAssignId"
-                  class="wc-unassigned__input wc-unassigned__input--side"
-                  :disabled="departmentAssignSaving"
-                >
-                  <option value="" disabled>Chọn phòng ban</option>
-                  <option v-for="item in departmentOptions" :key="item.id" :value="String(item.id)">
-                    {{ item.name }}
-                  </option>
-                </select>
-                <button
-                  type="button"
-                  class="wc-unassigned__side-btn"
-                  :disabled="departmentAssignSaving || departmentAssignUnchanged || departmentAssignId === ''"
-                  @click="saveMemberDepartment"
-                >
-                  {{ departmentAssignSaving ? 'Đang lưu…' : 'Gán' }}
-                </button>
-              </div>
+            <div class="wc-people__row">
+              <span class="wc-people__row-label">Phòng ban hiện tại</span>
+              <span class="wc-people__row-value">
+                <span v-if="selected.department">{{ selected.department.name }}</span>
+                <span v-else class="wc-people__muted">Chưa gán phòng ban</span>
+              </span>
             </div>
-            <div class="wc-unassigned__row">
-              <span class="wc-unassigned__row-label">Vai trò</span>
-              <span class="wc-unassigned__row-value">{{ memberRolesText(selected) }}</span>
+            <div class="wc-people__row">
+              <span class="wc-people__row-label">Nhóm</span>
+              <span class="wc-people__row-value">{{ selected.team?.name || '—' }}</span>
             </div>
-            <div class="wc-unassigned__row">
-              <span class="wc-unassigned__row-label">Trạng thái</span>
-              <span class="wc-unassigned__row-value">
+            <div class="wc-people__row">
+              <span class="wc-people__row-label">Vai trò</span>
+              <span class="wc-people__row-value">{{ memberRolesText(selected) }}</span>
+            </div>
+            <div class="wc-people__row">
+              <span class="wc-people__row-label">Trạng thái</span>
+              <span class="wc-people__row-value">
                 <StatusBadge :on="selected.status === 'active'" :label="memberStatusLabel(selected.status)" />
               </span>
             </div>
-            <div class="wc-unassigned__row">
-              <span class="wc-unassigned__row-label">Mã thành viên</span>
-              <span class="wc-unassigned__row-value">{{ selected.id }}</span>
+            <div class="wc-people__row">
+              <span class="wc-people__row-label">Mã thành viên</span>
+              <span class="wc-people__row-value">{{ selected.id }}</span>
             </div>
+          </div>
+
+          <div class="wc-people__side-form">
+            <label class="wc-people__label" for="wc-people-dept-assign">Đổi phòng ban</label>
+            <select
+              id="wc-people-dept-assign"
+              v-model="departmentAssignId"
+              class="wc-people__input"
+              :disabled="departmentAssignSaving"
+            >
+              <option value="" disabled>Chọn phòng ban</option>
+              <option v-for="item in departmentOptions" :key="item.id" :value="String(item.id)">
+                {{ item.name }}
+              </option>
+            </select>
+            <button
+              type="button"
+              class="wc-people__btn wc-people__btn--primary wc-people__btn--block"
+              :disabled="departmentAssignSaving || departmentAssignUnchanged || departmentAssignId === ''"
+              @click="saveMemberDepartment"
+            >
+              {{ departmentAssignSaving ? 'Đang lưu…' : 'Lưu phòng ban' }}
+            </button>
           </div>
         </aside>
       </Transition>
@@ -801,15 +1249,16 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.wc-unassigned {
+.wc-people {
   height: 100%;
   display: flex;
   flex-direction: column;
+  gap: var(--space-3);
   padding: var(--space-5);
   overflow: hidden;
 }
 
-.wc-unassigned__header-btn {
+.wc-people__tool-btn {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -827,388 +1276,547 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.wc-unassigned__header-btn:hover:not(:disabled) {
+.wc-people__tool-btn:hover:not(:disabled) {
   background: var(--color-surface-muted);
 }
 
-.wc-unassigned__header-btn:disabled {
+.wc-people__tool-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.wc-unassigned__spin {
-  animation: wc-unassigned-spin 0.8s linear infinite;
+.wc-people__spin {
+  animation: wc-people-spin 0.8s linear infinite;
 }
 
-@keyframes wc-unassigned-spin {
+@keyframes wc-people-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-.wc-unassigned__stats {
-  flex-shrink: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-  margin: var(--space-3) 0 0;
-}
+/* ── Bố cục thân trang ─────────────────────────────────────────────────── */
 
-.wc-unassigned__stat {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-family-base);
-  text-align: left;
-  box-shadow: inset 0 0 0 1px transparent, var(--shadow-sm);
-  cursor: pointer;
-  transition: box-shadow 0.15s ease, background 0.15s ease;
-}
-
-.wc-unassigned__stat::before {
-  content: '';
-  position: absolute;
-  top: var(--space-2);
-  bottom: var(--space-2);
-  left: var(--space-2);
-  width: 3px;
-  border-radius: 0;
-  background: var(--color-border);
-}
-
-.wc-unassigned__stat--info::before {
-  background: var(--color-tertiary);
-}
-
-.wc-unassigned__stat--warning::before {
-  background: var(--color-warning);
-}
-
-.wc-unassigned__stat--success::before {
-  background: var(--color-success);
-}
-
-.wc-unassigned__stat-icon {
-  display: grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
-}
-
-.wc-unassigned__stat--info .wc-unassigned__stat-icon {
-  background: var(--color-tertiary-surface);
-  color: var(--color-tertiary);
-}
-
-.wc-unassigned__stat--warning .wc-unassigned__stat-icon {
-  background: var(--color-warning-tint-bg);
-  color: var(--color-warning-tint-fg);
-}
-
-.wc-unassigned__stat--success .wc-unassigned__stat-icon {
-  background: var(--color-success-tint-bg);
-  color: var(--color-success-tint-fg);
-}
-
-.wc-unassigned__stat-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 0.125rem;
-}
-
-.wc-unassigned__stat:hover {
-  background: var(--color-surface-muted);
-}
-
-.wc-unassigned__stat--on {
-  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
-}
-
-.wc-unassigned__stat--on.wc-unassigned__stat--info {
-  background: var(--color-tertiary-surface);
-  box-shadow: inset 0 0 0 1px var(--color-tertiary-200), var(--shadow-sm);
-}
-
-.wc-unassigned__stat--on.wc-unassigned__stat--warning {
-  background: var(--color-warning-tint-bg);
-  box-shadow: inset 0 0 0 1px var(--color-warning-tint-border), var(--shadow-sm);
-}
-
-.wc-unassigned__stat-value {
-  color: var(--color-text);
-  font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.wc-unassigned__stat-label {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.wc-unassigned__body {
+.wc-people__body {
   flex: 1;
+  display: flex;
+  gap: var(--space-3);
   min-height: 0;
-  display: flex;
-  gap: var(--space-4);
-  margin-top: var(--space-3);
   overflow: hidden;
 }
 
-.wc-unassigned__main {
+.wc-people__main {
   flex: 1;
+  display: flex;
   min-width: 0;
+  min-height: 0;
+}
+
+/* ── Panel danh sách (thẻ trắng bọc bảng, mẫu ListDataPanel) ───────────── */
+
+.wc-people__panel {
+  flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
   overflow: hidden;
 }
 
-.wc-unassigned__toolbar {
-  position: relative;
-  z-index: 6;
+.wc-people__panel-head {
   flex-shrink: 0;
   display: flex;
-  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
   gap: var(--space-3);
-  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
-.wc-unassigned__filters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-  width: 100%;
+.wc-people__panel-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
-.wc-unassigned__field {
+.wc-people__panel-heading {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.wc-people__panel-count {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.wc-people__panel-search {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
+  gap: 0.25rem;
   width: 100%;
+  max-width: 20rem;
 }
 
-.wc-unassigned__label {
+.wc-people__search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.wc-people__search-icon {
+  position: absolute;
+  left: 0.5rem;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.wc-people__input--search {
+  padding-left: 1.875rem;
+}
+
+/* ── Bộ lọc ghim ───────────────────────────────────────────────────────── */
+
+.wc-people__filters {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.wc-people__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.wc-people__label {
   color: var(--color-text-muted);
   font-size: 0.75rem;
   font-weight: 600;
+  line-height: 1.3;
 }
 
-.wc-unassigned__input {
+.wc-people__input {
   width: 100%;
-  min-width: 0;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  height: 2rem;
+  padding: 0 0.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-family-base);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
-.wc-unassigned__check {
+.wc-people__input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--color-primary-900);
+}
+
+.wc-people__input:disabled {
+  background: var(--color-surface-muted);
+  opacity: 0.7;
+}
+
+.wc-people__check {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0;
+  gap: var(--space-2);
+  padding: 0.25rem 0;
   color: var(--color-text);
   font-size: 0.8125rem;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.wc-unassigned__note {
+/* ── Chip bộ lọc đang áp dụng ──────────────────────────────────────────── */
+
+.wc-people__chips {
   flex-shrink: 0;
-  margin: 0 0 var(--space-2);
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
-.wc-unassigned__table-wrap {
+.wc-people__chips-label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.wc-people__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.625rem;
+  padding: 0 0.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
+}
+
+.wc-people__chip:hover {
+  background: var(--color-primary-50);
+  color: var(--color-primary-900);
+}
+
+.wc-people__chips-clear {
+  border: none;
+  background: transparent;
+  color: var(--color-primary-900);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wc-people__chips-clear:hover {
+  text-decoration: underline;
+}
+
+/* ── Thanh thao tác hàng loạt ──────────────────────────────────────────── */
+
+.wc-people__bulk {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-primary-50);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.wc-people__bulk-text {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+}
+
+.wc-people__bulk-text strong {
+  color: var(--color-primary-900);
+  font-variant-numeric: tabular-nums;
+}
+
+.wc-people__bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.wc-people__input--bulk {
+  width: 12rem;
+}
+
+.wc-people__btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 2rem;
+  padding: 0 0.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
+}
+
+.wc-people__btn:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.wc-people__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wc-people__btn--primary {
+  background: var(--color-primary-900);
+  color: var(--color-on-primary);
+  box-shadow: none;
+}
+
+.wc-people__btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.wc-people__btn--block {
+  width: 100%;
+}
+
+/* ── Bảng ──────────────────────────────────────────────────────────────── */
+
+.wc-people__table-wrap {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  zoom: var(--table-zoom, 1);
 }
 
-.wc-unassigned__table-wrap--resizing {
+.wc-people__table-wrap--resizing {
   cursor: col-resize;
   user-select: none;
 }
 
-.wc-unassigned__table {
-  min-width: 100%;
+.wc-people__table {
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
-  border-collapse: collapse;
-  font-size: calc(0.875rem * var(--table-zoom, 1));
 }
 
-.wc-unassigned__table thead th {
+.wc-people__table thead th {
   position: sticky;
   top: 0;
-  z-index: 1;
-  padding: var(--space-3) var(--space-4);
+  z-index: 2;
+  padding: 0.5rem 1rem;
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
-  font-weight: 600;
   font-size: 0.75rem;
-  letter-spacing: 0.02em;
+  font-weight: 600;
   text-align: left;
   white-space: nowrap;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.wc-unassigned__resize {
+.wc-people__table thead th:not(.wc-people__th-select) {
+  position: sticky;
+  padding-right: 1.25rem;
+}
+
+.wc-people__th-select,
+.wc-people__td-select {
+  width: 44px;
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+  text-align: center;
+}
+
+.wc-people__checkbox {
+  width: 0.875rem;
+  height: 0.875rem;
+  accent-color: var(--color-primary-900);
+  cursor: pointer;
+}
+
+.wc-people__checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.wc-people__resize {
   position: absolute;
   top: 0;
   right: 0;
-  z-index: 2;
-  width: 0.5rem;
+  width: 0.625rem;
   height: 100%;
-  padding: 0;
   border: none;
   background: transparent;
   cursor: col-resize;
 }
 
-.wc-unassigned__resize::after {
+.wc-people__resize::after {
   content: '';
   position: absolute;
   top: 25%;
-  right: 2px;
-  width: 2px;
+  right: 0.25rem;
+  width: 1px;
   height: 50%;
-  border-radius: var(--radius-full);
-  background: var(--color-border);
+  background: var(--color-border-strong);
 }
 
-.wc-unassigned__resize:hover::after,
-.wc-unassigned__table-wrap--resizing .wc-unassigned__resize:hover::after {
-  background: var(--color-primary);
+.wc-people__resize:hover::after {
+  background: var(--color-primary-900);
 }
 
-.wc-unassigned__table tbody td {
-  padding: var(--space-3) var(--space-4);
+.wc-people__table tbody td {
+  padding: 0.5rem 1rem;
   color: var(--color-text);
-  vertical-align: middle;
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.wc-unassigned__table tbody tr {
+.wc-people__table tbody tr {
   cursor: pointer;
 }
 
-.wc-unassigned__table tbody tr:hover td {
+.wc-people__table tbody tr:hover td {
   background: var(--color-surface-muted);
 }
 
-.wc-unassigned__row--active td {
-  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+.wc-people__row--active td {
+  background: var(--color-primary-50);
 }
 
-.wc-unassigned__empty {
-  padding: var(--space-5);
-  text-align: center;
-  color: var(--color-text-muted);
-  white-space: normal;
+.wc-people__row-btn {
+  height: 1.625rem;
+  padding: 0 0.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-primary-900);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
 }
 
-.wc-unassigned__person {
-  display: flex;
+.wc-people__row-btn:hover {
+  background: var(--color-primary-50);
+}
+
+.wc-people__person {
+  display: inline-flex;
   align-items: center;
-  gap: 0.625rem;
+  gap: var(--space-2);
   min-width: 0;
 }
 
-.wc-unassigned__person-text {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-
-.wc-unassigned__person-text span {
-  display: block;
+.wc-people__person-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.wc-unassigned__avatar {
+.wc-people__avatar {
   display: grid;
-  flex-shrink: 0;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
-  overflow: hidden;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
   border-radius: var(--radius-full);
-  background: var(--color-primary);
+  background: var(--color-primary-900);
+  overflow: hidden;
 }
 
-.wc-unassigned__avatar--lg {
-  width: 2.75rem;
-  height: 2.75rem;
+.wc-people__avatar--lg {
+  width: 3rem;
+  height: 3rem;
 }
 
-.wc-unassigned__avatar-img {
+.wc-people__avatar-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.wc-unassigned__avatar-fallback {
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
-  padding: 4%;
+.wc-people__avatar-fallback {
+  width: 60%;
+  height: 60%;
   object-fit: contain;
 }
 
-.wc-unassigned__muted {
-  margin-top: 0.125rem;
+.wc-people__muted {
   color: var(--color-text-muted);
-  font-size: 0.75rem;
 }
 
-.wc-unassigned__side {
+/* ── Trạng thái rỗng ───────────────────────────────────────────────────── */
+
+.wc-people__empty {
+  padding: var(--space-6) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  text-align: center;
+  white-space: normal;
+}
+
+.wc-people__empty-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 24rem;
+  margin: 0 auto;
+}
+
+.wc-people__empty-icon {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.wc-people__empty-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.wc-people__empty-text {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+/* ── Panel chi tiết đẩy ngang ──────────────────────────────────────────── */
+
+.wc-people__side {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
   width: 28rem;
-  overflow-y: auto;
   padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+  overflow-y: auto;
 }
 
-.wc-unassigned__side-head {
+.wc-people__side-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
 }
 
-.wc-unassigned__side-title {
+.wc-people__side-title {
   margin: 0;
   color: var(--color-text);
-  font-size: 1.0625rem;
-  font-weight: 700;
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
-.wc-unassigned__icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.wc-people__icon-btn {
+  display: grid;
+  place-items: center;
   width: 1.75rem;
   height: 1.75rem;
   border: none;
@@ -1218,168 +1826,138 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.wc-unassigned__icon-btn:hover {
+.wc-people__icon-btn:hover {
   background: var(--color-surface-muted);
+  color: var(--color-text);
 }
 
-.wc-unassigned__side-person {
+.wc-people__side-person {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin: var(--space-3) 0 var(--space-4);
+  min-width: 0;
 }
 
-.wc-unassigned__side-lead {
-  margin: 0;
+.wc-people__side-person-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.wc-people__side-lead {
   color: var(--color-text);
-  font-weight: 600;
   font-size: 0.9375rem;
-  line-height: 1.45;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
-.wc-unassigned__rows {
+.wc-people__side-person-text .wc-people__muted {
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wc-people__rows {
   display: flex;
   flex-direction: column;
 }
 
-.wc-unassigned__row {
+.wc-people__row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-2) 0;
+  padding: 0.5rem 0;
   box-shadow: 0 1px 0 var(--color-border);
+}
+
+.wc-people__row-label {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
   font-size: 0.8125rem;
 }
 
-.wc-unassigned__row:last-child {
-  box-shadow: none;
-}
-
-.wc-unassigned__row-label {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-}
-
-.wc-unassigned__row-label::after {
-  content: ':';
-}
-
-.wc-unassigned__row-value {
+.wc-people__row-value {
+  min-width: 0;
   color: var(--color-text);
-  font-style: italic;
+  font-size: 0.8125rem;
   text-align: right;
   overflow-wrap: anywhere;
 }
 
-.wc-unassigned__row--dept {
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-2);
-}
-
-.wc-unassigned__row-label--dept {
-  flex-shrink: initial;
-}
-
-.wc-unassigned__row-dept {
-  flex: 1;
-  min-width: 0;
+.wc-people__side-form {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--space-2);
+  padding-top: var(--space-2);
 }
 
-.wc-unassigned__input--side {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.8125rem;
+.wc-people-side-enter-active,
+.wc-people-side-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
-.wc-unassigned__side-btn {
-  flex-shrink: 0;
-  padding: 0.375rem 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-family-base);
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.wc-unassigned__side-btn:hover:not(:disabled) {
-  background: var(--color-surface-muted);
-}
-
-.wc-unassigned__side-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.wc-unassigned-side-enter-active,
-.wc-unassigned-side-leave-active {
-  transition: transform 0.18s ease, opacity 0.18s ease;
-}
-
-.wc-unassigned-side-enter-from,
-.wc-unassigned-side-leave-to {
-  transform: translateX(0.75rem);
+.wc-people-side-enter-from,
+.wc-people-side-leave-to {
   opacity: 0;
+  transform: translateX(var(--space-4));
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .wc-unassigned-side-enter-active,
-  .wc-unassigned-side-leave-active {
-    transition: none;
-  }
+/* ── Responsive ────────────────────────────────────────────────────────── */
 
-  .wc-unassigned__spin {
-    animation: none;
-  }
-}
-
-@media (max-width: 1024px) {
-  .wc-unassigned__body {
-    flex-direction: column;
-  }
-
-  .wc-unassigned__side {
-    width: 100%;
-    max-height: 42%;
-  }
-
-  .wc-unassigned__table-wrap {
-    min-height: 16rem;
-  }
-
-  .wc-unassigned__filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .wc-unassigned__stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (max-width: 1280px) {
+  .wc-people__side {
+    width: 24rem;
   }
 }
 
 @media (max-width: 768px) {
-  .wc-unassigned {
-    padding: var(--space-4);
+  .wc-people {
+    padding: var(--space-3);
+  }
+
+  .wc-people__body {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .wc-people__panel-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wc-people__panel-search {
+    max-width: none;
+  }
+
+  .wc-people__side {
+    width: 100%;
+  }
+
+  .wc-people__bulk {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wc-people__input--bulk {
+    width: 100%;
   }
 }
 
 @media (max-width: 480px) {
-  .wc-unassigned {
-    padding: var(--space-3);
+  .wc-people {
+    padding: var(--space-2);
   }
 
-  .wc-unassigned__filters {
+  .wc-people__filters {
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
   }
 
-  .wc-unassigned__stats {
-    grid-template-columns: minmax(0, 1fr);
+  .wc-people__bulk-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>
