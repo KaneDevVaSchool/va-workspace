@@ -127,17 +127,26 @@ class HrmSsoController extends Controller
 
     private function loginErrorForTokenInvalid(HrmTokenInvalid $e): string
     {
-        $reason = mb_strtolower($e->getMessage());
-
-        if (
-            str_contains($reason, 'ability')
-            || str_contains($reason, 'quyền')
-            || str_contains($reason, 'verify-token')
-        ) {
+        if ($this->isSsoVerifyAbilityError($e->getMessage())) {
             return 'Workspace chưa được cấp quyền xác thực SSO trên HRM. Quản trị HRM cần bổ sung ability verify-token cho ApiClient va-workspace, hoặc bật endpoint JWKS.';
         }
 
         return 'Phiên đăng nhập không hợp lệ. Vui lòng thử lại.';
+    }
+
+    private function isSsoVerifyAbilityError(string $reason): bool
+    {
+        $reason = mb_strtolower($reason);
+
+        if (str_contains($reason, 'thiếu ability gọi verify-token')) {
+            return true;
+        }
+
+        if (str_contains($reason, 'insufficient_abilities')) {
+            return true;
+        }
+
+        return str_contains($reason, 'quyền') && str_contains($reason, 'ability');
     }
 
     /** @param array<string, string|null> $query */

@@ -78,7 +78,7 @@ class HrmApiClient
         $status = $response->status();
         $message = (string) ($response->json('error.message') ?? 'token không hợp lệ');
 
-        if ($status === 403 || $this->isVerifyTokenAbilityDenied($message, $response->json('error.code'))) {
+        if ($this->isVerifyTokenAbilityDenied($message, $response->json('error.code'))) {
             throw new HrmApiUnavailable(
                 'ApiClient va-workspace thiếu ability gọi verify-token — cấp quyền trên admin HRM hoặc publish JWKS'
             );
