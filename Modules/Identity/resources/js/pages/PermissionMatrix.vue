@@ -101,16 +101,19 @@ const hasActiveFilters = computed(
 const roleSummaries = computed(() =>
   roles.value.map((role) => {
     if (!scopeReady.value) {
-      return { ...role, granted: null, overridden: null };
+      return { ...role, granted: null, overridden: null, editable: null };
     }
     let granted = 0;
     let overridden = 0;
+    let editable = 0;
     for (const perm of permissions.value) {
       const cell = cellFor(role.code, perm.key);
-      if (cell.effective && !cell.reserved) granted += 1;
+      if (cell.reserved) continue;
+      editable += 1;
+      if (cell.effective) granted += 1;
       if (overrideHere(cell) !== null) overridden += 1;
     }
-    return { ...role, granted, overridden };
+    return { ...role, granted, overridden, editable };
   }),
 );
 
@@ -254,6 +257,12 @@ function moduleStats(moduleLabel) {
   const keys = grantableKeys(moduleLabel);
   const granted = keys.filter((key) => cellFor(selectedRoleCode.value, key).effective).length;
   return { total: keys.length, granted };
+}
+
+function moduleCaption(moduleLabel) {
+  const { total, granted } = moduleStats(moduleLabel);
+  if (total === 0) return 'Chỉ có quyền hệ thống';
+  return `${granted} trên ${total} quyền được cấp`;
 }
 
 function moduleTone(moduleLabel) {
@@ -661,7 +670,7 @@ onMounted(() => {
           >
             <span class="perm__role-name">{{ role.label }}</span>
             <span v-if="role.granted === null" class="perm__role-meta">Chưa chọn phạm vi</span>
-            <span v-else class="perm__role-meta">{{ role.granted }} / {{ permissions.length }} quyền được cấp</span>
+            <span v-else class="perm__role-meta">{{ role.granted }} / {{ role.editable }} quyền được cấp</span>
             <span v-if="role.overridden" class="perm__role-note">{{ role.overridden }} thiết lập riêng</span>
           </button>
         </div>
@@ -687,7 +696,7 @@ onMounted(() => {
             <div>
               <h2>{{ selectedRole.label }}</h2>
               <p v-if="selectedSummary">
-                {{ selectedSummary.granted }} trên {{ permissions.length }} quyền được cấp trong {{ scopeLabel }}.
+                {{ selectedSummary.granted }} trên {{ selectedSummary.editable }} quyền được cấp trong {{ scopeLabel }}.
                 <template v-if="selectedSummary.overridden">
                   {{ selectedSummary.overridden }} quyền có thiết lập riêng.
                 </template>
@@ -747,7 +756,7 @@ onMounted(() => {
                   <span>
                     <strong>{{ group.module }}</strong>
                     <small>
-                      {{ moduleStats(group.module).granted }} trên {{ moduleStats(group.module).total }} quyền được cấp
+                      {{ moduleCaption(group.module) }}
                       <template v-if="group.items.length !== (permissionsByModule[group.module] || []).length">
                         · đang hiện {{ group.items.length }}
                       </template>
