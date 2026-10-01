@@ -9,5 +9,6 @@
     "Credential": true,
     "Dashboard": true,
     "FeatureRequest": true,
-    "Chat": true
+    "Chat": true,
+    "Contract": true
 }

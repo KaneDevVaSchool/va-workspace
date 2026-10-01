@@ -95,6 +95,9 @@ return [
             // Báo cáo mọi phòng ban — giám đốc điều hành giám sát toàn hệ
             // thống nên không giới hạn theo department_id như trưởng phòng.
             'report.*',
+            // Nhà cung cấp & Hợp đồng — cấp giám đốc xem toàn bộ dữ liệu,
+            // thao tác quản trị vẫn dành cho admin hoặc quản lý phòng ban.
+            'contract.view',
             'my_work.*',
             'notification.*',
             'feature_request.create',
@@ -428,9 +431,9 @@ return [
         'report.view_assigned' => ['label' => 'Xem báo cáo được chia sẻ', 'module' => 'Báo cáo', 'description' => 'Menu trái: Báo cáo. Xem báo cáo mà người tạo đã thêm mình vào danh sách người xem', 'active' => true],
 
         // ---------- Hợp đồng (contract) ----------
-        'contract.*' => ['label' => 'Toàn bộ hợp đồng', 'module' => 'Hợp đồng', 'description' => 'Toàn quyền quản lý hợp đồng'],
-        'contract.view' => ['label' => 'Xem hợp đồng', 'module' => 'Hợp đồng', 'description' => 'Xem danh sách và chi tiết hợp đồng'],
-        'contract.manage_department' => ['label' => 'Quản lý hợp đồng phòng ban', 'module' => 'Hợp đồng', 'description' => 'Quản lý hợp đồng thuộc phòng ban'],
+        'contract.*' => ['label' => 'Toàn bộ Nhà cung cấp & Hợp đồng', 'module' => 'Nhà cung cấp & Hợp đồng', 'description' => 'Toàn quyền quản lý nhà cung cấp, hồ sơ, hợp đồng và cấu hình', 'active' => true],
+        'contract.view' => ['label' => 'Xem Nhà cung cấp & Hợp đồng', 'module' => 'Nhà cung cấp & Hợp đồng', 'description' => 'Menu trái: Nhà cung cấp. Xem tổng quan, danh sách và chi tiết nhà cung cấp/hợp đồng trong phạm vi được cấp', 'active' => true],
+        'contract.manage_department' => ['label' => 'Quản lý Nhà cung cấp & Hợp đồng phòng ban', 'module' => 'Nhà cung cấp & Hợp đồng', 'description' => 'Tạo, sửa, đổi trạng thái nhà cung cấp/hồ sơ/hợp đồng thuộc phòng ban', 'active' => true],
 
         // ---------- Quản lý tài khoản (credential) ----------
         'credential.*' => ['label' => 'Toàn bộ quản lý tài khoản', 'module' => 'Quản lý tài khoản', 'description' => 'Toàn quyền quản lý tài khoản dịch vụ (Google, Canva, Cursor, Claude, AWS, VPS, database, IAM, domain...)', 'active' => true],

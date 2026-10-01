@@ -196,6 +196,17 @@ const MENU_SECTIONS = [
         requiresAnyPermission: ['report.manage_department', 'report.view_assigned'],
         configurableByDepartment: true,
       },
+      {
+        // Nhà cung cấp & Hợp đồng — MVP1 mở trước phần Nhà cung cấp
+        // (danh sách, hồ sơ, liên hệ, tài khoản ngân hàng). Scope thật
+        // chặn ở API Contract: trưởng/phó phòng theo phòng ban, cấp giám
+        // đốc trở lên xem toàn bộ.
+        name: 'manager.contract.suppliers.index',
+        label: 'Nhà cung cấp',
+        icon: 'building',
+        requiresAnyPermission: ['contract.view', 'contract.manage_department'],
+        configurableByDepartment: true,
+      },
     ],
   },
   {
@@ -414,6 +425,9 @@ function isActive(routeName) {
   }
   if (routeName === 'manager.reports.index') {
     return route.path === '/manager/reports' || route.path.startsWith('/manager/reports/');
+  }
+  if (routeName === 'manager.contract.suppliers.index') {
+    return route.path === '/manager/contract/suppliers' || route.path.startsWith('/manager/contract/suppliers/');
   }
   if (routeName === 'manager.project.tasks') {
     return route.path === '/manager/project/tasks' || route.path.startsWith('/manager/project/tasks/');

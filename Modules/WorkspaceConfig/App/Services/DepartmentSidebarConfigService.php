@@ -48,6 +48,7 @@ class DepartmentSidebarConfigService
         'manager.project.index' => 'Dự án',
         'manager.project.tasks' => 'Công việc',
         'manager.reports.index' => 'Báo cáo',
+        'manager.contract.suppliers.index' => 'Nhà cung cấp',
         'manager.credential.index' => 'Tài khoản',
     ];
 
@@ -61,6 +62,7 @@ class DepartmentSidebarConfigService
         'manager.project.index' => 'operations',
         'manager.project.tasks' => 'operations',
         'manager.reports.index' => 'operations',
+        'manager.contract.suppliers.index' => 'operations',
         'manager.credential.index' => 'control',
     ];
 

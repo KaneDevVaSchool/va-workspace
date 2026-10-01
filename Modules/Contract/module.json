@@ -1,0 +1,11 @@
+{
+    "name": "Contract",
+    "alias": "contract",
+    "description": "Quản lý Nhà cung cấp & Hợp đồng: hồ sơ nhà cung cấp, trạng thái hợp tác, hồ sơ bắt buộc, hợp đồng và phụ lục.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Contract\\App\\Providers\\ContractServiceProvider"
+    ],
+    "files": []
+}
