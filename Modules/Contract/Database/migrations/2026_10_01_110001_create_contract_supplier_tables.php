@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('contract_supplier_types', function (Blueprint $table) {
             $table->id();
-            $table->string('code', 50)->unique();
+            $table->string('code', 50)->unique('contract_supplier_types_code_unique');
             $table->string('name');
             $table->boolean('is_active')->default(true);
             $table->unsignedInteger('sort_order')->default(0);
@@ -26,16 +26,16 @@ return new class extends Migration
             $table->unsignedInteger('sort_order')->default(0);
             $table->timestamps();
 
-            $table->unique(['supplier_type_id', 'code']);
+            $table->unique(['supplier_type_id', 'code'], 'contract_supplier_groups_type_code_unique');
         });
 
         Schema::create('contract_suppliers', function (Blueprint $table) {
             $table->id();
-            $table->string('code', 20)->unique();
+            $table->string('code', 20)->unique('contract_suppliers_code_unique');
             $table->string('name');
             $table->string('short_name')->nullable();
             $table->string('tax_code', 30)->nullable();
-            $table->string('normalized_tax_code', 30)->nullable()->unique();
+            $table->string('normalized_tax_code', 30)->nullable()->unique('contract_suppliers_tax_unique');
             $table->foreignId('supplier_type_id')->nullable()->constrained('contract_supplier_types')->nullOnDelete();
             $table->foreignId('supplier_group_id')->nullable()->constrained('contract_supplier_groups')->nullOnDelete();
             $table->string('legal_name')->nullable();
@@ -63,9 +63,9 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index(['department_id', 'status']);
-            $table->index(['owner_user_id']);
-            $table->index(['supplier_type_id', 'supplier_group_id']);
+            $table->index(['department_id', 'status'], 'contract_suppliers_dept_status_idx');
+            $table->index(['owner_user_id'], 'contract_suppliers_owner_idx');
+            $table->index(['supplier_type_id', 'supplier_group_id'], 'contract_suppliers_type_group_idx');
         });
 
         Schema::create('contract_supplier_contacts', function (Blueprint $table) {
@@ -80,7 +80,7 @@ return new class extends Migration
             $table->boolean('is_primary')->default(false);
             $table->timestamps();
 
-            $table->index(['supplier_id', 'is_primary']);
+            $table->index(['supplier_id', 'is_primary'], 'contract_supplier_contacts_primary_idx');
         });
 
         Schema::create('contract_supplier_bank_accounts', function (Blueprint $table) {
@@ -95,12 +95,12 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->timestamps();
 
-            $table->index(['supplier_id', 'is_default']);
+            $table->index(['supplier_id', 'is_default'], 'contract_supplier_banks_default_idx');
         });
 
         Schema::create('contract_supplier_document_types', function (Blueprint $table) {
             $table->id();
-            $table->string('code', 80)->unique();
+            $table->string('code', 80)->unique('contract_doc_types_code_unique');
             $table->string('name');
             $table->string('group_label', 80)->default('Khác');
             $table->boolean('has_expiry')->default(false);
@@ -143,8 +143,8 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['supplier_id', 'document_type_id'], 'contract_supplier_doc_unique');
-            $table->index(['supplier_id', 'status']);
-            $table->index(['expires_at']);
+            $table->index(['supplier_id', 'status'], 'contract_supplier_docs_status_idx');
+            $table->index(['expires_at'], 'contract_supplier_docs_expires_idx');
         });
 
         Schema::create('contract_supplier_document_versions', function (Blueprint $table) {
@@ -161,13 +161,13 @@ return new class extends Migration
             $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
-            $table->unique(['supplier_document_id', 'version'], 'contract_supplier_doc_version_unique');
+            $table->unique(['supplier_document_id', 'version'], 'contract_doc_versions_unique');
         });
 
         Schema::create('contracts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('supplier_id')->nullable()->constrained('contract_suppliers')->nullOnDelete();
-            $table->string('code', 30)->unique();
+            $table->string('code', 30)->unique('contracts_code_unique');
             $table->string('contract_number')->nullable();
             $table->string('title');
             $table->string('type', 80)->nullable();
@@ -184,9 +184,9 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index(['supplier_id', 'status']);
-            $table->index(['department_id']);
-            $table->index(['ends_at']);
+            $table->index(['supplier_id', 'status'], 'contracts_supplier_status_idx');
+            $table->index(['department_id'], 'contracts_department_idx');
+            $table->index(['ends_at'], 'contracts_ends_at_idx');
         });
 
         Schema::create('contract_audit_logs', function (Blueprint $table) {
@@ -203,10 +203,10 @@ return new class extends Migration
             $table->foreignId('actor_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
-            $table->index(['subject_type', 'subject_id']);
-            $table->index(['action']);
-            $table->index(['actor_id']);
-            $table->index(['created_at']);
+            $table->index(['subject_type', 'subject_id'], 'contract_audit_subject_idx');
+            $table->index(['action'], 'contract_audit_action_idx');
+            $table->index(['actor_id'], 'contract_audit_actor_idx');
+            $table->index(['created_at'], 'contract_audit_created_idx');
         });
     }
 
