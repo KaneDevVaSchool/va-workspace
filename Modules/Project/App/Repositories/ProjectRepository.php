@@ -10,6 +10,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Services\PermissionService;
+use Modules\Identity\App\Services\ViewAsService;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\ProjectAttachment;
 use Modules\Project\App\Models\ProjectCreatorAllowlist;
@@ -501,10 +502,11 @@ class ProjectRepository implements ProjectRepositoryInterface
     }
 
     /**
-     * Nhân viên và người xem chỉ mở dự án mình được gắn (thành viên, theo dõi,
-     * phụ trách, người tạo, người thực hiện / quản lý việc). Cùng phòng ban
-     * thực hiện không đủ. Trưởng nhóm trở lên (task.view hoặc quản lý dự án
-     * phòng ban) vẫn xem cả phòng.
+     * Vai trò nhân viên / người xem chỉ mở dự án mình được gắn (thành viên,
+     * theo dõi, phụ trách, người tạo, người thực hiện hoặc quản lý việc).
+     * Cùng phòng ban thực hiện không đủ — grant DB có thể nới project.* của
+     * role member, nên xét theo mã vai trò, không theo permission key.
+     * Có thêm vai trò trưởng nhóm trở lên thì vẫn xem cả phòng.
      */
     private function whereAssignedWhenIndividual(Builder $query, User $viewer): void
     {
@@ -526,11 +528,18 @@ class ProjectRepository implements ProjectRepositoryInterface
 
     private function seesOnlyParticipatingProjects(User $viewer): bool
     {
-        $permissions = app(PermissionService::class);
+        $roles = app(ViewAsService::class)->effectiveRoles($viewer);
+        if ($roles === []) {
+            return true;
+        }
 
-        return ! $permissions->allows($viewer, 'task.view')
-            && ! $permissions->allows($viewer, 'project.manage_department')
-            && ! $permissions->allows($viewer, 'project.update_department');
+        foreach ($roles as $code) {
+            if (! in_array($code, ['member', 'viewer'], true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
