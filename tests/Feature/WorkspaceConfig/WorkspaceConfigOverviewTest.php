@@ -403,6 +403,24 @@ class WorkspaceConfigOverviewTest extends TestCase
         ]);
     }
 
+    public function test_assigning_department_gives_unroled_user_member_role(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $member = $this->makeUser(['department_id' => null]);
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $this->actingAs($admin)
+            ->putJson("/api/workspace-config/members/{$member->id}/department", [
+                'department_id' => $dept->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('member.roles.0.code', 'member');
+
+        $this->assertTrue($member->fresh()->roles()->where('code', 'member')->exists());
+    }
+
     public function test_assigning_department_clears_stale_team_from_previous_department(): void
     {
         $this->seed(RoleSeeder::class);

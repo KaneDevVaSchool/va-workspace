@@ -285,6 +285,9 @@ return [
         ],
 
         'member' => [
+            // Xem danh sách dự án của phòng ban mình; nếu chưa có phòng ban
+            // thì route vẫn hiện menu nhưng repository trả rỗng.
+            'project.view',
             // Công việc được giao
             'task.view_assigned',
             // Báo cáo ngày của bản thân

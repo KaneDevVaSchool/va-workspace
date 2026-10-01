@@ -149,6 +149,27 @@ class ProjectVisibilityTest extends TestCase
         $this->assertContains($project->id, $ids);
     }
 
+    public function test_member_can_open_project_list_for_own_department(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
+
+        $member = $this->makeUser(['department_id' => $dept->id], ['member']);
+        $creator = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+
+        $project = $this->makeProject([
+            'owner_department_id' => $dept->id,
+            'created_by' => $creator->id,
+        ]);
+
+        $response = $this->actingAs($member)->getJson('/api/project');
+
+        $response->assertOk();
+        $ids = collect($response->json('projects'))->pluck('id')->all();
+        $this->assertContains($project->id, $ids);
+    }
+
     /** Follow dự án phòng ban mình thì được, và vẫn xem được sau đó. */
     public function test_user_can_follow_project_of_own_department(): void
     {

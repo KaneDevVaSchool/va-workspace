@@ -340,7 +340,24 @@ class WorkspaceConfigMemberService
             $this->users->update($user, ['department_id' => $departmentId, 'team_id' => null]);
         }
 
+        $this->ensureDefaultMemberRole($userId);
+
         return $user->fresh(['department', 'team', 'roles']) ?? $user;
+    }
+
+    private function ensureDefaultMemberRole(int $userId): void
+    {
+        $user = $this->users->findById($userId);
+        if ($user === null || $user->roles()->exists()) {
+            return;
+        }
+
+        $role = $this->roles->findByCode('member');
+        if ($role === null) {
+            return;
+        }
+
+        $this->roles->syncForUser($userId, [$role->id]);
     }
 
     private function presentDirector(?User $user): ?array
