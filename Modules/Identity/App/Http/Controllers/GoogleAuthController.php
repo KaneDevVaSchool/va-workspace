@@ -67,8 +67,8 @@ class GoogleAuthController extends Controller
         }
 
         // prompt=select_account: luôn bắt Google hiện màn hình chọn tài khoản,
-        // không tự đăng nhập lại tài khoản gần nhất. Đây là lý do nút Google
-        // tồn tại song song với VA-HRM SSO (HRM giữ session nên không hỏi lại).
+        // không tự đăng nhập lại tài khoản gần nhất. Trang /login chỉ có một
+        // nút này — cùng kiểu nút Google trên VA-HRM.
         //
         // KHÔNG gửi `hd`: dự án cho phép nhiều domain
         // (GOOGLE_ALLOWED_DOMAINS = vaschools.edu.vn, hcm.vaschools.edu.vn)

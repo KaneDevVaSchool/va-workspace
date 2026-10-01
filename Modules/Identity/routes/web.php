@@ -19,12 +19,8 @@ use Modules\Identity\App\Http\Controllers\ViewAsController;
 | nhập (HrmSsoController::redirect()). throttle vì callback thực hiện DB
 | write (find-or-create user) mỗi lần gọi.
 |
-| Hai lối đăng nhập song song, user tự chọn ở trang /login:
-|   - VA-HRM SSO (HrmSsoController) — mặc định, lấy luôn thông tin nhân sự.
-|   - Google Workspace trực tiếp (GoogleAuthController) — dùng khi HRM lỗi,
-|     hoặc khi cần đổi sang tài khoản Google khác mà session HRM đang giữ
-|     tài khoản cũ (HRM /sso/authorize nằm sau middleware auth nên phát JWT
-|     ngay cho user đang đăng nhập, không hiện màn hình chọn tài khoản).
+| Trang /login đồng bộ với VA-HRM: một nút Google (GoogleAuthController,
+| prompt=select_account). VA-HRM SSO (HrmSsoController) vẫn giữ route.
 */
 
 Route::middleware('throttle:20,1')->group(function () {

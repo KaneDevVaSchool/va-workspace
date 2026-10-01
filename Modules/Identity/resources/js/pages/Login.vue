@@ -1,17 +1,12 @@
 <script setup>
 //
-// Trang đăng nhập — 2 lối SSO, không có form user/password.
-// Bấm nút -> điều hướng full-page (window.location) tới /auth/{hrm,google}/redirect
-// vì đây là OAuth-like redirect thật, không phải gọi API qua axios.
+// Trang đăng nhập — một nút Google, đồng bộ với VA-HRM
+// (va-hrm/resources/js/Pages/Auth/Login.tsx). Không form user/password.
+// Bấm nút -> điều hướng full-page (window.location) tới /auth/google/redirect
+// vì đây là OAuth redirect thật, không phải gọi API qua axios.
 //
-// Vì sao có cả nút Google trực tiếp: /sso/authorize bên HRM nằm sau middleware
-// auth, nên khi HRM còn session nó phát JWT ngay cho tài khoản đang đăng nhập
-// mà không hiện màn hình chọn tài khoản. Muốn đổi sang tài khoản khác thì đi
-// đường Google trực tiếp (có prompt=select_account), xem GoogleAuthController.
-//
-// Bố cục port từ va-hrm (resources/js/Pages/Auth/Login.tsx — React/Tailwind)
-// sang CSS thuần theo theme.css của dự án này (không dùng Tailwind, xem
-// .claude/CLAUDE.md mục 1/6/11).
+// Bố cục port từ bản React/Tailwind sang CSS thuần theo theme.css của dự án
+// này (không dùng Tailwind, xem .claude/CLAUDE.md mục 1/6/11).
 //
 import { onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -32,7 +27,7 @@ onMounted(() => {
     }
 });
 
-function ssoUrl(base, extra = {}) {
+function ssoUrl(base) {
     const params = new URLSearchParams();
 
     const redirect =
@@ -41,22 +36,12 @@ function ssoUrl(base, extra = {}) {
         params.set("redirect", redirect);
     }
 
-    for (const [key, value] of Object.entries(extra)) {
-        params.set(key, value);
-    }
-
     const query = params.toString();
     return query === "" ? base : `${base}?${query}`;
 }
 
-function loginWithHrmSso() {
-    window.location.href = ssoUrl("/auth/hrm/redirect");
-}
-
-// switch=1: nếu còn session Workspace cũ thì controller đăng xuất trước rồi
-// mới sang Google, nếu không Google sẽ trả về đúng tài khoản cũ.
-function loginWithGoogle() {
-    window.location.href = ssoUrl("/auth/google/redirect", { switch: "1" });
+function login() {
+    window.location.href = ssoUrl("/auth/google/redirect");
 }
 </script>
 
@@ -92,34 +77,16 @@ function loginWithGoogle() {
                 <div class="login__actions">
                     <button
                         type="button"
-                        class="login__btn login__btn--primary"
-                        @click="loginWithHrmSso"
-                    >
-                        <img
-                            src="/images/google.png"
-                            alt=""
-                            class="login__btn-icon"
-                        />
-                        <span>Đăng nhập qua VA-HRM</span>
-                    </button>
-
-                    <button
-                        type="button"
                         class="login__btn"
-                        @click="loginWithGoogle"
+                        aria-label="Đăng nhập bằng Google"
+                        @click="login"
                     >
                         <img
                             src="/images/google.png"
                             alt=""
                             class="login__btn-icon"
                         />
-                        <span>Chọn tài khoản Google khác</span>
                     </button>
-
-                    <p class="login__hint">
-                        Chọn cách thứ hai nếu hệ thống đang tự đăng nhập vào
-                        một tài khoản mà bạn không muốn dùng.
-                    </p>
                 </div>
             </div>
         </div>
@@ -237,55 +204,39 @@ function loginWithGoogle() {
     margin-top: var(--space-6);
     display: flex;
     flex-direction: column;
-    align-items: stretch;
+    align-items: center;
     gap: var(--space-3);
 }
 
 .login__btn {
-    width: 100%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-2);
-    padding: var(--space-3) var(--space-4);
+    padding: 0.5rem;
     border: 1px solid var(--login-border);
-    border-radius: var(--radius-md);
+    border-radius: 999px;
     background: var(--login-card-bg);
-    box-shadow: var(--shadow-sm);
-    color: var(--login-text);
-    font-family: inherit;
-    font-size: 0.9375rem;
-    font-weight: 600;
-    line-height: 1.4;
+    box-shadow: var(--shadow-md);
     cursor: pointer;
-    transition:
-        box-shadow 0.15s ease,
-        background-color 0.15s ease;
+    transition: box-shadow 0.15s ease;
 }
 
 .login__btn:hover {
-    box-shadow: var(--shadow-md);
-    background: var(--color-primary-50);
-}
-
-.login__btn--primary {
-    border-color: var(--color-primary-900);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-lg);
 }
 
 .login__btn-icon {
     display: block;
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 2.25rem;
+    height: 2.25rem;
     flex-shrink: 0;
 }
 
-.login__hint {
-    margin: var(--space-1) 0 0;
-    color: var(--login-text-muted);
-    font-size: 0.8125rem;
-    line-height: 1.5;
-    text-align: center;
+@media (min-width: 640px) {
+    .login__btn-icon {
+        width: 2.5rem;
+        height: 2.5rem;
+    }
 }
 
 @media (max-width: 480px) {
