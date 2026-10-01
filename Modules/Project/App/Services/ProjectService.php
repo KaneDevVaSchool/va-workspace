@@ -87,9 +87,9 @@ class ProjectService
     }
 
     /**
-     * Chỉ trả về dự án nếu $viewer được phép xem: dự án của phòng ban mình
-     * (sở hữu, phụ trách, hoặc được giao thực hiện). Super admin thật, admin
-     * và giám đốc điều hành xem mọi phòng ban — xem
+     * Chỉ trả về dự án nếu $viewer được phép xem. Super admin, admin và giám
+     * đốc điều hành xem mọi phòng ban. Trưởng nhóm trở lên xem dự án của
+     * phòng mình. Nhân viên chỉ xem dự án mình được gắn. Xem
      * ProjectRepository::forViewer(). Dùng cho mọi thao tác xem/sửa 1 dự án
      * theo ID (show/update/destroy/tài liệu/đính kèm/...).
      */

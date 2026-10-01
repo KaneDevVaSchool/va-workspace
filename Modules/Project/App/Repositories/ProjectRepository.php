@@ -469,7 +469,10 @@ class ProjectRepository implements ProjectRepositoryInterface
             return $query;
         }
 
-        return $this->whereViewerDepartment($query, $viewer);
+        $this->whereViewerDepartment($query, $viewer);
+        $this->whereAssignedWhenIndividual($query, $viewer);
+
+        return $query;
     }
 
     public function forAssignableTaskProject(Builder $query, User $viewer): Builder
@@ -478,7 +481,10 @@ class ProjectRepository implements ProjectRepositoryInterface
             return $query;
         }
 
-        return $this->whereViewerDepartment($query, $viewer);
+        $this->whereViewerDepartment($query, $viewer);
+        $this->whereAssignedWhenIndividual($query, $viewer);
+
+        return $query;
     }
 
     /**
@@ -492,6 +498,39 @@ class ProjectRepository implements ProjectRepositoryInterface
 
         return $permissions->allows($viewer, 'project.*')
             || $permissions->allows($viewer, 'dashboard.view_company');
+    }
+
+    /**
+     * Nhân viên và người xem chỉ mở dự án mình được gắn (thành viên, theo dõi,
+     * phụ trách, người tạo, người thực hiện / quản lý việc). Cùng phòng ban
+     * thực hiện không đủ. Trưởng nhóm trở lên (task.view hoặc quản lý dự án
+     * phòng ban) vẫn xem cả phòng.
+     */
+    private function whereAssignedWhenIndividual(Builder $query, User $viewer): void
+    {
+        if (! $this->seesOnlyParticipatingProjects($viewer)) {
+            return;
+        }
+
+        $query->where(function (Builder $sub) use ($viewer) {
+            $sub->where('lead_user_id', $viewer->id)
+                ->orWhere('created_by', $viewer->id)
+                ->orWhereHas('members', fn (Builder $members) => $members->where('users.id', $viewer->id))
+                ->orWhereHas('followers', fn (Builder $followers) => $followers->where('users.id', $viewer->id))
+                ->orWhereHas('tasks', function (Builder $tasks) use ($viewer) {
+                    $tasks->where('assignee_id', $viewer->id)
+                        ->orWhere('manager_id', $viewer->id);
+                });
+        });
+    }
+
+    private function seesOnlyParticipatingProjects(User $viewer): bool
+    {
+        $permissions = app(PermissionService::class);
+
+        return ! $permissions->allows($viewer, 'task.view')
+            && ! $permissions->allows($viewer, 'project.manage_department')
+            && ! $permissions->allows($viewer, 'project.update_department');
     }
 
     /**

@@ -285,8 +285,9 @@ return [
         ],
 
         'member' => [
-            // Xem danh sách dự án của phòng ban mình; nếu chưa có phòng ban
-            // thì route vẫn hiện menu nhưng repository trả rỗng.
+            // Xem dự án mình được gắn (thành viên, theo dõi, phụ trách, người
+            // tạo, hoặc được giao việc) trong phòng ban liên quan. Cùng phòng
+            // thực hiện nhưng không được gắn thì không thấy.
             'project.view',
             // Công việc được giao
             'task.view_assigned',

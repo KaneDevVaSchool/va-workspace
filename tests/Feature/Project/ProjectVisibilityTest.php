@@ -13,8 +13,9 @@ use Tests\TestCase;
 /**
  * Kiểm thử luồng phân quyền xem dự án (mục A):
  *  - user phòng ban A KHÔNG thấy dự án phòng ban B (không liên quan gì)
- *  - user phòng ban A THẤY dự án khi executing_department_id = phòng ban A
- *  - user THẤY dự án khi có mặt trong project_members
+ *  - trưởng nhóm phòng ban A THẤY dự án khi executing_department_id = phòng ban A
+ *  - nhân viên chỉ THẤY dự án khi được gắn (thành viên hoặc được giao việc),
+ *    không thấy chỉ vì cùng phòng ban thực hiện
  *  - user THẤY dự án khi có mặt trong project_followers (nhưng phải đã xem
  *    được dự án — thuộc phòng giao/thực hiện/thành viên — mới follow được;
  *    user hoàn toàn ngoài phạm vi bị chặn 404 khi gọi API follow)
@@ -127,7 +128,7 @@ class ProjectVisibilityTest extends TestCase
         $this->assertNotContains($project->id, $ids);
     }
 
-    /** Thành viên cùng phòng ban sở hữu thì xem được — đường đi hợp lệ. */
+    /** Trưởng nhóm cùng phòng ban sở hữu thì xem được — đường đi hợp lệ. */
     public function test_user_sees_project_of_own_department(): void
     {
         $this->seed(RoleSeeder::class);
@@ -149,7 +150,7 @@ class ProjectVisibilityTest extends TestCase
         $this->assertContains($project->id, $ids);
     }
 
-    public function test_member_can_open_project_list_for_own_department(): void
+    public function test_member_does_not_see_department_project_without_personal_assignment(): void
     {
         $this->seed(RoleSeeder::class);
 
@@ -160,14 +161,56 @@ class ProjectVisibilityTest extends TestCase
 
         $project = $this->makeProject([
             'owner_department_id' => $dept->id,
+            'executing_department_id' => $dept->id,
             'created_by' => $creator->id,
         ]);
 
-        $response = $this->actingAs($member)->getJson('/api/project');
+        $list = $this->actingAs($member)->getJson('/api/project');
+        $list->assertOk();
+        $ids = collect($list->json('projects'))->pluck('id')->all();
+        $this->assertNotContains($project->id, $ids);
 
-        $response->assertOk();
-        $ids = collect($response->json('projects'))->pluck('id')->all();
-        $this->assertContains($project->id, $ids);
+        $this->actingAs($member)->getJson("/api/project/{$project->id}")->assertNotFound();
+    }
+
+    public function test_member_sees_project_when_assigned_as_member_or_assignee(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
+
+        $member = $this->makeUser(['department_id' => $dept->id], ['member']);
+        $assignee = $this->makeUser(['department_id' => $dept->id, 'name' => 'Người được giao'], ['member']);
+        $creator = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+
+        $asMember = $this->makeProject([
+            'owner_department_id' => $dept->id,
+            'executing_department_id' => $dept->id,
+            'created_by' => $creator->id,
+        ]);
+        $asMember->members()->attach($member->id);
+
+        $asAssignee = $this->makeProject([
+            'code' => 'PRJ'.random_int(1000, 999999),
+            'owner_department_id' => $dept->id,
+            'executing_department_id' => $dept->id,
+            'created_by' => $creator->id,
+        ]);
+        $asAssignee->tasks()->create([
+            'type' => 'task',
+            'title' => 'Việc được giao',
+            'status' => 'not_started',
+            'assignee_id' => $assignee->id,
+            'created_by' => $creator->id,
+        ]);
+
+        $memberIds = collect($this->actingAs($member)->getJson('/api/project')->json('projects'))->pluck('id')->all();
+        $this->assertContains($asMember->id, $memberIds);
+        $this->assertNotContains($asAssignee->id, $memberIds);
+
+        $assigneeIds = collect($this->actingAs($assignee)->getJson('/api/project')->json('projects'))->pluck('id')->all();
+        $this->assertContains($asAssignee->id, $assigneeIds);
+        $this->assertNotContains($asMember->id, $assigneeIds);
     }
 
     /** Follow dự án phòng ban mình thì được, và vẫn xem được sau đó. */

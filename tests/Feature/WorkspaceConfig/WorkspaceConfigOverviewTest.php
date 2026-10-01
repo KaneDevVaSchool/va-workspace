@@ -17,6 +17,12 @@ class WorkspaceConfigOverviewTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->withoutHrmSync();
+    }
+
     private function makeUser(array $attributes = [], array $roles = []): User
     {
         $user = User::factory()->create(array_merge(['status' => 'active'], $attributes));
@@ -40,7 +46,6 @@ class WorkspaceConfigOverviewTest extends TestCase
 
     public function test_super_admin_overview_includes_inactive_and_config_flags(): void
     {
-        $this->withoutHrmSync();
         $this->seed(RoleSeeder::class);
 
         $active = Department::query()->create(['code' => 'D1', 'name' => 'Active Dept', 'is_active' => true]);
@@ -85,7 +90,6 @@ class WorkspaceConfigOverviewTest extends TestCase
 
     public function test_overview_includes_company_and_director(): void
     {
-        $this->withoutHrmSync();
         $this->seed(RoleSeeder::class);
 
         $company = Company::query()->create([
@@ -131,6 +135,7 @@ class WorkspaceConfigOverviewTest extends TestCase
             'services.hrm.api_token' => 'test-token',
             'services.hrm.department_manager_sync_ttl' => 60,
         ]);
+        \Illuminate\Support\Facades\Cache::flush();
 
         $dept = Department::query()->create([
             'code' => 'D-HRM',
@@ -146,18 +151,6 @@ class WorkspaceConfigOverviewTest extends TestCase
         ]);
 
         Http::fake([
-            'https://hrm.test/api/v1/org-units*' => Http::response([
-                'data' => [
-                    [
-                        'uuid' => 'ou-mgr-1',
-                        'code' => 'HRM',
-                        'name' => 'Phòng HRM',
-                        'type' => 'department',
-                        'status' => 'active',
-                    ],
-                ],
-                'meta' => ['cursor' => ['next' => null, 'prev' => null, 'count' => 1, 'per_page' => 200]],
-            ], 200),
             'https://hrm.test/api/v1/org-units/ou-mgr-1' => Http::response([
                 'data' => [
                     'uuid' => 'ou-mgr-1',
@@ -171,6 +164,18 @@ class WorkspaceConfigOverviewTest extends TestCase
                         'full_name' => 'Trưởng HRM',
                     ],
                 ],
+            ], 200),
+            'https://hrm.test/api/v1/org-units?per_page=200' => Http::response([
+                'data' => [
+                    [
+                        'uuid' => 'ou-mgr-1',
+                        'code' => 'HRM',
+                        'name' => 'Phòng HRM',
+                        'type' => 'department',
+                        'status' => 'active',
+                    ],
+                ],
+                'meta' => ['cursor' => ['next' => null, 'prev' => null, 'count' => 1, 'per_page' => 200]],
             ], 200),
             'https://hrm.test/api/v1/employees/emp-mgr-1' => Http::response([
                 'data' => [
