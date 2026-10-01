@@ -1379,7 +1379,23 @@ onBeforeUnmount(() => {
 }
 
 .wc-people__input--search {
-  padding-left: 1.875rem;
+  padding-left: 2.25rem;
+  padding-right: 1.75rem;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.wc-people__input--search::-webkit-search-decoration,
+.wc-people__input--search::-webkit-search-results-button,
+.wc-people__input--search::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+.wc-people__input--search::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 /* ── Bộ lọc ghim ───────────────────────────────────────────────────────── */

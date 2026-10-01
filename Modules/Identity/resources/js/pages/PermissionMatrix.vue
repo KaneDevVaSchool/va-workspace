@@ -149,6 +149,20 @@ const overrideCount = computed(() => {
   return count;
 });
 
+const roleSummaries = computed(() =>
+  roles.value.map((role) => {
+    let granted = 0;
+    let overridden = 0;
+    for (const perm of permissions.value) {
+      const cell = cellFor(role.code, perm.key);
+      if (cell.effective && !cell.reserved) granted += 1;
+      if (cellHasOverride(cell)) overridden += 1;
+    }
+
+    return { ...role, granted, overridden };
+  }),
+);
+
 const totalCount = computed(() => filteredPermissions.value.length);
 const lastPage = computed(() => Math.max(1, Math.ceil(totalCount.value / perPage.value) || 1));
 const from = computed(() => (totalCount.value === 0 ? 0 : (page.value - 1) * perPage.value + 1));
@@ -876,52 +890,24 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div class="perm-page__meta">
-            <ul class="perm-page__legend" aria-label="Chú thích ô">
-              <li class="perm-page__legend-item">
-                <span class="perm-page__swatch perm-page__swatch--granted" aria-hidden="true">
-                  <AppIcon name="check" :size="12" />
-                </span>
-                Cấp
-              </li>
-              <li class="perm-page__legend-item">
-                <span class="perm-page__swatch perm-page__swatch--denied" aria-hidden="true" />
-                Chưa cấp
-              </li>
-              <li class="perm-page__legend-item">
-                <span class="perm-page__swatch perm-page__swatch--reserved" aria-hidden="true">
-                  <AppIcon name="lock" :size="12" />
-                </span>
-                Hệ thống
-              </li>
-              <li class="perm-page__legend-item">
-                <span class="perm-page__swatch perm-page__swatch--override" aria-hidden="true" />
-                Sửa riêng
-              </li>
-            </ul>
-            <p v-if="!isLoading && permissions.length" class="perm-page__count">
-              {{ permissions.length }} quyền
-              <template v-if="overrideCount"> · {{ overrideCount }} ô đã sửa riêng</template>
-            </p>
+          <div class="perm-page__summary-strip" aria-label="Tóm tắt phân quyền">
+            <div class="perm-page__summary-card">
+              <span class="perm-page__summary-label">Phạm vi đang xem</span>
+              <strong>{{ scopeLabel }}</strong>
+            </div>
+            <div class="perm-page__summary-card">
+              <span class="perm-page__summary-label">Số quyền</span>
+              <strong>{{ permissions.length || '—' }}</strong>
+            </div>
+            <div class="perm-page__summary-card">
+              <span class="perm-page__summary-label">Sửa riêng</span>
+              <strong>{{ overrideCount || '—' }}</strong>
+            </div>
           </div>
         </div>
 
-        <section class="perm-page__guide" aria-label="Cách đọc bảng phân quyền">
-          <h2>Bạn đang xem ma trận quyền của Super Admin</h2>
-          <p>
-            Mỗi cột là một vai trò. Dấu tick nghĩa là vai trò đó được làm việc tương ứng. Mô tả quyền ghi rõ mục menu trái mà quyền đó mở ra.
-          </p>
-          <dl>
-            <div><dt>Super Admin</dt><dd>Người quản trị cao nhất, vận hành toàn hệ thống. Không nằm trong bảng vì luôn có mọi quyền.</dd></div>
-            <div><dt>Admin</dt><dd>Quản trị nghiệp vụ toàn trường, không đổi cấu hình gốc của hệ thống.</dd></div>
-            <div><dt>Giám đốc điều hành</dt><dd>Xem xuyên các phòng ban, theo dõi dự án và báo cáo.</dd></div>
-            <div><dt>Trưởng phòng</dt><dd>Quản lý dự án, công việc, đánh giá và cấu hình của phòng mình.</dd></div>
-            <div><dt>Nhân viên</dt><dd>Xem và làm công việc được giao, gửi ghi nhận của mình.</dd></div>
-          </dl>
-        </section>
-
         <p v-if="!isLoading && permissions.length" class="perm-page__hint">
-          Bấm 1 lần vào ô để xem chi tiết, bấm đúp để cấp/thu hồi ngay. Ở đầu mỗi nhóm module có nút cấp/thu hồi cả module cho từng vai trò.
+          Bấm 1 lần vào ô để xem chi tiết ở cột phải, bấm đúp để cấp/thu hồi ngay.
         </p>
 
         <TablePagesBar
@@ -1008,15 +994,16 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <aside v-if="inspectPanel" class="perm-page__side" aria-label="Chi tiết quyền">
+      <aside class="perm-page__side" aria-label="Giải thích và chi tiết quyền">
         <div class="perm-page__side-head">
-          <h2 class="perm-page__side-title">Chi tiết quyền</h2>
-          <button type="button" class="perm-page__icon-btn" aria-label="Đóng" @click="closeInspect">
+          <h2 class="perm-page__side-title">{{ inspectPanel ? 'Chi tiết quyền' : 'Cách đọc trang này' }}</h2>
+          <button v-if="inspectPanel" type="button" class="perm-page__icon-btn" aria-label="Đóng" @click="closeInspect">
             <AppIcon name="close" :size="16" />
           </button>
         </div>
 
         <div class="perm-page__side-body hide-scrollbar">
+          <template v-if="inspectPanel">
           <div class="perm-page__side-lead" :class="`perm-page__side-lead--${panelTone(inspectPanel.cell)}`">
             <span class="perm-page__side-lead-kicker">
               {{ inspectPanel.cell.reserved ? 'Quyền hệ thống' : inspectPanel.cell.effective ? 'Được cấp' : 'Chưa cấp' }}
@@ -1088,9 +1075,66 @@ onBeforeUnmount(() => {
               {{ role.label }}
             </button>
           </div>
+          </template>
+
+          <template v-else>
+            <div class="perm-page__side-lead perm-page__side-lead--info">
+              <span class="perm-page__side-lead-kicker">Bố cục 2 cột</span>
+              <p class="perm-page__side-lead-title">Bên trái chọn quyền, bên phải xem ý nghĩa</p>
+              <p class="perm-page__side-lead-desc">
+                Mỗi hàng là một quyền. Mỗi cột vai trò cho biết vai trò đó đang được cấp hay chưa trong phạm vi đang chọn.
+              </p>
+            </div>
+
+            <ul class="perm-page__legend" aria-label="Chú thích ô">
+              <li class="perm-page__legend-item">
+                <span class="perm-page__swatch perm-page__swatch--granted" aria-hidden="true">
+                  <AppIcon name="check" :size="12" />
+                </span>
+                Được cấp
+              </li>
+              <li class="perm-page__legend-item">
+                <span class="perm-page__swatch perm-page__swatch--denied" aria-hidden="true" />
+                Chưa cấp
+              </li>
+              <li class="perm-page__legend-item">
+                <span class="perm-page__swatch perm-page__swatch--reserved" aria-hidden="true">
+                  <AppIcon name="lock" :size="12" />
+                </span>
+                Quyền hệ thống
+              </li>
+              <li class="perm-page__legend-item">
+                <span class="perm-page__swatch perm-page__swatch--override" aria-hidden="true" />
+                Có sửa riêng
+              </li>
+            </ul>
+
+            <div v-if="roleSummaries.length" class="perm-page__role-summary" aria-label="Tóm tắt theo vai trò">
+              <h3 class="perm-page__section-title">Vai trò trong bảng</h3>
+              <button
+                v-for="role in roleSummaries"
+                :key="role.code"
+                type="button"
+                class="perm-page__role-row"
+                @click="inspectPermission(permissions[0], role.code)"
+              >
+                <span class="perm-page__role-row-main">
+                  <strong>{{ role.label }}</strong>
+                  <small>{{ role.granted }} quyền được cấp</small>
+                </span>
+                <span v-if="role.overridden" class="perm-page__role-row-badge">{{ role.overridden }} sửa riêng</span>
+              </button>
+            </div>
+
+            <div class="perm-page__guide" aria-label="Gợi ý thao tác">
+              <h3 class="perm-page__section-title">Thao tác nhanh</h3>
+              <p>Bấm một ô để xem quyền đó áp dụng cho vai trò nào. Bấm đúp ô nếu muốn cấp hoặc thu hồi ngay.</p>
+              <p>Nút ở đầu từng nhóm module dùng để cấp hoặc thu hồi cả nhóm quyền cho một vai trò.</p>
+            </div>
+          </template>
         </div>
 
-        <div class="perm-page__side-actions">
+        <div v-if="inspectPanel" class="perm-page__side-actions">
           <div v-if="inspectPanel.cell.reserved" class="perm-page__reserved">
             <AppIcon name="lock" :size="16" />
             Quyền hệ thống — không đổi được.
@@ -1210,19 +1254,42 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.perm-page__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.perm-page__summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
-  flex-wrap: wrap;
+}
+
+.perm-page__summary-card {
+  min-width: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.perm-page__summary-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.perm-page__summary-card strong {
+  display: block;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .perm-page__legend {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-4);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1317,40 +1384,22 @@ onBeforeUnmount(() => {
 
 .perm-page__guide {
   flex-shrink: 0;
-  margin: 0 0 var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }
 
-.perm-page__guide h2 {
-  margin: 0 0 var(--space-1);
-  font-size: 0.9375rem;
-}
-
 .perm-page__guide p {
-  margin: 0 0 var(--space-3);
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-}
-
-.perm-page__guide dl {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: var(--space-2);
-  margin: 0;
-}
-
-.perm-page__guide dt {
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-
-.perm-page__guide dd {
   margin: 0;
   color: var(--color-text-muted);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.perm-page__guide p + p {
+  margin-top: var(--space-2);
 }
 
 .perm-page__hint {
@@ -1376,7 +1425,7 @@ onBeforeUnmount(() => {
 
 .perm-page__side {
   flex-shrink: 0;
-  width: 28rem;
+  width: min(28rem, 34vw);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1423,6 +1472,13 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: auto;
   margin-top: var(--space-3);
+}
+
+.perm-page__section-title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
 }
 
 .perm-page__side-lead {
@@ -1525,6 +1581,57 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: var(--space-2);
   margin: 0 0 var(--space-2);
+}
+
+.perm-page__role-summary {
+  margin-top: var(--space-4);
+}
+
+.perm-page__role-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.perm-page__role-row:hover {
+  color: var(--color-primary);
+}
+
+.perm-page__role-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.perm-page__role-row-main strong {
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.perm-page__role-row-main small {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.perm-page__role-row-badge {
+  flex-shrink: 0;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-info-surface, var(--color-primary-surface));
+  color: var(--color-info, var(--color-primary));
+  font-size: 0.6875rem;
+  font-weight: 700;
 }
 
 .perm-page__role {
@@ -1659,6 +1766,10 @@ onBeforeUnmount(() => {
 @media (max-width: 768px) {
   .perm-page {
     padding: var(--space-4);
+  }
+
+  .perm-page__summary-strip {
+    grid-template-columns: 1fr;
   }
 }
 

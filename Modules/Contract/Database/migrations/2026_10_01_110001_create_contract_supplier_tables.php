@@ -19,7 +19,7 @@ return new class extends Migration
 
         Schema::create('contract_supplier_groups', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('supplier_type_id')->constrained('contract_supplier_types')->cascadeOnDelete();
+            $table->unsignedBigInteger('supplier_type_id');
             $table->string('code', 50);
             $table->string('name');
             $table->boolean('is_active')->default(true);
@@ -27,6 +27,10 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['supplier_type_id', 'code'], 'contract_supplier_groups_type_code_unique');
+            $table->foreign('supplier_type_id', 'contract_groups_type_fk')
+                ->references('id')
+                ->on('contract_supplier_types')
+                ->cascadeOnDelete();
         });
 
         Schema::create('contract_suppliers', function (Blueprint $table) {
@@ -36,8 +40,8 @@ return new class extends Migration
             $table->string('short_name')->nullable();
             $table->string('tax_code', 30)->nullable();
             $table->string('normalized_tax_code', 30)->nullable()->unique('contract_suppliers_tax_unique');
-            $table->foreignId('supplier_type_id')->nullable()->constrained('contract_supplier_types')->nullOnDelete();
-            $table->foreignId('supplier_group_id')->nullable()->constrained('contract_supplier_groups')->nullOnDelete();
+            $table->unsignedBigInteger('supplier_type_id')->nullable();
+            $table->unsignedBigInteger('supplier_group_id')->nullable();
             $table->string('legal_name')->nullable();
             $table->string('trade_name')->nullable();
             $table->string('representative_name')->nullable();
@@ -66,6 +70,14 @@ return new class extends Migration
             $table->index(['department_id', 'status'], 'contract_suppliers_dept_status_idx');
             $table->index(['owner_user_id'], 'contract_suppliers_owner_idx');
             $table->index(['supplier_type_id', 'supplier_group_id'], 'contract_suppliers_type_group_idx');
+            $table->foreign('supplier_type_id', 'contract_suppliers_type_fk')
+                ->references('id')
+                ->on('contract_supplier_types')
+                ->nullOnDelete();
+            $table->foreign('supplier_group_id', 'contract_suppliers_group_fk')
+                ->references('id')
+                ->on('contract_supplier_groups')
+                ->nullOnDelete();
         });
 
         Schema::create('contract_supplier_contacts', function (Blueprint $table) {
@@ -113,20 +125,32 @@ return new class extends Migration
 
         Schema::create('contract_supplier_document_requirements', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('document_type_id')->constrained('contract_supplier_document_types')->cascadeOnDelete();
-            $table->foreignId('supplier_type_id')->nullable()->constrained('contract_supplier_types')->cascadeOnDelete();
-            $table->foreignId('supplier_group_id')->nullable()->constrained('contract_supplier_groups')->cascadeOnDelete();
+            $table->unsignedBigInteger('document_type_id');
+            $table->unsignedBigInteger('supplier_type_id')->nullable();
+            $table->unsignedBigInteger('supplier_group_id')->nullable();
             $table->string('requirement', 20)->default('required');
             $table->string('reviewer_role', 80)->nullable();
             $table->timestamps();
 
             $table->unique(['document_type_id', 'supplier_type_id', 'supplier_group_id'], 'contract_doc_req_unique');
+            $table->foreign('document_type_id', 'contract_doc_req_type_fk')
+                ->references('id')
+                ->on('contract_supplier_document_types')
+                ->cascadeOnDelete();
+            $table->foreign('supplier_type_id', 'contract_doc_req_supplier_type_fk')
+                ->references('id')
+                ->on('contract_supplier_types')
+                ->cascadeOnDelete();
+            $table->foreign('supplier_group_id', 'contract_doc_req_supplier_group_fk')
+                ->references('id')
+                ->on('contract_supplier_groups')
+                ->cascadeOnDelete();
         });
 
         Schema::create('contract_supplier_documents', function (Blueprint $table) {
             $table->id();
             $table->foreignId('supplier_id')->constrained('contract_suppliers')->cascadeOnDelete();
-            $table->foreignId('document_type_id')->nullable()->constrained('contract_supplier_document_types')->nullOnDelete();
+            $table->unsignedBigInteger('document_type_id')->nullable();
             $table->string('custom_name')->nullable();
             $table->string('status', 30)->default('not_provided');
             $table->unsignedInteger('current_version')->default(0);
@@ -145,11 +169,15 @@ return new class extends Migration
             $table->unique(['supplier_id', 'document_type_id'], 'contract_supplier_doc_unique');
             $table->index(['supplier_id', 'status'], 'contract_supplier_docs_status_idx');
             $table->index(['expires_at'], 'contract_supplier_docs_expires_idx');
+            $table->foreign('document_type_id', 'contract_supplier_docs_type_fk')
+                ->references('id')
+                ->on('contract_supplier_document_types')
+                ->nullOnDelete();
         });
 
         Schema::create('contract_supplier_document_versions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('supplier_document_id')->constrained('contract_supplier_documents')->cascadeOnDelete();
+            $table->unsignedBigInteger('supplier_document_id');
             $table->unsignedInteger('version');
             $table->string('original_name')->nullable();
             $table->string('path')->nullable();
@@ -158,10 +186,18 @@ return new class extends Migration
             $table->string('status', 30)->default('provided');
             $table->text('uploader_note')->nullable();
             $table->text('review_note')->nullable();
-            $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->unsignedBigInteger('uploaded_by')->nullable();
             $table->timestamps();
 
             $table->unique(['supplier_document_id', 'version'], 'contract_doc_versions_unique');
+            $table->foreign('supplier_document_id', 'contract_doc_versions_doc_fk')
+                ->references('id')
+                ->on('contract_supplier_documents')
+                ->cascadeOnDelete();
+            $table->foreign('uploaded_by', 'contract_doc_versions_uploader_fk')
+                ->references('id')
+                ->on('users')
+                ->nullOnDelete();
         });
 
         Schema::create('contracts', function (Blueprint $table) {
