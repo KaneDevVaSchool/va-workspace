@@ -23,6 +23,9 @@ interface DepartmentRepositoryInterface
      */
     public function all(): Collection;
 
+    /** Phòng ban đã map org-unit VA-HRM — dùng khi HRM đã cấu hình. */
+    public function allSyncedFromHrm(): Collection;
+
     public function find(int $id): ?Department;
 
     /** Tìm phòng ban đã map thủ công tới 1 OrgUnit của VA-HRM (qua UI Department). */

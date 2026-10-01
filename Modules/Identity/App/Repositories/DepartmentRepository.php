@@ -25,6 +25,15 @@ class DepartmentRepository implements DepartmentRepositoryInterface
             ->get();
     }
 
+    public function allSyncedFromHrm(): Collection
+    {
+        return Department::query()
+            ->whereNotNull('hrm_org_unit_uuid')
+            ->orderByDesc('is_active')
+            ->orderBy('name')
+            ->get();
+    }
+
     public function find(int $id): ?Department
     {
         return Department::query()->find($id);

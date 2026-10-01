@@ -4,6 +4,8 @@ namespace Modules\WorkspaceConfig\App\Services;
 
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\Role;
 use Modules\Identity\App\Models\Team;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
@@ -253,6 +255,16 @@ class WorkspaceConfigMemberService
         $ids = $departments->pluck('id')->all();
         $counts = $this->users->countByDepartmentIds($ids);
         $directors = $this->users->departmentDirectorsByDepartmentIds($ids);
+        $hrmConfigured = HrmDepartmentSyncService::isConfigured();
+        $usersByHrmEmployeeUuid = $hrmConfigured
+            ? User::query()
+                ->whereIn(
+                    'hrm_employee_uuid',
+                    $departments->pluck('hrm_manager_employee_uuid')->filter()->unique()->values()->all(),
+                )
+                ->get()
+                ->keyBy('hrm_employee_uuid')
+            : collect();
         $configuredIds = array_flip([
             ...$this->teams->departmentIdsWithTeams($ids),
             ...$this->sidebarConfigs->departmentIdsWithConfig($ids),
@@ -269,15 +281,31 @@ class WorkspaceConfigMemberService
             'member_count' => (int) $counts->get($department->id, 0),
             // Số tiêu chí đánh giá — giá trị thật khi Giai đoạn B (module Evaluation).
             'criteria_count' => 0,
-            'director' => $this->presentDirector($directors->get($department->id)),
+            'director' => $this->presentDirectorForDepartment(
+                $department,
+                $directors->get($department->id),
+                $usersByHrmEmployeeUuid,
+            ),
         ])->values();
     }
 
     public function directorForDepartment(int $departmentId): ?array
     {
-        return $this->presentDirector(
-            $this->users->departmentDirectorsByDepartmentIds([$departmentId])->get($departmentId),
-        );
+        $department = $this->departments->find($departmentId);
+        if ($department === null) {
+            return null;
+        }
+
+        $workspaceDirector = $this->users->departmentDirectorsByDepartmentIds([$departmentId])->get($departmentId);
+        $usersByHrmEmployeeUuid = collect();
+        if (HrmDepartmentSyncService::isConfigured() && filled($department->hrm_manager_employee_uuid)) {
+            $linked = User::query()->where('hrm_employee_uuid', $department->hrm_manager_employee_uuid)->first();
+            if ($linked !== null) {
+                $usersByHrmEmployeeUuid = collect([$department->hrm_manager_employee_uuid => $linked]);
+            }
+        }
+
+        return $this->presentDirectorForDepartment($department, $workspaceDirector, $usersByHrmEmployeeUuid);
     }
 
     /**
@@ -348,6 +376,30 @@ class WorkspaceConfigMemberService
         }
 
         return $user->fresh(['department', 'team', 'roles']) ?? $user;
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<string, User>  $usersByHrmEmployeeUuid
+     */
+    private function presentDirectorForDepartment(
+        Department $department,
+        ?User $workspaceDirector,
+        Collection $usersByHrmEmployeeUuid,
+    ): ?array {
+        if (HrmDepartmentSyncService::isConfigured() && filled($department->hrm_manager_name)) {
+            $linked = filled($department->hrm_manager_employee_uuid)
+                ? $usersByHrmEmployeeUuid->get($department->hrm_manager_employee_uuid)
+                : null;
+
+            return [
+                'id' => $linked?->id,
+                'name' => $department->hrm_manager_name,
+                'email' => $department->hrm_manager_email ?? $linked?->email ?? '',
+                'avatar_url' => $linked?->avatar_url,
+            ];
+        }
+
+        return $this->presentDirector($workspaceDirector);
     }
 
     private function presentDirector(?User $user): ?array

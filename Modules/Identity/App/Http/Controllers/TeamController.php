@@ -12,7 +12,7 @@ use Modules\Identity\App\Services\PermissionService;
 
 /**
  * GET manager/teams — danh sách nhóm theo department_id (query).
- * Dùng cho PermissionScopeFilter trên ma trận phân quyền.
+ * Dùng cho bộ chọn phạm vi trên trang quản lý phân quyền.
  * Tạo/sửa/xoá nhóm: API WorkspaceConfig members.
  */
 class TeamController extends Controller

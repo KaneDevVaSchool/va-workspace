@@ -122,6 +122,84 @@ class WorkspaceConfigOverviewTest extends TestCase
             ]);
     }
 
+    public function test_overview_director_prefers_hrm_org_unit_manager(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        config([
+            'services.hrm.api_base_url' => 'https://hrm.test',
+            'services.hrm.api_token' => 'test-token',
+            'services.hrm.department_manager_sync_ttl' => 60,
+        ]);
+
+        $dept = Department::query()->create([
+            'code' => 'D-HRM',
+            'name' => 'Phòng HRM',
+            'is_active' => true,
+            'hrm_org_unit_uuid' => 'ou-mgr-1',
+        ]);
+
+        Department::query()->create([
+            'code' => 'LOCAL-ONLY',
+            'name' => 'Phòng seed local',
+            'is_active' => true,
+        ]);
+
+        Http::fake([
+            'https://hrm.test/api/v1/org-units*' => Http::response([
+                'data' => [
+                    [
+                        'uuid' => 'ou-mgr-1',
+                        'code' => 'HRM',
+                        'name' => 'Phòng HRM',
+                        'type' => 'department',
+                        'status' => 'active',
+                    ],
+                ],
+                'meta' => ['cursor' => ['next' => null, 'prev' => null, 'count' => 1, 'per_page' => 200]],
+            ], 200),
+            'https://hrm.test/api/v1/org-units/ou-mgr-1' => Http::response([
+                'data' => [
+                    'uuid' => 'ou-mgr-1',
+                    'code' => 'HRM',
+                    'name' => 'Phòng HRM',
+                    'type' => 'department',
+                    'status' => 'active',
+                    'manager' => [
+                        'uuid' => 'emp-mgr-1',
+                        'code' => 'NV001',
+                        'full_name' => 'Trưởng HRM',
+                    ],
+                ],
+            ], 200),
+            'https://hrm.test/api/v1/employees/emp-mgr-1' => Http::response([
+                'data' => [
+                    'uuid' => 'emp-mgr-1',
+                    'code' => 'NV001',
+                    'full_name' => 'Trưởng HRM',
+                    'status' => 'active',
+                    'company_email' => 'truong.hrm@vaschools.edu.vn',
+                    'manager_uuid' => null,
+                    'manager_code' => null,
+                    'manager_email' => null,
+                    'primary_assignment' => null,
+                    'concurrent_assignments' => [],
+                ],
+            ], 200),
+            'https://hrm.test/api/v1/employees/emp-mgr-1/manager' => Http::response(['data' => null], 200),
+        ]);
+
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $this->actingAs($admin)
+            ->getJson('/api/workspace-config/overview')
+            ->assertOk()
+            ->assertJsonCount(1, 'departments')
+            ->assertJsonPath('departments.0.id', $dept->id)
+            ->assertJsonPath('departments.0.director.name', 'Trưởng HRM')
+            ->assertJsonPath('departments.0.director.email', 'truong.hrm@vaschools.edu.vn');
+    }
+
     public function test_director_cannot_view_overview(): void
     {
         $this->seed(RoleSeeder::class);

@@ -9,8 +9,9 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Modules\Identity\App\Models\Company;
-use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\Identity\App\Hrm\Services\HrmApiClient;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 
 /**
  * Xử lý webhook org_unit.changed — chỉ cập nhật Department đã map sẵn tới
@@ -36,7 +37,11 @@ class ProcessOrgUnitChangedJob implements ShouldQueue
         return [60, 300, 900, 3600];
     }
 
-    public function handle(DepartmentRepositoryInterface $departments, HrmApiClient $hrmApi): void
+    public function handle(
+        DepartmentRepositoryInterface $departments,
+        HrmApiClient $hrmApi,
+        HrmDepartmentSyncService $departmentSync,
+    ): void
     {
         $department = $departments->findByHrmOrgUnitUuid($this->orgUuid);
 
@@ -62,6 +67,8 @@ class ProcessOrgUnitChangedJob implements ShouldQueue
             'external_code' => $orgUnit['code'] ?? null,
             'company_id' => $company?->id,
         ], fn ($value) => $value !== null))->save();
+
+        $departmentSync->applyManagerFromOrgUnit($department, $orgUnit);
     }
 
     /** @param array<string, mixed>|null $companyPayload */

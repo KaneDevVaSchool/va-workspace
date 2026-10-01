@@ -40,9 +40,14 @@ class WorkspaceConfigOverviewController extends Controller
     public function index(): JsonResponse
     {
         $this->hrmDepartmentSync->syncDepartmentsFromHrm();
+        $this->hrmDepartmentSync->syncDepartmentManagersFromHrm();
+
+        $departments = HrmDepartmentSyncService::isConfigured()
+            ? $this->departments->allSyncedFromHrm()
+            : $this->departments->all();
 
         return response()->json([
-            'departments' => $this->members->overviewRows($this->departments->all()),
+            'departments' => $this->members->overviewRows($departments),
         ]);
     }
 

@@ -3,8 +3,8 @@
 // superadmin/workspace-config — tổng hợp workspace của TẤT CẢ phòng ban.
 // Bảng theo mẫu ActivityLog: filter, 2 thanh trang, kéo cột, panel chi tiết
 // đẩy ngang. Bấm dòng mở panel (không modal); vào trang chi tiết từ panel.
-// director = trưởng đơn vị + email — tạm từ role department_director,
-// cùng shape khi sau này load phòng ban từ API HRM.
+// director = trưởng đơn vị VA-HRM (org-unit manager) khi HRM đã cấu hình;
+// fallback role department_director trên workspace khi chưa có HRM.
 //
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';

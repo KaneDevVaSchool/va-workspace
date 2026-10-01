@@ -25,6 +25,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $hrm_org_unit_uuid
  * @property string|null $external_code
  * @property int|null $company_id
+ * @property string|null $hrm_manager_employee_uuid
+ * @property string|null $hrm_manager_name
+ * @property string|null $hrm_manager_email
  */
 class Department extends Model
 {
@@ -38,6 +41,9 @@ class Department extends Model
         'hrm_org_unit_uuid',
         'external_code',
         'company_id',
+        'hrm_manager_employee_uuid',
+        'hrm_manager_name',
+        'hrm_manager_email',
     ];
 
     protected function casts(): array

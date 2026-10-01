@@ -76,6 +76,7 @@ return [
         // Khoảng cách tối thiểu giữa 2 lần bulk sync nhân viên (giây) — tránh
         // GET /members/by-department kéo HRM hàng nghìn request mỗi lần mở trang.
         'employee_bulk_sync_ttl' => (int) env('HRM_EMPLOYEE_BULK_SYNC_TTL', 900),
+        'department_manager_sync_ttl' => (int) env('HRM_DEPARTMENT_MANAGER_SYNC_TTL', 900),
     ],
 
     /*
