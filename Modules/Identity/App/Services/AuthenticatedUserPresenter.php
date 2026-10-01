@@ -16,6 +16,7 @@ class AuthenticatedUserPresenter
     public function __construct(
         private readonly ViewAsService $viewAs,
         private readonly SuperAdminBootstrap $superAdminBootstrap,
+        private readonly DefaultMemberRoleBootstrap $defaultMemberRole,
         private readonly PermissionService $permissions,
         private readonly DepartmentSidebarConfigRepositoryInterface $sidebarConfigs,
         private readonly GlobalMenuVisibilityRepositoryInterface $globalMenus,
@@ -25,6 +26,7 @@ class AuthenticatedUserPresenter
     public function forUser(User $user): array
     {
         $this->superAdminBootstrap->ensureRolesForUser($user);
+        $this->defaultMemberRole->ensureForUser($user);
         $user->unsetRelation('roles');
         $user->load(['department', 'roles', 'company', 'concurrentPositions']);
 

@@ -26,6 +26,7 @@ class GoogleAuthenticator
     public function __construct(
         private readonly UserRepositoryInterface $users,
         private readonly SuperAdminBootstrap $superAdminBootstrap,
+        private readonly DefaultMemberRoleBootstrap $defaultMemberRole,
     ) {}
 
     /**
@@ -45,6 +46,7 @@ class GoogleAuthenticator
 
             $this->assertUsable($user, $email);
             $this->superAdminBootstrap->ensureRolesForUser($user);
+            $this->defaultMemberRole->ensureForUser($user);
 
             return $user->fresh(['roles']);
         });

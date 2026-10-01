@@ -11,6 +11,7 @@ use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositor
 use Modules\Identity\App\Repositories\Contracts\RoleRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\TeamRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
+use Modules\Identity\App\Services\DefaultMemberRoleBootstrap;
 use Modules\Identity\App\Services\TeamService;
 use Modules\WorkspaceConfig\App\Exceptions\MemberDepartmentNotAssignable;
 use Modules\WorkspaceConfig\App\Exceptions\MemberTeamNotAssignable;
@@ -38,6 +39,7 @@ class WorkspaceConfigMemberService
         private readonly RoleRepositoryInterface $roles,
         private readonly DepartmentSidebarConfigRepositoryInterface $sidebarConfigs,
         private readonly DepartmentRepositoryInterface $departments,
+        private readonly DefaultMemberRoleBootstrap $defaultMemberRole,
     ) {}
 
     public function forDepartment(int $departmentId): Collection
@@ -340,24 +342,12 @@ class WorkspaceConfigMemberService
             $this->users->update($user, ['department_id' => $departmentId, 'team_id' => null]);
         }
 
-        $this->ensureDefaultMemberRole($userId);
+        $user = $this->users->findById($userId);
+        if ($user !== null) {
+            $this->defaultMemberRole->ensureForUser($user);
+        }
 
         return $user->fresh(['department', 'team', 'roles']) ?? $user;
-    }
-
-    private function ensureDefaultMemberRole(int $userId): void
-    {
-        $user = $this->users->findById($userId);
-        if ($user === null || $user->roles()->exists()) {
-            return;
-        }
-
-        $role = $this->roles->findByCode('member');
-        if ($role === null) {
-            return;
-        }
-
-        $this->roles->syncForUser($userId, [$role->id]);
     }
 
     private function presentDirector(?User $user): ?array

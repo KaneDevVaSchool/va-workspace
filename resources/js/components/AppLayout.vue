@@ -2,8 +2,9 @@
 //
 // Layout khung: sidebar + header một hàng (menu + title/actions) + nội dung.
 //
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AppSidebar from './AppSidebar.vue';
 import AppHeader from './AppHeader.vue';
 import AppIcon from './AppIcon.vue';
@@ -13,6 +14,12 @@ import { closeHeaderPopovers } from '../composables/useHeaderPopover';
 providePageHeaderTarget();
 
 const route = useRoute();
+const auth = useAuthStore();
+
+const showUnassignedBanner = computed(
+  () => auth.isAuthenticated && !auth.showSuperAdminNav && auth.user && !auth.user.department,
+);
+
 const COLLAPSE_KEY = 'va-sidebar-collapsed';
 const HEADER_HIDDEN_KEY = 'va-header-hidden';
 const DESKTOP_MQ = '(min-width: 1280px)';
@@ -102,6 +109,13 @@ onBeforeUnmount(() => {
       </button>
 
       <main class="app-layout__content">
+        <div v-if="showUnassignedBanner" class="app-layout__setup-banner" role="status">
+          <AppIcon name="building" :size="18" />
+          <p>
+            Tài khoản chưa được gắn phòng ban trên Workspace. Bạn vẫn xem được hướng dẫn và một số mục cơ bản;
+            liên hệ quản trị viên hoặc trưởng phòng để được gán phòng ban và giao việc.
+          </p>
+        </div>
         <slot />
       </main>
     </div>
@@ -127,6 +141,30 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+.app-layout__setup-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0 1.25rem 0;
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
+.app-layout__setup-banner p {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.app-layout__setup-banner svg {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+  color: var(--color-primary);
 }
 
 /* Ẩn bằng CSS thay vì v-if/unmount: AppHeader chứa #app-content-header,

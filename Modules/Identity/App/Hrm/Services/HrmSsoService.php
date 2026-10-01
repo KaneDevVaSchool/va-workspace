@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use Modules\Identity\App\Exceptions\AccountNotUsable;
 use Modules\Identity\App\Hrm\Exceptions\HrmApiUnavailable;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
+use Modules\Identity\App\Services\DefaultMemberRoleBootstrap;
 use Modules\Identity\App\Services\SuperAdminBootstrap;
 
 /**
@@ -23,6 +24,7 @@ class HrmSsoService
         private readonly HrmApiClient $hrmApi,
         private readonly HrmEmployeeSyncService $sync,
         private readonly SuperAdminBootstrap $superAdminBootstrap,
+        private readonly DefaultMemberRoleBootstrap $defaultMemberRole,
     ) {}
 
     /**
@@ -67,6 +69,7 @@ class HrmSsoService
 
             $this->assertUsable($user, $email);
             $this->superAdminBootstrap->ensureRolesForUser($user);
+            $this->defaultMemberRole->ensureForUser($user);
 
             Log::info('hrm_sso.login', [
                 'user_id' => $user->id,
