@@ -1,5 +1,73 @@
 # Known issues / Nợ kỹ thuật
 
+## 6 cách tính tiến độ Task đã ẩn khỏi UI vì chưa có công thức (2026-09-30)
+
+`TaskEnums::PROGRESS_TYPES` khai 8 giá trị nhưng `TaskService` chỉ tự tính cho
+`quantity` (và `percent` là người dùng tự nhập). 6 giá trị còn lại —
+`checklist`, `child_weight`, `timeline`, `average`, `duration_weighted`,
+`task_weighted` — có nhãn + validate nhưng **không có logic tính**: chọn vào thì
+`progress_percent` đứng yên.
+
+Nghiêm trọng hơn: `TaskCreate.vue` và `ProjectQuickActionModals.vue` từng mặc
+định `progress_type: 'average'`, nên **phần lớn task tạo mới rơi vào cách tính
+không hoạt động**.
+
+Đã xử lý: thêm `TaskEnums::SELECTABLE_PROGRESS_TYPES = ['percent', 'quantity']`
+cho UI chọn, đổi mặc định frontend sang `percent`. `PROGRESS_TYPES` giữ đủ 8 giá
+trị để validate dữ liệu cũ. 3 giá trị `average`/`duration_weighted`/
+`task_weighted` vốn là cách gộp ở **cấp dự án** (`ProjectEnums::PROGRESS_METHODS`),
+không hợp nghĩa cho 1 task đơn lẻ.
+
+**Cần làm**: chốt công thức cho `checklist`/`child_weight`/`timeline` rồi cài
+`applyQuantityProgress()` tương ứng, hoặc bỏ hẳn khỏi enum.
+
+## Chuyển giao công việc chưa siết phạm vi phòng ban (2026-09-30)
+
+`BulkDelegateTaskRequest` giờ đã chặn giao cho người đã nghỉ việc (thêm
+`Rule::exists(...)->where('status', 'active')`), nhưng **vẫn chưa siết phạm vi**:
+ai có quyền `task.delegate` vẫn giao được cho bất kỳ ai đang hoạt động trong
+toàn hệ thống, không giới hạn theo phòng ban/dự án liên quan tới task.
+
+Chưa siết được vì cần chốt trước: phạm vi hợp lệ là cùng phòng ban, cùng dự án,
+hay cùng công ty? Xem `plans/2026-09-30-master-plan-trien-khai.md` §6.5.
+
+## `ReportPersonSnapshot` là code chết (2026-09-30)
+
+Commit `1966255` bỏ luồng "sửa/xem chi tiết báo cáo đã lưu" (xoá route
+`GET /report/{id}`, `PUT /report/{id}`, `GET /report/{id}/employees/{userId}`
+và `ReportView.vue`). Sau đó **không còn chỗ nào ghi** vào
+`ReportPersonSnapshot` — rà toàn repo chỉ còn 2 chỗ nhắc tới model này:
+chính file model và quan hệ `Report::personSnapshots()`.
+
+Nghĩa là model + bảng `report_person_snapshots` hiện là code chết. Cùng commit
+đó cũng **bỏ sót** `tests/Feature/Report/ReportPeopleSnapshotTest.php` (5 test
+gọi endpoint đã xoá nên nhận HTML của SPA thay vì JSON) — đã xoá file test
+ngày 2026-09-30.
+
+**Cần quyết định**: nếu tính năng "báo cáo đã lưu chụp danh sách nhân sự" vẫn
+nằm trong kế hoạch thì phải làm lại cả ghi snapshot + endpoint xem; nếu bỏ hẳn
+thì nên xoá model, quan hệ và tạo migration drop bảng. Đừng để nguyên trạng —
+người đọc code sau sẽ tưởng tính năng này đang chạy.
+
+## Test HRM cần biến môi trường `OPENSSL_CONF` (2026-09-30)
+
+13 test HRM (`tests/Unit/Identity/HrmJwtVerifierTest.php`,
+`tests/Feature/Identity/HrmSsoTest.php`) tự sinh cặp khoá RSA để ký JWT giả.
+Trên máy dev mà `OPENSSL_CONF` không trỏ tới `openssl.cnf`, `openssl_pkey_new()`
+trả `false` và toàn bộ nhóm test đổ với `Cannot get key from parameter 1` —
+**lỗi môi trường, không phải lỗi code**.
+
+Cách chạy:
+
+```powershell
+$env:OPENSSL_CONF = "C:\ServBay\packages\php\8.2\extras\ssl\openssl.cnf"
+php artisan test --filter=Hrm
+```
+
+Không hardcode đường dẫn này vào `phpunit.xml` vì mỗi máy một chỗ khác nhau.
+Hai test đã thêm `markTestSkipped()` kèm hướng dẫn, nên khi thiếu cấu hình thì
+test **skip có thông báo rõ** thay vì đổ lỗi khó hiểu.
+
 ## Laravel 10 đã hết hạn vá bảo mật (2026-08-24)
 
 Toàn bộ dòng `laravel/framework` 10.x (kể cả bản mới nhất `10.50.3`) bị
@@ -28,23 +96,29 @@ change, chưa chắc tương thích `laravel-vite-plugin@^1.0.0` hiện tại. C
 áp dụng để tránh phá vỡ setup. Cần đánh giá lại khi nâng cấp Vite có kế
 hoạch rõ ràng, không chạy `--force` một cách bị động.
 
-## User/Department vẫn stub, chưa HRM (2026-08-24)
+## ~~User/Department vẫn stub, chưa HRM~~ — ĐÃ GIẢI QUYẾT (2026-09-30)
 
-`UserRepository` / `DepartmentRepository` trong `Identity` đọc bảng local.
-Khi HRM cung cấp API: đổi binding trong `IdentityServiceProvider`, không
-đổi Controller/Service. Team **không** nằm trong đợt thay này (`team_lead_id`
-là sở hữu Workspace).
+Không còn đúng. Tích hợp VA-HRM đã dựng đầy đủ tại
+`Modules/Identity/App/Hrm/`: SSO qua JWKS (`HrmSsoService`, `HrmJwtVerifier`),
+webhook HMAC (`HrmWebhookController` + `VerifyHrmWebhookSignature`, bảng
+`hrm_webhook_deliveries`), 3 service đồng bộ (`HrmEmployeeSyncService`,
+`HrmEmployeeBulkSyncService`, `HrmDepartmentSyncService`), bảng `companies` +
+`user_concurrent_positions` (kiêm nhiệm).
 
-## Bulk actions Task không bọc transaction (2026-08-30)
+Việc **còn lại**: tách entity `Employee` (SSOT HRM) khỏi `User`/system account —
+`app/Models/User.php` vẫn gộp 2 vai trò. Các seeder nhân sự local
+(`KinhDoanhTeamSeeder`, `HcnsTeamSeeder`, `CnttSoftwareTeamSeeder`) vẫn còn
+trong repo, cần rà xem còn dùng cho dev/test hay nên bỏ.
 
-`TaskService::bulkUpdate()` và `bulkDelegate()`
-(`Modules/Project/App/Services/TaskService.php`) lặp qua từng task, gọi
-`find()` + `update()` riêng cho mỗi task, không bọc `DB::transaction()`. Nếu
-lỗi giữa chừng (mất kết nối DB, timeout khi chọn hàng trăm task), một phần
-task đã đổi dữ liệu, phần còn lại giữ nguyên — không có cách rollback, và
-response không phản ánh rõ ràng phần nào thất bại. **Cần làm**: bọc
-`DB::transaction()` quanh vòng lặp, cân nhắc chuyển sang update hàng loạt
-bằng 1 câu query thay vì N query riêng lẻ khi có thời gian.
+## ~~Bulk actions Task không bọc transaction~~ — ĐÃ GIẢI QUYẾT (2026-09-30)
+
+`TaskService::bulkUpdate()` và `bulkDelegate()` đã bọc `DB::transaction()`
+quanh vòng lặp, nên lỗi giữa chừng rollback sạch thay vì để dữ liệu nửa vời.
+Thông báo chuyển giao gửi **sau** khi commit (nếu gửi trong transaction rồi
+rollback thì người nhận đã nhận thông báo về việc không hề xảy ra).
+
+Còn lại (không chặn): vẫn là N query `find()` + `update()` cho N task. Cân nhắc
+gộp thành 1 câu update hàng loạt nếu có lúc chọn hàng nghìn task.
 
 ## Filter Lịch (`overlap_from`/`overlap_to`) không có index phù hợp (2026-08-30)
 
@@ -55,7 +129,7 @@ tận dụng được index thường trên `start_date`/`end_date`. Bảng `tas
 nhỏ nên chưa ảnh hưởng hiệu năng thực tế; cần đánh giá lại (functional
 index hoặc đổi cách lọc) khi dữ liệu lớn hơn.
 
-## Task Delegation — chưa siết phạm vi người nhận theo phòng ban (2026-08-30)
+## Task Delegation — chưa siết phạm vi người nhận theo phòng ban (2026-08-30, cập nhật 30/09)
 
 `BulkDelegateTaskRequest` chỉ validate `exists:users,id`; kết hợp với
 `ProjectService::assignableUsers(unrestricted: true)` (dùng khi FE mở dropdown
@@ -64,10 +138,21 @@ cho **bất kỳ user nào trong toàn hệ thống**, không giới hạn theo 
 liên quan tới task/project. Cần siết lại phạm vi hợp lý khi làm tiếp Phase 3
 đầy đủ (`plans/2026-08-30-task-delegation-hoan-thien.md`).
 
+**Cập nhật 30/09:** đã chặn được một nửa — `BulkDelegateTaskRequest` giờ dùng
+`Rule::exists('users','id')->where('status','active')` nên không giao được cho
+người đã nghỉ việc. Phần phạm vi phòng ban/dự án **vẫn chưa siết** vì cần chốt
+phạm vi hợp lệ trước (§6.5 của `plans/2026-09-30-master-plan-trien-khai.md`).
+
 ## Vi phạm nhẹ pattern Controller/Service gọi Eloquent trực tiếp (2026-08-30)
 
 Rà soát phát hiện vài chỗ Service/Controller gọi thẳng Eloquent Model thay
 vì qua Repository (vi phạm §5 CLAUDE.md):
+
+**Đã dọn 30/09:** `ProjectProgressCalculator` (trước ở module Dashboard) gọi
+`DB::table('tasks')` trực tiếp — khi chuyển sang module Project đã đổi sang đi
+qua `TaskRepository::progressAggregatesByProject()`.
+
+Còn lại:
 
 - `TaskService` gọi `Project::query()` trực tiếp ở 5 chỗ (để truyền vào
   `ProjectRepositoryInterface::forViewer(Builder $query, ...)` — chữ ký
@@ -85,7 +170,7 @@ cân nhắc dọn khi có đợt refactor Identity/Social hoặc khi sửa
 `ProjectRepositoryInterface::forViewer()` để tự khởi tạo query bên trong
 thay vì nhận từ ngoài.
 
-## `progress_type` mới (`checklist`/`child_weight`/`timeline`) chỉ khai enum, chưa có logic tính (2026-08-30)
+## ~~`progress_type` mới chỉ khai enum, chưa có logic tính~~ — ĐÃ XỬ LÝ TẠM (2026-09-30)
 
 `TaskEnums::PROGRESS_TYPES` đã thêm 3 giá trị mới cùng nhãn hiển thị, và
 `StoreTaskRequest`/`UpdateTaskRequest` chấp nhận chúng khi validate, nhưng
@@ -95,6 +180,12 @@ xử lý `percent`/`quantity` như trước — chọn `checklist`/`child_weight
 trị nhập tay hoặc null. Cần cài đặt logic tương ứng trước khi cho phép chọn
 3 phương pháp này trên UI thật (hiện `TaskCreate.vue`/`TaskList.vue` đã có
 sẵn trong danh sách lựa chọn qua `TaskEnums::options()`).
+
+**Cập nhật 30/09:** đã ẩn khỏi UI bằng `TaskEnums::SELECTABLE_PROGRESS_TYPES`
+(chỉ còn `percent` + `quantity`), và phát hiện thêm 3 giá trị cấp dự án
+(`average`/`duration_weighted`/`task_weighted`) cũng nằm trong danh sách chọn —
+xem mục đầu file để biết chi tiết. Logic tính cho 3 phương pháp này vẫn **chưa
+có**, chỉ là không còn phơi ra UI nữa.
 
 ## Creation settings mới trên Task — cột + validate đã có, enforcement runtime chưa rà soát (2026-08-30)
 

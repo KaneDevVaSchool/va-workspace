@@ -74,10 +74,33 @@ class TaskEnums
      * `timeline` giữ value cũ để tương thích dữ liệu. Form tạo việc chỉ
      * chọn 3 phương pháp roll-up (cùng key với ProjectEnums).
      */
+    /**
+     * Mọi giá trị progress_type ĐANG TỒN TẠI trong DB — dùng để validate, không
+     * dùng để hiện lên UI. Giữ đủ danh sách vì task cũ đã lưu các giá trị này.
+     */
     public const PROGRESS_TYPES = [
         'percent', 'quantity', 'checklist', 'child_weight', 'timeline',
         'average', 'duration_weighted', 'task_weighted',
     ];
+
+    /**
+     * Chỉ những cách tính ĐÃ CÓ LOGIC THẬT — đây mới là danh sách cho người
+     * dùng chọn (GET /api/project/tasks/options).
+     *
+     * - `percent`: người dùng tự nhập % → có thật.
+     * - `quantity`: TaskService::applyQuantityProgress() tự tính → có thật.
+     *
+     * 6 giá trị còn lại (`checklist`, `child_weight`, `timeline`, `average`,
+     * `duration_weighted`, `task_weighted`) đã khai enum + nhãn + validate
+     * nhưng KHÔNG có logic tính: chọn vào thì progress_percent đứng yên, người
+     * dùng tưởng hệ thống tự tính hộ. Ẩn khỏi UI tới khi cài xong công thức
+     * thay vì để lựa chọn không hoạt động.
+     *
+     * Lưu ý: 3 giá trị `average`/`duration_weighted`/`task_weighted` là cách gộp
+     * tiến độ ở CẤP DỰ ÁN (xem ProjectEnums::PROGRESS_METHODS +
+     * ProjectProgressCalculator), vốn không hợp nghĩa cho một task đơn lẻ.
+     */
+    public const SELECTABLE_PROGRESS_TYPES = ['percent', 'quantity'];
 
     public const PROGRESS_TYPE_LABELS = [
         'percent' => 'Theo % người dùng tự cập nhật',
@@ -111,7 +134,8 @@ class TaskEnums
             'type' => self::mapOptions(self::TYPES, self::TYPE_LABELS),
             'status' => self::mapOptions(self::STATUSES, self::STATUS_LABELS),
             'priority' => self::mapOptions(self::PRIORITIES, self::PRIORITY_LABELS),
-            'progress_type' => self::mapOptions(self::PROGRESS_TYPES, self::PROGRESS_TYPE_LABELS),
+            // Chỉ trả cách tính đã có logic thật — xem SELECTABLE_PROGRESS_TYPES.
+            'progress_type' => self::mapOptions(self::SELECTABLE_PROGRESS_TYPES, self::PROGRESS_TYPE_LABELS),
         ];
     }
 

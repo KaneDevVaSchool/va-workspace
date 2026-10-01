@@ -39,7 +39,17 @@ return [
     'google' => [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
-        'redirect' => env('GOOGLE_REDIRECT_URI', '/auth/google/callback'),
+        // Socialite cần URL tuyệt đối. .env chỉ cần ghi path ('/auth/google/callback')
+        // và sẽ được ghép với APP_URL; ghi full URL trong .env cũng được tôn trọng.
+        'redirect' => (function (): string {
+            $redirect = (string) env('GOOGLE_REDIRECT_URI', '/auth/google/callback');
+
+            if (str_starts_with($redirect, 'http://') || str_starts_with($redirect, 'https://')) {
+                return $redirect;
+            }
+
+            return rtrim((string) env('APP_URL', 'http://localhost'), '/').'/'.ltrim($redirect, '/');
+        })(),
         // Chỉ chấp nhận email thuộc các domain này (Google Workspace SSO).
         'allowed_domains' => array_values(array_filter(array_map(
             'trim',

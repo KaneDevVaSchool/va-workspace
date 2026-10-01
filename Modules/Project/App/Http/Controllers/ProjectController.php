@@ -54,8 +54,15 @@ class ProjectController extends Controller
 
         $paginated = $this->service->paginate($filters, $perPage, $page, $viewer);
 
+        // Nạp tiến độ cho cả trang bằng 1 query trước khi present() từng dòng —
+        // nếu không, mỗi dòng tự query tiến độ (N+1).
+        $items = collect($paginated->items());
+        $this->service->prefetchProgress($items);
+        $projects = $items->map(fn ($p) => $this->service->present($p, $viewer))->values();
+        $this->service->forgetPrefetchedProgress();
+
         return response()->json([
-            'projects' => collect($paginated->items())->map(fn ($p) => $this->service->present($p, $viewer))->values(),
+            'projects' => $projects,
             'meta' => [
                 'current_page' => $paginated->currentPage(),
                 'last_page' => $paginated->lastPage(),

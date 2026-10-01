@@ -122,7 +122,12 @@ class TaskPriorityValidationTest extends TestCase
             ->assertJsonPath('source', 'kit_difficulty')
             ->assertJsonPath('importance.0.value', 'RK');
 
-        $this->assertSame('Rất khó', $options->json('importance.0.label'));
+        // Nhãn có tiền tố mã: "RK-Rất khó" chứ không phải "Rất khó".
+        // Đây là yêu cầu của người dùng (ghi nhận tính năng STT 15 — "tách chữ
+        // và ký hiệu ra, ví dụ RKRất khó tách thành RK-Rất khó"), cài ở
+        // TaskImportanceOptions::mapLevels(). Test này viết trước thay đổi đó
+        // nên còn kỳ vọng nhãn cũ.
+        $this->assertSame('RK-Rất khó', $options->json('importance.0.label'));
 
         $this->actingAs($user)->postJson('/api/project/tasks', [
             'title' => 'Soạn đề thi',

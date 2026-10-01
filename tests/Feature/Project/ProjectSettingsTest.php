@@ -33,6 +33,11 @@ class ProjectSettingsTest extends TestCase
         return array_merge([
             'code_pattern' => 'DA_{date,"m/Y"}_{count}',
             'code_counter' => 344,
+            // task_code_pattern / task_code_counter là 'required' trong
+            // UpdateProjectSettingsRequest (thêm sau khi test này được viết),
+            // thiếu 2 field này thì PUT trả 422.
+            'task_code_pattern' => 'CV_{date,"m/Y"}_{count}',
+            'task_code_counter' => 1,
             'default_progress_method' => 'average',
             'auto_start_on_begin_date' => false,
             'shift_task_dates_with_project' => false,

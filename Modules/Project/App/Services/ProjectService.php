@@ -28,8 +28,12 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 /**
  * Business logic của module Project.
  *
- * KHÔNG tính toán evaluation_score / progress ở đây — cột evaluation_score
- * chỉ để trống, sẽ tổng hợp từ Task ở giai đoạn sau.
+ * progress_percent được roll-up từ Task lá qua ProjectProgressCalculator (bảng
+ * `projects` không có cột tiến độ riêng). Danh sách dự án PHẢI gọi
+ * prefetchProgress() trước vòng lặp present() để tránh N+1.
+ *
+ * KHÔNG tính toán evaluation_score ở đây — cột đó vẫn để trống, sẽ tổng hợp từ
+ * Task ở giai đoạn sau.
  */
 class ProjectService
 {
@@ -46,7 +50,35 @@ class ProjectService
         private readonly TaskRepositoryInterface $tasks,
         private readonly TaskAttachmentRepositoryInterface $taskAttachments,
         private readonly TaskAttachmentService $taskAttachmentService,
+        private readonly ProjectProgressCalculator $progressCalculator,
     ) {}
+
+    /**
+     * Số liệu tiến độ đã nạp sẵn cho 1 lô project, keyBy project_id.
+     *
+     * Danh sách dự án gọi present() cho từng dòng — nếu mỗi lần lại tự query
+     * tiến độ thì thành N+1. Controller gọi prefetchProgress() một lần trước
+     * vòng lặp, present() sẽ dùng số đã nạp.
+     *
+     * @var array<int, float|null>|null
+     */
+    private ?array $progressCache = null;
+
+    /**
+     * Nạp trước tiến độ cho cả danh sách project bằng 1 query.
+     *
+     * @param  Collection<int, Project>  $projects
+     */
+    public function prefetchProgress(Collection $projects): void
+    {
+        $this->progressCache = $this->progressCalculator->resolveMany($projects);
+    }
+
+    /** Bỏ số liệu tiến độ đã nạp — gọi sau khi xong 1 danh sách. */
+    public function forgetPrefetchedProgress(): void
+    {
+        $this->progressCache = null;
+    }
 
     /** @param  array<string, mixed>  $filters */
     public function paginate(array $filters, int $perPage, int $page, User $viewer): LengthAwarePaginator
@@ -985,7 +1017,12 @@ class ProjectService
             'avatar_path' => $project->avatar_path,
             'avatar_url' => $project->avatar_path ? Storage::disk('public')->url($project->avatar_path) : null,
             'evaluation_score' => $project->evaluation_score !== null ? (float) $project->evaluation_score : null,
-            'progress_percent' => null, // Chưa có Task — luôn null ở giai đoạn 1.
+            // Roll-up từ Task lá theo progress_method của dự án. Dùng số đã nạp
+            // sẵn khi đang render 1 danh sách (prefetchProgress) để không N+1;
+            // trang chi tiết 1 dự án thì tự query 1 lần.
+            'progress_percent' => $this->progressCache !== null
+                ? ($this->progressCache[$project->id] ?? null)
+                : $this->progressCalculator->resolveOne((int) $project->id, $project->progress_method),
             'scopes' => $project->scopes->map(fn (ProjectScope $s) => [
                 'id' => $s->id,
                 'scope_type' => $s->scope_type,

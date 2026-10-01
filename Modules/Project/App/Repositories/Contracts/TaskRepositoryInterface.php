@@ -101,4 +101,16 @@ interface TaskRepositoryInterface
 
     /** Đánh dấu đã gửi thông báo sắp quá hạn — chống cron gửi lặp. */
     public function markDueSoonNotified(Task $task): void;
+
+    /**
+     * Số liệu tổng hợp tiến độ của task lá theo từng project — 1 query cho cả
+     * danh sách project (không N+1). Chỉ tính type='task', bỏ status='cancelled'.
+     *
+     * Mỗi phần tử có: avg_progress, total_duration, weighted_duration_sum,
+     * total_weight, weighted_task_sum, task_count.
+     *
+     * @param  list<int>  $projectIds
+     * @return Collection<int, object> keyBy project_id
+     */
+    public function progressAggregatesByProject(array $projectIds): Collection;
 }

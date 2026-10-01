@@ -1,14 +1,29 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ChatFloatingPanel from '@modules/Chat/resources/js/components/ChatFloatingPanel.vue';
 import ChatWidgetButton from '@modules/Chat/resources/js/components/ChatWidgetButton.vue';
 import { useChatStore } from '@modules/Chat/resources/js/store/chatStore';
+import { notifyHeaderPopoverOpened, registerHeaderPopover } from '../composables/useHeaderPopover';
 
 const store = useChatStore();
 const route = useRoute();
 const router = useRouter();
 const rootRef = ref(null);
+
+// Panel chat giữ trạng thái mở trong Pinia store (store.panelOpen), không dùng
+// useHeaderPopover như các panel header khác — nên phải tự đăng ký vào cùng
+// nhóm loại trừ, nếu không chat sẽ hiện song song và chồng lên panel khác.
+const unregisterPopover = registerHeaderPopover('chat', () => store.closePanel());
+
+watch(
+  () => store.panelOpen,
+  (open) => {
+    if (open) notifyHeaderPopoverOpened('chat');
+  },
+);
+
+onBeforeUnmount(unregisterPopover);
 
 watch(
   () => route.query.chat,

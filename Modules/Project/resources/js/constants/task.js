@@ -141,6 +141,10 @@ export const TASK_COLUMNS = [
   { key: 'code', label: 'Mã công việc', defaultOn: true },
   { key: 'title', label: 'Tên công việc', defaultOn: true, always: true },
   { key: 'project', label: 'Dự án', defaultOn: true },
+  // Danh mục (giai đoạn) chứa công việc — suy từ cây công việc bằng
+  // resolvePhaseTitles(), không phải field API. Bật sẵn để người dùng thấy
+  // ngay danh mục mà không cần đổi sang chế độ xem "Theo giai đoạn".
+  { key: 'phase', label: 'Danh mục', defaultOn: true },
   { key: 'assignee', label: 'Người thực hiện', defaultOn: true },
   { key: 'status', label: 'Trạng thái', defaultOn: true },
   { key: 'priority', label: 'Độ khó', defaultOn: true },
@@ -184,6 +188,9 @@ export const PROJECT_TASK_VIEWS = [
   { key: 'plan', label: 'Kế hoạch', icon: 'calendar' },
 ];
 export const PROJECT_TASK_COLUMNS = TASK_COLUMNS.filter((col) => col.key !== 'project');
+// Trang "Tất cả công việc" xuyên dự án không có 1 cây WBS duy nhất để suy ra
+// danh mục, nên bỏ cột này ở đó — chỉ dùng trong tab Công việc của 1 dự án.
+export const ALL_TASK_COLUMNS = TASK_COLUMNS.filter((col) => col.key !== 'phase');
 export const KANBAN_GROUP_KEY = 'va-task-kanban-group';
 export const KANBAN_ASSIGNEES_KEY = 'va-task-kanban-assignees';
 export const COLLAPSED_GROUPS_KEY = 'va-task-collapsed-groups';
@@ -309,6 +316,31 @@ export function collectPhaseNodes(nodes) {
     }
   };
   walk(nodes);
+  return out;
+}
+
+/**
+ * Map id công việc → tên danh mục (giai đoạn) chứa nó, suy từ cây WBS.
+ *
+ * Danh mục không phải field trên payload task — nó là node type=phase nằm
+ * phía trên trong cây, nên chỉ suy được khi có cả cây. Dùng cho cột "Danh mục"
+ * ở chế độ danh sách phẳng, để người dùng thấy danh mục mà không phải đổi sang
+ * chế độ xem "Theo giai đoạn".
+ *
+ * @returns {Map<number, string>}
+ */
+export function resolvePhaseTitles(nodes) {
+  const out = new Map();
+  const walk = (list, phaseNode) => {
+    for (const node of list || []) {
+      const nextPhaseNode = node.type === 'phase' ? node : phaseNode;
+      if (node.type === 'task' && nextPhaseNode) {
+        out.set(node.id, nextPhaseNode.title || '');
+      }
+      if (node.children?.length) walk(node.children, nextPhaseNode);
+    }
+  };
+  walk(nodes, null);
   return out;
 }
 
@@ -493,6 +525,9 @@ export function taskCellText(task, key) {
   if (key === 'creator') return task.creator?.name || '—';
   if (key === 'created_at' || key === 'updated_at') return formatTaskDateTime(task[key]);
   if (key === 'parent') return task.parent?.title || '—';
+  // phase_title do trang cha gắn vào từ resolvePhaseTitles() — không có trên
+  // payload API vì danh mục là node cha trong cây WBS, không phải field task.
+  if (key === 'phase') return task.phase_title || '—';
   if (key === 'attachments_count') return String(task.attachments_count || 0);
   if (key === 'estimated_hours') return task.estimated_hours ?? '—';
   if (key === 'worklog_hours') return String(task.worklog_hours || 0);

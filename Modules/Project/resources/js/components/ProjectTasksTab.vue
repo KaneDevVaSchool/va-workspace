@@ -24,6 +24,7 @@ import {
   PROJECT_TASK_VIEWS,
   PROJECT_TASK_WIDTH_KEY,
   PROJECT_TASK_ZOOM_KEY,
+  resolvePhaseTitles,
   TASK_PRIORITY_LABELS,
   TASK_PRIORITY_TONES,
   TASK_STATUSES,
@@ -181,13 +182,19 @@ const shownColumns = computed(() =>
 );
 const colSpan = computed(() => Math.max(shownColumns.value.length, 1));
 
-const sourceTasks = computed(() =>
-  flattenProjectTasks(props.tree, {
+// Tên danh mục (giai đoạn) của từng công việc — suy 1 lần từ cây WBS rồi gắn
+// vào task để cột "Danh mục" hiện được ở chế độ danh sách phẳng, không phải
+// đổi sang chế độ xem "Theo giai đoạn" mới thấy.
+const phaseTitles = computed(() => resolvePhaseTitles(props.tree));
+
+const sourceTasks = computed(() => {
+  const titles = phaseTitles.value;
+  return flattenProjectTasks(props.tree, {
     parentsOnly: viewMode.value === 'parents',
     filter: props.filter,
     query: query.value,
-  }),
-);
+  }).map((task) => ({ ...task, phase_title: titles.get(task.id) || '' }));
+});
 
 // Kanban "Theo loại" cần cả phase/category, không chỉ type=task như sourceTasks.
 const kanbanSourceTasks = computed(() => {
@@ -201,18 +208,21 @@ const phaseGroups = computed(() => {
   // Ẩn hẳn công việc con của 1 việc cha đang thu gọn (giống cách viewMode
   // 'all' xử lý ở visibleTasks) thay vì chỉ v-show — tránh cuộn qua hàng
   // đã thu gọn.
+  const titles = phaseTitles.value;
   return groups.map((group) => {
     const ids = new Set(group.tasks.map((task) => task.id));
     const collapsedAncestor = new Set();
-    const tasks = group.tasks.filter((task) => {
-      const parentKey = ids.has(task.parent_id) ? task.parent_id : null;
-      if (parentKey != null && collapsedAncestor.has(parentKey)) {
-        collapsedAncestor.add(task.id);
-        return false;
-      }
-      if (collapsedIds.value.has(task.id)) collapsedAncestor.add(task.id);
-      return true;
-    });
+    const tasks = group.tasks
+      .filter((task) => {
+        const parentKey = ids.has(task.parent_id) ? task.parent_id : null;
+        if (parentKey != null && collapsedAncestor.has(parentKey)) {
+          collapsedAncestor.add(task.id);
+          return false;
+        }
+        if (collapsedIds.value.has(task.id)) collapsedAncestor.add(task.id);
+        return true;
+      })
+      .map((task) => ({ ...task, phase_title: titles.get(task.id) || '' }));
     return { ...group, tasks };
   });
 });

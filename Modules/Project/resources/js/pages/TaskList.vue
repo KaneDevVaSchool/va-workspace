@@ -37,7 +37,9 @@ import {
   LIST_GROUP_KEY,
   LIST_GROUP_MODES,
   LIST_GROUP_OPTIONS,
-  TASK_COLUMNS,
+  // Trang này xuyên nhiều dự án nên không suy được cột "Danh mục" (cần cây WBS
+  // của 1 dự án) — dùng bản đã lọc bỏ cột đó.
+  ALL_TASK_COLUMNS as TASK_COLUMNS,
   TASK_PRIORITY_LABELS,
   TASK_PRIORITY_TONES,
   TASK_PROGRESS_TYPE_LABELS,
@@ -1975,7 +1977,14 @@ onBeforeUnmount(() => {
 
     <div class="task-page__body">
       <div class="task-page__main">
-        <div v-if="!isCalendar" class="task-tabs-row">
+        <!--
+          Hàng tab luôn hiện ở mọi chế độ xem để nút chọn chế độ (Danh sách /
+          Kanban / Lịch) đứng cố định một chỗ. Trước đây hàng này bị ẩn khi
+          xem Lịch và nút được mount lại trong toolbar lịch, làm nút nhảy từ
+          trái sang phải màn hình. Ở chế độ Lịch chỉ còn nút chọn chế độ, các
+          tab lọc nhanh ẩn đi vì lịch tự lọc theo khoảng ngày.
+        -->
+        <div class="task-tabs-row">
           <TaskViewModeMenu
             :open="viewModeOpen"
             :is-list="isList"
@@ -1990,7 +1999,7 @@ onBeforeUnmount(() => {
             @select-kanban="chooseKanbanGroup"
           />
 
-          <nav class="task-tabs hide-scrollbar" aria-label="Lọc nhanh công việc">
+          <nav v-if="!isCalendar" class="task-tabs hide-scrollbar" aria-label="Lọc nhanh công việc">
             <button
               v-for="tab in TASK_TABS"
               :key="tab.key"
@@ -2441,22 +2450,6 @@ onBeforeUnmount(() => {
           @delete="deleteFromCalendar"
           @context-task="openRowContextMenu"
         >
-          <template #view-mode>
-            <TaskViewModeMenu
-              toolbar
-              :open="viewModeOpen"
-              :is-list="isList"
-              :is-kanban="isKanban"
-              :is-calendar="isCalendar"
-              :kanban-group-by="kanbanGroupBy"
-              :trigger-label="viewModeTriggerLabel"
-              :trigger-icon="viewModeTriggerIcon"
-              @toggle="toggleViewModeMenu"
-              @select-list="setViewMode('list')"
-              @select-calendar="setViewMode('calendar')"
-              @select-kanban="chooseKanbanGroup"
-            />
-          </template>
         </TaskCalendarView>
       </div>
 

@@ -93,7 +93,18 @@ class ProjectVisibilityTest extends TestCase
         $this->assertContains($delegated->id, $ids);
     }
 
-    public function test_user_sees_project_when_member(): void
+    /**
+     * Là thành viên của dự án phòng ban KHÁC thì vẫn KHÔNG xem được.
+     *
+     * Quy tắc đã siết lại (commit dff1c55, 22/09/2026): phạm vi xem dự án chỉ
+     * mở theo PHÒNG BAN (sở hữu / phụ trách / được giao thực hiện / có scope),
+     * không mở theo tư cách cá nhân — xem docblock
+     * ProjectRepository::whereViewerDepartment(). Test này trước đây kỳ vọng
+     * ngược lại (thành viên thì xem được), tức là đang kiểm hành vi cũ đã bị
+     * thay đổi có chủ ý, nên đảo lại cho khớp quy tắc hiện hành. Nó cũng nhất
+     * quán với test_user_cannot_follow_unrelated_department_project() ngay dưới.
+     */
+    public function test_member_of_other_department_project_still_cannot_see_it(): void
     {
         $this->seed(RoleSeeder::class);
 
@@ -113,35 +124,52 @@ class ProjectVisibilityTest extends TestCase
         $response->assertOk();
         $ids = collect($response->json('projects'))->pluck('id')->all();
 
-        $this->assertContains($project->id, $ids);
+        $this->assertNotContains($project->id, $ids);
     }
 
-    public function test_user_sees_project_when_follower(): void
+    /** Thành viên cùng phòng ban sở hữu thì xem được — đường đi hợp lệ. */
+    public function test_user_sees_project_of_own_department(): void
     {
         $this->seed(RoleSeeder::class);
 
-        $deptA = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
-        $deptB = Department::query()->create(['code' => 'B', 'name' => 'Phòng B', 'is_active' => true]);
+        $dept = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
 
-        $userA = $this->makeUser(['department_id' => $deptA->id], ['team_lead']);
-        $creatorB = $this->makeUser(['department_id' => $deptB->id], ['department_director']);
+        $user = $this->makeUser(['department_id' => $dept->id], ['team_lead']);
+        $creator = $this->makeUser(['department_id' => $dept->id], ['department_director']);
 
-        // userA đã có quyền xem qua project_members — chỉ còn kiểm tra
-        // follow có hoạt động và giữ được visibility sau khi gỡ member.
         $project = $this->makeProject([
-            'owner_department_id' => $deptB->id,
-            'created_by' => $creatorB->id,
+            'owner_department_id' => $dept->id,
+            'created_by' => $creator->id,
         ]);
-        $project->members()->attach($userA->id);
 
-        // Theo dõi qua chính API follow (mục B) thay vì thao tác DB trực tiếp
-        // để test luôn cả luồng thật.
-        $this->actingAs($userA)->postJson("/api/project/{$project->id}/follow")->assertOk();
+        $response = $this->actingAs($user)->getJson('/api/project');
+        $response->assertOk();
+        $ids = collect($response->json('projects'))->pluck('id')->all();
 
-        // Gỡ khỏi project_members — vẫn thấy được nhờ đang follow.
-        $project->members()->detach($userA->id);
+        $this->assertContains($project->id, $ids);
+    }
 
-        $response = $this->actingAs($userA)->getJson('/api/project');
+    /** Follow dự án phòng ban mình thì được, và vẫn xem được sau đó. */
+    public function test_user_can_follow_project_of_own_department(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'A', 'name' => 'Phòng A', 'is_active' => true]);
+
+        $user = $this->makeUser(['department_id' => $dept->id], ['team_lead']);
+        $creator = $this->makeUser(['department_id' => $dept->id], ['department_director']);
+
+        $project = $this->makeProject([
+            'owner_department_id' => $dept->id,
+            'created_by' => $creator->id,
+        ]);
+
+        $this->actingAs($user)
+            ->postJson("/api/project/{$project->id}/follow")
+            ->assertOk()
+            ->assertJsonPath('is_following', true);
+
+        $response = $this->actingAs($user)->getJson('/api/project');
         $response->assertOk();
         $ids = collect($response->json('projects'))->pluck('id')->all();
 

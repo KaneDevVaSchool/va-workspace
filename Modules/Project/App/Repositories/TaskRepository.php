@@ -484,4 +484,26 @@ class TaskRepository implements TaskRepositoryInterface
     {
         $task->forceFill(['due_soon_notified_at' => now()])->save();
     }
+
+    public function progressAggregatesByProject(array $projectIds): Collection
+    {
+        if (empty($projectIds)) {
+            return collect();
+        }
+
+        return Task::query()
+            ->selectRaw('project_id')
+            ->selectRaw('AVG(progress_percent) as avg_progress')
+            ->selectRaw('SUM(DATEDIFF(COALESCE(end_date, start_date), COALESCE(start_date, end_date)) + 1) as total_duration')
+            ->selectRaw('SUM((DATEDIFF(COALESCE(end_date, start_date), COALESCE(start_date, end_date)) + 1) * COALESCE(progress_percent, 0)) as weighted_duration_sum')
+            ->selectRaw('SUM(COALESCE(weight, 0)) as total_weight')
+            ->selectRaw('SUM(COALESCE(weight, 0) * COALESCE(progress_percent, 0)) as weighted_task_sum')
+            ->selectRaw('COUNT(*) as task_count')
+            ->whereIn('project_id', $projectIds)
+            ->where('type', 'task')
+            ->where('status', '!=', 'cancelled')
+            ->groupBy('project_id')
+            ->get()
+            ->keyBy('project_id');
+    }
 }

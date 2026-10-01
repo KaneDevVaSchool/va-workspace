@@ -1,8 +1,13 @@
 <script setup>
 //
-// Trang đăng nhập — chỉ VA-HRM SSO (không có form user/password).
-// Bấm nút -> điều hướng full-page (window.location) tới /auth/hrm/redirect
+// Trang đăng nhập — 2 lối SSO, không có form user/password.
+// Bấm nút -> điều hướng full-page (window.location) tới /auth/{hrm,google}/redirect
 // vì đây là OAuth-like redirect thật, không phải gọi API qua axios.
+//
+// Vì sao có cả nút Google trực tiếp: /sso/authorize bên HRM nằm sau middleware
+// auth, nên khi HRM còn session nó phát JWT ngay cho tài khoản đang đăng nhập
+// mà không hiện màn hình chọn tài khoản. Muốn đổi sang tài khoản khác thì đi
+// đường Google trực tiếp (có prompt=select_account), xem GoogleAuthController.
 //
 // Bố cục port từ va-hrm (resources/js/Pages/Auth/Login.tsx — React/Tailwind)
 // sang CSS thuần theo theme.css của dự án này (không dùng Tailwind, xem
@@ -27,13 +32,31 @@ onMounted(() => {
     }
 });
 
-function loginWithHrmSso() {
+function ssoUrl(base, extra = {}) {
+    const params = new URLSearchParams();
+
     const redirect =
         typeof route.query.redirect === "string" ? route.query.redirect : null;
-    const url = redirect
-        ? `/auth/hrm/redirect?redirect=${encodeURIComponent(redirect)}`
-        : "/auth/hrm/redirect";
-    window.location.href = url;
+    if (redirect) {
+        params.set("redirect", redirect);
+    }
+
+    for (const [key, value] of Object.entries(extra)) {
+        params.set(key, value);
+    }
+
+    const query = params.toString();
+    return query === "" ? base : `${base}?${query}`;
+}
+
+function loginWithHrmSso() {
+    window.location.href = ssoUrl("/auth/hrm/redirect");
+}
+
+// switch=1: nếu còn session Workspace cũ thì controller đăng xuất trước rồi
+// mới sang Google, nếu không Google sẽ trả về đúng tài khoản cũ.
+function loginWithGoogle() {
+    window.location.href = ssoUrl("/auth/google/redirect", { switch: "1" });
 }
 </script>
 
@@ -69,16 +92,34 @@ function loginWithHrmSso() {
                 <div class="login__actions">
                     <button
                         type="button"
-                        class="login__hrm-btn"
-                        aria-label="Đăng nhập bằng tài khoản VA-HRM"
+                        class="login__btn login__btn--primary"
                         @click="loginWithHrmSso"
                     >
                         <img
                             src="/images/google.png"
                             alt=""
-                            class="login__hrm-icon"
+                            class="login__btn-icon"
                         />
+                        <span>Đăng nhập qua VA-HRM</span>
                     </button>
+
+                    <button
+                        type="button"
+                        class="login__btn"
+                        @click="loginWithGoogle"
+                    >
+                        <img
+                            src="/images/google.png"
+                            alt=""
+                            class="login__btn-icon"
+                        />
+                        <span>Chọn tài khoản Google khác</span>
+                    </button>
+
+                    <p class="login__hint">
+                        Chọn cách thứ hai nếu hệ thống đang tự đăng nhập vào
+                        một tài khoản mà bạn không muốn dùng.
+                    </p>
                 </div>
             </div>
         </div>
@@ -196,31 +237,55 @@ function loginWithHrmSso() {
     margin-top: var(--space-6);
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     gap: var(--space-3);
 }
 
-.login__hrm-btn {
+.login__btn {
+    width: 100%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: var(--space-2);
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
     border: 1px solid var(--login-border);
-    border-radius: var(--radius-full);
+    border-radius: var(--radius-md);
     background: var(--login-card-bg);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-sm);
+    color: var(--login-text);
+    font-family: inherit;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.4;
     cursor: pointer;
-    transition: box-shadow 0.15s ease;
+    transition:
+        box-shadow 0.15s ease,
+        background-color 0.15s ease;
 }
 
-.login__hrm-btn:hover {
-    box-shadow: var(--shadow-lg);
+.login__btn:hover {
+    box-shadow: var(--shadow-md);
+    background: var(--color-primary-50);
 }
 
-.login__hrm-icon {
+.login__btn--primary {
+    border-color: var(--color-primary-900);
+    box-shadow: var(--shadow-md);
+}
+
+.login__btn-icon {
     display: block;
-    width: 2.25rem;
-    height: 2.25rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+}
+
+.login__hint {
+    margin: var(--space-1) 0 0;
+    color: var(--login-text-muted);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    text-align: center;
 }
 
 @media (max-width: 480px) {

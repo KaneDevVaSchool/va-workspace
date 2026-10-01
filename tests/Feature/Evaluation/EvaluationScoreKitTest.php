@@ -638,7 +638,9 @@ class EvaluationScoreKitTest extends TestCase
             ->assertJsonPath('source', 'kit_difficulty')
             ->assertJsonPath('mode', 'weighted_task')
             ->assertJsonPath('importance.0.value', 'M1')
-            ->assertJsonPath('importance.0.label', 'Khá')
+            // Nhãn có tiền tố mã ("M1-Khá") theo yêu cầu người dùng STT 15, cài
+            // ở TaskImportanceOptions::mapLevels(). Test viết trước thay đổi đó.
+            ->assertJsonPath('importance.0.label', 'M1-Khá')
             ->assertJsonPath('quality_levels.0.label', 'Xuất sắc');
 
         $this->actingAs($director)

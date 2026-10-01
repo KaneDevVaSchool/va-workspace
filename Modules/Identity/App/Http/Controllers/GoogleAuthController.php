@@ -37,9 +37,18 @@ class GoogleAuthController extends Controller
             return $this->failLogin('Đăng nhập Google chưa được cấu hình trên máy chủ.');
         }
 
-        // Đã đăng nhập rồi → về thẳng trang chủ (SPA), không chạy lại OAuth.
+        // Đã đăng nhập rồi: mặc định về thẳng trang chủ (SPA) thay vì chạy
+        // lại OAuth. Trừ khi ?switch=1 — người dùng chủ động muốn đổi sang
+        // tài khoản Google khác, khi đó phải huỷ session hiện tại trước, nếu
+        // không Google trả về đúng user cũ và ta chỉ đăng nhập lại chính nó.
         if ($request->user()) {
-            return redirect()->to($this->frontendUrl('/'));
+            if (! $request->boolean('switch')) {
+                return redirect()->to($this->frontendUrl('/'));
+            }
+
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
         }
 
         $request->session()->put(
@@ -57,12 +66,16 @@ class GoogleAuthController extends Controller
             ]);
         }
 
-        $domains = (array) config('services.google.allowed_domains', []);
-
-        $params = array_filter([
-            'hd' => $domains[0] ?? null,
-            'prompt' => 'select_account',
-        ]);
+        // prompt=select_account: luôn bắt Google hiện màn hình chọn tài khoản,
+        // không tự đăng nhập lại tài khoản gần nhất. Đây là lý do nút Google
+        // tồn tại song song với VA-HRM SSO (HRM giữ session nên không hỏi lại).
+        //
+        // KHÔNG gửi `hd`: dự án cho phép nhiều domain
+        // (GOOGLE_ALLOWED_DOMAINS = vaschools.edu.vn, hcm.vaschools.edu.vn)
+        // mà `hd` chỉ nhận 1 giá trị, sẽ ẩn tài khoản thuộc domain còn lại
+        // khỏi danh sách chọn. Việc chặn domain đã làm ở GoogleAuthenticator
+        // (domainAllowed()) nên không mất lớp bảo vệ nào.
+        $params = ['prompt' => 'select_account'];
 
         return Socialite::driver('google')
             ->scopes(['openid', 'profile', 'email'])

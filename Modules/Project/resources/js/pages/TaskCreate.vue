@@ -54,7 +54,7 @@ const form = reactive({
   collaborator_ids: [],
   type: 'task',
   priority: 'important',
-  progress_type: 'average',
+  progress_type: 'percent',
   progress_number: '0',
   progress_total: '',
   unit: '',

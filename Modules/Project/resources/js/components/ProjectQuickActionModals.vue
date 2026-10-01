@@ -251,7 +251,7 @@ function emptyStructureRow(overrides = {}) {
     key: nextRowKey(),
     id: null,
     title: '',
-    progress_type: 'average',
+    progress_type: 'percent',
     start_date: props.project?.start_date || '',
     end_date: props.project?.end_date || '',
     description: '',
@@ -301,7 +301,7 @@ function addStructureRow() {
     let end = props.project?.end_date || '';
     if (start && end && end < start) end = '';
     structureRows.value.push(emptyStructureRow({
-      progress_type: last.progress_type || 'average',
+      progress_type: last.progress_type || 'percent',
       start_date: start,
       end_date: end,
     }));
@@ -617,7 +617,7 @@ watch(
             ? categories.value.map((item) => emptyStructureRow({
               id: item.id,
               title: item.title || '',
-              progress_type: item.progress_type || 'average',
+              progress_type: item.progress_type || 'percent',
               description: item.description || '',
             }))
             : [emptyStructureRow()];
@@ -628,7 +628,7 @@ watch(
             ? phases.value.map((item) => emptyStructureRow({
               id: item.id,
               title: item.title || '',
-              progress_type: item.progress_type || 'average',
+              progress_type: item.progress_type || 'percent',
               start_date: item.start_date || '',
               end_date: item.end_date || '',
               description: item.description || '',
@@ -785,7 +785,7 @@ async function submit() {
       const items = filled.map((row, index) => {
         const item = {
           title: row.title.trim(),
-          progress_type: row.progress_type || 'average',
+          progress_type: row.progress_type || 'percent',
           description: row.description?.trim() || null,
           sort_order: index,
         };

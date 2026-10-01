@@ -19,9 +19,12 @@ use Modules\Identity\App\Http\Controllers\ViewAsController;
 | nhập (HrmSsoController::redirect()). throttle vì callback thực hiện DB
 | write (find-or-create user) mỗi lần gọi.
 |
-| Google login (GoogleAuthController) không còn được route tới — thay thế
-| hoàn toàn bằng VA-HRM SSO. Controller/Service Google giữ nguyên trong
-| codebase để tham khảo/rollback khẩn cấp, không xoá.
+| Hai lối đăng nhập song song, user tự chọn ở trang /login:
+|   - VA-HRM SSO (HrmSsoController) — mặc định, lấy luôn thông tin nhân sự.
+|   - Google Workspace trực tiếp (GoogleAuthController) — dùng khi HRM lỗi,
+|     hoặc khi cần đổi sang tài khoản Google khác mà session HRM đang giữ
+|     tài khoản cũ (HRM /sso/authorize nằm sau middleware auth nên phát JWT
+|     ngay cho user đang đăng nhập, không hiện màn hình chọn tài khoản).
 */
 
 Route::middleware('throttle:20,1')->group(function () {
@@ -29,6 +32,11 @@ Route::middleware('throttle:20,1')->group(function () {
         ->name('auth.hrm.redirect');
     Route::get('/auth/hrm/callback', [HrmSsoController::class, 'callback'])
         ->name('auth.hrm.callback');
+
+    Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect'])
+        ->name('auth.google.redirect');
+    Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])
+        ->name('auth.google.callback');
 });
 
 // Named `login` — Laravel auth middleware / Exception Handler gọi route('login')

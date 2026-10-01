@@ -1,8 +1,10 @@
 <script setup>
 //
 // Lịch công việc: tháng / tuần (toggle). Thanh điều hướng bám mẫu
-// "Hôm nay + mũi tên + Xem theo…". Nút đổi chế độ xem (Danh sách /
-// Kanban / Lịch) do trang cha Teleport vào #task-cal-view-mode-host.
+// "Hôm nay + mũi tên + Xem theo…". Nút đổi chế độ xem (Danh sách / Kanban /
+// Lịch) KHÔNG nằm ở đây — nó đứng cố định trên hàng tab của trang cha để
+// không nhảy vị trí khi đổi chế độ. Slot "view-mode" vẫn để trống sẵn cho
+// trường hợp cần nhúng nút riêng vào toolbar sau này.
 //
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
@@ -638,7 +640,13 @@ onBeforeUnmount(() => {
           </span>
         </div>
 
-        <div class="task-cal__view-mode-host">
+        <!--
+          Slot tuỳ chọn. Trang "Tất cả công việc" KHÔNG dùng slot này nữa —
+          nút chọn chế độ xem đứng cố định trên hàng tab để không nhảy vị trí
+          khi đổi sang Lịch. Chỉ bọc thẻ khi thực sự có nội dung, tránh để lại
+          1 ô flex rỗng trên toolbar.
+        -->
+        <div v-if="$slots['view-mode']" class="task-cal__view-mode-host">
           <slot name="view-mode" />
         </div>
       </div>

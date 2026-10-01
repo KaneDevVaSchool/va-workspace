@@ -4,6 +4,9 @@ namespace Modules\Dashboard\App\Services;
 
 use Illuminate\Support\Carbon;
 use Modules\Dashboard\App\Repositories\Contracts\CompanyDashboardRepositoryInterface;
+// Tiến độ dự án thuộc nghiệp vụ module Project — Dashboard chỉ là bên tiêu thụ,
+// dùng chung 1 công thức với trang Dự án để 2 nơi không ra số khác nhau.
+use Modules\Project\App\Services\ProjectProgressCalculator;
 
 /**
  * Business logic Dashboard tổng công ty — Controller chỉ gọi qua đây,

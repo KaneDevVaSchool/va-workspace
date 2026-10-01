@@ -973,16 +973,21 @@ class TaskService
         $allowedProjectIds = $this->projects->forViewer(Project::query(), $editor)->pluck('id')->all();
         $allowed['updated_by'] = $editor->id;
 
-        $updated = [];
-        foreach ($taskIds as $taskId) {
-            $task = $this->tasks->find((int) $taskId);
-            if ($task === null || ! $this->viewerCanAccessTask($task, $editor, $allowedProjectIds)) {
-                continue;
+        // Bọc transaction: chọn hàng trăm task mà lỗi giữa chừng (mất kết nối,
+        // timeout) thì rollback sạch, không để một phần đã đổi và phần còn lại
+        // giữ nguyên — trạng thái nửa vời đó không có cách nào hoàn tác.
+        return DB::transaction(function () use ($taskIds, $allowed, $editor, $allowedProjectIds) {
+            $updated = [];
+            foreach ($taskIds as $taskId) {
+                $task = $this->tasks->find((int) $taskId);
+                if ($task === null || ! $this->viewerCanAccessTask($task, $editor, $allowedProjectIds)) {
+                    continue;
+                }
+                $updated[] = $this->tasks->update($task, $allowed);
             }
-            $updated[] = $this->tasks->update($task, $allowed);
-        }
 
-        return $updated;
+            return $updated;
+        });
     }
 
     /**
@@ -1007,22 +1012,30 @@ class TaskService
 
         $allowedProjectIds = $this->projects->forViewer(Project::query(), $editor)->pluck('id')->all();
 
-        $updated = [];
-        foreach ($taskIds as $taskId) {
-            $task = $this->tasks->find((int) $taskId);
-            if ($task === null || ! $this->viewerCanAccessTask($task, $editor, $allowedProjectIds)) {
-                continue;
+        // Bọc transaction như bulkUpdate() — chuyển giao nửa vời (một phần task
+        // đã sang người nhận, phần còn lại chưa) không thể hoàn tác được.
+        // Thông báo gửi SAU khi commit: nếu gửi trong transaction mà sau đó
+        // rollback thì người nhận đã nhận thông báo về việc không hề xảy ra.
+        $updated = DB::transaction(function () use ($taskIds, $recipient, $editor, $allowedProjectIds) {
+            $result = [];
+            foreach ($taskIds as $taskId) {
+                $task = $this->tasks->find((int) $taskId);
+                if ($task === null || ! $this->viewerCanAccessTask($task, $editor, $allowedProjectIds)) {
+                    continue;
+                }
+
+                $result[] = $this->tasks->update($task, [
+                    'assignee_id' => $recipient->id,
+                    'origin_department_id' => $task->origin_department_id ?? $task->project?->owner_department_id,
+                    'delegated_to_department_id' => $recipient->department_id,
+                    'delegated_to_employee_id' => $recipient->id,
+                    'delegation_status' => 'pending',
+                    'updated_by' => $editor->id,
+                ]);
             }
 
-            $updated[] = $this->tasks->update($task, [
-                'assignee_id' => $recipient->id,
-                'origin_department_id' => $task->origin_department_id ?? $task->project?->owner_department_id,
-                'delegated_to_department_id' => $recipient->department_id,
-                'delegated_to_employee_id' => $recipient->id,
-                'delegation_status' => 'pending',
-                'updated_by' => $editor->id,
-            ]);
-        }
+            return $result;
+        });
 
         if ($updated !== []) {
             $this->notifyDelegation($updated, $recipient, $editor);
