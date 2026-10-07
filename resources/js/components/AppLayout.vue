@@ -17,7 +17,11 @@ const route = useRoute();
 const auth = useAuthStore();
 
 const showUnassignedBanner = computed(
-  () => auth.isAuthenticated && !auth.showSuperAdminNav && auth.user && !auth.user.department,
+  () => auth.isAuthenticated
+    && !auth.isImpersonating
+    && !auth.showSuperAdminNav
+    && auth.user
+    && !auth.user.department,
 );
 
 const COLLAPSE_KEY = 'va-sidebar-collapsed';
