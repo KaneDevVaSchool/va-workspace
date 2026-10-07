@@ -461,6 +461,11 @@ function colWidthStyle(key) {
   return width ? `${width}px` : undefined;
 }
 
+function colMinWidthStyle(key) {
+  const width = columnWidths[key];
+  return width ? { minWidth: `${width}px`, width: `${width}px` } : {};
+}
+
 function measureText(text, font) {
   if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
   measureCtx.font = font;
@@ -502,12 +507,33 @@ function columnContentWidth(key, fonts) {
   return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
 }
 
+function distributeExtraWidth(widths, keys, available) {
+  const sum = keys.reduce((total, key) => total + widths[key], 0);
+  if (sum <= 0 || available <= sum) return widths;
+
+  const extra = available - sum;
+  const next = { ...widths };
+  let used = 0;
+  keys.forEach((key, index) => {
+    if (index === keys.length - 1) {
+      next[key] = available - used;
+      return;
+    }
+    next[key] = widths[key] + Math.floor((widths[key] / sum) * extra);
+    used += next[key];
+  });
+  return next;
+}
+
 function fitColumnsToContent() {
   const wrap = tableWrap.value;
   const keys = tableColumnKeys.value;
   if (!wrap || keys.length === 0 || resizing.value) return;
   const fonts = readTableFonts();
-  for (const key of keys) columnWidths[key] = columnContentWidth(key, fonts);
+  const measured = {};
+  for (const key of keys) measured[key] = columnContentWidth(key, fonts);
+  const next = distributeExtraWidth(measured, keys, wrap.clientWidth);
+  for (const key of keys) columnWidths[key] = next[key];
 }
 
 function startResize(event, key) {
@@ -774,11 +800,15 @@ onBeforeUnmount(() => {
         >
           <table class="roster-page__table" :style="{ width: tableWidthPx }">
             <colgroup>
-              <col v-for="key in tableColumnKeys" :key="key" :style="{ width: colWidthStyle(key) }" />
+              <col
+                v-for="key in tableColumnKeys"
+                :key="key"
+                :style="{ width: colWidthStyle(key), minWidth: colWidthStyle(key) }"
+              />
             </colgroup>
             <thead>
               <tr>
-                <th v-for="col in shownColumns" :key="col.key">
+                <th v-for="col in shownColumns" :key="col.key" :style="colMinWidthStyle(col.key)">
                   <button
                     v-if="col.key === 'person' || col.key === 'timekeeping_code' || col.key === 'manager'"
                     type="button"
@@ -797,7 +827,7 @@ onBeforeUnmount(() => {
                     @mousedown.stop.prevent="startResize($event, col.key)"
                   />
                 </th>
-                <th>
+                <th :style="colMinWidthStyle('actions')">
                   <span>Thao tác</span>
                   <button
                     type="button"
@@ -840,7 +870,7 @@ onBeforeUnmount(() => {
                 :class="{ 'roster-page__row--active': sameMember(selected, member) }"
                 @click="inspect(member)"
               >
-                <td v-for="col in shownColumns" :key="col.key">
+                <td v-for="col in shownColumns" :key="col.key" :style="colMinWidthStyle(col.key)">
                   <template v-if="col.key === 'person'">
                     <span class="roster-page__person">
                       <UserAvatarTip :user="avatarUser(member)" label="Nhân sự" />
@@ -859,7 +889,7 @@ onBeforeUnmount(() => {
                   </span>
                   <span v-else class="roster-page__cell">{{ cellText(member, col.key) }}</span>
                 </td>
-                <td @click.stop>
+                <td :style="colMinWidthStyle('actions')" @click.stop>
                   <button
                     type="button"
                     class="roster-page__menu-btn"
@@ -1328,7 +1358,7 @@ onBeforeUnmount(() => {
 }
 
 .roster-page__table {
-  width: max-content;
+  min-width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: calc(0.9375rem * var(--table-zoom, 1));
@@ -1338,6 +1368,8 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 1;
+  box-sizing: border-box;
+  overflow: visible;
   padding: 0.625rem var(--space-4);
   background: color-mix(in srgb, var(--color-surface-muted) 65%, var(--color-surface));
   color: var(--color-primary);
@@ -1380,10 +1412,12 @@ onBeforeUnmount(() => {
 }
 
 .roster-page__table tbody td {
+  box-sizing: border-box;
   padding: 0.625rem var(--space-4);
   color: var(--color-text-muted);
   vertical-align: middle;
   white-space: nowrap;
+  overflow: visible;
   box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--color-border) 55%, transparent);
 }
 
@@ -1409,13 +1443,15 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.625rem;
-  min-width: 0;
+  width: max-content;
+  max-width: none;
 }
 
 .roster-page__person-text {
   display: flex;
-  min-width: 0;
   flex-direction: column;
+  width: max-content;
+  max-width: none;
 }
 
 .roster-page__person-text span {
