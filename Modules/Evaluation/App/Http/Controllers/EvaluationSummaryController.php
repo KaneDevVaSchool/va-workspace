@@ -5,6 +5,7 @@ namespace Modules\Evaluation\App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Modules\Evaluation\App\Http\Requests\EvaluationSummaryRequest;
+use Modules\Evaluation\App\Services\EvaluationDepartmentResolver;
 use Modules\Evaluation\App\Services\EvaluationSummaryService;
 use Modules\Identity\App\Services\PermissionService;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,17 +20,15 @@ class EvaluationSummaryController extends Controller
     public function __construct(
         private readonly EvaluationSummaryService $service,
         private readonly PermissionService $permissions,
+        private readonly EvaluationDepartmentResolver $departments,
     ) {}
 
     public function index(EvaluationSummaryRequest $request): JsonResponse
     {
-        $departmentId = $request->user()?->department_id;
-
-        if (! $departmentId) {
-            return response()->json(['message' => 'Tài khoản chưa gắn với phòng ban nào.'], 422);
+        $departmentId = $this->departments->idOrFail($request);
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
         }
-
-        $departmentId = (int) $departmentId;
 
         if (! $this->permissions->allows(
             $request->user(),
@@ -52,13 +51,10 @@ class EvaluationSummaryController extends Controller
 
     public function exportPdf(EvaluationSummaryRequest $request): JsonResponse|Response
     {
-        $departmentId = $request->user()?->department_id;
-
-        if (! $departmentId) {
-            return response()->json(['message' => 'Tài khoản chưa gắn với phòng ban nào.'], 422);
+        $departmentId = $this->departments->idOrFail($request);
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
         }
-
-        $departmentId = (int) $departmentId;
 
         if (! $this->permissions->allows(
             $request->user(),
