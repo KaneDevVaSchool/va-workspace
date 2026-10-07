@@ -371,11 +371,18 @@ class WorkspaceConfigMemberService
      */
     public function rosterFromHrmDatabase(): array
     {
-        $loaded = $this->hrmDirectory->load();
-        $this->hrmDepartments->syncDepartmentsFromRecords($loaded['org_units']);
+        $this->hrmDepartments->syncDepartmentsFromHrm();
 
-        $departments = $this->departments->all();
+        $loaded = $this->hrmDirectory->load();
+
+        $departments = HrmDepartmentSyncService::isConfigured()
+            ? $this->departments->allSyncedFromHrm()
+            : $this->departments->all();
+
         $users = $this->usersForHrmEmployees($loaded['employees']);
+        $this->applyHrmDepartmentAssignments($loaded['employees'], $users);
+        $users = $this->usersForHrmEmployees($loaded['employees']);
+
         $members = collect($loaded['employees'])
             ->map(fn (array $employee) => $this->presentHrmEmployee(
                 $employee,
@@ -666,6 +673,7 @@ class WorkspaceConfigMemberService
                 'id' => $user->department->id,
                 'name' => $user->department->name,
             ] : null,
+            'suggested_department' => $this->suggestedDepartmentForHrmEmployee($employee, $user),
             'team' => $user?->team ? [
                 'id' => $user->team->id,
                 'name' => $user->team->name,
@@ -728,6 +736,74 @@ class WorkspaceConfigMemberService
                 'id' => $department->id,
                 'name' => $department->name,
             ])->values()->all(),
+        ];
+    }
+
+    /**
+     * Gán phòng ban workspace theo danh mục HRM — chỉ tài khoản đã có, chưa
+     * gán phòng ban (không ghi đè gán tay).
+     *
+     * @param  list<array<string, mixed>>  $employees
+     * @param  Collection<int, User>  $users
+     */
+    private function applyHrmDepartmentAssignments(array $employees, Collection $users): void
+    {
+        if (! HrmDepartmentSyncService::isConfigured()) {
+            return;
+        }
+
+        foreach ($employees as $employee) {
+            if (! is_array($employee)) {
+                continue;
+            }
+
+            $user = $this->matchWorkspaceUser($employee, $users);
+            if ($user === null || $user->department_id !== null) {
+                continue;
+            }
+
+            $departmentId = $this->hrmDepartments->departmentIdMatchingHrm($user);
+            if ($departmentId === null) {
+                continue;
+            }
+
+            try {
+                $this->assignDepartment($user->id, $departmentId);
+            } catch (MemberDepartmentNotAssignable) {
+                continue;
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $employee
+     * @return array{id: int, name: string}|null
+     */
+    private function suggestedDepartmentForHrmEmployee(array $employee, ?User $user): ?array
+    {
+        if ($user?->department !== null) {
+            return null;
+        }
+
+        $departmentId = $user !== null
+            ? $this->hrmDepartments->departmentIdMatchingHrm($user)
+            : $this->hrmDepartments->departmentIdForHrmEmployee(
+                isset($employee['uuid']) ? (string) $employee['uuid'] : null,
+                $this->hrmEmail($employee),
+            );
+
+        if ($departmentId === null) {
+            return null;
+        }
+
+        $department = $this->departments->find($departmentId);
+        if ($department === null) {
+            return null;
+        }
+
+        return [
+            'id' => $department->id,
+            'name' => $department->name,
         ];
     }
 

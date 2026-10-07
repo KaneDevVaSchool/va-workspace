@@ -79,9 +79,13 @@ class WorkspaceConfigOverviewController extends Controller
     {
         $this->hrmDepartmentSync->syncDepartmentsFromHrm();
 
+        $departmentList = HrmDepartmentSyncService::isConfigured()
+            ? $this->departments->allSyncedFromHrm()
+            : $this->departments->all();
+
         return response()->json([
             'members' => $this->members->unassignedMembers(),
-            'departments' => $this->departments->all()->map(fn ($d) => [
+            'departments' => $departmentList->map(fn ($d) => [
                 'id' => $d->id,
                 'name' => $d->name,
             ])->values(),

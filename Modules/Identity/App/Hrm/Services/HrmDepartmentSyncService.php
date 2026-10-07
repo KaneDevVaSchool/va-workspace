@@ -89,6 +89,49 @@ class HrmDepartmentSyncService
             return null;
         }
 
+        return $this->departmentIdForCatalogUuid($catalogUuid);
+    }
+
+    /**
+     * Id phòng ban workspace khớp danh mục HRM của nhân sự (chưa cần tài khoản).
+     */
+    public function departmentIdForHrmEmployee(?string $employeeUuid, ?string $email): ?int
+    {
+        if (! self::isConfigured()) {
+            return null;
+        }
+
+        try {
+            $catalogUuid = $this->directory->catalogDepartmentUuidForEmployee($employeeUuid, $email);
+        } catch (HrmDatabaseUnavailable $e) {
+            Log::warning('hrm.user_department.lookup_failed', [
+                'hrm_employee_uuid' => $employeeUuid,
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($catalogUuid === null) {
+            return null;
+        }
+
+        $existing = $this->departmentIdForCatalogUuid($catalogUuid);
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $this->syncDepartmentsFromHrm();
+
+        return $this->departmentIdForCatalogUuid($catalogUuid);
+    }
+
+    private function departmentIdForCatalogUuid(?string $catalogUuid): ?int
+    {
+        if ($catalogUuid === null || $catalogUuid === '') {
+            return null;
+        }
+
         $id = Department::query()->where('hrm_org_unit_uuid', $catalogUuid)->value('id');
 
         return $id !== null ? (int) $id : null;

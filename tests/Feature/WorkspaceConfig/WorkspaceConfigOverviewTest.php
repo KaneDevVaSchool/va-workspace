@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Models\Company;
@@ -157,6 +158,17 @@ class WorkspaceConfigOverviewTest extends TestCase
             $table->string('company_email')->nullable();
             $table->timestamp('deleted_at')->nullable();
         });
+        $schema->create('departments', function (Blueprint $table): void {
+            $table->bigIncrements('id');
+            $table->uuid('uuid');
+            $table->unsignedBigInteger('company_id');
+            $table->string('code')->nullable();
+            $table->string('software_code')->nullable();
+            $table->string('name')->nullable();
+            $table->string('status')->nullable();
+            $table->unsignedBigInteger('manager_employee_id')->nullable();
+            $table->timestamp('deleted_at')->nullable();
+        });
         $schema->create('org_units', function (Blueprint $table): void {
             $table->bigIncrements('id');
             $table->uuid('uuid')->nullable();
@@ -170,16 +182,22 @@ class WorkspaceConfigOverviewTest extends TestCase
             $table->unsignedBigInteger('manager_employee_id')->nullable();
             $table->timestamp('deleted_at')->nullable();
         });
+        DB::connection('hrm')->table('companies')->insert([
+            'id' => 1,
+            'uuid' => 'co-hrm-1',
+            'code' => 'VAS',
+            'name' => 'VA Schools',
+        ]);
         DB::connection('hrm')->table('employees')->insert([
             'id' => 7,
             'uuid' => 'emp-mgr-1',
             'full_name' => 'Trưởng HRM',
             'company_email' => 'truong.hrm@vaschools.edu.vn',
         ]);
-        DB::connection('hrm')->table('org_units')->insert([
+        DB::connection('hrm')->table('departments')->insert([
             'id' => 1,
             'uuid' => 'ou-mgr-1',
-            'type' => 'department',
+            'company_id' => 1,
             'code' => 'HRM',
             'name' => 'Phòng HRM',
             'status' => 'active',
@@ -373,36 +391,22 @@ class WorkspaceConfigOverviewTest extends TestCase
         ]);
     }
 
-    public function test_unassigned_members_syncs_departments_from_hrm_org_units(): void
+    public function test_unassigned_members_syncs_departments_from_hrm_catalog(): void
     {
         $this->seed(RoleSeeder::class);
+        Http::fake();
 
-        config([
-            'services.hrm.api_base_url' => 'https://hrm.test',
-            'services.hrm.api_token' => 'test-token',
-        ]);
-
-        Http::fake([
-            'https://hrm.test/api/v1/org-units*' => Http::response([
-                'data' => [
-                    [
-                        'uuid' => 'ou-sync-1',
-                        'code' => 'PB01',
-                        'name' => 'Phòng Kế toán',
-                        'type' => 'department',
-                        'status' => 'active',
-                        'company' => ['uuid' => 'co-1', 'code' => 'VAS', 'name' => 'VA Schools'],
-                    ],
-                    [
-                        'uuid' => 'ou-sync-hq',
-                        'code' => 'HQ',
-                        'name' => 'Trụ sở',
-                        'type' => 'headquarter',
-                        'status' => 'active',
-                    ],
-                ],
-                'meta' => ['cursor' => ['next' => null, 'prev' => null, 'count' => 2, 'per_page' => 200]],
-            ], 200),
+        $this->useHrmDirectory([], [
+            $this->hrmOrgUnit('ou-sync-1', 'PB01', 'Phòng Kế toán'),
+            [
+                'uuid' => 'ou-sync-hq',
+                'code' => 'HQ',
+                'name' => 'Trụ sở',
+                'short_name' => null,
+                'type' => 'headquarter',
+                'status' => 'active',
+                'company' => ['uuid' => 'co-1', 'code' => 'VAS', 'name' => 'VA Schools'],
+            ],
         ]);
 
         $admin = $this->makeUser([], ['super_admin']);
@@ -418,6 +422,47 @@ class WorkspaceConfigOverviewTest extends TestCase
         $this->assertDatabaseHas('departments', [
             'hrm_org_unit_uuid' => 'ou-sync-1',
             'name' => 'Phòng Kế toán',
+        ]);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_hrm_roster_auto_assigns_department_for_unassigned_workspace_account(): void
+    {
+        $this->seed(RoleSeeder::class);
+        Http::fake();
+
+        $employeeUuid = '22222222-2222-4222-8222-222222222222';
+        $this->useHrmDirectory([
+            $this->hrmEmployee($employeeUuid, 'c.le@vaschools.edu.vn', 'Lê Văn C'),
+        ], [
+            $this->hrmOrgUnit('ou-emp-1', 'PB01', 'Phòng Kế toán'),
+        ]);
+
+        $member = $this->makeUser([
+            'department_id' => null,
+            'hrm_employee_uuid' => $employeeUuid,
+            'email' => 'c.le@vaschools.edu.vn',
+        ], ['member']);
+
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $response = $this->actingAs($admin)
+            ->getJson('/api/workspace-config/members/by-department')
+            ->assertOk();
+
+        $departmentId = (int) Department::query()->where('hrm_org_unit_uuid', 'ou-emp-1')->value('id');
+        $this->assertGreaterThan(0, $departmentId);
+
+        $unassignedIds = collect($response->json('unassigned'))->pluck('id')->filter()->all();
+        $this->assertNotContains($member->id, $unassignedIds);
+
+        $assigned = collect($response->json('members'))->firstWhere('id', $member->id);
+        $this->assertSame($departmentId, $assigned['department']['id'] ?? null);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $member->id,
+            'department_id' => $departmentId,
         ]);
     }
 
@@ -550,13 +595,31 @@ class WorkspaceConfigOverviewTest extends TestCase
     {
         config(['database.connections.hrm.database' => 'hrm-test']);
 
-        $this->mock(HrmEmployeeDirectory::class, function ($mock) use ($employees, $orgUnits): void {
+        $catalog = $orgUnits;
+
+        $this->mock(HrmEmployeeDirectory::class, function ($mock) use ($employees, $orgUnits, $catalog): void {
             $mock->shouldReceive('load')->andReturn([
                 'employees' => $employees,
                 'org_units' => $orgUnits,
             ]);
+            $mock->shouldReceive('organizationDepartments')->andReturn($catalog);
             $mock->shouldReceive('findEmployee')->andReturnUsing(
                 fn (string $uuid) => collect($employees)->firstWhere('uuid', $uuid)
+            );
+            $mock->shouldReceive('catalogDepartmentUuidForEmployee')->andReturnUsing(
+                function (?string $employeeUuid, ?string $email) use ($employees): ?string {
+                    $employee = collect($employees)->first(
+                        fn (array $row): bool => ($employeeUuid !== null && ($row['uuid'] ?? null) === $employeeUuid)
+                            || ($email !== null && strtolower((string) ($row['company_email'] ?? '')) === strtolower($email))
+                    );
+                    if ($employee === null) {
+                        return null;
+                    }
+
+                    return filled($employee['org_unit_uuid'] ?? null)
+                        ? (string) $employee['org_unit_uuid']
+                        : null;
+                }
             );
         });
     }

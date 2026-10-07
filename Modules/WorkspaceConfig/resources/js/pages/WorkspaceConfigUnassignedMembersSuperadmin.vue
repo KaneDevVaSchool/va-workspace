@@ -1,7 +1,7 @@
 <script setup>
 //
-// superadmin/workspace-config/unassigned — danh sách nhân sự đọc từ
-// MySQL VA-HRM. Phòng ban workspace gán tay trên panel chi tiết.
+// superadmin/workspace-config/unassigned — nhân sự chưa gán phòng ban workspace;
+// danh mục phòng ban đồng bộ HRM, tự gán theo danh mục khi đã có tài khoản.
 //
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -364,7 +364,8 @@ async function load(options = {}) {
   loading.value = true;
   try {
     const { data } = await window.axios.get('/api/workspace-config/members/by-department');
-    allMembers.value = data.members ?? [];
+    const rows = data.unassigned ?? data.members ?? [];
+    allMembers.value = Array.isArray(rows) ? rows : [];
     departmentOptions.value = data.department_options ?? [];
     source.value = data.source ?? 'workspace';
     if (selected.value && !allMembers.value.some((member) => sameMember(member, selected.value))) {
@@ -577,7 +578,13 @@ watch(tableZoom, (value) => {
   nextTick(fitColumnsToContent);
 });
 watch(selected, (member) => {
-  departmentAssignId.value = member?.department?.id ? String(member.department.id) : '';
+  if (member?.department?.id != null) {
+    departmentAssignId.value = String(member.department.id);
+  } else if (member?.suggested_department?.id != null) {
+    departmentAssignId.value = String(member.suggested_department.id);
+  } else {
+    departmentAssignId.value = '';
+  }
   nextTick(fitColumnsToContent);
 });
 watch(shownColumns, () => nextTick(fitColumnsToContent));
