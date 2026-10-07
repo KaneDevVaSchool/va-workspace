@@ -17,8 +17,20 @@ class HrmEmployeeDirectory
     /** @var list<string> */
     private const ASSIGNABLE_ORG_UNIT_TYPES = ['department', 'unit', 'branch'];
 
-    /** @var array{by_id: Collection, by_company_code: Collection}|null */
+    /** @var Collection<int|string, object>|null */
+    private ?Collection $orgUnitsCache = null;
+
+    /**
+     * @var array{
+     *   by_id: Collection<int|string, object>,
+     *   by_company_code: array<string, object>,
+     *   by_company_name: array<string, object>
+     * }|null
+     */
     private ?array $hrmCatalogDepartments = null;
+
+    /** @var array<string, object>|null division index: "{department_id}|{key}" */
+    private ?array $hrmDivisionsByDeptKey = null;
 
     public static function isConfigured(): bool
     {
@@ -116,6 +128,100 @@ class HrmEmployeeDirectory
      *
      * @throws HrmDatabaseUnavailable
      */
+    /**
+     * Danh mục phòng ban HRM — trang Tổ chức → Phòng ban (`/organization/departments`).
+     *
+     * @return list<array<string, mixed>>
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    public function organizationDepartments(): array
+    {
+        try {
+            return DB::connection('hrm')
+                ->table('departments as d')
+                ->join('companies as c', 'c.id', '=', 'd.company_id')
+                ->leftJoin('employees as m', function ($join): void {
+                    $join->on('m.id', '=', 'd.manager_employee_id')
+                        ->whereNull('m.deleted_at');
+                })
+                ->whereNull('d.deleted_at')
+                ->orderBy('c.code')
+                ->orderBy('d.name')
+                ->get([
+                    'd.uuid',
+                    'd.code',
+                    'd.software_code',
+                    'd.name',
+                    'd.status',
+                    'c.uuid as company_uuid',
+                    'c.code as company_code',
+                    'c.name as company_name',
+                    'm.uuid as manager_uuid',
+                    'm.full_name as manager_name',
+                    'm.company_email as manager_email',
+                ])
+                ->map(function (object $row): array {
+                    return [
+                        'uuid' => (string) $row->uuid,
+                        'code' => $row->code,
+                        'software_code' => filled($row->software_code) ? (string) $row->software_code : null,
+                        'name' => $row->name,
+                        'status' => (string) ($row->status ?? 'active'),
+                        'company' => [
+                            'uuid' => (string) $row->company_uuid,
+                            'code' => $row->company_code,
+                            'name' => $row->company_name,
+                        ],
+                        'manager' => filled($row->manager_uuid) ? [
+                            'uuid' => (string) $row->manager_uuid,
+                            'full_name' => (string) ($row->manager_name ?? ''),
+                            'email' => filled($row->manager_email) ? (string) $row->manager_email : null,
+                        ] : null,
+                    ];
+                })
+                ->values()
+                ->all();
+        } catch (HrmDatabaseUnavailable $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            Log::warning('hrm.database.organization_departments_failed', ['message' => $e->getMessage()]);
+
+            throw new HrmDatabaseUnavailable('Không đọc được danh mục phòng ban từ cơ sở dữ liệu HRM.');
+        }
+    }
+
+    /**
+     * UUID phòng ban danh mục HRM của nhân sự (từ phân công org unit → khớp danh mục).
+     */
+    public function catalogDepartmentUuidForEmployee(?string $employeeUuid, ?string $email): ?string
+    {
+        try {
+            $presented = $this->primaryDepartmentOrgUnit($employeeUuid, $email);
+            if ($presented === null || ! filled($presented['uuid'] ?? null)) {
+                return null;
+            }
+
+            $unit = $this->orgUnits()->first(fn (object $row): bool => (string) $row->uuid === (string) $presented['uuid']);
+            if ($unit === null) {
+                return null;
+            }
+
+            $catalog = $this->linkedCatalogDepartment($unit);
+            if ($catalog === null || ! filled($catalog->uuid ?? null)) {
+                return null;
+            }
+
+            return (string) $catalog->uuid;
+        } catch (HrmDatabaseUnavailable $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            Log::warning('hrm.database.catalog_department_lookup_failed', ['message' => $e->getMessage()]);
+
+            return null;
+        }
+    }
+
     public function assignableOrgUnits(): array
     {
         try {
@@ -238,7 +344,11 @@ class HrmEmployeeDirectory
 
     private function orgUnits(): Collection
     {
-        return DB::connection('hrm')
+        if ($this->orgUnitsCache !== null) {
+            return $this->orgUnitsCache;
+        }
+
+        $this->orgUnitsCache = DB::connection('hrm')
             ->table('org_units as ou')
             ->leftJoin('companies as c', 'c.id', '=', 'ou.company_id')
             ->whereNull('ou.deleted_at')
@@ -258,6 +368,14 @@ class HrmEmployeeDirectory
                 'c.code as company_code',
                 'c.name as company_name',
             ]);
+
+        return $this->orgUnitsCache;
+    }
+
+    /** @return Collection<int|string, object> */
+    private function orgUnitsById(): Collection
+    {
+        return $this->orgUnits()->keyBy('id');
     }
 
     /** @return Collection<int|string, string|null> */
@@ -494,14 +612,8 @@ class HrmEmployeeDirectory
     /** @return array<string, mixed> */
     private function presentOrgUnit(object $unit): array
     {
-        $catalog = $this->catalogDepartmentForOrgUnit($unit);
-        $softwareCode = null;
-        if ($catalog !== null && filled($catalog->software_code ?? null)) {
-            $softwareCode = trim((string) $catalog->software_code);
-            if ($softwareCode === '') {
-                $softwareCode = null;
-            }
-        }
+        $catalog = $this->linkedCatalogDepartment($unit);
+        $softwareCode = $this->softwareCodeForOrgUnit($unit, $catalog);
 
         return [
             'uuid' => (string) $unit->uuid,
@@ -525,7 +637,11 @@ class HrmEmployeeDirectory
     /**
      * Danh mục Tổ chức → Phòng ban (HRM `/organization/departments`).
      *
-     * @return array{by_id: Collection<int|string, object>, by_company_code: Collection<string, Collection<int, object>>}
+     * @return array{
+     *   by_id: Collection<int|string, object>,
+     *   by_company_code: array<string, object>,
+     *   by_company_name: array<string, object>
+     * }
      */
     private function hrmCatalogDepartments(): array
     {
@@ -537,43 +653,166 @@ class HrmEmployeeDirectory
             ->table('departments')
             ->whereNull('deleted_at')
             ->where('status', 'active')
-            ->get(['id', 'company_id', 'code', 'software_code']);
+            ->get(['id', 'uuid', 'company_id', 'code', 'name', 'software_code']);
+
+        $byCompanyCode = [];
+        $byCompanyName = [];
+        foreach ($rows as $department) {
+            $companyId = (int) ($department->company_id ?? 0);
+            $codeKey = strtoupper(trim((string) ($department->code ?? '')));
+            if ($codeKey !== '') {
+                $byCompanyCode[$companyId.'|'.$codeKey] = $department;
+            }
+            $nameKey = mb_strtolower(trim((string) ($department->name ?? '')));
+            if ($nameKey !== '') {
+                $byCompanyName[$companyId.'|'.$nameKey] = $department;
+            }
+        }
 
         $this->hrmCatalogDepartments = [
             'by_id' => $rows->keyBy('id'),
-            'by_company_code' => $rows->groupBy(function (object $row): string {
-                $code = strtoupper(trim((string) ($row->code ?? '')));
-
-                return ($row->company_id ?? 0)."\0".$code;
-            }),
+            'by_company_code' => $byCompanyCode,
+            'by_company_name' => $byCompanyName,
         ];
 
         return $this->hrmCatalogDepartments;
     }
 
-    private function catalogDepartmentForOrgUnit(object $unit): ?object
+    /** @return array<string, object> */
+    private function hrmDivisionsByDeptKey(): array
     {
-        $catalog = $this->hrmCatalogDepartments();
+        if ($this->hrmDivisionsByDeptKey !== null) {
+            return $this->hrmDivisionsByDeptKey;
+        }
 
-        $legacyId = $unit->legacy_department_id ?? null;
-        if ($legacyId !== null) {
-            $byLegacy = $catalog['by_id']->get($legacyId) ?? $catalog['by_id']->get((int) $legacyId);
-            if ($byLegacy !== null) {
-                return $byLegacy;
+        $rows = DB::connection('hrm')
+            ->table('divisions')
+            ->where('status', 'active')
+            ->whereNull('deleted_at')
+            ->get(['id', 'department_id', 'code', 'name']);
+
+        $index = [];
+        foreach ($rows as $division) {
+            $deptId = (int) ($division->department_id ?? 0);
+            $nameKey = $this->orgUnitNameKey((string) ($division->name ?? ''));
+            if ($nameKey !== '') {
+                $index[$deptId.'|n:'.$nameKey] = $division;
+            }
+            $codeKey = strtoupper(trim((string) ($division->code ?? '')));
+            if ($codeKey !== '') {
+                $index[$deptId.'|c:'.$codeKey] = $division;
             }
         }
 
-        $orgCode = strtoupper(trim((string) ($unit->code ?? '')));
-        if ($orgCode === '' || ($unit->company_id ?? null) === null) {
+        $this->hrmDivisionsByDeptKey = $index;
+
+        return $this->hrmDivisionsByDeptKey;
+    }
+
+    /**
+     * Khớp phòng ban danh mục HRM — cùng quy tắc sơ đồ tổ chức (legacy, leo cha, mã/tên).
+     */
+    private function linkedCatalogDepartment(object $unit): ?object
+    {
+        $companyId = (int) ($unit->company_id ?? 0);
+        if ($companyId === 0) {
             return null;
         }
 
-        $key = ($unit->company_id ?? 0)."\0".$orgCode;
-        $matches = $catalog['by_company_code']->get($key);
-        if ($matches === null || $matches->count() !== 1) {
+        $catalog = $this->hrmCatalogDepartments();
+        $unitsById = $this->orgUnitsById();
+        $cursor = $unit;
+
+        for ($depth = 0; $depth < 6 && $cursor !== null; $depth++) {
+            $legacyId = $cursor->legacy_department_id ?? null;
+            if ($legacyId !== null) {
+                $department = $catalog['by_id']->get($legacyId) ?? $catalog['by_id']->get((int) $legacyId);
+                if ($department !== null) {
+                    return $department;
+                }
+            }
+
+            if ((string) ($cursor->type ?? '') === 'department') {
+                $codeKey = strtoupper(trim((string) ($cursor->code ?? '')));
+                if ($codeKey !== '') {
+                    $department = $catalog['by_company_code'][$companyId.'|'.$codeKey] ?? null;
+                    if ($department !== null) {
+                        return $department;
+                    }
+                }
+
+                $nameKey = mb_strtolower(trim((string) ($cursor->name ?? '')));
+                if ($nameKey !== '') {
+                    $department = $catalog['by_company_name'][$companyId.'|'.$nameKey] ?? null;
+                    if ($department !== null) {
+                        return $department;
+                    }
+                }
+            }
+
+            $parentId = $cursor->parent_id ?? null;
+            if ($parentId === null) {
+                break;
+            }
+
+            $cursor = $unitsById->get($parentId) ?? $unitsById->get((int) $parentId);
+        }
+
+        return null;
+    }
+
+    private function softwareCodeForOrgUnit(object $unit, ?object $catalogDepartment): ?string
+    {
+        if ((string) ($unit->type ?? '') === 'unit' && $catalogDepartment !== null) {
+            $divisionCode = $this->divisionSoftwareCodeForUnit($catalogDepartment, $unit);
+            if ($divisionCode !== null) {
+                return $divisionCode;
+            }
+        }
+
+        if ($catalogDepartment !== null) {
+            $software = trim((string) ($catalogDepartment->software_code ?? ''));
+            if ($software !== '') {
+                return $software;
+            }
+        }
+
+        return null;
+    }
+
+    private function divisionSoftwareCodeForUnit(object $department, object $unit): ?string
+    {
+        $deptId = (int) ($department->id ?? 0);
+        if ($deptId === 0) {
             return null;
         }
 
-        return $matches->first();
+        $index = $this->hrmDivisionsByDeptKey();
+        $nameKey = $this->orgUnitNameKey((string) ($unit->name ?? ''));
+        $division = null;
+        if ($nameKey !== '') {
+            $division = $index[$deptId.'|n:'.$nameKey] ?? null;
+        }
+        if ($division === null) {
+            $unitCode = strtoupper(trim((string) ($unit->code ?? '')));
+            if ($unitCode !== '') {
+                $division = $index[$deptId.'|c:'.$unitCode] ?? null;
+            }
+        }
+
+        if ($division === null) {
+            return null;
+        }
+
+        $code = trim((string) ($division->code ?? ''));
+
+        return $code !== '' ? $code : null;
+    }
+
+    private function orgUnitNameKey(string $name): string
+    {
+        $key = mb_strtolower(trim($name));
+
+        return (string) preg_replace('/\s+/u', ' ', $key);
     }
 }

@@ -43,7 +43,8 @@ class DepartmentRepository implements DepartmentRepositoryInterface
             ->orderBy('name')
             ->get();
 
-        return $this->dedupeHrmDepartmentsForPicker($rows);
+        // Danh mục HRM đã là 1 dòng / phòng ban — không gộp thêm.
+        return $rows;
     }
 
     public function collapseDuplicatePickerIds(array $ids): array

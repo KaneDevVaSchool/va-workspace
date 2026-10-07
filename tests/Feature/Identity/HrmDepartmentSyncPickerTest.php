@@ -60,8 +60,11 @@ class HrmDepartmentSyncPickerTest extends TestCase
 
         $picker = app(DepartmentRepository::class)->allActiveSyncedFromHrmForPicker();
 
-        $this->assertCount(1, $picker);
-        $this->assertSame('ou-current', $picker->first()->hrm_org_unit_uuid);
+        $this->assertCount(2, $picker);
+        $this->assertSame(
+            ['ou-current', 'ou-stale'],
+            $picker->pluck('hrm_org_unit_uuid')->sort()->values()->all(),
+        );
     }
 
     public function test_sync_prefers_hrm_software_code_for_external_code(): void

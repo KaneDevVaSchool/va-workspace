@@ -10,12 +10,12 @@ use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Models\Department;
 
 /**
- * Đồng bộ OrgUnit VA-HRM → bảng departments (phẳng) để dropdown gán phòng ban
- * và tổng hợp workspace dùng cùng department_id integer.
+ * Đồng bộ danh mục phòng ban HRM (`/organization/departments`) → bảng
+ * departments workspace. `hrm_org_unit_uuid` lưu uuid danh mục HRM.
  */
 class HrmDepartmentSyncService
 {
-    /** Các type HRM mà nhân sự có thể thuộc (bỏ headquarter — thường không gán user). */
+    /** @deprecated Chỉ dùng khi syncDepartmentsFromRecords nhận org unit (test/webhook). */
     private const ASSIGNABLE_ORG_UNIT_TYPES = ['department', 'unit', 'branch'];
 
     public function __construct(
@@ -67,20 +67,36 @@ class HrmDepartmentSyncService
      */
     public function existingDepartmentIdFor(User $user): ?int
     {
-        $hrm = $this->hrmDepartmentFor($user);
-        if ($hrm === null) {
+        if (! self::isConfigured()) {
             return null;
         }
 
-        $id = Department::query()->where('hrm_org_unit_uuid', $hrm['uuid'])->value('id');
+        try {
+            $catalogUuid = $this->directory->catalogDepartmentUuidForEmployee(
+                $user->hrm_employee_uuid,
+                $user->email,
+            );
+        } catch (HrmDatabaseUnavailable $e) {
+            Log::warning('hrm.user_department.lookup_failed', [
+                'user_id' => $user->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($catalogUuid === null) {
+            return null;
+        }
+
+        $id = Department::query()->where('hrm_org_unit_uuid', $catalogUuid)->value('id');
 
         return $id !== null ? (int) $id : null;
     }
 
     /**
-     * Id phòng ban Workspace trùng uuid phòng ban HRM của user. Tạo dòng
-     * danh mục nếu HRM đã có phòng ban mà Workspace chưa đồng bộ. Không ghi
-     * users.department_id.
+     * Id phòng ban Workspace trùng danh mục HRM của user. Tạo dòng nếu chưa
+     * đồng bộ. Không ghi users.department_id.
      */
     public function departmentIdMatchingHrm(User $user): ?int
     {
@@ -93,26 +109,9 @@ class HrmDepartmentSyncService
             return null;
         }
 
-        try {
-            $orgUnit = $this->directory->primaryDepartmentOrgUnit($user->hrm_employee_uuid, $user->email);
-        } catch (HrmDatabaseUnavailable $e) {
-            Log::warning('hrm.user_department.lookup_failed', [
-                'user_id' => $user->id,
-                'message' => $e->getMessage(),
-            ]);
+        $this->syncDepartmentsFromHrm();
 
-            return null;
-        }
-
-        if ($orgUnit === null || ! filled($orgUnit['uuid'] ?? null)) {
-            return null;
-        }
-
-        $this->upsertDepartment($orgUnit);
-
-        $id = Department::query()->where('hrm_org_unit_uuid', (string) $orgUnit['uuid'])->value('id');
-
-        return $id !== null ? (int) $id : null;
+        return $this->existingDepartmentIdFor($user);
     }
 
     /**
@@ -129,15 +128,15 @@ class HrmDepartmentSyncService
         }
 
         try {
-            $orgUnits = $this->directory->assignableOrgUnits();
+            $catalog = $this->directory->organizationDepartments();
         } catch (HrmDatabaseUnavailable $e) {
             Log::warning('hrm.department_sync.failed', ['message' => $e->getMessage()]);
 
             return;
         }
 
-        $this->syncDepartmentsFromRecords($orgUnits);
-        $this->applyManagers($orgUnits);
+        $this->syncDepartmentsFromRecords($catalog);
+        $this->applyManagers($catalog);
     }
 
     /**
@@ -198,7 +197,7 @@ class HrmDepartmentSyncService
         }
 
         try {
-            $this->applyManagers($this->directory->assignableOrgUnits());
+            $this->applyManagers($this->directory->organizationDepartments());
         } catch (HrmDatabaseUnavailable $e) {
             Log::warning('hrm.department_manager_sync.failed', ['message' => $e->getMessage()]);
         }
@@ -220,7 +219,7 @@ class HrmDepartmentSyncService
                 continue;
             }
 
-            $this->applyManagerFromOrgUnit($department, $orgUnit);
+            $this->applyManagerFromOrgUnit($department, $orgUnit); // shape: catalog hoặc org unit
         }
     }
 
