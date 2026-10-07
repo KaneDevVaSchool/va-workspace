@@ -5,6 +5,7 @@ namespace Modules\Project\App\Services;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Modules\Identity\App\Hrm\Services\HrmWorkspaceConstraint;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\ProjectTestCase;
 use Modules\Project\App\Repositories\Contracts\ProjectTestCaseRepositoryInterface;
@@ -20,6 +21,7 @@ class ProjectTestCaseService
 {
     public function __construct(
         private readonly ProjectTestCaseRepositoryInterface $testCases,
+        private readonly HrmWorkspaceConstraint $hrmConstraint,
     ) {}
 
     public function listForProject(Project $project): array
@@ -30,9 +32,20 @@ class ProjectTestCaseService
             ->all();
     }
 
-    /** @param  array<string, mixed>  $data */
-    public function create(Project $project, array $data, User $actor): ProjectTestCase
+    /**
+     * @param  array<string, mixed>  $data
+     * @return ProjectTestCase|array{error: string}
+     */
+    public function create(Project $project, array $data, User $actor): ProjectTestCase|array
     {
+        $hrmError = $this->hrmConstraint->validateOptionalUserId(
+            isset($data['assignee_id']) ? (int) $data['assignee_id'] : null,
+            'Người phụ trách',
+        );
+        if ($hrmError !== null) {
+            return ['error' => $hrmError];
+        }
+
         return $this->testCases->create([
             'project_id' => $project->id,
             'title' => trim($data['title']),
@@ -55,9 +68,20 @@ class ProjectTestCaseService
      * theo đúng người: assignee vs. người tạo).
      *
      * @param  array<string, mixed>  $data
+     * @return ProjectTestCase|array{error: string}
      */
-    public function update(ProjectTestCase $testCase, array $data, User $actor): ProjectTestCase
+    public function update(ProjectTestCase $testCase, array $data, User $actor): ProjectTestCase|array
     {
+        if (array_key_exists('assignee_id', $data)) {
+            $hrmError = $this->hrmConstraint->validateOptionalUserId(
+                $data['assignee_id'] !== null ? (int) $data['assignee_id'] : null,
+                'Người phụ trách',
+            );
+            if ($hrmError !== null) {
+                return ['error' => $hrmError];
+            }
+        }
+
         $payload = ['updated_by' => $actor->id];
 
         foreach (['title', 'steps', 'expected_result', 'actual_result', 'assignee_id', 'link_url', 'phase_id'] as $field) {

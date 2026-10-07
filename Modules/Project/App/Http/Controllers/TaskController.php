@@ -374,6 +374,10 @@ class TaskController extends Controller
             $request->user(),
         );
 
+        if (isset($updated['error'])) {
+            return response()->json(['message' => $updated['error']], 422);
+        }
+
         if ($updated !== []) {
             $recipientName = User::find((int) $validated['delegated_to_employee_id'])?->name
                 ?? '#'.$validated['delegated_to_employee_id'];

@@ -9,6 +9,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Identity\App\Hrm\Services\HrmWorkspaceConstraint;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Project\App\Enums\ProjectEnums;
@@ -52,6 +53,7 @@ class ProjectService
         private readonly TaskAttachmentRepositoryInterface $taskAttachments,
         private readonly TaskAttachmentService $taskAttachmentService,
         private readonly ProjectProgressCalculator $progressCalculator,
+        private readonly HrmWorkspaceConstraint $hrmConstraint,
     ) {}
 
     /**
@@ -293,12 +295,18 @@ class ProjectService
             throw new ProjectOwnerDepartmentMissing;
         }
 
-        $code = $this->projects->nextCode();
-
-        $settings = $this->projects->getSettings();
         $executingIds = $this->normalizeDepartmentIds(
             $data['executing_department_ids'] ?? (isset($data['executing_department_id']) ? [$data['executing_department_id']] : []),
         );
+
+        $hrmError = $this->validateHrmBindings($data, $ownerDepartmentId, $executingIds);
+        if ($hrmError !== null) {
+            return ['error' => $hrmError];
+        }
+
+        $code = $this->projects->nextCode();
+
+        $settings = $this->projects->getSettings();
 
         $this->ensureType($data['type'], $creator->id);
 
@@ -350,6 +358,11 @@ class ProjectService
         $error = $this->validateDateRange($merged);
         if ($error !== null) {
             return ['error' => $error];
+        }
+
+        $hrmError = $this->validateHrmBindingsForUpdate($data, $project);
+        if ($hrmError !== null) {
+            return ['error' => $hrmError];
         }
 
         $payload = ['updated_by' => $updater->id];
@@ -1178,6 +1191,81 @@ class ProjectService
     private function normalizeDepartmentIds(array $rawIds): array
     {
         return array_values(array_unique(array_filter(array_map('intval', $rawIds))));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  list<int>  $executingIds
+     */
+    private function validateHrmBindings(array $data, int $ownerDepartmentId, array $executingIds): ?string
+    {
+        $userIds = $this->normalizeUserIds($data['member_ids'] ?? []);
+        if (! empty($data['lead_user_id'])) {
+            $userIds[] = (int) $data['lead_user_id'];
+        }
+        $userIds = array_merge($userIds, $this->normalizeUserIds($data['follower_ids'] ?? []));
+
+        $message = $this->hrmConstraint->validateUserIds($userIds);
+        if ($message !== null) {
+            return $message;
+        }
+
+        $departmentIds = [$ownerDepartmentId];
+        if (! empty($data['lead_department_id'])) {
+            $departmentIds[] = (int) $data['lead_department_id'];
+        }
+        $departmentIds = array_merge($departmentIds, $executingIds);
+        foreach ($this->normalizeScopes($data['scopes'] ?? []) as $scope) {
+            if (! empty($scope['department_id'])) {
+                $departmentIds[] = (int) $scope['department_id'];
+            }
+        }
+
+        return $this->hrmConstraint->validateDepartmentIds($departmentIds);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function validateHrmBindingsForUpdate(array $data, Project $project): ?string
+    {
+        $userIds = [];
+        if (array_key_exists('member_ids', $data)) {
+            $userIds = array_merge($userIds, $this->normalizeUserIds($data['member_ids'] ?? []));
+        }
+        if (array_key_exists('lead_user_id', $data) && $data['lead_user_id'] !== null) {
+            $userIds[] = (int) $data['lead_user_id'];
+        }
+        if (array_key_exists('follower_ids', $data)) {
+            $userIds = array_merge($userIds, $this->normalizeUserIds($data['follower_ids'] ?? []));
+        }
+
+        $message = $this->hrmConstraint->validateUserIds($userIds);
+        if ($message !== null) {
+            return $message;
+        }
+
+        $departmentIds = [];
+        if (array_key_exists('lead_department_id', $data) && $data['lead_department_id'] !== null) {
+            $departmentIds[] = (int) $data['lead_department_id'];
+        }
+        if (array_key_exists('executing_department_ids', $data) || array_key_exists('executing_department_id', $data)) {
+            $departmentIds = array_merge(
+                $departmentIds,
+                $this->normalizeDepartmentIds(
+                    $data['executing_department_ids'] ?? (isset($data['executing_department_id']) ? [$data['executing_department_id']] : []),
+                ),
+            );
+        }
+        if (array_key_exists('scopes', $data)) {
+            foreach ($this->normalizeScopes($data['scopes'] ?? []) as $scope) {
+                if (! empty($scope['department_id'])) {
+                    $departmentIds[] = (int) $scope['department_id'];
+                }
+            }
+        }
+
+        return $this->hrmConstraint->validateDepartmentIds($departmentIds);
     }
 
     /**

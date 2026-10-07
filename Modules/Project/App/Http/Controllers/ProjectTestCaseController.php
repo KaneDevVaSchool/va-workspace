@@ -33,6 +33,9 @@ class ProjectTestCaseController extends Controller
     public function store(StoreProjectTestCaseRequest $request, Project $project): JsonResponse
     {
         $testCase = $this->service->create($project, $request->validated(), $request->user());
+        if (is_array($testCase) && isset($testCase['error'])) {
+            return response()->json(['message' => $testCase['error']], 422);
+        }
 
         $this->activityLogs->record(
             'project_testcase.create',
@@ -53,6 +56,9 @@ class ProjectTestCaseController extends Controller
         }
 
         $updated = $this->service->update($model, $request->validated(), $request->user());
+        if (is_array($updated) && isset($updated['error'])) {
+            return response()->json(['message' => $updated['error']], 422);
+        }
 
         $this->activityLogs->record(
             'project_testcase.update',

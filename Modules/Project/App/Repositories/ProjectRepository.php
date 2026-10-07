@@ -9,6 +9,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Identity\App\Hrm\Services\HrmWorkspaceConstraint;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\Identity\App\Services\PermissionService;
@@ -30,6 +31,10 @@ use Modules\Project\App\Repositories\Contracts\ProjectRepositoryInterface;
  */
 class ProjectRepository implements ProjectRepositoryInterface
 {
+    public function __construct(
+        private readonly HrmWorkspaceConstraint $hrmConstraint,
+    ) {}
+
     public function paginate(array $filters, int $perPage, int $page, User $viewer): LengthAwarePaginator
     {
         $query = Project::query()->with(Project::WITH_PRESENT);
@@ -59,7 +64,12 @@ class ProjectRepository implements ProjectRepositoryInterface
             return null;
         }
 
-        return User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+        $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+        if (! $this->hrmConstraint->userIsHrmLinked($user)) {
+            return null;
+        }
+
+        return $user;
     }
 
     public function findDepartmentByName(string $name): ?Department
@@ -450,16 +460,20 @@ class ProjectRepository implements ProjectRepositoryInterface
             $query->where('department_id', $departmentId);
         }
 
+        $this->hrmConstraint->restrictToHrmLinkedUsers($query);
+
         return $query->orderBy('name')->get();
     }
 
     public function allUsers(): Collection
     {
-        return User::query()
+        $query = User::query()
             ->select(['id', 'name', 'email', 'avatar_url', 'department_id', 'status'])
-            ->with('department:id,name')
-            ->orderBy('name')
-            ->get();
+            ->with('department:id,name');
+
+        $this->hrmConstraint->restrictToHrmLinkedUsers($query);
+
+        return $query->orderBy('name')->get();
     }
 
     public function findUser(int $id): ?User

@@ -3,6 +3,7 @@
 namespace Modules\Credential\App\Repositories;
 
 use App\Models\User;
+use Modules\Identity\App\Hrm\Services\HrmWorkspaceConstraint;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -17,6 +18,10 @@ use Modules\Credential\App\Repositories\Contracts\CredentialRepositoryInterface;
  */
 class CredentialRepository implements CredentialRepositoryInterface
 {
+    public function __construct(
+        private readonly HrmWorkspaceConstraint $hrmConstraint,
+    ) {}
+
     public function paginate(array $filters, int $perPage, int $page, ?array $departmentScope = null, ?int $viewerId = null): LengthAwarePaginator
     {
         $query = Credential::query()->with(['provider', 'creator', 'googleAccountOwner', 'department']);
@@ -121,7 +126,10 @@ class CredentialRepository implements CredentialRepositoryInterface
 
     public function allUsers(): Collection
     {
-        return User::query()->select(['id', 'name', 'email'])->orderBy('name')->get();
+        $query = User::query()->select(['id', 'name', 'email']);
+        $this->hrmConstraint->restrictToHrmLinkedUsers($query);
+
+        return $query->orderBy('name')->get();
     }
 
     public function allWithCost(?array $departmentScope = null, ?int $viewerId = null): Collection

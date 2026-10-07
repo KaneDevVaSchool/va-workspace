@@ -22,9 +22,7 @@ class DepartmentController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $source = (string) $request->query('source', '');
-
-        if ($source === 'hrm' && HrmDepartmentSyncService::isConfigured()) {
+        if (HrmDepartmentSyncService::isConfigured()) {
             $this->hrmDepartmentSync->syncDepartmentsFromHrm();
             $rows = $this->departments->allActiveSyncedFromHrmForPicker();
         } else {

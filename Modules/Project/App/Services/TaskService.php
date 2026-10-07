@@ -7,6 +7,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Modules\Identity\App\Hrm\Services\HrmWorkspaceConstraint;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Services\NotificationService;
 use Modules\Identity\App\Services\PermissionService;
@@ -39,6 +40,7 @@ class TaskService
         private readonly NotificationService $notifications,
         private readonly SprintRepositoryInterface $sprints,
         private readonly TaskImportanceOptions $importanceOptions,
+        private readonly HrmWorkspaceConstraint $hrmConstraint,
     ) {}
 
     /** @param  array<string, mixed>  $filters */
@@ -591,6 +593,11 @@ class TaskService
         $collaboratorIds = array_map('intval', $data['collaborator_ids'] ?? []);
         unset($data['titles'], $data['watcher_ids'], $data['collaborator_ids'], $data['project_id']);
 
+        $hrmError = $this->hrmConstraint->validateTaskPeople($data, $watcherIds, $collaboratorIds);
+        if ($hrmError !== null) {
+            return ['error' => $hrmError];
+        }
+
         $data = $this->applyQuantityProgress($data);
         if (array_key_exists('priority', $data)) {
             $data['priority'] = TaskEnums::normalizePriority($data['priority'] ?? null);
@@ -719,6 +726,15 @@ class TaskService
         $watcherIds = $hasWatchers ? array_map('intval', $data['watcher_ids'] ?? []) : null;
         $collaboratorIds = $hasCollaborators ? array_map('intval', $data['collaborator_ids'] ?? []) : null;
         unset($data['watcher_ids'], $data['collaborator_ids']);
+
+        $hrmError = $this->hrmConstraint->validateTaskPeople(
+            $data,
+            $hasWatchers ? $watcherIds : null,
+            $hasCollaborators ? $collaboratorIds : null,
+        );
+        if ($hrmError !== null) {
+            return ['error' => $hrmError];
+        }
 
         $data = $this->applyQuantityProgress($data, $task);
         if (array_key_exists('priority', $data)) {
@@ -999,10 +1015,18 @@ class TaskService
      * @param  list<int>  $taskIds
      * @return list<Task>
      */
+    /**
+     * @return list<Task>|array{error: string}
+     */
     public function bulkDelegate(array $taskIds, int $delegatedToEmployeeId, User $editor): array
     {
         if ($taskIds === []) {
             return [];
+        }
+
+        $hrmError = $this->hrmConstraint->validateOptionalUserId($delegatedToEmployeeId, 'Người nhận chuyển giao');
+        if ($hrmError !== null) {
+            return ['error' => $hrmError];
         }
 
         $recipient = $this->projects->findUser($delegatedToEmployeeId);
