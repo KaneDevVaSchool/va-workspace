@@ -56,6 +56,7 @@ class EvaluationServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 \Modules\Evaluation\App\Console\RepairCach2Command::class,
+                \Modules\Evaluation\App\Console\RemapEvaluationHrmDepartmentsCommand::class,
             ]);
         }
     }
