@@ -59,11 +59,6 @@ class HrmEmployeeDirectory
     }
 
     /**
-     * @return array<string, mixed>|null
-     *
-     * @throws HrmDatabaseUnavailable
-     */
-    /**
      * Phòng ban của phân công chính: org unit type department, hoặc cha của bộ phận.
      *
      * @return array<string, mixed>|null
@@ -100,6 +95,52 @@ class HrmEmployeeDirectory
             Log::warning('hrm.database.department_lookup_failed', ['message' => $e->getMessage()]);
 
             throw new HrmDatabaseUnavailable('Không đọc được phòng ban nhân sự từ cơ sở dữ liệu HRM.');
+        }
+    }
+
+    /**
+     * Org unit gán được nhân sự, đọc từ MySQL. Kèm trưởng đơn vị nếu có.
+     *
+     * @return list<array<string, mixed>>
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    public function assignableOrgUnits(): array
+    {
+        try {
+            $units = $this->orgUnits();
+            $managerIds = $units->pluck('manager_employee_id')->filter()->unique()->values();
+            $managers = $managerIds->isEmpty()
+                ? collect()
+                : DB::connection('hrm')
+                    ->table('employees')
+                    ->whereIn('id', $managerIds->all())
+                    ->whereNull('deleted_at')
+                    ->get(['id', 'uuid', 'full_name', 'company_email'])
+                    ->keyBy('id');
+
+            return $units
+                ->filter(fn (object $unit) => in_array((string) $unit->type, self::ASSIGNABLE_ORG_UNIT_TYPES, true))
+                ->map(function (object $unit) use ($managers) {
+                    $presented = $this->presentOrgUnit($unit);
+                    $manager = $managers->get($unit->manager_employee_id)
+                        ?? $managers->get((int) $unit->manager_employee_id);
+                    $presented['manager'] = $manager === null ? null : [
+                        'uuid' => (string) $manager->uuid,
+                        'full_name' => (string) ($manager->full_name ?? ''),
+                        'email' => filled($manager->company_email) ? (string) $manager->company_email : null,
+                    ];
+
+                    return $presented;
+                })
+                ->values()
+                ->all();
+        } catch (HrmDatabaseUnavailable $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            Log::warning('hrm.database.org_units_failed', ['message' => $e->getMessage()]);
+
+            throw new HrmDatabaseUnavailable('Không đọc được đơn vị tổ chức từ cơ sở dữ liệu HRM.');
         }
     }
 

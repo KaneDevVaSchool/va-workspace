@@ -3,10 +3,8 @@
 namespace Modules\Identity\App\Hrm\Services;
 
 use App\Models\User;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Modules\Identity\App\Hrm\Exceptions\HrmApiUnavailable;
 use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Models\Department;
@@ -21,23 +19,18 @@ class HrmDepartmentSyncService
     private const ASSIGNABLE_ORG_UNIT_TYPES = ['department', 'unit', 'branch'];
 
     public function __construct(
-        private readonly HrmApiClient $hrmApi,
         private readonly HrmEmployeeDirectory $directory,
     ) {}
 
     public static function isConfigured(): bool
     {
-        return filled(config('services.hrm.api_base_url'))
-            && filled(config('services.hrm.api_token'));
+        return HrmEmployeeDirectory::isConfigured();
     }
 
     /**
-     * Kéo toàn bộ org-units từ HRM và upsert departments local. Không làm gì
-     * khi chưa cấu hình HRM; lỗi API được log, không chặn trang (fallback DB local).
-     */
-    /**
      * Tài khoản chưa có phòng ban Workspace thì gán đúng phòng ban HRM
      * (không gán bộ phận). Không ghi đè phòng ban đã gán tay.
+     * Đọc MySQL HRM, không gọi API.
      */
     public function ensureUserDepartment(User $user): void
     {
@@ -77,14 +70,15 @@ class HrmDepartmentSyncService
         }
 
         try {
-            $orgUnits = $this->hrmApi->listAllOrgUnits();
-        } catch (HrmApiUnavailable $e) {
+            $orgUnits = $this->directory->assignableOrgUnits();
+        } catch (HrmDatabaseUnavailable $e) {
             Log::warning('hrm.department_sync.failed', ['message' => $e->getMessage()]);
 
             return;
         }
 
         $this->syncDepartmentsFromRecords($orgUnits);
+        $this->applyManagers($orgUnits);
     }
 
     /**
@@ -112,8 +106,7 @@ class HrmDepartmentSyncService
     }
 
     /**
-     * Cập nhật trưởng đơn vị (manager) từ GET /org-units/{uuid} — list index
-     * không trả manager. TTL cache giống bulk sync nhân viên.
+     * Cập nhật trưởng đơn vị từ MySQL HRM (org_units.manager_employee_id).
      */
     public function syncDepartmentManagersFromHrm(): void
     {
@@ -121,54 +114,26 @@ class HrmDepartmentSyncService
             return;
         }
 
-        $ttlSeconds = max(60, (int) config('services.hrm.department_manager_sync_ttl', 900));
-        $doneKey = 'hrm:department_manager_sync:done';
-
-        if (Cache::has($doneKey)) {
-            return;
-        }
-
-        $lock = Cache::lock('hrm:department_manager_sync:lock', min(600, $ttlSeconds));
-        if (! $lock->get()) {
-            return;
-        }
-
         try {
-            if (Cache::has($doneKey)) {
-                return;
-            }
-
-            $this->runManagerSync();
-            Cache::put($doneKey, true, $ttlSeconds);
-        } finally {
-            $lock->release();
+            $this->applyManagers($this->directory->assignableOrgUnits());
+        } catch (HrmDatabaseUnavailable $e) {
+            Log::warning('hrm.department_manager_sync.failed', ['message' => $e->getMessage()]);
         }
     }
 
-    private function runManagerSync(): void
+    /**
+     * @param  list<array<string, mixed>>  $orgUnits
+     */
+    private function applyManagers(array $orgUnits): void
     {
-        $departments = Department::query()
-            ->whereNotNull('hrm_org_unit_uuid')
-            ->get(['id', 'hrm_org_unit_uuid', 'hrm_manager_employee_uuid', 'hrm_manager_name', 'hrm_manager_email']);
-
-        foreach ($departments as $department) {
-            $uuid = (string) $department->hrm_org_unit_uuid;
+        foreach ($orgUnits as $orgUnit) {
+            $uuid = (string) ($orgUnit['uuid'] ?? '');
             if ($uuid === '') {
                 continue;
             }
 
-            try {
-                $orgUnit = $this->hrmApi->getOrgUnit($uuid);
-            } catch (HrmApiUnavailable $e) {
-                Log::warning('hrm.department_manager_sync.failed', [
-                    'org_unit_uuid' => $uuid,
-                    'message' => $e->getMessage(),
-                ]);
-
-                return;
-            }
-
-            if ($orgUnit === null) {
+            $department = Department::query()->where('hrm_org_unit_uuid', $uuid)->first();
+            if ($department === null) {
                 continue;
             }
 
@@ -198,19 +163,8 @@ class HrmDepartmentSyncService
 
         $employeeUuid = (string) $manager['uuid'];
         $name = trim((string) ($manager['full_name'] ?? ''));
-        $email = User::query()->where('hrm_employee_uuid', $employeeUuid)->value('email');
-
-        if ($email === null) {
-            try {
-                $employee = $this->hrmApi->getEmployee($employeeUuid);
-                $email = $employee?->companyEmail;
-            } catch (HrmApiUnavailable $e) {
-                Log::debug('hrm.department_manager_sync.email_lookup_failed', [
-                    'employee_uuid' => $employeeUuid,
-                    'message' => $e->getMessage(),
-                ]);
-            }
-        }
+        $email = User::query()->where('hrm_employee_uuid', $employeeUuid)->value('email')
+            ?? (filled($manager['email'] ?? null) ? (string) $manager['email'] : null);
 
         $department->forceFill([
             'hrm_manager_employee_uuid' => $employeeUuid,

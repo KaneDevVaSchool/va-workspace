@@ -510,6 +510,9 @@ async function loadDepartments() {
 }
 
 async function load() {
+  if (!canViewAll.value && !auth.user?.department?.id) {
+    await auth.fetchMe({ force: true });
+  }
   if (!canLoadCriteria.value) {
     allCriteria.value = [];
     criterionTypes.value = [];
@@ -698,6 +701,17 @@ watch(departmentFilter, () => {
   selected.value = null;
   load();
 });
+watch(
+  () => auth.user?.department?.id ?? null,
+  (id) => {
+    if (!id) return;
+    if (String(departmentFilter.value) !== String(id)) {
+      departmentFilter.value = String(id);
+      return;
+    }
+    load();
+  },
+);
 
 onMounted(async () => {
   document.addEventListener('keydown', handleKeydown);

@@ -14,6 +14,7 @@ use Modules\Evaluation\App\Http\Requests\UpdateEvaluationCriteriaRequest;
 use Modules\Evaluation\App\Http\Requests\UpdateTaskScoreLevelsRequest;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
 use Modules\Evaluation\App\Services\EvaluationCriteriaService;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
 use Modules\Identity\App\Models\ActivityLog;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
@@ -45,11 +46,18 @@ class EvaluationCriteriaController extends Controller
         private readonly EvaluationCriteriaService $service,
         private readonly PermissionService $permissions,
         private readonly ActivityLogService $activityLogs,
+        private readonly HrmDepartmentSyncService $hrmDepartments,
     ) {}
 
     private function departmentIdOrFail(Request $request): int|JsonResponse
     {
-        $departmentId = $request->user()?->department_id;
+        $user = $request->user();
+        if ($user !== null && $user->department_id === null) {
+            $this->hrmDepartments->ensureUserDepartment($user);
+            $user->refresh();
+        }
+
+        $departmentId = $user?->department_id;
 
         return $departmentId
             ? (int) $departmentId

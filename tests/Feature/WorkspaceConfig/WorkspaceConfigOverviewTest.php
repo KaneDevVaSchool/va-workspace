@@ -3,8 +3,10 @@
 namespace Tests\Feature\WorkspaceConfig;
 
 use App\Models\User;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Models\Department;
@@ -133,11 +135,56 @@ class WorkspaceConfigOverviewTest extends TestCase
         $this->seed(RoleSeeder::class);
 
         config([
-            'services.hrm.api_base_url' => 'https://hrm.test',
-            'services.hrm.api_token' => 'test-token',
-            'services.hrm.department_manager_sync_ttl' => 60,
+            'database.connections.hrm' => [
+                'driver' => 'sqlite',
+                'database' => ':memory:',
+                'prefix' => 'va_hrm_',
+                'foreign_key_constraints' => false,
+            ],
         ]);
-        \Illuminate\Support\Facades\Cache::flush();
+        DB::purge('hrm');
+        $schema = Schema::connection('hrm');
+        $schema->create('companies', function (Blueprint $table): void {
+            $table->bigIncrements('id');
+            $table->uuid('uuid')->nullable();
+            $table->string('code')->nullable();
+            $table->string('name')->nullable();
+        });
+        $schema->create('employees', function (Blueprint $table): void {
+            $table->bigIncrements('id');
+            $table->uuid('uuid');
+            $table->string('full_name')->nullable();
+            $table->string('company_email')->nullable();
+            $table->timestamp('deleted_at')->nullable();
+        });
+        $schema->create('org_units', function (Blueprint $table): void {
+            $table->bigIncrements('id');
+            $table->uuid('uuid')->nullable();
+            $table->unsignedBigInteger('parent_id')->nullable();
+            $table->unsignedBigInteger('company_id')->nullable();
+            $table->string('type')->nullable();
+            $table->string('code')->nullable();
+            $table->string('name')->nullable();
+            $table->string('short_name')->nullable();
+            $table->string('status')->nullable();
+            $table->unsignedBigInteger('manager_employee_id')->nullable();
+            $table->timestamp('deleted_at')->nullable();
+        });
+        DB::connection('hrm')->table('employees')->insert([
+            'id' => 7,
+            'uuid' => 'emp-mgr-1',
+            'full_name' => 'Trưởng HRM',
+            'company_email' => 'truong.hrm@vaschools.edu.vn',
+        ]);
+        DB::connection('hrm')->table('org_units')->insert([
+            'id' => 1,
+            'uuid' => 'ou-mgr-1',
+            'type' => 'department',
+            'code' => 'HRM',
+            'name' => 'Phòng HRM',
+            'status' => 'active',
+            'manager_employee_id' => 7,
+        ]);
 
         $dept = Department::query()->create([
             'code' => 'D-HRM',
@@ -150,50 +197,6 @@ class WorkspaceConfigOverviewTest extends TestCase
             'code' => 'LOCAL-ONLY',
             'name' => 'Phòng seed local',
             'is_active' => true,
-        ]);
-
-        Http::fake([
-            'https://hrm.test/api/v1/org-units/ou-mgr-1' => Http::response([
-                'data' => [
-                    'uuid' => 'ou-mgr-1',
-                    'code' => 'HRM',
-                    'name' => 'Phòng HRM',
-                    'type' => 'department',
-                    'status' => 'active',
-                    'manager' => [
-                        'uuid' => 'emp-mgr-1',
-                        'code' => 'NV001',
-                        'full_name' => 'Trưởng HRM',
-                    ],
-                ],
-            ], 200),
-            'https://hrm.test/api/v1/org-units?per_page=200' => Http::response([
-                'data' => [
-                    [
-                        'uuid' => 'ou-mgr-1',
-                        'code' => 'HRM',
-                        'name' => 'Phòng HRM',
-                        'type' => 'department',
-                        'status' => 'active',
-                    ],
-                ],
-                'meta' => ['cursor' => ['next' => null, 'prev' => null, 'count' => 1, 'per_page' => 200]],
-            ], 200),
-            'https://hrm.test/api/v1/employees/emp-mgr-1' => Http::response([
-                'data' => [
-                    'uuid' => 'emp-mgr-1',
-                    'code' => 'NV001',
-                    'full_name' => 'Trưởng HRM',
-                    'status' => 'active',
-                    'company_email' => 'truong.hrm@vaschools.edu.vn',
-                    'manager_uuid' => null,
-                    'manager_code' => null,
-                    'manager_email' => null,
-                    'primary_assignment' => null,
-                    'concurrent_assignments' => [],
-                ],
-            ], 200),
-            'https://hrm.test/api/v1/employees/emp-mgr-1/manager' => Http::response(['data' => null], 200),
         ]);
 
         $admin = $this->makeUser([], ['super_admin']);

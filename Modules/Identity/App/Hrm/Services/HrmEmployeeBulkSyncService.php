@@ -29,7 +29,8 @@ class HrmEmployeeBulkSyncService
 
     public static function isConfigured(): bool
     {
-        return HrmDepartmentSyncService::isConfigured();
+        return filled(config('services.hrm.api_base_url'))
+            && filled(config('services.hrm.api_token'));
     }
 
     /**
