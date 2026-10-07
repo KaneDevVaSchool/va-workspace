@@ -7,6 +7,7 @@ use Illuminate\Database\Seeder;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
 use Modules\Evaluation\App\Models\EvaluationCriterionType;
 use Modules\Evaluation\App\Models\EvaluationEvent;
+use Modules\Evaluation\Database\Seeders\Concerns\ResolvesHrmSyncedDepartments;
 use Modules\Identity\App\Models\Department;
 
 /**
@@ -14,10 +15,18 @@ use Modules\Identity\App\Models\Department;
  * Hiệu lực từ 01/10/2025; điểm tháng khởi đầu 100 (áp dụng khi chấm điểm).
  *
  * Idempotent: updateOrCreate theo (department_id, name). Tắt tiêu chí demo cũ của NS.
+ *
+ * Production (HRM): phòng active có external_code HCNS (và legacy NS nếu trùng mã).
  */
 class HrNsEvaluationCriteriaSeeder extends Seeder
 {
-    private const DEPARTMENT_CODE = 'NS';
+    use ResolvesHrmSyncedDepartments;
+
+    /** @var list<string> */
+    private const HRM_EXTERNAL_CODES = ['HCNS', 'NS'];
+
+    /** @var list<string> */
+    private const LEGACY_DEPARTMENT_CODES = ['NS', 'HCNS'];
 
     /** @var list<string> */
     private const DEMO_CRITERION_NAMES = [
@@ -33,15 +42,27 @@ class HrNsEvaluationCriteriaSeeder extends Seeder
 
     public function run(): void
     {
-        $department = Department::query()->where('code', self::DEPARTMENT_CODE)->first();
-        if ($department === null) {
-            $this->command?->warn('Không tìm thấy phòng ban code NS — bỏ qua HrNsEvaluationCriteriaSeeder.');
+        $departments = $this->resolveSeedTargetDepartments(
+            self::HRM_EXTERNAL_CODES,
+            self::LEGACY_DEPARTMENT_CODES,
+        );
+
+        if ($departments->isEmpty()) {
+            $this->seedLineWarn('Không tìm thấy phòng HCNS đồng bộ HRM — bỏ qua HrNsEvaluationCriteriaSeeder.');
 
             return;
         }
 
-        $departmentId = (int) $department->id;
         $createdBy = User::query()->orderBy('id')->value('id');
+
+        foreach ($departments as $department) {
+            $this->seedForDepartment($department, $createdBy);
+        }
+    }
+
+    private function seedForDepartment(Department $department, ?int $createdBy): void
+    {
+        $departmentId = (int) $department->id;
 
         EvaluationCriteria::query()
             ->where('department_id', $departmentId)
@@ -87,10 +108,11 @@ class HrNsEvaluationCriteriaSeeder extends Seeder
         }
 
         $this->command?->info(sprintf(
-            'Đã seed %d tiêu chí đánh giá cho phòng %s (id=%d).',
+            'Đã seed %d tiêu chí đánh giá cho phòng %s (id=%d, external_code=%s).',
             count($this->criteria()),
             $department->name,
             $departmentId,
+            $department->external_code ?? '—',
         ));
     }
 

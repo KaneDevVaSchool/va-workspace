@@ -4,8 +4,11 @@ namespace Modules\Evaluation\Database\Seeders;
 
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
 use Modules\Evaluation\App\Models\EvaluationCriterionType;
+use Modules\Evaluation\Database\Seeders\Concerns\ResolvesHrmSyncedDepartments;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
 use Modules\Identity\App\Models\Department;
 
 /**
@@ -16,10 +19,25 @@ use Modules\Identity\App\Models\Department;
  * và điểm thưởng đột xuất (A2).
  *
  * Idempotent: updateOrCreate theo (department_id, name). Tắt tiêu chí demo cũ của CNTT.
+ *
+ * Production (HRM): seed Phòng Công nghệ cho đúng 2 pháp nhân VM và HV.
  */
 class HrCnttEvaluationCriteriaSeeder extends Seeder
 {
-    private const DEPARTMENT_CODE = 'CNTT';
+    use ResolvesHrmSyncedDepartments;
+
+    /**
+     * @var array<string, list<string>>
+     *
+     * Mã phần mềm HRM theo công ty (companies.code) — ưu tiên mã PCN riêng, fallback CN.
+     */
+    private const TECH_DEPARTMENT_BY_COMPANY = [
+        'VM' => ['VM_PCN', 'CN'],
+        'HV' => ['HV_PCN', 'CN'],
+    ];
+
+    /** @var list<string> */
+    private const LEGACY_DEPARTMENT_CODES = ['CNTT'];
 
     /** @var list<string> */
     private const DEMO_CRITERION_NAMES = [
@@ -35,15 +53,35 @@ class HrCnttEvaluationCriteriaSeeder extends Seeder
 
     public function run(): void
     {
-        $department = Department::query()->where('code', self::DEPARTMENT_CODE)->first();
-        if ($department === null) {
-            $this->command?->warn('Không tìm thấy phòng ban code CNTT — bỏ qua HrCnttEvaluationCriteriaSeeder.');
+        $departments = $this->resolveTechDepartmentsForVmAndHv();
+
+        if ($departments->isEmpty()) {
+            $this->seedLineWarn('Không tìm thấy phòng Công nghệ (VM/HV) đồng bộ HRM — bỏ qua HrCnttEvaluationCriteriaSeeder.');
 
             return;
         }
 
-        $departmentId = (int) $department->id;
         $createdBy = User::query()->orderBy('id')->value('id');
+
+        foreach ($departments as $department) {
+            $this->seedForDepartment($department, $createdBy);
+        }
+    }
+
+    /** @return Collection<int, Department> */
+    private function resolveTechDepartmentsForVmAndHv(): Collection
+    {
+        if (HrmDepartmentSyncService::isConfigured()) {
+            return $this->resolveOneHrmDepartmentPerCompany(self::TECH_DEPARTMENT_BY_COMPANY);
+        }
+
+        return $this->resolveSeedTargetDepartments([], self::LEGACY_DEPARTMENT_CODES);
+    }
+
+    private function seedForDepartment(Department $department, ?int $createdBy): void
+    {
+        $department->loadMissing('company:id,code');
+        $departmentId = (int) $department->id;
 
         EvaluationCriteria::query()
             ->where('department_id', $departmentId)
@@ -86,11 +124,14 @@ class HrCnttEvaluationCriteriaSeeder extends Seeder
             );
         }
 
+        $companyCode = $department->company?->code ?? '—';
         $this->command?->info(sprintf(
-            'Đã seed %d tiêu chí đánh giá cho phòng %s (id=%d).',
+            'Đã seed %d tiêu chí đánh giá — %s / pháp nhân %s (id=%d, external_code=%s).',
             count($this->criteria()),
             $department->name,
+            $companyCode,
             $departmentId,
+            $department->external_code ?? '—',
         ));
     }
 

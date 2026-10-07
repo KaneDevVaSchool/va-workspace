@@ -6,18 +6,28 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Modules\Evaluation\App\Models\EvaluationCriteria;
 use Modules\Evaluation\App\Models\EvaluationCriterionType;
+use Modules\Evaluation\Database\Seeders\Concerns\ResolvesHrmSyncedDepartments;
+use Illuminate\Support\Collection;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Identity\App\Hrm\Services\HrmWorkspaceConstraint;
 use Modules\Identity\App\Models\Department;
 
 /**
  * Loại + tiêu chí đánh giá mẫu theo từng phòng ban.
  * Idempotent: updateOrCreate theo (department_id, code/name).
+ *
+ * Khi HRM cấu hình: chỉ seed phòng ban active đã đồng bộ (cùng ràng buộc /manager/evaluation).
  */
 class EvaluationCriteriaSeeder extends Seeder
 {
+    use ResolvesHrmSyncedDepartments;
+
     public function run(): void
     {
-        $departments = Department::query()->orderBy('id')->get();
+        $departments = $this->targetDepartments();
         if ($departments->isEmpty()) {
+            $this->seedLineWarn('Không có phòng ban hợp lệ để seed tiêu chí demo.');
+
             return;
         }
 
@@ -26,6 +36,28 @@ class EvaluationCriteriaSeeder extends Seeder
         foreach ($departments as $department) {
             $this->seedForDepartment((int) $department->id, $createdBy);
         }
+    }
+
+    /** @return Collection<int, Department> */
+    private function targetDepartments(): Collection
+    {
+        if (HrmDepartmentSyncService::isConfigured()) {
+            app(HrmDepartmentSyncService::class)->syncDepartmentsFromHrm();
+
+            $constraint = app(HrmWorkspaceConstraint::class);
+
+            return Department::query()
+                ->whereNotNull('hrm_org_unit_uuid')
+                ->where('is_active', true)
+                ->orderBy('id')
+                ->get()
+                ->filter(function (Department $department) use ($constraint): bool {
+                    return $constraint->validateDepartmentIds([(int) $department->id]) === null;
+                })
+                ->values();
+        }
+
+        return Department::query()->orderBy('id')->get();
     }
 
     private function seedForDepartment(int $departmentId, ?int $createdBy): void
