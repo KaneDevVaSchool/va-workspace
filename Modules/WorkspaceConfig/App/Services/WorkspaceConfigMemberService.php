@@ -53,7 +53,7 @@ class WorkspaceConfigMemberService
 
     public function presentMember(User $user): array
     {
-        $user->loadMissing(['department', 'team', 'roles']);
+        $user->loadMissing(['department', 'team', 'roles', 'company', 'concurrentPositions']);
 
         return [
             'id' => $user->id,
@@ -76,6 +76,25 @@ class WorkspaceConfigMemberService
                 ])
                 ->values()
                 ->all(),
+            // Hồ sơ hiển thị đồng bộ từ VA-HRM — không dùng để phân quyền.
+            'employee_code' => $user->employee_code,
+            'job_title_name' => $user->job_title_name,
+            'job_position_level' => $user->job_position_level,
+            'company' => $user->company ? [
+                'id' => $user->company->id,
+                'code' => $user->company->code,
+                'name' => $user->company->name,
+            ] : null,
+            'manager_display_name' => $user->manager_display_name,
+            'concurrent_positions' => $user->concurrentPositions
+                ->map(fn ($position) => [
+                    'job_title_name' => $position->job_title_name,
+                    'company_name' => $position->company_name,
+                    'org_unit_name' => $position->org_unit_name,
+                ])
+                ->values()
+                ->all(),
+            'hrm_synced_at' => $user->hrm_synced_at?->toIso8601String(),
         ];
     }
 

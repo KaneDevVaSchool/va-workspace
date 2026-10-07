@@ -52,7 +52,7 @@ class UserRepository implements UserRepositoryInterface
     {
         return User::query()
             ->where('department_id', $departmentId)
-            ->with(['team', 'roles'])
+            ->with(['team', 'roles', 'company', 'concurrentPositions'])
             ->orderBy('name')
             ->get();
     }
@@ -61,7 +61,7 @@ class UserRepository implements UserRepositoryInterface
     {
         return User::query()
             ->whereNotNull('department_id')
-            ->with(['department', 'team', 'roles'])
+            ->with(['department', 'team', 'roles', 'company', 'concurrentPositions'])
             ->orderBy('name')
             ->get();
     }
@@ -151,7 +151,7 @@ class UserRepository implements UserRepositoryInterface
     {
         return User::query()
             ->whereNull('department_id')
-            ->with('roles')
+            ->with(['roles', 'company', 'concurrentPositions'])
             ->orderBy('name')
             ->get();
     }

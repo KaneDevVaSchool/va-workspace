@@ -3,10 +3,10 @@
 // superadmin/workspace-config/unassigned — trang QUẢN LÝ NHÂN SỰ workspace,
 // dựng lại theo mẫu trang /employees của va-hrm nhưng bằng token + quy tắc UI
 // của dự án này:
-//   PageHeader → dải thẻ KPI bấm lọc nhanh → panel danh sách (tiêu đề +
-//   thanh công cụ: số dòng/trang, tìm kiếm, menu Bộ lọc, menu Cột) → bảng có
-//   lọc/sắp xếp ngay trên tiêu đề từng cột + chip bộ lọc đang áp dụng +
-//   chọn nhiều dòng để gán phòng ban hàng loạt → panel chi tiết đẩy ngang.
+//   PageHeader → dải thẻ KPI bấm lọc nhanh → panel danh sách → bảng cột
+//   cùng nghĩa với /employees của VA-HRM (họ tên + mã, chức danh, pháp nhân,
+//   cấp trên, phòng ban, trạng thái) → panel chi tiết tách hồ sơ HRM và
+//   phòng ban workspace.
 // Không badge nền màu, không border theo hướng, không title/tooltip.
 // Endpoint gán phòng ban trả về bản ghi vừa đổi để patch thẳng vào state.
 //
@@ -31,18 +31,21 @@ import {
   UNASSIGNED_COLUMNS,
   UNASSIGNED_FILTERS,
   ZOOM_STORAGE_KEY,
+  companyName,
+  concurrentTitleText,
   departmentName,
   loadVisibility,
   memberRoles,
   memberRolesText,
   memberStatusLabel,
+  personMetaText,
   saveVisibility,
   teamName,
 } from '../constants/unassignedMembers.js';
 
 const CELL_PAD_X = 32;
 const COL_EXTRA = 24;
-const AVATAR_EXTRA = 44;
+const AVATAR_EXTRA = 48;
 const SELECT_COL_PX = 44;
 let measureCtx = null;
 let wrapObserver = null;
@@ -193,9 +196,15 @@ const roleFilterOptions = computed(() => {
 /* ── Lọc + sắp xếp ─────────────────────────────────────────────────────── */
 
 function headerFilterText(member, key) {
-  if (key === 'person') return `${member.name ?? ''} ${member.email ?? ''}`;
+  if (key === 'person') return `${member.name ?? ''} ${personMetaText(member)}`;
   if (key === 'email') return member.email ?? '';
+  if (key === 'employee_code') return member.employee_code ?? '';
+  if (key === 'job_title') return member.job_title_name ?? '';
+  if (key === 'position_level') return member.job_position_level ?? '';
+  if (key === 'company') return companyName(member);
+  if (key === 'manager') return member.manager_display_name ?? '';
   if (key === 'department') return departmentName(member);
+  if (key === 'concurrent') return concurrentTitleText(member);
   if (key === 'team') return teamName(member);
   if (key === 'roles') return memberRolesText(member);
   return '';
@@ -211,7 +220,19 @@ const filteredMembers = computed(() => {
 
   const rows = allMembers.value.filter((member) => {
     if (q) {
-      const hay = `${member.name ?? ''} ${member.email ?? ''} ${departmentName(member)} ${teamName(member)}`
+      const hay = [
+        member.name,
+        personMetaText(member),
+        member.job_title_name,
+        member.job_position_level,
+        member.manager_display_name,
+        companyName(member),
+        departmentName(member),
+        concurrentTitleText(member),
+        teamName(member),
+      ]
+        .filter(Boolean)
+        .join(' ')
         .toLowerCase();
       if (!hay.includes(q)) return false;
     }
@@ -241,6 +262,15 @@ const filteredMembers = computed(() => {
 function compareBy(a, b, key) {
   if (key === 'person') return (a.name ?? '').localeCompare(b.name ?? '', 'vi');
   if (key === 'email') return (a.email ?? '').localeCompare(b.email ?? '', 'vi');
+  if (key === 'employee_code') return (a.employee_code ?? '').localeCompare(b.employee_code ?? '', 'vi');
+  if (key === 'job_title') return (a.job_title_name ?? '').localeCompare(b.job_title_name ?? '', 'vi');
+  if (key === 'position_level') {
+    return (a.job_position_level ?? '').localeCompare(b.job_position_level ?? '', 'vi');
+  }
+  if (key === 'company') return companyName(a).localeCompare(companyName(b), 'vi');
+  if (key === 'manager') {
+    return (a.manager_display_name ?? '').localeCompare(b.manager_display_name ?? '', 'vi');
+  }
   if (key === 'department') return departmentName(a).localeCompare(departmentName(b), 'vi');
   if (key === 'team') return teamName(a).localeCompare(teamName(b), 'vi');
   if (key === 'status') return (a.status ?? '').localeCompare(b.status ?? '');
@@ -576,13 +606,25 @@ async function saveBulkDepartment() {
 function cellText(member, key) {
   if (key === 'person') return member.name || '—';
   if (key === 'email') return member.email || '—';
+  if (key === 'employee_code') return member.employee_code || '—';
+  if (key === 'job_title') return member.job_title_name || '—';
+  if (key === 'position_level') return member.job_position_level || '—';
+  if (key === 'company') return companyName(member) || '—';
+  if (key === 'manager') return member.manager_display_name || '—';
   if (key === 'department') return departmentName(member) || 'Chưa gán phòng ban';
+  if (key === 'concurrent') return concurrentTitleText(member) || '—';
   if (key === 'team') return teamName(member) || '—';
   if (key === 'roles') return memberRolesText(member);
   if (key === 'status') return memberStatusLabel(member.status);
   if (key === 'id') return String(member.id ?? '—');
-  if (key === 'actions') return 'Xem chi tiết';
   return '—';
+}
+
+function formatSyncedAt(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
 }
 
 function loadZoom() {
@@ -652,7 +694,9 @@ function columnContentWidth(key, fonts) {
 
   for (const member of pageMembers.value) {
     if (key === 'person') {
-      maxW = Math.max(maxW, measureText(cellText(member, 'person'), fonts.cell) + AVATAR_EXTRA);
+      const nameW = measureText(cellText(member, 'person'), fonts.cell);
+      const metaW = measureText(personMetaText(member), fonts.muted);
+      maxW = Math.max(maxW, Math.max(nameW, metaW) + AVATAR_EXTRA);
     } else {
       maxW = Math.max(maxW, measureText(cellText(member, key), fonts.cell));
     }
@@ -823,7 +867,7 @@ onBeforeUnmount(() => {
   <section class="wc-people">
     <PageHeader
       title="Nhân sự"
-      subtitle="Danh sách toàn bộ nhân sự workspace và phòng ban đang phụ trách"
+      subtitle="Hồ sơ lấy từ VA-HRM. Cột phòng ban là phòng ban workspace đang gán."
       icon="users"
       :breadcrumbs="[
         { label: 'Trang chủ', to: { name: 'home' } },
@@ -863,7 +907,7 @@ onBeforeUnmount(() => {
                   v-model="query"
                   type="search"
                   class="wc-people__input wc-people__input--search"
-                  placeholder="Vd. Nguyễn Văn An, an.nguyen@vaschools.edu.vn"
+                  placeholder="Tên, mã nhân viên hoặc email"
                 />
               </div>
             </div>
@@ -1094,7 +1138,7 @@ onBeforeUnmount(() => {
                       @change="toggleSelect(member.id)"
                     />
                   </td>
-                  <td v-for="col in shownColumns" :key="col.key">
+                  <td v-for="col in shownColumns" :key="col.key" :class="{ 'wc-people__td-person': col.key === 'person' }">
                     <template v-if="col.key === 'person'">
                       <span class="wc-people__person">
                         <span class="wc-people__avatar" aria-hidden="true">
@@ -1114,7 +1158,14 @@ onBeforeUnmount(() => {
                             class="wc-people__avatar-fallback"
                           />
                         </span>
-                        <span class="wc-people__person-name">{{ member.name }}</span>
+                        <span class="wc-people__person-text">
+                          <span class="wc-people__person-name">{{ member.name }}</span>
+                          <span v-if="personMetaText(member)" class="wc-people__person-meta">
+                            <span v-if="member.employee_code" class="wc-people__code">{{ member.employee_code }}</span>
+                            <span v-if="member.employee_code && member.email" aria-hidden="true"> · </span>
+                            <span v-if="member.email">{{ member.email }}</span>
+                          </span>
+                        </span>
                       </span>
                     </template>
                     <template v-else-if="col.key === 'department'">
@@ -1124,16 +1175,9 @@ onBeforeUnmount(() => {
                     <template v-else-if="col.key === 'status'">
                       <StatusBadge :on="member.status === 'active'" :label="memberStatusLabel(member.status)" />
                     </template>
-                    <template v-else-if="col.key === 'actions'">
-                      <button
-                        type="button"
-                        class="wc-people__row-btn"
-                        @click.stop="inspect(member)"
-                      >
-                        Xem chi tiết
-                      </button>
-                    </template>
-                    <span v-else>{{ cellText(member, col.key) }}</span>
+                    <span v-else :class="{ 'wc-people__muted': cellText(member, col.key) === '—', 'wc-people__code': col.key === 'employee_code' && member.employee_code }">
+                      {{ cellText(member, col.key) }}
+                    </span>
                   </td>
                 </tr>
               </tbody>
@@ -1184,63 +1228,112 @@ onBeforeUnmount(() => {
             </span>
             <span class="wc-people__side-person-text">
               <span class="wc-people__side-lead">{{ selected.name }}</span>
-              <span v-if="selected.email" class="wc-people__muted">{{ selected.email }}</span>
+              <span v-if="personMetaText(selected)" class="wc-people__person-meta">
+                <span v-if="selected.employee_code" class="wc-people__code">{{ selected.employee_code }}</span>
+                <span v-if="selected.employee_code && selected.email" aria-hidden="true"> · </span>
+                <span v-if="selected.email">{{ selected.email }}</span>
+              </span>
             </span>
           </div>
 
-          <div class="wc-people__rows">
-            <div class="wc-people__row">
-              <span class="wc-people__row-label">Email</span>
-              <span class="wc-people__row-value">{{ selected.email || '—' }}</span>
-            </div>
-            <div class="wc-people__row">
-              <span class="wc-people__row-label">Phòng ban hiện tại</span>
-              <span class="wc-people__row-value">
-                <span v-if="selected.department">{{ selected.department.name }}</span>
-                <span v-else class="wc-people__muted">Chưa gán phòng ban</span>
-              </span>
-            </div>
-            <div class="wc-people__row">
-              <span class="wc-people__row-label">Nhóm</span>
-              <span class="wc-people__row-value">{{ selected.team?.name || '—' }}</span>
-            </div>
-            <div class="wc-people__row">
-              <span class="wc-people__row-label">Vai trò</span>
-              <span class="wc-people__row-value">{{ memberRolesText(selected) }}</span>
-            </div>
-            <div class="wc-people__row">
-              <span class="wc-people__row-label">Trạng thái</span>
-              <span class="wc-people__row-value">
-                <StatusBadge :on="selected.status === 'active'" :label="memberStatusLabel(selected.status)" />
-              </span>
-            </div>
-            <div class="wc-people__row">
-              <span class="wc-people__row-label">Mã thành viên</span>
-              <span class="wc-people__row-value">{{ selected.id }}</span>
+          <div class="wc-people__side-block">
+            <h3 class="wc-people__side-kicker">Hồ sơ VA-HRM</h3>
+            <div class="wc-people__rows">
+              <div class="wc-people__row">
+                <span class="wc-people__row-label">Mã nhân viên</span>
+                <span class="wc-people__row-value">{{ selected.employee_code || '—' }}</span>
+              </div>
+              <div class="wc-people__row">
+                <span class="wc-people__row-label">Chức danh</span>
+                <span class="wc-people__row-value">{{ selected.job_title_name || '—' }}</span>
+              </div>
+              <div class="wc-people__row">
+                <span class="wc-people__row-label">Cấp bậc</span>
+                <span class="wc-people__row-value">{{ selected.job_position_level || '—' }}</span>
+              </div>
+              <div class="wc-people__row">
+                <span class="wc-people__row-label">Pháp nhân</span>
+                <span class="wc-people__row-value">{{ selected.company?.name || '—' }}</span>
+              </div>
+              <div class="wc-people__row">
+                <span class="wc-people__row-label">Cấp trên trực tiếp</span>
+                <span class="wc-people__row-value">{{ selected.manager_display_name || '—' }}</span>
+              </div>
+              <div class="wc-people__row">
+                <span class="wc-people__row-label">Kiêm nhiệm</span>
+                <span class="wc-people__row-value">
+                  <template v-if="selected.concurrent_positions?.length">
+                    <span
+                      v-for="(position, index) in selected.concurrent_positions"
+                      :key="`${position.job_title_name}-${index}`"
+                      class="wc-people__stack-line"
+                    >
+                      {{ position.job_title_name }}
+                      <template v-if="position.org_unit_name"> · {{ position.org_unit_name }}</template>
+                    </span>
+                  </template>
+                  <template v-else>—</template>
+                </span>
+              </div>
+              <div v-if="formatSyncedAt(selected.hrm_synced_at)" class="wc-people__row">
+                <span class="wc-people__row-label">Đồng bộ lúc</span>
+                <span class="wc-people__row-value">{{ formatSyncedAt(selected.hrm_synced_at) }}</span>
+              </div>
             </div>
           </div>
 
-          <div class="wc-people__side-form">
-            <label class="wc-people__label" for="wc-people-dept-assign">Đổi phòng ban</label>
-            <select
-              id="wc-people-dept-assign"
-              v-model="departmentAssignId"
-              class="wc-people__input"
-              :disabled="departmentAssignSaving"
-            >
-              <option value="" disabled>Chọn phòng ban</option>
-              <option v-for="item in departmentOptions" :key="item.id" :value="String(item.id)">
-                {{ item.name }}
-              </option>
-            </select>
-            <button
-              type="button"
-              class="wc-people__btn wc-people__btn--primary wc-people__btn--block"
-              :disabled="departmentAssignSaving || departmentAssignUnchanged || departmentAssignId === ''"
-              @click="saveMemberDepartment"
-            >
-              {{ departmentAssignSaving ? 'Đang lưu…' : 'Lưu phòng ban' }}
-            </button>
+          <div class="wc-people__side-block">
+            <h3 class="wc-people__side-kicker">Workspace</h3>
+            <div class="wc-people__rows">
+              <div class="wc-people__row">
+                <span class="wc-people__row-label">Email</span>
+                <span class="wc-people__row-value">{{ selected.email || '—' }}</span>
+              </div>
+              <div class="wc-people__row">
+                <span class="wc-people__row-label">Phòng ban</span>
+                <span class="wc-people__row-value">
+                  <span v-if="selected.department">{{ selected.department.name }}</span>
+                  <span v-else>Chưa gán phòng ban</span>
+                </span>
+              </div>
+              <div class="wc-people__row">
+                <span class="wc-people__row-label">Nhóm</span>
+                <span class="wc-people__row-value">{{ selected.team?.name || '—' }}</span>
+              </div>
+              <div class="wc-people__row">
+                <span class="wc-people__row-label">Vai trò</span>
+                <span class="wc-people__row-value">{{ memberRolesText(selected) }}</span>
+              </div>
+              <div class="wc-people__row">
+                <span class="wc-people__row-label">Trạng thái</span>
+                <span class="wc-people__row-value">
+                  <StatusBadge :on="selected.status === 'active'" :label="memberStatusLabel(selected.status)" />
+                </span>
+              </div>
+            </div>
+
+            <div class="wc-people__side-form">
+              <label class="wc-people__label" for="wc-people-dept-assign">Đổi phòng ban</label>
+              <select
+                id="wc-people-dept-assign"
+                v-model="departmentAssignId"
+                class="wc-people__input"
+                :disabled="departmentAssignSaving"
+              >
+                <option value="" disabled>Chọn phòng ban</option>
+                <option v-for="item in departmentOptions" :key="item.id" :value="String(item.id)">
+                  {{ item.name }}
+                </option>
+              </select>
+              <button
+                type="button"
+                class="wc-people__btn wc-people__btn--primary wc-people__btn--block"
+                :disabled="departmentAssignSaving || departmentAssignUnchanged || departmentAssignId === ''"
+                @click="saveMemberDepartment"
+              >
+                {{ departmentAssignSaving ? 'Đang lưu…' : 'Lưu phòng ban' }}
+              </button>
+            </div>
           </div>
         </aside>
       </Transition>
@@ -1676,10 +1769,15 @@ onBeforeUnmount(() => {
   padding: 0.5rem 1rem;
   color: var(--color-text);
   font-size: 0.8125rem;
+  vertical-align: middle;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   box-shadow: 0 1px 0 var(--color-border);
+}
+
+.wc-people__td-person {
+  white-space: normal;
 }
 
 .wc-people__table tbody tr {
@@ -1694,43 +1792,50 @@ onBeforeUnmount(() => {
   background: var(--color-primary-50);
 }
 
-.wc-people__row-btn {
-  height: 1.625rem;
-  padding: 0 0.5rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-primary-900);
-  font-family: var(--font-family-base);
-  font-size: 0.75rem;
-  font-weight: 600;
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  cursor: pointer;
-}
-
-.wc-people__row-btn:hover {
-  background: var(--color-primary-50);
-}
-
 .wc-people__person {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 0.625rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wc-people__person-text {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
 .wc-people__person-name {
   overflow: hidden;
+  color: var(--color-text);
+  font-weight: 600;
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.wc-people__person-meta {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wc-people__code {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .wc-people__avatar {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2rem;
+  height: 2rem;
   border-radius: var(--radius-full);
   background: var(--color-primary-900);
   overflow: hidden;
@@ -1868,10 +1973,19 @@ onBeforeUnmount(() => {
   line-height: 1.3;
 }
 
-.wc-people__side-person-text .wc-people__muted {
-  font-size: 0.8125rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.wc-people__side-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.wc-people__side-kicker {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .wc-people__rows {
@@ -1881,7 +1995,7 @@ onBeforeUnmount(() => {
 
 .wc-people__row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
   padding: 0.5rem 0;
@@ -1894,19 +2008,28 @@ onBeforeUnmount(() => {
   font-size: 0.8125rem;
 }
 
+.wc-people__row-label::after {
+  content: ':';
+}
+
 .wc-people__row-value {
   min-width: 0;
   color: var(--color-text);
   font-size: 0.8125rem;
+  font-style: italic;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.wc-people__stack-line {
+  display: block;
 }
 
 .wc-people__side-form {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding-top: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .wc-people-side-enter-active,

@@ -470,7 +470,12 @@ class WorkspaceConfigOverviewTest extends TestCase
         $this->seed(RoleSeeder::class);
 
         $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
-        $member = $this->makeUser(['department_id' => null], ['member']);
+        $member = $this->makeUser([
+            'department_id' => null,
+            'employee_code' => 'NV100',
+            'job_title_name' => 'Giáo viên',
+            'manager_display_name' => 'Trần Quản lý',
+        ], ['member']);
         $admin = $this->makeUser([], ['super_admin']);
 
         $this->actingAs($admin)
@@ -478,7 +483,11 @@ class WorkspaceConfigOverviewTest extends TestCase
                 'department_id' => $dept->id,
             ])
             ->assertOk()
-            ->assertJsonPath('member.department.id', $dept->id);
+            ->assertJsonPath('member.department.id', $dept->id)
+            ->assertJsonPath('member.employee_code', 'NV100')
+            ->assertJsonPath('member.job_title_name', 'Giáo viên')
+            ->assertJsonPath('member.manager_display_name', 'Trần Quản lý')
+            ->assertJsonPath('member.concurrent_positions', []);
 
         $this->assertDatabaseHas('users', [
             'id' => $member->id,
