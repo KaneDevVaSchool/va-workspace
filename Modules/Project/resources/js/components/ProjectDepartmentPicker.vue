@@ -18,6 +18,10 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 
+function deptHrmCode(department) {
+  return department?.hrm_code || department?.external_code || department?.code || '';
+}
+
 const selectedIds = computed(() => new Set(props.modelValue.map((id) => String(id))));
 const query = ref('');
 const open = ref(false);
@@ -33,7 +37,8 @@ const matches = computed(() => {
   const list = props.departments.filter((d) => {
     if (selectedIds.value.has(String(d.id))) return false;
     if (!q) return true;
-    return (d.name || '').toLowerCase().includes(q) || (d.code || '').toLowerCase().includes(q);
+    const code = deptHrmCode(d).toLowerCase();
+    return (d.name || '').toLowerCase().includes(q) || code.includes(q);
   });
   if (q) return list;
   return list.slice(0, 40);
@@ -115,7 +120,7 @@ function onKeydown(event) {
       <li v-for="item in selectedDepartments" :key="item.id" class="proj-dept-picker__row">
         <span class="proj-dept-picker__dot" aria-hidden="true" />
         <span class="proj-dept-picker__name">{{ item.name }}</span>
-        <span v-if="item.code" class="proj-dept-picker__meta">{{ item.code }}</span>
+        <span v-if="deptHrmCode(item)" class="proj-dept-picker__meta">{{ deptHrmCode(item) }}</span>
         <button
           type="button"
           class="proj-dept-picker__remove"
@@ -161,7 +166,7 @@ function onKeydown(event) {
           @mousedown.prevent="pick(item)"
         >
           <span>{{ item.name }}</span>
-          <span v-if="item.code" class="proj-dept-picker__option-meta">{{ item.code }}</span>
+          <span v-if="deptHrmCode(item)" class="proj-dept-picker__option-meta">{{ deptHrmCode(item) }}</span>
         </li>
         <li v-if="matches.length === 0" class="proj-dept-picker__empty">Không tìm thấy.</li>
       </ul>

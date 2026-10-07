@@ -189,7 +189,9 @@ const emptyState = computed(() => {
     return {
       icon: 'clipboardCheck',
       title: 'Chưa có tiêu chí',
-      text: 'Nhấp vào cấu hình phòng ban để cài đặt tiêu chí phòng ban của Anh/Chị.',
+      text: selectedDepartmentName.value
+        ? `${selectedDepartmentName.value} chưa có tiêu chí đánh giá.`
+        : 'Nhấp vào cấu hình phòng ban để cài đặt tiêu chí phòng ban của Anh/Chị.',
       action: auth.can('workspace_config.view_department')
         ? { label: 'Cấu hình phòng ban', to: { name: 'manager.workspace-config.hub' } }
         : null,
@@ -741,7 +743,9 @@ onBeforeUnmount(() => {
           ? (selectedDepartmentName
             ? `Tiêu chí đang áp dụng — ${selectedDepartmentName}.`
             : 'Chọn phòng ban để xem tiêu chí đánh giá.')
-          : 'Tiêu chí đang áp dụng cho phòng ban của bạn. Bấm một dòng để xem thang điểm và hành vi.'
+          : (selectedDepartmentName
+            ? `Tiêu chí đang áp dụng — ${selectedDepartmentName}. Bấm một dòng để xem thang điểm và hành vi.`
+            : 'Tài khoản chưa có phòng ban trên HRM.')
       "
       export-label="Dữ liệu"
       :export-options="canLoadCriteria ? exportOptions : []"

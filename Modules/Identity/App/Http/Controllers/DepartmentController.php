@@ -4,6 +4,8 @@ namespace Modules\Identity\App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 
@@ -15,14 +17,25 @@ class DepartmentController extends Controller
 {
     public function __construct(private readonly DepartmentRepositoryInterface $departments) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $source = (string) $request->query('source', '');
+
+        if ($source === 'hrm' && HrmDepartmentSyncService::isConfigured()) {
+            $rows = $this->departments->allSyncedFromHrm()->filter(
+                fn (Department $d): bool => $d->is_active,
+            );
+        } else {
+            $rows = $this->departments->allActive();
+        }
+
         return response()->json([
-            'departments' => $this->departments->allActive()
+            'departments' => $rows
                 ->map(fn (Department $d) => [
                     'id' => $d->id,
                     'code' => $d->code,
                     'name' => $d->name,
+                    'hrm_code' => $d->external_code,
                 ])
                 ->values(),
         ]);

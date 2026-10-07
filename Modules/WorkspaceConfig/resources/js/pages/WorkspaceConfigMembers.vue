@@ -284,7 +284,7 @@ const hiddenActiveFilterLabels = computed(() =>
 
 const hasVisibleFilterFields = computed(() => MEMBER_FILTERS.some((item) => visibleFilters[item.key]));
 
-const hasDepartment = computed(() => Boolean(auth.user?.department?.id));
+const hasDepartment = computed(() => Boolean(auth.user?.department?.uuid || auth.user?.department?.name || auth.user?.department?.id));
 
 const emptyTableMessage = computed(() => {
   if (!hasDepartment.value) return 'Tài khoản chưa gắn với phòng ban nào.';

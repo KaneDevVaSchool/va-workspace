@@ -549,7 +549,10 @@ function toggleRule(key) {
             <div v-else-if="ownerDepartment" class="proj-org__locked">
               <span class="proj-org__locked-dot" aria-hidden="true" />
               <span class="proj-org__locked-name">{{ ownerDepartment.name || '—' }}</span>
-              <span v-if="ownerDepartment.code" class="proj-org__locked-meta">{{ ownerDepartment.code }}</span>
+              <span
+                v-if="ownerDepartment.hrm_code || ownerDepartment.code"
+                class="proj-org__locked-meta"
+              >{{ ownerDepartment.hrm_code || ownerDepartment.code }}</span>
               <AppIcon name="lock" :size="14" class="proj-org__locked-icon" />
             </div>
           </div>

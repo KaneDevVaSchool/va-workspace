@@ -206,7 +206,7 @@ const scaleView = ref("weight");
 let flashTimer = null;
 let editVersion = 0;
 
-const hasDepartment = computed(() => Boolean(auth.user?.department?.id));
+const hasDepartment = computed(() => Boolean(auth.user?.department?.uuid || auth.user?.department?.name || auth.user?.department?.id));
 const canManage = computed(() => auth.can("evaluation.manage_department"));
 const departmentName = computed(
     () => auth.user?.department?.name || "Chưa gắn phòng ban",

@@ -8,6 +8,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Project\App\Enums\ProjectEnums;
@@ -282,7 +283,8 @@ class ProjectService
         // hoặc muốn tạo dự án thay mặt phòng ban khác — cho phép chọn thẳng
         // owner_department_id trong request (mục C). Role khác vẫn bị khoá
         // theo phòng ban của chính mình, bỏ qua field này nếu có gửi lên.
-        $ownerDepartmentId = $creator->department_id;
+        $ownerDepartmentId = app(HrmDepartmentSyncService::class)->departmentIdMatchingHrm($creator)
+            ?? $creator->department_id;
         if (($data['owner_department_id'] ?? null) && $this->userCanChooseOwnerDepartment($creator)) {
             $ownerDepartmentId = (int) $data['owner_department_id'];
         }
@@ -1234,6 +1236,11 @@ class ProjectService
             return null;
         }
 
-        return ['id' => $department->id, 'name' => $department->name];
+        return [
+            'id' => $department->id,
+            'name' => $department->name,
+            'code' => $department->code,
+            'hrm_code' => $department->external_code,
+        ];
     }
 }

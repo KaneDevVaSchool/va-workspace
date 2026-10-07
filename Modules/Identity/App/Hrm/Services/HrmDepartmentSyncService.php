@@ -78,6 +78,44 @@ class HrmDepartmentSyncService
     }
 
     /**
+     * Id phòng ban Workspace trùng uuid phòng ban HRM của user. Tạo dòng
+     * danh mục nếu HRM đã có phòng ban mà Workspace chưa đồng bộ. Không ghi
+     * users.department_id.
+     */
+    public function departmentIdMatchingHrm(User $user): ?int
+    {
+        $existing = $this->existingDepartmentIdFor($user);
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        if (! self::isConfigured()) {
+            return null;
+        }
+
+        try {
+            $orgUnit = $this->directory->primaryDepartmentOrgUnit($user->hrm_employee_uuid, $user->email);
+        } catch (HrmDatabaseUnavailable $e) {
+            Log::warning('hrm.user_department.lookup_failed', [
+                'user_id' => $user->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($orgUnit === null || ! filled($orgUnit['uuid'] ?? null)) {
+            return null;
+        }
+
+        $this->upsertDepartment($orgUnit);
+
+        $id = Department::query()->where('hrm_org_unit_uuid', (string) $orgUnit['uuid'])->value('id');
+
+        return $id !== null ? (int) $id : null;
+    }
+
+    /**
      * Không gán department Workspace. Phòng ban của tài khoản đọc từ HRM.
      */
     public function ensureUserDepartment(User $user): void

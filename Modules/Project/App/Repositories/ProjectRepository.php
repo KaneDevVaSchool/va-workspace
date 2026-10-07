@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Identity\App\Services\ViewAsService;
@@ -549,7 +550,10 @@ class ProjectRepository implements ProjectRepositoryInterface
      */
     private function whereViewerDepartment(Builder $query, User $viewer): Builder
     {
-        $departmentId = $viewer->department_id ? (int) $viewer->department_id : null;
+        $departmentId = app(HrmDepartmentSyncService::class)->existingDepartmentIdFor($viewer);
+        if ($departmentId === null && $viewer->department_id) {
+            $departmentId = (int) $viewer->department_id;
+        }
         if ($departmentId === null) {
             return $query->whereRaw('0 = 1');
         }

@@ -12,7 +12,7 @@ import { layoutPayload } from '../constants/sidebarMenus.js';
 
 const hub = inject('workspaceConfigHub', null);
 const auth = useAuthStore();
-const hasDepartment = computed(() => Boolean(auth.user?.department?.id));
+const hasDepartment = computed(() => Boolean(auth.user?.department?.uuid || auth.user?.department?.name || auth.user?.department?.id));
 
 const menus = ref([]);
 const sections = ref([]);

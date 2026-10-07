@@ -160,7 +160,7 @@ const dialogTypeGroupCollapsed = reactive({});
 
 // ─── computed ─────────────────────────────────────────────────────────────────
 
-const hasDepartment = computed(() => Boolean(auth.user?.department?.id));
+const hasDepartment = computed(() => Boolean(auth.user?.department?.uuid || auth.user?.department?.name || auth.user?.department?.id));
 
 const canManage = computed(() => auth.can("evaluation.manage_department"));
 

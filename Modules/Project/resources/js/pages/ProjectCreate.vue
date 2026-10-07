@@ -153,7 +153,7 @@ async function loadMeta() {
   try {
     const [optionsRes, departmentsRes, usersRes, labelsRes] = await Promise.all([
       window.axios.get('/api/project/options'),
-      window.axios.get('/manager/departments'),
+      window.axios.get('/manager/departments', { params: { source: 'hrm' } }),
       window.axios.get('/api/project/assignable-users'),
       window.axios.get('/api/project/labels'),
     ]);

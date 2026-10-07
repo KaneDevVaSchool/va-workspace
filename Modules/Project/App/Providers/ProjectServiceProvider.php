@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Modules\Project\App\Console\Commands\AutoStartProjectsCommand;
+use Modules\Project\App\Console\Commands\MapProjectHrmDepartmentsCommand;
 use Modules\Project\App\Console\Commands\NotifyTasksDueSoonCommand;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\Task;
@@ -95,6 +96,7 @@ class ProjectServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 AutoStartProjectsCommand::class,
+                MapProjectHrmDepartmentsCommand::class,
                 NotifyTasksDueSoonCommand::class,
             ]);
         }
