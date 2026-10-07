@@ -3,6 +3,7 @@
 namespace Modules\Identity\App\Services;
 
 use App\Models\User;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
 use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\GlobalMenuSectionConfigRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\GlobalMenuVisibilityRepositoryInterface;
@@ -21,10 +22,12 @@ class AuthenticatedUserPresenter
         private readonly DepartmentSidebarConfigRepositoryInterface $sidebarConfigs,
         private readonly GlobalMenuVisibilityRepositoryInterface $globalMenus,
         private readonly GlobalMenuSectionConfigRepositoryInterface $globalMenuSections,
+        private readonly HrmDepartmentSyncService $hrmDepartments,
     ) {}
 
     public function forUser(User $user): array
     {
+        $this->hrmDepartments->ensureUserDepartment($user);
         $this->superAdminBootstrap->ensureRolesForUser($user);
         $this->defaultMemberRole->ensureForUser($user);
         $user->unsetRelation('roles');

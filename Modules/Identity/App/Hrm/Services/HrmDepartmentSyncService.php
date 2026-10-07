@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Modules\Identity\App\Hrm\Exceptions\HrmApiUnavailable;
+use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Models\Department;
 
@@ -19,7 +20,10 @@ class HrmDepartmentSyncService
     /** Các type HRM mà nhân sự có thể thuộc (bỏ headquarter — thường không gán user). */
     private const ASSIGNABLE_ORG_UNIT_TYPES = ['department', 'unit', 'branch'];
 
-    public function __construct(private readonly HrmApiClient $hrmApi) {}
+    public function __construct(
+        private readonly HrmApiClient $hrmApi,
+        private readonly HrmEmployeeDirectory $directory,
+    ) {}
 
     public static function isConfigured(): bool
     {
@@ -31,6 +35,41 @@ class HrmDepartmentSyncService
      * Kéo toàn bộ org-units từ HRM và upsert departments local. Không làm gì
      * khi chưa cấu hình HRM; lỗi API được log, không chặn trang (fallback DB local).
      */
+    /**
+     * Tài khoản chưa có phòng ban Workspace thì gán đúng phòng ban HRM
+     * (không gán bộ phận). Không ghi đè phòng ban đã gán tay.
+     */
+    public function ensureUserDepartment(User $user): void
+    {
+        if ($user->department_id !== null || ! HrmEmployeeDirectory::isConfigured()) {
+            return;
+        }
+
+        try {
+            $orgUnit = $this->directory->primaryDepartmentOrgUnit($user->hrm_employee_uuid, $user->email);
+        } catch (HrmDatabaseUnavailable $e) {
+            Log::warning('hrm.user_department.ensure_failed', [
+                'user_id' => $user->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        if ($orgUnit === null) {
+            return;
+        }
+
+        $this->upsertDepartment($orgUnit);
+
+        $department = Department::query()->where('hrm_org_unit_uuid', $orgUnit['uuid'])->first();
+        if ($department === null) {
+            return;
+        }
+
+        $user->forceFill(['department_id' => $department->id])->save();
+    }
+
     public function syncDepartmentsFromHrm(): void
     {
         if (! self::isConfigured()) {

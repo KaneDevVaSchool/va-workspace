@@ -221,5 +221,9 @@ class HrmEmployeeDirectoryTest extends TestCase
         $this->assertSame('Phần mềm', $unitEmployee['org_unit_name']);
         $this->assertSame('Phòng Công nghệ', $unitEmployee['department_name']);
         $this->assertSame('Phần mềm', $unitEmployee['division_name']);
+
+        $department = (new HrmEmployeeDirectory)->primaryDepartmentOrgUnit('emp-unit', null);
+        $this->assertSame('Phòng Công nghệ', $department['name']);
+        $this->assertSame('ou-1', $department['uuid']);
     }
 }

@@ -63,6 +63,46 @@ class HrmEmployeeDirectory
      *
      * @throws HrmDatabaseUnavailable
      */
+    /**
+     * Phòng ban của phân công chính: org unit type department, hoặc cha của bộ phận.
+     *
+     * @return array<string, mixed>|null
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    public function primaryDepartmentOrgUnit(?string $employeeUuid, ?string $email): ?array
+    {
+        if (($employeeUuid === null || $employeeUuid === '') && ($email === null || $email === '')) {
+            return null;
+        }
+
+        try {
+            $query = DB::connection('hrm')
+                ->table('employees as e')
+                ->leftJoin('employee_assignments as a', 'a.open_primary_employee_id', '=', 'e.id')
+                ->whereNull('e.deleted_at');
+
+            if ($employeeUuid !== null && $employeeUuid !== '') {
+                $query->where('e.uuid', $employeeUuid);
+            } else {
+                $query->whereRaw('LOWER(e.company_email) = ?', [strtolower((string) $email)]);
+            }
+
+            $orgUnitId = $query->value('a.org_unit_id');
+            if (! $orgUnitId) {
+                return null;
+            }
+
+            $unit = $this->departmentAncestor($orgUnitId);
+
+            return $unit !== null ? $this->presentOrgUnit($unit) : null;
+        } catch (Throwable $e) {
+            Log::warning('hrm.database.department_lookup_failed', ['message' => $e->getMessage()]);
+
+            throw new HrmDatabaseUnavailable('Không đọc được phòng ban nhân sự từ cơ sở dữ liệu HRM.');
+        }
+    }
+
     public function findEmployee(string $uuid): ?array
     {
         foreach ($this->load()['employees'] as $employee) {
@@ -342,6 +382,46 @@ class HrmEmployeeDirectory
             }
 
             $unitId = $unit->parent_id;
+        }
+
+        return null;
+    }
+
+    private function departmentAncestor(mixed $orgUnitId): ?object
+    {
+        $current = $orgUnitId;
+        $guard = 0;
+
+        while ($current && $guard++ < 12) {
+            $unit = DB::connection('hrm')
+                ->table('org_units as ou')
+                ->leftJoin('companies as c', 'c.id', '=', 'ou.company_id')
+                ->where('ou.id', $current)
+                ->whereNull('ou.deleted_at')
+                ->first([
+                    'ou.id',
+                    'ou.uuid',
+                    'ou.parent_id',
+                    'ou.type',
+                    'ou.code',
+                    'ou.name',
+                    'ou.short_name',
+                    'ou.status',
+                    'ou.manager_employee_id',
+                    'c.uuid as company_uuid',
+                    'c.code as company_code',
+                    'c.name as company_name',
+                ]);
+
+            if ($unit === null) {
+                return null;
+            }
+
+            if ((string) $unit->type === 'department') {
+                return $unit;
+            }
+
+            $current = $unit->parent_id;
         }
 
         return null;
