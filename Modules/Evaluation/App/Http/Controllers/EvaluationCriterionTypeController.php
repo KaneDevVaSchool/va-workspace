@@ -7,7 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Evaluation\App\Http\Requests\StoreEvaluationCriterionTypeRequest;
 use Modules\Evaluation\App\Services\EvaluationCriterionTypeService;
-use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Evaluation\App\Services\EvaluationDepartmentResolver;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
 
@@ -17,36 +17,17 @@ class EvaluationCriterionTypeController extends Controller
         private readonly EvaluationCriterionTypeService $service,
         private readonly PermissionService $permissions,
         private readonly ActivityLogService $activityLogs,
-        private readonly HrmDepartmentSyncService $hrmDepartments,
+        private readonly EvaluationDepartmentResolver $departments,
     ) {}
 
     private function departmentIdOrFail(Request $request): int|JsonResponse
     {
-        $user = $request->user();
-        $departmentId = $user !== null
-            ? $this->hrmDepartments->existingDepartmentIdFor($user)
-            : null;
-
-        return $departmentId
-            ? (int) $departmentId
-            : response()->json(['message' => 'Tài khoản chưa có phòng ban trên HRM.'], 422);
+        return $this->departments->idOrFail($request);
     }
 
     public function index(Request $request): JsonResponse
     {
-        $queryDeptId = $request->query('department_id');
-
-        if ($queryDeptId !== null) {
-            if (! $this->permissions->allows($request->user(), 'workspace_config.view_all')) {
-                return response()->json(['message' => 'Không có quyền xem loại tiêu chí phòng ban khác.'], 403);
-            }
-
-            return response()->json([
-                'types' => $this->service->listForDepartment((int) $queryDeptId),
-            ]);
-        }
-
-        $departmentId = $this->departmentIdOrFail($request);
+        $departmentId = $this->departments->resolveCriterionTypesForRead($request);
         if ($departmentId instanceof JsonResponse) {
             return $departmentId;
         }

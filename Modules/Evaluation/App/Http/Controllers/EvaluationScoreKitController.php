@@ -10,6 +10,7 @@ use Modules\Evaluation\App\Http\Requests\UpdateEvaluationScoreKitRequest;
 use Modules\Evaluation\App\Models\EvaluationScoreKit;
 use Modules\Evaluation\App\Repositories\Contracts\EvaluationScoreKitRepositoryInterface;
 use Modules\Evaluation\App\Services\EvaluationConfigVersionService;
+use Modules\Evaluation\App\Services\EvaluationDepartmentResolver;
 use Modules\Evaluation\App\Services\EvaluationScoreKitService;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
@@ -72,6 +73,7 @@ class EvaluationScoreKitController extends Controller
         private readonly PermissionService $permissions,
         private readonly ActivityLogService $activityLogs,
         private readonly EvaluationScoreKitRepositoryInterface $kits,
+        private readonly EvaluationDepartmentResolver $departments,
     ) {}
 
     /**
@@ -92,9 +94,9 @@ class EvaluationScoreKitController extends Controller
             return response()->json(['message' => 'Bạn cần đăng nhập.'], 401);
         }
 
-        $departmentId = (int) $request->query('department_id');
-        if ($departmentId <= 0) {
-            return response()->json(['message' => 'Thiếu department_id.'], 422);
+        $departmentId = $this->departments->assertHrmSyncedDepartment((int) $request->query('department_id'));
+        if ($departmentId instanceof JsonResponse) {
+            return $departmentId;
         }
 
         $kitScales = $this->service->taskScalesForDepartment($departmentId);
@@ -194,11 +196,7 @@ class EvaluationScoreKitController extends Controller
 
     private function departmentIdOrFail(Request $request): int|JsonResponse
     {
-        $departmentId = $request->user()?->department_id;
-
-        return $departmentId
-            ? (int) $departmentId
-            : response()->json(['message' => 'Tài khoản chưa gắn với phòng ban nào.'], 422);
+        return $this->departments->idOrFail($request);
     }
 
     /**

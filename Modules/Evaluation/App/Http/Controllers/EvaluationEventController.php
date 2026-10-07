@@ -9,6 +9,7 @@ use Modules\Evaluation\App\Http\Requests\RejectEvaluationEventRequest;
 use Modules\Evaluation\App\Http\Requests\StoreEvaluationEventRequest;
 use Modules\Evaluation\App\Http\Requests\UpdateEvaluationEventRequest;
 use Modules\Evaluation\App\Models\EvaluationEvent;
+use Modules\Evaluation\App\Services\EvaluationDepartmentResolver;
 use Modules\Evaluation\App\Services\EvaluationEventService;
 use Modules\Evaluation\App\Services\EvaluationSummaryService;
 use Modules\Identity\App\Services\ActivityLogService;
@@ -30,6 +31,7 @@ class EvaluationEventController extends Controller
         private readonly EvaluationSummaryService $summaries,
         private readonly PermissionService $permissions,
         private readonly ActivityLogService $activityLogs,
+        private readonly EvaluationDepartmentResolver $departments,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -279,10 +281,6 @@ class EvaluationEventController extends Controller
 
     private function departmentIdOrFail(Request $request): int|JsonResponse
     {
-        $departmentId = $request->user()?->department_id;
-
-        return $departmentId
-            ? (int) $departmentId
-            : response()->json(['message' => 'Tài khoản chưa gắn với phòng ban nào.'], 422);
+        return $this->departments->idOrFail($request);
     }
 }

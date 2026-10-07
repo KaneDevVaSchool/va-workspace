@@ -86,6 +86,7 @@ const typeGroupCollapsed = reactive({});
 
 // ─── computed ─────────────────────────────────────────────────────────────────
 
+/** Phòng ban hiển thị trên /api/me — lấy từ HRM, không phải users.department_id. */
 const hasDepartment = computed(() => Boolean(auth.user?.department?.uuid || auth.user?.department?.name));
 const canViewAll = computed(() => auth.can('workspace_config.view_all'));
 

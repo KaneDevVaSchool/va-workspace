@@ -14,6 +14,12 @@ class EvaluationCriteriaHistoryTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['database.connections.hrm.database' => null]);
+    }
+
     private function makeUser(array $attributes = [], array $roles = []): User
     {
         $user = User::factory()->create(array_merge(['status' => 'active'], $attributes));

@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Evaluation\App\Http\Requests\PublishEvaluationConfigVersionRequest;
 use Modules\Evaluation\App\Services\EvaluationConfigVersionService;
+use Modules\Evaluation\App\Services\EvaluationDepartmentResolver;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
 
@@ -25,6 +26,7 @@ class EvaluationConfigVersionController extends Controller
         private readonly EvaluationConfigVersionService $service,
         private readonly PermissionService $permissions,
         private readonly ActivityLogService $activityLogs,
+        private readonly EvaluationDepartmentResolver $departments,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -134,10 +136,6 @@ class EvaluationConfigVersionController extends Controller
 
     private function departmentIdOrFail(Request $request): int|JsonResponse
     {
-        $departmentId = $request->user()?->department_id;
-
-        return $departmentId
-            ? (int) $departmentId
-            : response()->json(['message' => 'Tài khoản chưa gắn với phòng ban nào.'], 422);
+        return $this->departments->idOrFail($request);
     }
 }
