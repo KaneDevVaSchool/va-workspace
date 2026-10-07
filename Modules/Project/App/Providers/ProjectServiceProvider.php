@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Modules\Project\App\Console\Commands\AutoStartProjectsCommand;
 use Modules\Project\App\Console\Commands\MapProjectHrmDepartmentsCommand;
+use Modules\Project\App\Console\Commands\SyncProjectHrmDepartmentsCommand;
 use Modules\Project\App\Console\Commands\NotifyTasksDueSoonCommand;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\Task;
@@ -97,6 +98,7 @@ class ProjectServiceProvider extends ServiceProvider
             $this->commands([
                 AutoStartProjectsCommand::class,
                 MapProjectHrmDepartmentsCommand::class,
+                SyncProjectHrmDepartmentsCommand::class,
                 NotifyTasksDueSoonCommand::class,
             ]);
         }
