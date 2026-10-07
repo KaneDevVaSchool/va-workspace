@@ -634,7 +634,7 @@ class WorkspaceConfigMemberService
             'hrm_employee_uuid' => $employee['uuid'],
             'name' => filled($employee['full_name']) ? $employee['full_name'] : ($user?->name ?? ''),
             'email' => $employee['company_email'] ?? $user?->email,
-            'avatar_url' => $user?->avatar_url,
+            'avatar_url' => filled($employee['avatar_url'] ?? null) ? $employee['avatar_url'] : $user?->avatar_url,
             'status' => $employee['status'],
             'employee_code' => $employee['code'],
             'job_title_name' => $employee['job_title'],
@@ -650,6 +650,8 @@ class WorkspaceConfigMemberService
             'employment_status' => $employee['employment_status'] ?? null,
             'created_at' => $employee['created_at'] ?? null,
             'profile_department_name' => $employee['profile_department_name'] ?? null,
+            'hrm_department_name' => $employee['department_name'] ?? null,
+            'division_name' => $employee['division_name'] ?? null,
             'org_unit_code' => $employee['org_unit_code'] ?? null,
             'company' => filled($employee['company_name']) ? [
                 'code' => $employee['company_code'],

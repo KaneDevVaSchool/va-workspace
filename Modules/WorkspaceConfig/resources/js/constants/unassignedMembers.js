@@ -76,9 +76,11 @@ export const UNASSIGNED_COLUMNS = [
   { key: 'job_title', label: 'Chức danh 1', defaultOn: true },
   { key: 'job_title_2', label: 'Chức danh 2', defaultOn: true },
   { key: 'department_2', label: 'Phòng ban 2', defaultOn: true },
+  { key: 'division_2', label: 'Bộ phận 2', defaultOn: true },
   { key: 'position_level', label: 'Phân Loại Cấp Bậc', defaultOn: true },
   { key: 'manager', label: 'Cấp trên trực tiếp', defaultOn: true },
   { key: 'department', label: 'Phòng ban 1', defaultOn: true },
+  { key: 'division', label: 'Bộ phận', defaultOn: true },
   { key: 'status', label: 'Trạng thái', defaultOn: true },
   { key: 'org_unit', label: 'Đơn Vị', defaultOn: false },
   { key: 'phone', label: 'Số Điện Thoại', defaultOn: false },
@@ -102,9 +104,9 @@ export const UNASSIGNED_FILTERS = [
   { key: 'gender', label: 'Giới tính', defaultOn: true },
 ];
 
-export const COLUMN_STORAGE_KEY = 'va-wc-unassigned-columns-v5';
+export const COLUMN_STORAGE_KEY = 'va-wc-unassigned-columns-v6';
 export const FILTER_STORAGE_KEY = 'va-wc-unassigned-filters-v4';
-export const COLUMN_WIDTH_KEY = 'va-wc-unassigned-column-widths-v5';
+export const COLUMN_WIDTH_KEY = 'va-wc-unassigned-column-widths-v6';
 export const ZOOM_STORAGE_KEY = 'va-wc-unassigned-zoom';
 
 export function departmentName(member) {
@@ -113,6 +115,14 @@ export function departmentName(member) {
 
 export function orgUnitName(member) {
   return member?.org_unit?.name || '';
+}
+
+export function hrmDepartmentName(member) {
+  return member?.hrm_department_name || '';
+}
+
+export function divisionName(member) {
+  return member?.division_name || '';
 }
 
 export function teamName(member) {

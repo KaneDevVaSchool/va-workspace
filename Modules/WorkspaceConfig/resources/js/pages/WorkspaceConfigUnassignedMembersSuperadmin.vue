@@ -14,16 +14,16 @@ import { useDragScroll } from '@/composables/useDragScroll';
 import {
   COLUMN_STORAGE_KEY,
   COLUMN_WIDTH_KEY,
-  FILTER_STORAGE_KEY,
   EMPLOYMENT_STATUS_OPTIONS,
   GENDER_OPTIONS,
   HRM_STATUS_OPTIONS,
   UNASSIGNED_COLUMNS,
-  UNASSIGNED_FILTERS,
   ZOOM_STORAGE_KEY,
   companyName,
   concurrentTitleText,
   departmentName,
+  divisionName,
+  hrmDepartmentName,
   employmentStatusLabel,
   formatHrmDate,
   genderLabel,
@@ -55,6 +55,7 @@ const rowMenu = ref(null);
 
 const query = ref('');
 const orgUnit = ref('');
+const division = ref('');
 const company = ref('');
 const workplace = ref('');
 const gender = ref('');
@@ -68,7 +69,6 @@ const page = ref(1);
 const perPage = ref(10);
 
 const visibleColumns = reactive(loadVisibility(COLUMN_STORAGE_KEY, UNASSIGNED_COLUMNS));
-const visibleFilters = reactive(loadVisibility(FILTER_STORAGE_KEY, UNASSIGNED_FILTERS));
 
 const tableWrap = ref(null);
 const resizing = ref(false);
@@ -86,7 +86,16 @@ const colSpan = computed(() => Math.max(tableColumnKeys.value.length, 1));
 const orgUnitOptions = computed(() => {
   const names = new Set();
   for (const member of allMembers.value) {
-    const name = orgUnitName(member);
+    const name = hrmDepartmentName(member);
+    if (name) names.add(name);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b, 'vi'));
+});
+
+const divisionOptions = computed(() => {
+  const names = new Set();
+  for (const member of allMembers.value) {
+    const name = divisionName(member);
     if (name) names.add(name);
   }
   return [...names].sort((a, b) => a.localeCompare(b, 'vi'));
@@ -151,7 +160,8 @@ const filteredMembers = computed(() => {
     if (gender.value && member.gender !== gender.value) return false;
     if (company.value === 'none' && companyName(member)) return false;
     if (company.value && company.value !== 'none' && companyName(member) !== company.value) return false;
-    if (orgUnit.value && orgUnitName(member) !== orgUnit.value) return false;
+    if (orgUnit.value && hrmDepartmentName(member) !== orgUnit.value) return false;
+    if (division.value && divisionName(member) !== division.value) return false;
     if (workplace.value && member.workplace !== workplace.value) return false;
     if (!needle) return true;
     const haystack = [
@@ -166,7 +176,11 @@ const filteredMembers = computed(() => {
       member.workplace,
       member.personnel_type,
       orgUnitName(member),
+      hrmDepartmentName(member),
+      divisionName(member),
       departmentName(member),
+      secondaryPlacement(member)?.department_name,
+      secondaryPlacement(member)?.division_name,
       companyName(member),
       secondaryPlacement(member)?.job_title_name,
       secondaryPlacement(member)?.company_name,
@@ -201,6 +215,7 @@ const meta = computed(() => {
 const hasActiveFilters = computed(
   () => Boolean(query.value.trim())
     || Boolean(orgUnit.value)
+    || Boolean(division.value)
     || Boolean(company.value)
     || Boolean(workplace.value)
     || Boolean(gender.value)
@@ -208,12 +223,6 @@ const hasActiveFilters = computed(
     || Boolean(employmentStatus.value)
     || Boolean(status.value)
     || newThisMonth.value,
-);
-
-const hasVisibleFilterFields = computed(() => UNASSIGNED_FILTERS.some((item) => visibleFilters[item.key]));
-
-const hiddenActiveFilterLabels = computed(() =>
-  UNASSIGNED_FILTERS.filter((item) => !visibleFilters[item.key] && filterHasValue(item.key)).map((item) => item.label),
 );
 
 const tableWidthPx = computed(() => {
@@ -247,17 +256,6 @@ function statusClass(value) {
     return value;
   }
   return 'active';
-}
-
-function filterHasValue(key) {
-  if (key === 'org_unit') return Boolean(orgUnit.value);
-  if (key === 'company') return Boolean(company.value);
-  if (key === 'workplace') return Boolean(workplace.value);
-  if (key === 'gender') return Boolean(gender.value);
-  if (key === 'personnel_type') return Boolean(personnelType.value);
-  if (key === 'employment_status') return Boolean(employmentStatus.value);
-  if (key === 'status') return Boolean(status.value);
-  return false;
 }
 
 function avatarUser(member) {
@@ -294,8 +292,10 @@ function cellText(member, key) {
   if (key === 'company_2') return blank(second?.company_name);
   if (key === 'manager') return blank(member.manager_display_name);
   if (key === 'org_unit') return blank(orgUnitName(member));
-  if (key === 'department') return blank(orgUnitName(member) || member.profile_department_name);
-  if (key === 'department_2') return blank(second?.org_unit_name);
+  if (key === 'department') return blank(hrmDepartmentName(member));
+  if (key === 'division') return blank(divisionName(member));
+  if (key === 'department_2') return blank(second?.department_name);
+  if (key === 'division_2') return blank(second?.division_name);
   if (key === 'workspace_department') return blank(departmentName(member));
   if (key === 'phone') return blank(member.phone);
   if (key === 'email') return blank(member.email);
@@ -328,6 +328,7 @@ function inspect(member) {
 function clearFilters() {
   query.value = '';
   orgUnit.value = '';
+  division.value = '';
   company.value = '';
   workplace.value = '';
   gender.value = '';
@@ -476,41 +477,28 @@ function readTableFonts() {
   return {
     header: fontOf(table?.querySelector('thead th'), '600 12px "Be Vietnam Pro", sans-serif'),
     cell: fontOf(table?.querySelector('tbody td'), '400 14px "Be Vietnam Pro", sans-serif'),
+    person: fontOf(table?.querySelector('.roster-page__person-name'), '600 15px "Be Vietnam Pro", sans-serif'),
+    status: fontOf(table?.querySelector('.roster-page__status'), '500 13px "Be Vietnam Pro", sans-serif'),
     muted: fontOf(table?.querySelector('.roster-page__muted'), '400 12px "Be Vietnam Pro", sans-serif'),
   };
 }
 
 function columnContentWidth(key, fonts) {
   if (key === 'actions') return ACTIONS_COL_PX;
-  const label = UNASSIGNED_COLUMNS.find((col) => col.key === key)?.label ?? '';
-  let maxW = measureText(label, fonts.header);
-  for (const member of pageRows.value) {
+  const label = UNASSIGNED_COLUMNS.find((col) => col.key === key)?.label ?? 'Thao tác';
+  let maxW = measureText(String(label).toLocaleUpperCase('vi'), fonts.header);
+  const rows = allMembers.value.length ? allMembers.value : pageRows.value;
+  for (const member of rows) {
     if (key === 'person') {
-      maxW = Math.max(maxW, measureText(cellText(member, 'person'), fonts.cell));
-      if (member.email) maxW = Math.max(maxW, measureText(member.email, fonts.muted));
-    } else {
-      maxW = Math.max(maxW, measureText(cellText(member, key), fonts.cell));
+      maxW = Math.max(maxW, measureText(cellText(member, 'person'), fonts.person));
+      if (member.employee_code) maxW = Math.max(maxW, measureText(member.employee_code, fonts.muted));
+    } else if (key !== 'actions') {
+      const font = key === 'status' ? fonts.status : fonts.cell;
+      maxW = Math.max(maxW, measureText(cellText(member, key), font));
     }
   }
-  const extra = key === 'person' ? AVATAR_EXTRA : 0;
+  const extra = key === 'person' ? AVATAR_EXTRA : key === 'status' ? 22 : 0;
   return Math.max(MIN_COL_PX, Math.ceil(maxW + CELL_PAD_X + COL_EXTRA + extra));
-}
-
-function distributeExtraWidth(widths, keys, available) {
-  const sum = keys.reduce((total, key) => total + widths[key], 0);
-  if (sum <= 0 || available <= sum) return widths;
-  const extra = available - sum;
-  const next = { ...widths };
-  let used = 0;
-  keys.forEach((key, index) => {
-    if (index === keys.length - 1) {
-      next[key] = available - used;
-      return;
-    }
-    next[key] = widths[key] + Math.floor((widths[key] / sum) * extra);
-    used += next[key];
-  });
-  return next;
 }
 
 function fitColumnsToContent() {
@@ -518,10 +506,7 @@ function fitColumnsToContent() {
   const keys = tableColumnKeys.value;
   if (!wrap || keys.length === 0 || resizing.value) return;
   const fonts = readTableFonts();
-  const measured = {};
-  for (const key of keys) measured[key] = columnContentWidth(key, fonts);
-  const next = distributeExtraWidth(measured, keys, wrap.clientWidth);
-  for (const key of keys) columnWidths[key] = next[key];
+  for (const key of keys) columnWidths[key] = columnContentWidth(key, fonts);
 }
 
 function startResize(event, key) {
@@ -566,10 +551,6 @@ function onColumnToggle(key, checked) {
   visibleColumns[key] = checked;
 }
 
-function onFilterToggle(key, checked) {
-  visibleFilters[key] = checked;
-}
-
 function handleDocumentClick(event) {
   if (!rowMenu.value) return;
   if (event.target?.closest?.('[data-row-menu]')) return;
@@ -586,7 +567,6 @@ function handleDocumentKeydown(event) {
 }
 
 watch(visibleColumns, (value) => saveVisibility(COLUMN_STORAGE_KEY, value), { deep: true });
-watch(visibleFilters, (value) => saveVisibility(FILTER_STORAGE_KEY, value), { deep: true });
 watch(columnWidths, (value) => saveVisibility(COLUMN_WIDTH_KEY, value), { deep: true });
 watch(tableZoom, (value) => {
   try {
@@ -601,7 +581,7 @@ watch(selected, (member) => {
   nextTick(fitColumnsToContent);
 });
 watch(shownColumns, () => nextTick(fitColumnsToContent));
-watch([query, orgUnit, company, workplace, gender, personnelType, employmentStatus, status, newThisMonth, perPage], () => {
+watch([query, orgUnit, division, company, workplace, gender, personnelType, employmentStatus, status, newThisMonth, perPage], () => {
   page.value = 1;
 });
 watch(lastPage, (value) => {
@@ -679,62 +659,6 @@ onBeforeUnmount(() => {
             <AppIcon name="search" :size="16" />
             <input v-model="query" type="search" placeholder="Tìm tên, mã, email…" />
           </label>
-          <div v-if="hasVisibleFilterFields" class="roster-page__filters">
-            <div v-if="visibleFilters.status" class="roster-page__field">
-              <label class="roster-page__label" for="roster-status">Trạng thái</label>
-              <select id="roster-status" v-model="status" class="roster-page__input">
-                <option v-for="item in HRM_STATUS_OPTIONS" :key="item.value || 'all'" :value="item.value">
-                  {{ item.label }}
-                </option>
-              </select>
-            </div>
-            <div v-if="visibleFilters.employment_status" class="roster-page__field">
-              <label class="roster-page__label" for="roster-employment">Trạng thái nhân sự</label>
-              <select id="roster-employment" v-model="employmentStatus" class="roster-page__input">
-                <option v-for="item in EMPLOYMENT_STATUS_OPTIONS" :key="item.value || 'all'" :value="item.value">
-                  {{ item.label }}
-                </option>
-              </select>
-            </div>
-            <div v-if="visibleFilters.personnel_type" class="roster-page__field">
-              <label class="roster-page__label" for="roster-personnel">Phân loại</label>
-              <select id="roster-personnel" v-model="personnelType" class="roster-page__input">
-                <option value="">Phân loại</option>
-                <option value="Cơ hữu">Cơ hữu</option>
-                <option value="Dịch vụ">Dịch vụ</option>
-              </select>
-            </div>
-            <div v-if="visibleFilters.company" class="roster-page__field">
-              <label class="roster-page__label" for="roster-company">Công ty</label>
-              <select id="roster-company" v-model="company" class="roster-page__input">
-                <option value="">Tất cả công ty</option>
-                <option value="none">Chưa gắn công ty</option>
-                <option v-for="name in companyOptions" :key="name" :value="name">{{ name }}</option>
-              </select>
-            </div>
-            <div v-if="visibleFilters.org_unit" class="roster-page__field">
-              <label class="roster-page__label" for="roster-org">Đơn vị</label>
-              <select id="roster-org" v-model="orgUnit" class="roster-page__input">
-                <option value="">Tất cả đơn vị</option>
-                <option v-for="name in orgUnitOptions" :key="name" :value="name">{{ name }}</option>
-              </select>
-            </div>
-            <div v-if="visibleFilters.workplace" class="roster-page__field">
-              <label class="roster-page__label" for="roster-workplace">Cơ sở</label>
-              <select id="roster-workplace" v-model="workplace" class="roster-page__input">
-                <option value="">Tất cả cơ sở</option>
-                <option v-for="name in workplaceOptions" :key="name" :value="name">{{ name }}</option>
-              </select>
-            </div>
-            <div v-if="visibleFilters.gender" class="roster-page__field">
-              <label class="roster-page__label" for="roster-gender">Giới tính</label>
-              <select id="roster-gender" v-model="gender" class="roster-page__input">
-                <option v-for="item in GENDER_OPTIONS" :key="item.value || 'all'" :value="item.value">
-                  {{ item.label }}
-                </option>
-              </select>
-            </div>
-          </div>
         </div>
 
         <TablePagesBar
@@ -748,6 +672,8 @@ onBeforeUnmount(() => {
           :per-page-options="[10, 20, 50, 100]"
           :zoom="tableZoom"
           show-search
+          filters-menu-wide
+          filters-menu-title="Bộ lọc"
           :show-clear-filters="hasActiveFilters"
           :filters-active="hasActiveFilters"
           @search="page = 1"
@@ -757,14 +683,69 @@ onBeforeUnmount(() => {
           @update:zoom="tableZoom = $event"
         >
           <template #filters>
-            <label v-for="item in UNASSIGNED_FILTERS" :key="item.key" class="roster-page__check">
-              <input
-                type="checkbox"
-                :checked="visibleFilters[item.key]"
-                @change="onFilterToggle(item.key, $event.target.checked)"
-              />
-              <span>{{ item.label }}</span>
-            </label>
+            <div class="roster-page__filter-menu">
+              <div class="roster-page__field">
+                <label class="roster-page__label" for="roster-status">Trạng thái</label>
+                <select id="roster-status" v-model="status" class="roster-page__input">
+                  <option v-for="item in HRM_STATUS_OPTIONS" :key="item.value || 'all'" :value="item.value">
+                    {{ item.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="roster-page__field">
+                <label class="roster-page__label" for="roster-employment">Trạng thái nhân sự</label>
+                <select id="roster-employment" v-model="employmentStatus" class="roster-page__input">
+                  <option v-for="item in EMPLOYMENT_STATUS_OPTIONS" :key="item.value || 'all'" :value="item.value">
+                    {{ item.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="roster-page__field">
+                <label class="roster-page__label" for="roster-personnel">Phân loại</label>
+                <select id="roster-personnel" v-model="personnelType" class="roster-page__input">
+                  <option value="">Phân loại</option>
+                  <option value="Cơ hữu">Cơ hữu</option>
+                  <option value="Dịch vụ">Dịch vụ</option>
+                </select>
+              </div>
+              <div class="roster-page__field">
+                <label class="roster-page__label" for="roster-company">Công ty</label>
+                <select id="roster-company" v-model="company" class="roster-page__input">
+                  <option value="">Tất cả công ty</option>
+                  <option value="none">Chưa gắn công ty</option>
+                  <option v-for="name in companyOptions" :key="name" :value="name">{{ name }}</option>
+                </select>
+              </div>
+              <div class="roster-page__field">
+                <label class="roster-page__label" for="roster-org">Phòng ban</label>
+                <select id="roster-org" v-model="orgUnit" class="roster-page__input">
+                  <option value="">Tất cả phòng ban</option>
+                  <option v-for="name in orgUnitOptions" :key="name" :value="name">{{ name }}</option>
+                </select>
+              </div>
+              <div class="roster-page__field">
+                <label class="roster-page__label" for="roster-division">Bộ phận</label>
+                <select id="roster-division" v-model="division" class="roster-page__input">
+                  <option value="">Tất cả bộ phận</option>
+                  <option v-for="name in divisionOptions" :key="name" :value="name">{{ name }}</option>
+                </select>
+              </div>
+              <div class="roster-page__field">
+                <label class="roster-page__label" for="roster-workplace">Cơ sở</label>
+                <select id="roster-workplace" v-model="workplace" class="roster-page__input">
+                  <option value="">Tất cả cơ sở</option>
+                  <option v-for="name in workplaceOptions" :key="name" :value="name">{{ name }}</option>
+                </select>
+              </div>
+              <div class="roster-page__field">
+                <label class="roster-page__label" for="roster-gender">Giới tính</label>
+                <select id="roster-gender" v-model="gender" class="roster-page__input">
+                  <option v-for="item in GENDER_OPTIONS" :key="item.value || 'all'" :value="item.value">
+                    {{ item.label }}
+                  </option>
+                </select>
+              </div>
+            </div>
           </template>
           <template #settings>
             <label v-for="col in UNASSIGNED_COLUMNS" :key="col.key" class="roster-page__check">
@@ -777,10 +758,6 @@ onBeforeUnmount(() => {
             </label>
           </template>
         </TablePagesBar>
-
-        <p v-if="hiddenActiveFilterLabels.length" class="roster-page__note">
-          Đang lọc thêm theo: {{ hiddenActiveFilterLabels.join(', ') }} (bộ lọc đang ẩn).
-        </p>
 
         <div
           ref="tableWrap"
@@ -950,7 +927,11 @@ onBeforeUnmount(() => {
           </div>
           <div class="roster-page__row">
             <span class="roster-page__row-label">Phòng ban 2</span>
-            <span class="roster-page__row-value">{{ secondaryPlacement(selected)?.org_unit_name || 'Chưa cập nhật' }}</span>
+            <span class="roster-page__row-value">{{ secondaryPlacement(selected)?.department_name || 'Chưa cập nhật' }}</span>
+          </div>
+          <div class="roster-page__row">
+            <span class="roster-page__row-label">Bộ phận 2</span>
+            <span class="roster-page__row-value">{{ secondaryPlacement(selected)?.division_name || 'Chưa cập nhật' }}</span>
           </div>
           <div class="roster-page__row">
             <span class="roster-page__row-label">Giới tính</span>
@@ -977,8 +958,12 @@ onBeforeUnmount(() => {
             <span class="roster-page__row-value">{{ companyName(selected) || '—' }}</span>
           </div>
           <div class="roster-page__row">
-            <span class="roster-page__row-label">Đơn vị HRM</span>
-            <span class="roster-page__row-value">{{ orgUnitName(selected) || 'Chưa có đơn vị' }}</span>
+            <span class="roster-page__row-label">Phòng ban</span>
+            <span class="roster-page__row-value">{{ hrmDepartmentName(selected) || 'Chưa cập nhật' }}</span>
+          </div>
+          <div class="roster-page__row">
+            <span class="roster-page__row-label">Bộ phận</span>
+            <span class="roster-page__row-value">{{ divisionName(selected) || 'Chưa cập nhật' }}</span>
           </div>
           <div class="roster-page__row">
             <span class="roster-page__row-label">Cấp trên</span>
@@ -1132,10 +1117,10 @@ onBeforeUnmount(() => {
   outline: none;
 }
 
-.roster-page__filters {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3);
+.roster-page__filter-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .roster-page__sort {
@@ -1336,7 +1321,7 @@ onBeforeUnmount(() => {
 }
 
 .roster-page__table {
-  min-width: 100%;
+  width: max-content;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: calc(0.9375rem * var(--table-zoom, 1));
@@ -1735,7 +1720,6 @@ onBeforeUnmount(() => {
   .roster-page__body { flex-direction: column; }
   .roster-page__side { width: 100%; max-height: 42%; }
   .roster-page__table-wrap { min-height: 16rem; }
-  .roster-page__filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .roster-page__summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
@@ -1745,7 +1729,6 @@ onBeforeUnmount(() => {
 
 @media (max-width: 480px) {
   .roster-page { padding: var(--space-3); }
-  .roster-page__filters { grid-template-columns: minmax(0, 1fr); }
   .roster-page__summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

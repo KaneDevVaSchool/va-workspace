@@ -25,6 +25,8 @@ const props = defineProps({
   showSearch: { type: Boolean, default: false },
   showClearFilters: { type: Boolean, default: false },
   filtersActive: { type: Boolean, default: false },
+  filtersMenuTitle: { type: String, default: 'Chọn bộ lọc hiện trên trang' },
+  filtersMenuWide: { type: Boolean, default: false },
   extraMenuLabel: { type: String, default: '' },
   extraMenuTitle: { type: String, default: '' },
   extraMenuIcon: { type: String, default: '' },
@@ -148,8 +150,13 @@ onBeforeUnmount(() => {
           <AppIcon name="sliders" :size="15" :stroke-width="1.75" />
           <span>Bộ lọc</span>
         </button>
-        <div v-if="open === 'filters'" class="table-pages__menu" role="menu">
-          <p class="table-pages__menu-title">Chọn bộ lọc hiện trên trang</p>
+        <div
+          v-if="open === 'filters'"
+          class="table-pages__menu"
+          :class="{ 'table-pages__menu--wide': filtersMenuWide }"
+          role="menu"
+        >
+          <p class="table-pages__menu-title">{{ filtersMenuTitle }}</p>
           <slot name="filters" />
         </div>
       </div>
@@ -415,6 +422,11 @@ onBeforeUnmount(() => {
   display: none;
   width: 0;
   height: 0;
+}
+
+.table-pages__menu--wide {
+  width: 20rem;
+  max-height: min(28rem, calc(100vh - 8rem));
 }
 
 .table-pages__menu--page {

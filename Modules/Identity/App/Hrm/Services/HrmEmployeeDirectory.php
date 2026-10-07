@@ -31,11 +31,13 @@ class HrmEmployeeDirectory
     {
         try {
             $orgUnits = $this->orgUnits();
+            $unitsById = $orgUnits->keyBy('id');
             $concurrent = $this->concurrentByEmployeeId();
             $names = $this->employeeNames();
+            $avatars = $this->avatarsByEmployeeId();
 
             $employees = $this->employeeRows()
-                ->map(fn (object $row) => $this->presentEmployee($row, $orgUnits->keyBy('id'), $names, $concurrent))
+                ->map(fn (object $row) => $this->presentEmployee($row, $unitsById, $names, $concurrent, $avatars))
                 ->values()
                 ->all();
 
@@ -102,6 +104,7 @@ class HrmEmployeeDirectory
                 'e.employment_status',
                 'e.created_at',
                 'e.department_name as profile_department_name',
+                'e.avatar_path',
                 'e.status',
                 'e.direct_manager_name',
                 'e.job_title_name as profile_job_title',
@@ -132,6 +135,7 @@ class HrmEmployeeDirectory
             ->whereNull('a.effective_to')
             ->get([
                 'a.employee_id',
+                'a.org_unit_id',
                 'jt.name as job_title',
                 'p.title as position_title',
                 'c.name as company_name',
@@ -162,6 +166,16 @@ class HrmEmployeeDirectory
             ]);
     }
 
+    /** @return Collection<int|string, string|null> */
+    private function avatarsByEmployeeId(): Collection
+    {
+        return DB::connection('hrm')
+            ->table('users')
+            ->whereNull('deleted_at')
+            ->whereNotNull('employee_id')
+            ->pluck('avatar_url', 'employee_id');
+    }
+
     /** @return Collection<int|string, string> */
     private function employeeNames(): Collection
     {
@@ -175,15 +189,18 @@ class HrmEmployeeDirectory
      * @param  Collection<int|string, object>  $unitsById
      * @param  Collection<int|string, string>  $names
      * @param  Collection<int|string, Collection<int, object>>  $concurrent
+     * @param  Collection<int|string, string|null>  $avatars
      * @return array<string, mixed>
      */
-    private function presentEmployee(object $row, Collection $unitsById, Collection $names, Collection $concurrent): array
+    private function presentEmployee(object $row, Collection $unitsById, Collection $names, Collection $concurrent, Collection $avatars): array
     {
         $jobTitle = $row->job_title ?: $row->position_title ?: $row->profile_job_title;
         $level = filled($row->level_name)
             ? (string) $row->level_name
             : ($row->position_level !== null && $row->position_level !== '' ? (string) $row->position_level : null);
         $concurrentRows = $concurrent->get($row->id) ?? $concurrent->get((string) $row->id) ?? collect();
+        $placement = $this->placementNames($row->org_unit_id, $unitsById);
+        $accountAvatar = $avatars->get($row->id) ?? $avatars->get((string) $row->id) ?? $avatars->get((int) $row->id);
 
         return [
             'uuid' => (string) $row->uuid,
@@ -212,17 +229,88 @@ class HrmEmployeeDirectory
             'org_unit_code' => filled($row->org_unit_code) ? (string) $row->org_unit_code : null,
             'org_unit_name' => filled($row->org_unit_name) ? (string) $row->org_unit_name : null,
             'org_unit_path' => filled($row->org_unit_path) ? (string) $row->org_unit_path : null,
+            'department_name' => $placement['department_name'],
+            'division_name' => $placement['division_name'],
+            'avatar_url' => $this->avatarUrl($row->avatar_path ?? null, is_string($accountAvatar) ? $accountAvatar : null),
             'manager_name' => $this->managerName($row, $unitsById, $names),
             'concurrent_positions' => $concurrentRows
-                ->map(fn (object $item) => [
-                    'job_title_name' => $item->job_title ?: $item->position_title,
-                    'company_name' => $item->company_name,
-                    'org_unit_name' => $item->org_unit_name,
-                ])
-                ->filter(fn (array $item) => filled($item['job_title_name']) || filled($item['company_name']) || filled($item['org_unit_name']))
+                ->map(function (object $item) use ($unitsById) {
+                    $placement = $this->placementNames($item->org_unit_id ?? null, $unitsById);
+
+                    return [
+                        'job_title_name' => $item->job_title ?: $item->position_title,
+                        'company_name' => $item->company_name,
+                        'org_unit_name' => $item->org_unit_name,
+                        'department_name' => $placement['department_name'],
+                        'division_name' => $placement['division_name'],
+                    ];
+                })
+                ->filter(fn (array $item) => filled($item['job_title_name']) || filled($item['company_name']) || filled($item['org_unit_name']) || filled($item['department_name']) || filled($item['division_name']))
                 ->values()
                 ->all(),
         ];
+    }
+
+    /**
+     * Phân công trỏ tới nút lá. Phòng ban là org unit type department
+     * (chính nút đó hoặc cha). Bộ phận là org unit type unit.
+     *
+     * @param  Collection<int|string, object>  $unitsById
+     * @return array{department_name: ?string, division_name: ?string}
+     */
+    private function placementNames(mixed $orgUnitId, Collection $unitsById): array
+    {
+        $department = null;
+        $division = null;
+        $current = $orgUnitId;
+        $guard = 0;
+
+        while ($current && $guard++ < 12) {
+            $unit = $unitsById->get($current) ?? $unitsById->get((int) $current) ?? $unitsById->get((string) $current);
+            if ($unit === null) {
+                break;
+            }
+
+            $type = (string) ($unit->type ?? '');
+            if ($type === 'unit' && $division === null && filled($unit->name)) {
+                $division = (string) $unit->name;
+            }
+            if ($type === 'department' && filled($unit->name)) {
+                $department = (string) $unit->name;
+                break;
+            }
+
+            $current = $unit->parent_id;
+        }
+
+        return [
+            'department_name' => $department,
+            'division_name' => $division,
+        ];
+    }
+
+    private function avatarUrl(mixed $path, ?string $accountUrl): ?string
+    {
+        $stored = trim((string) $path);
+        if ($stored !== '') {
+            if (preg_match('#^https?://#i', $stored) === 1) {
+                return $stored;
+            }
+
+            $base = rtrim((string) config('services.hrm.api_base_url'), '/');
+            if ($base !== '') {
+                $relative = ltrim($stored, '/');
+                if (! str_starts_with($relative, 'storage/')) {
+                    $relative = 'storage/'.$relative;
+                }
+
+                return $base.'/'.$relative;
+            }
+        }
+
+        $account = trim((string) $accountUrl);
+
+        return $account !== '' ? $account : null;
     }
 
     /**

@@ -15,6 +15,7 @@ class HrmEmployeeDirectoryTest extends TestCase
         parent::setUp();
 
         config([
+            'services.hrm.api_base_url' => 'https://hrm.vaschools.edu.vn',
             'database.connections.hrm' => [
                 'driver' => 'sqlite',
                 'database' => ':memory:',
@@ -43,6 +44,7 @@ class HrmEmployeeDirectoryTest extends TestCase
             $table->string('employment_status')->nullable();
             $table->timestamp('created_at')->nullable();
             $table->string('department_name')->nullable();
+            $table->string('avatar_path')->nullable();
             $table->string('status')->nullable();
             $table->string('direct_manager_name')->nullable();
             $table->string('job_title_name')->nullable();
@@ -87,6 +89,12 @@ class HrmEmployeeDirectoryTest extends TestCase
             $table->string('name')->nullable();
             $table->timestamp('deleted_at')->nullable();
         });
+        $schema->create('users', function (Blueprint $table): void {
+            $table->bigIncrements('id');
+            $table->unsignedBigInteger('employee_id')->nullable();
+            $table->string('avatar_url')->nullable();
+            $table->timestamp('deleted_at')->nullable();
+        });
         $schema->create('employee_assignments', function (Blueprint $table): void {
             $table->bigIncrements('id');
             $table->unsignedBigInteger('employee_id');
@@ -125,6 +133,16 @@ class HrmEmployeeDirectoryTest extends TestCase
             'status' => 'active',
             'manager_employee_id' => 7,
         ]);
+        $hrm->table('org_units')->insert([
+            'id' => 4,
+            'uuid' => 'ou-unit',
+            'parent_id' => 3,
+            'company_id' => 1,
+            'type' => 'unit',
+            'code' => 'PM',
+            'name' => 'Phần mềm',
+            'status' => 'active',
+        ]);
         $hrm->table('job_titles')->insert(['id' => 1, 'name' => 'Kỹ sư']);
         $hrm->table('position_levels')->insert(['id' => 1, 'level' => 2, 'name' => 'Nhân viên']);
         $hrm->table('positions')->insert([
@@ -141,6 +159,12 @@ class HrmEmployeeDirectoryTest extends TestCase
             'company_email' => 'a.nguyen@vaschools.edu.vn',
             'phone' => '0901',
             'status' => 'active',
+            'avatar_path' => 'avatars/nv009.jpg',
+        ]);
+        $hrm->table('users')->insert([
+            'id' => 1,
+            'employee_id' => 9,
+            'avatar_url' => 'https://lh3.googleusercontent.com/a/nv009',
         ]);
         $hrm->table('employee_assignments')->insert([
             'employee_id' => 9,
@@ -165,11 +189,37 @@ class HrmEmployeeDirectoryTest extends TestCase
         $this->assertNotNull($employee);
         $this->assertSame('Nguyễn Văn A', $employee['full_name']);
         $this->assertSame('Phòng Công nghệ', $employee['org_unit_name']);
+        $this->assertSame('Phòng Công nghệ', $employee['department_name']);
+        $this->assertNull($employee['division_name']);
+        $this->assertSame('https://hrm.vaschools.edu.vn/storage/avatars/nv009.jpg', $employee['avatar_url']);
         $this->assertSame('VA Schools', $employee['company_name']);
         $this->assertSame('Kỹ sư', $employee['job_title']);
         $this->assertSame('Nhân viên', $employee['level_name']);
         $this->assertSame('Trần Quản lý', $employee['manager_name']);
         $this->assertSame('Kỹ sư', $employee['concurrent_positions'][0]['job_title_name']);
+        $this->assertSame('Phòng Công nghệ', $employee['concurrent_positions'][0]['department_name']);
+        $this->assertNull($employee['concurrent_positions'][0]['division_name']);
         $this->assertSame('Phòng Công nghệ', $loaded['org_units'][0]['name']);
+
+        $hrm->table('employees')->insert([
+            'id' => 10,
+            'uuid' => 'emp-unit',
+            'code' => 'NV010',
+            'full_name' => 'Lê Bộ phận',
+            'status' => 'active',
+        ]);
+        $hrm->table('employee_assignments')->insert([
+            'employee_id' => 10,
+            'company_id' => 1,
+            'org_unit_id' => 4,
+            'position_id' => 1,
+            'is_primary' => 1,
+            'open_primary_employee_id' => 10,
+        ]);
+
+        $unitEmployee = collect((new HrmEmployeeDirectory)->load()['employees'])->firstWhere('code', 'NV010');
+        $this->assertSame('Phần mềm', $unitEmployee['org_unit_name']);
+        $this->assertSame('Phòng Công nghệ', $unitEmployee['department_name']);
+        $this->assertSame('Phần mềm', $unitEmployee['division_name']);
     }
 }
