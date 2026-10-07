@@ -240,12 +240,10 @@ class HrmDepartmentSyncService
             return null;
         }
 
-        return Company::query()->updateOrCreate(
-            ['hrm_uuid' => $companyPayload['uuid']],
-            [
-                'code' => $companyPayload['code'] ?? $companyPayload['uuid'],
-                'name' => $companyPayload['name'] ?? $companyPayload['code'] ?? $companyPayload['uuid'],
-            ],
+        return Company::upsertFromHrm(
+            (string) $companyPayload['uuid'],
+            isset($companyPayload['code']) ? (string) $companyPayload['code'] : null,
+            isset($companyPayload['name']) ? (string) $companyPayload['name'] : null,
         );
     }
 }

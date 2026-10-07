@@ -15,6 +15,8 @@ import {
   COLUMN_STORAGE_KEY,
   COLUMN_WIDTH_KEY,
   FILTER_STORAGE_KEY,
+  EMPLOYMENT_STATUS_OPTIONS,
+  GENDER_OPTIONS,
   HRM_STATUS_OPTIONS,
   UNASSIGNED_COLUMNS,
   UNASSIGNED_FILTERS,
@@ -22,12 +24,16 @@ import {
   companyName,
   concurrentTitleText,
   departmentName,
+  employmentStatusLabel,
+  formatHrmDate,
+  genderLabel,
   hrmStatusLabel,
   loadVisibility,
   memberKey,
   memberRolesText,
   orgUnitName,
   saveVisibility,
+  secondaryPlacement,
   teamName,
 } from '../constants/unassignedMembers.js';
 
@@ -49,10 +55,17 @@ const rowMenu = ref(null);
 
 const query = ref('');
 const orgUnit = ref('');
-const departmentId = ref('');
+const company = ref('');
+const workplace = ref('');
+const gender = ref('');
+const personnelType = ref('');
+const employmentStatus = ref('');
+const newThisMonth = ref(false);
 const status = ref('');
+const sortKey = ref('');
+const sortDir = ref('asc');
 const page = ref(1);
-const perPage = ref(20);
+const perPage = ref(10);
 
 const visibleColumns = reactive(loadVisibility(COLUMN_STORAGE_KEY, UNASSIGNED_COLUMNS));
 const visibleFilters = reactive(loadVisibility(FILTER_STORAGE_KEY, UNASSIGNED_FILTERS));
@@ -70,12 +83,6 @@ const shownColumns = computed(() => UNASSIGNED_COLUMNS.filter((col) => visibleCo
 const tableColumnKeys = computed(() => [...shownColumns.value.map((col) => col.key), 'actions']);
 const colSpan = computed(() => Math.max(tableColumnKeys.value.length, 1));
 
-const pageDescription = computed(() =>
-  source.value === 'hrm_database'
-    ? 'Nhân sự lấy trực tiếp từ cơ sở dữ liệu VA-HRM. Gán phòng ban workspace để nhân sự vào được đúng không gian làm việc.'
-    : 'Chưa cấu hình cơ sở dữ liệu HRM. Đang hiển thị tài khoản đã có trên workspace.',
-);
-
 const orgUnitOptions = computed(() => {
   const names = new Set();
   for (const member of allMembers.value) {
@@ -85,20 +92,67 @@ const orgUnitOptions = computed(() => {
   return [...names].sort((a, b) => a.localeCompare(b, 'vi'));
 });
 
+function isNewThisMonth(member) {
+  const hired = String(member?.hired_at || '');
+  if (!/^\d{4}-\d{2}/.test(hired)) return false;
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  return hired.startsWith(month);
+}
+
+const summaryCards = computed(() => {
+  const counts = { active: 0, on_leave: 0, terminated: 0, onboarding: 0, new_this_month: 0 };
+  for (const member of allMembers.value) {
+    if (member.status === 'active') counts.active += 1;
+    else if (member.status === 'on_leave') counts.on_leave += 1;
+    else if (member.status === 'terminated' || member.status === 'inactive') counts.terminated += 1;
+    if (member.status === 'pending_confirmation' || member.status === 'processing') counts.onboarding += 1;
+    if (isNewThisMonth(member)) counts.new_this_month += 1;
+  }
+  const fmt = (value) => value.toLocaleString('vi-VN');
+  return [
+    { key: 'total', label: 'Tổng hồ sơ', value: fmt(allMembers.value.length), tone: 'brand', icon: 'users', filter: '' },
+    { key: 'active', label: 'Xác nhận xử lý', value: fmt(counts.active), tone: 'success', icon: 'check', filter: 'active' },
+    { key: 'on_leave', label: 'Tạm nghỉ', value: fmt(counts.on_leave), tone: 'warning', icon: 'calendar', filter: 'on_leave' },
+    { key: 'terminated', label: 'Đã nghỉ việc', value: fmt(counts.terminated), tone: 'danger', icon: 'close', filter: 'terminated' },
+    { key: 'new_this_month', label: 'Tuyển mới tháng này', value: fmt(counts.new_this_month), tone: 'info', icon: 'userPlus', filter: 'new_this_month' },
+    { key: 'onboarding', label: 'Onboarding', value: fmt(counts.onboarding), tone: 'violet', icon: 'clock', filter: 'onboarding' },
+  ];
+});
+
+const companyOptions = computed(() => {
+  const names = new Set();
+  for (const member of allMembers.value) {
+    const name = companyName(member);
+    if (name) names.add(name);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b, 'vi'));
+});
+
+const workplaceOptions = computed(() => {
+  const names = new Set();
+  for (const member of allMembers.value) {
+    if (member.workplace) names.add(member.workplace);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b, 'vi'));
+});
+
 const filteredMembers = computed(() => {
   const needle = query.value.trim().toLowerCase();
-  return allMembers.value.filter((member) => {
-    if (status.value && member.status !== status.value) return false;
-    if (orgUnit.value === 'none' && orgUnitName(member)) return false;
-    if (orgUnit.value && orgUnit.value !== 'none' && orgUnitName(member) !== orgUnit.value) return false;
-    if (departmentId.value === 'none' && member.department) return false;
-    if (
-      departmentId.value &&
-      departmentId.value !== 'none' &&
-      String(member.department?.id ?? '') !== departmentId.value
-    ) {
-      return false;
-    }
+  const rows = allMembers.value.filter((member) => {
+    if (newThisMonth.value && !isNewThisMonth(member)) return false;
+    if (status.value === 'onboarding') {
+      if (member.status !== 'pending_confirmation' && member.status !== 'processing') return false;
+    } else if (status.value === 'terminated') {
+      if (member.status !== 'terminated' && member.status !== 'inactive') return false;
+    } else if (status.value && member.status !== status.value) return false;
+    if (employmentStatus.value && member.employment_status !== employmentStatus.value) return false;
+    if (personnelType.value && member.personnel_type !== personnelType.value) return false;
+    if (gender.value && member.gender !== gender.value) return false;
+    if (company.value === 'none' && companyName(member)) return false;
+    if (company.value && company.value !== 'none' && companyName(member) !== company.value) return false;
+    if (orgUnit.value && orgUnitName(member) !== orgUnit.value) return false;
+    if (workplace.value && member.workplace !== workplace.value) return false;
     if (!needle) return true;
     const haystack = [
       member.name,
@@ -107,9 +161,15 @@ const filteredMembers = computed(() => {
       member.job_title_name,
       member.job_position_level,
       member.manager_display_name,
+      member.employee_code,
+      member.phone,
+      member.workplace,
+      member.personnel_type,
       orgUnitName(member),
       departmentName(member),
       companyName(member),
+      secondaryPlacement(member)?.job_title_name,
+      secondaryPlacement(member)?.company_name,
       teamName(member),
     ]
       .filter(Boolean)
@@ -117,6 +177,9 @@ const filteredMembers = computed(() => {
       .toLowerCase();
     return haystack.includes(needle);
   });
+  if (!sortKey.value) return rows;
+  const dir = sortDir.value === 'desc' ? -1 : 1;
+  return [...rows].sort((left, right) => dir * cellText(left, sortKey.value).localeCompare(cellText(right, sortKey.value), 'vi'));
 });
 
 const lastPage = computed(() => Math.max(1, Math.ceil(filteredMembers.value.length / perPage.value)));
@@ -136,7 +199,15 @@ const meta = computed(() => {
 });
 
 const hasActiveFilters = computed(
-  () => Boolean(query.value.trim()) || Boolean(orgUnit.value) || Boolean(departmentId.value) || Boolean(status.value),
+  () => Boolean(query.value.trim())
+    || Boolean(orgUnit.value)
+    || Boolean(company.value)
+    || Boolean(workplace.value)
+    || Boolean(gender.value)
+    || Boolean(personnelType.value)
+    || Boolean(employmentStatus.value)
+    || Boolean(status.value)
+    || newThisMonth.value,
 );
 
 const hasVisibleFilterFields = computed(() => UNASSIGNED_FILTERS.some((item) => visibleFilters[item.key]));
@@ -155,10 +226,36 @@ const departmentAssignReady = computed(() => {
   return String(selected.value.department?.id ?? '') !== String(departmentAssignId.value);
 });
 
+function kpiOn(card) {
+  if (card.filter === 'new_this_month') return newThisMonth.value;
+  if (card.filter === '') return !status.value && !newThisMonth.value;
+  return status.value === card.filter;
+}
+
+function applySummary(filter) {
+  page.value = 1;
+  if (filter === 'new_this_month') {
+    newThisMonth.value = !newThisMonth.value;
+    return;
+  }
+  status.value = status.value === filter ? '' : filter;
+}
+
+function statusClass(value) {
+  if (value === 'inactive') return 'terminated';
+  if (value === 'pending_confirmation' || value === 'processing' || value === 'on_leave' || value === 'suspended' || value === 'terminated') {
+    return value;
+  }
+  return 'active';
+}
+
 function filterHasValue(key) {
-  if (key === 'q') return Boolean(query.value.trim());
   if (key === 'org_unit') return Boolean(orgUnit.value);
-  if (key === 'department_id') return Boolean(departmentId.value);
+  if (key === 'company') return Boolean(company.value);
+  if (key === 'workplace') return Boolean(workplace.value);
+  if (key === 'gender') return Boolean(gender.value);
+  if (key === 'personnel_type') return Boolean(personnelType.value);
+  if (key === 'employment_status') return Boolean(employmentStatus.value);
   if (key === 'status') return Boolean(status.value);
   return false;
 }
@@ -182,20 +279,37 @@ function statusTone(value) {
   return 'info';
 }
 
+function blank(value) {
+  return value ? String(value) : 'Chưa cập nhật';
+}
+
 function cellText(member, key) {
-  if (key === 'person') return member.name || '—';
-  if (key === 'employee_code') return member.employee_code || '—';
-  if (key === 'job_title') return member.job_title_name || '—';
-  if (key === 'position_level') return member.job_position_level || '—';
-  if (key === 'company') return companyName(member) || '—';
-  if (key === 'manager') return member.manager_display_name || '—';
-  if (key === 'org_unit') return orgUnitName(member) || 'Chưa có đơn vị';
-  if (key === 'department') return departmentName(member) || 'Chưa gán phòng ban';
-  if (key === 'concurrent') return concurrentTitleText(member) || '—';
-  if (key === 'team') return teamName(member) || '—';
+  const second = secondaryPlacement(member);
+  if (key === 'person') return member.name || 'Chưa cập nhật';
+  if (key === 'timekeeping_code' || key === 'employee_code') return blank(member.employee_code);
+  if (key === 'job_title') return blank(member.job_title_name);
+  if (key === 'job_title_2') return blank(second?.job_title_name);
+  if (key === 'position_level') return blank(member.job_position_level);
+  if (key === 'company') return blank(companyName(member));
+  if (key === 'company_2') return blank(second?.company_name);
+  if (key === 'manager') return blank(member.manager_display_name);
+  if (key === 'org_unit') return blank(orgUnitName(member));
+  if (key === 'department') return blank(orgUnitName(member) || member.profile_department_name);
+  if (key === 'department_2') return blank(second?.org_unit_name);
+  if (key === 'workspace_department') return blank(departmentName(member));
+  if (key === 'phone') return blank(member.phone);
+  if (key === 'email') return blank(member.email);
+  if (key === 'hired_at') return formatHrmDate(member.hired_at);
+  if (key === 'actual_start_date') return formatHrmDate(member.actual_start_date);
+  if (key === 'gender') return genderLabel(member.gender);
+  if (key === 'workplace') return blank(member.workplace);
+  if (key === 'personnel_type') return blank(member.personnel_type);
+  if (key === 'employment_status') return employmentStatusLabel(member.employment_status);
+  if (key === 'concurrent') return concurrentTitleText(member) || 'Chưa cập nhật';
+  if (key === 'team') return blank(teamName(member));
   if (key === 'roles') return memberRolesText(member);
   if (key === 'status') return hrmStatusLabel(member.status);
-  return '—';
+  return 'Chưa cập nhật';
 }
 
 function sameMember(left, right) {
@@ -214,9 +328,29 @@ function inspect(member) {
 function clearFilters() {
   query.value = '';
   orgUnit.value = '';
-  departmentId.value = '';
+  company.value = '';
+  workplace.value = '';
+  gender.value = '';
+  personnelType.value = '';
+  employmentStatus.value = '';
+  newThisMonth.value = false;
   status.value = '';
   page.value = 1;
+}
+
+function toggleSort(key) {
+  page.value = 1;
+  if (sortKey.value !== key) {
+    sortKey.value = key;
+    sortDir.value = 'asc';
+    return;
+  }
+  if (sortDir.value === 'asc') {
+    sortDir.value = 'desc';
+    return;
+  }
+  sortKey.value = '';
+  sortDir.value = 'asc';
 }
 
 function goPage(nextPage) {
@@ -467,7 +601,7 @@ watch(selected, (member) => {
   nextTick(fitColumnsToContent);
 });
 watch(shownColumns, () => nextTick(fitColumnsToContent));
-watch([query, orgUnit, departmentId, status, perPage], () => {
+watch([query, orgUnit, company, workplace, gender, personnelType, employmentStatus, status, newThisMonth, perPage], () => {
   page.value = 1;
 });
 watch(lastPage, (value) => {
@@ -503,7 +637,11 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="roster-page">
-    <PageHeader title="Nhân sự workspace" icon="users" :description="pageDescription">
+    <PageHeader
+      title="Nhân viên"
+      icon="users"
+      :breadcrumbs="[{ label: 'Trang chủ' }, { label: 'Nhân sự' }, { label: 'Danh sách nhân viên' }]"
+    >
       <template #actions>
         <button type="button" class="roster-page__header-btn" :disabled="loading" @click="load()">
           <AppIcon name="refresh" :size="16" :class="{ 'roster-page__spin': loading }" />
@@ -512,42 +650,86 @@ onBeforeUnmount(() => {
       </template>
     </PageHeader>
 
+    <div class="roster-page__summary" aria-label="Thống kê tổng quan nhân viên">
+      <p class="roster-page__summary-title">Bức tranh nhân sự</p>
+      <div class="roster-page__summary-grid">
+        <button
+          v-for="card in summaryCards"
+          :key="card.key"
+          type="button"
+          class="roster-page__kpi"
+          :class="[`roster-page__kpi--${card.tone}`, { 'roster-page__kpi--on': kpiOn(card) }]"
+          @click="applySummary(card.filter)"
+        >
+          <span class="roster-page__kpi-icon" aria-hidden="true">
+            <AppIcon :name="card.icon" :size="16" />
+          </span>
+          <span class="roster-page__kpi-copy">
+            <span class="roster-page__kpi-label">{{ card.label }}</span>
+            <span class="roster-page__kpi-value">{{ card.value }}</span>
+          </span>
+        </button>
+      </div>
+    </div>
+
     <div class="roster-page__body">
       <div class="roster-page__main">
-        <div v-if="hasVisibleFilterFields" class="roster-page__toolbar">
-          <div class="roster-page__filters">
-            <div v-if="visibleFilters.q" class="roster-page__field">
-              <label class="roster-page__label" for="roster-q">Tìm kiếm</label>
-              <input
-                id="roster-q"
-                v-model="query"
-                type="search"
-                class="roster-page__input"
-                placeholder="Họ tên, email, mã nhân viên…"
-              />
-            </div>
-            <div v-if="visibleFilters.org_unit" class="roster-page__field">
-              <label class="roster-page__label" for="roster-org">Đơn vị HRM</label>
-              <select id="roster-org" v-model="orgUnit" class="roster-page__input">
-                <option value="">Tất cả đơn vị</option>
-                <option value="none">Chưa có đơn vị</option>
-                <option v-for="name in orgUnitOptions" :key="name" :value="name">{{ name }}</option>
-              </select>
-            </div>
-            <div v-if="visibleFilters.department_id" class="roster-page__field">
-              <label class="roster-page__label" for="roster-dept">Phòng ban workspace</label>
-              <select id="roster-dept" v-model="departmentId" class="roster-page__input">
-                <option value="">Tất cả phòng ban</option>
-                <option value="none">Chưa gán phòng ban</option>
-                <option v-for="item in departmentOptions" :key="item.id" :value="String(item.id)">
-                  {{ item.name }}
-                </option>
-              </select>
-            </div>
+        <div class="roster-page__toolbar">
+          <label class="roster-page__search">
+            <AppIcon name="search" :size="16" />
+            <input v-model="query" type="search" placeholder="Tìm tên, mã, email…" />
+          </label>
+          <div v-if="hasVisibleFilterFields" class="roster-page__filters">
             <div v-if="visibleFilters.status" class="roster-page__field">
               <label class="roster-page__label" for="roster-status">Trạng thái</label>
               <select id="roster-status" v-model="status" class="roster-page__input">
                 <option v-for="item in HRM_STATUS_OPTIONS" :key="item.value || 'all'" :value="item.value">
+                  {{ item.label }}
+                </option>
+              </select>
+            </div>
+            <div v-if="visibleFilters.employment_status" class="roster-page__field">
+              <label class="roster-page__label" for="roster-employment">Trạng thái nhân sự</label>
+              <select id="roster-employment" v-model="employmentStatus" class="roster-page__input">
+                <option v-for="item in EMPLOYMENT_STATUS_OPTIONS" :key="item.value || 'all'" :value="item.value">
+                  {{ item.label }}
+                </option>
+              </select>
+            </div>
+            <div v-if="visibleFilters.personnel_type" class="roster-page__field">
+              <label class="roster-page__label" for="roster-personnel">Phân loại</label>
+              <select id="roster-personnel" v-model="personnelType" class="roster-page__input">
+                <option value="">Phân loại</option>
+                <option value="Cơ hữu">Cơ hữu</option>
+                <option value="Dịch vụ">Dịch vụ</option>
+              </select>
+            </div>
+            <div v-if="visibleFilters.company" class="roster-page__field">
+              <label class="roster-page__label" for="roster-company">Công ty</label>
+              <select id="roster-company" v-model="company" class="roster-page__input">
+                <option value="">Tất cả công ty</option>
+                <option value="none">Chưa gắn công ty</option>
+                <option v-for="name in companyOptions" :key="name" :value="name">{{ name }}</option>
+              </select>
+            </div>
+            <div v-if="visibleFilters.org_unit" class="roster-page__field">
+              <label class="roster-page__label" for="roster-org">Đơn vị</label>
+              <select id="roster-org" v-model="orgUnit" class="roster-page__input">
+                <option value="">Tất cả đơn vị</option>
+                <option v-for="name in orgUnitOptions" :key="name" :value="name">{{ name }}</option>
+              </select>
+            </div>
+            <div v-if="visibleFilters.workplace" class="roster-page__field">
+              <label class="roster-page__label" for="roster-workplace">Cơ sở</label>
+              <select id="roster-workplace" v-model="workplace" class="roster-page__input">
+                <option value="">Tất cả cơ sở</option>
+                <option v-for="name in workplaceOptions" :key="name" :value="name">{{ name }}</option>
+              </select>
+            </div>
+            <div v-if="visibleFilters.gender" class="roster-page__field">
+              <label class="roster-page__label" for="roster-gender">Giới tính</label>
+              <select id="roster-gender" v-model="gender" class="roster-page__input">
+                <option v-for="item in GENDER_OPTIONS" :key="item.value || 'all'" :value="item.value">
                   {{ item.label }}
                 </option>
               </select>
@@ -563,6 +745,7 @@ onBeforeUnmount(() => {
           :page="page"
           :last-page="lastPage"
           :per-page="perPage"
+          :per-page-options="[10, 20, 50, 100]"
           :zoom="tableZoom"
           show-search
           :show-clear-filters="hasActiveFilters"
@@ -612,7 +795,16 @@ onBeforeUnmount(() => {
             <thead>
               <tr>
                 <th v-for="col in shownColumns" :key="col.key">
-                  <span>{{ col.label }}</span>
+                  <button
+                    v-if="col.key === 'person' || col.key === 'timekeeping_code' || col.key === 'manager'"
+                    type="button"
+                    class="roster-page__sort"
+                    @click.stop="toggleSort(col.key)"
+                  >
+                    {{ col.label }}
+                    <span v-if="sortKey === col.key" class="roster-page__sort-mark">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
+                  </button>
+                  <span v-else>{{ col.label }}</span>
                   <button
                     type="button"
                     class="roster-page__resize"
@@ -638,7 +830,24 @@ onBeforeUnmount(() => {
                 <td :colspan="colSpan" class="roster-page__empty">Đang tải…</td>
               </tr>
               <tr v-else-if="pageRows.length === 0">
-                <td :colspan="colSpan" class="roster-page__empty">Chưa có nhân sự nào.</td>
+                <td :colspan="colSpan" class="roster-page__empty">
+                  <span class="roster-page__empty-icon" aria-hidden="true">
+                    <AppIcon name="users" :size="22" />
+                  </span>
+                  <span class="roster-page__empty-title">
+                    {{ allMembers.length === 0 ? 'Chưa có hồ sơ nhân viên' : 'Không có kết quả phù hợp' }}
+                  </span>
+                  <span class="roster-page__empty-desc">
+                    {{
+                      allMembers.length === 0
+                        ? 'Danh sách nhân sự lấy từ VA-HRM sẽ hiện ở đây.'
+                        : 'Thử xóa từ khóa hoặc đặt lại các bộ lọc đang áp dụng.'
+                    }}
+                  </span>
+                  <button v-if="hasActiveFilters" type="button" class="roster-page__empty-btn" @click="clearFilters">
+                    Đặt lại bộ lọc
+                  </button>
+                </td>
               </tr>
               <tr
                 v-for="member in pageRows"
@@ -652,11 +861,18 @@ onBeforeUnmount(() => {
                     <span class="roster-page__person">
                       <UserAvatarTip :user="avatarUser(member)" label="Nhân sự" />
                       <span class="roster-page__person-text">
-                        <span>{{ cellText(member, 'person') }}</span>
-                        <span v-if="member.email" class="roster-page__muted">{{ member.email }}</span>
+                        <span class="roster-page__person-name">{{ cellText(member, 'person') }}</span>
+                        <span v-if="member.employee_code" class="roster-page__muted">{{ member.employee_code }}</span>
                       </span>
                     </span>
                   </template>
+                  <span
+                    v-else-if="col.key === 'status'"
+                    class="roster-page__status"
+                    :class="`roster-page__status--${statusClass(member.status)}`"
+                  >
+                    {{ cellText(member, col.key) }}
+                  </span>
                   <span v-else class="roster-page__cell">{{ cellText(member, col.key) }}</span>
                 </td>
                 <td @click.stop>
@@ -685,6 +901,7 @@ onBeforeUnmount(() => {
           :page="page"
           :last-page="lastPage"
           :per-page="perPage"
+          :per-page-options="[10, 20, 50, 100]"
           @update:page="goPage"
           @update:per-page="perPage = $event"
         />
@@ -721,7 +938,35 @@ onBeforeUnmount(() => {
           </div>
           <div class="roster-page__row">
             <span class="roster-page__row-label">Chức danh</span>
-            <span class="roster-page__row-value">{{ selected.job_title_name || '—' }}</span>
+            <span class="roster-page__row-value">{{ selected.job_title_name || 'Chưa cập nhật' }}</span>
+          </div>
+          <div class="roster-page__row">
+            <span class="roster-page__row-label">Chức danh 2</span>
+            <span class="roster-page__row-value">{{ secondaryPlacement(selected)?.job_title_name || 'Chưa cập nhật' }}</span>
+          </div>
+          <div class="roster-page__row">
+            <span class="roster-page__row-label">Pháp nhân 2</span>
+            <span class="roster-page__row-value">{{ secondaryPlacement(selected)?.company_name || 'Chưa cập nhật' }}</span>
+          </div>
+          <div class="roster-page__row">
+            <span class="roster-page__row-label">Phòng ban 2</span>
+            <span class="roster-page__row-value">{{ secondaryPlacement(selected)?.org_unit_name || 'Chưa cập nhật' }}</span>
+          </div>
+          <div class="roster-page__row">
+            <span class="roster-page__row-label">Giới tính</span>
+            <span class="roster-page__row-value">{{ genderLabel(selected.gender) }}</span>
+          </div>
+          <div class="roster-page__row">
+            <span class="roster-page__row-label">Ngày vào làm</span>
+            <span class="roster-page__row-value">{{ formatHrmDate(selected.hired_at) }}</span>
+          </div>
+          <div class="roster-page__row">
+            <span class="roster-page__row-label">Trạng thái nhân sự</span>
+            <span class="roster-page__row-value">{{ employmentStatusLabel(selected.employment_status) }}</span>
+          </div>
+          <div class="roster-page__row">
+            <span class="roster-page__row-label">Cơ sở</span>
+            <span class="roster-page__row-value">{{ selected.workplace || 'Chưa cập nhật' }}</span>
           </div>
           <div class="roster-page__row">
             <span class="roster-page__row-label">Cấp bậc</span>
@@ -863,10 +1108,52 @@ onBeforeUnmount(() => {
   margin: var(--space-3) 0;
 }
 
+.roster-page__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: 0 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.roster-page__search input {
+  flex: 1;
+  min-width: 0;
+  height: 2.25rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
+  outline: none;
+}
+
 .roster-page__filters {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-3);
+}
+
+.roster-page__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.roster-page__sort-mark {
+  font-size: 0.75rem;
 }
 
 .roster-page__field {
@@ -924,26 +1211,151 @@ onBeforeUnmount(() => {
   user-select: none;
 }
 
+.roster-page__summary {
+  flex-shrink: 0;
+  margin-bottom: var(--space-3);
+}
+
+.roster-page__summary-title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.roster-page__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.625rem;
+}
+
+.roster-page__kpi {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0.625rem 0.75rem 0.625rem calc(var(--space-2) + 3px + var(--space-2));
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-family-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.roster-page__kpi::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.roster-page__kpi--brand::before { background: var(--color-primary); }
+.roster-page__kpi--success::before { background: var(--color-success); }
+.roster-page__kpi--warning::before { background: var(--color-warning); }
+.roster-page__kpi--danger::before { background: var(--color-danger); }
+.roster-page__kpi--umber::before { background: var(--color-umber); }
+.roster-page__kpi--info::before { background: var(--color-info); }
+
+.roster-page__kpi--on {
+  background: var(--color-primary-surface);
+}
+
+.roster-page__kpi-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.roster-page__kpi--brand .roster-page__kpi-icon {
+  background: var(--color-primary-surface-strong);
+  color: var(--color-primary);
+}
+
+.roster-page__kpi--success .roster-page__kpi-icon {
+  background: var(--color-success-tint-bg);
+  color: var(--color-success-tint-fg);
+}
+
+.roster-page__kpi--warning .roster-page__kpi-icon {
+  background: var(--color-warning-tint-bg);
+  color: var(--color-warning-tint-fg);
+}
+
+.roster-page__kpi--danger .roster-page__kpi-icon {
+  background: var(--color-danger-tint-bg);
+  color: var(--color-danger-tint-fg);
+}
+
+.roster-page__kpi--umber .roster-page__kpi-icon {
+  background: var(--color-umber-tint-bg);
+  color: var(--color-umber-tint-fg);
+}
+
+.roster-page__kpi--info .roster-page__kpi-icon,
+.roster-page__kpi--violet .roster-page__kpi-icon {
+  background: var(--color-tertiary-100);
+  color: var(--color-tertiary-800);
+}
+
+.roster-page__kpi--violet::before { background: var(--color-tertiary); }
+
+.roster-page__kpi-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.roster-page__kpi-label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.roster-page__kpi-value {
+  color: var(--color-text);
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
 .roster-page__table {
   min-width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
-  font-size: calc(0.875rem * var(--table-zoom, 1));
+  font-size: calc(0.9375rem * var(--table-zoom, 1));
 }
 
 .roster-page__table thead th {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
+  padding: 0.625rem var(--space-4);
+  background: color-mix(in srgb, var(--color-surface-muted) 65%, var(--color-surface));
+  color: var(--color-primary);
   font-weight: 600;
   font-size: 0.75rem;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   text-align: left;
+  text-transform: uppercase;
   white-space: nowrap;
-  box-shadow: 0 1px 0 var(--color-border);
+  box-shadow: inset 0 -1px 0 var(--color-border);
 }
 
 .roster-page__resize {
@@ -976,11 +1388,11 @@ onBeforeUnmount(() => {
 }
 
 .roster-page__table tbody td {
-  padding: var(--space-3) var(--space-4);
-  color: var(--color-text);
+  padding: 0.625rem var(--space-4);
+  color: var(--color-text-muted);
   vertical-align: middle;
   white-space: nowrap;
-  box-shadow: 0 1px 0 var(--color-border);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--color-border) 55%, transparent);
 }
 
 .roster-page__table tbody tr {
@@ -988,11 +1400,12 @@ onBeforeUnmount(() => {
 }
 
 .roster-page__table tbody tr:hover td {
-  background: var(--color-surface-muted);
+  background: var(--color-info-tint-bg);
 }
 
-.roster-page__row--active td {
-  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+.roster-page__row--active td,
+.roster-page__row--active:hover td {
+  background: var(--color-primary-surface);
 }
 
 .roster-page__cell {
@@ -1018,17 +1431,111 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.roster-page__person-name {
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
 .roster-page__muted {
   margin-top: 0.125rem;
   color: var(--color-text-muted);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.roster-page__status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.roster-page__status--active {
+  background: var(--color-gold-100);
+  color: var(--color-gold-800);
+}
+
+.roster-page__status--on_leave {
+  background: var(--color-warning-tint-bg);
+  color: var(--color-warning-tint-fg);
+}
+
+.roster-page__status--pending_confirmation {
+  background: var(--color-info-tint-bg);
+  color: var(--color-info-tint-fg);
+}
+
+.roster-page__status--processing {
+  background: var(--color-tertiary-100);
+  color: var(--color-tertiary-800);
+}
+
+.roster-page__status--suspended {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.roster-page__status--terminated {
+  background: var(--color-danger-tint-bg);
+  color: var(--color-danger-tint-fg);
 }
 
 .roster-page__empty {
-  padding: var(--space-5);
+  padding: var(--space-6) var(--space-5);
   text-align: center;
   color: var(--color-text-muted);
   white-space: normal;
+}
+
+.roster-page__empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.roster-page__empty-title,
+.roster-page__empty-desc {
+  display: block;
+}
+
+.roster-page__empty-title {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.roster-page__empty-desc {
+  margin-top: var(--space-1);
+  font-size: 0.875rem;
+}
+
+.roster-page__empty-btn {
+  margin-top: var(--space-4);
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
+}
+
+.roster-page__empty-btn:hover {
+  background: var(--color-surface-muted);
 }
 
 .roster-page__menu-btn {
@@ -1229,6 +1736,7 @@ onBeforeUnmount(() => {
   .roster-page__side { width: 100%; max-height: 42%; }
   .roster-page__table-wrap { min-height: 16rem; }
   .roster-page__filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .roster-page__summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 768px) {
@@ -1238,6 +1746,7 @@ onBeforeUnmount(() => {
 @media (max-width: 480px) {
   .roster-page { padding: var(--space-3); }
   .roster-page__filters { grid-template-columns: minmax(0, 1fr); }
+  .roster-page__summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

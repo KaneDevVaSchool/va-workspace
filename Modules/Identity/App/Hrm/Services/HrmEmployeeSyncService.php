@@ -64,12 +64,10 @@ class HrmEmployeeSyncService
     /** Find-or-create theo hrm_uuid — Company không ảnh hưởng permission, an toàn để auto-create. */
     private function resolveCompany(HrmAssignmentData $assignment): Company
     {
-        return Company::query()->updateOrCreate(
-            ['hrm_uuid' => $assignment->companyHrmUuid],
-            [
-                'code' => $assignment->companyCode ?? $assignment->companyHrmUuid,
-                'name' => $assignment->companyName ?? $assignment->companyCode ?? $assignment->companyHrmUuid,
-            ],
+        return Company::upsertFromHrm(
+            (string) $assignment->companyHrmUuid,
+            $assignment->companyCode,
+            $assignment->companyName,
         );
     }
 

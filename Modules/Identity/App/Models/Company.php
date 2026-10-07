@@ -44,4 +44,47 @@ class Company extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    /**
+     * Pháp nhân workspace đôi khi còn mã HRM cũ (cùng `code`, khác `hrm_uuid`).
+     * Khớp theo uuid, rồi theo code, để không insert trùng unique `code`.
+     */
+    public static function upsertFromHrm(string $uuid, ?string $code, ?string $name): self
+    {
+        $code = trim((string) $code);
+        if ($code === '') {
+            $code = $uuid;
+        }
+        $name = trim((string) $name);
+        if ($name === '') {
+            $name = $code;
+        }
+
+        $byUuid = self::query()->where('hrm_uuid', $uuid)->first();
+        if ($byUuid !== null) {
+            $byUuid->name = $name;
+            $codeTaken = self::query()->where('code', $code)->where('id', '!=', $byUuid->id)->exists();
+            if (! $codeTaken) {
+                $byUuid->code = $code;
+            }
+            $byUuid->save();
+
+            return $byUuid;
+        }
+
+        $byCode = self::query()->where('code', $code)->first();
+        if ($byCode !== null) {
+            $byCode->hrm_uuid = $uuid;
+            $byCode->name = $name;
+            $byCode->save();
+
+            return $byCode;
+        }
+
+        return self::query()->create([
+            'hrm_uuid' => $uuid,
+            'code' => $code,
+            'name' => $name,
+        ]);
+    }
 }

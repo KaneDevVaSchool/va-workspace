@@ -33,6 +33,16 @@ class HrmEmployeeDirectoryTest extends TestCase
             $table->string('company_email')->nullable();
             $table->string('personal_email')->nullable();
             $table->string('phone')->nullable();
+            $table->string('gender')->nullable();
+            $table->string('birthdate')->nullable();
+            $table->string('personnel_type')->nullable();
+            $table->string('workplace')->nullable();
+            $table->string('attendance_code')->nullable();
+            $table->string('hired_at')->nullable();
+            $table->string('actual_start_date')->nullable();
+            $table->string('employment_status')->nullable();
+            $table->timestamp('created_at')->nullable();
+            $table->string('department_name')->nullable();
             $table->string('status')->nullable();
             $table->string('direct_manager_name')->nullable();
             $table->string('job_title_name')->nullable();

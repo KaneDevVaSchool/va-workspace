@@ -337,6 +337,39 @@ class WorkspaceConfigOverviewTest extends TestCase
         ]);
     }
 
+    public function test_hrm_roster_relinks_company_when_code_already_exists(): void
+    {
+        $this->seed(RoleSeeder::class);
+        Http::fake();
+
+        Company::query()->create([
+            'hrm_uuid' => '4ddd509c-eefd-4fb8-bd3d-a781b73da5dc',
+            'code' => 'VAS',
+            'name' => 'VA Schools cũ',
+        ]);
+
+        $this->useHrmDirectory([
+            $this->hrmEmployee('9968e9b8-a011-4d46-b6ad-3ff28ac584a6', 'a.nguyen@vaschools.edu.vn', 'Nguyễn Văn A'),
+        ], [
+            $this->hrmOrgUnit('ou-emp-1', 'PB01', 'Phòng Kế toán'),
+        ]);
+
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $this->actingAs($admin)
+            ->getJson('/api/workspace-config/members/by-department')
+            ->assertOk()
+            ->assertJsonPath('source', 'hrm_database')
+            ->assertJsonCount(1, 'members');
+
+        $this->assertSame(1, Company::query()->where('code', 'VAS')->count());
+        $this->assertDatabaseHas('companies', [
+            'code' => 'VAS',
+            'hrm_uuid' => 'co-1',
+            'name' => 'VA Schools',
+        ]);
+    }
+
     public function test_unassigned_members_syncs_departments_from_hrm_org_units(): void
     {
         $this->seed(RoleSeeder::class);
