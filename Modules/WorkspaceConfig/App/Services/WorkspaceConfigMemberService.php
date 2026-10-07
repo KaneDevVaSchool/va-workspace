@@ -4,7 +4,10 @@ namespace Modules\WorkspaceConfig\App\Services;
 
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\Role;
 use Modules\Identity\App\Models\Team;
@@ -42,6 +45,8 @@ class WorkspaceConfigMemberService
         private readonly DepartmentSidebarConfigRepositoryInterface $sidebarConfigs,
         private readonly DepartmentRepositoryInterface $departments,
         private readonly DefaultMemberRoleBootstrap $defaultMemberRole,
+        private readonly HrmEmployeeDirectory $hrmDirectory,
+        private readonly HrmDepartmentSyncService $hrmDepartments,
     ) {}
 
     public function forDepartment(int $departmentId): Collection
@@ -340,6 +345,118 @@ class WorkspaceConfigMemberService
     }
 
     /**
+     * Danh sách phẳng khi chưa cấu hình MySQL HRM — tài khoản workspace local.
+     *
+     * @return array<string, mixed>
+     */
+    public function workspaceRoster(): array
+    {
+        $departments = $this->departments->all();
+        $unassigned = $this->unassignedMembers();
+        $groups = $this->departmentRosterGroups($departments);
+        $members = $unassigned->concat(
+            $groups->flatMap(fn (array $group) => $group['members'])
+        )->unique('id')->values();
+
+        return $this->rosterPayload('workspace', $members, $unassigned, $groups, $departments);
+    }
+
+    /**
+     * Nhân sự đọc từ MySQL VA-HRM, phủ phòng ban workspace nếu đã có tài khoản.
+     * Không gọi API HRM. Không tự gán department_id.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    public function rosterFromHrmDatabase(): array
+    {
+        $loaded = $this->hrmDirectory->load();
+        $this->hrmDepartments->syncDepartmentsFromRecords($loaded['org_units']);
+
+        $departments = $this->departments->all();
+        $users = $this->usersForHrmEmployees($loaded['employees']);
+        $members = collect($loaded['employees'])
+            ->map(fn (array $employee) => $this->presentHrmEmployee(
+                $employee,
+                $this->matchWorkspaceUser($employee, $users),
+            ))
+            ->values();
+        $unassigned = $members
+            ->filter(fn (array $member) => $member['department'] === null)
+            ->values();
+
+        return $this->rosterPayload(
+            'hrm_database',
+            $members,
+            $unassigned,
+            $this->groupMembersByDepartment($departments, $members),
+            $departments,
+        );
+    }
+
+    /**
+     * Tạo tài khoản workspace nếu chưa có, rồi gán phòng ban. Hồ sơ hiển thị
+     * lấy từ dòng HRM vừa đọc, không gọi API.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws MemberDepartmentNotAssignable
+     * @throws HrmDatabaseUnavailable
+     */
+    public function assignDepartmentFromHrm(string $employeeUuid, int $departmentId): array
+    {
+        $employee = $this->hrmDirectory->findEmployee($employeeUuid);
+        if ($employee === null) {
+            throw new MemberDepartmentNotAssignable('Không tìm thấy nhân sự trên HRM.');
+        }
+
+        $email = $this->hrmEmail($employee);
+        if ($email === null) {
+            throw new MemberDepartmentNotAssignable('Nhân sự chưa có email nên chưa tạo được tài khoản workspace.');
+        }
+
+        $user = $this->users->findByHrmEmployeeUuid($employeeUuid)
+            ?? $this->users->findByEmail($email);
+
+        if ($user !== null && filled($user->hrm_employee_uuid) && $user->hrm_employee_uuid !== $employeeUuid) {
+            throw new MemberDepartmentNotAssignable('Email này đã gắn với một nhân sự HRM khác.');
+        }
+
+        if ($user === null) {
+            $active = ['active', 'processing', 'pending_confirmation', 'on_leave'];
+            $user = $this->users->create([
+                'name' => filled($employee['full_name']) ? $employee['full_name'] : $email,
+                'email' => $email,
+                'hrm_employee_uuid' => $employeeUuid,
+                'employee_code' => $employee['code'],
+                'job_title_name' => $employee['job_title'],
+                'job_position_level' => $employee['level_name'],
+                'manager_display_name' => $employee['manager_name'],
+                'status' => in_array($employee['status'], $active, true) ? 'active' : 'inactive',
+            ]);
+        } else {
+            $attributes = [
+                'employee_code' => $employee['code'],
+                'job_title_name' => $employee['job_title'],
+                'job_position_level' => $employee['level_name'],
+                'manager_display_name' => $employee['manager_name'],
+            ];
+            if (filled($employee['full_name'])) {
+                $attributes['name'] = $employee['full_name'];
+            }
+            if ($user->hrm_employee_uuid === null) {
+                $attributes['hrm_employee_uuid'] = $employeeUuid;
+            }
+            $this->users->update($user, $attributes);
+        }
+
+        $user = $this->assignDepartment($user->id, $departmentId);
+
+        return $this->presentHrmEmployee($employee, $user);
+    }
+
+    /**
      * Toàn bộ nhân sự workspace đã có phòng ban — gom theo từng department
      * (kể cả inactive), dùng cho superadmin xem roster một lần gọi API.
      *
@@ -447,5 +564,165 @@ class WorkspaceConfigMemberService
             'code' => $company->code,
             'name' => $company->name,
         ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $employees
+     * @return Collection<int, User>
+     */
+    private function usersForHrmEmployees(array $employees): Collection
+    {
+        $uuids = collect($employees)->pluck('uuid')->filter()->unique()->values();
+        $emails = collect($employees)
+            ->map(fn (array $employee) => $this->hrmEmail($employee))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($uuids->isEmpty() && $emails->isEmpty()) {
+            return collect();
+        }
+
+        return User::query()
+            ->with(['department', 'team', 'roles'])
+            ->where(function ($query) use ($uuids, $emails): void {
+                if ($uuids->isNotEmpty()) {
+                    $query->whereIn('hrm_employee_uuid', $uuids->all());
+                }
+                if ($emails->isNotEmpty()) {
+                    $method = $uuids->isNotEmpty() ? 'orWhereIn' : 'whereIn';
+                    $query->{$method}(DB::raw('LOWER(email)'), $emails->all());
+                }
+            })
+            ->get();
+    }
+
+    /**
+     * @param  array<string, mixed>  $employee
+     * @param  Collection<int, User>  $users
+     */
+    private function matchWorkspaceUser(array $employee, Collection $users): ?User
+    {
+        $matched = $users->first(
+            fn (User $user) => $user->hrm_employee_uuid !== null && $user->hrm_employee_uuid === $employee['uuid']
+        );
+        if ($matched !== null) {
+            return $matched;
+        }
+
+        $email = $this->hrmEmail($employee);
+        if ($email === null) {
+            return null;
+        }
+
+        return $users->first(
+            fn (User $user) => strtolower((string) $user->email) === $email
+                && ($user->hrm_employee_uuid === null || $user->hrm_employee_uuid === $employee['uuid'])
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $employee
+     * @return array<string, mixed>
+     */
+    private function presentHrmEmployee(array $employee, ?User $user): array
+    {
+        $user?->loadMissing(['department', 'team', 'roles']);
+
+        return [
+            'id' => $user?->id,
+            'hrm_employee_uuid' => $employee['uuid'],
+            'name' => filled($employee['full_name']) ? $employee['full_name'] : ($user?->name ?? ''),
+            'email' => $employee['company_email'] ?? $user?->email,
+            'avatar_url' => $user?->avatar_url,
+            'status' => $employee['status'],
+            'employee_code' => $employee['code'],
+            'job_title_name' => $employee['job_title'],
+            'job_position_level' => $employee['level_name'],
+            'phone' => $employee['phone'],
+            'company' => filled($employee['company_name']) ? [
+                'code' => $employee['company_code'],
+                'name' => $employee['company_name'],
+            ] : null,
+            'org_unit' => filled($employee['org_unit_name']) ? [
+                'uuid' => $employee['org_unit_uuid'],
+                'name' => $employee['org_unit_name'],
+                'path' => $employee['org_unit_path'],
+            ] : null,
+            'department' => $user?->department ? [
+                'id' => $user->department->id,
+                'name' => $user->department->name,
+            ] : null,
+            'team' => $user?->team ? [
+                'id' => $user->team->id,
+                'name' => $user->team->name,
+            ] : null,
+            'roles' => $user
+                ? $user->roles->map(fn ($role) => [
+                    'code' => $role->code,
+                    'name' => $role->name,
+                ])->values()->all()
+                : [],
+            'manager_display_name' => $employee['manager_name'],
+            'concurrent_positions' => $employee['concurrent_positions'] ?? [],
+            'has_workspace_account' => $user !== null,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, Department>  $departments
+     * @param  Collection<int, array<string, mixed>>  $members
+     */
+    private function groupMembersByDepartment(Collection $departments, Collection $members): Collection
+    {
+        $byDepartment = $members
+            ->filter(fn (array $member) => isset($member['department']['id']))
+            ->groupBy(fn (array $member) => (int) $member['department']['id']);
+
+        return $departments->map(function ($department) use ($byDepartment) {
+            $rows = $byDepartment->get($department->id) ?? collect();
+
+            return [
+                'id' => $department->id,
+                'name' => $department->name,
+                'is_active' => (bool) $department->is_active,
+                'member_count' => $rows->count(),
+                'members' => $rows->values()->all(),
+            ];
+        })->values();
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $members
+     * @param  Collection<int, array<string, mixed>>  $unassigned
+     * @param  Collection<int, array<string, mixed>>  $groups
+     * @param  Collection<int, Department>  $departments
+     * @return array<string, mixed>
+     */
+    private function rosterPayload(
+        string $source,
+        Collection $members,
+        Collection $unassigned,
+        Collection $groups,
+        Collection $departments,
+    ): array {
+        return [
+            'source' => $source,
+            'members' => $members->values()->all(),
+            'unassigned' => $unassigned->values()->all(),
+            'departments' => $groups->values()->all(),
+            'department_options' => $departments->map(fn ($department) => [
+                'id' => $department->id,
+                'name' => $department->name,
+            ])->values()->all(),
+        ];
+    }
+
+    /** @param  array<string, mixed>  $employee */
+    private function hrmEmail(array $employee): ?string
+    {
+        $email = $employee['company_email'] ?? $employee['personal_email'] ?? null;
+
+        return is_string($email) && $email !== '' ? strtolower($email) : null;
     }
 }

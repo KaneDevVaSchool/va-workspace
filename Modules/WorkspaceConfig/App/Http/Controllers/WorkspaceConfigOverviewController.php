@@ -5,8 +5,9 @@ namespace Modules\WorkspaceConfig\App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Modules\Evaluation\App\Services\EvaluationCriteriaService;
+use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
-use Modules\Identity\App\Hrm\Services\HrmEmployeeBulkSyncService;
+use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\WorkspaceConfig\App\Exceptions\MemberDepartmentNotAssignable;
@@ -34,7 +35,6 @@ class WorkspaceConfigOverviewController extends Controller
         private readonly EvaluationCriteriaService $evaluationCriteria,
         private readonly ActivityLogService $activityLogs,
         private readonly HrmDepartmentSyncService $hrmDepartmentSync,
-        private readonly HrmEmployeeBulkSyncService $hrmEmployeeSync,
     ) {}
 
     public function index(): JsonResponse
@@ -88,22 +88,43 @@ class WorkspaceConfigOverviewController extends Controller
         ]);
     }
 
-    /** Toàn bộ nhân sự workspace theo phòng ban + danh sách chưa gán. */
+    /** Toàn bộ nhân sự: MySQL VA-HRM khi đã cấu hình, không gọi API. */
     public function membersByDepartment(): JsonResponse
     {
-        $this->hrmDepartmentSync->syncDepartmentsFromHrm();
-        $this->hrmEmployeeSync->syncEmployeesFromHrm();
+        try {
+            $payload = HrmEmployeeDirectory::isConfigured()
+                ? $this->members->rosterFromHrmDatabase()
+                : $this->members->workspaceRoster();
+        } catch (HrmDatabaseUnavailable $e) {
+            return response()->json(['message' => $e->getMessage()], 503);
+        }
 
-        $departments = $this->departments->all();
+        return response()->json($payload);
+    }
 
-        return response()->json([
-            'unassigned' => $this->members->unassignedMembers(),
-            'departments' => $this->members->departmentRosterGroups($departments),
-            'department_options' => $departments->map(fn ($d) => [
-                'id' => $d->id,
-                'name' => $d->name,
-            ])->values(),
-        ]);
+    /** Gán phòng ban cho nhân sự HRM — tạo tài khoản workspace nếu chưa có. */
+    public function assignHrmDepartment(AssignWorkspaceConfigMemberDepartmentRequest $request, string $employee): JsonResponse
+    {
+        $data = $request->validated();
+
+        try {
+            $presented = $this->members->assignDepartmentFromHrm($employee, (int) $data['department_id']);
+        } catch (MemberDepartmentNotAssignable $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (HrmDatabaseUnavailable $e) {
+            return response()->json(['message' => $e->getMessage()], 503);
+        }
+
+        $this->activityLogs->record(
+            'member.department.assign',
+            'Gán phòng ban '.($presented['department']['name'] ?? '').' cho '.($presented['name'] ?? ''),
+            $request->user(),
+            'user',
+            $presented['id'] ?? null,
+            ['department_id' => $data['department_id'], 'hrm_employee_uuid' => $employee],
+        );
+
+        return response()->json(['member' => $presented]);
     }
 
     /** Gán/đổi phòng ban cho 1 tài khoản — bước chặn trước khi vào cấu hình phòng ban. */

@@ -5,6 +5,7 @@ namespace Tests\Feature\WorkspaceConfig;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\DepartmentSidebarConfig;
@@ -41,6 +42,7 @@ class WorkspaceConfigOverviewTest extends TestCase
         config([
             'services.hrm.api_base_url' => null,
             'services.hrm.api_token' => null,
+            'database.connections.hrm.database' => null,
         ]);
     }
 
@@ -259,161 +261,79 @@ class WorkspaceConfigOverviewTest extends TestCase
         $this->assertContains($assigned->id, collect($group['members'])->pluck('id')->all());
     }
 
-    public function test_members_by_department_syncs_new_employees_from_hrm_with_department(): void
+    public function test_members_by_department_reads_hrm_database_without_calling_api(): void
     {
         $this->seed(RoleSeeder::class);
+        Http::fake();
 
-        $dept = Department::query()->create([
-            'code' => 'PB01',
-            'name' => 'Phòng Kế toán',
-            'is_active' => true,
-            'hrm_org_unit_uuid' => 'ou-emp-1',
-        ]);
-
-        config([
-            'services.hrm.api_base_url' => 'https://hrm.test',
-            'services.hrm.api_token' => 'test-token',
-        ]);
-
-        Http::fake([
-            'https://hrm.test/api/v1/org-units*' => Http::response([
-                'data' => [],
-                'meta' => ['cursor' => ['next' => null, 'prev' => null, 'count' => 0, 'per_page' => 200]],
-            ], 200),
-            'https://hrm.test/api/v1/employees/emp-uuid-1/manager' => Http::response(['data' => null], 200),
-            'https://hrm.test/api/v1/employees/emp-uuid-1' => Http::response([
-                'data' => [
-                    'uuid' => 'emp-uuid-1',
-                    'code' => 'NV001',
-                    'full_name' => 'Nguyễn Văn A',
-                    'status' => 'active',
-                    'company_email' => 'a.nguyen@vaschools.edu.vn',
-                    'manager_uuid' => null,
-                    'manager_code' => null,
-                    'manager_email' => null,
-                    'primary_assignment' => [
-                        'is_primary' => true,
-                        'is_current' => true,
-                        'company' => ['uuid' => 'co-1', 'code' => 'VAS', 'name' => 'VA Schools'],
-                        'org_unit' => ['uuid' => 'ou-emp-1', 'name' => 'Phòng Kế toán', 'path' => '/ou-emp-1'],
-                        'position' => ['title' => 'Nhân viên', 'level' => null],
-                        'effective_from' => null,
-                        'effective_to' => null,
-                    ],
-                    'concurrent_assignments' => [],
-                ],
-            ], 200),
-            'https://hrm.test/api/v1/employees*' => Http::response([
-                'data' => [
-                    [
-                        'uuid' => 'emp-uuid-1',
-                        'code' => 'NV001',
-                        'full_name' => 'Nguyễn Văn A',
-                        'status' => 'active',
-                        'company_email' => 'a.nguyen@vaschools.edu.vn',
-                        'personal_email' => null,
-                    ],
-                ],
-                'meta' => ['cursor' => ['next' => null, 'prev' => null, 'count' => 1, 'per_page' => 200]],
-            ], 200),
-        ]);
-
-        $admin = $this->makeUser([], ['super_admin']);
-
-        $response = $this->actingAs($admin)
-            ->getJson('/api/workspace-config/members/by-department')
-            ->assertOk();
-
-        $this->assertDatabaseHas('users', [
-            'hrm_employee_uuid' => 'emp-uuid-1',
-            'email' => 'a.nguyen@vaschools.edu.vn',
-            'department_id' => $dept->id,
-        ]);
-
-        $group = collect($response->json('departments'))->firstWhere('id', $dept->id);
-        $this->assertNotNull($group);
-        $this->assertContains('a.nguyen@vaschools.edu.vn', collect($group['members'])->pluck('email')->all());
-    }
-
-    public function test_employee_sync_does_not_override_manually_assigned_department(): void
-    {
-        $this->seed(RoleSeeder::class);
-
-        $hrmDept = Department::query()->create([
-            'code' => 'PB01',
-            'name' => 'Phòng Kế toán',
-            'is_active' => true,
-            'hrm_org_unit_uuid' => 'ou-emp-2',
-        ]);
-        $manualDept = Department::query()->create(['code' => 'PB02', 'name' => 'Phòng Nhân sự', 'is_active' => true]);
-
-        $existing = $this->makeUser([
-            'department_id' => $manualDept->id,
-            'hrm_employee_uuid' => 'emp-uuid-2',
-            'email' => 'b.tran@vaschools.edu.vn',
-        ], ['member']);
-
-        config([
-            'services.hrm.api_base_url' => 'https://hrm.test',
-            'services.hrm.api_token' => 'test-token',
-        ]);
-
-        Http::fake([
-            'https://hrm.test/api/v1/org-units*' => Http::response([
-                'data' => [],
-                'meta' => ['cursor' => ['next' => null, 'prev' => null, 'count' => 0, 'per_page' => 200]],
-            ], 200),
-            'https://hrm.test/api/v1/employees/emp-uuid-2/manager' => Http::response(['data' => null], 200),
-            'https://hrm.test/api/v1/employees/emp-uuid-2' => Http::response([
-                'data' => [
-                    'uuid' => 'emp-uuid-2',
-                    'code' => 'NV002',
-                    'full_name' => 'Trần Thị B',
-                    'status' => 'active',
-                    'company_email' => 'b.tran@vaschools.edu.vn',
-                    'manager_uuid' => null,
-                    'manager_code' => null,
-                    'manager_email' => null,
-                    'primary_assignment' => [
-                        'is_primary' => true,
-                        'is_current' => true,
-                        'company' => ['uuid' => 'co-1', 'code' => 'VAS', 'name' => 'VA Schools'],
-                        'org_unit' => ['uuid' => 'ou-emp-2', 'name' => 'Phòng Kế toán', 'path' => '/ou-emp-2'],
-                        'position' => ['title' => 'Nhân viên', 'level' => null],
-                        'effective_from' => null,
-                        'effective_to' => null,
-                    ],
-                    'concurrent_assignments' => [],
-                ],
-            ], 200),
-            'https://hrm.test/api/v1/employees*' => Http::response([
-                'data' => [
-                    [
-                        'uuid' => 'emp-uuid-2',
-                        'code' => 'NV002',
-                        'full_name' => 'Trần Thị B',
-                        'status' => 'active',
-                        'company_email' => 'b.tran@vaschools.edu.vn',
-                        'personal_email' => null,
-                    ],
-                ],
-                'meta' => ['cursor' => ['next' => null, 'prev' => null, 'count' => 1, 'per_page' => 200]],
-            ], 200),
+        $employeeUuid = '9968e9b8-a011-4d46-b6ad-3ff28ac584a6';
+        $this->useHrmDirectory([
+            $this->hrmEmployee($employeeUuid, 'a.nguyen@vaschools.edu.vn', 'Nguyễn Văn A'),
+        ], [
+            $this->hrmOrgUnit('ou-emp-1', 'PB01', 'Phòng Kế toán'),
         ]);
 
         $admin = $this->makeUser([], ['super_admin']);
 
         $this->actingAs($admin)
             ->getJson('/api/workspace-config/members/by-department')
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('source', 'hrm_database')
+            ->assertJsonPath('members.0.email', 'a.nguyen@vaschools.edu.vn')
+            ->assertJsonPath('members.0.org_unit.name', 'Phòng Kế toán')
+            ->assertJsonPath('members.0.department', null)
+            ->assertJsonPath('members.0.has_workspace_account', false);
 
+        Http::assertNothingSent();
+        $this->assertDatabaseMissing('users', ['email' => 'a.nguyen@vaschools.edu.vn']);
+
+        $department = Department::query()->where('hrm_org_unit_uuid', 'ou-emp-1')->first();
+        $this->assertNotNull($department);
+
+        $this->actingAs($admin)
+            ->putJson("/api/workspace-config/members/hrm/{$employeeUuid}/department", [
+                'department_id' => $department->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('member.department.id', $department->id)
+            ->assertJsonPath('member.has_workspace_account', true);
+
+        $this->assertDatabaseHas('users', [
+            'hrm_employee_uuid' => $employeeUuid,
+            'email' => 'a.nguyen@vaschools.edu.vn',
+            'department_id' => $department->id,
+        ]);
+    }
+
+    public function test_hrm_roster_does_not_override_manually_assigned_department(): void
+    {
+        $this->seed(RoleSeeder::class);
+        Http::fake();
+
+        $manualDept = Department::query()->create(['code' => 'PB02', 'name' => 'Phòng Nhân sự', 'is_active' => true]);
+        $existing = $this->makeUser([
+            'department_id' => $manualDept->id,
+            'hrm_employee_uuid' => '11111111-1111-4111-8111-111111111111',
+            'email' => 'b.tran@vaschools.edu.vn',
+        ], ['member']);
+
+        $this->useHrmDirectory([
+            $this->hrmEmployee('11111111-1111-4111-8111-111111111111', 'b.tran@vaschools.edu.vn', 'Trần Thị B'),
+        ], [
+            $this->hrmOrgUnit('ou-emp-2', 'PB01', 'Phòng Kế toán'),
+        ]);
+
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $this->actingAs($admin)
+            ->getJson('/api/workspace-config/members/by-department')
+            ->assertOk()
+            ->assertJsonPath('members.0.department.id', $manualDept->id);
+
+        Http::assertNothingSent();
         $this->assertDatabaseHas('users', [
             'id' => $existing->id,
             'department_id' => $manualDept->id,
-        ]);
-        $this->assertDatabaseMissing('users', [
-            'id' => $existing->id,
-            'department_id' => $hrmDept->id,
         ]);
     }
 
@@ -584,5 +504,62 @@ class WorkspaceConfigOverviewTest extends TestCase
                 'role_code' => 'team_lead',
             ])
             ->assertStatus(403);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $employees
+     * @param  list<array<string, mixed>>  $orgUnits
+     */
+    private function useHrmDirectory(array $employees, array $orgUnits): void
+    {
+        config(['database.connections.hrm.database' => 'hrm-test']);
+
+        $this->mock(HrmEmployeeDirectory::class, function ($mock) use ($employees, $orgUnits): void {
+            $mock->shouldReceive('load')->andReturn([
+                'employees' => $employees,
+                'org_units' => $orgUnits,
+            ]);
+            $mock->shouldReceive('findEmployee')->andReturnUsing(
+                fn (string $uuid) => collect($employees)->firstWhere('uuid', $uuid)
+            );
+        });
+    }
+
+    /** @return array<string, mixed> */
+    private function hrmEmployee(string $uuid, string $email, string $name): array
+    {
+        return [
+            'uuid' => $uuid,
+            'code' => 'NV001',
+            'full_name' => $name,
+            'company_email' => $email,
+            'personal_email' => null,
+            'phone' => null,
+            'status' => 'active',
+            'job_title' => 'Nhân viên',
+            'level_name' => 'Nhân viên',
+            'company_uuid' => 'co-1',
+            'company_code' => 'VAS',
+            'company_name' => 'VA Schools',
+            'org_unit_uuid' => 'ou-emp-1',
+            'org_unit_name' => 'Phòng Kế toán',
+            'org_unit_path' => '/ou-emp-1',
+            'manager_name' => 'Trần Quản lý',
+            'concurrent_positions' => [],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function hrmOrgUnit(string $uuid, string $code, string $name): array
+    {
+        return [
+            'uuid' => $uuid,
+            'code' => $code,
+            'name' => $name,
+            'short_name' => null,
+            'type' => 'department',
+            'status' => 'active',
+            'company' => ['uuid' => 'co-1', 'code' => 'VAS', 'name' => 'VA Schools'],
+        ];
     }
 }

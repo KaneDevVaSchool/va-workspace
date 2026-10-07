@@ -63,6 +63,30 @@ return [
             ]) : [],
         ],
 
+        /*
+         * MySQL VA-HRM — chỉ đọc nhân sự / đơn vị cho trang Nhân sự workspace.
+         * Không dùng HTTP API. Host 127.0.0.1 chỉ đúng khi PHP workspace chạy
+         * cùng máy với MySQL HRM.
+         */
+        'hrm' => [
+            'driver' => 'mysql',
+            'host' => env('HRM_DB_HOST', '127.0.0.1'),
+            'port' => env('HRM_DB_PORT', '3306'),
+            'database' => env('HRM_DB_DATABASE'),
+            'username' => env('HRM_DB_USERNAME'),
+            'password' => env('HRM_DB_PASSWORD', ''),
+            'unix_socket' => env('HRM_DB_SOCKET', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => env('HRM_DB_PREFIX', 'va_hrm_'),
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DATABASE_URL'),

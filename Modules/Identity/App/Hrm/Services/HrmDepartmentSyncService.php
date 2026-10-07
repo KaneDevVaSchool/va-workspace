@@ -45,6 +45,17 @@ class HrmDepartmentSyncService
             return;
         }
 
+        $this->syncDepartmentsFromRecords($orgUnits);
+    }
+
+    /**
+     * Upsert phòng ban workspace từ các dòng org-unit đã đọc ở DB HRM
+     * (cùng shape với OrgUnitResource). Không gọi API.
+     *
+     * @param  iterable<int, array<string, mixed>>  $orgUnits
+     */
+    public function syncDepartmentsFromRecords(iterable $orgUnits): void
+    {
         DB::transaction(function () use ($orgUnits): void {
             foreach ($orgUnits as $orgUnit) {
                 if (! is_array($orgUnit) || ! isset($orgUnit['uuid'])) {
