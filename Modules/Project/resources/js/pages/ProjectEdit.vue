@@ -10,6 +10,7 @@ import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import ProjectFormFields from '../components/ProjectFormFields.vue';
+import { collapseDuplicateDepartmentIds } from '../utils/projectDepartments.js';
 
 const STEPS = [
   { id: 1, title: 'Thông tin dự án', icon: 'fileText', color: 'primary' },
@@ -154,6 +155,9 @@ function mergeDepartmentsFromProject(deptList, project) {
       name: d.name,
       code: d.code ?? null,
       hrm_code: d.hrm_code ?? d.external_code ?? null,
+      company_id: d.company_id ?? null,
+      company_code: d.company_code ?? null,
+      company_name: d.company_name ?? null,
     });
     byId.set(d.id, true);
   }
@@ -223,6 +227,10 @@ async function loadMeta() {
     const project = projectRes.data.project;
     departments.value = mergeDepartmentsFromProject(departmentsRes.data.departments ?? [], project);
     applyProject(project);
+    form.executing_department_ids = collapseDuplicateDepartmentIds(
+      form.executing_department_ids,
+      departments.value,
+    );
   } catch (err) {
     if (err?.response?.status === 404) {
       notFound.value = true;

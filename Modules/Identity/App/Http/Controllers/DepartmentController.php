@@ -37,7 +37,11 @@ class DepartmentController extends Controller
                     'id' => $d->id,
                     'code' => $d->code,
                     'name' => $d->name,
+                    // Mã phần mềm HRM (departments.software_code) — xem /organization/departments
                     'hrm_code' => $d->external_code,
+                    'company_id' => $d->company_id,
+                    'company_code' => $d->company?->code,
+                    'company_name' => $d->company?->name,
                 ])
                 ->values(),
         ]);

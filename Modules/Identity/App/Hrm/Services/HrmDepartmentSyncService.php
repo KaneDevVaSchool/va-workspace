@@ -261,16 +261,16 @@ class HrmDepartmentSyncService
     {
         $uuid = (string) $orgUnit['uuid'];
         $name = trim((string) ($orgUnit['name'] ?? $orgUnit['short_name'] ?? $uuid));
-        $code = $this->uniqueDepartmentCode($uuid, $orgUnit);
         $isActive = ($orgUnit['status'] ?? 'active') === 'active';
         $company = $this->resolveCompany($orgUnit['company'] ?? null);
+        $code = $this->uniqueDepartmentCode($uuid, $orgUnit, $company);
 
         $department = Department::query()->where('hrm_org_unit_uuid', $uuid)->first();
 
         $attributes = [
             'code' => $code,
             'name' => $name !== '' ? $name : $code,
-            'external_code' => $orgUnit['code'] ?? null,
+            'external_code' => $this->hrmExternalCode($orgUnit),
             'is_active' => $isActive,
             'company_id' => $company?->id,
         ];
@@ -286,27 +286,55 @@ class HrmDepartmentSyncService
         ]));
     }
 
-    /** @param array<string, mixed> $orgUnit */
-    private function uniqueDepartmentCode(string $uuid, array $orgUnit): string
+    /**
+     * Mã hiển thị/tích hợp — ưu tiên «Mã phần mềm» danh mục HRM
+     * (`/organization/departments`), fallback mã org unit.
+     *
+     * @param  array<string, mixed>  $orgUnit
+     */
+    private function hrmExternalCode(array $orgUnit): ?string
     {
-        $candidate = trim((string) ($orgUnit['code'] ?? ''));
+        $software = trim((string) ($orgUnit['software_code'] ?? ''));
+        if ($software !== '') {
+            return $software;
+        }
+
+        $code = trim((string) ($orgUnit['code'] ?? ''));
+
+        return $code !== '' ? $code : null;
+    }
+
+    /** @param array<string, mixed> $orgUnit */
+    private function uniqueDepartmentCode(string $uuid, array $orgUnit, ?Company $company): string
+    {
+        $candidate = $this->hrmExternalCode($orgUnit) ?? '';
         if ($candidate === '') {
             $candidate = 'HRM-'.strtoupper(substr(str_replace('-', '', $uuid), 0, 12));
         }
 
-        $conflict = Department::query()
-            ->where('code', $candidate)
+        if ($company !== null && filled($company->code)) {
+            $scoped = strtoupper((string) $company->code).'_'.$candidate;
+            if (! $this->departmentCodeTakenByOtherUuid($scoped, $uuid)) {
+                return $scoped;
+            }
+        }
+
+        if (! $this->departmentCodeTakenByOtherUuid($candidate, $uuid)) {
+            return $candidate;
+        }
+
+        return $candidate.'-'.substr($uuid, 0, 8);
+    }
+
+    private function departmentCodeTakenByOtherUuid(string $code, string $uuid): bool
+    {
+        return Department::query()
+            ->where('code', $code)
             ->where(function ($query) use ($uuid): void {
                 $query->whereNull('hrm_org_unit_uuid')
                     ->orWhere('hrm_org_unit_uuid', '!=', $uuid);
             })
             ->exists();
-
-        if ($conflict) {
-            $candidate = $candidate.'-'.substr($uuid, 0, 8);
-        }
-
-        return $candidate;
     }
 
     /** @param array<string, mixed>|null $companyPayload */

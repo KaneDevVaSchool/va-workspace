@@ -62,9 +62,13 @@ class ProcessOrgUnitChangedJob implements ShouldQueue
 
         $company = $this->resolveCompany($orgUnit['company'] ?? null);
 
+        $externalCode = filled($orgUnit['software_code'] ?? null)
+            ? (string) $orgUnit['software_code']
+            : ($orgUnit['code'] ?? null);
+
         $department->fill(array_filter([
             'name' => $orgUnit['name'] ?? null,
-            'external_code' => $orgUnit['code'] ?? null,
+            'external_code' => $externalCode,
             'company_id' => $company?->id,
         ], fn ($value) => $value !== null))->save();
 

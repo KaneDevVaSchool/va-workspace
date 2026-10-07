@@ -1236,11 +1236,16 @@ class ProjectService
             return null;
         }
 
+        $department->loadMissing('company:id,code,name');
+
         return [
             'id' => $department->id,
             'name' => $department->name,
             'code' => $department->code,
             'hrm_code' => $department->external_code,
+            'company_id' => $department->company_id,
+            'company_code' => $department->company?->code,
+            'company_name' => $department->company?->name,
         ];
     }
 }

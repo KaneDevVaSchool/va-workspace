@@ -37,12 +37,39 @@ class DepartmentRepository implements DepartmentRepositoryInterface
     public function allActiveSyncedFromHrmForPicker(): Collection
     {
         $rows = Department::query()
+            ->with('company:id,code,name')
             ->whereNotNull('hrm_org_unit_uuid')
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
 
         return $this->dedupeHrmDepartmentsForPicker($rows);
+    }
+
+    public function collapseDuplicatePickerIds(array $ids): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if ($ids === []) {
+            return [];
+        }
+
+        $departments = Department::query()->whereIn('id', $ids)->get()->keyBy('id');
+        /** @var array<string, int> $best */
+        $best = [];
+
+        foreach ($ids as $id) {
+            $department = $departments->get($id);
+            if ($department === null) {
+                continue;
+            }
+
+            $key = $this->pickerDedupeKey($department);
+            if (! isset($best[$key]) || $id > $best[$key]) {
+                $best[$key] = $id;
+            }
+        }
+
+        return array_values($best);
     }
 
     /**
@@ -55,10 +82,7 @@ class DepartmentRepository implements DepartmentRepositoryInterface
         $best = [];
 
         foreach ($rows as $department) {
-            $externalCode = strtolower(trim((string) ($department->external_code ?? '')));
-            $key = $externalCode !== ''
-                ? ($department->company_id ?? 0)."\0".$externalCode
-                : 'uuid:'.$department->hrm_org_unit_uuid;
+            $key = $this->pickerDedupeKey($department);
 
             if (! isset($best[$key]) || $department->id > $best[$key]->id) {
                 $best[$key] = $department;
@@ -78,5 +102,14 @@ class DepartmentRepository implements DepartmentRepositoryInterface
     public function findByHrmOrgUnitUuid(string $hrmOrgUnitUuid): ?Department
     {
         return Department::query()->where('hrm_org_unit_uuid', $hrmOrgUnitUuid)->first();
+    }
+
+    private function pickerDedupeKey(Department $department): string
+    {
+        $externalCode = strtolower(trim((string) ($department->external_code ?? '')));
+
+        return $externalCode !== ''
+            ? ($department->company_id ?? 0)."\0".$externalCode
+            : 'uuid:'.$department->hrm_org_unit_uuid;
     }
 }

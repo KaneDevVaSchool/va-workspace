@@ -6,6 +6,7 @@
 //
 import { computed, nextTick, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
+import { formatDepartmentMeta } from '../utils/projectDepartments.js';
 
 const props = defineProps({
   modelValue: { type: Array, required: true },
@@ -18,8 +19,8 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 
-function deptHrmCode(department) {
-  return department?.hrm_code || department?.external_code || department?.code || '';
+function deptMeta(department) {
+  return formatDepartmentMeta(department);
 }
 
 const selectedIds = computed(() => new Set(props.modelValue.map((id) => String(id))));
@@ -37,8 +38,13 @@ const matches = computed(() => {
   const list = props.departments.filter((d) => {
     if (selectedIds.value.has(String(d.id))) return false;
     if (!q) return true;
-    const code = deptHrmCode(d).toLowerCase();
-    return (d.name || '').toLowerCase().includes(q) || code.includes(q);
+    const code = deptMeta(d).toLowerCase();
+    const company = String(d.company_name ?? '').toLowerCase();
+    return (
+      (d.name || '').toLowerCase().includes(q)
+      || code.includes(q)
+      || company.includes(q)
+    );
   });
   if (q) return list;
   return list.slice(0, 40);
@@ -120,7 +126,7 @@ function onKeydown(event) {
       <li v-for="item in selectedDepartments" :key="item.id" class="proj-dept-picker__row">
         <span class="proj-dept-picker__dot" aria-hidden="true" />
         <span class="proj-dept-picker__name">{{ item.name }}</span>
-        <span v-if="deptHrmCode(item)" class="proj-dept-picker__meta">{{ deptHrmCode(item) }}</span>
+        <span v-if="deptMeta(item)" class="proj-dept-picker__meta">{{ deptMeta(item) }}</span>
         <button
           type="button"
           class="proj-dept-picker__remove"
@@ -166,7 +172,7 @@ function onKeydown(event) {
           @mousedown.prevent="pick(item)"
         >
           <span>{{ item.name }}</span>
-          <span v-if="deptHrmCode(item)" class="proj-dept-picker__option-meta">{{ deptHrmCode(item) }}</span>
+          <span v-if="deptMeta(item)" class="proj-dept-picker__option-meta">{{ deptMeta(item) }}</span>
         </li>
         <li v-if="matches.length === 0" class="proj-dept-picker__empty">Không tìm thấy.</li>
       </ul>

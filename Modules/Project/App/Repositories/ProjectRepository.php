@@ -10,6 +10,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
 use Modules\Identity\App\Models\Department;
+use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Identity\App\Services\ViewAsService;
 use Modules\Project\App\Models\Project;
@@ -229,7 +230,8 @@ class ProjectRepository implements ProjectRepositoryInterface
 
     public function replaceExecutingDepartments(Project $project, array $departmentIds): Project
     {
-        $ids = array_values(array_unique(array_map('intval', $departmentIds)));
+        $ids = app(DepartmentRepositoryInterface::class)
+            ->collapseDuplicatePickerIds(array_map('intval', $departmentIds));
         $project->executingDepartments()->sync($ids);
 
         $project->update([

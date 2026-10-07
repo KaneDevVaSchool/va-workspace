@@ -34,6 +34,14 @@ interface DepartmentRepositoryInterface
      */
     public function allActiveSyncedFromHrmForPicker(): Collection;
 
+    /**
+     * Gom id trùng cùng (company_id, mã HRM) — giữ id lớn nhất.
+     *
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    public function collapseDuplicatePickerIds(array $ids): array;
+
     public function find(int $id): ?Department;
 
     /** Tìm phòng ban đã map thủ công tới 1 OrgUnit của VA-HRM (qua UI Department). */
