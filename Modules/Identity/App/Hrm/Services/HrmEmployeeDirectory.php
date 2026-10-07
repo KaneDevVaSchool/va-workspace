@@ -72,27 +72,33 @@ class HrmEmployeeDirectory
         }
 
         try {
-            $orgUnitId = null;
+            $match = null;
             if ($employeeUuid !== null && $employeeUuid !== '') {
-                $orgUnitId = $this->primaryAssignmentQuery()
+                $match = $this->primaryAssignmentQuery()
                     ->where('e.uuid', $employeeUuid)
-                    ->value('a.org_unit_id');
+                    ->first(['a.org_unit_id', 'e.uuid as employee_uuid']);
             }
 
-            if (! $orgUnitId && $email !== null && $email !== '') {
+            if (($match === null || ! $match->org_unit_id) && $email !== null && $email !== '') {
                 $query = $this->primaryAssignmentQuery();
                 $column = $query->getGrammar()->wrap('e.company_email');
-                $orgUnitId = $query
+                $match = $query
                     ->whereRaw('LOWER('.$column.') = ?', [strtolower($email)])
-                    ->value('a.org_unit_id');
+                    ->first(['a.org_unit_id', 'e.uuid as employee_uuid']);
             }
-            if (! $orgUnitId) {
+            if ($match === null || ! $match->org_unit_id) {
                 return null;
             }
 
-            $unit = $this->departmentAncestor($orgUnitId);
+            $unit = $this->departmentAncestor($match->org_unit_id);
+            if ($unit === null) {
+                return null;
+            }
 
-            return $unit !== null ? $this->presentOrgUnit($unit) : null;
+            $presented = $this->presentOrgUnit($unit);
+            $presented['employee_uuid'] = (string) $match->employee_uuid;
+
+            return $presented;
         } catch (Throwable $e) {
             Log::warning('hrm.database.department_lookup_failed', ['message' => $e->getMessage()]);
 

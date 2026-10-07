@@ -34,7 +34,12 @@ class HrmDepartmentSyncService
      */
     public function ensureUserDepartment(User $user): void
     {
-        if ($user->department_id !== null || ! HrmEmployeeDirectory::isConfigured()) {
+        if (! HrmEmployeeDirectory::isConfigured()) {
+            return;
+        }
+
+        if ($user->department_id !== null
+            && Department::query()->whereKey($user->department_id)->exists()) {
             return;
         }
 
@@ -60,7 +65,15 @@ class HrmDepartmentSyncService
             return;
         }
 
-        $user->forceFill(['department_id' => $department->id])->save();
+        $fill = ['department_id' => $department->id];
+        $employeeUuid = filled($orgUnit['employee_uuid'] ?? null) ? (string) $orgUnit['employee_uuid'] : null;
+        if ($employeeUuid !== null
+            && $user->hrm_employee_uuid !== $employeeUuid
+            && ! User::query()->where('hrm_employee_uuid', $employeeUuid)->whereKeyNot($user->id)->exists()) {
+            $fill['hrm_employee_uuid'] = $employeeUuid;
+        }
+
+        $user->forceFill($fill)->save();
     }
 
     public function syncDepartmentsFromHrm(): void

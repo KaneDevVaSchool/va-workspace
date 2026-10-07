@@ -177,4 +177,37 @@ class HrmWorkspaceDepartmentAssignTest extends TestCase
             $user->fresh()->department_id,
         );
     }
+
+    public function test_api_me_replaces_a_department_id_whose_row_was_deleted(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $gone = Department::query()->create([
+            'code' => 'GONE',
+            'name' => 'Phòng đã xoá',
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'status' => 'active',
+            'email' => 'tu.van@vaschools.edu.vn',
+            'hrm_employee_uuid' => '00000000-0000-4000-8000-000000000099',
+            'department_id' => $gone->id,
+        ]);
+
+        Schema::disableForeignKeyConstraints();
+        $gone->delete();
+        Schema::enableForeignKeyConstraints();
+
+        $this->actingAs($user)
+            ->getJson('/api/me')
+            ->assertOk()
+            ->assertJsonPath('department.name', 'Phòng Marketing');
+
+        $user->refresh();
+        $this->assertSame(
+            Department::query()->where('hrm_org_unit_uuid', 'ou-dept')->value('id'),
+            $user->department_id,
+        );
+        $this->assertSame('emp-1', $user->hrm_employee_uuid);
+    }
 }
