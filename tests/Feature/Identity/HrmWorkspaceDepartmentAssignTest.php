@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Modules\Identity\App\Models\Department;
+use Modules\Identity\App\Models\Role;
 use Modules\Identity\Database\Seeders\RoleSeeder;
 use Tests\TestCase;
 
@@ -144,5 +145,36 @@ class HrmWorkspaceDepartmentAssignTest extends TestCase
             ->assertJsonPath('department.name', 'Phòng đã gán tay');
 
         $this->assertSame($manual->id, $user->fresh()->department_id);
+    }
+
+    public function test_view_as_member_assigns_department_from_email_when_uuid_is_missing(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $user = User::factory()->create([
+            'status' => 'active',
+            'email' => 'Tu.Van@VASchools.edu.vn',
+            'hrm_employee_uuid' => null,
+            'department_id' => null,
+        ]);
+        $user->roles()->sync(Role::query()->pluck('id'));
+
+        $this->actingAs($user)
+            ->getJson('/api/me')
+            ->assertOk()
+            ->assertJsonPath('department', null)
+            ->assertJsonPath('is_impersonating', false);
+
+        $this->actingAs($user)
+            ->postJson('/api/view-as', ['role_code' => 'member'])
+            ->assertOk()
+            ->assertJsonPath('user.active_role', 'member')
+            ->assertJsonPath('user.is_impersonating', true)
+            ->assertJsonPath('user.department.name', 'Phòng Marketing');
+
+        $this->assertSame(
+            Department::query()->where('hrm_org_unit_uuid', 'ou-dept')->value('id'),
+            $user->fresh()->department_id,
+        );
     }
 }

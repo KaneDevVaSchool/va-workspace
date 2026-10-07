@@ -72,18 +72,20 @@ class HrmEmployeeDirectory
         }
 
         try {
-            $query = DB::connection('hrm')
-                ->table('employees as e')
-                ->leftJoin('employee_assignments as a', 'a.open_primary_employee_id', '=', 'e.id')
-                ->whereNull('e.deleted_at');
-
+            $orgUnitId = null;
             if ($employeeUuid !== null && $employeeUuid !== '') {
-                $query->where('e.uuid', $employeeUuid);
-            } else {
-                $query->whereRaw('LOWER(e.company_email) = ?', [strtolower((string) $email)]);
+                $orgUnitId = $this->primaryAssignmentQuery()
+                    ->where('e.uuid', $employeeUuid)
+                    ->value('a.org_unit_id');
             }
 
-            $orgUnitId = $query->value('a.org_unit_id');
+            if (! $orgUnitId && $email !== null && $email !== '') {
+                $query = $this->primaryAssignmentQuery();
+                $column = $query->getGrammar()->wrap('e.company_email');
+                $orgUnitId = $query
+                    ->whereRaw('LOWER('.$column.') = ?', [strtolower($email)])
+                    ->value('a.org_unit_id');
+            }
             if (! $orgUnitId) {
                 return null;
             }
@@ -426,6 +428,14 @@ class HrmEmployeeDirectory
         }
 
         return null;
+    }
+
+    private function primaryAssignmentQuery(): \Illuminate\Database\Query\Builder
+    {
+        return DB::connection('hrm')
+            ->table('employees as e')
+            ->leftJoin('employee_assignments as a', 'a.open_primary_employee_id', '=', 'e.id')
+            ->whereNull('e.deleted_at');
     }
 
     private function departmentAncestor(mixed $orgUnitId): ?object
