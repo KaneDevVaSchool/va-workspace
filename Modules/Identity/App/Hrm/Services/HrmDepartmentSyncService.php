@@ -28,52 +28,60 @@ class HrmDepartmentSyncService
     }
 
     /**
-     * Tài khoản chưa có phòng ban Workspace thì gán đúng phòng ban HRM
-     * (không gán bộ phận). Không ghi đè phòng ban đã gán tay.
-     * Đọc MySQL HRM, không gọi API.
+     * Phòng ban HRM của tài khoản (org unit type department). Không đọc và
+     * không ghi department Workspace.
+     *
+     * @return array{uuid: string, code: mixed, name: mixed}|null
      */
-    public function ensureUserDepartment(User $user): void
+    public function hrmDepartmentFor(User $user): ?array
     {
         if (! HrmEmployeeDirectory::isConfigured()) {
-            return;
-        }
-
-        if ($user->department_id !== null
-            && Department::query()->whereKey($user->department_id)->exists()) {
-            return;
+            return null;
         }
 
         try {
             $orgUnit = $this->directory->primaryDepartmentOrgUnit($user->hrm_employee_uuid, $user->email);
         } catch (HrmDatabaseUnavailable $e) {
-            Log::warning('hrm.user_department.ensure_failed', [
+            Log::warning('hrm.user_department.lookup_failed', [
                 'user_id' => $user->id,
                 'message' => $e->getMessage(),
             ]);
 
-            return;
+            return null;
         }
 
-        if ($orgUnit === null) {
-            return;
+        if ($orgUnit === null || ! filled($orgUnit['uuid'] ?? null)) {
+            return null;
         }
 
-        $this->upsertDepartment($orgUnit);
+        return [
+            'uuid' => (string) $orgUnit['uuid'],
+            'code' => $orgUnit['code'] ?? null,
+            'name' => $orgUnit['name'] ?? null,
+        ];
+    }
 
-        $department = Department::query()->where('hrm_org_unit_uuid', $orgUnit['uuid'])->first();
-        if ($department === null) {
-            return;
+    /**
+     * Phòng ban Workspace đã đồng bộ cùng uuid HRM, chỉ để đọc tiêu chí.
+     * Không tạo dòng mới và không gán users.department_id.
+     */
+    public function existingDepartmentIdFor(User $user): ?int
+    {
+        $hrm = $this->hrmDepartmentFor($user);
+        if ($hrm === null) {
+            return null;
         }
 
-        $fill = ['department_id' => $department->id];
-        $employeeUuid = filled($orgUnit['employee_uuid'] ?? null) ? (string) $orgUnit['employee_uuid'] : null;
-        if ($employeeUuid !== null
-            && $user->hrm_employee_uuid !== $employeeUuid
-            && ! User::query()->where('hrm_employee_uuid', $employeeUuid)->whereKeyNot($user->id)->exists()) {
-            $fill['hrm_employee_uuid'] = $employeeUuid;
-        }
+        $id = Department::query()->where('hrm_org_unit_uuid', $hrm['uuid'])->value('id');
 
-        $user->forceFill($fill)->save();
+        return $id !== null ? (int) $id : null;
+    }
+
+    /**
+     * Không gán department Workspace. Phòng ban của tài khoản đọc từ HRM.
+     */
+    public function ensureUserDepartment(User $user): void
+    {
     }
 
     public function syncDepartmentsFromHrm(): void

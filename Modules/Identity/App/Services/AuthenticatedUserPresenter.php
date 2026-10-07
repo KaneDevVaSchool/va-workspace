@@ -27,18 +27,17 @@ class AuthenticatedUserPresenter
 
     public function forUser(User $user): array
     {
-        $this->hrmDepartments->ensureUserDepartment($user);
         $this->superAdminBootstrap->ensureRolesForUser($user);
         $this->defaultMemberRole->ensureForUser($user);
         $user->unsetRelation('roles');
         $user->load(['department', 'roles', 'company', 'concurrentPositions']);
 
-        // Super admin (không đang xem thử) không mang ngữ cảnh phòng ban:
-        // sidebar đi theo menu toàn hệ thống, không đè overlay per-department.
-        // Xem thử vai trò khác thì giữ department_id thật để RBAC scope=department.
+        // Super admin (không đang xem thử) không mang ngữ cảnh phòng ban.
+        // Xem thử vai trò khác thì phòng ban lấy từ HRM, không từ department Workspace.
         $department = ($user->isSuperAdmin() && ! $this->viewAs->isImpersonating())
             ? null
-            : $user->department;
+            : $this->hrmDepartments->hrmDepartmentFor($user);
+        $menuDepartment = $user->department;
 
         return [
             'id' => $user->id,
@@ -46,11 +45,7 @@ class AuthenticatedUserPresenter
             'email' => $user->email,
             'avatar_url' => $user->avatar_url,
             'status' => $user->status,
-            'department' => $department ? [
-                'id' => $department->id,
-                'code' => $department->code,
-                'name' => $department->name,
-            ] : null,
+            'department' => $department,
             // Đồng bộ từ VA-HRM (Modules/Identity/App/Hrm) — chỉ hiển thị.
             'employee_code' => $user->employee_code,
             'job_title_name' => $user->job_title_name,
@@ -74,20 +69,20 @@ class AuthenticatedUserPresenter
             // ['*'] nếu là super_admin thực sự; catalog keys đang được cấp nếu không.
             'granted_permissions' => $this->permissions->resolveGrantedKeys($user),
             // Menu sidebar bị phòng ban của user tự tắt / đổi tên / sắp xếp (xem AppSidebar.vue).
-            'hidden_menu_keys' => $department
-                ? $this->sidebarConfigs->hiddenKeysForDepartment($department->id)
+            'hidden_menu_keys' => $menuDepartment
+                ? $this->sidebarConfigs->hiddenKeysForDepartment($menuDepartment->id)
                 : [],
-            'menu_labels' => $department
-                ? $this->sidebarConfigs->customLabelsForDepartment($department->id)
+            'menu_labels' => $menuDepartment
+                ? $this->sidebarConfigs->customLabelsForDepartment($menuDepartment->id)
                 : (object) [],
-            'menu_order' => $department
-                ? $this->sidebarConfigs->sortOrdersForDepartment($department->id)
+            'menu_order' => $menuDepartment
+                ? $this->sidebarConfigs->sortOrdersForDepartment($menuDepartment->id)
                 : (object) [],
-            'menu_item_sections' => $department
-                ? $this->sidebarConfigs->itemSectionsForDepartment($department->id)
+            'menu_item_sections' => $menuDepartment
+                ? $this->sidebarConfigs->itemSectionsForDepartment($menuDepartment->id)
                 : (object) [],
-            'menu_section_labels' => $department
-                ? $this->sidebarConfigs->sectionLabelsForDepartment($department->id)
+            'menu_section_labels' => $menuDepartment
+                ? $this->sidebarConfigs->sectionLabelsForDepartment($menuDepartment->id)
                 : (object) [],
             // Menu bị ẩn TOÀN HỆ THỐNG (superadmin cấu hình) — LUÔN trả,
             // không phụ thuộc department. Áp dụng cho MỌI tài khoản kể cả

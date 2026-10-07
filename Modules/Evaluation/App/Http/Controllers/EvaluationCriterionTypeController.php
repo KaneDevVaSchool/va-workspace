@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Evaluation\App\Http\Requests\StoreEvaluationCriterionTypeRequest;
 use Modules\Evaluation\App\Services\EvaluationCriterionTypeService;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
 
@@ -16,15 +17,19 @@ class EvaluationCriterionTypeController extends Controller
         private readonly EvaluationCriterionTypeService $service,
         private readonly PermissionService $permissions,
         private readonly ActivityLogService $activityLogs,
+        private readonly HrmDepartmentSyncService $hrmDepartments,
     ) {}
 
     private function departmentIdOrFail(Request $request): int|JsonResponse
     {
-        $departmentId = $request->user()?->department_id;
+        $user = $request->user();
+        $departmentId = $user !== null
+            ? $this->hrmDepartments->existingDepartmentIdFor($user)
+            : null;
 
         return $departmentId
             ? (int) $departmentId
-            : response()->json(['message' => 'Tài khoản chưa gắn với phòng ban nào.'], 422);
+            : response()->json(['message' => 'Tài khoản chưa có phòng ban trên HRM.'], 422);
     }
 
     public function index(Request $request): JsonResponse

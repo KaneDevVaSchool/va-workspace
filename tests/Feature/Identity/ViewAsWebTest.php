@@ -54,8 +54,7 @@ class ViewAsWebTest extends TestCase
             ->postJson('/api/view-as', ['role_code' => 'department_director'])
             ->assertOk()
             ->assertJsonPath('user.active_role', 'department_director')
-            ->assertJsonPath('user.department.id', $dept->id)
-            ->assertJsonPath('user.department.code', 'CNTT');
+            ->assertJsonPath('user.department', null);
 
         $this->actingAs($user)
             ->postJson('/api/view-as', ['role_code' => 'super_admin'])

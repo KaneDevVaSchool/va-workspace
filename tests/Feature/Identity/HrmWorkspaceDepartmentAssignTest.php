@@ -115,11 +115,13 @@ class HrmWorkspaceDepartmentAssignTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/me')
             ->assertOk()
-            ->assertJsonPath('department.name', 'Phòng Marketing');
+            ->assertJsonPath('department.name', 'Phòng Marketing')
+            ->assertJsonPath('department.uuid', 'ou-dept')
+            ->assertJsonPath('department.code', 'PMKT');
 
-        $department = Department::query()->where('hrm_org_unit_uuid', 'ou-dept')->first();
-        $this->assertNotNull($department);
-        $this->assertSame($department->id, $user->fresh()->department_id);
+        $user->refresh();
+        $this->assertNull($user->department_id);
+        $this->assertNull(Department::query()->where('hrm_org_unit_uuid', 'ou-dept')->first());
         $this->assertNull(Department::query()->where('hrm_org_unit_uuid', 'ou-unit')->first());
     }
 
@@ -142,7 +144,8 @@ class HrmWorkspaceDepartmentAssignTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/me')
             ->assertOk()
-            ->assertJsonPath('department.name', 'Phòng đã gán tay');
+            ->assertJsonPath('department.name', 'Phòng Marketing')
+            ->assertJsonPath('department.uuid', 'ou-dept');
 
         $this->assertSame($manual->id, $user->fresh()->department_id);
     }
@@ -170,12 +173,11 @@ class HrmWorkspaceDepartmentAssignTest extends TestCase
             ->assertOk()
             ->assertJsonPath('user.active_role', 'member')
             ->assertJsonPath('user.is_impersonating', true)
-            ->assertJsonPath('user.department.name', 'Phòng Marketing');
+            ->assertJsonPath('user.department.name', 'Phòng Marketing')
+            ->assertJsonPath('user.department.uuid', 'ou-dept');
 
-        $this->assertSame(
-            Department::query()->where('hrm_org_unit_uuid', 'ou-dept')->value('id'),
-            $user->fresh()->department_id,
-        );
+        $this->assertNull($user->fresh()->department_id);
+        $this->assertNull(Department::query()->where('hrm_org_unit_uuid', 'ou-dept')->first());
     }
 
     public function test_api_me_replaces_a_department_id_whose_row_was_deleted(): void
@@ -201,13 +203,12 @@ class HrmWorkspaceDepartmentAssignTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/me')
             ->assertOk()
-            ->assertJsonPath('department.name', 'Phòng Marketing');
+            ->assertJsonPath('department.name', 'Phòng Marketing')
+            ->assertJsonPath('department.uuid', 'ou-dept');
 
         $user->refresh();
-        $this->assertSame(
-            Department::query()->where('hrm_org_unit_uuid', 'ou-dept')->value('id'),
-            $user->department_id,
-        );
-        $this->assertSame('emp-1', $user->hrm_employee_uuid);
+        $this->assertSame($gone->id, $user->department_id);
+        $this->assertSame('00000000-0000-4000-8000-000000000099', $user->hrm_employee_uuid);
+        $this->assertNull(Department::query()->where('hrm_org_unit_uuid', 'ou-dept')->first());
     }
 }

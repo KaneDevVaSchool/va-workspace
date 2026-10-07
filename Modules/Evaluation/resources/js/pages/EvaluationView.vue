@@ -86,31 +86,29 @@ const typeGroupCollapsed = reactive({});
 
 // ─── computed ─────────────────────────────────────────────────────────────────
 
-const hasDepartment = computed(() => Boolean(auth.user?.department?.id));
+const hasDepartment = computed(() => Boolean(auth.user?.department?.uuid || auth.user?.department?.name));
 const canViewAll = computed(() => auth.can('workspace_config.view_all'));
 
 const filterDefinitions = computed(() =>
   FILTERS.filter((item) => !item.viewAllOnly || canViewAll.value),
 );
 
-/** Phòng ban đang xem — manager: PB của user; superadmin: chọn từ dropdown. */
+/** Phòng ban đang xem — superadmin chọn từ dropdown; nhân viên lấy phòng ban HRM. */
 const activeDepartmentId = computed(() => {
-  if (canViewAll.value) {
-    return departmentFilter.value ? Number(departmentFilter.value) : null;
-  }
-  const id = auth.user?.department?.id;
-  return id ? Number(id) : null;
+  if (!canViewAll.value) return null;
+  return departmentFilter.value ? Number(departmentFilter.value) : null;
 });
 
-const canLoadCriteria = computed(() => Boolean(activeDepartmentId.value));
+const canLoadCriteria = computed(() => (
+  canViewAll.value ? Boolean(activeDepartmentId.value) : hasDepartment.value
+));
 
 const selectedDepartmentName = computed(() => {
+  if (!canViewAll.value) return auth.user?.department?.name ?? '';
   const id = activeDepartmentId.value;
   if (!id) return '';
   const fromList = departments.value.find((d) => Number(d.id) === id);
-  if (fromList?.name) return fromList.name;
-  if (Number(auth.user?.department?.id) === id) return auth.user?.department?.name ?? '';
-  return '';
+  return fromList?.name ?? '';
 });
 
 const filtered = computed(() => {
@@ -510,7 +508,7 @@ async function loadDepartments() {
 }
 
 async function load() {
-  if (!canViewAll.value && !auth.user?.department?.id) {
+  if (!canViewAll.value && !hasDepartment.value) {
     await auth.fetchMe({ force: true });
   }
   if (!canLoadCriteria.value) {
@@ -702,22 +700,15 @@ watch(departmentFilter, () => {
   load();
 });
 watch(
-  () => auth.user?.department?.id ?? null,
-  (id) => {
-    if (!id) return;
-    if (String(departmentFilter.value) !== String(id)) {
-      departmentFilter.value = String(id);
-      return;
-    }
+  () => auth.user?.department?.uuid ?? null,
+  (uuid, previous) => {
+    if (!uuid || uuid === previous) return;
     load();
   },
 );
 
 onMounted(async () => {
   document.addEventListener('keydown', handleKeydown);
-  if (auth.user?.department?.id) {
-    departmentFilter.value = String(auth.user.department.id);
-  }
   await loadDepartments();
   await load();
   await nextTick();

@@ -52,16 +52,13 @@ class EvaluationCriteriaController extends Controller
     private function departmentIdOrFail(Request $request): int|JsonResponse
     {
         $user = $request->user();
-        if ($user !== null && $user->department_id === null) {
-            $this->hrmDepartments->ensureUserDepartment($user);
-            $user->refresh();
-        }
-
-        $departmentId = $user?->department_id;
+        $departmentId = $user !== null
+            ? $this->hrmDepartments->existingDepartmentIdFor($user)
+            : null;
 
         return $departmentId
             ? (int) $departmentId
-            : response()->json(['message' => 'Tài khoản chưa gắn với phòng ban nào.'], 422);
+            : response()->json(['message' => 'Tài khoản chưa có phòng ban trên HRM.'], 422);
     }
 
     public function index(Request $request): JsonResponse
