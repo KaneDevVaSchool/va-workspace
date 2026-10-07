@@ -34,6 +34,42 @@ class DepartmentRepository implements DepartmentRepositoryInterface
             ->get();
     }
 
+    public function allActiveSyncedFromHrmForPicker(): Collection
+    {
+        $rows = Department::query()
+            ->whereNotNull('hrm_org_unit_uuid')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        return $this->dedupeHrmDepartmentsForPicker($rows);
+    }
+
+    /**
+     * @param  Collection<int, Department>  $rows
+     * @return Collection<int, Department>
+     */
+    private function dedupeHrmDepartmentsForPicker(Collection $rows): Collection
+    {
+        /** @var array<string, Department> $best */
+        $best = [];
+
+        foreach ($rows as $department) {
+            $externalCode = strtolower(trim((string) ($department->external_code ?? '')));
+            $key = $externalCode !== ''
+                ? ($department->company_id ?? 0)."\0".$externalCode
+                : 'uuid:'.$department->hrm_org_unit_uuid;
+
+            if (! isset($best[$key]) || $department->id > $best[$key]->id) {
+                $best[$key] = $department;
+            }
+        }
+
+        return collect($best)
+            ->sortBy(fn (Department $d): string => $d->name ?? '', SORT_NATURAL)
+            ->values();
+    }
+
     public function find(int $id): ?Department
     {
         return Department::query()->find($id);

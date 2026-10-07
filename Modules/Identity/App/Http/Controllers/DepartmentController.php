@@ -15,16 +15,18 @@ use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
  */
 class DepartmentController extends Controller
 {
-    public function __construct(private readonly DepartmentRepositoryInterface $departments) {}
+    public function __construct(
+        private readonly DepartmentRepositoryInterface $departments,
+        private readonly HrmDepartmentSyncService $hrmDepartmentSync,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
         $source = (string) $request->query('source', '');
 
         if ($source === 'hrm' && HrmDepartmentSyncService::isConfigured()) {
-            $rows = $this->departments->allSyncedFromHrm()->filter(
-                fn (Department $d): bool => $d->is_active,
-            );
+            $this->hrmDepartmentSync->syncDepartmentsFromHrm();
+            $rows = $this->departments->allActiveSyncedFromHrmForPicker();
         } else {
             $rows = $this->departments->allActive();
         }

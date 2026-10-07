@@ -148,7 +148,9 @@ class HrmDepartmentSyncService
      */
     public function syncDepartmentsFromRecords(iterable $orgUnits): void
     {
-        DB::transaction(function () use ($orgUnits): void {
+        $presentUuids = [];
+
+        DB::transaction(function () use ($orgUnits, &$presentUuids): void {
             foreach ($orgUnits as $orgUnit) {
                 if (! is_array($orgUnit) || ! isset($orgUnit['uuid'])) {
                     continue;
@@ -159,9 +161,31 @@ class HrmDepartmentSyncService
                     continue;
                 }
 
+                $presentUuids[] = (string) $orgUnit['uuid'];
                 $this->upsertDepartment($orgUnit);
             }
         });
+
+        $this->deactivateStaleHrmDepartments($presentUuids);
+    }
+
+    /**
+     * Phòng ban workspace gắn uuid HRM nhưng org unit không còn trên HRM
+     * (soft delete / đổi uuid) — ẩn khỏi dropdown, tránh trùng tên/mã cũ.
+     *
+     * @param  list<string>  $presentUuids
+     */
+    private function deactivateStaleHrmDepartments(array $presentUuids): void
+    {
+        $query = Department::query()
+            ->whereNotNull('hrm_org_unit_uuid')
+            ->where('is_active', true);
+
+        if ($presentUuids !== []) {
+            $query->whereNotIn('hrm_org_unit_uuid', $presentUuids);
+        }
+
+        $query->update(['is_active' => false]);
     }
 
     /**

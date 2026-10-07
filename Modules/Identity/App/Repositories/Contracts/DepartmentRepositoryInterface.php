@@ -26,6 +26,14 @@ interface DepartmentRepositoryInterface
     /** Phòng ban đã map org-unit VA-HRM — dùng khi HRM đã cấu hình. */
     public function allSyncedFromHrm(): Collection;
 
+    /**
+     * Phòng ban HRM đang hoạt động cho dropdown — khử trùng theo mã HRM
+     * (external_code) trong cùng công ty khi còn sót bản ghi cũ sau đồng bộ.
+     *
+     * @return Collection<int, Department>
+     */
+    public function allActiveSyncedFromHrmForPicker(): Collection;
+
     public function find(int $id): ?Department;
 
     /** Tìm phòng ban đã map thủ công tới 1 OrgUnit của VA-HRM (qua UI Department). */
