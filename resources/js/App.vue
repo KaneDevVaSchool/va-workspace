@@ -10,12 +10,30 @@
 // đang ở viewport ≤768px — áp dụng cho MỌI tài khoản, không riêng nhân viên
 // thường (xem useEmployeeMobileView.js). Desktop (>768px) luôn dùng AppLayout.
 //
+import { watch } from 'vue';
+import { useRoute } from 'vue-router';
 import AppLayout from './components/AppLayout.vue';
 import ToastHost from './components/ToastHost.vue';
 import EmployeeMobileLayout from '@modules/Attendance/resources/js/layouts/EmployeeMobileLayout.vue';
 import { useEmployeeMobileView } from './composables/useEmployeeMobileView';
+import { setPwaShellSurface } from './lib/pwaStandalone';
 
+const route = useRoute();
 const { isEmployeeMobile } = useEmployeeMobileView();
+
+function syncPwaShellSurface() {
+  if (route.meta.requiresAuth) {
+    if (route.meta.employeeMobile && isEmployeeMobile.value) {
+      setPwaShellSurface('employee');
+    } else {
+      setPwaShellSurface('app');
+    }
+    return;
+  }
+  setPwaShellSurface('guest');
+}
+
+watch([() => route.fullPath, isEmployeeMobile], syncPwaShellSurface, { immediate: true });
 </script>
 
 <template>

@@ -3,6 +3,15 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <script>
+        (function () {
+            var s =
+                window.matchMedia('(display-mode: standalone)').matches ||
+                window.matchMedia('(display-mode: fullscreen)').matches ||
+                window.navigator.standalone === true;
+            if (s) document.documentElement.classList.add('pwa-standalone');
+        })();
+    </script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="vapid-public-key" content="{{ config('services.webpush.public_key') }}">
     <meta name="theme-color" content="#9a0036">
@@ -31,6 +40,13 @@
             padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
                 max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
             background: #9a0036;
+        }
+
+        html.pwa-standalone,
+        html.pwa-standalone body {
+            min-height: 100dvh;
+            min-height: -webkit-fill-available;
+            background-color: #9a0036;
         }
     </style>
     @vite(['resources/css/app.css', 'resources/js/app.js'])

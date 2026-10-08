@@ -48,6 +48,46 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* PWA standalone: sau boot splash body trắng lộ dưới home indicator (iOS) /
+   thanh hệ thống (Android) — nền html/body khớp shell, không dùng #fff mặc định. */
+html.pwa-standalone,
+html.pwa-standalone body {
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  overscroll-behavior: none;
+}
+
+html.pwa-standalone body {
+  background-color: var(--color-primary-900);
+}
+
+html.pwa-standalone.pwa-surface-employee body {
+  background-color: var(--color-surface-muted);
+}
+
+html.pwa-standalone.pwa-surface-app body {
+  background-color: var(--color-bg);
+}
+
+html.pwa-standalone #app,
+html.pwa-standalone .app-shell {
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  background: transparent;
+}
+
+html.pwa-standalone .login::after {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: max(env(safe-area-inset-bottom, 0px), 2rem);
+  background: var(--color-primary-900);
+  pointer-events: none;
+}
+
 /* ---------- PWA / SPA boot splash (HTML trong app.blade.php) ---------- */
 .app-boot {
   overflow: hidden;
