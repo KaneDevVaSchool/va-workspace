@@ -40,7 +40,12 @@ html {
     height: 100dvh;
   }
 
-  /* Shell bottom nav: cố định full viewport trong .employee-shell — khóa scroll body. */
+  /* Shell bottom nav: cố định full viewport trong .employee-shell — khóa scroll body.
+     Nền html = màu header để không lộ khe sáng phía trên shell (mobile web). */
+  html:has(.employee-shell) {
+    background-color: var(--color-tertiary-800);
+  }
+
   html:has(.employee-shell) body {
     overflow: hidden;
     background-color: var(--color-surface);

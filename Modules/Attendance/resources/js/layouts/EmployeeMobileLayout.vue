@@ -130,6 +130,11 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 .employee-shell {
   --employee-stat-overlap: 3.25rem;
   --employee-tabbar-height: 3.75rem;
+  /* Trình duyệt: chỉ cần space-4 khi safe-area = 0; iOS tab vẫn có inset.
+     PWA: chỉ cộng thêm chút dưới vùng status bar — tránh padding-top gấp đôi. */
+  --employee-header-pt: max(var(--space-4), env(safe-area-inset-top, 0px));
+  --employee-header-px: calc(var(--space-4) + env(safe-area-inset-right, 0px));
+  --employee-header-pb-compact: var(--space-4);
   flex: 1;
   min-height: 0;
   display: flex;
@@ -140,16 +145,21 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 @media (max-width: 768px) {
   .employee-shell {
     position: fixed;
-    inset: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: 0;
     width: 100%;
     max-width: 100vw;
-    /* Ghi đè inset: 0 (tính theo layout viewport, không co theo thanh địa
-       chỉ trình duyệt) bằng height tường minh theo dynamic viewport —
-       tránh shell cao hơn vùng nhìn thấy thực tế, che/hụt header. */
-    height: 100svh;
-    height: 100dvh;
+    /* inset + height dvh cùng lúc dễ lệch mép trên (khe body) trên mobile web. */
+    min-height: 100dvh;
+    min-height: 100svh;
   }
+}
+
+:global(html.pwa-standalone) .employee-shell {
+  --employee-header-pt: calc(env(safe-area-inset-top, 0px) + var(--space-2));
 }
 
 .employee-shell__header {
@@ -159,8 +169,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: calc(var(--space-4) + env(safe-area-inset-top, 0px))
-    calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-5)
+  padding: var(--employee-header-pt) var(--employee-header-px) var(--space-5)
     calc(var(--space-4) + env(safe-area-inset-left, 0px));
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   background: linear-gradient(145deg, var(--color-tertiary-800), var(--color-tertiary-600));
@@ -450,16 +459,24 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 }
 
 @media (max-width: 360px) {
-  .employee-shell__header:not(.employee-shell__header--compact) {
-    padding-top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
-    padding-right: calc(var(--space-3) + env(safe-area-inset-right, 0px));
-    padding-left: calc(var(--space-3) + env(safe-area-inset-left, 0px));
+  .employee-shell {
+    --employee-header-px: calc(var(--space-3) + env(safe-area-inset-right, 0px));
+  }
+
+  :global(html:not(.pwa-standalone)) .employee-shell {
+    --employee-header-pt: max(var(--space-3), env(safe-area-inset-top, 0px));
+  }
+
+  :global(html.pwa-standalone) .employee-shell {
+    --employee-header-pt: calc(env(safe-area-inset-top, 0px) + var(--space-1));
   }
 
   .employee-shell__header--compact {
-    padding-top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
-    padding-right: calc(var(--space-3) + env(safe-area-inset-right, 0px));
-    padding-bottom: var(--space-4);
+    padding-bottom: var(--employee-header-pb-compact);
+    padding-left: calc(var(--space-3) + env(safe-area-inset-left, 0px));
+  }
+
+  .employee-shell__header:not(.employee-shell__header--compact) {
     padding-left: calc(var(--space-3) + env(safe-area-inset-left, 0px));
   }
 
