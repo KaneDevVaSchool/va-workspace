@@ -242,10 +242,12 @@ function noopLink(event) {
 }
 
 .employee-home__stat-row {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-3);
-  margin-top: calc(-1 * var(--space-6));
+  margin-top: calc(-1 * var(--employee-stat-overlap, 2.75rem));
   margin-bottom: var(--space-1);
 }
 

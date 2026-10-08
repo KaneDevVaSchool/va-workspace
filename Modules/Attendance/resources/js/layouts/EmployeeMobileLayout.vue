@@ -45,8 +45,14 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 </script>
 
 <template>
-  <div class="employee-shell">
-    <header class="employee-shell__header">
+  <div
+    class="employee-shell"
+    :class="{ 'employee-shell--home': route.name === 'dashboard.me' }"
+  >
+    <header
+      class="employee-shell__header"
+      :class="{ 'employee-shell__header--compact': route.name !== 'dashboard.me' }"
+    >
       <div class="employee-shell__header-deco" aria-hidden="true"></div>
 
       <div class="employee-shell__header-top">
@@ -65,7 +71,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
         </div>
       </div>
 
-      <label class="employee-shell__search">
+      <label v-if="route.name === 'dashboard.me'" class="employee-shell__search">
         <AppIcon name="search" :size="18" class="employee-shell__search-icon" />
         <input
           type="search"
@@ -113,8 +119,10 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 
 <style scoped>
 .employee-shell {
+  --employee-stat-overlap: 2.75rem;
   flex: 1;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--color-tertiary-surface);
@@ -122,6 +130,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 
 .employee-shell__header {
   position: relative;
+  z-index: 1;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
@@ -133,6 +142,15 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   background: linear-gradient(145deg, var(--color-tertiary-800), var(--color-tertiary-600));
   color: var(--color-on-tertiary);
   overflow: hidden;
+}
+
+.employee-shell__header--compact {
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+}
+
+.employee-shell--home .employee-shell__header {
+  padding-bottom: calc(var(--space-5) + var(--employee-stat-overlap) * 0.35);
 }
 
 .employee-shell__header-deco {
@@ -266,14 +284,19 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 }
 
 .employee-shell__content {
+  position: relative;
+  z-index: 2;
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
-  padding: var(--space-4) var(--space-3) var(--space-6);
+  -webkit-overflow-scrolling: touch;
+  padding: var(--space-4) var(--space-3) var(--space-4);
 }
 
 .employee-shell__content--home {
-  padding-top: 0;
+  /* Padding trên tránh clip phần thẻ nổi (margin âm) khi main overflow:auto */
+  padding-top: var(--employee-stat-overlap);
 }
 
 .install-banner {
@@ -351,7 +374,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   padding: var(--space-2) calc(var(--space-2) + env(safe-area-inset-right, 0px))
-    calc(var(--space-2) + env(safe-area-inset-bottom, 0px))
+    max(var(--space-2), env(safe-area-inset-bottom, 0px))
     calc(var(--space-2) + env(safe-area-inset-left, 0px));
   background: var(--color-surface);
   box-shadow: 0 -1px 0 var(--color-border), var(--shadow-md);
