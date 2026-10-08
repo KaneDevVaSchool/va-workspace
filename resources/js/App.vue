@@ -8,12 +8,22 @@
 //
 import AppLayout from './components/AppLayout.vue';
 import ToastHost from './components/ToastHost.vue';
+import EmployeeMobileLayout from '@modules/Attendance/resources/js/layouts/EmployeeMobileLayout.vue';
+import { useEmployeeMobileView } from './composables/useEmployeeMobileView';
+
+const { isEmployeeMobile } = useEmployeeMobileView();
 </script>
 
 <template>
   <div class="app-shell">
     <router-view v-slot="{ Component, route }">
-      <AppLayout v-if="route.meta.requiresAuth" class="app-shell__auth-content">
+      <EmployeeMobileLayout
+        v-if="route.meta.requiresAuth && route.meta.employeeMobile && isEmployeeMobile"
+        class="app-shell__auth-content"
+      >
+        <component :is="Component" />
+      </EmployeeMobileLayout>
+      <AppLayout v-else-if="route.meta.requiresAuth" class="app-shell__auth-content">
         <component :is="Component" />
       </AppLayout>
       <div v-else class="app-shell__content">

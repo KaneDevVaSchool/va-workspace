@@ -2,6 +2,7 @@
 import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { showClientToast } from '@/lib/clientToast';
+import { useEmployeeMobileView } from '@/composables/useEmployeeMobileView';
 import { computed, onMounted, ref } from 'vue';
 import DashboardSkeleton from '../components/DashboardSkeleton.vue';
 import DonutChart from '../components/DonutChart.vue';
@@ -9,6 +10,9 @@ import MyTaskTable from '../components/MyTaskTable.vue';
 import KpiCard from '../components/KpiCard.vue';
 import { statusColor } from '../utils/chartColors';
 import { asList, asRecord, unwrapOverview } from '../utils/dashboardPayload';
+import EmployeeHome from '@modules/Attendance/resources/js/pages/EmployeeHome.vue';
+
+const { isEmployeeMobile } = useEmployeeMobileView();
 
 const overview = ref(null);
 const overviewLoading = ref(true);
@@ -26,7 +30,11 @@ async function loadOverview() {
   }
 }
 
-onMounted(loadOverview);
+// Nhân viên mobile xem EmployeeHome (checklist + chấm công/nghỉ phép, UI
+// mock) thay vì bảng KPI — không cần gọi API tổng quan trong trường hợp đó.
+onMounted(() => {
+  if (!isEmployeeMobile.value) loadOverview();
+});
 
 function toggleStatus(value) {
   statusFilter.value = statusFilter.value === value ? null : value;
@@ -57,40 +65,44 @@ const filteredTasks = computed(() => {
 </script>
 
 <template>
-  <PageHeader title="Dashboard của tôi" subtitle="Tổng quan nhanh tiến độ công việc của bạn">
-    <template #actions>
-      <button type="button" class="dashboard-me__refresh" aria-label="Làm mới dữ liệu" :disabled="overviewLoading" @click="loadOverview">
-        <AppIcon name="refresh" :size="16" />
-        <span>Làm mới</span>
-      </button>
-    </template>
-  </PageHeader>
+  <EmployeeHome v-if="isEmployeeMobile" />
 
-  <div class="dashboard-me">
-    <div class="dashboard-me__kpis">
-      <KpiCard label="Tổng công việc" :value="overview?.kpis?.total_tasks ?? null" icon="listChecks" tone="tertiary" />
-      <KpiCard label="Tiến độ trung bình" :value="overview?.kpis?.average_progress_percent ?? null" suffix="%" icon="percent" :decimals="1" tone="secondary" />
-      <KpiCard label="Công việc trễ hạn" :value="overview?.kpis?.overdue_tasks_count ?? null" icon="clock" tone="danger" />
+  <template v-else>
+    <PageHeader title="Dashboard của tôi" subtitle="Tổng quan nhanh tiến độ công việc của bạn">
+      <template #actions>
+        <button type="button" class="dashboard-me__refresh" aria-label="Làm mới dữ liệu" :disabled="overviewLoading" @click="loadOverview">
+          <AppIcon name="refresh" :size="16" />
+          <span>Làm mới</span>
+        </button>
+      </template>
+    </PageHeader>
+
+    <div class="dashboard-me">
+      <div class="dashboard-me__kpis">
+        <KpiCard label="Tổng công việc" :value="overview?.kpis?.total_tasks ?? null" icon="listChecks" tone="tertiary" />
+        <KpiCard label="Tiến độ trung bình" :value="overview?.kpis?.average_progress_percent ?? null" suffix="%" icon="percent" :decimals="1" tone="secondary" />
+        <KpiCard label="Công việc trễ hạn" :value="overview?.kpis?.overdue_tasks_count ?? null" icon="clock" tone="danger" />
+      </div>
+
+      <div class="dashboard-me__grid">
+        <section class="dashboard-me__panel dashboard-me__panel--donut">
+          <div class="dashboard-me__panel-head">
+            <h2>Công việc theo trạng thái</h2>
+          </div>
+          <DashboardSkeleton v-if="overviewLoading" height="240px" />
+          <DonutChart v-else :labels="workStatusDonutData.labels" :series="workStatusDonutData.series" :selected="statusFilter" @select="toggleStatus" />
+        </section>
+
+        <section class="dashboard-me__panel dashboard-me__panel--table">
+          <div class="dashboard-me__panel-head">
+            <h2>Danh sách công việc</h2>
+          </div>
+          <DashboardSkeleton v-if="overviewLoading" :rows="6" />
+          <MyTaskTable v-else :rows="filteredTasks" :loading="overviewLoading" />
+        </section>
+      </div>
     </div>
-
-    <div class="dashboard-me__grid">
-      <section class="dashboard-me__panel dashboard-me__panel--donut">
-        <div class="dashboard-me__panel-head">
-          <h2>Công việc theo trạng thái</h2>
-        </div>
-        <DashboardSkeleton v-if="overviewLoading" height="240px" />
-        <DonutChart v-else :labels="workStatusDonutData.labels" :series="workStatusDonutData.series" :selected="statusFilter" @select="toggleStatus" />
-      </section>
-
-      <section class="dashboard-me__panel dashboard-me__panel--table">
-        <div class="dashboard-me__panel-head">
-          <h2>Danh sách công việc</h2>
-        </div>
-        <DashboardSkeleton v-if="overviewLoading" :rows="6" />
-        <MyTaskTable v-else :rows="filteredTasks" :loading="overviewLoading" />
-      </section>
-    </div>
-  </div>
+  </template>
 </template>
 
 <style scoped>

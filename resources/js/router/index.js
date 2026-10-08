@@ -9,6 +9,7 @@ import credentialRoutes from '@modules/Credential/resources/js/router.js';
 import dashboardRoutes from '@modules/Dashboard/resources/js/router.js';
 import featureRequestRoutes from '@modules/FeatureRequest/resources/js/router.js';
 import contractRoutes from '@modules/Contract/resources/js/router.js';
+import attendanceRoutes from '@modules/Attendance/resources/js/router.js';
 
 /**
  * Route Vue (SPA phía client) — KHÔNG nhầm với route Laravel
@@ -36,6 +37,7 @@ const routes = [
     ...dashboardRoutes,
     ...featureRequestRoutes,
     ...contractRoutes,
+    ...attendanceRoutes,
     {
         path: '/:pathMatch(.*)*',
         name: 'not-found',

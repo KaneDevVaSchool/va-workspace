@@ -17,6 +17,8 @@ import TablePagesBar from '@/components/TablePagesBar.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useDragScroll } from '@/composables/useDragScroll';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
+import OptionPicker from '@modules/Project/resources/js/components/OptionPicker.vue';
+import { formatDepartmentMeta } from '@modules/Project/resources/js/utils/projectDepartments.js';
 
 const router = useRouter();
 
@@ -32,6 +34,7 @@ const COLUMNS = [
 
 const FILTERS = [
   { key: 'q',          label: 'Tìm kiếm',  defaultOn: true },
+  { key: 'company',    label: 'Pháp nhân', defaultOn: true, viewAllOnly: true },
   { key: 'department', label: 'Phòng ban', defaultOn: true, viewAllOnly: true },
   { key: 'kind',       label: 'Loại',      defaultOn: true },
   { key: 'type',       label: 'Cách chấm', defaultOn: true },
@@ -39,7 +42,7 @@ const FILTERS = [
 
 const TYPE_LABELS = { scale: 'Thang điểm', behavior: 'Cộng/trừ' };
 const COL_KEY    = 'va-eval-view-columns-v1';
-const FILTER_KEY = 'va-eval-view-filters-v2';
+const FILTER_KEY = 'va-eval-view-filters-v3';
 const WIDTH_KEY  = 'va-eval-view-widths-v2';
 const ZOOM_KEY   = 'va-eval-view-zoom';
 
@@ -63,6 +66,7 @@ const exportingPdf   = ref(false);
 
 const departments = ref([]);
 const query           = ref('');
+const companyFilter    = ref('');
 const departmentFilter = ref('');
 const kindFilter      = ref('');
 const typeFilter      = ref('');
@@ -111,6 +115,57 @@ const selectedDepartmentName = computed(() => {
   const fromList = departments.value.find((d) => Number(d.id) === id);
   return fromList?.name ?? '';
 });
+
+const companyPickerOptions = computed(() => {
+  /** @type {Map<string, { value: string, label: string, description: string }>} */
+  const byId = new Map();
+  for (const dept of departments.value) {
+    if (dept.company_id == null) continue;
+    const key = String(dept.company_id);
+    if (byId.has(key)) continue;
+    const code = String(dept.company_code ?? '').trim();
+    const name = String(dept.company_name ?? '').trim();
+    byId.set(key, {
+      value: key,
+      label: name || code || `Pháp nhân #${key}`,
+      description: name && code ? `Mã ${code}` : code,
+    });
+  }
+  return [...byId.values()].sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+});
+
+const departmentsForPicker = computed(() => {
+  if (!companyFilter.value) return departments.value;
+  return departments.value.filter(
+    (d) => String(d.company_id ?? '') === String(companyFilter.value),
+  );
+});
+
+const departmentPickerOptions = computed(() =>
+  departmentsForPicker.value.map((dept) => {
+    const meta = formatDepartmentMeta(dept);
+    const company = String(dept.company_name ?? dept.company_code ?? '').trim();
+    const description = [company, meta].filter(Boolean).join(' · ');
+    return {
+      value: String(dept.id),
+      label: dept.name ?? '',
+      description,
+    };
+  }),
+);
+
+const kindPickerOptions = computed(() =>
+  criterionTypes.value.map((item) => ({
+    value: String(item.id),
+    label: item.name ?? '',
+    description: item.code ? `Mã ${item.code}` : '',
+  })),
+);
+
+const typePickerOptions = [
+  { value: 'scale', label: 'Thang điểm', description: 'Nhiều mức điểm theo thang' },
+  { value: 'behavior', label: 'Cộng/trừ', description: 'Điểm cộng hoặc trừ theo hành vi' },
+];
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase();
@@ -168,7 +223,9 @@ const emptyState = computed(() => {
     return {
       icon: 'building',
       title: 'Chọn phòng ban',
-      text: 'Chọn phòng ban ở bộ lọc phía trên để xem tiêu chí đánh giá.',
+      text: companyFilter.value
+        ? 'Chọn phòng ban thuộc pháp nhân đã chọn để xem tiêu chí đánh giá.'
+        : 'Chọn pháp nhân (tuỳ chọn) rồi chọn phòng ban ở bộ lọc phía trên.',
     };
   }
   if (!canViewAll.value && !hasDepartment.value) {
@@ -316,6 +373,7 @@ function filterHasValue(key) {
   if (key === 'q') return Boolean(query.value.trim());
   if (key === 'kind') return Boolean(kindFilter.value);
   if (key === 'type') return Boolean(typeFilter.value);
+  if (key === 'company') return Boolean(canViewAll.value && companyFilter.value);
   if (key === 'department') return Boolean(canViewAll.value && departmentFilter.value);
   return false;
 }
@@ -324,6 +382,10 @@ function clearFilters() {
   query.value = '';
   kindFilter.value = '';
   typeFilter.value = '';
+  if (canViewAll.value) {
+    companyFilter.value = '';
+    departmentFilter.value = '';
+  }
   page.value = 1;
 }
 
@@ -696,7 +758,25 @@ watch(visibleFilters, (value) => saveVisibility(FILTER_KEY, value), { deep: true
 watch(shownColumns, () => nextTick(fitColumnsToContent));
 watch(tableZoom, () => nextTick(fitColumnsToContent));
 watch(selected, () => nextTick(fitColumnsToContent));
-watch(departmentFilter, () => {
+watch(companyFilter, () => {
+  if (!departmentFilter.value) return;
+  const dept = departments.value.find((d) => String(d.id) === String(departmentFilter.value));
+  if (
+    dept
+    && companyFilter.value
+    && String(dept.company_id ?? '') !== String(companyFilter.value)
+  ) {
+    departmentFilter.value = '';
+  }
+});
+
+watch(departmentFilter, (id) => {
+  if (id) {
+    const dept = departments.value.find((d) => String(d.id) === String(id));
+    if (dept?.company_id != null) {
+      companyFilter.value = String(dept.company_id);
+    }
+  }
   page.value = 1;
   kindFilter.value = '';
   selected.value = null;
@@ -818,31 +898,61 @@ onBeforeUnmount(() => {
               @keydown.enter="page = 1"
             />
           </div>
+          <div v-if="canViewAll && visibleFilters.company" class="eval-view__field">
+            <label id="eval-view-company-label" class="eval-view__label">Pháp nhân</label>
+            <div class="eval-view__picker">
+              <OptionPicker
+                v-model="companyFilter"
+                :options="companyPickerOptions"
+                autocomplete
+                clearable
+                placeholder="Gõ tên hoặc mã pháp nhân…"
+                labelled-by="eval-view-company-label"
+              />
+            </div>
+          </div>
           <div v-if="canViewAll && visibleFilters.department" class="eval-view__field">
-            <label class="eval-view__label" for="eval-view-department">Phòng ban</label>
-            <select id="eval-view-department" v-model="departmentFilter" class="eval-view__input">
-              <option value="">— Chọn phòng ban —</option>
-              <option v-for="dept in departments" :key="dept.id" :value="String(dept.id)">
-                {{ dept.name }}
-              </option>
-            </select>
+            <label id="eval-view-department-label" class="eval-view__label">Phòng ban</label>
+            <div class="eval-view__picker">
+              <OptionPicker
+                v-model="departmentFilter"
+                :options="departmentPickerOptions"
+                autocomplete
+                clearable
+                :placeholder="
+                  companyFilter
+                    ? 'Gõ tên phòng ban trong pháp nhân đã chọn…'
+                    : 'Gõ tên phòng ban hoặc mã HRM…'
+                "
+                labelled-by="eval-view-department-label"
+              />
+            </div>
           </div>
           <div v-if="visibleFilters.kind" class="eval-view__field">
-            <label class="eval-view__label" for="eval-view-kind">Loại</label>
-            <select id="eval-view-kind" v-model="kindFilter" class="eval-view__input">
-              <option value="">Tất cả loại</option>
-              <option v-for="item in criterionTypes" :key="item.id" :value="String(item.id)">
-                {{ item.name }}{{ item.code ? ` — ${item.code}` : '' }}
-              </option>
-            </select>
+            <label id="eval-view-kind-label" class="eval-view__label">Loại</label>
+            <div class="eval-view__picker">
+              <OptionPicker
+                v-model="kindFilter"
+                :options="kindPickerOptions"
+                autocomplete
+                clearable
+                placeholder="Gõ tên loại tiêu chí…"
+                labelled-by="eval-view-kind-label"
+              />
+            </div>
           </div>
           <div v-if="visibleFilters.type" class="eval-view__field">
-            <label class="eval-view__label" for="eval-view-type">Cách chấm</label>
-            <select id="eval-view-type" v-model="typeFilter" class="eval-view__input">
-              <option value="">Tất cả cách chấm</option>
-              <option value="scale">Thang điểm</option>
-              <option value="behavior">Cộng/trừ</option>
-            </select>
+            <label id="eval-view-type-label" class="eval-view__label">Cách chấm</label>
+            <div class="eval-view__picker">
+              <OptionPicker
+                v-model="typeFilter"
+                :options="typePickerOptions"
+                searchable
+                clearable
+                placeholder="Chọn cách chấm…"
+                labelled-by="eval-view-type-label"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1349,6 +1459,30 @@ onBeforeUnmount(() => {
 .eval-view__input:focus {
   outline: 2px solid var(--color-primary);
   outline-offset: -1px;
+}
+
+.eval-view__picker {
+  width: 100%;
+  min-width: 0;
+}
+
+.eval-view__picker :deep(.opt-picker--autocomplete) {
+  width: 100%;
+}
+
+.eval-view__picker :deep(.opt-picker__ac-control) {
+  min-height: 2.375rem;
+  border-radius: var(--radius-md);
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+.eval-view__picker :deep(.opt-picker:not(.opt-picker--autocomplete) .opt-picker__trigger) {
+  min-height: 2.375rem;
+  border-radius: var(--radius-md);
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  font-size: 0.875rem;
 }
 
 .eval-view__table-wrap {
