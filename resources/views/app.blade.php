@@ -2,6 +2,35 @@
 <html lang="vi" data-theme="light">
 <head>
     <meta charset="utf-8">
+    @php
+        $ogTitle = 'VA Workspace - Hệ thống quản lý nội bộ VA Schools';
+        $ogDescription = 'Hệ thống quản lý nội bộ VA Schools: quản lý công việc, nhân sự, tài sản và quy trình trong một nền tảng duy nhất.';
+        $ogCoverV = (string) config('app.og_cover_version', '1');
+        $ogImage = asset('images/og-cover.jpg').'?v='.rawurlencode($ogCoverV);
+        $path = request()->getPathInfo();
+        $ogPageUrl = rtrim((string) config('app.url'), '/').($path === '/' ? '/' : $path);
+    @endphp
+    {{-- Open Graph đặt sớm trong <head> — bot Zalo/FB đọc meta trước khi cần JS --}}
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="vi_VN">
+    <meta property="og:site_name" content="VA Workspace">
+    <meta property="og:title" content="{{ $ogTitle }}">
+    <meta property="og:description" content="{{ $ogDescription }}">
+    <meta property="og:url" content="{{ $ogPageUrl }}">
+    <meta property="og:image" content="{{ $ogImage }}">
+    @if (str_starts_with($ogImage, 'https://'))
+    <meta property="og:image:secure_url" content="{{ $ogImage }}">
+    @endif
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="VA Workspace - Vietnam America Schools">
+    <meta name="description" content="{{ $ogDescription }}">
+    <link rel="canonical" href="{{ $ogPageUrl }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ $ogTitle }}">
+    <meta name="twitter:description" content="{{ $ogDescription }}">
+    <meta name="twitter:image" content="{{ $ogImage }}">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <script>
         (function () {
@@ -20,32 +49,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="VA Workspace">
     <title>{{ config('app.name', 'VA Workspace') }}</title>
-    @php
-        // URL tuyệt đối cùng domain công khai — Zalo/FB không fetch được localhost hay URL tương đối.
-        $ogPageUrl = url()->current();
-        $ogImage = asset('images/og-cover.jpg');
-        $ogTitle = 'VA Workspace — Hệ thống quản lý nội bộ VA Schools';
-        $ogDescription = 'Hệ thống quản lý nội bộ VA Schools: quản lý công việc, nhân sự, tài sản và quy trình trong một nền tảng duy nhất.';
-    @endphp
-    {{-- Open Graph / Twitter Card — preview khi share link lên Zalo, Facebook, Messenger, Slack --}}
-    <meta property="og:type" content="website">
-    <meta property="og:locale" content="vi_VN">
-    <meta property="og:site_name" content="VA Workspace">
-    <meta property="og:title" content="{{ $ogTitle }}">
-    <meta property="og:description" content="{{ $ogDescription }}">
-    <meta property="og:url" content="{{ $ogPageUrl }}">
-    <meta property="og:image" content="{{ $ogImage }}">
-    @if (str_starts_with($ogImage, 'https://'))
-    <meta property="og:image:secure_url" content="{{ $ogImage }}">
-    @endif
-    <meta property="og:image:type" content="image/jpeg">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="VA Workspace — Vietnam America Schools">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{{ $ogTitle }}">
-    <meta name="twitter:description" content="{{ $ogDescription }}">
-    <meta name="twitter:image" content="{{ $ogImage }}">
     @php($pwaIconV = config('app.pwa_icon_version'))
     <link rel="icon" href="/images/favicon.png?v={{ $pwaIconV }}" type="image/png" sizes="32x32">
     {{-- iOS “Thêm vào Màn hình chính” — URL ?v= bắt buộc khi đổi logo (Safari cache cứng) --}}
