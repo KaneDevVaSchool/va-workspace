@@ -2,6 +2,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
 
 @import './theme.css';
+@import './employee-mobile-shell.css';
 
 *,
 *::before,
@@ -40,12 +41,7 @@ html {
     height: 100dvh;
   }
 
-  /* Shell bottom nav: cố định full viewport trong .employee-shell — khóa scroll body.
-     Nền html = màu header để không lộ khe sáng phía trên shell (mobile web). */
-  html:has(.employee-shell) {
-    background-color: var(--color-tertiary-800);
-  }
-
+  /* Shell bottom nav — khóa scroll body (màu mép trên: employee-mobile-shell.css). */
   html:has(.employee-shell) body {
     overflow: hidden;
     background-color: var(--color-surface);

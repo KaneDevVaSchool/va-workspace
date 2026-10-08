@@ -105,7 +105,7 @@ function noopLink(event) {
 </script>
 
 <template>
-  <Teleport to="#employee-home-stats">
+  <div class="employee-home">
     <div class="employee-home__stat-row">
       <div class="stat-card stat-card--tasks">
         <span class="stat-card__icon stat-card__icon--tasks" aria-hidden="true">
@@ -136,9 +136,6 @@ function noopLink(event) {
         </div>
       </button>
     </div>
-  </Teleport>
-
-  <div class="employee-home">
     <section class="employee-home__section">
       <div class="section-head">
         <h2 class="section-head__title">Tiện ích nhanh</h2>
@@ -244,10 +241,12 @@ function noopLink(event) {
 }
 
 .employee-home__stat-row {
+  position: relative;
+  z-index: 4;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-3);
-  margin: 0;
+  margin: calc(-1 * var(--employee-stat-overlap, 3.25rem)) 0 var(--space-2);
 }
 
 .stat-card {
