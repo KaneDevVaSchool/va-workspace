@@ -3,7 +3,7 @@
 .employee-shell {
   --employee-stat-overlap: 3.25rem;
   /* Chiều cao hàng menu (icon + nhãn). Không gồm safe-area. */
-  --employee-tabbar-height: 3.75rem;
+  --employee-tabbar-height: 3.25rem;
   /* Dải dưới menu — PWA ghi đè; mặc định 0 để không đẩy height menu. */
   --employee-tabbar-safe: 0px;
   /* Tổng dock (menu + dải safe), JS đo và ghi đè lên <html>. */
@@ -323,7 +323,7 @@
   hàng menu cao hơn.
 */
 .employee-tabbar--dock {
-  --employee-tabbar-height: 3.75rem;
+  --employee-tabbar-height: 3.25rem;
   --employee-tabbar-safe: env(safe-area-inset-bottom, 0px);
   position: fixed;
   left: 0;
