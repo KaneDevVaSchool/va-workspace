@@ -352,7 +352,8 @@
 }
 
 .employee-tabbar--pwa {
-  --employee-tabbar-height: 3.25rem;
+  /* Cao hơn browser một chút — icon lớn, nhãn sát đáy vùng trắng (trên home bar). */
+  --employee-tabbar-height: 3.625rem;
 }
 
 .employee-tabbar__bar {
@@ -364,6 +365,12 @@
   padding: 0.25rem calc(var(--space-2) + env(safe-area-inset-right, 0px)) 0.125rem
     calc(var(--space-2) + env(safe-area-inset-left, 0px));
   overflow: hidden;
+}
+
+.employee-tabbar--pwa .employee-tabbar__bar {
+  align-items: end;
+  padding-top: 0.125rem;
+  padding-bottom: 0.0625rem;
 }
 
 .employee-tabbar__item {
@@ -407,6 +414,21 @@
   background: var(--color-tertiary-surface);
 }
 
+.employee-tabbar--pwa .employee-tabbar__item {
+  justify-content: flex-end;
+  min-height: 3.375rem;
+  gap: 3px;
+}
+
+.employee-tabbar--pwa .employee-tabbar__icon {
+  width: 2rem;
+  height: 2rem;
+}
+
+.employee-tabbar--pwa .employee-tabbar__label {
+  font-size: 0.71875rem;
+}
+
 @media (max-width: 360px) {
   .employee-shell {
     --employee-header-px: calc(var(--space-3) + env(safe-area-inset-right, 0px));
@@ -435,7 +457,16 @@
     height: 1.5rem;
   }
 
+  .employee-tabbar--pwa .employee-tabbar__icon {
+    width: 1.875rem;
+    height: 1.875rem;
+  }
+
   .employee-tabbar__label {
     font-size: 0.625rem;
+  }
+
+  .employee-tabbar--pwa .employee-tabbar__label {
+    font-size: 0.6875rem;
   }
 }

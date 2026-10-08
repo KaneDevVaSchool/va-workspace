@@ -178,7 +178,11 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
             :class="{ 'employee-tabbar__item--active': route.name === tab.name }"
           >
             <span class="employee-tabbar__icon">
-              <AppIcon :name="tab.icon" :size="20" :stroke-width="1.9" />
+              <AppIcon
+                :name="tab.icon"
+                :size="isMobilePwa ? 22 : 20"
+                :stroke-width="1.9"
+              />
             </span>
             <span class="employee-tabbar__label">{{ tab.label }}</span>
           </router-link>

@@ -1,5 +1,5 @@
 // VA Workspace — service worker
-// v10: tab bar mobile — safe-area gộp vào dock, không dải trống dưới icon.
+// v10: tab bar mobile — safe-area padding dock; PWA icon lớn + căn sát đáy vùng trắng.
 //
 // Chiến lược:
 // - App shell ("/"): network-first, cache lại bản mới nhất để mở offline được.
