@@ -15,23 +15,62 @@ const updateAvailable = ref(false);
 let registrationRef = null;
 let waitingWorker = null;
 let reloaded = false;
+/** Worker đã gắn listener statechange — tránh track trùng. */
+const trackedWorkers = new WeakSet();
 
 function listenControllerChange() {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (reloaded) return;
     reloaded = true;
+    clearUpdatePrompt();
     window.location.reload();
   });
 }
 
+function clearUpdatePrompt() {
+  waitingWorker = null;
+  updateAvailable.value = false;
+}
+
 function activate(worker) {
+  if (!worker || worker.state === 'redundant') return;
   worker.postMessage('skipWaiting');
 }
 
+function watchWaitingWorker(worker) {
+  if (!worker || trackedWorkers.has(worker)) return;
+  trackedWorkers.add(worker);
+  worker.addEventListener('statechange', () => {
+    if (worker.state === 'redundant' || worker.state === 'activated') {
+      if (waitingWorker === worker) {
+        clearUpdatePrompt();
+      }
+    }
+  });
+}
+
+function refreshUpdateState(registration) {
+  if (!registration?.active || !registration.waiting) {
+    clearUpdatePrompt();
+    return;
+  }
+  const waiting = registration.waiting;
+  if (waiting.state === 'redundant') {
+    clearUpdatePrompt();
+    return;
+  }
+  trackWaiting(waiting);
+}
+
 function trackWaiting(worker) {
+  if (!worker || worker.state === 'redundant') {
+    clearUpdatePrompt();
+    return;
+  }
   waitingWorker = worker;
   updateAvailable.value = true;
+  watchWaitingWorker(worker);
 
   if (document.visibilityState === 'hidden') {
     activate(worker);
@@ -52,10 +91,7 @@ export function bootstrapPwaServiceWorker() {
     updateViaCache: 'none',
   }).then((registration) => {
     registrationRef = registration;
-
-    if (registration.waiting && registration.active) {
-      trackWaiting(registration.waiting);
-    }
+    refreshUpdateState(registration);
 
     registration.addEventListener('updatefound', () => {
       const worker = registration.installing;
@@ -64,6 +100,9 @@ export function bootstrapPwaServiceWorker() {
         if (worker.state === 'installed' && registration.active) {
           trackWaiting(worker);
         }
+        if (worker.state === 'redundant') {
+          refreshUpdateState(registration);
+        }
       });
     });
 
@@ -71,10 +110,9 @@ export function bootstrapPwaServiceWorker() {
     // vì phụ thuộc chu kỳ check mặc định (thưa) của trình duyệt.
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') return;
-      registration.update().catch(() => {});
-      if (waitingWorker) {
-        activate(waitingWorker);
-      }
+      registration.update()
+        .then(() => refreshUpdateState(registration))
+        .catch(() => {});
     });
   }).catch(() => {});
 }
@@ -82,13 +120,17 @@ export function bootstrapPwaServiceWorker() {
 /** Dùng trong banner "Có bản cập nhật mới". */
 export function usePwaUpdate() {
   function applyUpdate() {
-    if (waitingWorker) {
-      activate(waitingWorker);
-      return;
+    reloaded = true;
+    const worker = waitingWorker || registrationRef?.waiting;
+    if (worker) {
+      activate(worker);
     }
-    // Không có SW mới đang chờ vì lý do nào đó — reload tay vẫn lấy bản mới
-    // nhất từ server (route /sw.js không cache).
-    window.location.reload();
+    clearUpdatePrompt();
+    // Người dùng đã bấm "Tải lại" — luôn reload; không chỉ dựa controllerchange
+    // (Safari / tab khác giữ SW cũ có thể không bắn sự kiện).
+    window.setTimeout(() => {
+      window.location.reload();
+    }, worker ? 120 : 0);
   }
 
   return { updateAvailable, applyUpdate };
