@@ -156,19 +156,25 @@ function login() {
 .login__header {
     margin-bottom: var(--space-6);
     padding: 0 var(--space-4);
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .login__logo {
     display: block;
-    width: 100%;
+    width: auto;
     max-width: min(100%, 300px);
     height: auto;
+    margin-inline: auto;
     object-fit: contain;
     filter: drop-shadow(var(--shadow-sm));
 }
 
 .login__system-name {
     margin: var(--space-3) 0 0;
+    width: 100%;
     text-align: center;
     color: #ffffff;
     font-size: 1rem;

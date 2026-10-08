@@ -43,4 +43,15 @@ export default [
       employeeMobile: true,
     },
   },
+  {
+    path: '/dashboard/me/feed',
+    name: 'employee.feed',
+    component: () => import('./pages/EmployeeFeed.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Bảng tin',
+      requiresPermission: 'dashboard.view',
+      employeeMobile: true,
+    },
+  },
 ];
