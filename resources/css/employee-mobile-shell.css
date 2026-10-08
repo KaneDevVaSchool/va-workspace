@@ -2,11 +2,12 @@
 
 .employee-shell {
   --employee-stat-overlap: 3.25rem;
+  /* Chiều cao hàng menu (icon + nhãn). Không gồm safe-area. */
   --employee-tabbar-height: 3.75rem;
-  --employee-tabbar-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --employee-tabbar-pad-bottom: calc(var(--space-2) + var(--employee-tabbar-safe-bottom));
-  /* Chiều cao thật do useEmployeeTabbarDock ghi lên <html>; fallback khi chưa đo. */
-  --employee-tabbar-block-size: 4.25rem;
+  /* Dải dưới menu — PWA ghi đè; mặc định 0 để không đẩy height menu. */
+  --employee-tabbar-safe: 0px;
+  /* Tổng dock (menu + dải safe), JS đo và ghi đè lên <html>. */
+  --employee-tabbar-block-size: var(--employee-tabbar-height);
   --employee-header-px: calc(var(--space-4) + env(safe-area-inset-right, 0px));
   --employee-header-pl: calc(var(--space-4) + env(safe-area-inset-left, 0px));
   flex: 1;
@@ -20,8 +21,7 @@
 .employee-shell--browser {
   --employee-header-pt: var(--space-4);
   --employee-stat-overlap: 3rem;
-  --employee-tabbar-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --employee-tabbar-pad-bottom: calc(var(--space-2) + var(--employee-tabbar-safe-bottom));
+  --employee-tabbar-safe: env(safe-area-inset-bottom, 0px);
 }
 
 @media (max-width: 768px) {
@@ -54,9 +54,8 @@
 .employee-shell--pwa {
   --employee-header-pt: calc(env(safe-area-inset-top, 0px) + var(--space-2));
   --employee-stat-overlap: 3.25rem;
-  /* Home indicator / gesture bar — Android đôi khi báo inset 0. */
-  --employee-tabbar-safe-bottom: max(env(safe-area-inset-bottom, 0px), 0.75rem);
-  --employee-tabbar-pad-bottom: calc(var(--space-3) + var(--employee-tabbar-safe-bottom));
+  /* Không cộng safe-area vào menu PWA — height hàng icon giữ nguyên. */
+  --employee-tabbar-safe: 0px;
 }
 
 @media (max-width: 768px) {
@@ -318,43 +317,70 @@
   cursor: pointer;
 }
 
-/* Tab bar dock (Teleport → body) — không nằm trong flex shell */
+/*
+  Dock (Teleport → body). Hàng icon khóa đúng --employee-tabbar-height.
+  .employee-tabbar__safe chỉ kéo nền xuống home indicator — không làm
+  hàng menu cao hơn.
+*/
 .employee-tabbar--dock {
+  --employee-tabbar-height: 3.75rem;
+  --employee-tabbar-safe: env(safe-area-inset-bottom, 0px);
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 500;
-  box-sizing: border-box;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  display: flex;
+  flex-direction: column;
   margin: 0;
-  padding: var(--space-2) calc(var(--space-2) + env(safe-area-inset-right, 0px))
-    var(--employee-tabbar-pad-bottom) calc(var(--space-2) + env(safe-area-inset-left, 0px));
+  padding: 0;
   background: var(--color-surface);
   box-shadow: 0 -1px 0 var(--color-border), var(--shadow-md);
 }
 
-html.pwa-standalone .employee-tabbar--dock {
-  --employee-tabbar-safe-bottom: max(env(safe-area-inset-bottom, 0px), 0.75rem);
-  --employee-tabbar-pad-bottom: calc(var(--space-2) + var(--employee-tabbar-safe-bottom));
+/* PWA: dải safe = 0 → dock không cao hơn --employee-tabbar-height.
+   Muốn né home indicator: đổi 0px thành env(safe-area-inset-bottom, 0px). */
+html.pwa-standalone .employee-tabbar--dock,
+.employee-tabbar--pwa {
+  --employee-tabbar-safe: 0px;
 }
 
-html:not(.pwa-standalone) .employee-tabbar--dock {
-  --employee-tabbar-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --employee-tabbar-pad-bottom: calc(var(--space-2) + var(--employee-tabbar-safe-bottom));
+.employee-tabbar__bar {
+  box-sizing: border-box;
+  flex: 0 0 var(--employee-tabbar-height);
+  height: var(--employee-tabbar-height);
+  max-height: var(--employee-tabbar-height);
+  min-height: var(--employee-tabbar-height);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+  padding: 0 calc(var(--space-2) + env(safe-area-inset-right, 0px)) 0
+    calc(var(--space-2) + env(safe-area-inset-left, 0px));
+  overflow: hidden;
+}
+
+.employee-tabbar__safe {
+  flex: 0 0 auto;
+  height: var(--employee-tabbar-safe);
+  max-height: var(--employee-tabbar-safe);
+  background: var(--color-surface);
+  pointer-events: none;
 }
 
 .employee-tabbar__item {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
   min-width: 0;
-  padding: var(--space-1) 2px;
+  height: 100%;
+  max-height: 100%;
+  padding: 0 2px;
   border-radius: var(--radius-md);
   color: var(--color-text-muted);
   text-decoration: none;
+  overflow: hidden;
 }
 
 .employee-tabbar__icon {
@@ -401,7 +427,7 @@ html:not(.pwa-standalone) .employee-tabbar--dock {
     font-size: 1.0625rem;
   }
 
-  .employee-tabbar--dock {
+  .employee-tabbar__bar {
     padding-left: 2px;
     padding-right: 2px;
   }

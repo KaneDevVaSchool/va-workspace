@@ -115,7 +115,11 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
       <slot />
     </main>
 
-    <!-- Dock viewport: tránh flex shell PWA đẩy tab bar ra ngoài màn hình -->
+    <!--
+      Dock tách khỏi flex shell. Chiều cao menu = --employee-tabbar-height
+      (cố định). Safe-area PWA là dải .employee-tabbar__safe, không cộng
+      vào height của hàng icon.
+    -->
     <Teleport to="body">
       <nav
         ref="tabbarRef"
@@ -123,18 +127,21 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
         :class="`employee-tabbar--${shellMode}`"
         aria-label="Điều hướng chính"
       >
-        <router-link
-          v-for="tab in TABS"
-          :key="tab.name"
-          :to="{ name: tab.name }"
-          class="employee-tabbar__item"
-          :class="{ 'employee-tabbar__item--active': route.name === tab.name }"
-        >
-          <span class="employee-tabbar__icon">
-            <AppIcon :name="tab.icon" :size="20" :stroke-width="1.9" />
-          </span>
-          <span class="employee-tabbar__label">{{ tab.label }}</span>
-        </router-link>
+        <div class="employee-tabbar__bar">
+          <router-link
+            v-for="tab in TABS"
+            :key="tab.name"
+            :to="{ name: tab.name }"
+            class="employee-tabbar__item"
+            :class="{ 'employee-tabbar__item--active': route.name === tab.name }"
+          >
+            <span class="employee-tabbar__icon">
+              <AppIcon :name="tab.icon" :size="20" :stroke-width="1.9" />
+            </span>
+            <span class="employee-tabbar__label">{{ tab.label }}</span>
+          </router-link>
+        </div>
+        <div class="employee-tabbar__safe" aria-hidden="true"></div>
       </nav>
     </Teleport>
   </div>
