@@ -3,6 +3,11 @@
 .employee-shell {
   --employee-stat-overlap: 3.25rem;
   --employee-tabbar-height: 3.75rem;
+  --employee-tabbar-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --employee-tabbar-pad-bottom: calc(var(--space-2) + var(--employee-tabbar-safe-bottom));
+  --employee-tabbar-block-size: calc(
+    var(--employee-tabbar-height) + var(--employee-tabbar-pad-bottom)
+  );
   --employee-header-px: calc(var(--space-4) + env(safe-area-inset-right, 0px));
   --employee-header-pl: calc(var(--space-4) + env(safe-area-inset-left, 0px));
   flex: 1;
@@ -16,6 +21,8 @@
 .employee-shell--browser {
   --employee-header-pt: var(--space-4);
   --employee-stat-overlap: 3rem;
+  --employee-tabbar-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --employee-tabbar-pad-bottom: calc(var(--space-2) + var(--employee-tabbar-safe-bottom));
 }
 
 @media (max-width: 768px) {
@@ -48,9 +55,35 @@
 .employee-shell--pwa {
   --employee-header-pt: calc(env(safe-area-inset-top, 0px) + var(--space-2));
   --employee-stat-overlap: 3.25rem;
+  /* Home indicator / gesture bar — Android đôi khi báo inset 0. */
+  --employee-tabbar-safe-bottom: max(env(safe-area-inset-bottom, 0px), 0.75rem);
+  --employee-tabbar-pad-bottom: calc(var(--space-3) + var(--employee-tabbar-safe-bottom));
 }
 
 @media (max-width: 768px) {
+  html.employee-mobile-browser {
+    --employee-tabbar-block-size: calc(
+      3.75rem + var(--space-2) + env(safe-area-inset-bottom, 0px)
+    );
+  }
+
+  html.employee-mobile-pwa {
+    background-color: var(--color-surface);
+    --employee-tabbar-block-size: calc(
+      3.75rem + var(--space-3) + max(env(safe-area-inset-bottom, 0px), 0.75rem)
+    );
+  }
+
+  /* Chuỗi #app không cao hơn viewport — tab bar flex luôn dính đáy shell. */
+  html.employee-mobile-pwa,
+  html.employee-mobile-pwa body,
+  html.employee-mobile-pwa #app,
+  html.employee-mobile-pwa .app-shell {
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 0;
+  }
+
   .employee-shell--pwa {
     position: fixed;
     top: 0;
@@ -60,8 +93,11 @@
     z-index: 0;
     width: 100%;
     max-width: 100vw;
-    min-height: 100dvh;
-    min-height: -webkit-fill-available;
+    /* Không dùng min-height 100dvh / -webkit-fill-available — dễ cao hơn
+       viewport thực, đẩy bottom tab xuống dưới vùng nhìn thấy. */
+    height: 100%;
+    max-height: 100dvh;
+    overflow: hidden;
   }
 }
 
@@ -306,12 +342,13 @@
 }
 
 .employee-tabbar {
+  position: relative;
+  z-index: 5;
   flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  padding: var(--space-2) calc(var(--space-2) + env(safe-area-inset-right, 0px)) var(--space-2)
-    calc(var(--space-2) + env(safe-area-inset-left, 0px));
-  padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+  padding: var(--space-2) calc(var(--space-2) + env(safe-area-inset-right, 0px))
+    var(--employee-tabbar-pad-bottom) calc(var(--space-2) + env(safe-area-inset-left, 0px));
   background: var(--color-surface);
   box-shadow: 0 -1px 0 var(--color-border), var(--shadow-md);
 }

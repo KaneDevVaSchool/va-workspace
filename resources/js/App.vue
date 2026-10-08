@@ -28,7 +28,10 @@ function syncPwaShellSurface() {
   const employeeTabShell = Boolean(
     route.meta.requiresAuth && route.meta.employeeMobile && isEmployeeMobile.value,
   );
-  root.style.setProperty('--toast-shell-bottom-inset', employeeTabShell ? '3.5rem' : '0px');
+  root.style.setProperty(
+    '--toast-shell-bottom-inset',
+    employeeTabShell ? 'var(--employee-tabbar-block-size)' : '0px',
+  );
 
   root.classList.toggle('employee-mobile-browser', employeeTabShell && !isPwaStandalone());
   root.classList.toggle('employee-mobile-pwa', employeeTabShell && isPwaStandalone());
