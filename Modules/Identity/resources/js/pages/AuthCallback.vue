@@ -8,6 +8,7 @@ import { onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { showClientToast } from "@/lib/clientToast";
+import { resolveAuthenticatedLandingRoute } from "@/lib/authenticatedLanding";
 
 const route = useRoute();
 const router = useRouter();
@@ -41,9 +42,10 @@ onMounted(async () => {
         return;
     }
 
-    const redirect =
-        typeof route.query.redirect === "string" ? route.query.redirect : "/";
-    await router.replace(redirect);
+    const landing = resolveAuthenticatedLandingRoute(route.query.redirect, {
+        canDashboardView: auth.can("dashboard.view"),
+    });
+    await router.replace(landing);
     // Hiện toast sau khi đã điều hướng vào app (ToastHost mount ở App.vue,
     // sống xuyên suốt route change nên vẫn nhận được event dù AuthCallback
     // đã unmount).

@@ -10,6 +10,7 @@ import dashboardRoutes from '@modules/Dashboard/resources/js/router.js';
 import featureRequestRoutes from '@modules/FeatureRequest/resources/js/router.js';
 import contractRoutes from '@modules/Contract/resources/js/router.js';
 import attendanceRoutes from '@modules/Attendance/resources/js/router.js';
+import { isMobileLandingViewport, resolveAuthenticatedLandingRoute } from '../lib/authenticatedLanding';
 
 /**
  * Route Vue (SPA phía client) — KHÔNG nhầm với route Laravel
@@ -154,7 +155,17 @@ router.beforeEach(async (to) => {
     }
 
     if (to.meta.guestOnly && auth.isAuthenticated) {
-        return { name: 'home' };
+        return resolveAuthenticatedLandingRoute(to.query.redirect, {
+            canDashboardView: auth.can('dashboard.view'),
+        });
+    }
+
+    if (
+        to.name === 'home'
+        && isMobileLandingViewport()
+        && auth.can('dashboard.view')
+    ) {
+        return { name: 'employee.feed' };
     }
 
     return true;
