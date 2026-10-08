@@ -20,14 +20,50 @@ export function applyPwaStandaloneClass() {
   }
 }
 
-/** Đăng ký SW sớm trên PWA để push hiện qua hệ thống (không phụ thuộc màn bật push). */
+/**
+ * Đăng ký SW sớm cho mọi phiên (không chỉ standalone) để app shell + asset
+ * được cache ngay từ lần ghé đầu — mở lại khi mất mạng vẫn vào được.
+ * Khi có bản SW mới chờ sẵn (waiting), tự kích hoạt rồi reload 1 lần —
+ * tránh người dùng kẹt ở bản cache cũ vô thời hạn.
+ */
 export function bootstrapPwaServiceWorker() {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
-  if (!isPwaStandalone()) return;
+
+  // Nếu trang chưa có controller (chưa từng cài SW), lần "controllerchange"
+  // đầu tiên chỉ là SW mới nhận quyền kiểm soát — không phải một bản cập
+  // nhật — nên không cần reload.
+  const hadControllerAtLoad = Boolean(navigator.serviceWorker.controller);
+
   navigator.serviceWorker.register('/sw.js', {
     scope: '/',
     updateViaCache: 'none',
+  }).then((registration) => {
+    function activateWaiting(worker) {
+      worker.postMessage('skipWaiting');
+    }
+
+    if (registration.waiting && registration.active) {
+      activateWaiting(registration.waiting);
+    }
+
+    registration.addEventListener('updatefound', () => {
+      const worker = registration.installing;
+      if (!worker) return;
+      worker.addEventListener('statechange', () => {
+        if (worker.state === 'installed' && registration.active) {
+          activateWaiting(worker);
+        }
+      });
+    });
   }).catch(() => {});
+
+  let reloadedOnce = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadControllerAtLoad) return;
+    if (reloadedOnce) return;
+    reloadedOnce = true;
+    window.location.reload();
+  });
 }
 
 /** @param {'guest' | 'employee' | 'app' | null} kind */
