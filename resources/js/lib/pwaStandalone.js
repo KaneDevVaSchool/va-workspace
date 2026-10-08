@@ -20,6 +20,16 @@ export function applyPwaStandaloneClass() {
   }
 }
 
+/** Đăng ký SW sớm trên PWA để push hiện qua hệ thống (không phụ thuộc màn bật push). */
+export function bootstrapPwaServiceWorker() {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  if (!isPwaStandalone()) return;
+  navigator.serviceWorker.register('/sw.js', {
+    scope: '/',
+    updateViaCache: 'none',
+  }).catch(() => {});
+}
+
 /** @param {'guest' | 'employee' | 'app' | null} kind */
 export function setPwaShellSurface(kind) {
   if (typeof document === 'undefined') return;

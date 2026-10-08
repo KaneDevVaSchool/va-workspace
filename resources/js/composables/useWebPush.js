@@ -233,6 +233,31 @@ export async function enablePush() {
   }
 }
 
+/** Hiện thông báo qua service worker — xuất hiện ở Trung tâm thông báo / màn hình khóa của OS. */
+export async function showSystemNotification({
+  title = 'VA Workspace',
+  body = '',
+  tag = 'va-workspace',
+  url = '/',
+} = {}) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+    return false;
+  }
+  try {
+    const registration = await getPushRegistration();
+    await registration.showNotification(title, {
+      body,
+      icon: '/images/pwa/icon-192.png',
+      badge: '/images/favicon.png',
+      tag,
+      data: { url },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function disablePush() {
   lastError.value = '';
   enabling.value = true;
@@ -288,5 +313,6 @@ export function useWebPush() {
     isBraveBrowser,
     enablePush,
     disablePush,
+    showSystemNotification,
   };
 }

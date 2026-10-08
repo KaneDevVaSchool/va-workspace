@@ -2,9 +2,10 @@ import './bootstrap';
 import './echo';
 import '../css/app.css';
 
-import { applyPwaStandaloneClass } from './lib/pwaStandalone';
+import { applyPwaStandaloneClass, bootstrapPwaServiceWorker } from './lib/pwaStandalone';
 
 applyPwaStandaloneClass();
+bootstrapPwaServiceWorker();
 
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';

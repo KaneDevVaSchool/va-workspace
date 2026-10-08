@@ -1,8 +1,8 @@
 <script setup>
 //
-// Hỏi bật thông báo đẩy khi mở app đã cài (PWA standalone). Chỉ hiện nếu
-// trình duyệt hỗ trợ, máy chủ đã cấu hình VAPID và chưa đăng ký push.
-// "Để sau" ẩn đến lần mở app tiếp theo (sessionStorage).
+// Gợi ý đăng ký Web Push (thông báo hệ thống iOS/Android qua service worker),
+// không liên quan toast/popup trong app hay hộp thư thông báo nội bộ.
+// Nút "Cho phép" mở hộp thoại quyền của điện thoại rồi lưu subscription lên server.
 //
 import { computed, onMounted, ref, watch } from 'vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
@@ -25,6 +25,7 @@ const {
   enabling,
   lastError,
   enablePush,
+  showSystemNotification,
 } = useWebPush();
 
 const canOffer = computed(() => {
@@ -68,6 +69,11 @@ async function onEnable() {
   const ok = await enablePush();
   if (ok) {
     open.value = false;
+    await showSystemNotification({
+      title: 'VA Workspace',
+      body: 'Đã bật thông báo trên điện thoại. Tin mới sẽ hiện cả khi bạn không mở app.',
+      tag: 'va-push-enabled',
+    });
     return;
   }
   if (permission.value === 'denied') {
@@ -99,10 +105,14 @@ async function onEnable() {
           </div>
 
           <h2 id="pwa-push-title" class="pwa-push-prompt__title">
-            Bật thông báo đẩy?
+            Nhận thông báo trên điện thoại?
           </h2>
           <p id="pwa-push-desc" class="pwa-push-prompt__desc">
-            Nhận tin mới, nhắc việc và cập nhật quan trọng ngay cả khi không mở ứng dụng.
+            Tin nhắn và cập nhật hiện trên màn hình khóa và Trung tâm thông báo của máy
+            (giống Zalo, Messenger) — không phải popup trong app.
+          </p>
+          <p class="pwa-push-prompt__hint">
+            Bấm bên dưới, điện thoại sẽ hỏi quyền thông báo của hệ thống.
           </p>
 
           <p v-if="lastError" class="pwa-push-prompt__error" role="alert">
@@ -116,7 +126,7 @@ async function onEnable() {
               :disabled="enabling"
               @click="onEnable"
             >
-              {{ enabling ? 'Đang bật…' : 'Bật thông báo' }}
+              {{ enabling ? 'Đang đăng ký…' : 'Cho phép trên điện thoại' }}
             </button>
             <button
               type="button"
@@ -189,6 +199,14 @@ async function onEnable() {
   font-size: 0.875rem;
   line-height: 1.5;
   color: var(--color-text-muted);
+}
+
+.pwa-push-prompt__hint {
+  margin: var(--space-3) 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+  opacity: 0.9;
 }
 
 .pwa-push-prompt__error {
