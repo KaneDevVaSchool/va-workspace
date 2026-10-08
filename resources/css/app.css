@@ -23,6 +23,21 @@ html {
   zoom: var(--app-scale);
 }
 
+/* Mobile / PWA: zoom 0.9 để lộ nền trắng body ở mép dưới viewport — tắt scale. */
+@media (max-width: 768px) {
+  html {
+    zoom: 1;
+  }
+
+  html,
+  body,
+  #app,
+  .app-shell {
+    min-height: 100dvh;
+    min-height: 100svh;
+  }
+}
+
 body {
   margin: 0;
   background: var(--color-bg);
@@ -192,6 +207,12 @@ svg {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* Login/callback: nội dung guest full-viewport (Login.vue position:fixed). */
+.app-shell__content--guest {
+  overflow: hidden;
+  position: relative;
 }
 
 /* ---------- Sidebar surface / nav (dùng chung, không gắn vào 1 component) ---------- */

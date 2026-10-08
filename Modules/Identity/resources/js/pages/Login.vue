@@ -105,13 +105,19 @@ function login() {
     --login-text-muted: #6b6b6f;
     --login-border: #e5e5e8;
 
-    position: relative;
-    height: 100%;
+    /* fixed + inset:0 — phủ kín viewport (PWA/iOS), tránh dải trắng body
+       lộ ở đáy khi zoom html hoặc 100% không khớp 100dvh */
+    position: fixed;
+    inset: 0;
+    z-index: 0;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--space-5) var(--space-4);
+    padding: max(var(--space-5), env(safe-area-inset-top, 0px))
+        max(var(--space-4), env(safe-area-inset-right, 0px))
+        max(var(--space-5), env(safe-area-inset-bottom, 0px))
+        max(var(--space-4), env(safe-area-inset-left, 0px));
     background: var(--color-primary-900);
 }
 

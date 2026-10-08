@@ -30,7 +30,7 @@ const { isEmployeeMobile } = useEmployeeMobileView();
       <AppLayout v-else-if="route.meta.requiresAuth" class="app-shell__auth-content">
         <component :is="Component" />
       </AppLayout>
-      <div v-else class="app-shell__content">
+      <div v-else class="app-shell__content app-shell__content--guest">
         <component :is="Component" />
       </div>
     </router-view>
