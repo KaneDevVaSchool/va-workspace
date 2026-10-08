@@ -37,19 +37,9 @@ html {
     min-height: 100svh;
   }
 
-  /* Shell bottom nav: % thay vì dvh — tránh hở dưới tab bar (Safari / PWA iOS). */
-  html:has(.employee-shell),
-  html:has(.employee-shell) body,
-  html:has(.employee-shell) #app,
-  html:has(.employee-shell) .app-shell,
-  html:has(.employee-shell) .app-shell__auth-content {
-    height: 100%;
-    max-height: 100%;
-    min-height: 0;
-    overflow: hidden;
-  }
-
+  /* Shell bottom nav: cố định full viewport trong .employee-shell — khóa scroll body. */
   html:has(.employee-shell) body {
+    overflow: hidden;
     background-color: var(--color-surface);
   }
 }
@@ -77,40 +67,9 @@ html.pwa-standalone body {
   background-color: var(--color-primary-900);
 }
 
-html.pwa-standalone.pwa-surface-employee,
-html.pwa-standalone.pwa-surface-employee body {
-  min-height: 0;
-  height: 100%;
-  max-height: 100%;
-}
-
 html.pwa-standalone.pwa-surface-employee body {
   background-color: var(--color-surface);
-}
-
-/* Shell mobile nhân viên: khóa chiều cao viewport — tránh khoảng trống dưới tab bar
-   khi body dùng min-height 100dvh lớn hơn vùng hiển thị (iOS standalone). */
-@media (max-width: 768px) {
-  html.pwa-standalone.pwa-surface-employee {
-    height: 100%;
-    overflow: hidden;
-  }
-
-  html.pwa-standalone.pwa-surface-employee body,
-  html.pwa-standalone.pwa-surface-employee #app,
-  html.pwa-standalone.pwa-surface-employee .app-shell,
-  html.pwa-standalone.pwa-surface-employee .app-shell__auth-content,
-  html.pwa-standalone.pwa-surface-employee .employee-shell {
-    height: 100%;
-    max-height: 100%;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  /* Trang con vẫn cuộn trong main — không cuộn body */
-  html.pwa-standalone.pwa-surface-employee .employee-shell__content {
-    overflow-y: auto;
-  }
+  overflow: hidden;
 }
 
 html.pwa-standalone.pwa-surface-app body {
@@ -124,10 +83,6 @@ html.pwa-standalone .app-shell {
   background: transparent;
 }
 
-html.pwa-standalone.pwa-surface-employee #app,
-html.pwa-standalone.pwa-surface-employee .app-shell {
-  min-height: 0;
-}
 
 html.pwa-standalone .login::after {
   content: '';
