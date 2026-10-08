@@ -6,20 +6,23 @@
 // useEmployeeMobileView() = true.
 //
 // CSS: resources/css/employee-mobile-shell.css
-//   .employee-shell--browser  → tab trình duyệt
-//   .employee-shell--pwa      → PWA cài màn hình
+//   .employee-shell--browser / --pwa  → header
+//   .employee-tabbar--dock (Teleport body, fixed) → bottom nav
 //
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { usePwaInstall } from '@/composables/usePwaInstall';
 import { useEmployeeMobileShell } from '@/composables/useEmployeeMobileShell';
+import { useEmployeeTabbarDock } from '@/composables/useEmployeeTabbarDock';
 import AppIcon from '@/components/AppIcon.vue';
 
 const route = useRoute();
 const auth = useAuthStore();
 const { canInstall, promptInstall, dismiss } = usePwaInstall();
 const { shellMode } = useEmployeeMobileShell();
+const tabbarRef = ref(null);
+useEmployeeTabbarDock(tabbarRef);
 
 const TABS = [
   { name: 'dashboard.me', icon: 'home', label: 'Trang chủ' },
@@ -112,19 +115,27 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
       <slot />
     </main>
 
-    <nav class="employee-tabbar" aria-label="Điều hướng chính">
-      <router-link
-        v-for="tab in TABS"
-        :key="tab.name"
-        :to="{ name: tab.name }"
-        class="employee-tabbar__item"
-        :class="{ 'employee-tabbar__item--active': route.name === tab.name }"
+    <!-- Dock viewport: tránh flex shell PWA đẩy tab bar ra ngoài màn hình -->
+    <Teleport to="body">
+      <nav
+        ref="tabbarRef"
+        class="employee-tabbar employee-tabbar--dock"
+        :class="`employee-tabbar--${shellMode}`"
+        aria-label="Điều hướng chính"
       >
-        <span class="employee-tabbar__icon">
-          <AppIcon :name="tab.icon" :size="20" :stroke-width="1.9" />
-        </span>
-        <span class="employee-tabbar__label">{{ tab.label }}</span>
-      </router-link>
-    </nav>
+        <router-link
+          v-for="tab in TABS"
+          :key="tab.name"
+          :to="{ name: tab.name }"
+          class="employee-tabbar__item"
+          :class="{ 'employee-tabbar__item--active': route.name === tab.name }"
+        >
+          <span class="employee-tabbar__icon">
+            <AppIcon :name="tab.icon" :size="20" :stroke-width="1.9" />
+          </span>
+          <span class="employee-tabbar__label">{{ tab.label }}</span>
+        </router-link>
+      </nav>
+    </Teleport>
   </div>
 </template>

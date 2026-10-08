@@ -1,15 +1,23 @@
 //
-// Phân biệt shell mobile trình duyệt (tab) vs PWA cài màn hình — class
-// employee-shell--browser | employee-shell--pwa để chỉnh CSS riêng từng mode.
+// Phân biệt shell mobile trình duyệt (tab) vs PWA cài màn hình.
+// Ưu tiên class sớm trên <html> (app.blade.php) — khớp CSS html.pwa-standalone.
 //
 import { computed, onMounted, ref } from 'vue';
 import { isPwaStandalone } from '@/lib/pwaStandalone';
 
+function readStandalone() {
+  if (typeof document === 'undefined') return false;
+  return (
+    document.documentElement.classList.contains('pwa-standalone')
+    || isPwaStandalone()
+  );
+}
+
 export function useEmployeeMobileShell() {
-  const standalone = ref(typeof window !== 'undefined' && isPwaStandalone());
+  const standalone = ref(readStandalone());
 
   onMounted(() => {
-    standalone.value = isPwaStandalone();
+    standalone.value = readStandalone();
   });
 
   const shellMode = computed(() => (standalone.value ? 'pwa' : 'browser'));
