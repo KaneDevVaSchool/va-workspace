@@ -15,6 +15,7 @@ import { useRoute } from 'vue-router';
 import AppLayout from './components/AppLayout.vue';
 import ToastHost from './components/ToastHost.vue';
 import PwaPushPrompt from './components/PwaPushPrompt.vue';
+import PwaUpdatePrompt from './components/PwaUpdatePrompt.vue';
 import EmployeeMobileLayout from '@modules/Attendance/resources/js/layouts/EmployeeMobileLayout.vue';
 import { useEmployeeMobileView } from './composables/useEmployeeMobileView';
 import { setPwaShellSurface } from './lib/pwaStandalone';
@@ -61,6 +62,7 @@ watch([() => route.fullPath, isEmployeeMobile], syncPwaShellSurface, { immediate
     </router-view>
     <ToastHost />
     <PwaPushPrompt />
+    <PwaUpdatePrompt />
   </div>
 </template>
 

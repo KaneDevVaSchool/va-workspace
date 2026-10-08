@@ -1,5 +1,6 @@
 // VA Workspace — service worker
-// v3: + offline/cache (trước đó chỉ xử lý push notification).
+// v4: đổi logo/icon PWA — bump version để xoá cache ảnh cũ (stale-while-
+// revalidate ở v3 vẫn phục vụ icon cũ cho tới khi cache bị invalidate).
 //
 // Chiến lược:
 // - App shell ("/"): network-first, cache lại bản mới nhất để mở offline được.
@@ -10,7 +11,7 @@
 // - API (/api/...) và điều hướng trang khác: network-first, không cache dữ liệu
 //   nhạy cảm — chỉ dùng fallback offline.html khi mất mạng hoàn toàn.
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const SHELL_CACHE = `va-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `va-assets-${CACHE_VERSION}`;
 const IMAGE_CACHE = `va-images-${CACHE_VERSION}`;

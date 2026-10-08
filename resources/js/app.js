@@ -2,7 +2,8 @@ import './bootstrap';
 import './echo';
 import '../css/app.css';
 
-import { applyPwaStandaloneClass, bootstrapPwaServiceWorker } from './lib/pwaStandalone';
+import { applyPwaStandaloneClass } from './lib/pwaStandalone';
+import { bootstrapPwaServiceWorker } from './composables/usePwaUpdate';
 
 applyPwaStandaloneClass();
 bootstrapPwaServiceWorker();
