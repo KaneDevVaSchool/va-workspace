@@ -1,5 +1,5 @@
 // VA Workspace — service worker
-// v8: icon PWA — không precache/không giữ cache SW (Safari “Thêm màn hình chính”).
+// v9: bỏ skipWaiting chờ tay — PWA đang mở phải nhận shell/menu mới.
 //
 // Chiến lược:
 // - App shell ("/"): network-first, cache lại bản mới nhất để mở offline được.
@@ -10,7 +10,7 @@
 // - API (/api/...) và điều hướng trang khác: network-first, không cache dữ liệu
 //   nhạy cảm — chỉ dùng fallback offline.html khi mất mạng hoàn toàn.
 
-const CACHE_VERSION = 'v8';
+const CACHE_VERSION = 'v9';
 const SHELL_CACHE = `va-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `va-assets-${CACHE_VERSION}`;
 const IMAGE_CACHE = `va-images-${CACHE_VERSION}`;
@@ -24,8 +24,7 @@ self.addEventListener('install', (event) => {
     (async () => {
       const cache = await caches.open(SHELL_CACHE);
       await cache.addAll(APP_SHELL_URLS).catch(() => {});
-      // Không skipWaiting() tự động — chờ trang xin qua message, tránh
-      // đổi SW giữa chừng khi tab khác vẫn đang dùng bản cũ.
+      await self.skipWaiting();
     })(),
   );
 });

@@ -20,9 +20,44 @@ import AppIcon from '@/components/AppIcon.vue';
 const route = useRoute();
 const auth = useAuthStore();
 const { canInstall, promptInstall, dismiss } = usePwaInstall();
-const { shellMode } = useEmployeeMobileShell();
+const { shellMode, isMobilePwa } = useEmployeeMobileShell();
 const tabbarRef = ref(null);
 useEmployeeTabbarDock(tabbarRef);
+
+// PWA: style gắn thẳng trên thẻ — không dùng class .employee-tabbar
+// (bản CSS cache vẫn có padding-bottom / safe-area kéo khoảng trống dưới icon).
+const pwaNavStyle = {
+  position: 'fixed',
+  left: '0',
+  right: '0',
+  bottom: '0',
+  zIndex: '500',
+  display: 'grid',
+  gridTemplateColumns: 'repeat(5, 1fr)',
+  alignItems: 'center',
+  height: '48px',
+  margin: '0',
+  padding: '0',
+  background: 'var(--color-surface, #fff)',
+  boxShadow: '0 -1px 0 var(--color-border, #e6e8ee)',
+  boxSizing: 'border-box',
+};
+
+const pwaItemStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '1px',
+  height: '48px',
+  margin: '0',
+  padding: '0',
+  color: 'var(--color-text-muted, #5c6570)',
+  textDecoration: 'none',
+  fontSize: '10px',
+  fontWeight: '600',
+  lineHeight: '1.1',
+};
 
 const TABS = [
   { name: 'dashboard.me', icon: 'home', label: 'Trang chủ' },
@@ -115,16 +150,31 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
       <slot />
     </main>
 
-    <!--
-      Dock tách khỏi flex shell. Chiều cao menu = --employee-tabbar-height
-      (cố định). Safe-area PWA là dải .employee-tabbar__safe, không cộng
-      vào height của hàng icon.
-    -->
     <Teleport to="body">
       <nav
+        v-if="isMobilePwa"
         ref="tabbarRef"
-        class="employee-tabbar employee-tabbar--dock"
-        :class="`employee-tabbar--${shellMode}`"
+        class="pwa-bottom-nav"
+        :style="pwaNavStyle"
+        aria-label="Điều hướng chính"
+      >
+        <router-link
+          v-for="tab in TABS"
+          :key="tab.name"
+          :to="{ name: tab.name }"
+          :style="{
+            ...pwaItemStyle,
+            color: route.name === tab.name ? 'var(--color-tertiary, #0e336f)' : pwaItemStyle.color,
+          }"
+        >
+          <AppIcon :name="tab.icon" :size="18" :stroke-width="1.9" />
+          <span>{{ tab.label }}</span>
+        </router-link>
+      </nav>
+      <nav
+        v-else
+        ref="tabbarRef"
+        class="employee-tabbar employee-tabbar--dock employee-tabbar--browser"
         aria-label="Điều hướng chính"
       >
         <div class="employee-tabbar__bar">
