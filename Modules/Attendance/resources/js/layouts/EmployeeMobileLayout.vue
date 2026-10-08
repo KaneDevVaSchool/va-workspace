@@ -144,6 +144,11 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
     z-index: 0;
     width: 100%;
     max-width: 100vw;
+    /* Ghi đè inset: 0 (tính theo layout viewport, không co theo thanh địa
+       chỉ trình duyệt) bằng height tường minh theo dynamic viewport —
+       tránh shell cao hơn vùng nhìn thấy thực tế, che/hụt header. */
+    height: 100svh;
+    height: 100dvh;
   }
 }
 

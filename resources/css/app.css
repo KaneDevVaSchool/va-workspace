@@ -29,12 +29,15 @@ html {
     zoom: 1;
   }
 
+  /* height (không phải min-height) ghi đè height:100% ở trên — tránh 2 nguồn
+     chiều cao lệch nhau (100% kế thừa cha vs dvh theo viewport động) khi
+     thanh địa chỉ trình duyệt mobile co giãn, gây hụt/che layout. */
   html,
   body,
   #app,
   .app-shell {
-    min-height: 100dvh;
-    min-height: 100svh;
+    height: 100svh;
+    height: 100dvh;
   }
 
   /* Shell bottom nav: cố định full viewport trong .employee-shell — khóa scroll body. */
@@ -243,9 +246,11 @@ svg {
 }
 
 /* Container chính: luôn responsive, tự scroll nội bộ khi tràn thay vì
-   để cả trang cuộn (quy tắc 6 + 7). */
+   để cả trang cuộn (quy tắc 6 + 7). Không tự đặt height: kế thừa từ #app
+   (100% desktop / 100dvh mobile — xem rule #app phía trên) để tránh 2 rule
+   .app-shell lệch nhau theo breakpoint ghi đè ngược nhau. */
 .app-shell {
-  height: 100%;
+  height: inherit;
   overflow: hidden;
   display: flex;
   flex-direction: column;
