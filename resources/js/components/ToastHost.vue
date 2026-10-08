@@ -349,13 +349,98 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 
-@media (max-width: 480px) {
+/* Mobile / PWA: snackbar dưới cùng — tránh toast trên cùng lộ viền nền đỏ
+   body (html.pwa-standalone) và không đè status bar. */
+@media (max-width: 768px) {
   .toast-host {
-    padding: var(--space-2);
+    inset: auto 0 0 0;
+    justify-content: center;
+    align-items: stretch;
+    padding: 0 var(--space-4)
+      calc(var(--space-3) + env(safe-area-inset-bottom, 0px) + var(--toast-shell-bottom-inset, 0px));
+    pointer-events: none;
   }
 
   .toast-host__stack {
-    max-width: 100%;
+    align-items: stretch;
+    max-width: 22rem;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .toast-host__item {
+    border-radius: var(--radius-full);
+    border-width: 0;
+    box-shadow:
+      0 8px 28px color-mix(in srgb, var(--color-text) 18%, transparent),
+      0 2px 8px color-mix(in srgb, var(--color-text) 8%, transparent);
+  }
+
+  .toast-host__item--success,
+  .toast-host__item--error,
+  .toast-host__item--warning,
+  .toast-host__item--info {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+  }
+
+  .toast-host__item--success .toast-host__icon {
+    color: var(--color-success-tint-fg);
+    background: var(--color-success-tint-bg);
+  }
+
+  .toast-host__item--error .toast-host__icon {
+    color: var(--color-danger-tint-fg);
+    background: var(--color-danger-tint-bg);
+  }
+
+  .toast-host__item--warning .toast-host__icon {
+    color: var(--color-warning-tint-fg);
+    background: var(--color-warning-tint-bg);
+  }
+
+  .toast-host__item--info .toast-host__icon {
+    color: var(--color-info-tint-fg);
+    background: var(--color-info-tint-bg);
+  }
+
+  .toast-host__row {
+    align-items: center;
+    padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+    gap: var(--space-2);
+  }
+
+  .toast-host__icon {
+    width: 2rem;
+    height: 2rem;
+    margin-top: 0;
+  }
+
+  .toast-host__label {
+    display: none;
+  }
+
+  .toast-host__message {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.35;
+    -webkit-line-clamp: 2;
+  }
+
+  .toast-host__progress-track {
+    display: none;
+  }
+
+  .toast-host-item-enter-from {
+    transform: translateY(12px) scale(0.96);
+    opacity: 0;
+  }
+
+  .toast-host-item-leave-to {
+    transform: translateY(8px);
+    opacity: 0;
   }
 }
 </style>

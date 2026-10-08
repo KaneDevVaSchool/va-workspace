@@ -14,6 +14,7 @@ import { watch } from 'vue';
 import { useRoute } from 'vue-router';
 import AppLayout from './components/AppLayout.vue';
 import ToastHost from './components/ToastHost.vue';
+import PwaPushPrompt from './components/PwaPushPrompt.vue';
 import EmployeeMobileLayout from '@modules/Attendance/resources/js/layouts/EmployeeMobileLayout.vue';
 import { useEmployeeMobileView } from './composables/useEmployeeMobileView';
 import { setPwaShellSurface } from './lib/pwaStandalone';
@@ -22,8 +23,14 @@ const route = useRoute();
 const { isEmployeeMobile } = useEmployeeMobileView();
 
 function syncPwaShellSurface() {
+  const root = document.documentElement;
+  const employeeTabShell = Boolean(
+    route.meta.requiresAuth && route.meta.employeeMobile && isEmployeeMobile.value,
+  );
+  root.style.setProperty('--toast-shell-bottom-inset', employeeTabShell ? '3.5rem' : '0px');
+
   if (route.meta.requiresAuth) {
-    if (route.meta.employeeMobile && isEmployeeMobile.value) {
+    if (employeeTabShell) {
       setPwaShellSurface('employee');
     } else {
       setPwaShellSurface('app');
@@ -53,6 +60,7 @@ watch([() => route.fullPath, isEmployeeMobile], syncPwaShellSurface, { immediate
       </div>
     </router-view>
     <ToastHost />
+    <PwaPushPrompt />
   </div>
 </template>
 

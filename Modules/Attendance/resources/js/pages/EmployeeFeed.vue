@@ -31,11 +31,18 @@ async function loadPosts({ append = false } = {}) {
   if (append) loadingMore.value = true; else loading.value = true;
   try {
     const { data } = await window.axios.get('/api/social/posts', {
-      params: { page: page.value, per_page: 10, scope: 'all' },
+      params: {
+        page: page.value,
+        per_page: 10,
+        scope: 'all',
+        post_scope: 'company',
+      },
     });
-    const items = data?.data ?? [];
+    const items = data?.posts ?? [];
     posts.value = append ? [...posts.value, ...items] : items;
-    hasMore.value = Boolean(data?.next_page_url ?? (data?.current_page < data?.last_page));
+    const currentPage = Number(data?.current_page) || 1;
+    const lastPage = Number(data?.last_page) || 1;
+    hasMore.value = currentPage < lastPage;
   } catch (error) {
     showClientToast('error', error?.response?.data?.message || 'Không tải được bảng tin.');
   } finally {
@@ -71,7 +78,9 @@ onMounted(() => loadPosts());
             <span v-else>{{ post.author?.name?.charAt(0) ?? '?' }}</span>
           </div>
           <div class="feed-card__who">
-            <p class="feed-card__name">{{ post.author?.name ?? 'Thông báo hệ thống' }}</p>
+            <p class="feed-card__name">
+              {{ post.author?.name ?? post.anonymous_name ?? 'Thông báo hệ thống' }}
+            </p>
             <p class="feed-card__meta">
               <span v-if="post.author?.department">{{ post.author.department }} · </span>
               <time :datetime="post.created_at">{{ formatSocialTime(post.created_at) }}</time>
