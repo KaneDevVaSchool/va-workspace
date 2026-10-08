@@ -324,7 +324,7 @@
 */
 .employee-tabbar--dock {
   --employee-tabbar-height: 3.25rem;
-  --employee-tabbar-safe: env(safe-area-inset-bottom, 0px);
+  --employee-tabbar-safe: 0px;
   position: fixed;
   left: 0;
   right: 0;
@@ -338,11 +338,22 @@
   box-shadow: 0 -1px 0 var(--color-border), var(--shadow-md);
 }
 
-/* PWA: dải safe = 0 → dock không cao hơn --employee-tabbar-height.
-   Muốn né home indicator: đổi 0px thành env(safe-area-inset-bottom, 0px). */
+/* Mobile web: menu cao hơn. */
+.employee-tabbar--browser {
+  --employee-tabbar-height: 3.75rem;
+  --employee-tabbar-safe: env(safe-area-inset-bottom, 0px);
+}
+
+/* PWA: không dải trống dưới icon. */
 html.pwa-standalone .employee-tabbar--dock,
 .employee-tabbar--pwa {
+  --employee-tabbar-height: 3rem;
   --employee-tabbar-safe: 0px;
+}
+
+html.pwa-standalone .employee-tabbar__safe,
+.employee-tabbar--pwa .employee-tabbar__safe {
+  display: none;
 }
 
 .employee-tabbar__bar {
@@ -365,6 +376,17 @@ html.pwa-standalone .employee-tabbar--dock,
   max-height: var(--employee-tabbar-safe);
   background: var(--color-surface);
   pointer-events: none;
+}
+
+/* PWA: hàng icon khít nội dung, không padding dưới icon/nhãn. */
+html.pwa-standalone .employee-tabbar__bar,
+.employee-tabbar--pwa .employee-tabbar__bar {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  padding-top: 0.375rem;
+  padding-bottom: 0;
 }
 
 .employee-tabbar__item {
