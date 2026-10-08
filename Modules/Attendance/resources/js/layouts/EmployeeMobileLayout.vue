@@ -93,7 +93,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 
 <style scoped>
 .employee-shell {
-  height: 100%;
+  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -105,7 +105,9 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-4) var(--space-5);
+  padding: calc(var(--space-4) + env(safe-area-inset-top, 0px))
+    calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-5)
+    calc(var(--space-4) + env(safe-area-inset-left, 0px));
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   background: linear-gradient(135deg, var(--color-primary-900), var(--color-primary-700));
   color: var(--color-on-primary);
@@ -147,7 +149,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--space-4) var(--space-3) calc(var(--space-6) + env(safe-area-inset-bottom));
+  padding: var(--space-4) var(--space-3) var(--space-6);
 }
 
 .install-banner {
@@ -224,7 +226,9 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  padding: var(--space-2) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom));
+  padding: var(--space-2) calc(var(--space-2) + env(safe-area-inset-right, 0px))
+    calc(var(--space-2) + env(safe-area-inset-bottom, 0px))
+    calc(var(--space-2) + env(safe-area-inset-left, 0px));
   background: var(--color-surface);
   box-shadow: 0 -1px 0 var(--color-border), var(--shadow-md);
 }
@@ -269,7 +273,10 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 
 @media (max-width: 360px) {
   .employee-shell__header {
-    padding: var(--space-3) var(--space-3) var(--space-4);
+    padding-top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
+    padding-right: calc(var(--space-3) + env(safe-area-inset-right, 0px));
+    padding-bottom: var(--space-4);
+    padding-left: calc(var(--space-3) + env(safe-area-inset-left, 0px));
   }
 
   .employee-shell__hello {

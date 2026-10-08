@@ -65,6 +65,21 @@ html.pwa-standalone.pwa-surface-employee body {
   background-color: var(--color-surface-muted);
 }
 
+/* Shell mobile nhân viên: khóa chiều cao viewport — tránh khoảng trống dưới tab bar
+   khi body dùng min-height 100dvh lớn hơn vùng hiển thị (iOS standalone). */
+@media (max-width: 768px) {
+  html.pwa-standalone.pwa-surface-employee,
+  html.pwa-standalone.pwa-surface-employee body,
+  html.pwa-standalone.pwa-surface-employee #app,
+  html.pwa-standalone.pwa-surface-employee .app-shell {
+    height: 100dvh;
+    height: 100svh;
+    max-height: 100dvh;
+    max-height: 100svh;
+    min-height: 0;
+  }
+}
+
 html.pwa-standalone.pwa-surface-app body {
   background-color: var(--color-bg);
 }

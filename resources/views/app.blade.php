@@ -20,6 +20,20 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="VA Workspace">
     <title>{{ config('app.name', 'VA Workspace') }}</title>
+    @php($ogImage = asset('images/og-cover.jpg'))
+    {{-- Open Graph / Twitter Card — preview khi share link lên Zalo, Facebook, Messenger, Slack --}}
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="VA Workspace">
+    <meta property="og:title" content="VA Workspace — Hệ thống quản lý nội bộ VA Schools">
+    <meta property="og:description" content="Hệ thống quản lý nội bộ VA Schools: quản lý công việc, nhân sự, tài sản và quy trình trong một nền tảng duy nhất.">
+    <meta property="og:image" content="{{ $ogImage }}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:url" content="{{ config('app.url') }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="VA Workspace — Hệ thống quản lý nội bộ VA Schools">
+    <meta name="twitter:description" content="Hệ thống quản lý nội bộ VA Schools: quản lý công việc, nhân sự, tài sản và quy trình trong một nền tảng duy nhất.">
+    <meta name="twitter:image" content="{{ $ogImage }}">
     @php($pwaIconV = config('app.pwa_icon_version'))
     <link rel="icon" href="/images/favicon.png?v={{ $pwaIconV }}" type="image/png" sizes="32x32">
     {{-- iOS “Thêm vào Màn hình chính” — URL ?v= bắt buộc khi đổi logo (Safari cache cứng) --}}
