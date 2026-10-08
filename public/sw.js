@@ -1,6 +1,5 @@
 // VA Workspace — service worker
-// v4: đổi logo/icon PWA — bump version để xoá cache ảnh cũ (stale-while-
-// revalidate ở v3 vẫn phục vụ icon cũ cho tới khi cache bị invalidate).
+// v7: icon PWA full artwork (không crop) — bump version để xoá cache ảnh cũ.
 //
 // Chiến lược:
 // - App shell ("/"): network-first, cache lại bản mới nhất để mở offline được.
@@ -11,7 +10,7 @@
 // - API (/api/...) và điều hướng trang khác: network-first, không cache dữ liệu
 //   nhạy cảm — chỉ dùng fallback offline.html khi mất mạng hoàn toàn.
 
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v7';
 const SHELL_CACHE = `va-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `va-assets-${CACHE_VERSION}`;
 const IMAGE_CACHE = `va-images-${CACHE_VERSION}`;
@@ -21,8 +20,11 @@ const OFFLINE_URL = '/offline.html';
 const APP_SHELL_URLS = [
   '/',
   OFFLINE_URL,
+  '/manifest.json',
   '/images/favicon.png',
+  '/images/pwa/apple-touch-icon.png',
   '/images/pwa/icon-192.png',
+  '/images/pwa/icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -58,6 +60,11 @@ self.addEventListener('message', (event) => {
 
 function isBuildAsset(url) {
   return url.origin === self.location.origin && url.pathname.startsWith('/build/');
+}
+
+function isPwaBrandImage(url) {
+  return url.pathname.startsWith('/images/pwa/')
+    || url.pathname === '/images/favicon.png';
 }
 
 function isStaticImage(url) {
@@ -102,6 +109,19 @@ async function networkFirstShell(request) {
   }
 }
 
+async function networkFirstImage(request) {
+  const cache = await caches.open(IMAGE_CACHE);
+  try {
+    const response = await fetch(request);
+    if (response.ok) cache.put(request, response.clone());
+    return response;
+  } catch {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    return fetch(request);
+  }
+}
+
 async function networkOnlyWithFallback(request) {
   try {
     return await fetch(request);
@@ -128,6 +148,11 @@ self.addEventListener('fetch', (event) => {
 
   if (isBuildAsset(url)) {
     event.respondWith(cacheFirst(request, ASSET_CACHE));
+    return;
+  }
+
+  if (isPwaBrandImage(url)) {
+    event.respondWith(networkFirstImage(request));
     return;
   }
 

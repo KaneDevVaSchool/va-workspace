@@ -20,8 +20,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="VA Workspace">
     <title>{{ config('app.name', 'VA Workspace') }}</title>
-    <link rel="icon" href="/images/favicon.png" type="image/png">
-    <link rel="apple-touch-icon" href="/images/pwa/apple-touch-icon.png">
+    <link rel="icon" href="/images/favicon.png" type="image/png" sizes="32x32">
+    {{-- iOS “Thêm vào Màn hình chính” — không dùng manifest icon --}}
+    <link rel="apple-touch-icon" href="/images/pwa/apple-touch-icon.png" sizes="180x180">
+    <link rel="apple-touch-icon" href="/images/pwa/icon-192.png" sizes="192x192">
     <link rel="manifest" href="/manifest.json">
     {{-- Boot splash: hiện ngay trước Vite — tránh màn trắng khi mở PWA / reload --}}
     <style>
