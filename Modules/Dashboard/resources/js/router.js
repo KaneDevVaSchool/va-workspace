@@ -37,11 +37,11 @@ export default [
       requiresAuth: true,
       title: 'Dashboard của tôi',
       requiresPermission: 'dashboard.view',
-      // Nhân viên thường trên mobile thấy trang chủ "của tôi" (checklist +
-      // chấm công/nghỉ phép, Modules/Attendance) thay vì bảng KPI bên dưới —
+      // Bất kỳ ai mở trên mobile (≤768px) thấy trang chủ "của tôi" (checklist
+      // + chấm công/nghỉ phép, Modules/Attendance) thay vì bảng KPI bên dưới —
       // xem DashboardMe.vue + useEmployeeMobileView(). employeeMobile: true
       // báo App.vue bọc EmployeeMobileLayout (bottom nav) thay vì AppLayout
-      // khi điều kiện đó đúng; quản lý/desktop vẫn dùng AppLayout như cũ.
+      // khi điều kiện đó đúng; desktop (>768px) vẫn luôn dùng AppLayout.
       employeeMobile: true,
     },
   },

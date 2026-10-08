@@ -14,9 +14,47 @@
     <link rel="icon" href="/images/favicon.png" type="image/png">
     <link rel="apple-touch-icon" href="/images/pwa/apple-touch-icon.png">
     <link rel="manifest" href="/manifest.json">
+    {{-- Boot splash: hiện ngay trước Vite — tránh màn trắng khi mở PWA / reload --}}
+    <style>
+        body.app-boot-active {
+            margin: 0;
+            background: #9a0036;
+        }
+
+        #app-boot {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+                max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+            background: #9a0036;
+        }
+    </style>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body>
+<body class="app-boot-active">
+    <div id="app-boot" class="app-boot" role="status" aria-live="polite" aria-busy="true">
+        <img
+            src="/images/background/background-logo.png"
+            alt=""
+            class="app-boot__watermark"
+            aria-hidden="true"
+        />
+        <div class="app-boot__scrim" aria-hidden="true"></div>
+        <div class="app-boot__inner">
+            <img
+                src="/images/logo-2.png"
+                alt="Vietnam America Schools"
+                class="app-boot__logo"
+            />
+            <p class="app-boot__brand">VA Workspace</p>
+            <div class="app-boot__spinner" aria-hidden="true"></div>
+            <p class="app-boot__hint">Đang tải…</p>
+        </div>
+    </div>
     <div id="app"></div>
 </body>
 </html>

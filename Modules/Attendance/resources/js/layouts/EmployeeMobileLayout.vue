@@ -1,8 +1,9 @@
 <script setup>
 //
-// Shell mobile riêng cho nhân viên thường — KHÔNG dùng AppSidebar/AppHeader.
-// Header ngang tối giản (lời chào) + bottom tab bar cố định 4 mục. Dùng cho
-// nhóm route meta.employeeMobile khi useEmployeeMobileView() = true.
+// Shell mobile dùng chung cho MỌI tài khoản trên viewport ≤768px — KHÔNG
+// dùng AppSidebar/AppHeader. Header ngang tối giản (lời chào) + bottom tab
+// bar cố định 5 mục. Dùng cho nhóm route meta.employeeMobile khi
+// useEmployeeMobileView() = true.
 //
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
@@ -16,9 +17,10 @@ const { canInstall, promptInstall, dismiss } = usePwaInstall();
 
 const TABS = [
   { name: 'dashboard.me', icon: 'home', label: 'Trang chủ' },
+  { name: 'employee.feed', icon: 'megaphone', label: 'Bảng tin' },
   { name: 'employee.attendance', icon: 'clock', label: 'Chấm công' },
   { name: 'employee.leave', icon: 'calendar', label: 'Nghỉ phép' },
-  { name: 'employee.requests', icon: 'fileText', label: 'Đơn của tôi' },
+  { name: 'employee.requests', icon: 'fileText', label: 'Đơn' },
 ];
 
 const greeting = computed(() => {
@@ -95,7 +97,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg);
+  background: var(--color-surface-muted);
 }
 
 .employee-shell__header {
@@ -221,7 +223,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 .employee-tabbar {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   padding: var(--space-2) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom));
   background: var(--color-surface);
   box-shadow: 0 -1px 0 var(--color-border), var(--shadow-md);
@@ -232,7 +234,8 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: var(--space-1) 0;
+  min-width: 0;
+  padding: var(--space-1) 2px;
   border-radius: var(--radius-md);
   color: var(--color-text-muted);
   text-decoration: none;
@@ -247,9 +250,13 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 }
 
 .employee-tabbar__label {
+  max-width: 100%;
   font-size: 0.6875rem;
   font-weight: 600;
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .employee-tabbar__item--active {
@@ -267,6 +274,20 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 
   .employee-shell__hello {
     font-size: 1rem;
+  }
+
+  .employee-tabbar {
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+
+  .employee-tabbar__icon {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .employee-tabbar__label {
+    font-size: 0.625rem;
   }
 }
 </style>

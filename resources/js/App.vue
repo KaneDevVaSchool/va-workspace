@@ -5,6 +5,10 @@
 //
 // Trang cần đăng nhập (meta.requiresAuth) được bọc trong AppLayout (sidebar
 // + topbar); trang guest (login, callback...) render trực tiếp, không sidebar.
+// Riêng route đánh dấu meta.employeeMobile (trang chủ "của tôi" + bảng tin/
+// chấm công/nghỉ phép/đơn) đổi sang EmployeeMobileLayout (bottom nav) khi
+// đang ở viewport ≤768px — áp dụng cho MỌI tài khoản, không riêng nhân viên
+// thường (xem useEmployeeMobileView.js). Desktop (>768px) luôn dùng AppLayout.
 //
 import AppLayout from './components/AppLayout.vue';
 import ToastHost from './components/ToastHost.vue';

@@ -33,6 +33,91 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ---------- PWA / SPA boot splash (HTML trong app.blade.php) ---------- */
+.app-boot {
+  overflow: hidden;
+  color: var(--color-on-primary);
+}
+
+.app-boot__watermark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.05);
+  filter: brightness(0) invert(1) contrast(1.5);
+  pointer-events: none;
+}
+
+.app-boot__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--color-primary-900) 5%, transparent),
+    transparent,
+    color-mix(in srgb, var(--color-primary-900) 22%, transparent)
+  );
+  pointer-events: none;
+}
+
+.app-boot__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 18rem);
+  text-align: center;
+}
+
+.app-boot__logo {
+  display: block;
+  width: auto;
+  max-width: min(100%, 220px);
+  height: auto;
+  margin-inline: auto;
+  filter: drop-shadow(var(--shadow-sm));
+}
+
+.app-boot__brand {
+  margin: var(--space-3) 0 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-shadow: var(--shadow-sm);
+}
+
+.app-boot__spinner {
+  width: 2rem;
+  height: 2rem;
+  margin-top: var(--space-5);
+  border-radius: var(--radius-full);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  border-top-color: var(--color-on-primary);
+  animation: app-boot-spin 0.75s linear infinite;
+}
+
+.app-boot__hint {
+  margin: var(--space-3) 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-sidebar-text);
+}
+
+.app-boot--hide {
+  opacity: 0;
+  transition: opacity 420ms ease;
+  pointer-events: none;
+}
+
+@keyframes app-boot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 img,
 picture,
 video,

@@ -30,8 +30,8 @@ async function loadOverview() {
   }
 }
 
-// Nhân viên mobile xem EmployeeHome (checklist + chấm công/nghỉ phép, UI
-// mock) thay vì bảng KPI — không cần gọi API tổng quan trong trường hợp đó.
+// Ai mở trên mobile cũng xem EmployeeHome (checklist + chấm công/nghỉ phép,
+// UI mock) thay vì bảng KPI — không cần gọi API tổng quan trong trường hợp đó.
 onMounted(() => {
   if (!isEmployeeMobile.value) loadOverview();
 });
