@@ -1,16 +1,16 @@
 <script setup>
 //
-// Bảng tin — bản mobile đơn giản, 1 cột, chỉ xem (chưa đăng bài/bình luận
-// từ đây). Gọi thẳng API thật của module Social (GET /api/social/posts) —
-// khác với 4 trang kia (chấm công/nghỉ phép/đơn/trang chủ) vẫn đang mock,
-// vì dữ liệu bảng tin thật đã có sẵn và không có rủi ro logic nghiệp vụ mới.
-// Không tái dùng SocialFeed.vue (3 cột, composer, poll...) vì nó là layout
-// desktop, nhét vào shell mobile sẽ vỡ bố cục.
+// Bảng tin mobile — 1 cột, dùng SocialPostCard (HTML an toàn, reaction, bình luận,
+// chia sẻ) giống /social, không duplicate logic feed đơn giản cũ (chỉ xem + text thô).
 //
-import { onMounted, ref } from 'vue';
-import AppIcon from '@/components/AppIcon.vue';
+import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { showClientToast } from '@/lib/clientToast';
-import { formatSocialTime } from '@modules/Social/resources/js/lib/formatSocialTime.js';
+import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
+import SocialPostCard from '@modules/Social/resources/js/components/SocialPostCard.vue';
+
+const auth = useAuthStore();
+const router = useRouter();
 
 const posts = ref([]);
 const loading = ref(true);
@@ -18,17 +18,11 @@ const loadingMore = ref(false);
 const page = ref(1);
 const hasMore = ref(true);
 
-function reactionTotal(reactions) {
-  if (!reactions || typeof reactions !== 'object') return 0;
-  return Object.values(reactions).reduce((sum, n) => sum + (Number(n) || 0), 0);
-}
-
-function firstImage(attachments) {
-  return (attachments ?? []).find((item) => item.type === 'image') ?? null;
-}
+const departmentName = computed(() => auth.user?.department?.name ?? '');
 
 async function loadPosts({ append = false } = {}) {
-  if (append) loadingMore.value = true; else loading.value = true;
+  if (append) loadingMore.value = true;
+  else loading.value = true;
   try {
     const { data } = await window.axios.get('/api/social/posts', {
       params: {
@@ -57,6 +51,40 @@ function loadMore() {
   loadPosts({ append: true });
 }
 
+function onUpdated(updatedPost) {
+  posts.value = posts.value.map((p) => (p.id === updatedPost.id ? updatedPost : p));
+}
+
+function onShared(post) {
+  if ((post.post_scope ?? 'company') === 'company') {
+    posts.value = [post, ...posts.value];
+  }
+}
+
+function onDeleted(postId) {
+  posts.value = posts.value.filter((p) => p.id !== postId);
+}
+
+function onPinned(updatedPost) {
+  posts.value = posts.value
+    .map((p) => (p.id === updatedPost.id ? updatedPost : p))
+    .sort((a, b) => Number(b.is_pinned) - Number(a.is_pinned));
+}
+
+function onUnpinned(updatedPost) {
+  onPinned(updatedPost);
+}
+
+function openWall(userId) {
+  if (!userId) return;
+  router.push({ name: 'social.feed', query: { wall: String(userId) } });
+}
+
+function onOpenHashtag(tag) {
+  if (!tag) return;
+  router.push({ name: 'social.feed', query: { hashtag: tag.replace(/^#/, '') } });
+}
+
 onMounted(() => loadPosts());
 </script>
 
@@ -71,44 +99,30 @@ onMounted(() => loadPosts());
     </div>
 
     <template v-else>
-      <article v-for="post in posts" :key="post.id" class="feed-card">
-        <header class="feed-card__head">
-          <div class="feed-card__avatar" aria-hidden="true">
-            <img v-if="post.author?.avatar_url" :src="post.author.avatar_url" :alt="`Ảnh đại diện của ${post.author.name}`" />
-            <span v-else>{{ post.author?.name?.charAt(0) ?? '?' }}</span>
-          </div>
-          <div class="feed-card__who">
-            <p class="feed-card__name">
-              {{ post.author?.name ?? post.anonymous_name ?? 'Thông báo hệ thống' }}
-            </p>
-            <p class="feed-card__meta">
-              <span v-if="post.author?.department">{{ post.author.department }} · </span>
-              <time :datetime="post.created_at">{{ formatSocialTime(post.created_at) }}</time>
-            </p>
-          </div>
-        </header>
-
-        <p v-if="post.content" class="feed-card__content">{{ post.content }}</p>
-
-        <div v-if="firstImage(post.attachments)" class="feed-card__image">
-          <img :src="firstImage(post.attachments).url" alt="" loading="lazy" />
-        </div>
-
-        <footer class="feed-card__footer">
-          <span class="feed-card__stat">
-            <AppIcon name="heart" :size="14" />
-            {{ reactionTotal(post.reactions) }}
-          </span>
-          <span class="feed-card__stat">
-            <AppIcon name="messageCircle" :size="14" />
-            {{ post.comments_count ?? 0 }}
-          </span>
-        </footer>
-      </article>
+      <SocialPostCard
+        v-for="post in posts"
+        :key="post.id"
+        :post="post"
+        post-scope="company"
+        :department-name="departmentName"
+        @deleted="onDeleted"
+        @pinned="onPinned"
+        @unpinned="onUnpinned"
+        @shared="onShared"
+        @updated="onUpdated"
+        @open-wall="openWall"
+        @open-hashtag="onOpenHashtag"
+      />
 
       <p v-if="!posts.length" class="feed__empty">Chưa có bài đăng nào trên bảng tin.</p>
 
-      <button v-if="hasMore && posts.length" type="button" class="feed__more" :disabled="loadingMore" @click="loadMore">
+      <button
+        v-if="hasMore && posts.length"
+        type="button"
+        class="feed__more"
+        :disabled="loadingMore"
+        @click="loadMore"
+      >
         {{ loadingMore ? 'Đang tải...' : 'Xem thêm' }}
       </button>
     </template>
@@ -120,103 +134,6 @@ onMounted(() => loadPosts());
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-}
-
-.feed-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.feed-card__head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.feed-card__avatar {
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--radius-full);
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
-  font-size: 0.9375rem;
-  font-weight: 700;
-  overflow: hidden;
-}
-
-.feed-card__avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.feed-card__who {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.feed-card__name {
-  margin: 0;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.feed-card__meta {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
-.feed-card__content {
-  margin: 0;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: var(--color-text);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.feed-card__image {
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--color-surface-muted);
-}
-
-.feed-card__image img {
-  display: block;
-  width: 100%;
-  max-height: 16rem;
-  object-fit: cover;
-}
-
-.feed-card__footer {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding-top: var(--space-1);
-}
-
-.feed-card__stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-}
-
-.feed-card__stat :deep(svg) {
-  color: var(--color-text-muted);
 }
 
 .feed__empty {
@@ -253,7 +170,13 @@ onMounted(() => loadPosts());
 }
 
 .feed-card--skeleton {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .feed-card__skeleton-row {
