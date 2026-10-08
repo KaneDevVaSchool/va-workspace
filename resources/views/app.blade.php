@@ -3,8 +3,9 @@
 <head>
     <meta charset="utf-8">
     @php
+        // UTF-8 có dấu; không dùng em dash (—) — parser preview Zalo hay chỉ lấy og:image, bỏ title/mô tả.
         $ogTitle = 'VA Workspace - Hệ thống quản lý nội bộ VA Schools';
-        $ogDescription = 'Hệ thống quản lý nội bộ VA Schools: quản lý công việc, nhân sự, tài sản và quy trình trong một nền tảng duy nhất.';
+        $ogDescription = 'Hệ thống quản lý nội bộ VA Schools. Quản lý công việc, nhân sự, tài sản và quy trình trên một nền tảng.';
         $ogCoverV = (string) config('app.og_cover_version', '1');
         $ogImage = asset('images/og-cover.jpg').'?v='.rawurlencode($ogCoverV);
         $path = request()->getPathInfo();
@@ -26,6 +27,10 @@
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="VA Workspace - Vietnam America Schools">
     <meta name="description" content="{{ $ogDescription }}">
+    <meta name="title" content="{{ $ogTitle }}">
+    <meta itemprop="name" content="{{ $ogTitle }}">
+    <meta itemprop="description" content="{{ $ogDescription }}">
+    <meta itemprop="image" content="{{ $ogImage }}">
     <link rel="canonical" href="{{ $ogPageUrl }}">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ $ogTitle }}">
@@ -48,7 +53,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="VA Workspace">
-    <title>{{ config('app.name', 'VA Workspace') }}</title>
+    <title>{{ $ogTitle }}</title>
     @php($pwaIconV = config('app.pwa_icon_version'))
     <link rel="icon" href="/images/favicon.png?v={{ $pwaIconV }}" type="image/png" sizes="32x32">
     {{-- iOS “Thêm vào Màn hình chính” — URL ?v= bắt buộc khi đổi logo (Safari cache cứng) --}}

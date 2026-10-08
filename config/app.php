@@ -27,7 +27,7 @@ return [
     /*
     | Bump khi đổi og-cover.jpg — ?v= trên og:image để Zalo/FB không giữ preview cũ.
     */
-    'og_cover_version' => env('OG_COVER_VERSION', '2'),
+    'og_cover_version' => env('OG_COVER_VERSION', '3'),
 
     /*
     |--------------------------------------------------------------------------
