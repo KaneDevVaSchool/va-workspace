@@ -133,14 +133,19 @@ function submit() {
 }
 
 const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usagePercent))}%`);
+
+const seniorityDays = computed(
+  () => breakdown.find((b) => b.id === 'seniority')?.value ?? 0,
+);
 </script>
 
 <template>
   <div class="leave">
     <section class="leave-hero">
+      <div class="leave-hero__glow" aria-hidden="true"></div>
       <div class="leave-hero__head">
         <span class="leave-hero__badge" aria-hidden="true">
-          <AppIcon name="calendar" :size="18" :stroke-width="1.8" />
+          <AppIcon name="calendar" :size="22" :stroke-width="1.8" />
         </span>
         <p class="leave-hero__label">Số ngày phép còn lại</p>
       </div>
@@ -149,51 +154,45 @@ const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usage
         <span class="leave-hero__unit">ngày</span>
       </p>
       <div class="leave-hero__split">
-        <div>
+        <div class="leave-hero__stat">
           <p class="leave-hero__split-label">Đã sử dụng</p>
           <p class="leave-hero__split-value">{{ formatDays(overview.used) }} ngày</p>
         </div>
-        <div>
+        <div class="leave-hero__stat">
           <p class="leave-hero__split-label">Phép thâm niên</p>
-          <p class="leave-hero__split-value">{{ formatDays(breakdown.find((b) => b.id === 'seniority')?.value ?? 0) }} ngày</p>
+          <p class="leave-hero__split-value">{{ formatDays(seniorityDays) }} ngày</p>
         </div>
       </div>
     </section>
 
     <section class="leave-panel">
+      <div class="leave-panel__ribbon" aria-hidden="true"></div>
       <div class="leave-panel__head">
-        <div>
-          <h2 class="leave-panel__title">Tổng quan phép năm</h2>
-          <p class="leave-panel__hint">
-            Tổng quỹ, số đã dùng và số còn lại quy đổi từ phút làm việc theo lịch có hiệu lực.
-          </p>
-        </div>
+        <h2 class="leave-panel__title">Tổng quan phép năm</h2>
         <button
           type="button"
           class="leave-panel__refresh"
           :disabled="refreshing"
+          aria-label="Cập nhật số dư phép"
           @click="refreshOverview"
         >
-          <AppIcon name="rotateCw" :size="16" :class="{ 'leave-panel__refresh-spin': refreshing }" />
+          <AppIcon name="rotateCw" :size="18" :class="{ 'leave-panel__refresh-spin': refreshing }" />
           <span>{{ refreshing ? 'Đang cập nhật…' : 'Cập nhật' }}</span>
         </button>
       </div>
 
       <div class="leave-metrics leave-metrics--primary">
-        <article class="leave-metric">
+        <article class="leave-metric leave-metric--fund">
           <p class="leave-metric__label">Tổng quỹ phát sinh</p>
-          <p class="leave-metric__value">{{ formatDays(overview.totalFund) }}</p>
-          <p class="leave-metric__hint">ngày · Tổng quyền lợi trước sử dụng và hết hạn</p>
+          <p class="leave-metric__value">{{ formatDays(overview.totalFund) }} <span class="leave-metric__unit">ngày</span></p>
         </article>
-        <article class="leave-metric">
+        <article class="leave-metric leave-metric--used">
           <p class="leave-metric__label">Đã sử dụng</p>
-          <p class="leave-metric__value leave-metric__value--used">{{ formatDays(overview.used) }}</p>
-          <p class="leave-metric__hint">ngày · Số ngày nghỉ đã ghi nhận</p>
+          <p class="leave-metric__value">{{ formatDays(overview.used) }} <span class="leave-metric__unit">ngày</span></p>
         </article>
-        <article class="leave-metric">
+        <article class="leave-metric leave-metric--remain">
           <p class="leave-metric__label">Còn lại</p>
-          <p class="leave-metric__value leave-metric__value--remain">{{ formatDays(overview.remaining) }}</p>
-          <p class="leave-metric__hint">ngày · Số ngày hiện có thể sử dụng</p>
+          <p class="leave-metric__value">{{ formatDays(overview.remaining) }} <span class="leave-metric__unit">ngày</span></p>
         </article>
       </div>
 
@@ -201,22 +200,18 @@ const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usage
         <article class="leave-chip">
           <p class="leave-chip__label">Đã đặt</p>
           <p class="leave-chip__value">{{ formatDays(overview.planned) }} ngày</p>
-          <p class="leave-chip__hint">Phép tương lai đã duyệt</p>
         </article>
         <article class="leave-chip">
           <p class="leave-chip__label">Đang chờ</p>
           <p class="leave-chip__value">{{ formatDays(overview.pending) }} ngày</p>
-          <p class="leave-chip__hint">Chưa trừ số dư chính thức</p>
         </article>
         <article class="leave-chip">
           <p class="leave-chip__label">Đã hết hạn</p>
           <p class="leave-chip__value">{{ formatDays(overview.expired) }} ngày</p>
-          <p class="leave-chip__hint">Phép chuyển năm không còn hiệu lực</p>
         </article>
         <article class="leave-chip leave-chip--warn">
-          <p class="leave-chip__label">Dự kiến hết hạn</p>
+          <p class="leave-chip__label">Dự kiến hết hạn · {{ overview.expiringBefore }}</p>
           <p class="leave-chip__value">{{ formatDays(overview.expiringSoon) }} ngày</p>
-          <p class="leave-chip__hint">Trước {{ overview.expiringBefore }}</p>
         </article>
       </div>
 
@@ -326,59 +321,81 @@ const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usage
 
 <style scoped>
 .leave {
+  --leave-clip-card: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 14px) 100%, 0 100%);
+  --leave-clip-metric: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  --leave-clip-chip: polygon(12px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 10px) 100%, 0 100%, 0 8px);
+  --leave-clip-btn: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
 .leave-hero {
+  position: relative;
   margin-top: calc(-1 * var(--employee-stat-overlap, 3rem));
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  overflow: hidden;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), 50% 100%, 0 calc(100% - 14px));
+  background: linear-gradient(145deg, var(--color-surface) 0%, var(--color-tertiary-surface) 100%);
   box-shadow: var(--shadow-md);
 }
 
+.leave-hero__glow {
+  position: absolute;
+  top: -2rem;
+  right: -1.5rem;
+  width: 8rem;
+  height: 8rem;
+  clip-path: circle(50% at 50% 50%);
+  background: radial-gradient(circle, rgba(14, 51, 111, 0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+
 .leave-hero__head {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .leave-hero__badge {
   display: grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: var(--radius-full);
-  background: var(--color-warning-surface, #fff8e6);
-  color: var(--color-warning, #c47a00);
+  width: 2.75rem;
+  height: 2.75rem;
+  clip-path: polygon(25% 0, 100% 0, 100% 75%, 75% 100%, 0 100%, 0 25%);
+  background: linear-gradient(135deg, var(--color-tertiary-surface), #fff);
+  color: var(--color-tertiary);
+  box-shadow: var(--shadow-sm);
 }
 
 .leave-hero__label {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
   color: var(--color-text-muted);
 }
 
 .leave-hero__value {
-  margin: 0 0 var(--space-3);
+  position: relative;
+  margin: 0 0 var(--space-4);
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
 }
 
 .leave-hero__number {
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--color-text);
+  font-size: 2.75rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--color-tertiary);
 }
 
 .leave-hero__unit {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.125rem;
+  font-weight: 700;
   color: var(--color-text-muted);
 }
 
@@ -390,61 +407,72 @@ const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usage
   box-shadow: inset 0 1px 0 var(--color-border);
 }
 
+.leave-hero__stat {
+  padding: var(--space-2) var(--space-3);
+  clip-path: var(--leave-clip-chip);
+  background: rgba(255, 255, 255, 0.72);
+}
+
 .leave-hero__split-label {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--color-text-muted);
 }
 
 .leave-hero__split-value {
-  margin: 2px 0 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  margin: 4px 0 0;
+  font-size: 1.0625rem;
+  font-weight: 800;
   color: var(--color-text);
 }
 
 .leave-panel {
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
+  position: relative;
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  clip-path: var(--leave-clip-card);
   background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
+}
+
+.leave-panel__ribbon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0.35rem;
+  clip-path: polygon(0 0, 100% 0, 98% 100%, 2% 100%);
+  background: linear-gradient(90deg, var(--color-tertiary), var(--color-primary));
 }
 
 .leave-panel__head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
 }
 
 .leave-panel__title {
-  margin: 0 0 var(--space-1);
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.leave-panel__hint {
   margin: 0;
-  font-size: 0.75rem;
-  line-height: 1.45;
-  color: var(--color-text-muted);
+  font-size: 1.125rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
 }
 
 .leave-panel__refresh {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  clip-path: var(--leave-clip-btn);
+  background: var(--color-tertiary-surface);
   color: var(--color-tertiary);
   font-family: inherit;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 700;
   cursor: pointer;
 }
@@ -480,72 +508,80 @@ const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usage
 }
 
 .leave-metric {
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
+  position: relative;
+  padding: var(--space-4) var(--space-3);
+  clip-path: var(--leave-clip-metric);
   background: var(--color-tertiary-surface);
 }
 
+.leave-metric--fund {
+  background: linear-gradient(135deg, var(--color-tertiary-surface), #eef3fb);
+}
+
+.leave-metric--used {
+  background: linear-gradient(135deg, #fdeef0, #fff5f6);
+}
+
+.leave-metric--used .leave-metric__value {
+  color: var(--color-primary);
+}
+
+.leave-metric--remain {
+  background: linear-gradient(135deg, #e8f7ee, #f4fbf7);
+}
+
+.leave-metric--remain .leave-metric__value {
+  color: var(--color-secondary);
+}
+
 .leave-metric__label {
-  margin: 0 0 var(--space-1);
-  font-size: 0.75rem;
-  font-weight: 600;
+  margin: 0 0 var(--space-2);
+  font-size: 0.875rem;
+  font-weight: 700;
   color: var(--color-text-muted);
 }
 
 .leave-metric__value {
   margin: 0;
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 2rem;
+  font-weight: 800;
   color: var(--color-tertiary);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
 }
 
-.leave-metric__value--used {
-  color: var(--color-primary);
-}
-
-.leave-metric__value--remain {
-  color: var(--color-secondary);
-}
-
-.leave-metric__hint {
-  margin: var(--space-1) 0 0;
-  font-size: 0.6875rem;
-  line-height: 1.4;
+.leave-metric__unit {
+  font-size: 1rem;
+  font-weight: 700;
   color: var(--color-text-muted);
 }
 
 .leave-chip {
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-3);
+  clip-path: var(--leave-clip-chip);
   background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .leave-chip--warn {
-  background: #fff8f0;
-  box-shadow: inset 0 0 0 1px rgba(196, 122, 0, 0.25);
+  background: linear-gradient(135deg, #fff8f0, #fff3e6);
+  box-shadow: inset 0 0 0 1px rgba(196, 122, 0, 0.22);
 }
 
 .leave-chip__label {
   margin: 0;
-  font-size: 0.6875rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 700;
   color: var(--color-text-muted);
+  line-height: 1.3;
 }
 
 .leave-chip__value {
-  margin: 2px 0 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  margin: var(--space-1) 0 0;
+  font-size: 1.125rem;
+  font-weight: 800;
   color: var(--color-text);
-}
-
-.leave-chip__hint {
-  margin: 2px 0 0;
-  font-size: 0.625rem;
-  line-height: 1.35;
-  color: var(--color-text-muted);
+  letter-spacing: -0.02em;
 }
 
 .leave-progress {
@@ -561,34 +597,34 @@ const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usage
 }
 
 .leave-progress__label {
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: 0.9375rem;
+  font-weight: 700;
   color: var(--color-text);
 }
 
 .leave-progress__pct {
-  font-size: 0.8125rem;
-  font-weight: 700;
+  font-size: 1.0625rem;
+  font-weight: 800;
   color: var(--color-tertiary);
 }
 
 .leave-progress__track {
-  height: 0.5rem;
-  border-radius: var(--radius-full);
+  height: 0.625rem;
+  clip-path: polygon(0 0, 100% 0, 100% 70%, calc(100% - 4px) 100%, 0 100%);
   background: var(--color-surface-muted);
   overflow: hidden;
 }
 
 .leave-progress__fill {
   height: 100%;
-  border-radius: inherit;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
   background: linear-gradient(90deg, var(--color-tertiary-600), var(--color-tertiary));
 }
 
 .leave-breakdown__title {
-  margin: 0 0 var(--space-2);
-  font-size: 0.875rem;
-  font-weight: 700;
+  margin: 0 0 var(--space-3);
+  font-size: 1rem;
+  font-weight: 800;
   color: var(--color-text);
 }
 
@@ -615,13 +651,14 @@ const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usage
 }
 
 .leave-breakdown__label {
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
   color: var(--color-text);
 }
 
 .leave-breakdown__value {
-  font-size: 0.8125rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 800;
   color: var(--color-secondary);
 }
 
@@ -631,22 +668,22 @@ const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usage
   justify-content: center;
   gap: var(--space-2);
   width: 100%;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-4) var(--space-4);
   border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-tertiary);
+  clip-path: var(--leave-clip-btn);
+  background: linear-gradient(135deg, var(--color-tertiary-700, var(--color-tertiary)), var(--color-tertiary));
   color: var(--color-on-tertiary);
   font-family: inherit;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 1.0625rem;
+  font-weight: 800;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
 }
 
 .leave-history__title {
   margin: 0 0 var(--space-3);
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 1.0625rem;
+  font-weight: 800;
   color: var(--color-text);
 }
 
@@ -663,8 +700,8 @@ const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usage
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-3);
+  clip-path: var(--leave-clip-chip);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
 }
@@ -673,9 +710,9 @@ const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usage
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--radius-md);
+  width: 2.75rem;
+  height: 2.75rem;
+  clip-path: polygon(20% 0, 100% 0, 100% 80%, 80% 100%, 0 100%, 0 20%);
 }
 
 .history-row__icon--tertiary {
@@ -702,22 +739,23 @@ const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usage
 }
 
 .history-row__type {
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.9375rem;
+  font-weight: 700;
   color: var(--color-text);
 }
 
 .history-row__meta {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--color-text-muted);
 }
 
 .history-row__status {
   flex-shrink: 0;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.6875rem;
-  font-weight: 700;
+  padding: 0.35rem 0.6rem;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  font-size: 0.75rem;
+  font-weight: 800;
 }
 
 .history-row__status--approved {
