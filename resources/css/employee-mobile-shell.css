@@ -195,6 +195,19 @@
   background: rgba(255, 255, 255, 0.22);
   color: var(--color-on-tertiary);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+
+.employee-shell__avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.employee-shell__avatar-initial {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .employee-shell__search {

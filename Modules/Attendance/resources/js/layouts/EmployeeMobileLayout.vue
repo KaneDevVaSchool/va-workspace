@@ -9,7 +9,7 @@
 //   .employee-shell--browser / --pwa  → header
 //   .employee-tabbar--dock (Teleport body, fixed) → bottom nav
 //
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { usePwaInstall } from '@/composables/usePwaInstall';
@@ -81,6 +81,27 @@ const firstName = computed(() => {
   return parts[parts.length - 1] || name;
 });
 
+const displayName = computed(() => auth.user?.name?.trim() || '');
+const departmentName = computed(() => auth.user?.department?.name?.trim() || '');
+const jobTitleName = computed(() => auth.user?.job_title_name?.trim() || '');
+
+const avatarBroken = ref(false);
+const hasAvatarPhoto = computed(
+  () => Boolean(auth.user?.avatar_url) && !avatarBroken.value,
+);
+const avatarInitial = computed(() => {
+  const name = displayName.value || auth.user?.email || '?';
+  return name.trim().charAt(0).toUpperCase() || '?';
+});
+
+const isHomeHeader = computed(() => route.name === 'dashboard.me');
+
+onMounted(() => {
+  if (auth.isAuthenticated) {
+    auth.fetchMe();
+  }
+});
+
 const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   weekday: 'long',
   day: '2-digit',
@@ -104,16 +125,30 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 
       <div class="employee-shell__header-top">
         <div class="employee-shell__greeting">
-          <p class="employee-shell__hello">{{ greeting }}{{ firstName ? `, ${firstName}` : '' }}</p>
-          <p class="employee-shell__date">{{ todayLabel }}</p>
+          <template v-if="isHomeHeader">
+            <p class="employee-shell__hello">{{ greeting }}{{ firstName ? `, ${firstName}` : '' }}</p>
+            <p class="employee-shell__date">{{ todayLabel }}</p>
+          </template>
+          <template v-else>
+            <p class="employee-shell__hello">{{ displayName || 'Nhân sự' }}</p>
+            <p v-if="departmentName" class="employee-shell__date">{{ departmentName }}</p>
+            <p v-else-if="jobTitleName" class="employee-shell__date">{{ jobTitleName }}</p>
+          </template>
         </div>
         <div class="employee-shell__header-actions">
           <button type="button" class="employee-shell__icon-btn" aria-label="Thông báo">
             <AppIcon name="bell" :size="20" :stroke-width="1.8" />
             <span class="employee-shell__notif-dot" aria-hidden="true"></span>
           </button>
-          <div class="employee-shell__avatar" aria-hidden="true">
-            <AppIcon name="user" :size="20" />
+          <div class="employee-shell__avatar" :aria-label="displayName || 'Ảnh đại diện'">
+            <img
+              v-if="hasAvatarPhoto"
+              class="employee-shell__avatar-img"
+              :src="auth.user.avatar_url"
+              alt=""
+              @error="avatarBroken = true"
+            />
+            <span v-else class="employee-shell__avatar-initial">{{ avatarInitial }}</span>
           </div>
         </div>
       </div>
