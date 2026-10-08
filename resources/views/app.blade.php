@@ -20,11 +20,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="VA Workspace">
     <title>{{ config('app.name', 'VA Workspace') }}</title>
-    <link rel="icon" href="/images/favicon.png" type="image/png" sizes="32x32">
-    {{-- iOS “Thêm vào Màn hình chính” — không dùng manifest icon --}}
-    <link rel="apple-touch-icon" href="/images/pwa/apple-touch-icon.png" sizes="180x180">
-    <link rel="apple-touch-icon" href="/images/pwa/icon-192.png" sizes="192x192">
-    <link rel="manifest" href="/manifest.json">
+    @php($pwaIconV = config('app.pwa_icon_version'))
+    <link rel="icon" href="/images/favicon.png?v={{ $pwaIconV }}" type="image/png" sizes="32x32">
+    {{-- iOS “Thêm vào Màn hình chính” — URL ?v= bắt buộc khi đổi logo (Safari cache cứng) --}}
+    <link rel="apple-touch-icon" href="/images/pwa/apple-touch-icon.png?v={{ $pwaIconV }}" sizes="180x180">
+    <link rel="apple-touch-icon" href="/images/pwa/icon-192.png?v={{ $pwaIconV }}" sizes="192x192">
+    <link rel="manifest" href="/manifest.json?v={{ $pwaIconV }}">
     {{-- Boot splash: hiện ngay trước Vite — tránh màn trắng khi mở PWA / reload --}}
     <style>
         body.app-boot-active {

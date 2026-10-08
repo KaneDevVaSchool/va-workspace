@@ -1,5 +1,5 @@
 // VA Workspace — service worker
-// v7: icon PWA full artwork (không crop) — bump version để xoá cache ảnh cũ.
+// v8: icon PWA — không precache/không giữ cache SW (Safari “Thêm màn hình chính”).
 //
 // Chiến lược:
 // - App shell ("/"): network-first, cache lại bản mới nhất để mở offline được.
@@ -10,22 +10,14 @@
 // - API (/api/...) và điều hướng trang khác: network-first, không cache dữ liệu
 //   nhạy cảm — chỉ dùng fallback offline.html khi mất mạng hoàn toàn.
 
-const CACHE_VERSION = 'v7';
+const CACHE_VERSION = 'v8';
 const SHELL_CACHE = `va-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `va-assets-${CACHE_VERSION}`;
 const IMAGE_CACHE = `va-images-${CACHE_VERSION}`;
 const CURRENT_CACHES = [SHELL_CACHE, ASSET_CACHE, IMAGE_CACHE];
 
 const OFFLINE_URL = '/offline.html';
-const APP_SHELL_URLS = [
-  '/',
-  OFFLINE_URL,
-  '/manifest.json',
-  '/images/favicon.png',
-  '/images/pwa/apple-touch-icon.png',
-  '/images/pwa/icon-192.png',
-  '/images/pwa/icon-512.png',
-];
+const APP_SHELL_URLS = ['/', OFFLINE_URL];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -47,6 +39,7 @@ self.addEventListener('activate', (event) => {
           .filter((name) => !CURRENT_CACHES.includes(name))
           .map((name) => caches.delete(name)),
       );
+      await purgeCachedPwaBrandImages();
       await self.clients.claim();
     })(),
   );
@@ -109,16 +102,29 @@ async function networkFirstShell(request) {
   }
 }
 
-async function networkFirstImage(request) {
-  const cache = await caches.open(IMAGE_CACHE);
+async function purgeCachedPwaBrandImages() {
+  const names = await caches.keys();
+  await Promise.all(
+    names.map(async (name) => {
+      const cache = await caches.open(name);
+      const keys = await cache.keys();
+      await Promise.all(
+        keys
+          .filter((req) => {
+            const p = new URL(req.url).pathname;
+            return p.startsWith('/images/pwa/') || p === '/images/favicon.png';
+          })
+          .map((req) => cache.delete(req)),
+      );
+    }),
+  );
+}
+
+async function networkOnlyBrandImage(request) {
   try {
-    const response = await fetch(request);
-    if (response.ok) cache.put(request, response.clone());
-    return response;
+    return await fetch(request, { cache: 'no-store' });
   } catch {
-    const cached = await cache.match(request);
-    if (cached) return cached;
-    return fetch(request);
+    return Response.error();
   }
 }
 
@@ -152,7 +158,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (isPwaBrandImage(url)) {
-    event.respondWith(networkFirstImage(request));
+    event.respondWith(networkOnlyBrandImage(request));
     return;
   }
 

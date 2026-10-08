@@ -19,6 +19,12 @@ return [
     'name' => env('APP_NAME', 'Laravel'),
 
     /*
+    | Bump khi đổi logo PWA — gắn ?v= vào icon/manifest để Safari/Chrome không
+    | giữ apple-touch-icon cũ theo URL.
+    */
+    'pwa_icon_version' => env('PWA_ICON_VERSION', '8'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------
