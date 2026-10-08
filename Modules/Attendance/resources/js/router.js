@@ -30,7 +30,7 @@ export default [
     component: () => import('./pages/EmployeeLeave.vue'),
     meta: {
       requiresAuth: true,
-      title: 'Nghỉ phép',
+      title: 'Quản lý Nghỉ phép',
       requiresPermission: 'dashboard.view',
       employeeMobile: true,
     },

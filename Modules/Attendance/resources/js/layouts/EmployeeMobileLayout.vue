@@ -24,41 +24,6 @@ const { shellMode, isMobilePwa } = useEmployeeMobileShell();
 const tabbarRef = ref(null);
 useEmployeeTabbarDock(tabbarRef);
 
-// PWA: style gắn thẳng trên thẻ — không dùng class .employee-tabbar
-// (bản CSS cache vẫn có padding-bottom / safe-area kéo khoảng trống dưới icon).
-const pwaNavStyle = {
-  position: 'fixed',
-  left: '0',
-  right: '0',
-  bottom: '0',
-  zIndex: '500',
-  display: 'grid',
-  gridTemplateColumns: 'repeat(5, 1fr)',
-  alignItems: 'center',
-  height: '48px',
-  margin: '0',
-  padding: '0',
-  background: 'var(--color-surface, #fff)',
-  boxShadow: '0 -1px 0 var(--color-border, #e6e8ee)',
-  boxSizing: 'border-box',
-};
-
-const pwaItemStyle = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '1px',
-  height: '48px',
-  margin: '0',
-  padding: '0',
-  color: 'var(--color-text-muted, #5c6570)',
-  textDecoration: 'none',
-  fontSize: '10px',
-  fontWeight: '600',
-  lineHeight: '1.1',
-};
-
 const TABS = [
   { name: 'dashboard.me', icon: 'home', label: 'Trang chủ' },
   { name: 'employee.feed', icon: 'megaphone', label: 'Bảng tin' },
@@ -96,6 +61,12 @@ const avatarInitial = computed(() => {
 
 const isHomeHeader = computed(() => route.name === 'dashboard.me');
 
+const compactHeaderTitle = computed(() => {
+  if (isHomeHeader.value) return '';
+  const title = route.meta?.title;
+  return typeof title === 'string' ? title.trim() : '';
+});
+
 onMounted(() => {
   if (auth.isAuthenticated) {
     auth.fetchMe();
@@ -128,6 +99,9 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
           <template v-if="isHomeHeader">
             <p class="employee-shell__hello">{{ greeting }}{{ firstName ? `, ${firstName}` : '' }}</p>
             <p class="employee-shell__date">{{ todayLabel }}</p>
+          </template>
+          <template v-else-if="compactHeaderTitle">
+            <p class="employee-shell__hello">{{ compactHeaderTitle }}</p>
           </template>
           <template v-else>
             <p class="employee-shell__hello">{{ displayName || 'Nhân sự' }}</p>
@@ -166,7 +140,10 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 
     <main
       class="employee-shell__content"
-      :class="{ 'employee-shell__content--home': route.name === 'dashboard.me' }"
+      :class="{
+        'employee-shell__content--home': route.name === 'dashboard.me',
+        'employee-shell__content--overlap': route.name === 'employee.leave',
+      }"
     >
       <div v-if="canInstall" class="install-banner">
         <span class="install-banner__icon" aria-hidden="true">
@@ -187,29 +164,9 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 
     <Teleport to="body">
       <nav
-        v-if="isMobilePwa"
         ref="tabbarRef"
-        class="pwa-bottom-nav"
-        :style="pwaNavStyle"
-        aria-label="Điều hướng chính"
-      >
-        <router-link
-          v-for="tab in TABS"
-          :key="tab.name"
-          :to="{ name: tab.name }"
-          :style="{
-            ...pwaItemStyle,
-            color: route.name === tab.name ? 'var(--color-tertiary, #0e336f)' : pwaItemStyle.color,
-          }"
-        >
-          <AppIcon :name="tab.icon" :size="18" :stroke-width="1.9" />
-          <span>{{ tab.label }}</span>
-        </router-link>
-      </nav>
-      <nav
-        v-else
-        ref="tabbarRef"
-        class="employee-tabbar employee-tabbar--dock employee-tabbar--browser"
+        class="employee-tabbar employee-tabbar--dock"
+        :class="isMobilePwa ? 'employee-tabbar--pwa' : 'employee-tabbar--browser'"
         aria-label="Điều hướng chính"
       >
         <div class="employee-tabbar__bar">
@@ -226,7 +183,6 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
             <span class="employee-tabbar__label">{{ tab.label }}</span>
           </router-link>
         </div>
-        <div class="employee-tabbar__safe" aria-hidden="true"></div>
       </nav>
     </Teleport>
   </div>

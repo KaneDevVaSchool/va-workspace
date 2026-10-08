@@ -1,5 +1,5 @@
 // VA Workspace — service worker
-// v9: bỏ skipWaiting chờ tay — PWA đang mở phải nhận shell/menu mới.
+// v10: tab bar mobile — safe-area gộp vào dock, không dải trống dưới icon.
 //
 // Chiến lược:
 // - App shell ("/"): network-first, cache lại bản mới nhất để mở offline được.
@@ -10,7 +10,7 @@
 // - API (/api/...) và điều hướng trang khác: network-first, không cache dữ liệu
 //   nhạy cảm — chỉ dùng fallback offline.html khi mất mạng hoàn toàn.
 
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v10';
 const SHELL_CACHE = `va-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `va-assets-${CACHE_VERSION}`;
 const IMAGE_CACHE = `va-images-${CACHE_VERSION}`;

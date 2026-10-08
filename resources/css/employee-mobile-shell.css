@@ -4,9 +4,7 @@
   --employee-stat-overlap: 3.25rem;
   /* Chiều cao hàng menu (icon + nhãn). Không gồm safe-area. */
   --employee-tabbar-height: 3.25rem;
-  /* Dải dưới menu — PWA ghi đè; mặc định 0 để không đẩy height menu. */
-  --employee-tabbar-safe: 0px;
-  /* Tổng dock (menu + dải safe), JS đo và ghi đè lên <html>. */
+  /* Tổng dock (menu + safe-area padding), JS đo và ghi đè lên <html>. */
   --employee-tabbar-block-size: var(--employee-tabbar-height);
   --employee-header-px: calc(var(--space-4) + env(safe-area-inset-right, 0px));
   --employee-header-pl: calc(var(--space-4) + env(safe-area-inset-left, 0px));
@@ -21,7 +19,6 @@
 .employee-shell--browser {
   --employee-header-pt: var(--space-4);
   --employee-stat-overlap: 3rem;
-  --employee-tabbar-safe: env(safe-area-inset-bottom, 0px);
 }
 
 @media (max-width: 768px) {
@@ -54,8 +51,6 @@
 .employee-shell--pwa {
   --employee-header-pt: calc(env(safe-area-inset-top, 0px) + var(--space-2));
   --employee-stat-overlap: 3.25rem;
-  /* Không cộng safe-area vào menu PWA — height hàng icon giữ nguyên. */
-  --employee-tabbar-safe: 0px;
 }
 
 @media (max-width: 768px) {
@@ -260,6 +255,10 @@
   padding-top: calc(var(--employee-stat-overlap) + var(--space-2));
 }
 
+.employee-shell__content--overlap {
+  padding-top: calc(var(--employee-stat-overlap) + var(--space-2));
+}
+
 .install-banner {
   display: flex;
   align-items: center;
@@ -331,75 +330,40 @@
 }
 
 /*
-  Dock (Teleport → body). Hàng icon khóa đúng --employee-tabbar-height.
-  .employee-tabbar__safe chỉ kéo nền xuống home indicator — không làm
-  hàng menu cao hơn.
+  Dock (Teleport → body). Safe-area nằm trong padding-bottom của dock —
+  nền trắng kéo sát đáy màn, icon không bị “nổi” lên trên dải trống.
 */
 .employee-tabbar--dock {
   --employee-tabbar-height: 3.25rem;
-  --employee-tabbar-safe: 0px;
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 500;
-  display: flex;
-  flex-direction: column;
+  box-sizing: border-box;
   margin: 0;
-  padding: 0;
+  padding: 0 0 env(safe-area-inset-bottom, 0px);
   background: var(--color-surface);
   box-shadow: 0 -1px 0 var(--color-border), var(--shadow-md);
 }
 
-/* Mobile web: menu cao hơn. */
 .employee-tabbar--browser {
-  --employee-tabbar-height: 3.75rem;
-  --employee-tabbar-safe: env(safe-area-inset-bottom, 0px);
+  --employee-tabbar-height: 3.5rem;
 }
 
-/* PWA: không dải trống dưới icon. */
-html.pwa-standalone .employee-tabbar--dock,
 .employee-tabbar--pwa {
-  --employee-tabbar-height: 3rem;
-  --employee-tabbar-safe: 0px;
-}
-
-html.pwa-standalone .employee-tabbar__safe,
-.employee-tabbar--pwa .employee-tabbar__safe {
-  display: none;
+  --employee-tabbar-height: 3.25rem;
 }
 
 .employee-tabbar__bar {
   box-sizing: border-box;
-  flex: 0 0 var(--employee-tabbar-height);
-  height: var(--employee-tabbar-height);
-  max-height: var(--employee-tabbar-height);
-  min-height: var(--employee-tabbar-height);
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: center;
-  padding: 0 calc(var(--space-2) + env(safe-area-inset-right, 0px)) 0
+  min-height: var(--employee-tabbar-height);
+  padding: 0.25rem calc(var(--space-2) + env(safe-area-inset-right, 0px)) 0.125rem
     calc(var(--space-2) + env(safe-area-inset-left, 0px));
   overflow: hidden;
-}
-
-.employee-tabbar__safe {
-  flex: 0 0 auto;
-  height: var(--employee-tabbar-safe);
-  max-height: var(--employee-tabbar-safe);
-  background: var(--color-surface);
-  pointer-events: none;
-}
-
-/* PWA: hàng icon khít nội dung, không padding dưới icon/nhãn. */
-html.pwa-standalone .employee-tabbar__bar,
-.employee-tabbar--pwa .employee-tabbar__bar {
-  flex: 0 0 auto;
-  height: auto;
-  min-height: 0;
-  max-height: none;
-  padding-top: 0.375rem;
-  padding-bottom: 0;
 }
 
 .employee-tabbar__item {
@@ -409,8 +373,7 @@ html.pwa-standalone .employee-tabbar__bar,
   justify-content: center;
   gap: 2px;
   min-width: 0;
-  height: 100%;
-  max-height: 100%;
+  min-height: 2.75rem;
   padding: 0 2px;
   border-radius: var(--radius-md);
   color: var(--color-text-muted);
