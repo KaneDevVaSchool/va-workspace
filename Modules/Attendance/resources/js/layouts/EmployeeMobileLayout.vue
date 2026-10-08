@@ -47,16 +47,36 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 <template>
   <div class="employee-shell">
     <header class="employee-shell__header">
-      <div class="employee-shell__avatar" aria-hidden="true">
-        <AppIcon name="user" :size="20" />
+      <div class="employee-shell__header-deco" aria-hidden="true"></div>
+
+      <div class="employee-shell__header-top">
+        <div class="employee-shell__greeting">
+          <p class="employee-shell__hello">{{ greeting }}{{ firstName ? `, ${firstName}` : '' }}</p>
+          <p class="employee-shell__date">{{ todayLabel }}</p>
+        </div>
+        <div class="employee-shell__header-actions">
+          <button type="button" class="employee-shell__icon-btn" aria-label="Thông báo">
+            <AppIcon name="bell" :size="20" :stroke-width="1.8" />
+            <span class="employee-shell__notif-dot" aria-hidden="true"></span>
+          </button>
+          <div class="employee-shell__avatar" aria-hidden="true">
+            <AppIcon name="user" :size="20" />
+          </div>
+        </div>
       </div>
-      <div class="employee-shell__greeting">
-        <p class="employee-shell__hello">{{ greeting }}{{ firstName ? `, ${firstName}` : '' }}</p>
-        <p class="employee-shell__date">{{ todayLabel }}</p>
-      </div>
+
+      <label class="employee-shell__search">
+        <AppIcon name="search" :size="18" class="employee-shell__search-icon" />
+        <input
+          type="search"
+          class="employee-shell__search-input"
+          placeholder="Tìm kiếm tiện ích, đồng nghiệp..."
+          autocomplete="off"
+        />
+      </label>
     </header>
 
-    <main class="employee-shell__content">
+    <main class="employee-shell__content" :class="{ 'employee-shell__content--home': route.name === 'dashboard.me' }">
       <div v-if="canInstall" class="install-banner">
         <span class="install-banner__icon" aria-hidden="true">
           <AppIcon name="download" :size="18" :stroke-width="1.9" />
@@ -97,31 +117,53 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface-muted);
+  background: var(--color-tertiary-surface);
 }
 
 .employee-shell__header {
+  position: relative;
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--space-3);
   padding: calc(var(--space-4) + env(safe-area-inset-top, 0px))
     calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-5)
     calc(var(--space-4) + env(safe-area-inset-left, 0px));
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  background: linear-gradient(135deg, var(--color-primary-900), var(--color-primary-700));
-  color: var(--color-on-primary);
+  background: linear-gradient(145deg, var(--color-tertiary-800), var(--color-tertiary-600));
+  color: var(--color-on-tertiary);
+  overflow: hidden;
 }
 
-.employee-shell__avatar {
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
+.employee-shell__header-deco {
+  position: absolute;
+  top: -3rem;
+  right: -2.5rem;
+  width: 9rem;
+  height: 9rem;
   border-radius: var(--radius-full);
-  background: var(--color-sidebar-well-strong);
-  color: var(--color-on-primary);
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+.employee-shell__header-deco::after {
+  content: '';
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.employee-shell__header-top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 
 .employee-shell__greeting {
@@ -133,16 +175,94 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 
 .employee-shell__hello {
   margin: 0;
-  font-size: 1.0625rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
 .employee-shell__date {
   margin: 0;
   font-size: 0.8125rem;
-  color: var(--color-sidebar-text);
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.78);
   text-transform: capitalize;
+}
+
+.employee-shell__header-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.employee-shell__icon-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--color-on-tertiary);
+  cursor: pointer;
+}
+
+.employee-shell__notif-dot {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.55rem;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-500);
+  box-shadow: 0 0 0 2px var(--color-tertiary-700);
+}
+
+.employee-shell__avatar {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.22);
+  color: var(--color-on-tertiary);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.employee-shell__search {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  height: 2.75rem;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.employee-shell__search-icon {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.employee-shell__search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-on-tertiary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.employee-shell__search-input::placeholder {
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .employee-shell__content {
@@ -152,6 +272,10 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   padding: var(--space-4) var(--space-3) var(--space-6);
 }
 
+.employee-shell__content--home {
+  padding-top: 0;
+}
+
 .install-banner {
   display: flex;
   align-items: center;
@@ -159,8 +283,8 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   margin-bottom: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-primary-surface);
-  box-shadow: inset 0 0 0 1px var(--color-primary-200);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .install-banner__icon {
@@ -170,8 +294,8 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   width: 2rem;
   height: 2rem;
   border-radius: var(--radius-full);
-  background: var(--color-surface);
-  color: var(--color-primary);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
 }
 
 .install-banner__text {
@@ -201,8 +325,8 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   padding: 0.375rem var(--space-3);
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--color-tertiary);
+  color: var(--color-on-tertiary);
   font-family: inherit;
   font-size: 0.75rem;
   font-weight: 700;
@@ -264,11 +388,11 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 }
 
 .employee-tabbar__item--active {
-  color: var(--color-primary);
+  color: var(--color-tertiary);
 }
 
 .employee-tabbar__item--active .employee-tabbar__icon {
-  background: var(--color-primary-surface);
+  background: var(--color-tertiary-surface);
 }
 
 @media (max-width: 360px) {
@@ -280,7 +404,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   }
 
   .employee-shell__hello {
-    font-size: 1rem;
+    font-size: 1.0625rem;
   }
 
   .employee-tabbar {
