@@ -1,7 +1,6 @@
 <script setup>
 //
-// Nghỉ phép mobile — catalog + gửi đơn qua HRM (HRM_LEAVE_API_* → POST /api/v1/leave/requests).
-// Số dư phép năm vẫn mock cục bộ cho tới khi HRM có API balance.
+// Nghỉ phép mobile — catalog, số dư và gửi đơn qua HRM (HRM_LEAVE_API_*).
 //
 import { computed, onMounted, reactive, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
@@ -16,34 +15,79 @@ function formatDays(value) {
 }
 
 const overview = reactive({
-  totalFund: 12,
-  used: 6.44,
-  remaining: 5.56,
+  totalFund: 0,
+  used: 0,
+  remaining: 0,
   planned: 0,
   pending: 0,
   expired: 0,
-  expiringSoon: 7.56,
-  expiringBefore: '31/12/2026',
-  usagePercent: 53.7,
+  expiringSoon: 0,
+  expiringBefore: '',
+  usagePercent: 0,
 });
 
-const breakdown = reactive([
-  { id: 'carry2025', label: 'Phép 2025 chuyển sang', value: 2.0 },
-  { id: 'annual2026', label: 'Phép năm 2026 phát sinh', value: 10.0 },
-  { id: 'seniority', label: 'Phép thâm niên', value: 0 },
-  { id: 'bonus', label: 'Phép cộng thêm', value: 0 },
-  { id: 'hrGrant', label: 'Phép công tác do HR cấp', value: 0 },
-]);
+/** @type {import('vue').Ref<Array<{ id: string, label: string, value: number }>>} */
+const breakdown = ref([]);
 
+const balanceLoading = ref(true);
+const balanceError = ref('');
 const refreshing = ref(false);
 
-function refreshOverview() {
-  if (refreshing.value) return;
-  refreshing.value = true;
-  setTimeout(() => {
+function formatExpiringBefore(isoDate) {
+  if (!isoDate) return '';
+  const [y, m, d] = String(isoDate).split('-').map(Number);
+  if (!y || !m || !d) return String(isoDate);
+  return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+}
+
+function applyBalancePayload(payload) {
+  if (!payload || typeof payload !== 'object') return;
+
+  overview.totalFund = Number(payload.pool_days ?? 0);
+  overview.used = Number(payload.used_days ?? 0);
+  overview.remaining = Number(payload.available_days ?? 0);
+  overview.planned = Number(payload.planned_days ?? 0);
+  overview.pending = Number(payload.pending_hold_days ?? 0);
+  overview.expired = Number(payload.expired_days ?? 0);
+  overview.expiringSoon = Number(payload.expiring_soon_days ?? 0);
+  overview.expiringBefore = formatExpiringBefore(payload.expiring_before);
+  overview.usagePercent = Number(payload.usage_percent ?? 0);
+
+  const rows = Array.isArray(payload.breakdown) ? payload.breakdown : [];
+  breakdown.value = rows.map((row) => ({
+    id: String(row.id ?? row.label ?? ''),
+    label: String(row.label ?? ''),
+    value: Number(row.days ?? 0),
+  }));
+}
+
+async function loadLeaveBalance({ silent = false } = {}) {
+  if (!silent) {
+    balanceLoading.value = true;
+  }
+  balanceError.value = '';
+  try {
+    const { data } = await window.axios.get('/api/attendance/leave-balance');
+    applyBalancePayload(data?.data);
+    if (silent) {
+      showClientToast('success', 'Đã cập nhật số dư phép năm.');
+    }
+  } catch (err) {
+    balanceError.value =
+      err?.response?.data?.message ?? 'Không tải được số dư phép từ HRM.';
+    if (silent) {
+      showClientToast('error', balanceError.value);
+    }
+  } finally {
+    balanceLoading.value = false;
     refreshing.value = false;
-    showClientToast('success', 'Đã cập nhật số dư phép năm.');
-  }, 600);
+  }
+}
+
+function refreshOverview() {
+  if (refreshing.value || balanceLoading.value) return;
+  refreshing.value = true;
+  void loadLeaveBalance({ silent: true });
 }
 
 /** @type {import('vue').Ref<Array<Record<string, unknown>>>} */
@@ -369,6 +413,7 @@ async function loadLeaveTypes() {
 onMounted(() => {
   void loadLeaveTypes();
   void loadLeaveHistory();
+  void loadLeaveBalance();
 });
 
 /** @type {import('vue').Ref<Array<Record<string, unknown>>>} */
@@ -515,6 +560,7 @@ async function submit() {
     resetForm();
     closeForm();
     await loadLeaveHistory();
+    void loadLeaveBalance({ silent: true });
   } catch (err) {
     const status = err?.response?.status;
     const raw =
@@ -533,7 +579,7 @@ async function submit() {
 const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usagePercent))}%`);
 
 const seniorityDays = computed(
-  () => breakdown.find((b) => b.id === 'seniority')?.value ?? 0,
+  () => breakdown.value.find((b) => b.id === 'seniority')?.value ?? 0,
 );
 </script>
 
@@ -548,9 +594,11 @@ const seniorityDays = computed(
         <p class="leave-hero__label">Số ngày phép còn lại</p>
       </div>
       <p class="leave-hero__value">
-        <span class="leave-hero__number">{{ formatDays(overview.remaining) }}</span>
+        <span v-if="balanceLoading" class="leave-hero__number leave-hero__number--muted">…</span>
+        <span v-else class="leave-hero__number">{{ formatDays(overview.remaining) }}</span>
         <span class="leave-hero__unit">ngày</span>
       </p>
+      <p v-if="balanceError" class="leave-types-error">{{ balanceError }}</p>
       <div class="leave-hero__split">
         <div class="leave-hero__stat">
           <p class="leave-hero__split-label">Đã sử dụng</p>

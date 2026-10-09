@@ -193,6 +193,35 @@ class HrmApiClient
     }
 
     /**
+     * Số dư phép năm — GET /api/v1/leave/balances (ability leave:read).
+     *
+     * @return array<string, mixed>
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function getLeaveBalance(string $employeeUuid, ?int $year = null): array
+    {
+        $query = ['employee_uuid' => $employeeUuid];
+        if ($year !== null) {
+            $query['year'] = $year;
+        }
+
+        try {
+            $response = HrmOutboundHttp::leaveCatalogClient()->get('/api/v1/leave/balances', $query);
+        } catch (ConnectionException $e) {
+            throw new HrmApiUnavailable('timeout/network lỗi khi gọi GET /api/v1/leave/balances', $e);
+        }
+
+        if (! $response->successful()) {
+            throw new HrmApiUnavailable("HTTP {$response->status()} khi gọi GET /api/v1/leave/balances");
+        }
+
+        $data = $response->json('data');
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
      * Toàn bộ đơn vị tổ chức (cursor paginate trên HRM, tối đa 200/trang).
      *
      * @param  array<string, scalar|null>  $filters  company, parent, type, …
