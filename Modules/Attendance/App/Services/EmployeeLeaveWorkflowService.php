@@ -310,17 +310,7 @@ class EmployeeLeaveWorkflowService
      */
     private function resolveHrPersonInCharge(string $employeeUuid): ?array
     {
-        $raw = null;
-
-        try {
-            $payload = $this->hrmApi->getEmployeePayload($employeeUuid);
-            $raw = $this->extractHrInChargeFromApiPayload($payload);
-        } catch (HrmApiUnavailable $e) {
-            Log::warning('attendance.leave_workflow.hr_in_charge_api_failed', [
-                'employee_uuid' => $employeeUuid,
-                'message' => $e->getMessage(),
-            ]);
-        }
+        $raw = $this->loadHrInChargeRawFromHrmApis($employeeUuid);
 
         if ($raw === null && HrmEmployeeDirectory::isConfigured()) {
             try {
@@ -341,6 +331,38 @@ class EmployeeLeaveWorkflowService
     }
 
     /**
+     * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
+     */
+    private function loadHrInChargeRawFromHrmApis(string $employeeUuid): ?array
+    {
+        $includeQuery = ['include' => 'hrOwner,hr_owner'];
+
+        $sources = [
+            static fn () => $this->hrmApi->getEmployeePayload($employeeUuid, $includeQuery),
+            static fn () => $this->hrmApi->getEmployeePayload($employeeUuid),
+            static fn () => $this->hrmApi->getEmployeePayloadFromLeaveCatalog($employeeUuid, $includeQuery),
+            static fn () => $this->hrmApi->getEmployeePayloadFromLeaveCatalog($employeeUuid),
+        ];
+
+        foreach ($sources as $fetch) {
+            try {
+                $payload = $fetch();
+                $raw = $this->extractHrInChargeFromApiPayload($payload);
+                if ($raw !== null) {
+                    return $raw;
+                }
+            } catch (HrmApiUnavailable $e) {
+                Log::warning('attendance.leave_workflow.hr_in_charge_api_failed', [
+                    'employee_uuid' => $employeeUuid,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param  array<string, mixed>|null  $payload
      * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
      */
@@ -352,6 +374,7 @@ class EmployeeLeaveWorkflowService
 
         foreach ([
             'hr_owner',
+            'hr_owner_employee',
             'hr_responsible_employee',
             'hr_responsible',
             'hr_officer',
@@ -365,22 +388,38 @@ class EmployeeLeaveWorkflowService
                 continue;
             }
 
-            $name = trim((string) ($node['full_name'] ?? $node['name'] ?? ''));
+            $fromNode = $this->hrContactFromResourceNode($node);
+            if ($fromNode !== null) {
+                return $fromNode;
+            }
+        }
+
+        foreach ([
+            'hr_owner_name',
+            'hr_owner_full_name',
+            'hr_responsible_name',
+            'hr_officer_name',
+            'hr_person_in_charge_name',
+            'assigned_hr_name',
+        ] as $nameKey) {
+            $name = trim((string) ($payload[$nameKey] ?? ''));
             if ($name === '') {
                 continue;
             }
 
+            $codeKey = str_replace('_name', '_code', $nameKey);
+            $code = filled($payload[$codeKey] ?? null) ? (string) $payload[$codeKey] : null;
+
             return [
-                'uuid' => filled($node['uuid'] ?? null) ? (string) $node['uuid'] : null,
+                'uuid' => null,
                 'full_name' => $name,
-                'code' => filled($node['code'] ?? null) ? (string) $node['code'] : null,
-                'job_title' => filled($node['job_title'] ?? $node['job_title_name'] ?? null)
-                    ? (string) ($node['job_title'] ?? $node['job_title_name'])
-                    : null,
+                'code' => $code,
+                'job_title' => null,
             ];
         }
 
-        $uuid = $payload['hr_responsible_employee_uuid']
+        $uuid = $payload['hr_owner_employee_uuid']
+            ?? $payload['hr_responsible_employee_uuid']
             ?? $payload['assigned_hr_employee_uuid']
             ?? $payload['hr_officer_employee_uuid']
             ?? null;
@@ -389,19 +428,97 @@ class EmployeeLeaveWorkflowService
             return [
                 'uuid' => (string) $uuid,
                 'full_name' => trim((string) (
-                    $payload['hr_responsible_employee_name']
+                    $payload['hr_owner_employee_name']
+                    ?? $payload['hr_responsible_employee_name']
                     ?? $payload['assigned_hr_employee_name']
                     ?? $payload['hr_officer_name']
                     ?? ''
                 )),
-                'code' => filled($payload['hr_responsible_employee_code'] ?? $payload['assigned_hr_employee_code'] ?? null)
-                    ? (string) ($payload['hr_responsible_employee_code'] ?? $payload['assigned_hr_employee_code'])
+                'code' => filled($payload['hr_owner_employee_code'] ?? $payload['hr_responsible_employee_code'] ?? $payload['assigned_hr_employee_code'] ?? null)
+                    ? (string) ($payload['hr_owner_employee_code'] ?? $payload['hr_responsible_employee_code'] ?? $payload['assigned_hr_employee_code'])
                     : null,
                 'job_title' => null,
             ];
         }
 
+        $internalId = $payload['hr_owner_employee_id']
+            ?? $payload['hr_responsible_employee_id']
+            ?? $payload['assigned_hr_employee_id']
+            ?? $payload['hr_officer_employee_id']
+            ?? null;
+
+        if (filled($internalId)) {
+            return $this->resolveHrContactByInternalEmployeeId((int) $internalId);
+        }
+
         return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $node
+     * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
+     */
+    private function hrContactFromResourceNode(array $node): ?array
+    {
+        if (isset($node['data']) && is_array($node['data'])) {
+            $nested = $this->hrContactFromResourceNode($node['data']);
+            if ($nested !== null) {
+                return $nested;
+            }
+        }
+
+        $name = trim((string) ($node['full_name'] ?? $node['name'] ?? ''));
+        $uuid = filled($node['uuid'] ?? null) ? (string) $node['uuid'] : null;
+        $code = filled($node['code'] ?? null) ? (string) $node['code'] : null;
+        $jobTitle = filled($node['job_title'] ?? $node['job_title_name'] ?? null)
+            ? (string) ($node['job_title'] ?? $node['job_title_name'])
+            : null;
+
+        if ($name !== '') {
+            return [
+                'uuid' => $uuid,
+                'full_name' => $name,
+                'code' => $code,
+                'job_title' => $jobTitle,
+            ];
+        }
+
+        if ($uuid !== null) {
+            return [
+                'uuid' => $uuid,
+                'full_name' => '',
+                'code' => $code,
+                'job_title' => $jobTitle,
+            ];
+        }
+
+        $internalId = $node['id'] ?? $node['employee_id'] ?? null;
+        if (filled($internalId)) {
+            return $this->resolveHrContactByInternalEmployeeId((int) $internalId);
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
+     */
+    private function resolveHrContactByInternalEmployeeId(int $employeeId): ?array
+    {
+        if (! HrmEmployeeDirectory::isConfigured()) {
+            return null;
+        }
+
+        try {
+            return $this->directory->findEmployeeContactByInternalId($employeeId);
+        } catch (HrmDatabaseUnavailable $e) {
+            Log::warning('attendance.leave_workflow.hr_in_charge_id_lookup_failed', [
+                'employee_id' => $employeeId,
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**

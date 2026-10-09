@@ -326,13 +326,6 @@ class HrmEmployeeDirectory
     }
 
     /**
-     * Nhân sự phụ trách hồ sơ (portal HRM — mục «Nhân sự phụ trách» trên hồ sơ nhân viên).
-     *
-     * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
-     *
-     * @throws HrmDatabaseUnavailable
-     */
-    /**
      * Cấp trên trực tiếp trên hồ sơ — cột direct_manager_name (vd. Nguyễn Viết Hùng (VA010067)).
      *
      * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
@@ -408,6 +401,41 @@ class HrmEmployeeDirectory
         return null;
     }
 
+    /**
+     * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    public function findEmployeeContactByInternalId(int $employeeId): ?array
+    {
+        if ($employeeId <= 0) {
+            return null;
+        }
+
+        try {
+            $row = DB::connection('hrm')
+                ->table('employees')
+                ->where('id', $employeeId)
+                ->whereNull('deleted_at')
+                ->first(['uuid', 'full_name', 'code', 'job_title_name', 'status']);
+        } catch (Throwable $e) {
+            throw new HrmDatabaseUnavailable('Không đọc được nhân viên HRM theo id.', $e);
+        }
+
+        if ($row === null || ! $this->isActiveHrmEmployee($row)) {
+            return null;
+        }
+
+        return $this->presentHrInChargeRow($row);
+    }
+
+    /**
+     * Nhân sự phụ trách hồ sơ (portal HRM — cột hr_owner_employee_id / «Nhân sự phụ trách»).
+     *
+     * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
+     *
+     * @throws HrmDatabaseUnavailable
+     */
     public function resolveHrPersonInChargeForEmployee(string $employeeUuid): ?array
     {
         $employee = DB::connection('hrm')
@@ -422,14 +450,9 @@ class HrmEmployeeDirectory
 
         $fkColumn = $this->hrInChargeEmployeeIdColumn();
         if ($fkColumn !== null && filled($employee->{$fkColumn} ?? null)) {
-            $hrRow = DB::connection('hrm')
-                ->table('employees')
-                ->where('id', $employee->{$fkColumn})
-                ->whereNull('deleted_at')
-                ->first(['uuid', 'full_name', 'code', 'job_title_name', 'status']);
-
-            if ($hrRow !== null && $this->isActiveHrmEmployee($hrRow)) {
-                return $this->presentHrInChargeRow($hrRow);
+            $contact = $this->findEmployeeContactByInternalId((int) $employee->{$fkColumn});
+            if ($contact !== null) {
+                return $contact;
             }
         }
 

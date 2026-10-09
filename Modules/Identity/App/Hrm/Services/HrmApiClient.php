@@ -23,9 +23,26 @@ class HrmApiClient
      *
      * @throws HrmApiUnavailable
      */
-    public function getEmployeePayload(string $uuid): ?array
+    /**
+     * @param  array<string, scalar|null>  $query
+     */
+    public function getEmployeePayload(string $uuid, array $query = []): ?array
     {
-        return $this->get("/api/v1/employees/{$uuid}");
+        return $this->get("/api/v1/employees/{$uuid}", $query);
+    }
+
+    /**
+     * Cùng endpoint employee show nhưng qua base portal (HRM_LEAVE_API_*)
+     * — thường có field mới (vd. hr_owner) trước khi đồng bộ lên hrm.vaschools.edu.vn.
+     *
+     * @param  array<string, scalar|null>  $query
+     * @return array<string, mixed>|null
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function getEmployeePayloadFromLeaveCatalog(string $uuid, array $query = []): ?array
+    {
+        return $this->getFrom(HrmOutboundHttp::leaveCatalogClient(), "/api/v1/employees/{$uuid}", $query);
     }
 
     /** @throws HrmApiUnavailable */
@@ -267,18 +284,23 @@ class HrmApiClient
      * @return array<string, mixed>|null
      * @throws HrmApiUnavailable
      */
-    private function get(string $path): ?array
+    /**
+     * @param  array<string, scalar|null>  $query
+     */
+    private function get(string $path, array $query = []): ?array
     {
-        return $this->getFrom($this->client(), $path);
+        return $this->getFrom($this->client(), $path, $query);
     }
 
     /**
+     * @param  array<string, scalar|null>  $query
+     *
      * @throws HrmApiUnavailable
      */
-    private function getFrom(\Illuminate\Http\Client\PendingRequest $http, string $path): ?array
+    private function getFrom(\Illuminate\Http\Client\PendingRequest $http, string $path, array $query = []): ?array
     {
         try {
-            $response = $http->get($path);
+            $response = $query === [] ? $http->get($path) : $http->get($path, $query);
         } catch (ConnectionException $e) {
             throw new HrmApiUnavailable("timeout/network lỗi khi gọi {$path}", $e);
         }
