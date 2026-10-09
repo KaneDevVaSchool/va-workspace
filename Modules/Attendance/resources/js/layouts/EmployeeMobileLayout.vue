@@ -181,7 +181,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
           <span class="employee-tabbar__icon">
             <AppIcon
               :name="tab.icon"
-              :size="isMobilePwa ? 22 : 20"
+              :size="20"
               :stroke-width="1.9"
             />
           </span>

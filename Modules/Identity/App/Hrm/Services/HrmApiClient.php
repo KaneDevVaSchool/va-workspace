@@ -106,6 +106,81 @@ class HrmApiClient
     }
 
     /**
+     * Tạo đơn nghỉ — POST /api/v1/leave/requests (ability leave:write, portal/HRM_LEAVE_API_*).
+     *
+     * @param  array<string, scalar|null>  $fields
+     * @param  list<\Illuminate\Http\UploadedFile>  $attachments
+     * @return array<string, mixed>
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function createLeaveRequest(array $fields, array $attachments = []): array
+    {
+        $http = HrmOutboundHttp::leaveCatalogClient(60);
+
+        foreach ($attachments as $file) {
+            $http = $http->attach(
+                'attachments[]',
+                fopen($file->getRealPath(), 'r'),
+                $file->getClientOriginalName(),
+            );
+        }
+
+        try {
+            $response = $http->post('/api/v1/leave/requests', $fields);
+        } catch (ConnectionException $e) {
+            throw new HrmApiUnavailable('timeout/network lỗi khi gọi POST /api/v1/leave/requests', $e);
+        }
+
+        if ($response->status() === 422) {
+            $errors = $response->json('errors') ?? $response->json('error.errors');
+            $message = is_array($errors)
+                ? collect($errors)->flatten()->first()
+                : (string) ($response->json('message') ?? 'Dữ liệu đơn nghỉ không hợp lệ.');
+
+            throw new HrmApiUnavailable((string) $message);
+        }
+
+        if (! $response->successful()) {
+            throw new HrmApiUnavailable("HTTP {$response->status()} khi gọi POST /api/v1/leave/requests");
+        }
+
+        $data = $response->json('data');
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
+     * Danh sách đơn nghỉ của nhân sự — GET /api/v1/leave/requests.
+     *
+     * @return array{items: list<array<string, mixed>>, meta: array<string, mixed>}
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function listLeaveRequests(string $employeeUuid, int $perPage = 20): array
+    {
+        try {
+            $response = HrmOutboundHttp::leaveCatalogClient()->get('/api/v1/leave/requests', [
+                'employee_uuid' => $employeeUuid,
+                'per_page' => $perPage,
+            ]);
+        } catch (ConnectionException $e) {
+            throw new HrmApiUnavailable('timeout/network lỗi khi gọi GET /api/v1/leave/requests', $e);
+        }
+
+        if (! $response->successful()) {
+            throw new HrmApiUnavailable("HTTP {$response->status()} khi gọi GET /api/v1/leave/requests");
+        }
+
+        $data = $response->json('data');
+
+        return [
+            'items' => is_array($data) ? $data : [],
+            'meta' => is_array($response->json('meta')) ? $response->json('meta') : [],
+        ];
+    }
+
+    /**
      * Toàn bộ đơn vị tổ chức (cursor paginate trên HRM, tối đa 200/trang).
      *
      * @param  array<string, scalar|null>  $filters  company, parent, type, …

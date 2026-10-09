@@ -1,7 +1,7 @@
 <script setup>
 //
-// Nghỉ phép mobile — loại nghỉ từ portal HRM (GET /api/attendance/leave-types → HRM_LEAVE_API_*).
-// Số dư / lịch sử / gửi đơn vẫn mock cục bộ cho tới khi nối API đơn nghỉ.
+// Nghỉ phép mobile — catalog + gửi đơn qua HRM (HRM_LEAVE_API_* → POST /api/v1/leave/requests).
+// Số dư phép năm vẫn mock cục bộ cho tới khi HRM có API balance.
 //
 import { computed, onMounted, reactive, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
@@ -368,28 +368,68 @@ async function loadLeaveTypes() {
 
 onMounted(() => {
   void loadLeaveTypes();
+  void loadLeaveHistory();
 });
 
-const history = reactive([
-  {
-    id: 1,
-    type: 'Nghỉ phép việc riêng',
-    days: 1,
-    dateLabel: '15/09',
-    status: 'approved',
-    icon: 'user',
-    tone: 'tertiary',
-  },
-  {
-    id: 2,
-    type: 'Nghỉ bệnh',
-    days: 0.5,
-    dateLabel: '02/08',
-    status: 'approved',
-    icon: 'clipboardCheck',
-    tone: 'danger',
-  },
-]);
+/** @type {import('vue').Ref<Array<Record<string, unknown>>>} */
+const history = ref([]);
+const historyLoading = ref(false);
+
+function historyToneForStatus(status) {
+  if (status === 'approved') return 'tertiary';
+  if (status === 'rejected') return 'danger';
+  if (status === 'cancelled') return 'muted';
+  return 'gold';
+}
+
+function formatHistoryDateLabel(row) {
+  const from = row.date_from ? new Date(row.date_from).toLocaleDateString('vi-VN') : '';
+  const to = row.date_to && row.date_to !== row.date_from
+    ? new Date(row.date_to).toLocaleDateString('vi-VN')
+    : '';
+  if (from && to) return `${from} – ${to}`;
+  return from || '—';
+}
+
+async function loadLeaveHistory() {
+  historyLoading.value = true;
+  try {
+    const { data } = await window.axios.get('/api/attendance/leave-requests', { params: { limit: 20 } });
+    const rows = Array.isArray(data?.data) ? data.data : [];
+    history.value = rows.map((row, index) => ({
+      id: row.uuid ?? index,
+      type: row.leave_type_name ?? 'Nghỉ phép',
+      days: Number(row.total_days ?? 0),
+      dateLabel: formatHistoryDateLabel(row),
+      status: row.status ?? 'pending',
+      icon: 'calendar',
+      tone: historyToneForStatus(row.status),
+    }));
+  } catch {
+    history.value = [];
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+function buildPeriodsForApi() {
+  return periods.value.map((period) => {
+    if (period.mode === 'hour') {
+      return {
+        mode: 'hour',
+        date_from: period.date,
+        date_to: period.date,
+        time_from: period.fromTime,
+        time_to: period.toTime,
+      };
+    }
+    return {
+      mode: 'day',
+      date_from: period.fromDate,
+      date_to: period.toDate || period.fromDate,
+    };
+  });
+}
 
 const statusLabel = {
   approved: 'Đã duyệt',
@@ -417,7 +457,7 @@ function resetForm() {
   periods.value = [createPeriod()];
 }
 
-function submit() {
+async function submit() {
   if (!form.leaveTypeId) {
     showClientToast('warning', 'Chọn loại nghỉ trước khi gửi.');
     return;
@@ -430,25 +470,60 @@ function submit() {
   if (!validateDocumentAttachment()) return;
 
   submitting.value = true;
-  const typeLabel = selectedLeaveType.value?.name ?? 'Nghỉ phép';
-  const dateLabel =
-    periods.value.map((p) => formatPeriodSummary(p)).filter(Boolean).join(' · ') || '—';
 
-  setTimeout(() => {
-    history.unshift({
-      id: Date.now(),
-      type: typeLabel,
-      days: 1,
-      dateLabel,
-      status: 'pending',
-      icon: 'calendar',
-      tone: 'gold',
-    });
-    showClientToast('success', 'Đã gửi đơn nghỉ phép, chờ trưởng phòng duyệt.');
+  const payload = {
+    leave_type_id: Number(form.leaveTypeId),
+    reason: form.reason.trim(),
+    document_link: documentAttachMode.value === 'drive' ? form.documentLink.trim() : '',
+    approver_employee_uuid: leaveWorkflow.approver?.uuid ?? null,
+    follower_employee_uuid: leaveWorkflow.hrResponsible?.uuid ?? null,
+    periods: buildPeriodsForApi(),
+  };
+
+  const hasFiles = documentAttachMode.value === 'files' && attachedFiles.value.length > 0;
+
+  try {
+    if (hasFiles) {
+      const formData = new FormData();
+      formData.append('leave_type_id', String(payload.leave_type_id));
+      formData.append('reason', payload.reason);
+      if (payload.document_link) formData.append('document_link', payload.document_link);
+      if (payload.approver_employee_uuid) {
+        formData.append('approver_employee_uuid', payload.approver_employee_uuid);
+      }
+      if (payload.follower_employee_uuid) {
+        formData.append('follower_employee_uuid', payload.follower_employee_uuid);
+      }
+      payload.periods.forEach((period, index) => {
+        Object.entries(period).forEach(([key, value]) => {
+          if (value != null && value !== '') {
+            formData.append(`periods[${index}][${key}]`, String(value));
+          }
+        });
+      });
+      for (const row of attachedFiles.value) {
+        formData.append('attachments[]', row.file, row.name);
+      }
+      await window.axios.post('/api/attendance/leave-requests', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    } else {
+      await window.axios.post('/api/attendance/leave-requests', payload);
+    }
+
+    showClientToast('success', 'Đã gửi đơn nghỉ phép qua HRM, chờ người duyệt.');
     resetForm();
-    submitting.value = false;
     closeForm();
-  }, 400);
+    await loadLeaveHistory();
+  } catch (err) {
+    const message =
+      err?.response?.data?.message ??
+      err?.response?.data?.errors?.periods?.[0] ??
+      'Không gửi được đơn nghỉ. Thử lại sau.';
+    showClientToast('error', message);
+  } finally {
+    submitting.value = false;
+  }
 }
 
 const progressWidth = computed(() => `${Math.min(100, Math.max(0, overview.usagePercent))}%`);
@@ -568,7 +643,9 @@ const seniorityDays = computed(
 
     <section class="leave-history">
       <h2 class="leave-history__title">Lịch sử xin phép</h2>
-      <ul class="leave-history__list">
+      <p v-if="historyLoading" class="leave-workflow__status">Đang tải từ HRM…</p>
+      <p v-else-if="history.length === 0" class="leave-workflow__status">Chưa có đơn nghỉ nào.</p>
+      <ul v-else class="leave-history__list">
         <li v-for="item in history" :key="item.id" class="history-row">
           <span class="history-row__icon" :class="`history-row__icon--${item.tone}`" aria-hidden="true">
             <AppIcon :name="item.icon" :size="20" :stroke-width="1.8" />

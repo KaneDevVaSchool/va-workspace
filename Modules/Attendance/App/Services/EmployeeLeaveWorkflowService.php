@@ -552,6 +552,7 @@ class EmployeeLeaveWorkflowService
         }
 
         return [
+            'uuid' => filled($raw['uuid'] ?? null) ? (string) $raw['uuid'] : null,
             'full_name' => $fullName,
             'code' => $code,
             'title' => $jobTitle ?? '',
@@ -635,6 +636,7 @@ class EmployeeLeaveWorkflowService
         ]);
 
         return [
+            'uuid' => filled($person['uuid'] ?? null) ? (string) $person['uuid'] : null,
             'name' => (string) ($person['full_name'] ?? ''),
             'code' => filled($person['code'] ?? null) ? (string) $person['code'] : null,
             'title' => $titleParts !== [] ? implode(' · ', $titleParts) : '',

@@ -1,13 +1,22 @@
 //
-// iOS Safari / PWA: 100dvh và fixed inset lệch nhau → tabbar hoặc nội dung “dính”
-// mép dưới. Ghi chiều cao visual viewport lên --employee-mobile-vh (px).
+// iOS Safari (tab): chiều cao layout theo visualViewport khi URL bar co giãn.
+// PWA standalone: dùng innerHeight + inset:0 trên shell — không lắng nghe
+// visualViewport.scroll (hay làm shell thấp hơn màn → tabbar “nổi” lên).
 //
 import { onBeforeUnmount, onMounted } from 'vue';
 
 const ROOT_VAR = '--employee-mobile-vh';
 
+function isPwaStandalone() {
+  if (typeof document === 'undefined') return false;
+  return document.documentElement.classList.contains('pwa-standalone');
+}
+
 function readViewportHeightPx() {
   if (typeof window === 'undefined') return 0;
+  if (isPwaStandalone()) {
+    return Math.max(0, Math.round(window.innerHeight));
+  }
   const vv = window.visualViewport;
   const h = vv?.height ?? window.innerHeight;
   return Math.max(0, Math.round(h));
@@ -15,6 +24,10 @@ function readViewportHeightPx() {
 
 function syncMobileViewportHeight() {
   if (typeof document === 'undefined') return;
+  if (isPwaStandalone()) {
+    document.documentElement.style.removeProperty(ROOT_VAR);
+    return;
+  }
   const height = readViewportHeightPx();
   if (height > 0) {
     document.documentElement.style.setProperty(ROOT_VAR, `${height}px`);
@@ -38,7 +51,6 @@ export function useEmployeeMobileViewport() {
     window.addEventListener('resize', scheduleSync, { passive: true });
     window.addEventListener('orientationchange', scheduleSync, { passive: true });
     window.visualViewport?.addEventListener('resize', scheduleSync, { passive: true });
-    window.visualViewport?.addEventListener('scroll', scheduleSync, { passive: true });
   });
 
   onBeforeUnmount(() => {
@@ -47,7 +59,6 @@ export function useEmployeeMobileViewport() {
     window.removeEventListener('resize', scheduleSync);
     window.removeEventListener('orientationchange', scheduleSync);
     window.visualViewport?.removeEventListener('resize', scheduleSync);
-    window.visualViewport?.removeEventListener('scroll', scheduleSync);
     document.documentElement.style.removeProperty(ROOT_VAR);
   });
 }
