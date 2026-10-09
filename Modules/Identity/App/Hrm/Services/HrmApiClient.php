@@ -16,10 +16,22 @@ use Modules\Identity\App\Hrm\Exceptions\HrmTokenInvalid;
  */
 class HrmApiClient
 {
+    /**
+     * Payload thô EmployeeResource — dùng khi cần field ngoài DTO (vd. nhân sự phụ trách).
+     *
+     * @return array<string, mixed>|null
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function getEmployeePayload(string $uuid): ?array
+    {
+        return $this->get("/api/v1/employees/{$uuid}");
+    }
+
     /** @throws HrmApiUnavailable */
     public function getEmployee(string $uuid): ?HrmEmployeeData
     {
-        $response = $this->get("/api/v1/employees/{$uuid}");
+        $response = $this->getEmployeePayload($uuid);
 
         if ($response === null) {
             return null;
@@ -163,6 +175,33 @@ class HrmApiClient
      *
      * @throws HrmApiUnavailable
      */
+    /**
+     * Tra cứu theo mã NV (exact) — dùng cho «Cấp trên trực tiếp» snapshot (VA010067).
+     *
+     * @return array<string, mixed>|null
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function findEmployeeByCode(string $code): ?array
+    {
+        $needle = strtoupper(trim($code));
+        if ($needle === '') {
+            return null;
+        }
+
+        $page = $this->listEmployeesPage(['q' => $needle, 'per_page' => 50]);
+        foreach ($page['items'] as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            if (strtoupper(trim((string) ($item['code'] ?? ''))) === $needle) {
+                return $item;
+            }
+        }
+
+        return null;
+    }
+
     public function listEmployeesPage(array $query = []): array
     {
         try {

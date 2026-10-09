@@ -11,10 +11,11 @@ use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 
 /**
  * Luồng duyệt đơn nghỉ — quản lý trực tiếp (HRM), fallback trưởng phòng ban;
- * HR theo dõi = nhân sự liên hệ phòng Nhân sự (catalog HRM /employees).
+ * Nhân sự phụ trách = HR gắn trên hồ sơ nhân viên (portal HRM «Nhân sự phụ trách»).
  */
 class EmployeeLeaveWorkflowService
 {
+    private const HR_IN_CHARGE_CAPTION = 'Nhân viên Hành chính Nhân sự phụ trách hồ sơ này.';
     public function __construct(
         private readonly HrmApiClient $hrmApi,
         private readonly HrmEmployeeDirectory $directory,
@@ -30,7 +31,8 @@ class EmployeeLeaveWorkflowService
             return $this->emptyPayload('Tài khoản chưa liên kết nhân sự HRM.');
         }
 
-        $directManager = $this->resolveDirectManager($user, (string) $employeeUuid);
+        $directFromProfile = $this->resolveDirectManagerFromProfile((string) $employeeUuid);
+        $directManager = $directFromProfile ?? $this->resolveDirectManagerFromOrgTree($user, (string) $employeeUuid);
         $departmentHead = $this->resolveDepartmentHead((string) $employeeUuid);
 
         $approver = $directManager ?? $departmentHead;
@@ -41,9 +43,12 @@ class EmployeeLeaveWorkflowService
         return [
             'approver_group_label' => $groupLabel,
             'approver' => $approver !== null ? $this->presentApproverCard($approver) : null,
+            'direct_manager' => $this->presentContactPerson($directFromProfile),
+            'direct_manager_label' => 'Cấp trên trực tiếp',
             'notify_to' => $notifyTo,
-            'watcher_label' => 'Người theo dõi (HR)',
-            'hr_watchers' => $this->listHrWatchers(),
+            'watcher_label' => 'Nhân sự phụ trách',
+            'hr_responsible' => $this->resolveHrPersonInCharge((string) $employeeUuid),
+            'hr_responsible_caption' => self::HR_IN_CHARGE_CAPTION,
             'message' => $approver === null ? 'Chưa xác định được người duyệt từ HRM.' : null,
         ];
     }
@@ -51,7 +56,45 @@ class EmployeeLeaveWorkflowService
     /**
      * @return array<string, mixed>|null
      */
-    private function resolveDirectManager(User $user, string $employeeUuid): ?array
+    private function resolveDirectManagerFromProfile(string $employeeUuid): ?array
+    {
+        try {
+            $payload = $this->hrmApi->getEmployeePayload($employeeUuid);
+            $label = trim((string) ($payload['direct_manager_name'] ?? ''));
+            if ($label !== '') {
+                $fromLabel = $this->personFromManagerLabel($label);
+                if ($fromLabel !== null) {
+                    return $this->enrichPerson($fromLabel, 'direct_manager');
+                }
+            }
+        } catch (HrmApiUnavailable $e) {
+            Log::warning('attendance.leave_workflow.direct_manager_profile_api_failed', [
+                'employee_uuid' => $employeeUuid,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        if (HrmEmployeeDirectory::isConfigured()) {
+            try {
+                $fromDb = $this->directory->resolveDirectManagerFromProfile($employeeUuid);
+                if ($fromDb !== null) {
+                    return $this->enrichPerson($fromDb, 'direct_manager');
+                }
+            } catch (HrmDatabaseUnavailable $e) {
+                Log::warning('attendance.leave_workflow.direct_manager_profile_db_failed', [
+                    'employee_uuid' => $employeeUuid,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveDirectManagerFromOrgTree(User $user, string $employeeUuid): ?array
     {
         try {
             $manager = $this->hrmApi->getEmployeeManager($employeeUuid);
@@ -70,6 +113,58 @@ class EmployeeLeaveWorkflowService
                 'uuid' => (string) $user->manager_employee_uuid,
                 'full_name' => $user->manager_display_name ?? $user->manager_employee_uuid,
             ], 'direct_manager');
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
+     */
+    private function personFromManagerLabel(string $label): ?array
+    {
+        $label = trim($label);
+        if ($label === '') {
+            return null;
+        }
+
+        $code = $this->extractEmployeeCodeFromLabel($label);
+        if ($code !== null) {
+            try {
+                $match = $this->hrmApi->findEmployeeByCode($code);
+                if (is_array($match) && filled($match['uuid'] ?? null)) {
+                    return [
+                        'uuid' => (string) $match['uuid'],
+                        'full_name' => trim((string) ($match['full_name'] ?? '')),
+                        'code' => (string) ($match['code'] ?? $code),
+                        'job_title' => filled($match['job_title_name'] ?? null)
+                            ? (string) $match['job_title_name']
+                            : null,
+                    ];
+                }
+            } catch (HrmApiUnavailable) {
+                // fallback tên từ snapshot
+            }
+        }
+
+        $name = trim((string) preg_replace('/\s*\([^)]*\)\s*$/u', '', $label));
+
+        return $name !== '' ? [
+            'uuid' => null,
+            'full_name' => $name,
+            'code' => $code,
+            'job_title' => null,
+        ] : null;
+    }
+
+    private function extractEmployeeCodeFromLabel(string $label): ?string
+    {
+        if (preg_match('/\(([A-Za-z]{2}\d+)\)\s*$/u', trim($label), $matches)) {
+            return strtoupper($matches[1]);
+        }
+
+        if (preg_match('/\(([A-Za-z0-9_-]+)\)\s*$/u', trim($label), $matches)) {
+            return strtoupper(trim($matches[1]));
         }
 
         return null;
@@ -211,21 +306,139 @@ class EmployeeLeaveWorkflowService
     }
 
     /**
-     * @return list<array{uuid: string, full_name: string, job_title: ?string}>
+     * @return array{full_name: string, code: ?string, title: string}|null
      */
-    private function listHrWatchers(): array
+    private function resolveHrPersonInCharge(string $employeeUuid): ?array
     {
-        if (! HrmEmployeeDirectory::isConfigured()) {
-            return [];
-        }
+        $raw = null;
 
         try {
-            return $this->directory->listHrContactEmployees();
-        } catch (HrmDatabaseUnavailable $e) {
-            Log::warning('attendance.leave_workflow.hr_contacts_failed', ['message' => $e->getMessage()]);
-
-            return [];
+            $payload = $this->hrmApi->getEmployeePayload($employeeUuid);
+            $raw = $this->extractHrInChargeFromApiPayload($payload);
+        } catch (HrmApiUnavailable $e) {
+            Log::warning('attendance.leave_workflow.hr_in_charge_api_failed', [
+                'employee_uuid' => $employeeUuid,
+                'message' => $e->getMessage(),
+            ]);
         }
+
+        if ($raw === null && HrmEmployeeDirectory::isConfigured()) {
+            try {
+                $raw = $this->directory->resolveHrPersonInChargeForEmployee($employeeUuid);
+            } catch (HrmDatabaseUnavailable $e) {
+                Log::warning('attendance.leave_workflow.hr_in_charge_db_failed', [
+                    'employee_uuid' => $employeeUuid,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        if ($raw === null || trim((string) ($raw['full_name'] ?? '')) === '') {
+            return null;
+        }
+
+        return $this->presentHrResponsible($raw);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $payload
+     * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
+     */
+    private function extractHrInChargeFromApiPayload(?array $payload): ?array
+    {
+        if ($payload === null) {
+            return null;
+        }
+
+        foreach ([
+            'hr_owner',
+            'hr_responsible_employee',
+            'hr_responsible',
+            'hr_officer',
+            'assigned_hr_employee',
+            'hr_in_charge',
+            'hr_person_in_charge',
+            'person_in_charge',
+        ] as $key) {
+            $node = $payload[$key] ?? null;
+            if (! is_array($node)) {
+                continue;
+            }
+
+            $name = trim((string) ($node['full_name'] ?? $node['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            return [
+                'uuid' => filled($node['uuid'] ?? null) ? (string) $node['uuid'] : null,
+                'full_name' => $name,
+                'code' => filled($node['code'] ?? null) ? (string) $node['code'] : null,
+                'job_title' => filled($node['job_title'] ?? $node['job_title_name'] ?? null)
+                    ? (string) ($node['job_title'] ?? $node['job_title_name'])
+                    : null,
+            ];
+        }
+
+        $uuid = $payload['hr_responsible_employee_uuid']
+            ?? $payload['assigned_hr_employee_uuid']
+            ?? $payload['hr_officer_employee_uuid']
+            ?? null;
+
+        if (filled($uuid)) {
+            return [
+                'uuid' => (string) $uuid,
+                'full_name' => trim((string) (
+                    $payload['hr_responsible_employee_name']
+                    ?? $payload['assigned_hr_employee_name']
+                    ?? $payload['hr_officer_name']
+                    ?? ''
+                )),
+                'code' => filled($payload['hr_responsible_employee_code'] ?? $payload['assigned_hr_employee_code'] ?? null)
+                    ? (string) ($payload['hr_responsible_employee_code'] ?? $payload['assigned_hr_employee_code'])
+                    : null,
+                'job_title' => null,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}  $raw
+     * @return array{full_name: string, code: ?string, title: string}
+     */
+    private function presentHrResponsible(array $raw): array
+    {
+        $fullName = trim((string) ($raw['full_name'] ?? ''));
+        $code = filled($raw['code'] ?? null) ? (string) $raw['code'] : null;
+        $jobTitle = filled($raw['job_title'] ?? null) ? (string) $raw['job_title'] : null;
+
+        $uuid = filled($raw['uuid'] ?? null) ? (string) $raw['uuid'] : null;
+        if ($uuid !== '') {
+            try {
+                $employee = $this->hrmApi->getEmployee($uuid);
+                if ($employee !== null) {
+                    if ($fullName === '') {
+                        $fullName = $employee->fullName;
+                    }
+                    if ($code === null && filled($employee->code)) {
+                        $code = $employee->code;
+                    }
+                    if ($jobTitle === null) {
+                        $jobTitle = $employee->primaryAssignment?->jobTitleName;
+                    }
+                }
+            } catch (HrmApiUnavailable) {
+                // giữ giá trị từ payload / DB
+            }
+        }
+
+        return [
+            'full_name' => $fullName,
+            'code' => $code,
+            'title' => $jobTitle ?? '',
+        ];
     }
 
     /**
@@ -254,15 +467,24 @@ class EmployeeLeaveWorkflowService
     {
         $uuid = (string) ($payload['uuid'] ?? '');
         $fullName = trim((string) ($payload['full_name'] ?? ''));
+        $code = filled($payload['code'] ?? null) ? (string) $payload['code'] : null;
 
-        $jobTitle = null;
+        $jobTitle = filled($payload['job_title'] ?? null) ? (string) $payload['job_title'] : null;
         $departmentName = null;
 
         if ($uuid !== '') {
             try {
                 $employee = $this->hrmApi->getEmployee($uuid);
                 if ($employee !== null) {
-                    $jobTitle = $employee->primaryAssignment?->jobTitleName;
+                    if ($fullName === '') {
+                        $fullName = $employee->fullName;
+                    }
+                    if ($code === null && filled($employee->code)) {
+                        $code = $employee->code;
+                    }
+                    if ($jobTitle === null) {
+                        $jobTitle = $employee->primaryAssignment?->jobTitleName;
+                    }
                     $departmentName = $employee->primaryAssignment?->orgUnitName;
                 }
             } catch (HrmApiUnavailable) {
@@ -277,6 +499,7 @@ class EmployeeLeaveWorkflowService
         return [
             'uuid' => $uuid,
             'full_name' => $fullName !== '' ? $fullName : $uuid,
+            'code' => $code,
             'job_title' => $jobTitle,
             'department_name' => $departmentName,
             'source' => $source,
@@ -296,8 +519,36 @@ class EmployeeLeaveWorkflowService
 
         return [
             'name' => (string) ($person['full_name'] ?? ''),
+            'code' => filled($person['code'] ?? null) ? (string) $person['code'] : null,
             'title' => $titleParts !== [] ? implode(' · ', $titleParts) : '',
             'source' => (string) ($person['source'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $person
+     * @return array{full_name: string, code: ?string, title: string}|null
+     */
+    private function presentContactPerson(?array $person): ?array
+    {
+        if ($person === null) {
+            return null;
+        }
+
+        $fullName = trim((string) ($person['full_name'] ?? ''));
+        if ($fullName === '') {
+            return null;
+        }
+
+        $titleParts = array_filter([
+            filled($person['job_title'] ?? null) ? (string) $person['job_title'] : null,
+            filled($person['department_name'] ?? null) ? (string) $person['department_name'] : null,
+        ]);
+
+        return [
+            'full_name' => $fullName,
+            'code' => filled($person['code'] ?? null) ? (string) $person['code'] : null,
+            'title' => $titleParts !== [] ? implode(' · ', $titleParts) : '',
         ];
     }
 
@@ -309,9 +560,12 @@ class EmployeeLeaveWorkflowService
         return [
             'approver_group_label' => 'Người duyệt',
             'approver' => null,
+            'direct_manager' => null,
+            'direct_manager_label' => 'Cấp trên trực tiếp',
             'notify_to' => null,
-            'watcher_label' => 'Người theo dõi (HR)',
-            'hr_watchers' => [],
+            'watcher_label' => 'Nhân sự phụ trách',
+            'hr_responsible' => null,
+            'hr_responsible_caption' => self::HR_IN_CHARGE_CAPTION,
             'message' => $message,
         ];
     }

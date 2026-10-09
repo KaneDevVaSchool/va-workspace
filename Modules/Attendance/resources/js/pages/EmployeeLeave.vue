@@ -59,12 +59,126 @@ const form = reactive({
   documentLink: '',
 });
 
+/** @typedef {'drive' | 'files'} DocumentAttachMode */
+
+/** @type {import('vue').Ref<DocumentAttachMode>} */
+const documentAttachMode = ref('drive');
+
+/** @type {import('vue').Ref<Array<{ id: number, file: File, name: string, sizeLabel: string }>>} */
+const attachedFiles = ref([]);
+
+const documentFileInput = ref(null);
+
+let attachmentSeq = 1;
+
+const MAX_ATTACHMENT_FILES = 8;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ATTACHMENT_ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf';
+
+const todayMinDate = computed(() => {
+  const n = new Date();
+  const y = n.getFullYear();
+  const m = String(n.getMonth() + 1).padStart(2, '0');
+  const d = String(n.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+});
+
+function parseLocalDateParts(dateStr) {
+  const [y, m, d] = String(dateStr || '').split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+function startOfToday() {
+  const t = new Date();
+  t.setHours(0, 0, 0, 0);
+  return t;
+}
+
+function minTimeForPeriod(period) {
+  if (period.mode !== 'hour' || period.date !== todayMinDate.value) return undefined;
+  const n = new Date();
+  return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+}
+
+function minToDateForPeriod(period) {
+  if (period.mode !== 'day') return todayMinDate.value;
+  return period.fromDate && period.fromDate > todayMinDate.value ? period.fromDate : todayMinDate.value;
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function setDocumentAttachMode(mode) {
+  documentAttachMode.value = mode;
+}
+
+function openDocumentFilePicker() {
+  documentFileInput.value?.click();
+}
+
+function onDocumentFilesChange(event) {
+  const input = event.target;
+  const picked = input.files ? Array.from(input.files) : [];
+  input.value = '';
+
+  if (!picked.length) return;
+
+  const room = MAX_ATTACHMENT_FILES - attachedFiles.value.length;
+  if (room <= 0) {
+    showClientToast('warning', `Chỉ đính kèm tối đa ${MAX_ATTACHMENT_FILES} tệp.`);
+    return;
+  }
+
+  for (const file of picked.slice(0, room)) {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      showClientToast('warning', `Tệp «${file.name}» vượt 10 MB.`);
+      continue;
+    }
+    attachedFiles.value.push({
+      id: attachmentSeq++,
+      file,
+      name: file.name,
+      sizeLabel: formatFileSize(file.size),
+    });
+  }
+}
+
+function removeAttachedFile(id) {
+  attachedFiles.value = attachedFiles.value.filter((row) => row.id !== id);
+}
+
+function validateDocumentAttachment() {
+  if (!selectedLeaveType.value?.requires_document_link) return true;
+
+  if (documentAttachMode.value === 'drive') {
+    if (!form.documentLink.trim()) {
+      showClientToast('warning', 'Nhập link Google Drive hoặc chuyển sang đính kèm tệp.');
+      return false;
+    }
+    return true;
+  }
+
+  if (attachedFiles.value.length === 0) {
+    showClientToast('warning', 'Chọn ít nhất một tệp đính kèm.');
+    return false;
+  }
+
+  return true;
+}
+
 const leaveWorkflow = reactive({
   approverGroupLabel: 'Người duyệt',
   approver: null,
   notifyTo: null,
-  watcherLabel: 'Người theo dõi (HR)',
-  hrWatchers: [],
+  watcherLabel: 'Nhân sự phụ trách',
+  directManager: null,
+  directManagerLabel: 'Cấp trên trực tiếp',
+  hrResponsible: null,
+  hrResponsibleCaption: '',
   message: null,
 });
 const workflowLoading = ref(false);
@@ -73,8 +187,11 @@ function resetLeaveWorkflow() {
   leaveWorkflow.approverGroupLabel = 'Người duyệt';
   leaveWorkflow.approver = null;
   leaveWorkflow.notifyTo = null;
-  leaveWorkflow.watcherLabel = 'Người theo dõi (HR)';
-  leaveWorkflow.hrWatchers = [];
+  leaveWorkflow.watcherLabel = 'Nhân sự phụ trách';
+  leaveWorkflow.directManager = null;
+  leaveWorkflow.directManagerLabel = 'Cấp trên trực tiếp';
+  leaveWorkflow.hrResponsible = null;
+  leaveWorkflow.hrResponsibleCaption = '';
   leaveWorkflow.message = null;
 }
 
@@ -87,8 +204,11 @@ async function loadLeaveWorkflow() {
     leaveWorkflow.approverGroupLabel = row.approver_group_label || 'Người duyệt';
     leaveWorkflow.approver = row.approver ?? null;
     leaveWorkflow.notifyTo = row.notify_to ?? null;
-    leaveWorkflow.watcherLabel = row.watcher_label || 'Người theo dõi (HR)';
-    leaveWorkflow.hrWatchers = Array.isArray(row.hr_watchers) ? row.hr_watchers : [];
+    leaveWorkflow.watcherLabel = row.watcher_label || 'Nhân sự phụ trách';
+    leaveWorkflow.directManager = row.direct_manager ?? null;
+    leaveWorkflow.directManagerLabel = row.direct_manager_label || 'Cấp trên trực tiếp';
+    leaveWorkflow.hrResponsible = row.hr_responsible ?? null;
+    leaveWorkflow.hrResponsibleCaption = row.hr_responsible_caption ?? '';
     leaveWorkflow.message = row.message ?? null;
   } catch {
     leaveWorkflow.message = 'Không tải được người duyệt từ HRM.';
@@ -97,11 +217,17 @@ async function loadLeaveWorkflow() {
   }
 }
 
-const hrWatcherLabel = computed(() => {
-  const rows = leaveWorkflow.hrWatchers;
-  if (!rows.length) return '—';
-  return rows.map((w) => w.full_name).filter(Boolean).join(', ');
-});
+function formatContactPerson(person) {
+  if (!person?.full_name) return '—';
+  const code = person.code?.trim();
+  return code ? `${person.full_name} (${code})` : person.full_name;
+}
+
+function formatApproverName(approver) {
+  if (!approver?.name) return '';
+  const code = approver.code?.trim();
+  return code ? `${approver.name} (${code})` : approver.name;
+}
 
 let periodSeq = 1;
 
@@ -168,16 +294,53 @@ function formatPeriodSummary(period) {
 }
 
 function validatePeriods() {
+  const today = startOfToday();
+  const now = new Date();
+
   for (const period of periods.value) {
     if (period.mode === 'hour') {
       if (!period.date || !period.fromTime || !period.toTime) {
         showClientToast('warning', 'Nhập đủ ngày và khung giờ cho từng khoảng nghỉ.');
         return false;
       }
+
+      const day = parseLocalDateParts(period.date);
+      if (!day || day < today) {
+        showClientToast('warning', 'Không chọn ngày nghỉ trong quá khứ.');
+        return false;
+      }
+
+      const [fh, fm] = period.fromTime.split(':').map(Number);
+      const [th, tm] = period.toTime.split(':').map(Number);
+      const start = new Date(day);
+      start.setHours(fh, fm, 0, 0);
+      const end = new Date(day);
+      end.setHours(th, tm, 0, 0);
+
+      if (start < now) {
+        showClientToast('warning', 'Không chọn khung giờ đã qua.');
+        return false;
+      }
+      if (end <= start) {
+        showClientToast('warning', 'Giờ kết thúc phải sau giờ bắt đầu.');
+        return false;
+      }
       continue;
     }
+
     if (!period.fromDate || !period.toDate) {
       showClientToast('warning', 'Chọn đủ từ ngày và đến ngày cho từng khoảng nghỉ.');
+      return false;
+    }
+
+    const from = parseLocalDateParts(period.fromDate);
+    const to = parseLocalDateParts(period.toDate);
+    if (!from || !to || from < today) {
+      showClientToast('warning', 'Không chọn ngày nghỉ trong quá khứ.');
+      return false;
+    }
+    if (to < from) {
+      showClientToast('warning', 'Đến ngày không được trước từ ngày.');
       return false;
     }
   }
@@ -246,6 +409,9 @@ function resetForm() {
   form.leaveTypeId = leaveTypes.value[0]?.id ?? null;
   form.reason = '';
   form.documentLink = '';
+  documentAttachMode.value = 'drive';
+  attachedFiles.value = [];
+  attachmentSeq = 1;
   periodSeq = 1;
   periods.value = [createPeriod()];
 }
@@ -260,10 +426,7 @@ function submit() {
     showClientToast('warning', 'Nhập lý do nghỉ phép.');
     return;
   }
-  if (selectedLeaveType.value?.requires_document_link && !form.documentLink.trim()) {
-    showClientToast('warning', 'Nhập link giấy tờ đính kèm.');
-    return;
-  }
+  if (!validateDocumentAttachment()) return;
 
   submitting.value = true;
   const typeLabel = selectedLeaveType.value?.name ?? 'Nghỉ phép';
@@ -508,21 +671,41 @@ const seniorityDays = computed(
                   <div v-if="period.mode === 'day'" class="leave-period-card__grid">
                     <label class="leave-form-field">
                       <span class="leave-form-field__label">Từ ngày</span>
-                      <input v-model="period.fromDate" type="date" class="leave-form-field__control" />
+                      <input
+                        v-model="period.fromDate"
+                        type="date"
+                        class="leave-form-field__control"
+                        :min="todayMinDate"
+                      />
                     </label>
                     <label class="leave-form-field">
                       <span class="leave-form-field__label">Đến ngày</span>
-                      <input v-model="period.toDate" type="date" class="leave-form-field__control" />
+                      <input
+                        v-model="period.toDate"
+                        type="date"
+                        class="leave-form-field__control"
+                        :min="minToDateForPeriod(period)"
+                      />
                     </label>
                   </div>
                   <div v-else class="leave-period-card__grid leave-period-card__grid--hour">
                     <label class="leave-form-field leave-form-field--span">
                       <span class="leave-form-field__label">Ngày</span>
-                      <input v-model="period.date" type="date" class="leave-form-field__control" />
+                      <input
+                        v-model="period.date"
+                        type="date"
+                        class="leave-form-field__control"
+                        :min="todayMinDate"
+                      />
                     </label>
                     <label class="leave-form-field">
                       <span class="leave-form-field__label">Từ giờ</span>
-                      <input v-model="period.fromTime" type="time" class="leave-form-field__control" />
+                      <input
+                        v-model="period.fromTime"
+                        type="time"
+                        class="leave-form-field__control"
+                        :min="minTimeForPeriod(period)"
+                      />
                     </label>
                     <label class="leave-form-field">
                       <span class="leave-form-field__label">Đến giờ</span>
@@ -541,24 +724,74 @@ const seniorityDays = computed(
                 v-if="selectedLeaveType?.requires_document_link"
                 class="leave-form-section leave-form-section--doc leave-card-accent leave-card-accent--gold"
               >
-                <label class="leave-form-field">
+                <div class="leave-form-field">
                   <span class="leave-form-field__label">
                     {{ documentFieldLabel }}
                     <span class="leave-form-field__req">*</span>
                   </span>
-                  <p class="leave-form-section__lead">
-                    Chụp ảnh giấy tờ → upload Google Drive → paste link tại đây
-                  </p>
-                  <span class="leave-form-field__with-icon">
-                    <AppIcon name="link" :size="18" class="leave-form-field__icon" aria-hidden="true" />
+
+                  <div class="leave-doc-mode" role="group" aria-label="Cách đính kèm giấy tờ">
+                    <button
+                      type="button"
+                      class="leave-doc-mode__btn"
+                      :class="{ 'leave-doc-mode__btn--active': documentAttachMode === 'drive' }"
+                      :aria-pressed="documentAttachMode === 'drive'"
+                      @click="setDocumentAttachMode('drive')"
+                    >
+                      Link Google Drive
+                    </button>
+                    <button
+                      type="button"
+                      class="leave-doc-mode__btn"
+                      :class="{ 'leave-doc-mode__btn--active': documentAttachMode === 'files' }"
+                      :aria-pressed="documentAttachMode === 'files'"
+                      @click="setDocumentAttachMode('files')"
+                    >
+                      Đính kèm tệp
+                    </button>
+                  </div>
+
+                  <div v-if="documentAttachMode === 'drive'" class="leave-doc-panel">
+                    <span class="leave-form-field__with-icon">
+                      <AppIcon name="link" :size="18" class="leave-form-field__icon" aria-hidden="true" />
+                      <input
+                        v-model="form.documentLink"
+                        type="url"
+                        class="leave-form-field__control leave-form-field__control--icon"
+                        placeholder="https://drive.google.com/…"
+                      />
+                    </span>
+                  </div>
+
+                  <div v-else class="leave-doc-panel">
                     <input
-                      v-model="form.documentLink"
-                      type="url"
-                      class="leave-form-field__control leave-form-field__control--icon"
-                      placeholder="https://drive.google.com/…"
+                      ref="documentFileInput"
+                      type="file"
+                      class="leave-doc-file-input"
+                      :accept="ATTACHMENT_ACCEPT"
+                      multiple
+                      @change="onDocumentFilesChange"
                     />
-                  </span>
-                </label>
+                    <button type="button" class="leave-doc-file-add" @click="openDocumentFilePicker">
+                      <AppIcon name="paperclip" :size="18" />
+                      <span>Chọn tệp (PDF, JPG, PNG)</span>
+                    </button>
+                    <ul v-if="attachedFiles.length" class="leave-doc-file-list">
+                      <li v-for="row in attachedFiles" :key="row.id" class="leave-doc-file-row">
+                        <span class="leave-doc-file-row__name">{{ row.name }}</span>
+                        <span class="leave-doc-file-row__size">{{ row.sizeLabel }}</span>
+                        <button
+                          type="button"
+                          class="leave-doc-file-row__remove"
+                          aria-label="Gỡ tệp đính kèm"
+                          @click="removeAttachedFile(row.id)"
+                        >
+                          <AppIcon name="close" :size="16" />
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
               </section>
 
               <section class="leave-form-section">
@@ -593,7 +826,7 @@ const seniorityDays = computed(
                       {{ approverInitials(leaveWorkflow.approver.name) }}
                     </span>
                     <span class="leave-approver-card__body">
-                      <span class="leave-approver-card__name">{{ leaveWorkflow.approver.name }}</span>
+                      <span class="leave-approver-card__name">{{ formatApproverName(leaveWorkflow.approver) }}</span>
                       <span v-if="leaveWorkflow.approver.title" class="leave-approver-card__title">
                         {{ leaveWorkflow.approver.title }}
                       </span>
@@ -601,15 +834,23 @@ const seniorityDays = computed(
                   </article>
 
                   <div class="leave-workflow-meta">
+                    <div v-if="leaveWorkflow.directManager" class="leave-workflow-row">
+                      <span class="leave-workflow-row__label">{{ leaveWorkflow.directManagerLabel }}</span>
+                      <span class="leave-workflow-row__value">
+                        {{ formatContactPerson(leaveWorkflow.directManager) }}
+                      </span>
+                    </div>
                     <div v-if="leaveWorkflow.notifyTo" class="leave-workflow-row">
                       <span class="leave-workflow-row__label">Thông báo tới</span>
                       <span class="leave-workflow-row__value">{{ leaveWorkflow.notifyTo }}</span>
                     </div>
-                    <div class="leave-workflow-row">
-                      <span class="leave-workflow-row__label">{{ leaveWorkflow.watcherLabel }}</span>
-                      <span class="leave-workflow-row__value leave-workflow-row__value--muted">
-                        {{ hrWatcherLabel }}
-                      </span>
+                    <div class="leave-workflow-hr">
+                      <div class="leave-workflow-row">
+                        <span class="leave-workflow-row__label">{{ leaveWorkflow.watcherLabel }}</span>
+                        <span class="leave-workflow-row__value">
+                          {{ formatContactPerson(leaveWorkflow.hrResponsible) }}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </template>
@@ -1223,14 +1464,6 @@ const seniorityDays = computed(
   letter-spacing: -0.01em;
 }
 
-.leave-form-section__lead {
-  margin: 0 0 var(--space-2);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  line-height: 1.45;
-  color: var(--color-text-muted);
-}
-
 .leave-form-section--doc {
   padding: var(--space-3) var(--space-3) var(--space-4);
   border-radius: var(--radius-lg);
@@ -1426,6 +1659,124 @@ const seniorityDays = computed(
   background: var(--color-surface);
 }
 
+.leave-doc-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin: var(--space-2) 0 var(--space-3);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.leave-doc-mode__btn {
+  padding: var(--space-2) var(--space-2);
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.leave-doc-mode__btn--active {
+  background: var(--color-surface);
+  color: var(--color-tertiary);
+  box-shadow: var(--shadow-sm);
+}
+
+.leave-doc-mode__btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.leave-doc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.leave-doc-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.leave-doc-file-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-tertiary);
+  cursor: pointer;
+}
+
+.leave-doc-file-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.leave-doc-file-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.leave-doc-file-row__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.leave-doc-file-row__size {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.leave-doc-file-row__remove {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
 .leave-form-field__control:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
@@ -1535,6 +1886,12 @@ const seniorityDays = computed(
 .leave-workflow-row__value--muted {
   font-weight: 600;
   color: var(--color-text-muted);
+}
+
+.leave-workflow-hr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
 .leave-dialog__actions {

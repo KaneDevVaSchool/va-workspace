@@ -326,94 +326,199 @@ class HrmEmployeeDirectory
     }
 
     /**
-     * Nhân sự HR liên hệ — ưu tiên cột is_hr_contact / hr_contact trên bảng employees (portal HRM),
-     * không có thì lọc nhân viên thuộc phòng ban Nhân sự trong danh mục HRM.
+     * Nhân sự phụ trách hồ sơ (portal HRM — mục «Nhân sự phụ trách» trên hồ sơ nhân viên).
      *
-     * @return list<array{uuid: string, full_name: string, job_title: ?string}>
+     * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
      *
      * @throws HrmDatabaseUnavailable
      */
-    public function listHrContactEmployees(): array
+    /**
+     * Cấp trên trực tiếp trên hồ sơ — cột direct_manager_name (vd. Nguyễn Viết Hùng (VA010067)).
+     *
+     * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    public function resolveDirectManagerFromProfile(string $employeeUuid): ?array
     {
-        $contactColumn = $this->hrContactColumnName();
-        if ($contactColumn !== null) {
-            return DB::connection('hrm')
+        $row = DB::connection('hrm')
+            ->table('employees')
+            ->where('uuid', $employeeUuid)
+            ->whereNull('deleted_at')
+            ->first(['direct_manager_name']);
+
+        if ($row === null || ! filled($row->direct_manager_name ?? null)) {
+            return null;
+        }
+
+        return $this->personFromManagerLabel((string) $row->direct_manager_name);
+    }
+
+    /**
+     * @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string}|null
+     */
+    private function personFromManagerLabel(string $label): ?array
+    {
+        $label = trim($label);
+        if ($label === '') {
+            return null;
+        }
+
+        $code = $this->extractEmployeeCodeFromLabel($label);
+        if ($code !== null) {
+            $match = DB::connection('hrm')
                 ->table('employees')
                 ->whereNull('deleted_at')
-                ->where('status', 'active')
-                ->where($contactColumn, true)
-                ->orderBy('full_name')
-                ->get(['uuid', 'full_name', 'job_title_name'])
-                ->map(fn (object $row) => [
-                    'uuid' => (string) ($row->uuid ?? ''),
-                    'full_name' => (string) ($row->full_name ?? ''),
-                    'job_title' => filled($row->job_title_name ?? null) ? (string) $row->job_title_name : null,
-                ])
-                ->filter(fn (array $item): bool => $item['uuid'] !== '' && $item['full_name'] !== '')
-                ->values()
-                ->all();
+                ->where('code', $code)
+                ->first(['uuid', 'full_name', 'code', 'job_title_name', 'status']);
+
+            if ($match !== null && $this->isActiveHrmEmployee($match)) {
+                return [
+                    'uuid' => filled($match->uuid ?? null) ? (string) $match->uuid : null,
+                    'full_name' => trim((string) ($match->full_name ?? '')),
+                    'code' => (string) ($match->code ?? $code),
+                    'job_title' => filled($match->job_title_name ?? null) ? (string) $match->job_title_name : null,
+                ];
+            }
         }
 
-        $hrDepartmentNames = collect($this->organizationDepartments())
-            ->filter(fn (array $dept): bool => $this->isHrCatalogDepartment($dept))
-            ->map(fn (array $dept): string => mb_strtolower(trim((string) ($dept['name'] ?? ''))))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-
-        if ($hrDepartmentNames === []) {
-            return [];
+        $name = trim((string) preg_replace('/\s*\([^)]*\)\s*$/u', '', $label));
+        if ($name === '') {
+            return null;
         }
 
-        return collect($this->load()['employees'])
-            ->filter(function (array $employee) use ($hrDepartmentNames): bool {
-                if (($employee['status'] ?? '') !== 'active') {
-                    return false;
-                }
-
-                $dept = mb_strtolower(trim((string) ($employee['department_name'] ?? '')));
-
-                return $dept !== '' && in_array($dept, $hrDepartmentNames, true);
-            })
-            ->map(fn (array $employee) => [
-                'uuid' => (string) ($employee['uuid'] ?? ''),
-                'full_name' => (string) ($employee['full_name'] ?? ''),
-                'job_title' => filled($employee['job_title'] ?? null) ? (string) $employee['job_title'] : null,
-            ])
-            ->filter(fn (array $row): bool => $row['uuid'] !== '' && $row['full_name'] !== '')
-            ->values()
-            ->all();
+        return [
+            'uuid' => null,
+            'full_name' => $name,
+            'code' => $code,
+            'job_title' => null,
+        ];
     }
 
-    /** @param array<string, mixed> $department */
-    private function isHrCatalogDepartment(array $department): bool
+    private function extractEmployeeCodeFromLabel(string $label): ?string
     {
-        $code = strtoupper(trim((string) ($department['code'] ?? '')));
-        if (in_array($code, ['NS', 'HR', 'HRM', 'HCNS', 'HANHCHINHNS'], true)) {
-            return true;
+        if (preg_match('/\(([A-Za-z]{2}\d+)\)\s*$/u', trim($label), $matches)) {
+            return strtoupper($matches[1]);
         }
 
-        $name = mb_strtolower(trim((string) ($department['name'] ?? '')));
+        if (preg_match('/\(([A-Za-z0-9_-]+)\)\s*$/u', trim($label), $matches)) {
+            return strtoupper(trim($matches[1]));
+        }
 
-        return str_contains($name, 'nhân sự') || str_contains($name, 'nhan su');
+        return null;
     }
 
-    private function hrContactColumnName(): ?string
+    public function resolveHrPersonInChargeForEmployee(string $employeeUuid): ?array
+    {
+        $employee = DB::connection('hrm')
+            ->table('employees')
+            ->where('uuid', $employeeUuid)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if ($employee === null) {
+            return null;
+        }
+
+        $fkColumn = $this->hrInChargeEmployeeIdColumn();
+        if ($fkColumn !== null && filled($employee->{$fkColumn} ?? null)) {
+            $hrRow = DB::connection('hrm')
+                ->table('employees')
+                ->where('id', $employee->{$fkColumn})
+                ->whereNull('deleted_at')
+                ->first(['uuid', 'full_name', 'code', 'job_title_name', 'status']);
+
+            if ($hrRow !== null && $this->isActiveHrmEmployee($hrRow)) {
+                return $this->presentHrInChargeRow($hrRow);
+            }
+        }
+
+        $name = $this->firstFilledColumn($employee, [
+            'hr_responsible_name',
+            'hr_officer_name',
+            'hr_person_in_charge_name',
+            'assigned_hr_name',
+        ]);
+        if ($name !== null) {
+            $code = $this->firstFilledColumn($employee, [
+                'hr_responsible_code',
+                'hr_officer_code',
+                'assigned_hr_code',
+            ]);
+
+            return [
+                'uuid' => null,
+                'full_name' => $name,
+                'code' => $code,
+                'job_title' => null,
+            ];
+        }
+
+        return null;
+    }
+
+    private function hrInChargeEmployeeIdColumn(): ?string
     {
         try {
             $schema = Schema::connection('hrm');
-            if ($schema->hasColumn('employees', 'is_hr_contact')) {
-                return 'is_hr_contact';
-            }
-            if ($schema->hasColumn('employees', 'hr_contact')) {
-                return 'hr_contact';
+            foreach ([
+                'hr_owner_employee_id',
+                'hr_responsible_employee_id',
+                'assigned_hr_employee_id',
+                'hr_officer_employee_id',
+                'hr_in_charge_employee_id',
+                'hr_pic_employee_id',
+            ] as $column) {
+                if ($schema->hasColumn('employees', $column)) {
+                    return $column;
+                }
             }
         } catch (Throwable) {
             return null;
         }
 
         return null;
+    }
+
+    /**
+     * @param  list<string>  $columns
+     */
+    private function firstFilledColumn(object $row, array $columns): ?string
+    {
+        try {
+            $schema = Schema::connection('hrm');
+            foreach ($columns as $column) {
+                if (! $schema->hasColumn('employees', $column)) {
+                    continue;
+                }
+                $value = trim((string) ($row->{$column} ?? ''));
+                if ($value !== '') {
+                    return $value;
+                }
+            }
+        } catch (Throwable) {
+            return null;
+        }
+
+        return null;
+    }
+
+    /** @return array{uuid: ?string, full_name: string, code: ?string, job_title: ?string} */
+    private function presentHrInChargeRow(object $row): array
+    {
+        return [
+            'uuid' => filled($row->uuid ?? null) ? (string) $row->uuid : null,
+            'full_name' => trim((string) ($row->full_name ?? '')),
+            'code' => filled($row->code ?? null) ? (string) $row->code : null,
+            'job_title' => filled($row->job_title_name ?? null) ? (string) $row->job_title_name : null,
+        ];
+    }
+
+    private function isActiveHrmEmployee(object $row): bool
+    {
+        $status = (string) ($row->status ?? 'active');
+
+        return ! in_array($status, ['terminated', 'inactive'], true);
     }
 
     private function employeeRows(): Collection
