@@ -27,7 +27,7 @@ const { updateAvailable, applyUpdate } = usePwaUpdate();
 .pwa-update-bar {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px) + var(--toast-shell-bottom-inset, 0px));
+  bottom: calc(var(--space-4) + var(--toast-shell-bottom-inset, env(safe-area-inset-bottom, 0px)));
   transform: translateX(-50%);
   z-index: 1950;
   display: flex;

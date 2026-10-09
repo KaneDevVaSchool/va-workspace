@@ -20,9 +20,9 @@
 @media (max-width: 768px) {
   html.employee-mobile-browser {
     background-color: var(--color-tertiary-800);
-    /* Toast — khớp tabbar gọn (~2.75rem hàng icon + safe-area trong __bar). */
+    /* Toast / padding main — hàng icon gọn + safe-area (một lần, trong __bar). */
     --employee-tabbar-block-size: calc(
-      2.75rem + env(safe-area-inset-bottom, 0px)
+      2.5rem + env(safe-area-inset-bottom, 0px)
     );
   }
 
@@ -58,7 +58,7 @@
   html.employee-mobile-pwa {
     background-color: var(--color-surface);
     --employee-tabbar-block-size: calc(
-      2.75rem + env(safe-area-inset-bottom, 0px)
+      2.5rem + env(safe-area-inset-bottom, 0px)
     );
   }
 
@@ -251,6 +251,30 @@
   padding: var(--space-4) var(--space-3);
 }
 
+@media (max-width: 768px) {
+  /* Tabbar fixed sát đáy viewport — tránh flex + safe-area làm cả khối menu “nổi” lên. */
+  .employee-tabbar--shell {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 5;
+    flex: 0 0 0;
+    height: 0;
+    min-height: 0;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .employee-tabbar--shell .employee-tabbar__bar {
+    pointer-events: auto;
+  }
+
+  .employee-shell__content {
+    padding-bottom: calc(var(--employee-tabbar-block-size, 2.5rem) + var(--space-3));
+  }
+}
+
 .employee-shell__content--home {
   /* Dự trữ chỗ cho thẻ KPI + margin âm — tránh overflow:auto cắt mép trên. */
   padding-top: calc(var(--employee-stat-overlap) + var(--space-2));
@@ -335,9 +359,7 @@
   nằm ngay trên home indicator, không thêm dải trắng trống dưới hàng menu.
 */
 .employee-tabbar--shell {
-  --employee-tabbar-height: 2.75rem;
-  position: relative;
-  z-index: 3;
+  --employee-tabbar-height: 2.5rem;
   flex: 0 0 auto;
   width: 100%;
   box-sizing: border-box;
@@ -354,8 +376,8 @@
   grid-template-columns: repeat(5, 1fr);
   align-items: center;
   min-height: var(--employee-tabbar-height);
-  padding: 0.3125rem calc(var(--space-2) + env(safe-area-inset-right, 0px))
-    calc(0.3125rem + env(safe-area-inset-bottom, 0px))
+  padding: 0.1875rem calc(var(--space-2) + env(safe-area-inset-right, 0px))
+    env(safe-area-inset-bottom, 0px)
     calc(var(--space-2) + env(safe-area-inset-left, 0px));
   overflow: hidden;
 }
@@ -365,9 +387,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: 0;
   min-width: 0;
-  min-height: 2.375rem;
+  min-height: 0;
   padding: 0 2px;
   border-radius: var(--radius-md);
   color: var(--color-text-muted);

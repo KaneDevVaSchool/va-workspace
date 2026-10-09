@@ -197,7 +197,7 @@ function closeDetail() {
   width: 100%;
   max-height: 80vh;
   overflow-y: auto;
-  padding: var(--space-2) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom));
+  padding: var(--space-2) var(--space-4) max(var(--space-4), env(safe-area-inset-bottom, 0px));
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--color-surface);
   box-shadow: var(--shadow-lg);

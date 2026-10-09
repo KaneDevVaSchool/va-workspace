@@ -357,7 +357,7 @@ onBeforeUnmount(() => {
     justify-content: center;
     align-items: stretch;
     padding: 0 var(--space-4)
-      calc(var(--space-3) + env(safe-area-inset-bottom, 0px) + var(--toast-shell-bottom-inset, 0px));
+      calc(var(--space-3) + var(--toast-shell-bottom-inset, env(safe-area-inset-bottom, 0px)));
     pointer-events: none;
   }
 

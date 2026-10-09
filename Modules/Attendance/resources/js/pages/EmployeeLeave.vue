@@ -1427,8 +1427,9 @@ const seniorityDays = computed(
   inset: 0;
   z-index: 600;
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
   padding: 0;
 }
 
@@ -1447,6 +1448,7 @@ const seniorityDays = computed(
   flex-direction: column;
   width: 100%;
   max-width: 32rem;
+  margin: 0 auto;
   height: min(calc(100dvh - env(safe-area-inset-top, 0px)), calc(100dvh - 0.5rem));
   max-height: calc(100dvh - env(safe-area-inset-top, 0px));
   overflow: hidden;
@@ -2007,7 +2009,7 @@ const seniorityDays = computed(
   grid-template-columns: 1fr 1.2fr;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom, 0px));
   background: var(--color-surface);
   box-shadow: inset 0 1px 0 var(--color-border);
 }
@@ -2041,8 +2043,9 @@ const seniorityDays = computed(
 @media (min-width: 480px) {
   .leave-dialog {
     align-items: center;
+    justify-content: center;
     padding: var(--space-4);
-    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom, 0px));
   }
 
   .leave-dialog__panel {
