@@ -5,6 +5,7 @@
 //
 import { computed, onMounted, reactive, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
+import AppDatePicker from '@/components/AppDatePicker.vue';
 import { showClientToast } from '@/lib/clientToast';
 
 function formatDays(value) {
@@ -669,35 +670,32 @@ const seniorityDays = computed(
                   </header>
 
                   <div v-if="period.mode === 'day'" class="leave-period-card__dates leave-period-card__dates--day">
-                    <label class="leave-form-field">
-                      <span class="leave-form-field__label">Từ ngày</span>
-                      <input
+                    <div class="leave-form-field">
+                      <label class="leave-form-field__label" :for="`leave-period-${period.id}-from`">Từ ngày</label>
+                      <AppDatePicker
+                        :id="`leave-period-${period.id}-from`"
                         v-model="period.fromDate"
-                        type="date"
-                        class="leave-form-field__control leave-form-field__control--date"
                         :min="todayMinDate"
                       />
-                    </label>
-                    <label class="leave-form-field">
-                      <span class="leave-form-field__label">Đến ngày</span>
-                      <input
+                    </div>
+                    <div class="leave-form-field">
+                      <label class="leave-form-field__label" :for="`leave-period-${period.id}-to`">Đến ngày</label>
+                      <AppDatePicker
+                        :id="`leave-period-${period.id}-to`"
                         v-model="period.toDate"
-                        type="date"
-                        class="leave-form-field__control leave-form-field__control--date"
                         :min="minToDateForPeriod(period)"
                       />
-                    </label>
+                    </div>
                   </div>
                   <div v-else class="leave-period-card__dates leave-period-card__dates--hour">
-                    <label class="leave-form-field">
-                      <span class="leave-form-field__label">Ngày</span>
-                      <input
+                    <div class="leave-form-field">
+                      <label class="leave-form-field__label" :for="`leave-period-${period.id}-date`">Ngày</label>
+                      <AppDatePicker
+                        :id="`leave-period-${period.id}-date`"
                         v-model="period.date"
-                        type="date"
-                        class="leave-form-field__control leave-form-field__control--date"
                         :min="todayMinDate"
                       />
-                    </label>
+                    </div>
                     <div class="leave-period-card__times">
                       <label class="leave-form-field">
                         <span class="leave-form-field__label">Từ giờ</span>
@@ -1664,7 +1662,6 @@ const seniorityDays = computed(
   color: var(--color-text);
 }
 
-.leave-form-field__control--date,
 .leave-form-field__control--time {
   min-height: 2.75rem;
   padding: var(--space-2) var(--space-3);
@@ -1673,22 +1670,10 @@ const seniorityDays = computed(
   color-scheme: light;
 }
 
-.leave-form-field__control--date {
-  display: block;
-  min-width: 0;
-}
-
-.leave-form-field__control--date::-webkit-date-and-time-value {
-  display: block;
-  min-height: 1.35em;
-  text-align: left;
-}
-
 .leave-form-field__control--time::-webkit-date-and-time-value {
   text-align: left;
 }
 
-.leave-form-field__control--date::-webkit-calendar-picker-indicator,
 .leave-form-field__control--time::-webkit-calendar-picker-indicator {
   margin-left: var(--space-1);
   opacity: 0.7;
