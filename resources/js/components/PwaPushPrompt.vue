@@ -152,7 +152,7 @@ async function onEnable() {
   align-items: flex-end;
   justify-content: center;
   padding: var(--space-4);
-  padding-bottom: calc(var(--space-4) + var(--toast-shell-bottom-inset, env(safe-area-inset-bottom, 0px)));
+  padding-bottom: calc(var(--space-4) + var(--toast-shell-bottom-inset, 0px));
   background: color-mix(in srgb, var(--color-text) 28%, transparent);
   backdrop-filter: blur(4px);
 }

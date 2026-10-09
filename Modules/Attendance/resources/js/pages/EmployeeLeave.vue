@@ -2009,7 +2009,7 @@ const seniorityDays = computed(
   grid-template-columns: 1fr 1.2fr;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom, 0px));
+  padding-bottom: var(--space-3);
   background: var(--color-surface);
   box-shadow: inset 0 1px 0 var(--color-border);
 }
@@ -2045,7 +2045,7 @@ const seniorityDays = computed(
     align-items: center;
     justify-content: center;
     padding: var(--space-4);
-    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom, 0px));
+    padding-bottom: var(--space-4);
   }
 
   .leave-dialog__panel {

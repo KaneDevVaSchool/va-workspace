@@ -20,10 +20,7 @@
 @media (max-width: 768px) {
   html.employee-mobile-browser {
     background-color: var(--color-tertiary-800);
-    /* Toast / padding main — hàng icon gọn + safe-area (một lần, trong __bar). */
-    --employee-tabbar-block-size: calc(
-      2.5rem + env(safe-area-inset-bottom, 0px)
-    );
+    --employee-tabbar-block-size: 2.5rem;
   }
 
   .employee-shell--browser {
@@ -38,7 +35,6 @@
     height: var(--employee-mobile-vh, 100dvh);
     max-height: var(--employee-mobile-vh, 100dvh);
     overflow: hidden;
-    box-shadow: inset 0 calc(-1 * env(safe-area-inset-bottom, 0px)) 0 0 var(--color-surface);
   }
 
   /* iOS Safari tab: có inset nhưng không cộng thêm padding cố định. */
@@ -58,9 +54,7 @@
 @media (max-width: 768px) {
   html.employee-mobile-pwa {
     background-color: var(--color-surface);
-    --employee-tabbar-block-size: calc(
-      2.5rem + env(safe-area-inset-bottom, 0px)
-    );
+    --employee-tabbar-block-size: 2.5rem;
   }
 
   .employee-shell--pwa {
@@ -70,8 +64,6 @@
     width: 100%;
     max-width: 100vw;
     overflow: hidden;
-    /* Vùng home indicator — cùng màu tabbar, tránh dải trắng body lộ dưới shell. */
-    box-shadow: inset 0 calc(-1 * env(safe-area-inset-bottom, 0px)) 0 0 var(--color-surface);
   }
 
 }
@@ -334,10 +326,7 @@
   cursor: pointer;
 }
 
-/*
-  Footer tab bar (in-flow). Safe-area gộp vào padding-bottom của __bar — icon/nhãn
-  nằm ngay trên home indicator, không thêm dải trắng trống dưới hàng menu.
-*/
+/* Footer tab bar (in-flow) — không padding đáy / safe-area (tránh khoảng trống). */
 .employee-tabbar--shell {
   --employee-tabbar-height: 2.5rem;
   position: relative;
@@ -357,9 +346,7 @@
   grid-template-columns: repeat(5, 1fr);
   align-items: center;
   min-height: var(--employee-tabbar-height);
-  padding: 0.25rem calc(var(--space-2) + env(safe-area-inset-right, 0px))
-    calc(0.25rem + env(safe-area-inset-bottom, 0px))
-    calc(var(--space-2) + env(safe-area-inset-left, 0px));
+  padding: 0 var(--space-2);
   overflow: hidden;
 }
 

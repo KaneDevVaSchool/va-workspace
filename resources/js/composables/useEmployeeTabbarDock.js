@@ -6,7 +6,7 @@
 import { onBeforeUnmount, ref, watch } from 'vue';
 
 const ROOT_VAR = '--employee-tabbar-block-size';
-const FALLBACK = '3rem';
+const FALLBACK = '2.5rem';
 
 export function useEmployeeTabbarDock(tabbarRef) {
   const ready = ref(false);
