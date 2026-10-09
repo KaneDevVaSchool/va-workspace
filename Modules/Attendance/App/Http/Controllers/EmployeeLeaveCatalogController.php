@@ -8,7 +8,8 @@ use Modules\Identity\App\Hrm\Exceptions\HrmApiUnavailable;
 use Modules\Identity\App\Hrm\Services\HrmApiClient;
 
 /**
- * Proxy catalog nghỉ phép từ VA-HRM (GET /api/v1/leave/types).
+ * Proxy catalog nghỉ phép (GET /api/v1/leave/types) — mặc định portal HRM
+ * (HRM_LEAVE_API_*), sau chuyển về hrm.vaschools.edu.vn.
  */
 class EmployeeLeaveCatalogController extends Controller
 {

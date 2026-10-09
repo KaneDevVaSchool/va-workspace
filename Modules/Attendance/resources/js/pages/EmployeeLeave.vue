@@ -1,6 +1,6 @@
 <script setup>
 //
-// Nghỉ phép mobile — loại nghỉ lấy từ HRM (GET /api/attendance/leave-types).
+// Nghỉ phép mobile — loại nghỉ từ portal HRM (GET /api/attendance/leave-types → HRM_LEAVE_API_*).
 // Số dư / lịch sử / gửi đơn vẫn mock cục bộ cho tới khi nối API đơn nghỉ.
 //
 import { computed, onMounted, reactive, ref } from 'vue';

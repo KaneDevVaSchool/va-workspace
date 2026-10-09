@@ -65,6 +65,10 @@ return [
     'hrm' => [
         'api_base_url' => env('HRM_API_BASE_URL'),
         'api_token' => env('HRM_API_TOKEN'),
+        // Catalog loại nghỉ (GET /api/v1/leave/types) — giai đoạn đầu trỏ portal HRM;
+        // khi chuyển về hrm.vaschools.edu.vn: xóa 2 biến env (fallback api_base_url/token).
+        'leave_api_base_url' => env('HRM_LEAVE_API_BASE_URL'),
+        'leave_api_token' => env('HRM_LEAVE_API_TOKEN'),
         'sso_client_id' => env('HRM_SSO_CLIENT_ID'),
         'sso_issuer' => env('HRM_SSO_ISSUER'),
         'sso_callback_url' => env('HRM_SSO_CALLBACK_URL'),

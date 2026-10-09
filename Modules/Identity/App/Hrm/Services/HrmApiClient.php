@@ -59,7 +59,7 @@ class HrmApiClient
      */
     public function listLeaveTypes(): array
     {
-        $data = $this->get('/api/v1/leave/types');
+        $data = $this->getFrom(HrmOutboundHttp::leaveCatalogClient(), '/api/v1/leave/types');
 
         return is_array($data) ? $data : [];
     }
@@ -218,8 +218,16 @@ class HrmApiClient
      */
     private function get(string $path): ?array
     {
+        return $this->getFrom($this->client(), $path);
+    }
+
+    /**
+     * @throws HrmApiUnavailable
+     */
+    private function getFrom(\Illuminate\Http\Client\PendingRequest $http, string $path): ?array
+    {
         try {
-            $response = $this->client()->get($path);
+            $response = $http->get($path);
         } catch (ConnectionException $e) {
             throw new HrmApiUnavailable("timeout/network lỗi khi gọi {$path}", $e);
         }
