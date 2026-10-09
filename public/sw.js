@@ -1,5 +1,5 @@
 // VA Workspace — service worker
-// v10: tab bar mobile — safe-area padding dock; PWA icon lớn + căn sát đáy vùng trắng.
+// v11: thông báo đẩy chỉ mở URL trong shell mobile (/dashboard/me/*).
 //
 // Chiến lược:
 // - App shell ("/"): network-first, cache lại bản mới nhất để mở offline được.
@@ -10,7 +10,7 @@
 // - API (/api/...) và điều hướng trang khác: network-first, không cache dữ liệu
 //   nhạy cảm — chỉ dùng fallback offline.html khi mất mạng hoàn toàn.
 
-const CACHE_VERSION = 'v10';
+const CACHE_VERSION = 'v11';
 const SHELL_CACHE = `va-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `va-assets-${CACHE_VERSION}`;
 const IMAGE_CACHE = `va-images-${CACHE_VERSION}`;
@@ -172,6 +172,39 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
+const EMPLOYEE_SHELL_PATHS = new Set([
+  '/dashboard/me',
+  '/dashboard/me/feed',
+  '/dashboard/me/attendance',
+  '/dashboard/me/leave',
+  '/dashboard/me/requests',
+]);
+
+const EMPLOYEE_SHELL_DEFAULT = '/dashboard/me/feed';
+
+function normalizePathname(pathname) {
+  if (!pathname) return '/';
+  const p = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  return p || '/';
+}
+
+/** Chỉ cho phép deep link trong shell mobile; còn lại mở bảng tin. */
+function sanitizeEmployeeShellTarget(raw) {
+  const fallback = EMPLOYEE_SHELL_DEFAULT;
+  if (!raw || typeof raw !== 'string') return fallback;
+  try {
+    const url = new URL(raw, self.location.origin);
+    if (url.origin !== self.location.origin) return fallback;
+    const path = normalizePathname(url.pathname);
+    if (!EMPLOYEE_SHELL_PATHS.has(path)) {
+      return `${fallback}?vaDesktopOnly=1`;
+    }
+    return `${path}${url.search}${url.hash}`;
+  } catch {
+    return fallback;
+  }
+}
+
 self.addEventListener('push', (event) => {
   let data = {};
   try {
@@ -186,7 +219,7 @@ self.addEventListener('push', (event) => {
     icon: data.icon || '/images/pwa/icon-192.png',
     badge: '/images/favicon.png',
     tag: data.tag || 'va-workspace',
-    data: { url: data.url || '/social' },
+    data: { url: sanitizeEmployeeShellTarget(data.url || EMPLOYEE_SHELL_DEFAULT) },
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
@@ -194,7 +227,9 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = event.notification.data?.url || '/social';
+  const target = sanitizeEmployeeShellTarget(
+    event.notification.data?.url || EMPLOYEE_SHELL_DEFAULT,
+  );
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {

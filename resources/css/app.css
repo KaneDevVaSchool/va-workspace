@@ -15,7 +15,7 @@ body,
 #app {
   height: 100%;
 }
-
+  
 html {
   color-scheme: light;
   /* Thu nhỏ toàn trang về tỉ lệ --app-scale (mặc định 0.9) mà không ảnh

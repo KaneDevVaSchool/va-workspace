@@ -1,9 +1,9 @@
 <script setup>
 //
-// Nghỉ phép mobile — UI mock (chưa nối API). Số liệu quy đổi từ phút theo
-// lịch làm việc; nút Cập nhật / gửi đơn chỉ mô phỏng phản hồi cục bộ.
+// Nghỉ phép mobile — loại nghỉ lấy từ HRM (GET /api/attendance/leave-types).
+// Số dư / lịch sử / gửi đơn vẫn mock cục bộ cho tới khi nối API đơn nghỉ.
 //
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 
@@ -45,21 +45,46 @@ function refreshOverview() {
   }, 600);
 }
 
-const LEAVE_TYPES = [
-  { value: 'annual', label: 'Nghỉ phép năm' },
-  { value: 'sick', label: 'Nghỉ bệnh' },
-  { value: 'personal', label: 'Nghỉ việc riêng' },
-  { value: 'unpaid', label: 'Nghỉ không lương' },
-];
+/** @type {import('vue').Ref<Array<Record<string, unknown>>>} */
+const leaveTypes = ref([]);
+const typesLoading = ref(true);
+const typesError = ref('');
 
 const formOpen = ref(false);
 const submitting = ref(false);
 
 const form = reactive({
-  type: 'annual',
+  leaveTypeId: null,
   fromDate: '',
   toDate: '',
   reason: '',
+  documentLink: '',
+});
+
+const selectedLeaveType = computed(() =>
+  leaveTypes.value.find((t) => Number(t.id) === Number(form.leaveTypeId)) ?? null,
+);
+
+async function loadLeaveTypes() {
+  typesLoading.value = true;
+  typesError.value = '';
+  try {
+    const { data } = await window.axios.get('/api/attendance/leave-types');
+    const rows = Array.isArray(data?.data) ? data.data : [];
+    leaveTypes.value = rows;
+    if (rows.length && form.leaveTypeId == null) {
+      form.leaveTypeId = rows[0].id;
+    }
+  } catch {
+    typesError.value = 'Không tải được danh sách loại nghỉ từ HRM.';
+    leaveTypes.value = [];
+  } finally {
+    typesLoading.value = false;
+  }
+}
+
+onMounted(() => {
+  void loadLeaveTypes();
 });
 
 const history = reactive([
@@ -98,20 +123,29 @@ function closeForm() {
 }
 
 function resetForm() {
-  form.type = 'annual';
+  form.leaveTypeId = leaveTypes.value[0]?.id ?? null;
   form.fromDate = '';
   form.toDate = '';
   form.reason = '';
+  form.documentLink = '';
 }
 
 function submit() {
+  if (!form.leaveTypeId) {
+    showClientToast('warning', 'Chọn loại nghỉ trước khi gửi.');
+    return;
+  }
   if (!form.fromDate || !form.toDate) {
     showClientToast('warning', 'Chọn đủ ngày bắt đầu và kết thúc trước khi gửi.');
     return;
   }
+  if (selectedLeaveType.value?.requires_document_link && !form.documentLink.trim()) {
+    showClientToast('warning', 'Nhập link giấy tờ đính kèm.');
+    return;
+  }
 
   submitting.value = true;
-  const typeLabel = LEAVE_TYPES.find((t) => t.value === form.type)?.label ?? 'Nghỉ phép';
+  const typeLabel = selectedLeaveType.value?.name ?? 'Nghỉ phép';
   const fromLabel = new Date(form.fromDate).toLocaleDateString('vi-VN');
   const toLabel = new Date(form.toDate).toLocaleDateString('vi-VN');
 
@@ -236,10 +270,16 @@ const seniorityDays = computed(
       </div>
     </section>
 
-    <button type="button" class="leave-create" @click="openForm">
+    <button
+      type="button"
+      class="leave-create"
+      :disabled="typesLoading || !!typesError || leaveTypes.length === 0"
+      @click="openForm"
+    >
       <AppIcon name="plus" :size="20" :stroke-width="2" />
-      <span>Tạo đơn xin nghỉ phép</span>
+      <span>{{ typesLoading ? 'Đang tải loại nghỉ…' : 'Tạo đơn xin nghỉ phép' }}</span>
     </button>
+    <p v-if="typesError" class="leave-types-error">{{ typesError }}</p>
 
     <section class="leave-history">
       <h2 class="leave-history__title">Lịch sử xin phép</h2>
@@ -279,9 +319,30 @@ const seniorityDays = computed(
             <div class="leave-form-grid">
               <label class="leave-form-field leave-form-field--span">
                 <span class="leave-form-field__label">Loại nghỉ</span>
-                <select v-model="form.type" class="leave-form-field__control">
-                  <option v-for="opt in LEAVE_TYPES" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                <select
+                  v-model="form.leaveTypeId"
+                  class="leave-form-field__control"
+                  :disabled="typesLoading || leaveTypes.length === 0"
+                >
+                  <option v-for="opt in leaveTypes" :key="opt.id" :value="opt.id">
+                    {{ opt.code }} — {{ opt.name }}
+                  </option>
                 </select>
+              </label>
+              <label
+                v-if="selectedLeaveType?.requires_document_link"
+                class="leave-form-field leave-form-field--span"
+              >
+                <span class="leave-form-field__label">
+                  Link giấy tờ
+                  <span class="leave-form-field__req">*</span>
+                </span>
+                <input
+                  v-model="form.documentLink"
+                  type="url"
+                  class="leave-form-field__control"
+                  placeholder="https://drive.google.com/…"
+                />
               </label>
               <label class="leave-form-field">
                 <span class="leave-form-field__label">Từ ngày</span>
@@ -662,6 +723,18 @@ const seniorityDays = computed(
   color: var(--color-secondary);
 }
 
+.leave-types-error {
+  margin: calc(-1 * var(--space-3)) 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-align: center;
+}
+
+.leave-form-field__req {
+  color: var(--color-primary);
+}
+
 .leave-create {
   display: inline-flex;
   align-items: center;
@@ -678,6 +751,11 @@ const seniorityDays = computed(
   font-weight: 800;
   cursor: pointer;
   box-shadow: var(--shadow-md);
+}
+
+.leave-create:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .leave-history__title {

@@ -10,7 +10,15 @@ import dashboardRoutes from '@modules/Dashboard/resources/js/router.js';
 import featureRequestRoutes from '@modules/FeatureRequest/resources/js/router.js';
 import contractRoutes from '@modules/Contract/resources/js/router.js';
 import attendanceRoutes from '@modules/Attendance/resources/js/router.js';
-import { isMobileLandingViewport, resolveAuthenticatedLandingRoute } from '../lib/authenticatedLanding';
+import { resolveAuthenticatedLandingRoute } from '../lib/authenticatedLanding';
+import { showClientToast } from '../lib/clientToast';
+import {
+    EMPLOYEE_SHELL_BLOCK_MESSAGE,
+    EMPLOYEE_SHELL_BLOCK_TOAST_KEY,
+    isEmployeeMobileShellPath,
+    isEmployeeShellGuestPath,
+    isEmployeeShellRestrictedContext,
+} from '../lib/employeeMobileShellRoutes';
 
 /**
  * Route Vue (SPA phía client) — KHÔNG nhầm với route Laravel
@@ -84,6 +92,10 @@ router.afterEach((to) => {
     try {
         if (sessionStorage.getItem(STALE_CHUNK_RELOAD_KEY) === to.fullPath) {
             sessionStorage.removeItem(STALE_CHUNK_RELOAD_KEY);
+        }
+        if (sessionStorage.getItem(EMPLOYEE_SHELL_BLOCK_TOAST_KEY) === '1') {
+            sessionStorage.removeItem(EMPLOYEE_SHELL_BLOCK_TOAST_KEY);
+            showClientToast('info', EMPLOYEE_SHELL_BLOCK_MESSAGE, { duration: 9000 });
         }
     } catch {
         // sessionStorage có thể bị chặn
@@ -162,10 +174,40 @@ router.beforeEach(async (to) => {
 
     if (
         to.name === 'home'
-        && isMobileLandingViewport()
+        && isEmployeeShellRestrictedContext()
         && auth.can('dashboard.view')
     ) {
         return { name: 'employee.feed' };
+    }
+
+    if (
+        isEmployeeShellRestrictedContext()
+        && auth.isAuthenticated
+        && !isEmployeeMobileShellPath(to.path)
+        && !isEmployeeShellGuestPath(to.path)
+    ) {
+        try {
+            sessionStorage.setItem(EMPLOYEE_SHELL_BLOCK_TOAST_KEY, '1');
+        } catch {
+            // sessionStorage có thể bị chặn
+        }
+        return { name: 'employee.feed' };
+    }
+
+    if (to.query.vaDesktopOnly === '1') {
+        try {
+            sessionStorage.setItem(EMPLOYEE_SHELL_BLOCK_TOAST_KEY, '1');
+        } catch {
+            // sessionStorage có thể bị chặn
+        }
+        const nextQuery = { ...to.query };
+        delete nextQuery.vaDesktopOnly;
+        return {
+            path: to.path,
+            hash: to.hash,
+            query: nextQuery,
+            replace: true,
+        };
     }
 
     return true;

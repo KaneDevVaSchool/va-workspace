@@ -51,6 +51,20 @@ class HrmApiClient
     }
 
     /**
+     * Loại đơn nghỉ đang hoạt động — đồng bộ portal HRM /leave/types (ability leave:read).
+     *
+     * @return list<array<string, mixed>>
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function listLeaveTypes(): array
+    {
+        $data = $this->get('/api/v1/leave/types');
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
      * Toàn bộ đơn vị tổ chức (cursor paginate trên HRM, tối đa 200/trang).
      *
      * @param  array<string, scalar|null>  $filters  company, parent, type, …

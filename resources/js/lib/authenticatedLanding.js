@@ -2,6 +2,11 @@
 // Đích mặc định sau đăng nhập / khi guest đã có session. Mobile (≤768px)
 // mở shell EmployeeMobileLayout tại bảng tin; desktop giữ trang Quy trình (/).
 //
+import {
+  isEmployeeMobileShellPath,
+  isEmployeeShellRestrictedContext,
+} from './employeeMobileShellRoutes';
+
 const MOBILE_MQ = '(max-width: 768px)';
 
 export function isMobileLandingViewport() {
@@ -22,10 +27,17 @@ export function resolveAuthenticatedLandingRoute(explicitRedirect, options = {})
     && explicitRedirect !== '/'
     && !explicitRedirect.startsWith('//')
   ) {
-    return explicitRedirect;
+    if (
+      isEmployeeShellRestrictedContext()
+      && !isEmployeeMobileShellPath(explicitRedirect)
+    ) {
+      // redirect từ thông báo / deep link ngoài phạm vi mobile — bỏ qua
+    } else {
+      return explicitRedirect;
+    }
   }
 
-  if (isMobileLandingViewport() && canDashboardView) {
+  if (isEmployeeShellRestrictedContext() && canDashboardView) {
     return { name: 'employee.feed' };
   }
 
