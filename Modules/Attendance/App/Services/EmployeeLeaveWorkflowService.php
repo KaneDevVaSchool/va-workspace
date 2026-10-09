@@ -337,14 +337,14 @@ class EmployeeLeaveWorkflowService
     {
         $includeQuery = ['include' => 'hrOwner,hr_owner'];
 
-        $sources = [
-            static fn () => $this->hrmApi->getEmployeePayload($employeeUuid, $includeQuery),
-            static fn () => $this->hrmApi->getEmployeePayload($employeeUuid),
-            static fn () => $this->hrmApi->getEmployeePayloadFromLeaveCatalog($employeeUuid, $includeQuery),
-            static fn () => $this->hrmApi->getEmployeePayloadFromLeaveCatalog($employeeUuid),
+        $attempts = [
+            fn () => $this->hrmApi->getEmployeePayload($employeeUuid, $includeQuery),
+            fn () => $this->hrmApi->getEmployeePayload($employeeUuid),
+            fn () => $this->hrmApi->getEmployeePayloadFromLeaveCatalog($employeeUuid, $includeQuery),
+            fn () => $this->hrmApi->getEmployeePayloadFromLeaveCatalog($employeeUuid),
         ];
 
-        foreach ($sources as $fetch) {
+        foreach ($attempts as $fetch) {
             try {
                 $payload = $fetch();
                 $raw = $this->extractHrInChargeFromApiPayload($payload);
