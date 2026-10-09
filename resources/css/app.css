@@ -1,8 +1,22 @@
-/* Google Font: Be Vietnam Pro — có đủ dấu tiếng Việt (Gabarito thiếu glyph, dễ lỗi font) */
-@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
-
 @import './theme.css';
 @import './employee-mobile-shell.css';
+
+/* Be Vietnam Pro self-host — tránh Google Fonts (render-blocking) trên mobile/PWA audit */
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('../../Modules/Project/resources/js/assets/fonts/BeVietnamPro-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('../../Modules/Project/resources/js/assets/fonts/BeVietnamPro-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 *,
 *::before,
@@ -69,49 +83,31 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* PWA standalone: sau boot splash body trắng lộ dưới home indicator (iOS) /
-   thanh hệ thống (Android) — nền html/body khớp shell, không dùng #fff mặc định. */
-html.pwa-standalone,
-html.pwa-standalone body {
-  min-height: 100dvh;
-  min-height: -webkit-fill-available;
-  overscroll-behavior: none;
-}
-
-html.pwa-standalone body {
-  background-color: var(--color-primary-900);
-}
-
-html.pwa-standalone.pwa-surface-employee body {
-  background-color: var(--color-surface);
-  overflow: hidden;
-}
-
-html.pwa-standalone.pwa-surface-app body {
-  background-color: var(--color-bg);
-}
-
-html.pwa-standalone #app,
-html.pwa-standalone .app-shell {
-  min-height: 100dvh;
-  min-height: -webkit-fill-available;
-  background: transparent;
-}
-
-
-html.pwa-standalone .login::after {
-  content: '';
-  position: fixed;
-  z-index: -1;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: max(env(safe-area-inset-bottom, 0px), 2rem);
-  background: var(--color-primary-900);
-  pointer-events: none;
-}
+/* PWA standalone: xem resources/css/pwa-standalone.css (tải có điều kiện). */
 
 /* ---------- PWA / SPA boot splash (HTML trong app.blade.php) ---------- */
+.app-noscript {
+  max-width: 28rem;
+  margin: 2rem auto;
+  padding: 1.5rem;
+  font-family: var(--font-family-base);
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.app-noscript h1 {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+}
+
+.app-noscript p {
+  margin: 0 0 0.75rem;
+}
+
+.app-noscript a {
+  color: var(--color-primary-900);
+}
+
 .app-boot {
   overflow: hidden;
   color: var(--color-on-primary);

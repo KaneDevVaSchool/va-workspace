@@ -24,6 +24,16 @@ $spaView = static fn () => response()
 
 Route::get('/', $spaView);
 
+Route::get('/offline.html', function () {
+    $path = public_path('offline.html');
+    abort_unless(is_file($path), 404);
+
+    return response((string) file_get_contents($path), 200, [
+        'Content-Type' => 'text/html; charset=UTF-8',
+        'Cache-Control' => 'public, max-age=3600',
+    ]);
+});
+
 Route::get('/pdfjs-worker.mjs', function () {
     $path = public_path('vendor/pdfjs/pdf.worker.min.mjs');
     if (! is_file($path)) {

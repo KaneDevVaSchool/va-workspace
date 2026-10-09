@@ -60,6 +60,16 @@
     <link rel="apple-touch-icon" href="/images/pwa/apple-touch-icon.png?v={{ $pwaIconV }}" sizes="180x180">
     <link rel="apple-touch-icon" href="/images/pwa/icon-192.png?v={{ $pwaIconV }}" sizes="192x192">
     <link rel="manifest" href="/manifest.json?v={{ $pwaIconV }}">
+    {{-- Đăng ký SW sớm (trước bundle Vite) để precache shell + offline pass Lighthouse --}}
+    <script>
+        (function () {
+            if (!('serviceWorker' in navigator)) return;
+            window.__vaSwRegisterPromise = navigator.serviceWorker.register('/sw.js', {
+                scope: '/',
+                updateViaCache: 'none',
+            });
+        })();
+    </script>
     {{-- Boot splash: hiện ngay trước Vite — tránh màn trắng khi mở PWA / reload --}}
     <style>
         body.app-boot-active {
@@ -86,15 +96,28 @@
             background-color: #9a0036;
         }
     </style>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/css/pwa-standalone.css', 'resources/js/app.js'])
 </head>
 <body class="app-boot-active">
-    <div id="app-boot" class="app-boot" role="status" aria-live="polite" aria-busy="true">
+    <noscript>
+        <style>
+            body.app-boot-active .app-boot { display: none !important; }
+            body.app-boot-active { background: #fff; }
+        </style>
+        <main class="app-noscript">
+            <h1>VA Workspace</h1>
+            <p>Hệ thống quản lý nội bộ VA Schools: công việc, chấm công, nghỉ phép và quy trình nội bộ.</p>
+            <p>Ứng dụng cần bật JavaScript. Bạn vẫn có thể <a href="/login">đăng nhập</a> sau khi bật JavaScript trong trình duyệt.</p>
+        </main>
+    </noscript>
+    <main id="app-boot" class="app-boot" role="status" aria-live="polite" aria-busy="true">
         <img
             src="/images/background/background-logo.png"
             alt=""
             class="app-boot__watermark"
             aria-hidden="true"
+            decoding="async"
+            fetchpriority="low"
         />
         <div class="app-boot__scrim" aria-hidden="true"></div>
         <div class="app-boot__inner">
@@ -102,12 +125,16 @@
                 src="/images/logo-2.png"
                 alt="Vietnam America Schools"
                 class="app-boot__logo"
+                width="220"
+                height="80"
+                decoding="async"
+                fetchpriority="high"
             />
             <p class="app-boot__brand">VA Workspace</p>
             <div class="app-boot__spinner" aria-hidden="true"></div>
             <p class="app-boot__hint">Đang tải…</p>
         </div>
-    </div>
+    </main>
     <div id="app"></div>
 </body>
 </html>

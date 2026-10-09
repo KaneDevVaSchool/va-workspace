@@ -1,29 +1,56 @@
 // VA Workspace — service worker
-// v11: thông báo đẩy chỉ mở URL trong shell mobile (/dashboard/me/*).
+// v12: precache shell + start_url; offline navigate trả SPA shell (200) thay vì chỉ offline.html.
 //
 // Chiến lược:
-// - App shell ("/"): network-first, cache lại bản mới nhất để mở offline được.
+// - App shell (navigate): network-first, cache theo URL + bản fallback "/".
 // - Asset build (/build/..., content-hash trong tên file): cache-first —
 //   file không bao giờ đổi nội dung dưới 1 tên, an toàn cache dài hạn.
 // - Ảnh/icon tĩnh (/images/...): stale-while-revalidate — hiện ngay bản cache,
 //   âm thầm lấy bản mới cho lần sau.
-// - API (/api/...) và điều hướng trang khác: network-first, không cache dữ liệu
-//   nhạy cảm — chỉ dùng fallback offline.html khi mất mạng hoàn toàn.
+// - API (/api/...): network-only — không cache dữ liệu nhạy cảm.
 
-const CACHE_VERSION = 'v11';
+const CACHE_VERSION = 'v12';
 const SHELL_CACHE = `va-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `va-assets-${CACHE_VERSION}`;
 const IMAGE_CACHE = `va-images-${CACHE_VERSION}`;
 const CURRENT_CACHES = [SHELL_CACHE, ASSET_CACHE, IMAGE_CACHE];
 
 const OFFLINE_URL = '/offline.html';
-const APP_SHELL_URLS = ['/', OFFLINE_URL];
+/** Khớp manifest start_url — Lighthouse kiểm tra 200 offline. */
+const START_URL = '/dashboard/me/feed';
+/** Mọi navigate offline dùng chung bản shell đã cache dưới key "/". */
+const SHELL_FALLBACK_REQUEST = new Request('/', { method: 'GET' });
+
+const SHELL_PRECACHE_URLS = [
+  '/',
+  OFFLINE_URL,
+  START_URL,
+  '/login',
+  '/dashboard/me',
+  '/dashboard/me/feed',
+  '/dashboard/me/attendance',
+  '/dashboard/me/leave',
+  '/dashboard/me/requests',
+];
+
+async function precacheShellDocument(url) {
+  const cache = await caches.open(SHELL_CACHE);
+  try {
+    const response = await fetch(url, { credentials: 'same-origin' });
+    if (!response.ok) return;
+    await cache.put(url, response.clone());
+    if (url === '/' || url === START_URL) {
+      await cache.put(SHELL_FALLBACK_REQUEST, response.clone());
+    }
+  } catch {
+    /* mạng chưa có lúc install — bỏ qua từng URL */
+  }
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
-      const cache = await caches.open(SHELL_CACHE);
-      await cache.addAll(APP_SHELL_URLS).catch(() => {});
+      await Promise.all(SHELL_PRECACHE_URLS.map((url) => precacheShellDocument(url)));
       await self.skipWaiting();
     })(),
   );
@@ -89,15 +116,30 @@ async function staleWhileRevalidate(request, cacheName) {
   return cached || networkFetch || fetch(request);
 }
 
+async function offlineShellResponse(cache, request) {
+  const exact = await cache.match(request);
+  if (exact) return exact;
+  const root = await cache.match(SHELL_FALLBACK_REQUEST, { ignoreSearch: true })
+    || await cache.match('/', { ignoreSearch: true });
+  if (root) return root;
+  const offline = await cache.match(OFFLINE_URL, { ignoreSearch: true });
+  if (offline) return offline;
+  return Response.error();
+}
+
 async function networkFirstShell(request) {
   const cache = await caches.open(SHELL_CACHE);
   try {
     const response = await fetch(request);
-    if (response.ok) cache.put(request, response.clone());
+    if (response.ok && request.mode === 'navigate') {
+      await cache.put(request, response.clone());
+      await cache.put(SHELL_FALLBACK_REQUEST, response.clone());
+    } else if (response.ok) {
+      await cache.put(request, response.clone());
+    }
     return response;
   } catch {
-    const cached = await cache.match(request);
-    return cached || cache.match(OFFLINE_URL);
+    return offlineShellResponse(cache, request);
   }
 }
 
@@ -133,7 +175,7 @@ async function networkOnlyWithFallback(request) {
   } catch {
     if (request.mode === 'navigate') {
       const cache = await caches.open(SHELL_CACHE);
-      return (await cache.match(OFFLINE_URL)) || Response.error();
+      return offlineShellResponse(cache, request);
     }
     return Response.error();
   }

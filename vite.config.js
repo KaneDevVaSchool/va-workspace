@@ -22,7 +22,11 @@ export default defineConfig({
             },
         },
         laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js'],
+            input: [
+                'resources/css/app.css',
+                'resources/css/pwa-standalone.css',
+                'resources/js/app.js',
+            ],
             refresh: true,
         }),
         vue({

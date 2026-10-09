@@ -1,0 +1,88 @@
+/*
+ * Styles chỉ cho PWA (Add to Home Screen / display-mode: standalone).
+ * File này được import động từ app.js khi phát hiện standalone — trình duyệt
+ * thường không tải. Quy tắc lặp html.pwa-standalone cho iOS (navigator.standalone)
+ * và cho giai đoạn sớm sau inline script trong app.blade.php.
+ *
+ * Có thể dùng thêm @media (display-mode: …) khi gắn <link media="…"> (mẫu Drupal).
+ */
+
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  html,
+  html body {
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+    overscroll-behavior: none;
+  }
+
+  html body {
+    background-color: var(--color-primary-900);
+  }
+
+  html.pwa-surface-employee body {
+    background-color: var(--color-surface);
+    overflow: hidden;
+  }
+
+  html.pwa-surface-app body {
+    background-color: var(--color-bg);
+  }
+
+  html #app,
+  html .app-shell {
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+    background: transparent;
+  }
+
+  html .login::after {
+    content: '';
+    position: fixed;
+    z-index: -1;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: max(env(safe-area-inset-bottom, 0px), 2rem);
+    background: var(--color-primary-900);
+    pointer-events: none;
+  }
+}
+
+html.pwa-standalone,
+html.pwa-standalone body {
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  overscroll-behavior: none;
+}
+
+html.pwa-standalone body {
+  background-color: var(--color-primary-900);
+}
+
+html.pwa-standalone.pwa-surface-employee body {
+  background-color: var(--color-surface);
+  overflow: hidden;
+}
+
+html.pwa-standalone.pwa-surface-app body {
+  background-color: var(--color-bg);
+}
+
+html.pwa-standalone #app,
+html.pwa-standalone .app-shell {
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  background: transparent;
+}
+
+html.pwa-standalone .login::after {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: max(env(safe-area-inset-bottom, 0px), 2rem);
+  background: var(--color-primary-900);
+  pointer-events: none;
+}

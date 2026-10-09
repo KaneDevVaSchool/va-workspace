@@ -86,10 +86,13 @@ export function bootstrapPwaServiceWorker() {
 
   listenControllerChange();
 
-  navigator.serviceWorker.register('/sw.js', {
-    scope: '/',
-    updateViaCache: 'none',
-  }).then((registration) => {
+  const registerPromise = window.__vaSwRegisterPromise
+    || navigator.serviceWorker.register('/sw.js', {
+      scope: '/',
+      updateViaCache: 'none',
+    });
+
+  registerPromise.then((registration) => {
     registrationRef = registration;
     refreshUpdateState(registration);
 

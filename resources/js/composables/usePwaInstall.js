@@ -4,6 +4,7 @@
 // 1 lần sớm trong vòng đời trang, trước khi component nào kịp mount.
 //
 import { computed, ref } from 'vue';
+import { isPwaStandalone, PWA_DISPLAY_MODE_MEDIA } from '@/lib/pwaStandalone';
 
 const DISMISSED_KEY = 'va-pwa-install-dismissed-at';
 const DISMISS_SNOOZE_DAYS = 14;
@@ -11,13 +12,7 @@ const DISMISS_SNOOZE_DAYS = 14;
 const deferredPrompt = ref(null);
 const installed = ref(false);
 
-function isStandalone() {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia?.('(display-mode: standalone)').matches
-    || window.navigator.standalone === true;
-}
-
-installed.value = isStandalone();
+installed.value = isPwaStandalone();
 
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (event) => {
@@ -29,6 +24,18 @@ if (typeof window !== 'undefined') {
     installed.value = true;
     deferredPrompt.value = null;
   });
+
+  if (typeof window.matchMedia === 'function') {
+    const mq = window.matchMedia(PWA_DISPLAY_MODE_MEDIA);
+    const syncInstalled = () => {
+      installed.value = isPwaStandalone();
+    };
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', syncInstalled);
+    } else if (typeof mq.addListener === 'function') {
+      mq.addListener(syncInstalled);
+    }
+  }
 }
 
 function wasDismissedRecently() {

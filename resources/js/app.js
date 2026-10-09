@@ -2,10 +2,14 @@ import './bootstrap';
 import './echo';
 import '../css/app.css';
 
-import { applyPwaStandaloneClass } from './lib/pwaStandalone';
+import {
+  applyPwaStandaloneClass,
+  loadPwaStandaloneAssets,
+} from './lib/pwaStandalone';
 import { bootstrapPwaServiceWorker } from './composables/usePwaUpdate';
 
 applyPwaStandaloneClass();
+loadPwaStandaloneAssets();
 bootstrapPwaServiceWorker();
 
 import { createApp } from 'vue';

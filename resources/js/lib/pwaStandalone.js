@@ -4,6 +4,9 @@
 // cần class sớm trên <html> + màu nền body theo shell (guest / employee / app).
 //
 
+/** Khớp media query gắn <link> PWA (mẫu Drupal / Stack Overflow). */
+export const PWA_DISPLAY_MODE_MEDIA = '(display-mode: standalone), (display-mode: fullscreen)';
+
 export function isPwaStandalone() {
   if (typeof window === 'undefined') return false;
   return (
@@ -13,11 +16,42 @@ export function isPwaStandalone() {
   );
 }
 
-export function applyPwaStandaloneClass() {
+function syncPwaStandaloneClass() {
   if (typeof document === 'undefined') return;
-  if (isPwaStandalone()) {
-    document.documentElement.classList.add('pwa-standalone');
+  document.documentElement.classList.toggle('pwa-standalone', isPwaStandalone());
+}
+
+export function applyPwaStandaloneClass() {
+  syncPwaStandaloneClass();
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
+  const mq = window.matchMedia(PWA_DISPLAY_MODE_MEDIA);
+  const onChange = () => syncPwaStandaloneClass();
+  if (typeof mq.addEventListener === 'function') {
+    mq.addEventListener('change', onChange);
+  } else if (typeof mq.addListener === 'function') {
+    mq.addListener(onChange);
   }
+}
+
+function pwaStandaloneStylesheetPresent() {
+  if (typeof document === 'undefined') return false;
+  try {
+    return [...document.styleSheets].some(
+      (sheet) => sheet.href && sheet.href.includes('pwa-standalone'),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** CSS (fallback iOS) + JS chỉ PWA — không gọi khi mở tab trình duyệt thường. */
+export function loadPwaStandaloneAssets() {
+  if (!isPwaStandalone()) return;
+  if (!pwaStandaloneStylesheetPresent()) {
+    void import('../../css/pwa-standalone.css');
+  }
+  void import('../pwa/bootstrap.js').then((m) => m.bootstrapPwaStandalone());
 }
 
 /** @param {'guest' | 'employee' | 'app' | null} kind */
