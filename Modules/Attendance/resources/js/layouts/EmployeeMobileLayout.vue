@@ -7,7 +7,7 @@
 //
 // CSS: resources/css/employee-mobile-shell.css
 //   .employee-shell--browser / --pwa  → header
-//   .employee-tabbar--dock (Teleport body, fixed) → bottom nav
+//   .employee-tabbar--shell (flex footer trong shell) → bottom nav
 //
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
@@ -162,32 +162,30 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
       <slot />
     </main>
 
-    <Teleport to="body">
-      <nav
-        ref="tabbarRef"
-        class="employee-tabbar employee-tabbar--dock"
-        :class="isMobilePwa ? 'employee-tabbar--pwa' : 'employee-tabbar--browser'"
-        aria-label="Điều hướng chính"
-      >
-        <div class="employee-tabbar__bar">
-          <router-link
-            v-for="tab in TABS"
-            :key="tab.name"
-            :to="{ name: tab.name }"
-            class="employee-tabbar__item"
-            :class="{ 'employee-tabbar__item--active': route.name === tab.name }"
-          >
-            <span class="employee-tabbar__icon">
-              <AppIcon
-                :name="tab.icon"
-                :size="isMobilePwa ? 22 : 20"
-                :stroke-width="1.9"
-              />
-            </span>
-            <span class="employee-tabbar__label">{{ tab.label }}</span>
-          </router-link>
-        </div>
-      </nav>
-    </Teleport>
+    <nav
+      ref="tabbarRef"
+      class="employee-tabbar employee-tabbar--shell"
+      :class="isMobilePwa ? 'employee-tabbar--pwa' : 'employee-tabbar--browser'"
+      aria-label="Điều hướng chính"
+    >
+      <div class="employee-tabbar__bar">
+        <router-link
+          v-for="tab in TABS"
+          :key="tab.name"
+          :to="{ name: tab.name }"
+          class="employee-tabbar__item"
+          :class="{ 'employee-tabbar__item--active': route.name === tab.name }"
+        >
+          <span class="employee-tabbar__icon">
+            <AppIcon
+              :name="tab.icon"
+              :size="isMobilePwa ? 22 : 20"
+              :stroke-width="1.9"
+            />
+          </span>
+          <span class="employee-tabbar__label">{{ tab.label }}</span>
+        </router-link>
+      </div>
+    </nav>
   </div>
 </template>

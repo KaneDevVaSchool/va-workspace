@@ -1,6 +1,7 @@
 //
-// Tab bar mobile dock dưới viewport (Teleport body) — đo chiều cao thật,
-// ghi --employee-tabbar-block-size lên <html> để main không bị che.
+// Tab bar footer trong EmployeeMobileLayout — đo chiều cao thật, ghi
+// --employee-tabbar-block-size lên <html> cho toast / PWA prompt (không dùng
+// padding-bottom giả trên main; tabbar nằm in-flow trong flex shell).
 //
 import { onBeforeUnmount, ref, watch } from 'vue';
 

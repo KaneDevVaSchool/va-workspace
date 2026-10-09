@@ -2,9 +2,6 @@
 
 .employee-shell {
   --employee-stat-overlap: 3.25rem;
-  /* --employee-tabbar-block-size: chỉ trên html.employee-mobile-* (fallback)
-     + inline style từ useEmployeeTabbarDock — không khai báo lại ở đây để
-     không che giá trị đo thật của dock Teleport. */
   --employee-header-px: calc(var(--space-4) + env(safe-area-inset-right, 0px));
   --employee-header-pl: calc(var(--space-4) + env(safe-area-inset-left, 0px));
   flex: 1;
@@ -38,8 +35,9 @@
     z-index: 0;
     width: 100%;
     max-width: 100vw;
-    min-height: 100dvh;
-    min-height: 100svh;
+    height: 100dvh;
+    height: 100svh;
+    overflow: hidden;
   }
 
   /* iOS Safari tab: có inset nhưng không cộng thêm padding cố định. */
@@ -74,6 +72,8 @@
     z-index: 0;
     width: 100%;
     max-width: 100vw;
+    height: 100dvh;
+    height: 100svh;
     overflow: hidden;
   }
 }
@@ -253,7 +253,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: var(--space-4) var(--space-3) var(--employee-tabbar-block-size);
+  padding: var(--space-4) var(--space-3);
 }
 
 .employee-shell__content--home {
@@ -336,16 +336,15 @@
 }
 
 /*
-  Dock (Teleport → body). Safe-area nằm trong padding-bottom của dock —
-  nền trắng kéo sát đáy màn, icon không bị “nổi” lên trên dải trống.
+  Footer tab bar (in-flow trong .employee-shell). Safe-area chỉ ở đáy nav —
+  shell flex column: header | main scroll | nav; không fixed + padding giả.
 */
-.employee-tabbar--dock {
+.employee-tabbar--shell {
   --employee-tabbar-height: 3.25rem;
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 500;
+  position: relative;
+  z-index: 3;
+  flex: 0 0 auto;
+  width: 100%;
   box-sizing: border-box;
   margin: 0;
   padding: 0 0 env(safe-area-inset-bottom, 0px);
