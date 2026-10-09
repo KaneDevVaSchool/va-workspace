@@ -14,7 +14,7 @@ export function useEmployeeTabbarDock(tabbarRef) {
   function measure() {
     const el = tabbarRef.value;
     if (!el || typeof document === 'undefined') return;
-    const height = el.getBoundingClientRect().height;
+    const height = Math.ceil(el.getBoundingClientRect().height);
     if (height > 0) {
       document.documentElement.style.setProperty(ROOT_VAR, `${height}px`);
     }

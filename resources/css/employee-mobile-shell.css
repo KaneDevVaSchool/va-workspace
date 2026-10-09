@@ -2,14 +2,9 @@
 
 .employee-shell {
   --employee-stat-overlap: 3.25rem;
-  /* Chiều cao hàng menu (icon + nhãn). Không gồm safe-area. */
-  --employee-tabbar-height: 3.25rem;
-  /* Tổng dock (menu + safe-area padding). JS sẽ đo đúng từng px và ghi
-     lên <html> sau mount — fallback đã gồm safe-area để content không bị
-     tabbar che trong khoảng thời gian trước khi JS đo xong. */
-  --employee-tabbar-block-size: calc(
-    var(--employee-tabbar-height) + env(safe-area-inset-bottom, 0px)
-  );
+  /* --employee-tabbar-block-size: chỉ trên html.employee-mobile-* (fallback)
+     + inline style từ useEmployeeTabbarDock — không khai báo lại ở đây để
+     không che giá trị đo thật của dock Teleport. */
   --employee-header-px: calc(var(--space-4) + env(safe-area-inset-right, 0px));
   --employee-header-pl: calc(var(--space-4) + env(safe-area-inset-left, 0px));
   flex: 1;
@@ -28,6 +23,10 @@
 @media (max-width: 768px) {
   html.employee-mobile-browser {
     background-color: var(--color-tertiary-800);
+    /* Khớp .employee-tabbar--browser (3.5rem + safe-area) trước khi JS đo. */
+    --employee-tabbar-block-size: calc(
+      3.5rem + env(safe-area-inset-bottom, 0px)
+    );
   }
 
   .employee-shell--browser {
@@ -60,6 +59,10 @@
 @media (max-width: 768px) {
   html.employee-mobile-pwa {
     background-color: var(--color-surface);
+    /* Khớp .employee-tabbar--pwa (3.625rem + safe-area) trước khi JS đo. */
+    --employee-tabbar-block-size: calc(
+      3.625rem + env(safe-area-inset-bottom, 0px)
+    );
   }
 
   .employee-shell--pwa {
