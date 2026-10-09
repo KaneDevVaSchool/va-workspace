@@ -668,13 +668,13 @@ const seniorityDays = computed(
                     </button>
                   </header>
 
-                  <div v-if="period.mode === 'day'" class="leave-period-card__grid">
+                  <div v-if="period.mode === 'day'" class="leave-period-card__dates leave-period-card__dates--day">
                     <label class="leave-form-field">
                       <span class="leave-form-field__label">Từ ngày</span>
                       <input
                         v-model="period.fromDate"
                         type="date"
-                        class="leave-form-field__control"
+                        class="leave-form-field__control leave-form-field__control--date"
                         :min="todayMinDate"
                       />
                     </label>
@@ -683,34 +683,40 @@ const seniorityDays = computed(
                       <input
                         v-model="period.toDate"
                         type="date"
-                        class="leave-form-field__control"
+                        class="leave-form-field__control leave-form-field__control--date"
                         :min="minToDateForPeriod(period)"
                       />
                     </label>
                   </div>
-                  <div v-else class="leave-period-card__grid leave-period-card__grid--hour">
-                    <label class="leave-form-field leave-form-field--span">
+                  <div v-else class="leave-period-card__dates leave-period-card__dates--hour">
+                    <label class="leave-form-field">
                       <span class="leave-form-field__label">Ngày</span>
                       <input
                         v-model="period.date"
                         type="date"
-                        class="leave-form-field__control"
+                        class="leave-form-field__control leave-form-field__control--date"
                         :min="todayMinDate"
                       />
                     </label>
-                    <label class="leave-form-field">
-                      <span class="leave-form-field__label">Từ giờ</span>
-                      <input
-                        v-model="period.fromTime"
-                        type="time"
-                        class="leave-form-field__control"
-                        :min="minTimeForPeriod(period)"
-                      />
-                    </label>
-                    <label class="leave-form-field">
-                      <span class="leave-form-field__label">Đến giờ</span>
-                      <input v-model="period.toTime" type="time" class="leave-form-field__control" />
-                    </label>
+                    <div class="leave-period-card__times">
+                      <label class="leave-form-field">
+                        <span class="leave-form-field__label">Từ giờ</span>
+                        <input
+                          v-model="period.fromTime"
+                          type="time"
+                          class="leave-form-field__control leave-form-field__control--time"
+                          :min="minTimeForPeriod(period)"
+                        />
+                      </label>
+                      <label class="leave-form-field">
+                        <span class="leave-form-field__label">Đến giờ</span>
+                        <input
+                          v-model="period.toTime"
+                          type="time"
+                          class="leave-form-field__control leave-form-field__control--time"
+                        />
+                      </label>
+                    </div>
                   </div>
                 </article>
 
@@ -1575,14 +1581,24 @@ const seniorityDays = computed(
   cursor: pointer;
 }
 
-.leave-period-card__grid {
+.leave-period-card__dates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.leave-period-card__dates--day {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
 }
 
-.leave-period-card__grid--hour {
+.leave-period-card__times {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .leave-period-add {
@@ -1610,10 +1626,6 @@ const seniorityDays = computed(
   min-width: 0;
 }
 
-.leave-form-field--span {
-  grid-column: 1 / -1;
-}
-
 .leave-form-field__label {
   font-size: 0.8125rem;
   font-weight: 700;
@@ -1639,7 +1651,9 @@ const seniorityDays = computed(
 }
 
 .leave-form-field__control {
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
   padding: var(--space-3) var(--space-3);
   border: none;
   border-radius: var(--radius-md);
@@ -1648,6 +1662,37 @@ const seniorityDays = computed(
   font-family: inherit;
   font-size: 0.9375rem;
   color: var(--color-text);
+}
+
+.leave-form-field__control--date,
+.leave-form-field__control--time {
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  font-size: 1rem;
+  line-height: 1.35;
+  color-scheme: light;
+}
+
+.leave-form-field__control--date {
+  display: block;
+  min-width: 0;
+}
+
+.leave-form-field__control--date::-webkit-date-and-time-value {
+  display: block;
+  min-height: 1.35em;
+  text-align: left;
+}
+
+.leave-form-field__control--time::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+.leave-form-field__control--date::-webkit-calendar-picker-indicator,
+.leave-form-field__control--time::-webkit-calendar-picker-indicator {
+  margin-left: var(--space-1);
+  opacity: 0.7;
+  cursor: pointer;
 }
 
 .leave-form-field__control--select {
@@ -1942,6 +1987,10 @@ const seniorityDays = computed(
     height: min(36rem, calc(100dvh - 2rem));
     max-height: calc(100dvh - 2rem);
     border-radius: var(--radius-lg);
+  }
+
+  .leave-period-card__dates--day {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
