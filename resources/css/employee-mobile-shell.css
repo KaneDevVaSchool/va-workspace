@@ -4,8 +4,12 @@
   --employee-stat-overlap: 3.25rem;
   /* Chiều cao hàng menu (icon + nhãn). Không gồm safe-area. */
   --employee-tabbar-height: 3.25rem;
-  /* Tổng dock (menu + safe-area padding), JS đo và ghi đè lên <html>. */
-  --employee-tabbar-block-size: var(--employee-tabbar-height);
+  /* Tổng dock (menu + safe-area padding). JS sẽ đo đúng từng px và ghi
+     lên <html> sau mount — fallback đã gồm safe-area để content không bị
+     tabbar che trong khoảng thời gian trước khi JS đo xong. */
+  --employee-tabbar-block-size: calc(
+    var(--employee-tabbar-height) + env(safe-area-inset-bottom, 0px)
+  );
   --employee-header-px: calc(var(--space-4) + env(safe-area-inset-right, 0px));
   --employee-header-pl: calc(var(--space-4) + env(safe-area-inset-left, 0px));
   flex: 1;
@@ -246,8 +250,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: var(--space-4) var(--space-3)
-    calc(var(--employee-tabbar-block-size) + var(--space-3));
+  padding: var(--space-4) var(--space-3) var(--employee-tabbar-block-size);
 }
 
 .employee-shell__content--home {
