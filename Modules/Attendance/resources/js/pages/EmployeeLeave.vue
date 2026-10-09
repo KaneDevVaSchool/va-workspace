@@ -55,15 +55,101 @@ const submitting = ref(false);
 
 const form = reactive({
   leaveTypeId: null,
-  fromDate: '',
-  toDate: '',
   reason: '',
   documentLink: '',
 });
 
+/** Mock luồng duyệt — thay bằng API HRM khi nối gửi đơn. */
+const leaveWorkflow = {
+  approverGroupLabel: 'Người duyệt nhóm Phần Mềm',
+  approver: {
+    name: 'Bùi Huy Hoàng',
+    title: 'Phó phòng Công nghệ Tập sự · Phòng Công Nghệ',
+  },
+  notifyTo: 'Bùi Quang Toàn',
+  watcherLabel: 'Người theo dõi (HR)',
+};
+
+let periodSeq = 1;
+
+function createPeriod() {
+  return {
+    id: periodSeq++,
+    mode: 'day',
+    fromDate: '',
+    toDate: '',
+    date: '',
+    fromTime: '',
+    toTime: '',
+  };
+}
+
+const periods = ref([createPeriod()]);
+
 const selectedLeaveType = computed(() =>
   leaveTypes.value.find((t) => Number(t.id) === Number(form.leaveTypeId)) ?? null,
 );
+
+const documentFieldLabel = computed(() => {
+  const custom = selectedLeaveType.value?.document_link_label;
+  if (typeof custom === 'string' && custom.trim()) return custom.trim();
+  return 'Link ảnh Giấy chứng sinh / Giấy chứng nhận phẫu thuật';
+});
+
+function addPeriod() {
+  periods.value.push(createPeriod());
+}
+
+function removePeriod(id) {
+  if (periods.value.length <= 1) return;
+  periods.value = periods.value.filter((p) => p.id !== id);
+}
+
+function setPeriodMode(period, mode) {
+  period.mode = mode;
+}
+
+function approverInitials(name) {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+  return (parts[0].slice(0, 1) + parts[parts.length - 1].slice(0, 1)).toUpperCase();
+}
+
+function formatPeriodSummary(period) {
+  if (period.mode === 'hour') {
+    if (!period.date) return '';
+    const d = new Date(period.date).toLocaleDateString('vi-VN');
+    const t =
+      period.fromTime && period.toTime ? `${period.fromTime}–${period.toTime}` : period.fromTime || '';
+    return t ? `${d} · ${t}` : d;
+  }
+  if (!period.fromDate) return '';
+  const from = new Date(period.fromDate).toLocaleDateString('vi-VN');
+  if (!period.toDate || period.toDate === period.fromDate) return from;
+  const to = new Date(period.toDate).toLocaleDateString('vi-VN');
+  return `${from} – ${to}`;
+}
+
+function validatePeriods() {
+  for (const period of periods.value) {
+    if (period.mode === 'hour') {
+      if (!period.date || !period.fromTime || !period.toTime) {
+        showClientToast('warning', 'Nhập đủ ngày và khung giờ cho từng khoảng nghỉ.');
+        return false;
+      }
+      continue;
+    }
+    if (!period.fromDate || !period.toDate) {
+      showClientToast('warning', 'Chọn đủ từ ngày và đến ngày cho từng khoảng nghỉ.');
+      return false;
+    }
+  }
+  return true;
+}
 
 async function loadLeaveTypes() {
   typesLoading.value = true;
@@ -124,10 +210,10 @@ function closeForm() {
 
 function resetForm() {
   form.leaveTypeId = leaveTypes.value[0]?.id ?? null;
-  form.fromDate = '';
-  form.toDate = '';
   form.reason = '';
   form.documentLink = '';
+  periodSeq = 1;
+  periods.value = [createPeriod()];
 }
 
 function submit() {
@@ -135,8 +221,9 @@ function submit() {
     showClientToast('warning', 'Chọn loại nghỉ trước khi gửi.');
     return;
   }
-  if (!form.fromDate || !form.toDate) {
-    showClientToast('warning', 'Chọn đủ ngày bắt đầu và kết thúc trước khi gửi.');
+  if (!validatePeriods()) return;
+  if (!form.reason.trim()) {
+    showClientToast('warning', 'Nhập lý do nghỉ phép.');
     return;
   }
   if (selectedLeaveType.value?.requires_document_link && !form.documentLink.trim()) {
@@ -146,15 +233,15 @@ function submit() {
 
   submitting.value = true;
   const typeLabel = selectedLeaveType.value?.name ?? 'Nghỉ phép';
-  const fromLabel = new Date(form.fromDate).toLocaleDateString('vi-VN');
-  const toLabel = new Date(form.toDate).toLocaleDateString('vi-VN');
+  const dateLabel =
+    periods.value.map((p) => formatPeriodSummary(p)).filter(Boolean).join(' · ') || '—';
 
   setTimeout(() => {
     history.unshift({
       id: Date.now(),
       type: typeLabel,
       days: 1,
-      dateLabel: fromLabel === toLabel ? fromLabel : `${fromLabel} – ${toLabel}`,
+      dateLabel,
       status: 'pending',
       icon: 'calendar',
       tone: 'gold',
@@ -310,63 +397,183 @@ const seniorityDays = computed(
         <button type="button" class="leave-dialog__overlay" aria-label="Đóng" @click="closeForm"></button>
         <div class="leave-dialog__panel">
           <header class="leave-dialog__head">
-            <h2 id="leave-form-title" class="leave-dialog__title">Tạo đơn xin nghỉ phép</h2>
+            <span class="leave-dialog__head-icon" aria-hidden="true">
+              <AppIcon name="calendar" :size="20" :stroke-width="1.8" />
+            </span>
+            <div class="leave-dialog__head-text">
+              <h2 id="leave-form-title" class="leave-dialog__title">Tạo đơn xin nghỉ phép</h2>
+              <p v-if="selectedLeaveType" class="leave-dialog__subtitle">
+                {{ selectedLeaveType.code }} — {{ selectedLeaveType.name }}
+              </p>
+            </div>
             <button type="button" class="leave-dialog__close" aria-label="Đóng" @click="closeForm">
               <AppIcon name="close" :size="18" />
             </button>
           </header>
-          <form class="leave-dialog__body" @submit.prevent="submit">
-            <div class="leave-form-grid">
-              <label class="leave-form-field leave-form-field--span">
-                <span class="leave-form-field__label">Loại nghỉ</span>
-                <select
-                  v-model="form.leaveTypeId"
-                  class="leave-form-field__control"
-                  :disabled="typesLoading || leaveTypes.length === 0"
+
+          <form class="leave-dialog__body hide-scrollbar" @submit.prevent="submit">
+            <div class="leave-form-stack">
+              <section class="leave-form-section">
+                <label class="leave-form-field">
+                  <span class="leave-form-field__label">Loại nghỉ</span>
+                  <select
+                    v-model="form.leaveTypeId"
+                    class="leave-form-field__control leave-form-field__control--select"
+                    :disabled="typesLoading || leaveTypes.length === 0"
+                  >
+                    <option v-for="opt in leaveTypes" :key="opt.id" :value="opt.id">
+                      {{ opt.code }} — {{ opt.name }}
+                    </option>
+                  </select>
+                </label>
+              </section>
+
+              <section class="leave-form-section" aria-labelledby="leave-periods-heading">
+                <div class="leave-form-section__head">
+                  <h3 id="leave-periods-heading" class="leave-form-section__title">Khoảng nghỉ</h3>
+                </div>
+
+                <article
+                  v-for="(period, index) in periods"
+                  :key="period.id"
+                  class="leave-period-card leave-card-accent leave-card-accent--info"
                 >
-                  <option v-for="opt in leaveTypes" :key="opt.id" :value="opt.id">
-                    {{ opt.code }} — {{ opt.name }}
-                  </option>
-                </select>
-              </label>
-              <label
+                  <header class="leave-period-card__head">
+                    <span class="leave-period-card__badge">{{ index + 1 }}</span>
+                    <div class="leave-period-mode" role="group" aria-label="Cách tính khoảng nghỉ">
+                      <button
+                        type="button"
+                        class="leave-period-mode__btn"
+                        :class="{ 'leave-period-mode__btn--active': period.mode === 'day' }"
+                        :aria-pressed="period.mode === 'day'"
+                        @click="setPeriodMode(period, 'day')"
+                      >
+                        Theo ngày
+                      </button>
+                      <button
+                        type="button"
+                        class="leave-period-mode__btn"
+                        :class="{ 'leave-period-mode__btn--active': period.mode === 'hour' }"
+                        :aria-pressed="period.mode === 'hour'"
+                        @click="setPeriodMode(period, 'hour')"
+                      >
+                        Theo giờ
+                      </button>
+                    </div>
+                    <button
+                      v-if="periods.length > 1"
+                      type="button"
+                      class="leave-period-card__remove"
+                      aria-label="Xoá khoảng nghỉ"
+                      @click="removePeriod(period.id)"
+                    >
+                      <AppIcon name="close" :size="16" />
+                    </button>
+                  </header>
+
+                  <div v-if="period.mode === 'day'" class="leave-period-card__grid">
+                    <label class="leave-form-field">
+                      <span class="leave-form-field__label">Từ ngày</span>
+                      <input v-model="period.fromDate" type="date" class="leave-form-field__control" />
+                    </label>
+                    <label class="leave-form-field">
+                      <span class="leave-form-field__label">Đến ngày</span>
+                      <input v-model="period.toDate" type="date" class="leave-form-field__control" />
+                    </label>
+                  </div>
+                  <div v-else class="leave-period-card__grid leave-period-card__grid--hour">
+                    <label class="leave-form-field leave-form-field--span">
+                      <span class="leave-form-field__label">Ngày</span>
+                      <input v-model="period.date" type="date" class="leave-form-field__control" />
+                    </label>
+                    <label class="leave-form-field">
+                      <span class="leave-form-field__label">Từ giờ</span>
+                      <input v-model="period.fromTime" type="time" class="leave-form-field__control" />
+                    </label>
+                    <label class="leave-form-field">
+                      <span class="leave-form-field__label">Đến giờ</span>
+                      <input v-model="period.toTime" type="time" class="leave-form-field__control" />
+                    </label>
+                  </div>
+                </article>
+
+                <button type="button" class="leave-period-add" @click="addPeriod">
+                  <AppIcon name="plus" :size="18" :stroke-width="2" />
+                  <span>Thêm khoảng nghỉ</span>
+                </button>
+              </section>
+
+              <section
                 v-if="selectedLeaveType?.requires_document_link"
-                class="leave-form-field leave-form-field--span"
+                class="leave-form-section leave-form-section--doc leave-card-accent leave-card-accent--gold"
               >
-                <span class="leave-form-field__label">
-                  Link giấy tờ
-                  <span class="leave-form-field__req">*</span>
-                </span>
-                <input
-                  v-model="form.documentLink"
-                  type="url"
-                  class="leave-form-field__control"
-                  placeholder="https://drive.google.com/…"
-                />
-              </label>
-              <label class="leave-form-field">
-                <span class="leave-form-field__label">Từ ngày</span>
-                <input v-model="form.fromDate" type="date" class="leave-form-field__control" />
-              </label>
-              <label class="leave-form-field">
-                <span class="leave-form-field__label">Đến ngày</span>
-                <input v-model="form.toDate" type="date" class="leave-form-field__control" />
-              </label>
-              <label class="leave-form-field leave-form-field--span">
-                <span class="leave-form-field__label">Lý do</span>
-                <textarea
-                  v-model="form.reason"
-                  class="leave-form-field__control leave-form-field__control--area"
-                  rows="3"
-                  placeholder="Vd. Về quê giải quyết việc gia đình"
-                ></textarea>
-              </label>
+                <label class="leave-form-field">
+                  <span class="leave-form-field__label">
+                    {{ documentFieldLabel }}
+                    <span class="leave-form-field__req">*</span>
+                  </span>
+                  <p class="leave-form-section__lead">
+                    Chụp ảnh giấy tờ → upload Google Drive → paste link tại đây
+                  </p>
+                  <span class="leave-form-field__with-icon">
+                    <AppIcon name="link" :size="18" class="leave-form-field__icon" aria-hidden="true" />
+                    <input
+                      v-model="form.documentLink"
+                      type="url"
+                      class="leave-form-field__control leave-form-field__control--icon"
+                      placeholder="https://drive.google.com/…"
+                    />
+                  </span>
+                </label>
+              </section>
+
+              <section class="leave-form-section">
+                <label class="leave-form-field">
+                  <span class="leave-form-field__label">
+                    Lý do
+                    <span class="leave-form-field__req">*</span>
+                  </span>
+                  <textarea
+                    v-model="form.reason"
+                    class="leave-form-field__control leave-form-field__control--area"
+                    rows="4"
+                    placeholder="Nhập lý do nghỉ phép…"
+                  ></textarea>
+                </label>
+              </section>
+
+              <section class="leave-form-section leave-form-section--workflow" aria-labelledby="leave-workflow-heading">
+                <h3 id="leave-workflow-heading" class="leave-form-section__title">Người duyệt</h3>
+                <p class="leave-workflow__group">{{ leaveWorkflow.approverGroupLabel }}</p>
+
+                <article class="leave-approver-card leave-card-accent leave-card-accent--tertiary">
+                  <span class="leave-approver-card__avatar" aria-hidden="true">
+                    {{ approverInitials(leaveWorkflow.approver.name) }}
+                  </span>
+                  <span class="leave-approver-card__body">
+                    <span class="leave-approver-card__name">{{ leaveWorkflow.approver.name }}</span>
+                    <span class="leave-approver-card__title">{{ leaveWorkflow.approver.title }}</span>
+                  </span>
+                </article>
+
+                <div class="leave-workflow-meta">
+                  <div class="leave-workflow-row">
+                    <span class="leave-workflow-row__label">Thông báo tới</span>
+                    <span class="leave-workflow-row__value">{{ leaveWorkflow.notifyTo }}</span>
+                  </div>
+                  <div class="leave-workflow-row">
+                    <span class="leave-workflow-row__label">{{ leaveWorkflow.watcherLabel }}</span>
+                    <span class="leave-workflow-row__value leave-workflow-row__value--muted">HR</span>
+                  </div>
+                </div>
+              </section>
             </div>
           </form>
+
           <footer class="leave-dialog__actions">
             <button type="button" class="leave-dialog__btn leave-dialog__btn--ghost" @click="closeForm">Huỷ</button>
             <button
-              type="button"
+              type="submit"
               class="leave-dialog__btn leave-dialog__btn--primary"
               :disabled="submitting"
               @click="submit"
@@ -851,10 +1058,9 @@ const seniorityDays = computed(
   inset: 0;
   z-index: 600;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  padding: var(--space-4);
-  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  padding: 0;
 }
 
 .leave-dialog__overlay {
@@ -870,35 +1076,65 @@ const seniorityDays = computed(
   z-index: 1;
   display: flex;
   flex-direction: column;
-  width: min(28rem, calc(100vw - 2rem));
-  max-height: calc(100dvh - 2rem);
+  width: 100%;
+  max-width: 32rem;
+  height: min(calc(100dvh - env(safe-area-inset-top, 0px)), calc(100dvh - 0.5rem));
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px));
   overflow: hidden;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--color-surface-muted);
   box-shadow: var(--shadow-lg);
 }
 
 .leave-dialog__head {
   flex-shrink: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-4);
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  background: var(--color-surface);
   box-shadow: inset 0 -1px 0 var(--color-border);
+}
+
+.leave-dialog__head-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--color-tertiary-surface), #fff);
+  color: var(--color-tertiary);
+  box-shadow: var(--shadow-sm);
+}
+
+.leave-dialog__head-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .leave-dialog__title {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+.leave-dialog__subtitle {
+  margin: 2px 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  line-height: 1.35;
 }
 
 .leave-dialog__close {
+  flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.25rem;
+  height: 2.25rem;
   border: none;
   border-radius: var(--radius-full);
   background: var(--color-surface-muted);
@@ -910,13 +1146,181 @@ const seniorityDays = computed(
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--space-4);
+  padding: var(--space-3) var(--space-4) var(--space-5);
 }
 
-.leave-form-grid {
+.leave-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.leave-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.leave-form-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.leave-form-section__title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+.leave-form-section__lead {
+  margin: 0 0 var(--space-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.leave-form-section--doc {
+  padding: var(--space-3) var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.leave-card-accent {
+  position: relative;
+  padding-left: calc(var(--space-2) + 3px + var(--space-3));
+}
+
+.leave-card-accent::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.leave-card-accent--info::before {
+  background: var(--color-tertiary);
+}
+
+.leave-card-accent--gold::before {
+  background: var(--color-warning, #c47a00);
+}
+
+.leave-card-accent--tertiary::before {
+  background: var(--color-tertiary);
+}
+
+.leave-period-card {
+  padding: var(--space-3) var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.leave-period-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.leave-period-card__badge {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+
+.leave-period-mode {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.leave-period-mode__btn {
+  padding: var(--space-2) var(--space-2);
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.leave-period-mode__btn--active {
+  background: var(--color-surface);
+  color: var(--color-tertiary);
+  box-shadow: var(--shadow-sm);
+}
+
+.leave-period-mode__btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.leave-period-card__remove {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.leave-period-card__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
+}
+
+.leave-period-card__grid--hour {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.leave-period-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-tertiary);
+  cursor: pointer;
 }
 
 .leave-form-field {
@@ -931,21 +1335,48 @@ const seniorityDays = computed(
 }
 
 .leave-form-field__label {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.leave-form-field__req {
+  color: var(--color-primary);
+}
+
+.leave-form-field__with-icon {
+  position: relative;
+  display: block;
+}
+
+.leave-form-field__icon {
+  position: absolute;
+  top: 50%;
+  left: var(--space-3);
+  transform: translateY(-50%);
   color: var(--color-text-muted);
+  pointer-events: none;
 }
 
 .leave-form-field__control {
   width: 100%;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-3);
   border: none;
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 1px var(--color-border);
   font-family: inherit;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   color: var(--color-text);
+}
+
+.leave-form-field__control--select {
+  background: var(--color-surface);
+}
+
+.leave-form-field__control--icon {
+  padding-left: calc(var(--space-3) + 1.5rem);
+  background: var(--color-surface);
 }
 
 .leave-form-field__control:focus-visible {
@@ -955,25 +1386,121 @@ const seniorityDays = computed(
 
 .leave-form-field__control--area {
   resize: vertical;
-  min-height: 4.5rem;
+  min-height: 5.5rem;
+  background: var(--color-surface);
+}
+
+.leave-form-section--workflow {
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.leave-workflow__group {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.leave-approver-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.leave-approver-card__avatar {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-full);
+  background: linear-gradient(145deg, var(--color-tertiary), var(--color-tertiary-600, var(--color-tertiary)));
+  color: var(--color-on-tertiary, #fff);
+  font-size: 0.9375rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.leave-approver-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.leave-approver-card__name {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.leave-approver-card__title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  line-height: 1.35;
+}
+
+.leave-workflow-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  box-shadow: inset 0 1px 0 var(--color-border);
+}
+
+.leave-workflow-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.leave-workflow-row__label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.leave-workflow-row__value {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-text);
+  text-align: right;
+}
+
+.leave-workflow-row__value--muted {
+  font-weight: 600;
+  color: var(--color-text-muted);
 }
 
 .leave-dialog__actions {
   flex-shrink: 0;
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4) var(--space-4);
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  background: var(--color-surface);
   box-shadow: inset 0 1px 0 var(--color-border);
 }
 
 .leave-dialog__btn {
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
   border: none;
   border-radius: var(--radius-md);
   font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-size: 0.9375rem;
+  font-weight: 800;
   cursor: pointer;
 }
 
@@ -983,13 +1510,28 @@ const seniorityDays = computed(
 }
 
 .leave-dialog__btn--primary {
-  background: var(--color-primary);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-600, var(--color-primary)));
   color: var(--color-on-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .leave-dialog__btn--primary:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+@media (min-width: 480px) {
+  .leave-dialog {
+    align-items: center;
+    padding: var(--space-4);
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .leave-dialog__panel {
+    height: min(36rem, calc(100dvh - 2rem));
+    max-height: calc(100dvh - 2rem);
+    border-radius: var(--radius-lg);
+  }
 }
 
 @media (min-width: 480px) {
