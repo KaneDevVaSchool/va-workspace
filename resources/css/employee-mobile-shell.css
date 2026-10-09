@@ -38,6 +38,7 @@
     height: var(--employee-mobile-vh, 100dvh);
     max-height: var(--employee-mobile-vh, 100dvh);
     overflow: hidden;
+    box-shadow: inset 0 calc(-1 * env(safe-area-inset-bottom, 0px)) 0 0 var(--color-surface);
   }
 
   /* iOS Safari tab: có inset nhưng không cộng thêm padding cố định. */
@@ -69,7 +70,10 @@
     width: 100%;
     max-width: 100vw;
     overflow: hidden;
+    /* Vùng home indicator — cùng màu tabbar, tránh dải trắng body lộ dưới shell. */
+    box-shadow: inset 0 calc(-1 * env(safe-area-inset-bottom, 0px)) 0 0 var(--color-surface);
   }
+
 }
 
 .employee-shell__header {
@@ -251,30 +255,6 @@
   padding: var(--space-4) var(--space-3);
 }
 
-@media (max-width: 768px) {
-  /* Tabbar fixed sát đáy viewport — tránh flex + safe-area làm cả khối menu “nổi” lên. */
-  .employee-tabbar--shell {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 5;
-    flex: 0 0 0;
-    height: 0;
-    min-height: 0;
-    overflow: visible;
-    pointer-events: none;
-  }
-
-  .employee-tabbar--shell .employee-tabbar__bar {
-    pointer-events: auto;
-  }
-
-  .employee-shell__content {
-    padding-bottom: calc(var(--employee-tabbar-block-size, 2.5rem) + var(--space-3));
-  }
-}
-
 .employee-shell__content--home {
   /* Dự trữ chỗ cho thẻ KPI + margin âm — tránh overflow:auto cắt mép trên. */
   padding-top: calc(var(--employee-stat-overlap) + var(--space-2));
@@ -360,6 +340,8 @@
 */
 .employee-tabbar--shell {
   --employee-tabbar-height: 2.5rem;
+  position: relative;
+  z-index: 3;
   flex: 0 0 auto;
   width: 100%;
   box-sizing: border-box;
@@ -367,7 +349,6 @@
   padding: 0;
   background: var(--color-surface);
   box-shadow: 0 -1px 0 var(--color-border), var(--shadow-md);
-  transform: translateZ(0);
 }
 
 .employee-tabbar__bar {
@@ -376,8 +357,8 @@
   grid-template-columns: repeat(5, 1fr);
   align-items: center;
   min-height: var(--employee-tabbar-height);
-  padding: 0.1875rem calc(var(--space-2) + env(safe-area-inset-right, 0px))
-    env(safe-area-inset-bottom, 0px)
+  padding: 0.25rem calc(var(--space-2) + env(safe-area-inset-right, 0px))
+    calc(0.25rem + env(safe-area-inset-bottom, 0px))
     calc(var(--space-2) + env(safe-area-inset-left, 0px));
   overflow: hidden;
 }
@@ -387,9 +368,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0;
+  gap: 1px;
   min-width: 0;
-  min-height: 0;
+  min-height: 2.125rem;
   padding: 0 2px;
   border-radius: var(--radius-md);
   color: var(--color-text-muted);

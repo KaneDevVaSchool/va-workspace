@@ -141,7 +141,22 @@ class HrmApiClient
             throw new HrmApiUnavailable((string) $message);
         }
 
+        if ($response->status() === 403) {
+            $code = $response->json('error.code');
+            $message = (string) ($response->json('error.message') ?? '');
+            if ($code === 'MISSING_ABILITY' || $this->isVerifyTokenAbilityDenied($message, $code)) {
+                throw new HrmApiUnavailable(
+                    'ApiClient HRM (HRM_LEAVE_API_TOKEN) thiếu quyền leave:write — bổ sung ability trên admin portal HRM, tạo lại token và cập nhật env máy chủ workspace.'
+                );
+            }
+        }
+
         if (! $response->successful()) {
+            $message = (string) ($response->json('error.message') ?? '');
+            if ($message !== '') {
+                throw new HrmApiUnavailable($message);
+            }
+
             throw new HrmApiUnavailable("HTTP {$response->status()} khi gọi POST /api/v1/leave/requests");
         }
 
