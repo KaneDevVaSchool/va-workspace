@@ -15,6 +15,7 @@ import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { usePwaInstall } from '@/composables/usePwaInstall';
 import { useEmployeeMobileShell } from '@/composables/useEmployeeMobileShell';
 import { useEmployeeTabbarDock } from '@/composables/useEmployeeTabbarDock';
+import { useEmployeeMobileViewport } from '@/composables/useEmployeeMobileViewport';
 import AppIcon from '@/components/AppIcon.vue';
 
 const route = useRoute();
@@ -23,6 +24,7 @@ const { canInstall, promptInstall, dismiss } = usePwaInstall();
 const { shellMode, isMobilePwa } = useEmployeeMobileShell();
 const tabbarRef = ref(null);
 useEmployeeTabbarDock(tabbarRef);
+useEmployeeMobileViewport();
 
 const TABS = [
   { name: 'dashboard.me', icon: 'home', label: 'Trang chủ' },

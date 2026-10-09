@@ -41,10 +41,21 @@ html {
     height: 100dvh;
   }
 
-  /* Shell bottom nav — khóa scroll body (màu mép trên: employee-mobile-shell.css). */
+  /* Shell bottom nav — khóa scroll document (iOS hay “dính”/bounce cả trang). */
   html:has(.employee-shell) body {
+    position: fixed;
+    inset: 0;
+    width: 100%;
     overflow: hidden;
     background-color: var(--color-surface);
+  }
+
+  html:has(.employee-shell) #app,
+  html:has(.employee-shell) .app-shell {
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
   }
 }
 
