@@ -59,16 +59,49 @@ const form = reactive({
   documentLink: '',
 });
 
-/** Mock luồng duyệt — thay bằng API HRM khi nối gửi đơn. */
-const leaveWorkflow = {
-  approverGroupLabel: 'Người duyệt nhóm Phần Mềm',
-  approver: {
-    name: 'Bùi Huy Hoàng',
-    title: 'Phó phòng Công nghệ Tập sự · Phòng Công Nghệ',
-  },
-  notifyTo: 'Bùi Quang Toàn',
+const leaveWorkflow = reactive({
+  approverGroupLabel: 'Người duyệt',
+  approver: null,
+  notifyTo: null,
   watcherLabel: 'Người theo dõi (HR)',
-};
+  hrWatchers: [],
+  message: null,
+});
+const workflowLoading = ref(false);
+
+function resetLeaveWorkflow() {
+  leaveWorkflow.approverGroupLabel = 'Người duyệt';
+  leaveWorkflow.approver = null;
+  leaveWorkflow.notifyTo = null;
+  leaveWorkflow.watcherLabel = 'Người theo dõi (HR)';
+  leaveWorkflow.hrWatchers = [];
+  leaveWorkflow.message = null;
+}
+
+async function loadLeaveWorkflow() {
+  workflowLoading.value = true;
+  resetLeaveWorkflow();
+  try {
+    const { data } = await window.axios.get('/api/attendance/leave-workflow');
+    const row = data?.data ?? {};
+    leaveWorkflow.approverGroupLabel = row.approver_group_label || 'Người duyệt';
+    leaveWorkflow.approver = row.approver ?? null;
+    leaveWorkflow.notifyTo = row.notify_to ?? null;
+    leaveWorkflow.watcherLabel = row.watcher_label || 'Người theo dõi (HR)';
+    leaveWorkflow.hrWatchers = Array.isArray(row.hr_watchers) ? row.hr_watchers : [];
+    leaveWorkflow.message = row.message ?? null;
+  } catch {
+    leaveWorkflow.message = 'Không tải được người duyệt từ HRM.';
+  } finally {
+    workflowLoading.value = false;
+  }
+}
+
+const hrWatcherLabel = computed(() => {
+  const rows = leaveWorkflow.hrWatchers;
+  if (!rows.length) return '—';
+  return rows.map((w) => w.full_name).filter(Boolean).join(', ');
+});
 
 let periodSeq = 1;
 
@@ -202,6 +235,7 @@ const statusLabel = {
 
 function openForm() {
   formOpen.value = true;
+  void loadLeaveWorkflow();
 }
 
 function closeForm() {
@@ -544,28 +578,41 @@ const seniorityDays = computed(
 
               <section class="leave-form-section leave-form-section--workflow" aria-labelledby="leave-workflow-heading">
                 <h3 id="leave-workflow-heading" class="leave-form-section__title">Người duyệt</h3>
-                <p class="leave-workflow__group">{{ leaveWorkflow.approverGroupLabel }}</p>
+                <p v-if="workflowLoading" class="leave-workflow__status">Đang tải luồng duyệt…</p>
+                <template v-else>
+                  <p class="leave-workflow__group">{{ leaveWorkflow.approverGroupLabel }}</p>
+                  <p v-if="leaveWorkflow.message && !leaveWorkflow.approver" class="leave-workflow__status">
+                    {{ leaveWorkflow.message }}
+                  </p>
 
-                <article class="leave-approver-card leave-card-accent leave-card-accent--tertiary">
-                  <span class="leave-approver-card__avatar" aria-hidden="true">
-                    {{ approverInitials(leaveWorkflow.approver.name) }}
-                  </span>
-                  <span class="leave-approver-card__body">
-                    <span class="leave-approver-card__name">{{ leaveWorkflow.approver.name }}</span>
-                    <span class="leave-approver-card__title">{{ leaveWorkflow.approver.title }}</span>
-                  </span>
-                </article>
+                  <article
+                    v-if="leaveWorkflow.approver"
+                    class="leave-approver-card leave-card-accent leave-card-accent--tertiary"
+                  >
+                    <span class="leave-approver-card__avatar" aria-hidden="true">
+                      {{ approverInitials(leaveWorkflow.approver.name) }}
+                    </span>
+                    <span class="leave-approver-card__body">
+                      <span class="leave-approver-card__name">{{ leaveWorkflow.approver.name }}</span>
+                      <span v-if="leaveWorkflow.approver.title" class="leave-approver-card__title">
+                        {{ leaveWorkflow.approver.title }}
+                      </span>
+                    </span>
+                  </article>
 
-                <div class="leave-workflow-meta">
-                  <div class="leave-workflow-row">
-                    <span class="leave-workflow-row__label">Thông báo tới</span>
-                    <span class="leave-workflow-row__value">{{ leaveWorkflow.notifyTo }}</span>
+                  <div class="leave-workflow-meta">
+                    <div v-if="leaveWorkflow.notifyTo" class="leave-workflow-row">
+                      <span class="leave-workflow-row__label">Thông báo tới</span>
+                      <span class="leave-workflow-row__value">{{ leaveWorkflow.notifyTo }}</span>
+                    </div>
+                    <div class="leave-workflow-row">
+                      <span class="leave-workflow-row__label">{{ leaveWorkflow.watcherLabel }}</span>
+                      <span class="leave-workflow-row__value leave-workflow-row__value--muted">
+                        {{ hrWatcherLabel }}
+                      </span>
+                    </div>
                   </div>
-                  <div class="leave-workflow-row">
-                    <span class="leave-workflow-row__label">{{ leaveWorkflow.watcherLabel }}</span>
-                    <span class="leave-workflow-row__value leave-workflow-row__value--muted">HR</span>
-                  </div>
-                </div>
+                </template>
               </section>
             </div>
           </form>
@@ -1401,6 +1448,13 @@ const seniorityDays = computed(
   margin: 0;
   font-size: 0.8125rem;
   font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.leave-workflow__status {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: var(--color-text-muted);
 }
 

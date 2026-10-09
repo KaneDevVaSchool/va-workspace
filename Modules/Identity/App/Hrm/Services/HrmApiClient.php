@@ -33,9 +33,21 @@ class HrmApiClient
     /** @throws HrmApiUnavailable */
     public function getEmployeeManagerFullName(string $uuid): ?string
     {
-        $manager = $this->get("/api/v1/employees/{$uuid}/manager");
+        $manager = $this->getEmployeeManager($uuid);
 
         return $manager['full_name'] ?? null;
+    }
+
+    /**
+     * Quản lý trực tiếp — GET /api/v1/employees/{uuid}/manager (EmployeeResource).
+     *
+     * @return array<string, mixed>|null
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function getEmployeeManager(string $uuid): ?array
+    {
+        return $this->get("/api/v1/employees/{$uuid}/manager");
     }
 
     /** @return array<string, mixed>|null */

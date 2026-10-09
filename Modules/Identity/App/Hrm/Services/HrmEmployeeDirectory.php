@@ -5,6 +5,7 @@ namespace Modules\Identity\App\Hrm\Services;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Throwable;
 
@@ -267,6 +268,149 @@ class HrmEmployeeDirectory
             if (($employee['uuid'] ?? '') === $uuid) {
                 return $employee;
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * Trưởng phòng ban của nhân sự — org unit type department (leo cây từ phân công).
+     *
+     * @return array{uuid: string, full_name: string, job_title: ?string, department_name: ?string, source: string}|null
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    public function resolveDepartmentHeadForEmployee(string $employeeUuid): ?array
+    {
+        $row = $this->employeeRows()->first(
+            fn (object $item): bool => (string) ($item->uuid ?? '') === $employeeUuid,
+        );
+
+        if ($row === null) {
+            return null;
+        }
+
+        $unitsById = $this->orgUnitsById();
+        $departmentUnit = $this->departmentAncestor($row->org_unit_id);
+        if ($departmentUnit === null) {
+            return null;
+        }
+
+        $managerId = $departmentUnit->manager_employee_id ?? null;
+        if ($managerId === null || (int) $managerId === (int) $row->id) {
+            return null;
+        }
+
+        $manager = DB::connection('hrm')
+            ->table('employees')
+            ->where('id', $managerId)
+            ->whereNull('deleted_at')
+            ->first(['uuid', 'full_name', 'status']);
+
+        if ($manager === null || ! filled($manager->uuid)) {
+            return null;
+        }
+
+        $status = (string) ($manager->status ?? 'active');
+        if (in_array($status, ['terminated', 'inactive'], true)) {
+            return null;
+        }
+
+        return [
+            'uuid' => (string) $manager->uuid,
+            'full_name' => trim((string) ($manager->full_name ?? '')),
+            'job_title' => null,
+            'department_name' => filled($departmentUnit->name) ? (string) $departmentUnit->name : null,
+            'source' => 'department_head',
+        ];
+    }
+
+    /**
+     * Nhân sự HR liên hệ — ưu tiên cột is_hr_contact / hr_contact trên bảng employees (portal HRM),
+     * không có thì lọc nhân viên thuộc phòng ban Nhân sự trong danh mục HRM.
+     *
+     * @return list<array{uuid: string, full_name: string, job_title: ?string}>
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    public function listHrContactEmployees(): array
+    {
+        $contactColumn = $this->hrContactColumnName();
+        if ($contactColumn !== null) {
+            return DB::connection('hrm')
+                ->table('employees')
+                ->whereNull('deleted_at')
+                ->where('status', 'active')
+                ->where($contactColumn, true)
+                ->orderBy('full_name')
+                ->get(['uuid', 'full_name', 'job_title_name'])
+                ->map(fn (object $row) => [
+                    'uuid' => (string) ($row->uuid ?? ''),
+                    'full_name' => (string) ($row->full_name ?? ''),
+                    'job_title' => filled($row->job_title_name ?? null) ? (string) $row->job_title_name : null,
+                ])
+                ->filter(fn (array $item): bool => $item['uuid'] !== '' && $item['full_name'] !== '')
+                ->values()
+                ->all();
+        }
+
+        $hrDepartmentNames = collect($this->organizationDepartments())
+            ->filter(fn (array $dept): bool => $this->isHrCatalogDepartment($dept))
+            ->map(fn (array $dept): string => mb_strtolower(trim((string) ($dept['name'] ?? ''))))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($hrDepartmentNames === []) {
+            return [];
+        }
+
+        return collect($this->load()['employees'])
+            ->filter(function (array $employee) use ($hrDepartmentNames): bool {
+                if (($employee['status'] ?? '') !== 'active') {
+                    return false;
+                }
+
+                $dept = mb_strtolower(trim((string) ($employee['department_name'] ?? '')));
+
+                return $dept !== '' && in_array($dept, $hrDepartmentNames, true);
+            })
+            ->map(fn (array $employee) => [
+                'uuid' => (string) ($employee['uuid'] ?? ''),
+                'full_name' => (string) ($employee['full_name'] ?? ''),
+                'job_title' => filled($employee['job_title'] ?? null) ? (string) $employee['job_title'] : null,
+            ])
+            ->filter(fn (array $row): bool => $row['uuid'] !== '' && $row['full_name'] !== '')
+            ->values()
+            ->all();
+    }
+
+    /** @param array<string, mixed> $department */
+    private function isHrCatalogDepartment(array $department): bool
+    {
+        $code = strtoupper(trim((string) ($department['code'] ?? '')));
+        if (in_array($code, ['NS', 'HR', 'HRM', 'HCNS', 'HANHCHINHNS'], true)) {
+            return true;
+        }
+
+        $name = mb_strtolower(trim((string) ($department['name'] ?? '')));
+
+        return str_contains($name, 'nhân sự') || str_contains($name, 'nhan su');
+    }
+
+    private function hrContactColumnName(): ?string
+    {
+        try {
+            $schema = Schema::connection('hrm');
+            if ($schema->hasColumn('employees', 'is_hr_contact')) {
+                return 'is_hr_contact';
+            }
+            if ($schema->hasColumn('employees', 'hr_contact')) {
+                return 'hr_contact';
+            }
+        } catch (Throwable) {
+            return null;
         }
 
         return null;
