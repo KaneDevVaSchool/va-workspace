@@ -516,11 +516,15 @@ async function submit() {
     closeForm();
     await loadLeaveHistory();
   } catch (err) {
-    const message =
+    const status = err?.response?.status;
+    const raw =
       err?.response?.data?.message ??
       err?.response?.data?.errors?.periods?.[0] ??
       'Không gửi được đơn nghỉ. Thử lại sau.';
-    showClientToast('error', message);
+    const message = String(raw)
+      .replace(/^Không thể kết nối API VA-HRM:\s*/u, '')
+      .trim();
+    showClientToast(status === 422 ? 'warning' : 'error', message);
   } finally {
     submitting.value = false;
   }

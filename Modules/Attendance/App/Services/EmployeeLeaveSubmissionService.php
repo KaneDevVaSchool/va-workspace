@@ -36,11 +36,11 @@ class EmployeeLeaveSubmissionService
     ): array {
         $employeeUuid = $user->hrm_employee_uuid;
         if (! filled($employeeUuid)) {
-            throw new HrmApiUnavailable('Tài khoản chưa liên kết nhân sự HRM.');
+            throw HrmApiUnavailable::userFacing('Tài khoản chưa liên kết nhân sự HRM.');
         }
 
         if ($periods === []) {
-            throw new HrmApiUnavailable('Chọn ít nhất một khoảng nghỉ.');
+            throw HrmApiUnavailable::userFacing('Chọn ít nhất một khoảng nghỉ.');
         }
 
         $batchRef = (string) Str::uuid();

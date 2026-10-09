@@ -133,20 +133,17 @@ class HrmApiClient
         }
 
         if ($response->status() === 422) {
-            $errors = $response->json('errors') ?? $response->json('error.errors');
-            $message = is_array($errors)
-                ? collect($errors)->flatten()->first()
-                : (string) ($response->json('message') ?? 'Dữ liệu đơn nghỉ không hợp lệ.');
-
-            throw new HrmApiUnavailable((string) $message);
+            throw HrmApiUnavailable::userFacing(
+                $this->humanizeLeaveRequestErrorMessage($this->firstLeaveRequestErrorMessage($response)),
+            );
         }
 
         if ($response->status() === 403) {
             $code = $response->json('error.code');
             $message = (string) ($response->json('error.message') ?? '');
             if ($code === 'MISSING_ABILITY' || $this->isVerifyTokenAbilityDenied($message, $code)) {
-                throw new HrmApiUnavailable(
-                    'ApiClient HRM (HRM_LEAVE_API_TOKEN) thiếu quyền leave:write — bổ sung ability trên admin portal HRM, tạo lại token và cập nhật env máy chủ workspace.'
+                throw HrmApiUnavailable::userFacing(
+                    'Hệ thống chưa được cấp quyền gửi đơn nghỉ trên HRM. Liên hệ IT hoặc HR.'
                 );
             }
         }
@@ -154,7 +151,7 @@ class HrmApiClient
         if (! $response->successful()) {
             $message = (string) ($response->json('error.message') ?? '');
             if ($message !== '') {
-                throw new HrmApiUnavailable($message);
+                throw HrmApiUnavailable::userFacing($message);
             }
 
             throw new HrmApiUnavailable("HTTP {$response->status()} khi gọi POST /api/v1/leave/requests");
@@ -420,5 +417,45 @@ class HrmApiClient
         $lower = mb_strtolower($message);
 
         return str_contains($lower, 'ability') || str_contains($lower, 'quyền');
+    }
+
+    private function firstLeaveRequestErrorMessage(\Illuminate\Http\Client\Response $response): string
+    {
+        $errors = $response->json('errors')
+            ?? $response->json('error.errors')
+            ?? $response->json('error.details.errors');
+
+        if (is_array($errors)) {
+            $first = collect($errors)->flatten()->first();
+            if (is_string($first) && $first !== '') {
+                return $first;
+            }
+        }
+
+        $message = (string) ($response->json('error.message') ?? $response->json('message') ?? '');
+        if ($message !== '' && ! str_contains(mb_strtolower($message), 'không hợp lệ')) {
+            return $message;
+        }
+
+        return 'Không gửi được đơn nghỉ. Kiểm tra lại thông tin trên form.';
+    }
+
+    private function humanizeLeaveRequestErrorMessage(string $raw): string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return 'Không gửi được đơn nghỉ. Kiểm tra lại thông tin trên form.';
+        }
+
+        if (preg_match('/Quỹ phép năm không đủ \(khả dụng ([^,]+), cần ([^)]+)\)/u', $raw, $m)) {
+            return "Không đủ phép năm: còn {$m[1]}, đơn này cần {$m[2]}. Liên hệ HR nếu số dư trên HRM chưa đúng.";
+        }
+
+        if (str_contains($raw, 'Dữ liệu đơn nghỉ không hợp lệ')
+            || str_contains(mb_strtolower($raw), 'không hợp lệ')) {
+            return 'Không gửi được đơn nghỉ. Kiểm tra loại nghỉ, ngày và giấy tờ đính kèm.';
+        }
+
+        return $raw;
     }
 }

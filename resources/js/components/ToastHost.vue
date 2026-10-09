@@ -362,7 +362,7 @@ onBeforeUnmount(() => {
 
   .toast-host__stack {
     align-items: stretch;
-    max-width: 22rem;
+    max-width: min(22rem, calc(100vw - 2rem));
     margin: 0 auto;
     width: 100%;
   }
@@ -424,8 +424,15 @@ onBeforeUnmount(() => {
     margin: 0;
     font-size: 0.8125rem;
     font-weight: 600;
-    line-height: 1.35;
-    -webkit-line-clamp: 2;
+    line-height: 1.4;
+    -webkit-line-clamp: 4;
+  }
+
+  .toast-host__item--error .toast-host__message,
+  .toast-host__item--warning .toast-host__message {
+    -webkit-line-clamp: unset;
+    overflow: visible;
+    font-weight: 500;
   }
 
   .toast-host__progress-track {
