@@ -222,6 +222,141 @@ class HrmApiClient
     }
 
     /**
+     * Bảng chấm công chờ Trưởng đơn vị duyệt (scope=pending) hoặc đã xử lý (scope=history) —
+     * GET /api/v1/attendance/timesheet-approvals (ability attendance:approve).
+     *
+     * @return list<array<string, mixed>>
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function listTimesheetApprovals(string $employeeUuid, string $scope = 'pending'): array
+    {
+        $response = $this->timesheetRequest('get', '/api/v1/attendance/timesheet-approvals', [
+            'employee_uuid' => $employeeUuid,
+            'scope' => $scope,
+        ]);
+
+        $data = $response->json('data');
+
+        return is_array($data) ? array_values($data) : [];
+    }
+
+    /**
+     * Chi tiết bảng chấm công (tổng hợp công + lịch sử) — GET /api/v1/attendance/timesheet-approvals/{uuid}.
+     *
+     * @return array<string, mixed>|null null khi không tìm thấy
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function getTimesheetApproval(string $confirmationUuid, string $employeeUuid): ?array
+    {
+        $response = $this->timesheetRequest(
+            'get',
+            "/api/v1/attendance/timesheet-approvals/{$confirmationUuid}",
+            ['employee_uuid' => $employeeUuid],
+            allowNotFound: true,
+        );
+
+        if ($response === null) {
+            return null;
+        }
+
+        $data = $response->json('data');
+
+        return is_array($data) ? $data : null;
+    }
+
+    /**
+     * Duyệt / từ chối — POST /api/v1/attendance/timesheet-approvals/{uuid}/{approve|reject}.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws HrmApiUnavailable lỗi nghiệp vụ (đã xử lý, không phải Trưởng đơn vị…) mang thông điệp userFacing
+     */
+    public function decideTimesheetApproval(
+        string $confirmationUuid,
+        string $employeeUuid,
+        bool $approve,
+        ?string $reason = null,
+    ): array {
+        $payload = ['employee_uuid' => $employeeUuid];
+        if (! $approve) {
+            $payload['reason'] = (string) $reason;
+        }
+
+        $response = $this->timesheetRequest(
+            'post',
+            "/api/v1/attendance/timesheet-approvals/{$confirmationUuid}/".($approve ? 'approve' : 'reject'),
+            $payload,
+        );
+
+        $data = $response->json('data');
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
+     * @param  'get'|'post'  $method
+     * @param  array<string, scalar|null>  $payload
+     *
+     * @throws HrmApiUnavailable
+     */
+    private function timesheetRequest(
+        string $method,
+        string $path,
+        array $payload,
+        bool $allowNotFound = false,
+    ): ?\Illuminate\Http\Client\Response {
+        try {
+            $http = HrmOutboundHttp::timesheetClient();
+            $response = $method === 'post' ? $http->post($path, $payload) : $http->get($path, $payload);
+        } catch (ConnectionException $e) {
+            throw new HrmApiUnavailable("timeout/network lỗi khi gọi {$path}", $e);
+        }
+
+        if ($response->successful()) {
+            return $response;
+        }
+
+        $status = $response->status();
+        if ($status === 404 && $allowNotFound) {
+            return null;
+        }
+
+        $code = $response->json('error.code');
+        $message = (string) ($response->json('error.message') ?? '');
+
+        if ($status === 403 && $code === 'MISSING_ABILITY') {
+            throw HrmApiUnavailable::userFacing(
+                'Workspace chưa được cấp quyền duyệt bảng chấm công trên HRM. Liên hệ IT.'
+            );
+        }
+
+        if ($status === 403) {
+            throw HrmApiUnavailable::userFacing(
+                $message !== '' && $code !== 'FORBIDDEN'
+                    ? $message
+                    : 'Anh/chị không phải Trưởng đơn vị của phòng này.'
+            );
+        }
+
+        if ($status === 404) {
+            throw HrmApiUnavailable::userFacing('Không tìm thấy bảng chấm công.');
+        }
+
+        if ($status === 422) {
+            $errors = $response->json('error.details.errors');
+            $first = is_array($errors) ? collect($errors)->flatten()->first() : null;
+
+            throw HrmApiUnavailable::userFacing(
+                is_string($first) && $first !== '' ? $first : 'Dữ liệu không hợp lệ.'
+            );
+        }
+
+        throw new HrmApiUnavailable("HTTP {$status} khi gọi {$path}");
+    }
+
+    /**
      * Toàn bộ đơn vị tổ chức (cursor paginate trên HRM, tối đa 200/trang).
      *
      * @param  array<string, scalar|null>  $filters  company, parent, type, …

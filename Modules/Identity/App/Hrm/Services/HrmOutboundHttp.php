@@ -26,6 +26,15 @@ final class HrmOutboundHttp
         return self::clientForBase(self::baseUrl(), $withApiToken, $timeoutSeconds, (string) config('services.hrm.api_token'));
     }
 
+    /** HTTP duyệt bảng chấm công — HRM chính, token riêng (HRM_TIMESHEET_API_TOKEN) hoặc token chung. */
+    public static function timesheetClient(int $timeoutSeconds = 10): PendingRequest
+    {
+        $token = config('services.hrm.timesheet_api_token');
+        $token = filled($token) ? (string) $token : (string) config('services.hrm.api_token');
+
+        return self::clientForBase(self::baseUrl(), true, $timeoutSeconds, $token);
+    }
+
     /** HTTP tới GET /api/v1/leave/types (portal HRM trước, chuyển về hrm.vaschools.edu.vn sau). */
     public static function leaveCatalogClient(int $timeoutSeconds = 5): PendingRequest
     {

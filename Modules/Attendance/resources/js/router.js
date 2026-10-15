@@ -14,6 +14,17 @@
  */
 export default [
   {
+    // Trưởng đơn vị duyệt bảng chấm công VA-HRM (desktop + mobile, mở từ thông báo
+    // ?confirmation=<uuid>). Quyền thật do HRM kiểm (quản lý trực tiếp của phòng).
+    path: '/attendance/timesheet-approvals',
+    name: 'attendance.timesheet-approvals',
+    component: () => import('./pages/TimesheetApprovals.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Duyệt bảng công',
+    },
+  },
+  {
     path: '/dashboard/me/attendance',
     name: 'employee.attendance',
     component: () => import('./pages/EmployeeAttendance.vue'),

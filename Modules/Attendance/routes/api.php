@@ -5,6 +5,7 @@ use Modules\Attendance\App\Http\Controllers\EmployeeLeaveBalanceController;
 use Modules\Attendance\App\Http\Controllers\EmployeeLeaveCatalogController;
 use Modules\Attendance\App\Http\Controllers\EmployeeLeaveRequestController;
 use Modules\Attendance\App\Http\Controllers\EmployeeLeaveWorkflowController;
+use Modules\Attendance\App\Http\Controllers\EmployeeTimesheetApprovalController;
 
 Route::middleware('auth')->prefix('attendance')->name('attendance.')->group(function () {
     Route::get('/leave-types', [EmployeeLeaveCatalogController::class, 'leaveTypes'])
@@ -17,4 +18,19 @@ Route::middleware('auth')->prefix('attendance')->name('attendance.')->group(func
         ->name('leave-requests.index');
     Route::post('/leave-requests', [EmployeeLeaveRequestController::class, 'store'])
         ->name('leave-requests.store');
+
+    // Trưởng đơn vị duyệt bảng chấm công HRM (API v1 attendance/timesheet-approvals).
+    Route::get('/timesheet-approvals', [EmployeeTimesheetApprovalController::class, 'index'])
+        ->name('timesheet-approvals.index');
+    Route::get('/timesheet-approvals/count', [EmployeeTimesheetApprovalController::class, 'count'])
+        ->name('timesheet-approvals.count');
+    Route::get('/timesheet-approvals/{uuid}', [EmployeeTimesheetApprovalController::class, 'show'])
+        ->whereUuid('uuid')
+        ->name('timesheet-approvals.show');
+    Route::post('/timesheet-approvals/{uuid}/approve', [EmployeeTimesheetApprovalController::class, 'approve'])
+        ->whereUuid('uuid')
+        ->name('timesheet-approvals.approve');
+    Route::post('/timesheet-approvals/{uuid}/reject', [EmployeeTimesheetApprovalController::class, 'reject'])
+        ->whereUuid('uuid')
+        ->name('timesheet-approvals.reject');
 });

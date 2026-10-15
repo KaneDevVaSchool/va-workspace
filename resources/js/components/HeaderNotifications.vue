@@ -97,6 +97,11 @@ async function openItem(item) {
     }
   }
   if (item.url) {
+    // Thông báo từ hệ khác (vd. bảng chấm công trên VA-HRM) mang URL tuyệt đối — mở tab mới.
+    if (/^https?:\/\//i.test(item.url)) {
+      window.open(item.url, '_blank', 'noopener');
+      return;
+    }
     router.push(item.url);
   }
 }

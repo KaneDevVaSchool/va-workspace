@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Modules\Attendance\App\Jobs\ProcessTimesheetStatusChangedJob;
 use Modules\Identity\App\Hrm\Jobs\ProcessEmployeeTerminatedJob;
 use Modules\Identity\App\Hrm\Jobs\ProcessEmployeeUpdatedJob;
 use Modules\Identity\App\Hrm\Jobs\ProcessOrgUnitChangedJob;
@@ -77,6 +78,23 @@ class HrmWebhookTest extends TestCase
             ->assertOk();
 
         Queue::assertPushed(ProcessEmployeeUpdatedJob::class, 1);
+    }
+
+    public function test_timesheet_status_changed_dispatches_notification_job(): void
+    {
+        Queue::fake();
+
+        $this->postWebhook('attendance.timesheet.status_changed', 'delivery-ts-1', [
+            'confirmation_uuid' => '9b2f3c4d-1111-4222-8333-944455556666',
+            'kind' => 'request',
+            'stage' => 'unit_head',
+            'notify' => ['approver_employee_uuids' => ['emp-head'], 'owner_employee_uuids' => []],
+        ])->assertOk();
+
+        Queue::assertPushed(
+            ProcessTimesheetStatusChangedJob::class,
+            fn ($job) => ($job->payload['confirmation_uuid'] ?? null) === '9b2f3c4d-1111-4222-8333-944455556666',
+        );
     }
 
     public function test_employee_updated_job_syncs_user_fields_without_touching_department_or_roles(): void

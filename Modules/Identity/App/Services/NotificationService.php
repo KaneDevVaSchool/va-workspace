@@ -63,6 +63,15 @@ class NotificationService
 
     public const TYPE_CHAT_MESSAGE = 'chat_message';
 
+    /** Bảng chấm công HRM chờ người nhận duyệt (webhook attendance.timesheet.status_changed). */
+    public const TYPE_HRM_TIMESHEET_PENDING = 'hrm_timesheet_pending';
+
+    /** Bảng chấm công HRM bị trả về — Admin đơn vị cần sửa và gửi lại. */
+    public const TYPE_HRM_TIMESHEET_REJECTED = 'hrm_timesheet_rejected';
+
+    /** Bảng chấm công HRM đã duyệt cuối — đóng, khóa chỉnh sửa. */
+    public const TYPE_HRM_TIMESHEET_FINALIZED = 'hrm_timesheet_finalized';
+
     public function __construct(
         private readonly UserNotificationRepositoryInterface $notifications,
         private readonly UserRepositoryInterface $users,
@@ -114,13 +123,48 @@ class NotificationService
             return null;
         }
 
+        return $this->deliver($recipient, $actor, $type, $title, $body, $url, $data);
+    }
+
+    /**
+     * Thông báo hệ thống, không có người gửi (actor_id null) — vd. sự kiện từ VA-HRM qua webhook.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function notifySystem(
+        User $recipient,
+        string $type,
+        string $title,
+        ?string $body,
+        ?string $url,
+        array $data = [],
+    ): ?UserNotification {
+        if (! $recipient->isActive()) {
+            return null;
+        }
+
+        return $this->deliver($recipient, null, $type, $title, $body, $url, $data);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function deliver(
+        User $recipient,
+        ?User $actor,
+        string $type,
+        string $title,
+        ?string $body,
+        ?string $url,
+        array $data,
+    ): UserNotification {
         $pushIcon = is_string($data['push_icon'] ?? null) ? $data['push_icon'] : null;
         $pushTag = is_string($data['push_tag'] ?? null) ? $data['push_tag'] : null;
         unset($data['push_icon'], $data['push_tag']);
 
         $notification = $this->notifications->create([
             'user_id' => $recipient->id,
-            'actor_id' => $actor->id,
+            'actor_id' => $actor?->id,
             'type' => $type,
             'title' => $title,
             'body' => $body,

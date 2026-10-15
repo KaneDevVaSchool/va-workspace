@@ -4,6 +4,7 @@ namespace Modules\Identity\App\Hrm\Services;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Modules\Attendance\App\Jobs\ProcessTimesheetStatusChangedJob;
 use Modules\Identity\App\Hrm\Jobs\ProcessEmployeeTerminatedJob;
 use Modules\Identity\App\Hrm\Jobs\ProcessEmployeeTransferredJob;
 use Modules\Identity\App\Hrm\Jobs\ProcessEmployeeUpdatedJob;
@@ -69,6 +70,7 @@ class HrmWebhookDispatcher
                 (string) ($payload['org_uuid'] ?? ''),
                 (string) ($payload['change_type'] ?? ''),
             ),
+            'attendance.timesheet.status_changed' => ProcessTimesheetStatusChangedJob::dispatch($payload),
             default => Log::info('hrm_webhook.unknown_event', ['event' => $event]),
         };
     }

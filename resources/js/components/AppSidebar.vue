@@ -45,7 +45,7 @@ async function loadPendingModerationCount() {
 
 function startModerationPoll() {
   stopModerationPoll();
-  moderationPollTimer = window.setInterval(loadPendingModerationCount, MODERATION_POLL_MS);
+  moderationPollTimer = window.setInterval(loadBadgeCounts, MODERATION_POLL_MS);
 }
 
 function stopModerationPoll() {
@@ -55,8 +55,27 @@ function stopModerationPoll() {
   }
 }
 
+// Số bảng chấm công HRM chờ Trưởng đơn vị duyệt — mục "Duyệt bảng công" chỉ hiện khi có
+// bảng chờ (hoặc đang đứng ở trang đó); backend cache 60s nên poll chung nhịp không tốn HRM.
+const pendingTimesheetCount = ref(0);
+
+async function loadPendingTimesheetCount() {
+  try {
+    const { data } = await window.axios.get('/api/attendance/timesheet-approvals/count');
+    pendingTimesheetCount.value = data.count ?? 0;
+  } catch {
+    // im lặng — sidebar không được vỡ vì lỗi đếm badge
+  }
+}
+
+function loadBadgeCounts() {
+  loadPendingModerationCount();
+  loadPendingTimesheetCount();
+}
+
 const badgeCounts = computed(() => ({
   'manager.social.moderation': pendingModerationCount.value,
+  'attendance.timesheet-approvals': pendingTimesheetCount.value,
 }));
 
 function badgeLabel(item) {
@@ -84,15 +103,15 @@ function handleKeydown(event) {
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown);
-  loadPendingModerationCount();
+  loadBadgeCounts();
   startModerationPoll();
-  window.addEventListener('focus', loadPendingModerationCount);
+  window.addEventListener('focus', loadBadgeCounts);
 });
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown);
   document.body.style.overflow = '';
   stopModerationPoll();
-  window.removeEventListener('focus', loadPendingModerationCount);
+  window.removeEventListener('focus', loadBadgeCounts);
 });
 
 // Nhóm theo mạch "kể chuyện" khi dùng workspace: bắt đầu từ tổng quan → theo
@@ -108,6 +127,14 @@ const MENU_SECTIONS = [
       // dashboard.view gán cho hầu hết mọi role kể cả viewer — điểm chạm
       // đầu tiên sau đăng nhập, luôn hiện đầu mục Tổng quan.
       { name: 'dashboard.me', label: 'Của tôi', icon: 'target', requiresPermission: 'dashboard.view' },
+      // Trưởng đơn vị duyệt bảng chấm công HRM — chỉ hiện khi có bảng chờ duyệt
+      // (requiresTimesheetApprovals), vào lại qua thông báo / link email bất cứ lúc nào.
+      {
+        name: 'attendance.timesheet-approvals',
+        label: 'Duyệt bảng công',
+        icon: 'clipboardCheck',
+        requiresTimesheetApprovals: true,
+      },
       // configurableByDepartment: true — đồng bộ thủ công với
       // CONFIGURABLE_MENUS trong DepartmentSidebarConfigService.
       { name: 'home', label: 'Quy trình', icon: 'gitBranch', configurableByDepartment: true },
@@ -338,6 +365,7 @@ function itemPasses(item) {
     // nhiều permission khác nhau tuỳ vai trò (VD: "Công việc" hiện với
     // task.view HOẶC task.view_assigned — xem TaskService::paginate()).
     (!item.requiresAnyPermission || item.requiresAnyPermission.some((key) => auth.can(key))) &&
+    (!item.requiresTimesheetApprovals || pendingTimesheetCount.value > 0 || route.name === item.name) &&
     !auth.hiddenMenuKeys.includes(item.name) &&
     // Ẩn toàn hệ thống (superadmin) thắng tuyệt đối per-department, áp dụng
     // cho MỌI tài khoản kể cả super_admin (không có ngoại lệ) — trang
