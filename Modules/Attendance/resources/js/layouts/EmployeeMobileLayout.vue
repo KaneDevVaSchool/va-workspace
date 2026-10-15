@@ -140,14 +140,8 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
       </label>
     </header>
 
-    <main
-      class="employee-shell__content"
-      :class="{
-        'employee-shell__content--home': route.name === 'dashboard.me',
-        'employee-shell__content--overlap': route.name === 'employee.leave',
-      }"
-    >
-      <div v-if="canInstall" class="install-banner">
+    <div v-if="canInstall" class="employee-shell__install">
+      <div class="install-banner">
         <span class="install-banner__icon" aria-hidden="true">
           <AppIcon name="download" :size="18" :stroke-width="1.9" />
         </span>
@@ -160,7 +154,15 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
           <AppIcon name="close" :size="14" />
         </button>
       </div>
+    </div>
 
+    <main
+      class="employee-shell__content"
+      :class="{
+        'employee-shell__content--home': route.name === 'dashboard.me',
+        'employee-shell__content--overlap': route.name === 'employee.leave',
+      }"
+    >
       <slot />
     </main>
 
