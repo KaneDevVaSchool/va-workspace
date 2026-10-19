@@ -58,6 +58,17 @@ export default [
     },
   },
   {
+    path: '/dashboard/me/utilities',
+    name: 'employee.utilities',
+    component: () => import('./pages/EmployeeUtilitiesAll.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Tiện ích nhanh',
+      requiresPermission: 'dashboard.view',
+      employeeMobile: true,
+    },
+  },
+  {
     path: '/dashboard/me/feed',
     name: 'employee.feed',
     component: () => import('./pages/EmployeeFeed.vue'),

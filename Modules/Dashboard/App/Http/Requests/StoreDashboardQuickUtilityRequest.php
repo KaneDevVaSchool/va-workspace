@@ -23,6 +23,7 @@ class StoreDashboardQuickUtilityRequest extends FormRequest
             'link_type' => ['nullable', 'string', Rule::in(DashboardQuickUtilityService::LINK_TYPES)],
             'link_target' => ['nullable', 'string', 'max:512'],
             'is_visible' => ['nullable', 'boolean'],
+            'is_under_maintenance' => ['nullable', 'boolean'],
         ];
     }
 }

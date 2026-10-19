@@ -27,9 +27,12 @@ const emit = defineEmits(['select']);
         :class="{
           'quick-utilities__tile--preview': preview,
           'quick-utilities__tile--active': activeKey && item.utility_key === activeKey,
+          'quick-utilities__tile--maintenance': item.is_under_maintenance,
         }"
+        :aria-disabled="!preview && item.is_under_maintenance ? true : undefined"
         @click="!preview && emit('select', item)"
       >
+        <span v-if="item.is_under_maintenance" class="quick-utilities__badge">Bảo trì</span>
         <span class="quick-utilities__icon" :class="`quick-utilities__icon--${item.tone || 'primary'}`">
           <AppIcon :name="item.icon || 'layoutGrid'" :size="compact ? 20 : 22" :stroke-width="1.75" />
         </span>
@@ -55,6 +58,7 @@ const emit = defineEmits(['select']);
 }
 
 .quick-utilities__tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -76,7 +80,7 @@ const emit = defineEmits(['select']);
   padding: var(--space-2);
 }
 
-.quick-utilities__tile:not(.quick-utilities__tile--preview):hover {
+.quick-utilities__tile:not(.quick-utilities__tile--preview):not(.quick-utilities__tile--maintenance):hover {
   transform: translateY(-2px);
   box-shadow: inset 0 0 0 1px var(--color-border-strong, var(--color-border)), var(--shadow-md);
 }
@@ -89,6 +93,29 @@ const emit = defineEmits(['select']);
   box-shadow:
     inset 0 0 0 2px var(--color-primary),
     var(--shadow-md);
+}
+
+.quick-utilities__tile--maintenance {
+  opacity: 0.82;
+}
+
+.quick-utilities__tile--maintenance:not(.quick-utilities__tile--preview) {
+  cursor: not-allowed;
+}
+
+.quick-utilities__badge {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-full);
+  background: var(--color-warning-tint-bg, #fef3c7);
+  color: var(--color-warning, #b45309);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1.2;
 }
 
 .quick-utilities__icon {

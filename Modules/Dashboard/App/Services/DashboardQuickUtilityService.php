@@ -58,6 +58,7 @@ class DashboardQuickUtilityService
             'link_target' => $this->normalizeLinkTarget($data['link_type'] ?? 'none', $data['link_target'] ?? null),
             'sort_order' => $sortOrder,
             'is_visible' => (bool) ($data['is_visible'] ?? true),
+            'is_under_maintenance' => (bool) ($data['is_under_maintenance'] ?? false),
             'updated_by' => $updatedBy,
         ]);
     }
@@ -93,6 +94,9 @@ class DashboardQuickUtilityService
         }
         if (array_key_exists('is_visible', $data)) {
             $patch['is_visible'] = (bool) $data['is_visible'];
+        }
+        if (array_key_exists('is_under_maintenance', $data)) {
+            $patch['is_under_maintenance'] = (bool) $data['is_under_maintenance'];
         }
 
         return $this->repository->update($row, $patch);
@@ -197,6 +201,7 @@ class DashboardQuickUtilityService
             'link_target' => $row->link_target,
             'sort_order' => $row->sort_order,
             'is_visible' => $row->is_visible,
+            'is_under_maintenance' => $row->is_under_maintenance,
         ];
 
         if ($includeMeta) {

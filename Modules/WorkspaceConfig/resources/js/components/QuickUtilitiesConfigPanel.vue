@@ -17,6 +17,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'toggle',
+  'toggle-maintenance',
   'edit',
   'delete',
   'move',
@@ -33,28 +34,36 @@ const menuRootRef = ref(null);
 
 const visibleCount = computed(() => props.utilities.filter((item) => item.is_visible).length);
 const hiddenCount = computed(() => props.utilities.length - visibleCount.value);
+const maintenanceCount = computed(() => props.utilities.filter((item) => item.is_under_maintenance).length);
 
 const filteredUtilities = computed(() => {
   if (filter.value === 'visible') return props.utilities.filter((item) => item.is_visible);
   if (filter.value === 'hidden') return props.utilities.filter((item) => !item.is_visible);
+  if (filter.value === 'maintenance') return props.utilities.filter((item) => item.is_under_maintenance);
   return props.utilities;
 });
 
 const filterEmptyText = computed(() => {
-  if (filter.value === 'visible') return 'Không có tiện ích nào đang hiện.';
-  if (filter.value === 'hidden') return 'Không có tiện ích nào đang ẩn.';
-  return 'Chưa có tiện ích nào. Thêm lối tắt để hiển thị trên Dashboard của tôi.';
+  if (filter.value === 'visible') return 'Chưa bật hiển thị mục nào.';
+  if (filter.value === 'hidden') return 'Không có mục nào đang tắt hiển thị.';
+  if (filter.value === 'maintenance') return 'Không có mục nào đang bảo trì.';
+  return 'Chưa có lối tắt nào. Bấm «Thêm tiện ích» để tạo mục đầu tiên.';
 });
 
 const canShowAll = computed(() => hiddenCount.value > 0 && !props.busy);
 const canHideAll = computed(() => visibleCount.value > 0 && !props.busy);
 
-const previewCompact = computed(() => previewMode.value === 'mobile');
+const previewModeLabels = {
+  desktop: 'Máy tính',
+  'mobile-home': 'ĐT — trang chủ',
+  'mobile-all': 'ĐT — xem tất cả',
+};
 
 function linkSummary(item) {
-  if (item.link_type === 'none' || !item.link_target) return 'Chưa gắn liên kết';
-  if (item.link_type === 'route') return `Route: ${item.link_target}`;
-  return `URL: ${item.link_target}`;
+  if (item.is_under_maintenance) return 'Đang bảo trì — nhân viên không mở được';
+  if (item.link_type === 'none' || !item.link_target) return 'Chưa chọn trang mở ra khi bấm';
+  if (item.link_type === 'route') return `Mở trang trong app: ${item.link_target}`;
+  return `Mở website: ${item.link_target}`;
 }
 
 function toggleMenu(key, event) {
@@ -97,13 +106,16 @@ onBeforeUnmount(() => {
     <div class="dqu-panel__toolbar">
       <div class="dqu-panel__stats">
         <span class="dqu-panel__stat">
-          <strong>{{ utilities.length }}</strong> tiện ích
+          <strong>{{ utilities.length }}</strong> lối tắt
         </span>
         <span class="dqu-panel__stat dqu-panel__stat--ok">
-          <strong>{{ visibleCount }}</strong> đang hiện
+          <strong>{{ visibleCount }}</strong> đang hiện cho nhân viên
         </span>
         <span v-if="hiddenCount" class="dqu-panel__stat dqu-panel__stat--muted">
-          <strong>{{ hiddenCount }}</strong> đang ẩn
+          <strong>{{ hiddenCount }}</strong> đang tắt
+        </span>
+        <span v-if="maintenanceCount" class="dqu-panel__stat dqu-panel__stat--warn">
+          <strong>{{ maintenanceCount }}</strong> bảo trì
         </span>
       </div>
 
@@ -134,16 +146,25 @@ onBeforeUnmount(() => {
             :aria-pressed="filter === 'hidden'"
             @click="filter = 'hidden'"
           >
-            Đang ẩn
+            Đang tắt
+          </button>
+          <button
+            type="button"
+            class="dqu-panel__filter"
+            :class="{ 'dqu-panel__filter--active': filter === 'maintenance' }"
+            :aria-pressed="filter === 'maintenance'"
+            @click="filter = 'maintenance'"
+          >
+            Bảo trì
           </button>
         </div>
 
         <div class="dqu-panel__bulk">
           <button type="button" class="dqu-panel__bulk-btn" :disabled="!canShowAll" @click="emit('show-all')">
-            Hiện tất cả
+            Bật hiển thị tất cả
           </button>
           <button type="button" class="dqu-panel__bulk-btn" :disabled="!canHideAll" @click="emit('hide-all')">
-            Ẩn tất cả
+            Tắt hiển thị tất cả
           </button>
         </div>
       </div>
@@ -165,6 +186,7 @@ onBeforeUnmount(() => {
             class="dqu-panel__row"
             :class="{
               'dqu-panel__row--hidden': !item.is_visible,
+              'dqu-panel__row--maintenance': item.is_under_maintenance,
               'dqu-panel__row--active': activeKey === item.utility_key,
             }"
             :data-utility-key="item.utility_key"
@@ -195,11 +217,11 @@ onBeforeUnmount(() => {
             </span>
 
             <div class="dqu-panel__body">
-              <p class="dqu-panel__title">{{ item.label }}</p>
-              <p class="dqu-panel__meta">
-                <span>{{ item.utility_key }}</span>
-                <span> · {{ linkSummary(item) }}</span>
+              <p class="dqu-panel__title">
+                {{ item.label }}
+                <span v-if="item.is_under_maintenance" class="dqu-panel__pill">Bảo trì</span>
               </p>
+              <p class="dqu-panel__meta">{{ linkSummary(item) }}</p>
             </div>
 
             <div class="dqu-panel__controls">
@@ -210,7 +232,7 @@ onBeforeUnmount(() => {
                 role="switch"
                 :aria-checked="item.is_visible"
                 :disabled="busy"
-                :aria-label="item.is_visible ? `Ẩn ${item.label}` : `Hiện ${item.label}`"
+                :aria-label="item.is_visible ? `Tắt hiển thị ${item.label}` : `Bật hiển thị ${item.label}`"
                 @click="emit('toggle', item)"
               >
                 <span class="dqu-panel__switch-thumb" />
@@ -233,10 +255,18 @@ onBeforeUnmount(() => {
                   role="menu"
                 >
                   <button type="button" role="menuitem" class="dqu-panel__menu-item" @click="runMenuAction('edit', item)">
-                    Sửa
+                    Sửa thông tin
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    class="dqu-panel__menu-item"
+                    @click="runMenuAction('toggle-maintenance', item)"
+                  >
+                    {{ item.is_under_maintenance ? 'Tắt bảo trì' : 'Bật bảo trì' }}
                   </button>
                   <button type="button" role="menuitem" class="dqu-panel__menu-item" @click="emit('highlight', item.utility_key)">
-                    Xem trên bản xem trước
+                    Xem trên hình minh hoạ
                   </button>
                   <button
                     type="button"
@@ -253,43 +283,37 @@ onBeforeUnmount(() => {
         </ul>
       </div>
 
-      <aside class="dqu-panel__preview" aria-label="Xem trước Dashboard của tôi">
+      <aside class="dqu-panel__preview" aria-label="Hình minh hoạ giao diện nhân viên">
         <div class="dqu-panel__preview-head">
           <div>
-            <p class="dqu-panel__preview-kicker">Xem trước</p>
-            <p class="dqu-panel__preview-title">Giống trên Dashboard của tôi</p>
+            <p class="dqu-panel__preview-kicker">Hình minh hoạ</p>
+            <p class="dqu-panel__preview-title">Đúng như nhân viên sẽ thấy</p>
           </div>
-          <div class="dqu-panel__preview-modes" role="group" aria-label="Chế độ xem trước">
+          <div class="dqu-panel__preview-modes" role="group" aria-label="Chọn màn hình xem thử">
             <button
+              v-for="(label, key) in previewModeLabels"
+              :key="key"
               type="button"
               class="dqu-panel__mode"
-              :class="{ 'dqu-panel__mode--active': previewMode === 'desktop' }"
-              :aria-pressed="previewMode === 'desktop'"
-              @click="previewMode = 'desktop'"
+              :class="{ 'dqu-panel__mode--active': previewMode === key }"
+              :aria-pressed="previewMode === key"
+              @click="previewMode = key"
             >
-              Desktop
-            </button>
-            <button
-              type="button"
-              class="dqu-panel__mode"
-              :class="{ 'dqu-panel__mode--active': previewMode === 'mobile' }"
-              :aria-pressed="previewMode === 'mobile'"
-              @click="previewMode = 'mobile'"
-            >
-              Mobile
+              {{ label }}
             </button>
           </div>
         </div>
 
         <div class="dqu-panel__preview-frame hide-scrollbar">
           <DashboardQuickUtilitiesPreview
-            :mode="previewCompact ? 'mobile' : 'desktop'"
+            v-if="loading || previewItems.length"
+            :mode="previewMode"
             :utilities="previewItems"
             :loading="loading"
             :active-utility-key="activeKey"
           />
-          <p v-if="!loading && !previewItems.length" class="dqu-panel__preview-empty">
-            Không có tiện ích nào đang hiện. Bật hiển thị hoặc thêm mục mới.
+          <p v-else class="dqu-panel__preview-empty">
+            Chưa có lối tắt nào đang hiện. Bật công tắc hiển thị hoặc thêm mục mới.
           </p>
         </div>
       </aside>
@@ -333,6 +357,10 @@ onBeforeUnmount(() => {
 
 .dqu-panel__stat--ok strong {
   color: var(--color-success, #15803d);
+}
+
+.dqu-panel__stat--warn strong {
+  color: var(--color-warning, #b45309);
 }
 
 .dqu-panel__toolbar-actions {
@@ -396,9 +424,15 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(22rem, 1.05fr);
+  grid-template-columns: minmax(0, 1fr) minmax(28rem, 1.15fr);
   gap: var(--space-4);
   overflow: hidden;
+}
+
+@media (min-width: 1280px) {
+  .dqu-panel__main {
+    grid-template-columns: minmax(0, 0.88fr) minmax(36rem, 1.12fr);
+  }
 }
 
 .dqu-panel__list-wrap {
@@ -456,6 +490,12 @@ onBeforeUnmount(() => {
 
 .dqu-panel__row--hidden {
   opacity: 0.72;
+}
+
+.dqu-panel__row--maintenance:not(.dqu-panel__row--hidden) {
+  box-shadow:
+    inset 3px 0 0 var(--color-warning, #d97706),
+    var(--shadow-sm);
 }
 
 .dqu-panel__row--active {
@@ -518,9 +558,24 @@ onBeforeUnmount(() => {
 }
 
 .dqu-panel__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0;
   font-size: 0.9375rem;
   font-weight: 700;
+}
+
+.dqu-panel__pill {
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-full);
+  background: var(--color-warning-tint-bg, #fef3c7);
+  color: var(--color-warning, #b45309);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .dqu-panel__meta {
@@ -631,8 +686,10 @@ onBeforeUnmount(() => {
 .dqu-panel__preview {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
   gap: var(--space-3);
+  overflow: hidden;
 }
 
 .dqu-panel__preview-head {
@@ -669,7 +726,7 @@ onBeforeUnmount(() => {
 
 .dqu-panel__mode {
   height: 1.625rem;
-  padding: 0 0.5rem;
+  padding: 0 0.4375rem;
   border: none;
   border-radius: calc(var(--radius-sm) - 2px);
   background: transparent;
@@ -692,13 +749,14 @@ onBeforeUnmount(() => {
   overflow: auto;
   padding: var(--space-2);
   border-radius: var(--radius-lg);
-  background: var(--color-surface-muted);
+  background: var(--color-bg);
   box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .dqu-panel__preview-empty {
-  margin: var(--space-3) var(--space-2) 0;
-  font-size: 0.75rem;
+  margin: 0;
+  padding: var(--space-8) var(--space-4);
+  font-size: 0.8125rem;
   color: var(--color-text-muted);
   text-align: center;
 }

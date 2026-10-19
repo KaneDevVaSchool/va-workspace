@@ -47,6 +47,7 @@ class MyDashboardService
                 'status_label' => TaskEnums::STATUS_LABELS[$task->status] ?? $task->status,
                 'progress_percent' => $task->progress_percent,
                 'end_date' => $task->end_date,
+                'due_time' => $task->due_time,
                 'is_overdue' => $isOverdue,
             ];
         }

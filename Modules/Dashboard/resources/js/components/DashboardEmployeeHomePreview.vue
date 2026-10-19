@@ -126,6 +126,45 @@ const tabs = [
               :active-key="activeUtilityKey"
             />
           </section>
+
+          <section class="employee-home__section">
+            <div class="section-head">
+              <h2 class="section-head__title">Việc thường ngày</h2>
+              <span class="section-head__link">Xem tất cả</span>
+            </div>
+            <p class="employee-home__hint">Công việc được giao từ dự án và module công việc.</p>
+            <ul class="task-list">
+              <li class="task-card task-card--upcoming">
+                <span class="task-card__check task-card__check--preview" aria-hidden="true"></span>
+                <div class="task-card__main">
+                  <p class="task-card__title">Cập nhật tiến độ việc được giao</p>
+                  <p class="task-card__project">Dự án triển khai hệ thống</p>
+                </div>
+                <span class="task-card__time">16:30</span>
+              </li>
+            </ul>
+          </section>
+
+          <section class="employee-home__section employee-home__section--last">
+            <div class="section-head">
+              <h2 class="section-head__title">Thông báo mới</h2>
+              <span class="section-head__link">Xem tất cả</span>
+            </div>
+            <p class="employee-home__hint">Ba tin mới nhất trên bảng tin chung.</p>
+            <ul class="notice-list">
+              <li>
+                <span class="notice-card notice-card--preview">
+                  <span class="notice-card__icon notice-card__icon--tertiary" aria-hidden="true">
+                    <AppIcon name="megaphone" :size="20" :stroke-width="1.8" />
+                  </span>
+                  <span class="notice-card__body">
+                    <span class="notice-card__title">Thông báo nghỉ lễ</span>
+                    <span class="notice-card__meta">Phòng Nhân sự • Hôm nay</span>
+                  </span>
+                </span>
+              </li>
+            </ul>
+          </section>
         </div>
       </main>
 
@@ -278,6 +317,115 @@ const tabs = [
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.employee-home__section--last {
+  padding-bottom: var(--space-2);
+}
+
+.employee-home__hint {
+  margin: calc(-1 * var(--space-1)) 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
+.task-list,
+.notice-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.task-card--upcoming {
+  background: var(--color-tertiary-surface);
+  box-shadow: inset 0 0 0 1px var(--color-tertiary-200);
+}
+
+.task-card__check--preview {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-full);
+  box-shadow: inset 0 0 0 2.5px var(--color-tertiary);
+}
+
+.task-card__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-card__title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.task-card__project {
+  margin: 2px 0 0;
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+}
+
+.task-card__time {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-tertiary);
+}
+
+.notice-card--preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.notice-card__icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+  color: var(--color-on-tertiary);
+}
+
+.notice-card__icon--tertiary {
+  background: var(--color-tertiary);
+}
+
+.notice-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notice-card__title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.notice-card__meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
 }
 
 .section-head {

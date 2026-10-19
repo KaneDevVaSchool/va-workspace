@@ -3,7 +3,14 @@ import { useRouter } from 'vue-router';
 import { showClientToast } from '@/lib/clientToast';
 
 export function navigateQuickUtility(router, item) {
-  if (!item || item.link_type === 'none' || !item.link_target) {
+  if (!item) {
+    return false;
+  }
+  if (item.is_under_maintenance) {
+    showClientToast('info', 'Tiện ích này đang bảo trì. Vui lòng thử lại sau.');
+    return false;
+  }
+  if (item.link_type === 'none' || !item.link_target) {
     return false;
   }
   if (item.link_type === 'route') {

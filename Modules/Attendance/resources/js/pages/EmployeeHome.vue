@@ -1,54 +1,34 @@
 <script setup>
 //
 // Trang chủ "của tôi" bản mobile nhân viên — render bởi DashboardMe.vue khi
-// useEmployeeMobileView() = true. Dữ liệu mock cố định, chưa gọi API (UI-only).
+// useEmployeeMobileView() = true.
 //
-import { computed, onMounted, reactive } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { RouterLink } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
+import { showClientToast } from '@/lib/clientToast';
+import { EMPLOYEE_SHELL_BLOCK_MESSAGE } from '@/lib/employeeMobileShellRoutes';
 import QuickUtilitiesGrid from '@modules/Dashboard/resources/js/components/QuickUtilitiesGrid.vue';
 import { useDashboardQuickUtilities } from '@modules/Dashboard/resources/js/composables/useDashboardQuickUtilities';
+import { unwrapOverview, asList } from '@modules/Dashboard/resources/js/utils/dashboardPayload';
+import { formatSocialTime } from '@modules/Social/resources/js/lib/formatSocialTime.js';
+
+const SOCIAL_HOME_LIMIT = 3;
 
 const { utilities, loading: utilitiesLoading, load: loadUtilities, openUtility } = useDashboardQuickUtilities();
 
-const checklist = reactive([
-  {
-    id: 1,
-    title: 'Điểm danh lớp 10A1 – tiết 1',
-    time: '07:00',
-    status: 'done',
-  },
-  {
-    id: 2,
-    title: 'Nộp báo cáo tuần cho trưởng phòng',
-    time: '11:00',
-    status: 'overdue',
-    hint: 'Quá hạn nhẹ',
-  },
-  {
-    id: 3,
-    title: 'Họp giao ban Phòng Công nghệ',
-    time: '14:00',
-    status: 'upcoming',
-    hint: 'Sắp diễn ra',
-  },
-  {
-    id: 4,
-    title: 'Cập nhật tiến độ việc "Bảo trì hệ thống"',
-    time: '16:30',
-    status: 'pending',
-  },
-]);
+const overview = ref(null);
+const overviewLoading = ref(true);
+const feedPosts = ref([]);
+const feedLoading = ref(true);
+const taskBusyId = ref(null);
 
-const doneCount = computed(() => checklist.filter((item) => item.status === 'done').length);
+const tasks = computed(() => {
+  const rows = asList(overview.value?.tasks).filter((task) => task.status !== 'cancelled');
+  return [...rows].sort((a, b) => taskSortRank(a) - taskSortRank(b));
+});
 
-function toggleDone(item) {
-  if (item.status === 'done') {
-    item.status = 'pending';
-    return;
-  }
-  item.status = 'done';
-  item.hint = undefined;
-}
+const doneCount = computed(() => tasks.value.filter((task) => task.status === 'completed').length);
 
 const attendanceStatus = {
   checkedInAt: '07:52',
@@ -56,39 +36,147 @@ const attendanceStatus = {
 
 onMounted(() => {
   loadUtilities();
+  loadOverview();
+  loadFeedPosts();
 });
 
-const notifications = [
-  {
-    id: 1,
-    title: 'Thông báo nghỉ lễ 30/4 – 1/5',
-    meta: 'Phòng Nhân sự • 2 giờ trước',
-    icon: 'megaphone',
-    tone: 'tertiary',
-  },
-  {
-    id: 2,
-    title: 'Chúc mừng thành tích thi đua tháng 9',
-    meta: 'Ban Giám hiệu • Hôm qua',
-    icon: 'star',
-    tone: 'success',
-  },
-];
+async function loadOverview() {
+  overviewLoading.value = true;
+  try {
+    const { data } = await window.axios.get('/api/dashboard/me/overview');
+    overview.value = unwrapOverview(data);
+  } catch (error) {
+    overview.value = null;
+    showClientToast('error', error?.response?.data?.message || 'Không tải được công việc được giao.');
+  } finally {
+    overviewLoading.value = false;
+  }
+}
 
-const upcomingEvent = {
-  weekday: 'THỨ 6',
-  day: '09',
-  title: 'Sinh hoạt chuyên môn Tổ Toán',
-  time: '08:00 – 09:30',
-  place: 'Phòng A204',
-};
+async function loadFeedPosts() {
+  feedLoading.value = true;
+  try {
+    const { data } = await window.axios.get('/api/social/posts', {
+      params: {
+        page: 1,
+        per_page: SOCIAL_HOME_LIMIT,
+        scope: 'all',
+        post_scope: 'company',
+      },
+    });
+    feedPosts.value = Array.isArray(data?.posts) ? data.posts.slice(0, SOCIAL_HOME_LIMIT) : [];
+  } catch (error) {
+    feedPosts.value = [];
+    showClientToast('error', error?.response?.data?.message || 'Không tải được thông báo bảng tin.');
+  } finally {
+    feedLoading.value = false;
+  }
+}
+
+function taskSortRank(task) {
+  if (task.status === 'completed') return 4;
+  if (task.is_overdue) return 0;
+  if (task.end_date && isSameCalendarDay(task.end_date, new Date())) return 1;
+  if (task.status === 'in_progress') return 2;
+  return 3;
+}
+
+function isSameCalendarDay(value, date) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.getFullYear() === date.getFullYear()
+    && d.getMonth() === date.getMonth()
+    && d.getDate() === date.getDate();
+}
+
+function taskCardStatus(task) {
+  if (task.status === 'completed') return 'done';
+  if (task.is_overdue) return 'overdue';
+  if (task.end_date && isSameCalendarDay(task.end_date, new Date())) return 'upcoming';
+  return 'pending';
+}
+
+function taskCardHint(task) {
+  if (task.status === 'completed') return undefined;
+  if (task.is_overdue) return 'Quá hạn';
+  if (task.end_date && isSameCalendarDay(task.end_date, new Date())) return 'Hôm nay';
+  return undefined;
+}
+
+function formatTaskTime(task) {
+  if (task.due_time && typeof task.due_time === 'string' && task.due_time.length >= 5) {
+    return task.due_time.slice(0, 5);
+  }
+  if (task.end_date) {
+    const d = new Date(task.end_date);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+    }
+  }
+  return '—';
+}
+
+function plainTextFromHtml(html) {
+  if (!html || typeof html !== 'string') return '';
+  if (typeof document === 'undefined') {
+    return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return (div.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function postTitle(post) {
+  const text = plainTextFromHtml(post?.content);
+  if (!text) return 'Bài viết bảng tin';
+  return text.length > 96 ? `${text.slice(0, 96)}…` : text;
+}
+
+function postAuthorLabel(post) {
+  if (post?.is_anonymous) return post.anonymous_name || 'Ẩn danh';
+  return post?.author?.name || 'Bảng tin chung';
+}
+
+function postMeta(post) {
+  return `${postAuthorLabel(post)} • ${formatSocialTime(post?.created_at)}`;
+}
+
+function postIconTone(post) {
+  if (post?.pin_scope === 'system') return 'tertiary';
+  if (post?.is_pinned) return 'success';
+  return 'tertiary';
+}
+
+function postIconName(post) {
+  if (post?.pin_scope === 'system' || post?.is_pinned) return 'megaphone';
+  return 'fileText';
+}
+
+function promptDesktopOnly(event) {
+  event?.preventDefault?.();
+  showClientToast('info', EMPLOYEE_SHELL_BLOCK_MESSAGE, { duration: 9000 });
+}
+
+async function toggleDone(task) {
+  if (taskBusyId.value === task.id) return;
+  const nextStatus = task.status === 'completed' ? 'in_progress' : 'completed';
+  taskBusyId.value = task.id;
+  try {
+    await window.axios.put(`/api/project/tasks/${task.id}`, { status: nextStatus });
+    task.status = nextStatus;
+    if (nextStatus === 'completed') {
+      task.is_overdue = false;
+    }
+    await loadOverview();
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không cập nhật được trạng thái công việc.');
+  } finally {
+    taskBusyId.value = null;
+  }
+}
 
 function goAttendance() {
   openUtility({ link_type: 'route', link_target: 'employee.attendance' });
-}
-
-function noopLink(event) {
-  event.preventDefault();
 }
 </script>
 
@@ -101,12 +189,18 @@ function noopLink(event) {
         </span>
         <div class="stat-card__body">
           <p class="stat-card__label">Việc hôm nay</p>
-          <p class="stat-card__value">{{ doneCount }}/{{ checklist.length }} đã xong</p>
+          <p class="stat-card__value">
+            {{
+              overviewLoading
+                ? '…'
+                : `${doneCount}/${tasks.length || 0} đã xong`
+            }}
+          </p>
         </div>
         <div class="stat-card__progress" aria-hidden="true">
           <div
             class="stat-card__progress-fill"
-            :style="{ width: `${checklist.length ? (doneCount / checklist.length) * 100 : 0}%` }"
+            :style="{ width: `${tasks.length ? (doneCount / tasks.length) * 100 : 0}%` }"
           ></div>
         </div>
       </div>
@@ -127,7 +221,7 @@ function noopLink(event) {
     <section class="employee-home__section">
       <div class="section-head">
         <h2 class="section-head__title">Tiện ích nhanh</h2>
-        <a href="#" class="section-head__link" @click="noopLink">Xem tất cả</a>
+        <RouterLink :to="{ name: 'employee.utilities' }" class="section-head__link">Xem tất cả</RouterLink>
       </div>
       <QuickUtilitiesGrid
         :items="utilities"
@@ -140,78 +234,72 @@ function noopLink(event) {
     <section class="employee-home__section">
       <div class="section-head">
         <h2 class="section-head__title">Việc thường ngày</h2>
-        <a href="#" class="section-head__link" @click="noopLink">Xem tất cả</a>
+        <button type="button" class="section-head__link section-head__link--btn" @click="promptDesktopOnly">
+          Xem tất cả
+        </button>
       </div>
       <p class="employee-home__hint">
-        <AppIcon name="target" :size="14" class="employee-home__hint-icon" />
-        Chạm vào vòng tròn để đánh dấu hoàn thành
+        <AppIcon name="listChecks" :size="14" class="employee-home__hint-icon" />
+        Công việc được giao từ dự án và module công việc. Chạm vòng tròn để đánh dấu hoàn thành.
       </p>
-      <ul class="task-list">
+      <p v-if="overviewLoading" class="employee-home__loading">Đang tải công việc…</p>
+      <p v-else-if="tasks.length === 0" class="employee-home__empty">Bạn chưa có công việc nào được giao.</p>
+      <ul v-else class="task-list">
         <li
-          v-for="item in checklist"
+          v-for="item in tasks"
           :key="item.id"
           class="task-card"
-          :class="`task-card--${item.status}`"
+          :class="`task-card--${taskCardStatus(item)}`"
         >
           <button
             type="button"
             class="task-card__check"
-            :class="{ 'task-card__check--done': item.status === 'done' }"
-            :aria-label="item.status === 'done' ? `Bỏ đánh dấu xong: ${item.title}` : `Đánh dấu đã xong: ${item.title}`"
+            :class="{ 'task-card__check--done': item.status === 'completed' }"
+            :disabled="taskBusyId === item.id"
+            :aria-label="item.status === 'completed' ? `Bỏ đánh dấu xong: ${item.title}` : `Đánh dấu đã xong: ${item.title}`"
             @click="toggleDone(item)"
           >
-            <AppIcon v-if="item.status === 'done'" name="check" :size="16" :stroke-width="2.5" />
+            <AppIcon v-if="item.status === 'completed'" name="check" :size="16" :stroke-width="2.5" />
           </button>
           <div class="task-card__main">
-            <p class="task-card__title" :class="{ 'task-card__title--done': item.status === 'done' }">
+            <p class="task-card__title" :class="{ 'task-card__title--done': item.status === 'completed' }">
               {{ item.title }}
             </p>
-            <p v-if="item.hint" class="task-card__hint">{{ item.hint }}</p>
+            <p v-if="item.project_name" class="task-card__project">{{ item.project_name }}</p>
+            <p v-if="taskCardHint(item)" class="task-card__hint">{{ taskCardHint(item) }}</p>
           </div>
-          <span class="task-card__time">{{ item.time }}</span>
-        </li>
-      </ul>
-    </section>
-
-    <section class="employee-home__section">
-      <div class="section-head">
-        <h2 class="section-head__title">Thông báo mới</h2>
-        <a href="#" class="section-head__link" @click="noopLink">Xem tất cả</a>
-      </div>
-      <ul class="notice-list">
-        <li v-for="note in notifications" :key="note.id">
-          <button type="button" class="notice-card">
-            <span class="notice-card__icon" :class="`notice-card__icon--${note.tone}`">
-              <AppIcon :name="note.icon" :size="20" :stroke-width="1.8" />
-            </span>
-            <span class="notice-card__body">
-              <span class="notice-card__title">{{ note.title }}</span>
-              <span class="notice-card__meta">{{ note.meta }}</span>
-            </span>
-            <AppIcon name="chevronRight" :size="18" class="notice-card__chevron" />
-          </button>
+          <span class="task-card__time">{{ formatTaskTime(item) }}</span>
         </li>
       </ul>
     </section>
 
     <section class="employee-home__section employee-home__section--last">
       <div class="section-head">
-        <h2 class="section-head__title">Lịch sắp tới</h2>
-        <a href="#" class="section-head__link" @click="noopLink">Xem lịch</a>
+        <h2 class="section-head__title">Thông báo mới</h2>
+        <button type="button" class="section-head__link section-head__link--btn" @click="promptDesktopOnly">
+          Xem tất cả
+        </button>
       </div>
-      <article class="schedule-card">
-        <div class="schedule-card__date">
-          <span class="schedule-card__weekday">{{ upcomingEvent.weekday }}</span>
-          <span class="schedule-card__day">{{ upcomingEvent.day }}</span>
-        </div>
-        <div class="schedule-card__body">
-          <h3 class="schedule-card__title">{{ upcomingEvent.title }}</h3>
-          <p class="schedule-card__meta">
-            <AppIcon name="clock" :size="14" class="schedule-card__meta-icon" />
-            {{ upcomingEvent.time }} • {{ upcomingEvent.place }}
-          </p>
-        </div>
-      </article>
+      <p class="employee-home__hint">
+        <AppIcon name="megaphone" :size="14" class="employee-home__hint-icon" />
+        Ba tin mới nhất trên bảng tin chung. Xem thêm trên máy tính.
+      </p>
+      <p v-if="feedLoading" class="employee-home__loading">Đang tải thông báo…</p>
+      <p v-else-if="feedPosts.length === 0" class="employee-home__empty">Chưa có bài đăng nào trên bảng tin chung.</p>
+      <ul v-else class="notice-list">
+        <li v-for="note in feedPosts" :key="note.id">
+          <button type="button" class="notice-card" @click="promptDesktopOnly">
+            <span class="notice-card__icon" :class="`notice-card__icon--${postIconTone(note)}`">
+              <AppIcon :name="postIconName(note)" :size="20" :stroke-width="1.8" />
+            </span>
+            <span class="notice-card__body">
+              <span class="notice-card__title">{{ postTitle(note) }}</span>
+              <span class="notice-card__meta">{{ postMeta(note) }}</span>
+            </span>
+            <AppIcon name="chevronRight" :size="18" class="notice-card__chevron" />
+          </button>
+        </li>
+      </ul>
     </section>
   </div>
 </template>
@@ -356,81 +444,35 @@ function noopLink(event) {
   text-decoration: none;
 }
 
-.utility-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-3) var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.utility-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
+.section-head__link--btn {
   padding: 0;
   border: none;
   background: transparent;
-  cursor: pointer;
   font-family: inherit;
-}
-
-.utility-tile__icon {
-  display: grid;
-  place-items: center;
-  width: 3.25rem;
-  height: 3.25rem;
-  border-radius: var(--radius-full);
-}
-
-.utility-tile__icon--tertiary {
-  background: var(--color-tertiary-surface);
-  color: var(--color-tertiary);
-}
-
-.utility-tile__icon--gold {
-  background: var(--color-gold-surface);
-  color: var(--color-gold-600);
-}
-
-.utility-tile__icon--primary {
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
-}
-
-.utility-tile__icon--secondary {
-  background: var(--color-secondary-surface);
-  color: var(--color-secondary);
-}
-
-.utility-tile__icon--muted {
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
-}
-
-.utility-tile__label {
-  font-size: 0.6875rem;
-  font-weight: 500;
-  color: var(--color-text);
-  text-align: center;
-  line-height: 1.25;
+  cursor: pointer;
 }
 
 .employee-home__hint {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-1);
   margin: calc(-1 * var(--space-1)) 0 0;
   font-size: 0.75rem;
+  line-height: 1.4;
   color: var(--color-text-muted);
 }
 
 .employee-home__hint-icon {
   flex-shrink: 0;
+  margin-top: 1px;
   opacity: 0.7;
+}
+
+.employee-home__loading,
+.employee-home__empty {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
 }
 
 .task-list {
@@ -479,6 +521,11 @@ function noopLink(event) {
   cursor: pointer;
 }
 
+.task-card__check:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .task-card--overdue .task-card__check {
   box-shadow: inset 0 0 0 2.5px var(--color-warning);
 }
@@ -508,6 +555,13 @@ function noopLink(event) {
 .task-card__title--done {
   color: var(--color-text-muted);
   text-decoration: line-through;
+}
+
+.task-card__project {
+  margin: 2px 0 0;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .task-card__hint {
@@ -606,85 +660,9 @@ function noopLink(event) {
   color: var(--color-text-muted);
 }
 
-.schedule-card {
-  display: flex;
-  align-items: stretch;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.schedule-card__date {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 3.5rem;
-  padding: var(--space-2) var(--space-1);
-  border-radius: var(--radius-md);
-  background: var(--color-tertiary-surface);
-  color: var(--color-tertiary);
-}
-
-.schedule-card__weekday {
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.schedule-card__day {
-  font-size: 1.375rem;
-  font-weight: 800;
-  line-height: 1.1;
-}
-
-.schedule-card__body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--space-1);
-}
-
-.schedule-card__title {
-  margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: var(--color-text);
-  line-height: 1.35;
-}
-
-.schedule-card__meta {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
-.schedule-card__meta-icon {
-  flex-shrink: 0;
-  opacity: 0.85;
-}
-
 @media (max-width: 360px) {
   .employee-home__stat-row {
     grid-template-columns: 1fr;
-  }
-
-  .utility-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: var(--space-2) var(--space-1);
-  }
-
-  .utility-tile__icon {
-    width: 2.875rem;
-    height: 2.875rem;
   }
 }
 </style>

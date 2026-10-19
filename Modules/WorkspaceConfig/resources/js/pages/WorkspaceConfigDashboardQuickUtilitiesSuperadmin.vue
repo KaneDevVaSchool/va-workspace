@@ -27,7 +27,22 @@ const form = reactive({
   link_type: 'none',
   link_target: '',
   is_visible: true,
+  is_under_maintenance: false,
 });
+
+const toneLabels = {
+  primary: 'Xanh (mặc định)',
+  secondary: 'Tím',
+  tertiary: 'Xanh ngọc',
+  gold: 'Vàng',
+  muted: 'Xám',
+};
+
+const linkTypeLabels = {
+  none: 'Không mở trang (chỉ hiển thị tên)',
+  route: 'Mở trang trong Workspace',
+  url: 'Mở website bên ngoài',
+};
 
 const editingKey = ref(null);
 
@@ -48,6 +63,7 @@ const previewUtilities = computed(() => {
     link_type: form.link_type,
     link_target: form.link_target,
     is_visible: form.is_visible,
+    is_under_maintenance: form.is_under_maintenance,
   };
 
   if (!draft.is_visible) {
@@ -78,6 +94,7 @@ function resetForm() {
   form.link_type = 'none';
   form.link_target = '';
   form.is_visible = true;
+  form.is_under_maintenance = false;
   editingKey.value = null;
 }
 
@@ -111,6 +128,7 @@ function openEdit(item) {
   form.link_type = item.link_type;
   form.link_target = item.link_target || '';
   form.is_visible = Boolean(item.is_visible);
+  form.is_under_maintenance = Boolean(item.is_under_maintenance);
   dialogOpen.value = true;
 }
 
@@ -132,6 +150,7 @@ async function saveForm() {
       link_type: form.link_type,
       link_target: form.link_type === 'none' ? null : form.link_target,
       is_visible: form.is_visible,
+      is_under_maintenance: form.is_under_maintenance,
     };
 
     if (dialogMode.value === 'create') {
@@ -160,9 +179,28 @@ async function toggleVisible(item) {
       is_visible: !item.is_visible,
     });
     item.is_visible = !item.is_visible;
-    showClientToast('success', item.is_visible ? `Đã hiện "${item.label}".` : `Đã ẩn "${item.label}".`);
+    showClientToast(
+      'success',
+      item.is_visible ? `Đã bật hiển thị «${item.label}».` : `Đã tắt hiển thị «${item.label}».`,
+    );
   } catch (error) {
     showClientToast('error', error?.response?.data?.message || 'Không đổi được trạng thái hiển thị.');
+  }
+}
+
+async function toggleMaintenance(item) {
+  try {
+    const next = !item.is_under_maintenance;
+    await window.axios.put(`/api/dashboard/quick-utilities/${item.utility_key}`, {
+      is_under_maintenance: next,
+    });
+    item.is_under_maintenance = next;
+    showClientToast(
+      'success',
+      next ? `«${item.label}» đang bảo trì — nhân viên không mở được.` : `Đã tắt bảo trì «${item.label}».`,
+    );
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không đổi được chế độ bảo trì.');
   }
 }
 
@@ -180,7 +218,7 @@ async function setAllVisible(visible) {
     targets.forEach((item) => {
       item.is_visible = visible;
     });
-    showClientToast('success', visible ? 'Đã hiện tất cả tiện ích.' : 'Đã ẩn tất cả tiện ích.');
+    showClientToast('success', visible ? 'Đã bật hiển thị tất cả lối tắt.' : 'Đã tắt hiển thị tất cả lối tắt.');
   } catch (error) {
     showClientToast('error', error?.response?.data?.message || 'Không cập nhật hàng loạt được.');
     await loadUtilities();
@@ -250,12 +288,12 @@ onMounted(loadUtilities);
 <template>
   <section class="dqu-page">
     <PageHeader
-      title="Tiện ích nhanh Dashboard"
+      title="Lối tắt trên Dashboard"
       icon="sparkles"
       :breadcrumbs="[
         { label: 'Trang chủ', to: { name: 'home' } },
         { label: 'Cấu hình Workspace', to: { name: 'superadmin.workspace-config.overview' } },
-        { label: 'Tiện ích nhanh' },
+        { label: 'Lối tắt Dashboard' },
       ]"
     >
       <template #actions>
@@ -276,9 +314,10 @@ onMounted(loadUtilities);
 
     <div class="dqu-page__body">
       <p class="dqu-page__lead">
-        Chỉnh danh sách bên trái; bên phải là bản xem trước <strong>cùng template và theme</strong> với
-        <strong>Dashboard của tôi</strong> (desktop) và trang chủ mobile nhân viên. Route Vue dùng tên route (ví dụ
-        <code>employee.attendance</code>); URL mở tab mới.
+        <strong>Bên trái:</strong> danh sách lối tắt — bật/tắt hiển thị, sắp thứ tự, bật bảo trì khi tính năng tạm ngưng.
+        <strong>Bên phải:</strong> hình minh hoạ đúng giao diện nhân viên (máy tính, điện thoại trang chủ, hoặc màn
+        «Xem tất cả» trên điện thoại). Công tắc xanh = nhân viên thấy lối tắt; nhãn <strong>Bảo trì</strong> = vẫn thấy
+        tên nhưng không mở được.
       </p>
 
       <QuickUtilitiesConfigPanel
@@ -288,6 +327,7 @@ onMounted(loadUtilities);
         :busy="saving"
         :active-key="highlightKey"
         @toggle="toggleVisible"
+        @toggle-maintenance="toggleMaintenance"
         @edit="openEdit"
         @delete="askDelete"
         @move="moveItem"
@@ -315,36 +355,54 @@ onMounted(loadUtilities);
             <div class="dqu-dialog__body hide-scrollbar">
               <form class="dqu-form" @submit.prevent="saveForm">
                 <label v-if="dialogMode === 'create'" class="dqu-field">
-                  <span class="dqu-field__label">Mã (tuỳ chọn)</span>
-                  <input v-model="form.utility_key" class="dqu-field__input" type="text" placeholder="vd: payslip" />
+                  <span class="dqu-field__label">Mã nội bộ (không bắt buộc)</span>
+                  <input v-model="form.utility_key" class="dqu-field__input" type="text" placeholder="vd: phieu_luong" />
+                  <span class="dqu-field__hint">Chỉ dùng để phân biệt trong hệ thống, nhân viên không thấy.</span>
                 </label>
                 <label class="dqu-field">
-                  <span class="dqu-field__label">Tên hiển thị</span>
-                  <input v-model="form.label" class="dqu-field__input" type="text" required maxlength="120" />
+                  <span class="dqu-field__label">Tên trên màn hình</span>
+                  <input v-model="form.label" class="dqu-field__input" type="text" required maxlength="120" placeholder="vd: Chấm công" />
                 </label>
                 <label class="dqu-field">
-                  <span class="dqu-field__label">Icon</span>
-                  <input v-model="form.icon" class="dqu-field__input" type="text" required maxlength="64" />
+                  <span class="dqu-field__label">Biểu tượng (tên icon)</span>
+                  <input v-model="form.icon" class="dqu-field__input" type="text" required maxlength="64" placeholder="vd: clock" />
+                  <span class="dqu-field__hint">Nhập tên icon có sẵn, ví dụ clock, calendar, users.</span>
                 </label>
                 <label class="dqu-field">
-                  <span class="dqu-field__label">Màu nhấn</span>
+                  <span class="dqu-field__label">Màu ô biểu tượng</span>
                   <select v-model="form.tone" class="dqu-field__input">
-                    <option v-for="tone in meta.tones" :key="tone" :value="tone">{{ tone }}</option>
+                    <option v-for="tone in meta.tones" :key="tone" :value="tone">{{ toneLabels[tone] || tone }}</option>
                   </select>
                 </label>
                 <label class="dqu-field">
-                  <span class="dqu-field__label">Loại liên kết</span>
+                  <span class="dqu-field__label">Khi nhân viên bấm vào</span>
                   <select v-model="form.link_type" class="dqu-field__input">
-                    <option v-for="type in meta.link_types" :key="type" :value="type">{{ type }}</option>
+                    <option v-for="type in meta.link_types" :key="type" :value="type">{{ linkTypeLabels[type] || type }}</option>
                   </select>
                 </label>
                 <label v-if="form.link_type !== 'none'" class="dqu-field dqu-field--wide">
-                  <span class="dqu-field__label">{{ form.link_type === 'route' ? 'Tên route Vue' : 'URL đầy đủ' }}</span>
-                  <input v-model="form.link_target" class="dqu-field__input" type="text" required maxlength="512" />
+                  <span class="dqu-field__label">{{
+                    form.link_type === 'route' ? 'Tên trang trong app (kỹ thuật)' : 'Địa chỉ website (https://…)'
+                  }}</span>
+                  <input
+                    v-model="form.link_target"
+                    class="dqu-field__input"
+                    type="text"
+                    required
+                    maxlength="512"
+                    :placeholder="form.link_type === 'route' ? 'vd: employee.attendance' : 'https://…'"
+                  />
+                  <span v-if="form.link_type === 'route'" class="dqu-field__hint">
+                    Hỏi bộ phận kỹ thuật nếu không chắc tên trang.
+                  </span>
                 </label>
                 <label class="dqu-field dqu-field--check">
                   <input v-model="form.is_visible" type="checkbox" />
-                  <span>Hiển thị trên Dashboard</span>
+                  <span>Cho nhân viên thấy lối tắt này</span>
+                </label>
+                <label class="dqu-field dqu-field--check">
+                  <input v-model="form.is_under_maintenance" type="checkbox" />
+                  <span>Đang bảo trì (hiện tên nhưng không mở được)</span>
                 </label>
               </form>
             </div>
@@ -363,7 +421,7 @@ onMounted(loadUtilities);
         <div v-if="deleteKey" class="dqu-alert" role="alertdialog" aria-modal="true" aria-labelledby="dqu-delete-title">
           <div class="dqu-alert__panel">
             <h2 id="dqu-delete-title" class="dqu-alert__title">Xoá tiện ích này?</h2>
-            <p class="dqu-alert__text">Thao tác không hoàn tác. Người dùng sẽ không còn thấy lối tắt trên Dashboard.</p>
+            <p class="dqu-alert__text">Không thể hoàn tác. Nhân viên sẽ không còn thấy lối tắt này.</p>
             <div class="dqu-alert__actions">
               <button type="button" class="dqu-page__btn" :disabled="saving" @click="cancelDelete">Huỷ</button>
               <button type="button" class="dqu-page__btn dqu-page__btn--danger" :disabled="saving" @click="confirmDelete">
@@ -549,6 +607,12 @@ onMounted(loadUtilities);
 .dqu-field__label {
   font-size: 0.75rem;
   font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.dqu-field__hint {
+  font-size: 0.6875rem;
+  line-height: 1.4;
   color: var(--color-text-muted);
 }
 

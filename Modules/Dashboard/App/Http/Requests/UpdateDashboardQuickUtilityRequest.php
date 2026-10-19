@@ -22,6 +22,7 @@ class UpdateDashboardQuickUtilityRequest extends FormRequest
             'link_type' => ['sometimes', 'string', Rule::in(DashboardQuickUtilityService::LINK_TYPES)],
             'link_target' => ['sometimes', 'nullable', 'string', 'max:512'],
             'is_visible' => ['sometimes', 'boolean'],
+            'is_under_maintenance' => ['sometimes', 'boolean'],
         ];
     }
 }

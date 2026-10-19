@@ -17,6 +17,8 @@ const props = defineProps({
   utilitiesLoading: { type: Boolean, default: false },
   preview: { type: Boolean, default: false },
   activeUtilityKey: { type: String, default: null },
+  /** Giữ layout desktop (2 cột hero, 3 KPI, donut+bảng) dù viewport hẹp — xem trước cấu hình */
+  forceDesktopLayout: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['utility-select']);
@@ -86,7 +88,13 @@ function onUtilitySelect(item) {
 </script>
 
 <template>
-  <div class="dashboard-me" :class="{ 'dashboard-me--preview': preview }">
+  <div
+    class="dashboard-me"
+    :class="{
+      'dashboard-me--preview': preview,
+      'dashboard-me--desktop-layout': forceDesktopLayout,
+    }"
+  >
     <section class="dashboard-me__hero">
       <div class="dashboard-me__hero-copy">
         <p class="dashboard-me__hero-kicker">{{ greeting }}, {{ displayName }}</p>
@@ -504,5 +512,27 @@ function onUtilitySelect(item) {
   .dashboard-me__kpis {
     grid-template-columns: 1fr;
   }
+}
+
+/* Xem trước admin: không co theo breakpoint — đúng desktop >1024px */
+.dashboard-me.dashboard-me--desktop-layout {
+  min-width: 56rem;
+  padding: var(--space-4);
+}
+
+.dashboard-me.dashboard-me--desktop-layout .dashboard-me__hero {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+}
+
+.dashboard-me.dashboard-me--desktop-layout .dashboard-me__hero-stats {
+  justify-content: flex-end;
+}
+
+.dashboard-me.dashboard-me--desktop-layout .dashboard-me__kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-me.dashboard-me--desktop-layout .dashboard-me__grid {
+  grid-template-columns: 5fr 7fr;
 }
 </style>
