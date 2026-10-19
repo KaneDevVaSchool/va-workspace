@@ -4,6 +4,7 @@
 // visualViewport.scroll (hay làm shell thấp hơn màn → tabbar “nổi” lên).
 //
 import { onBeforeUnmount, onMounted } from 'vue';
+import { syncEmployeeSafeAreaInsets } from '@/lib/employeeSafeArea';
 
 const ROOT_VAR = '--employee-mobile-vh';
 
@@ -42,11 +43,13 @@ export function useEmployeeMobileViewport() {
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => {
       syncMobileViewportHeight();
+      syncEmployeeSafeAreaInsets();
     });
   }
 
   onMounted(() => {
     syncMobileViewportHeight();
+    syncEmployeeSafeAreaInsets();
     scheduleSync();
     window.addEventListener('resize', scheduleSync, { passive: true });
     window.addEventListener('orientationchange', scheduleSync, { passive: true });

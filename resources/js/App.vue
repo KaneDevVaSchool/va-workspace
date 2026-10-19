@@ -19,6 +19,7 @@ import PwaUpdatePrompt from './components/PwaUpdatePrompt.vue';
 import EmployeeMobileLayout from '@modules/Attendance/resources/js/layouts/EmployeeMobileLayout.vue';
 import { useEmployeeMobileView } from './composables/useEmployeeMobileView';
 import { isPwaStandalone, setPwaShellSurface } from './lib/pwaStandalone';
+import { syncEmployeeSafeAreaInsets } from './lib/employeeSafeArea';
 
 const route = useRoute();
 const { isEmployeeMobile } = useEmployeeMobileView();
@@ -35,6 +36,7 @@ function syncPwaShellSurface() {
 
   root.classList.toggle('employee-mobile-browser', employeeTabShell && !isPwaStandalone());
   root.classList.toggle('employee-mobile-pwa', employeeTabShell && isPwaStandalone());
+  syncEmployeeSafeAreaInsets();
 
   if (route.meta.requiresAuth) {
     if (employeeTabShell) {
