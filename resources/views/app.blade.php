@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi" data-theme="light">
+<html lang="vi" data-theme="light" data-pwa-app-root>
 <head>
     <meta charset="utf-8">
     @php
@@ -43,7 +43,17 @@
                 window.matchMedia('(display-mode: standalone)').matches ||
                 window.matchMedia('(display-mode: fullscreen)').matches ||
                 window.navigator.standalone === true;
-            if (s) document.documentElement.classList.add('pwa-standalone');
+            if (s) {
+                document.documentElement.classList.add('pwa-standalone');
+                var vv = window.visualViewport;
+                if (vv) {
+                    var root = document.documentElement;
+                    root.style.setProperty('--pwa-vv-height', Math.round(vv.height) + 'px');
+                    root.style.setProperty('--pwa-vv-offset-top', Math.round(vv.offsetTop) + 'px');
+                    root.style.setProperty('--pwa-vv-offset-left', Math.round(vv.offsetLeft) + 'px');
+                    root.style.setProperty('--pwa-vv-width', Math.round(vv.width) + 'px');
+                }
+            }
         })();
     </script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -91,8 +101,9 @@
 
         html.pwa-standalone,
         html.pwa-standalone body {
-            min-height: 100dvh;
-            min-height: -webkit-fill-available;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
             background-color: #9a0036;
         }
     </style>
@@ -135,6 +146,6 @@
             <p class="app-boot__hint">Đang tải…</p>
         </div>
     </main>
-    <div id="app"></div>
+    <div id="app" data-pwa-app-mount></div>
 </body>
 </html>

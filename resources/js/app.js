@@ -8,10 +8,12 @@ import {
   loadPwaStandaloneAssets,
 } from './lib/pwaStandalone';
 import { syncEmployeeSafeAreaInsets } from './lib/employeeSafeArea';
+import { bootstrapPwaVisualViewport } from './lib/pwaVisualViewport';
 import { bootstrapPwaServiceWorker } from './composables/usePwaUpdate';
 
 applyPwaStandaloneClass();
 loadPwaStandaloneAssets();
+bootstrapPwaVisualViewport();
 
 if (typeof document !== 'undefined' && isPwaStandalone()) {
   syncEmployeeSafeAreaInsets();

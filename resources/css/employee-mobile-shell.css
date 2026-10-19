@@ -4,8 +4,8 @@
  * App shell (header | main scroll | tabbar in-flow) — tabbar không fixed riêng.
  * Chiều cao shell:
  *   · Safari tab: --employee-shell-height (px) = visualViewport.height (JS)
- *   · PWA standalone: không dùng biến JS — shell position:fixed; inset:0
- * Safe-area tabbar PWA: padding trong .employee-tabbar__bar (env + --employee-safe-bottom).
+ *   · PWA standalone: khung theo visualViewport (--pwa-vv-*, pwaVisualViewport.js)
+ * Safe-area: header = top inset (1 lần); footer tabbar = bottom inset (1 lần) — PWA UI.
  *
  * Debug trên iPhone: localStorage.setItem('va-employee-viewport-debug','1') → reload.
  */
@@ -108,23 +108,18 @@ html.employee-mobile-pwa {
   }
 
   /*
-   * PWA: full màn qua inset — không height/max-height px từ JS (tránh Case A).
-   * body đã position:fixed; inset:0 (app.css :has(.employee-shell)).
+   * PWA AppShell: một khung visual viewport — không inset:0 + 100dvh (pwaui.com/guides/app-layout).
    */
   .employee-shell--pwa:not(.emp-shell-preview__shell) {
     position: fixed;
-    inset: 0;
     z-index: 0;
-    width: 100%;
+    top: var(--pwa-vv-offset-top, 0px);
+    left: var(--pwa-vv-offset-left, 0px);
+    width: var(--pwa-vv-width, 100%);
     max-width: 100vw;
+    height: var(--pwa-vv-height, 100svh);
+    max-height: var(--pwa-vv-height, 100svh);
     overflow: hidden;
-  }
-}
-
-@media (max-width: 768px) and (display-mode: standalone) {
-  .employee-shell--pwa:not(.emp-shell-preview__shell) {
-    position: fixed;
-    inset: 0;
   }
 }
 
@@ -760,9 +755,9 @@ html.employee-mobile-pwa {
   box-shadow: none;
 }
 
-.employee-tabbar--pwa .employee-tabbar__bar {
+/* Footer (AppShell.Footer): bottom safe-area chỉ ở vùng tabbar ngoài — không lồng thêm trong __bar */
+.employee-tabbar--pwa.employee-tabbar--shell {
   padding-bottom: max(var(--space-1), var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px)));
-  min-height: calc(var(--employee-tabbar-height) + var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px)));
 }
 
 .employee-tabbar__bar {

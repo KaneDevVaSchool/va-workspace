@@ -10,9 +10,14 @@ import {
   syncEmployeeShellHeight,
 } from '@/lib/employeeMobileViewport';
 import { isPwaStandalone } from '@/lib/pwaStandalone';
+import { syncPwaVisualViewport } from '@/lib/pwaVisualViewport';
 
 export function syncEmployeeMobileViewport() {
-  syncEmployeeShellHeight();
+  if (isPwaStandalone()) {
+    syncPwaVisualViewport();
+  } else {
+    syncEmployeeShellHeight();
+  }
   syncEmployeeSafeAreaInsets();
 }
 
