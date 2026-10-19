@@ -2,7 +2,7 @@
 //
 // Nghỉ phép mobile — catalog, số dư và gửi đơn qua HRM (HRM_LEAVE_API_*).
 //
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import AppDatePicker from '@/components/AppDatePicker.vue';
 import { showClientToast } from '@/lib/clientToast';
@@ -80,15 +80,24 @@ async function loadLeaveBalance({ silent = false } = {}) {
     }
   } finally {
     balanceLoading.value = false;
+  }
+}
+
+async function refreshLeavePage() {
+  if (refreshing.value) return;
+  refreshing.value = true;
+  try {
+    await Promise.all([
+      loadLeaveBalance({ silent: true }),
+      loadLeaveTypes(),
+    ]);
+  } finally {
     refreshing.value = false;
   }
 }
 
-function refreshOverview() {
-  if (refreshing.value || balanceLoading.value) return;
-  refreshing.value = true;
-  void loadLeaveBalance({ silent: true });
-}
+const registerPageRefresh = inject('employeePageRefreshRegister', null);
+let unregisterPageRefresh;
 
 /** @type {import('vue').Ref<Array<Record<string, unknown>>>} */
 const leaveTypes = ref([]);
@@ -413,6 +422,13 @@ async function loadLeaveTypes() {
 onMounted(() => {
   void loadLeaveTypes();
   void loadLeaveBalance();
+  if (typeof registerPageRefresh === 'function') {
+    unregisterPageRefresh = registerPageRefresh(refreshLeavePage);
+  }
+});
+
+onBeforeUnmount(() => {
+  unregisterPageRefresh?.();
 });
 
 function buildPeriodsForApi() {
@@ -564,16 +580,6 @@ const seniorityDays = computed(
     <section class="leave-panel">
       <div class="leave-panel__head">
         <h2 class="leave-panel__title">Tổng quan phép năm</h2>
-        <button
-          type="button"
-          class="leave-panel__refresh"
-          :disabled="refreshing"
-          aria-label="Cập nhật số dư phép"
-          @click="refreshOverview"
-        >
-          <AppIcon name="rotateCw" :size="18" :class="{ 'leave-panel__refresh-spin': refreshing }" />
-          <span>{{ refreshing ? 'Đang cập nhật…' : 'Cập nhật' }}</span>
-        </button>
       </div>
 
       <dl class="leave-stats leave-stats--main">
@@ -1060,41 +1066,6 @@ const seniorityDays = computed(
   font-size: 0.875rem;
   font-weight: 400;
   color: var(--color-text);
-}
-
-.leave-panel__refresh {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  border: none;
-  border-radius: var(--radius-full);
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
-  font-family: inherit;
-  font-size: 0.75rem;
-  font-weight: 400;
-  cursor: pointer;
-}
-
-.leave-panel__refresh:not(:disabled):active {
-  background: var(--color-border);
-}
-
-.leave-panel__refresh:disabled {
-  opacity: 0.65;
-  cursor: default;
-}
-
-.leave-panel__refresh-spin {
-  animation: leave-spin 0.8s linear infinite;
-}
-
-@keyframes leave-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .leave-stats {

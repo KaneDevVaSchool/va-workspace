@@ -405,7 +405,7 @@ function goQuick(name) {
 
 <style scoped>
 .employee-home {
-  --eh-shadow: var(--eh-card-shadow, 0 4px 18px color-mix(in srgb, var(--color-primary-900) 6%, transparent));
+  --eh-shadow: var(--eh-card-shadow, 0 4px 18px color-mix(in srgb, var(--color-tertiary-900) 7%, transparent));
   display: flex;
   flex-direction: column;
   gap: var(--space-4);

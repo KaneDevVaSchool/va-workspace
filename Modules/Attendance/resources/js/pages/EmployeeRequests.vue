@@ -3,7 +3,7 @@
 // Danh sách đơn nghỉ phép của tôi — lấy từ HRM qua GET /api/attendance/leave-requests.
 // Giải trình chấm công sẽ bổ sung khi có API workspace/HRM tương ứng.
 //
-import { onMounted, ref } from 'vue';
+import { inject, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 
 const STATUS_META = {
@@ -99,8 +99,18 @@ function closeDetail() {
   selected.value = null;
 }
 
+const registerPageRefresh = inject('employeePageRefreshRegister', null);
+let unregisterPageRefresh;
+
 onMounted(() => {
   void loadRequests();
+  if (typeof registerPageRefresh === 'function') {
+    unregisterPageRefresh = registerPageRefresh(loadRequests);
+  }
+});
+
+onBeforeUnmount(() => {
+  unregisterPageRefresh?.();
 });
 </script>
 

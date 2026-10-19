@@ -3,7 +3,7 @@
 // Chấm công — UI only, chưa nối API. Nút check-in/check-out chỉ đổi state
 // cục bộ để minh hoạ luồng, đồng hồ cập nhật mỗi giây bằng setInterval.
 //
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import {
@@ -14,13 +14,8 @@ import {
 const now = ref(new Date());
 let timer;
 
-onMounted(() => {
-  timer = setInterval(() => {
-    now.value = new Date();
-  }, 1000);
-});
-
-onBeforeUnmount(() => clearInterval(timer));
+const registerPageRefresh = inject('employeePageRefreshRegister', null);
+let unregisterPageRefresh;
 
 const timeLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   hour: '2-digit',
@@ -39,6 +34,28 @@ const stored = readEmployeeAttendanceToday();
 const checkInTime = ref(stored?.checkInTime ?? null);
 const checkOutTime = ref(stored?.checkOutTime ?? null);
 const checkedIn = ref(Boolean(checkInTime.value && !checkOutTime.value));
+
+function refreshAttendanceView() {
+  const storedRow = readEmployeeAttendanceToday();
+  checkInTime.value = storedRow?.checkInTime ?? null;
+  checkOutTime.value = storedRow?.checkOutTime ?? null;
+  checkedIn.value = Boolean(checkInTime.value && !checkOutTime.value);
+  now.value = new Date();
+}
+
+onMounted(() => {
+  timer = setInterval(() => {
+    now.value = new Date();
+  }, 1000);
+  if (typeof registerPageRefresh === 'function') {
+    unregisterPageRefresh = registerPageRefresh(refreshAttendanceView);
+  }
+});
+
+onBeforeUnmount(() => {
+  clearInterval(timer);
+  unregisterPageRefresh?.();
+});
 
 function persistAttendance() {
   writeEmployeeAttendanceToday({

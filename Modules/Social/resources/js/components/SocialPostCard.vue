@@ -26,6 +26,8 @@ const props = defineProps({
   departmentName: { type: String, default: '' },
   openComments: { type: Boolean, default: false },
   highlighted: { type: Boolean, default: false },
+  /** Bảng tin mobile nhân viên: thumbnail trái, nội dung phải */
+  mobileFeedLayout: { type: Boolean, default: false },
 });
 
 const sanitizedContent = computed(() => sanitizeSocialHtml(props.post.content));
@@ -323,6 +325,7 @@ async function saveEdit() {
       'post-card--pinned-system': post.is_pinned && isSystemPin,
       'post-card--pinned-company': post.is_pinned && !isSystemPin,
       'post-card--focused': highlighted,
+      'post-card--mobile-feed': mobileFeedLayout,
     }"
   >
     <div v-if="post.is_pinned" class="post-card__pinned-badge">
@@ -478,28 +481,46 @@ async function saveEdit() {
     </div>
 
     <div
-      v-else-if="post.content"
-      class="post-card__content"
-      v-html="sanitizedContent"
-      v-social-stickers
-      @click="onContentClick"
-    ></div>
+      v-else-if="!localPoll"
+      class="post-card__stream-body"
+      :class="{
+        'post-card__stream-body--horizontal':
+          mobileFeedLayout && imageAttachments.length > 0 && !post.shared_from,
+      }"
+    >
+      <div
+        v-if="mobileFeedLayout && imageAttachments.length > 0 && !post.shared_from"
+        class="post-card__stream-thumb"
+      >
+        <SocialImageGrid :images="imageAttachments" compact />
+      </div>
 
-    <div v-if="post.link_previews?.length && !editing" class="post-card__link-previews">
-      <SocialLinkPreviewCard
-        v-for="preview in post.link_previews"
-        :key="preview.url"
-        :preview="preview"
-      />
+      <div class="post-card__stream-main">
+        <div
+          v-if="post.content"
+          class="post-card__content"
+          v-html="sanitizedContent"
+          v-social-stickers
+          @click="onContentClick"
+        ></div>
+
+        <div v-if="post.link_previews?.length" class="post-card__link-previews">
+          <SocialLinkPreviewCard
+            v-for="preview in post.link_previews"
+            :key="preview.url"
+            :preview="preview"
+          />
+        </div>
+
+        <ul v-if="post.hashtags?.length" class="post-card__hashtags" aria-label="Hashtag của bài viết">
+          <li v-for="tag in post.hashtags" :key="tag.name">
+            <button type="button" class="post-card__hashtag-chip" @click="emit('open-hashtag', tag.name)">
+              #{{ tag.label || tag.name }}
+            </button>
+          </li>
+        </ul>
+      </div>
     </div>
-
-    <ul v-if="post.hashtags?.length && !editing" class="post-card__hashtags" aria-label="Hashtag của bài viết">
-      <li v-for="tag in post.hashtags" :key="tag.name">
-        <button type="button" class="post-card__hashtag-chip" @click="emit('open-hashtag', tag.name)">
-          #{{ tag.label || tag.name }}
-        </button>
-      </li>
-    </ul>
 
     <SocialHistoryDialog
       :open="showHistory && !editing"
@@ -553,7 +574,10 @@ async function saveEdit() {
       </div>
     </div>
 
-    <div v-if="imageAttachments.length > 0" class="post-card__images">
+    <div
+      v-if="imageAttachments.length > 0 && !(mobileFeedLayout && !post.shared_from)"
+      class="post-card__images"
+    >
       <SocialImageGrid :images="imageAttachments" />
     </div>
 
@@ -804,6 +828,108 @@ async function saveEdit() {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
+}
+
+.post-card__stream-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.post-card__stream-body--horizontal {
+  flex-direction: row;
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+.post-card__stream-thumb {
+  flex: 0 0 min(38%, 8.5rem);
+  min-width: 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border-subtle);
+}
+
+.post-card__stream-body--horizontal .post-card__stream-thumb :deep(.image-grid-wrap) {
+  height: 100%;
+  min-height: 5.75rem;
+}
+
+.post-card__stream-body--horizontal .post-card__stream-thumb :deep(.image-grid) {
+  height: 100%;
+  min-height: 5.75rem;
+}
+
+.post-card__stream-body--horizontal .post-card__stream-thumb :deep(.image-grid__image) {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+  min-height: 5.75rem;
+}
+
+.post-card__stream-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.post-card--mobile-feed .post-card__header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: start;
+  column-gap: var(--space-2);
+  row-gap: 0.125rem;
+}
+
+.post-card--mobile-feed .post-card__avatar-btn,
+.post-card--mobile-feed .post-card__avatar--anonymous {
+  grid-row: 1 / span 2;
+}
+
+.post-card--mobile-feed .post-card__author-info {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.post-card--mobile-feed .post-card__when {
+  grid-column: 2;
+  grid-row: 2;
+  margin-left: 0;
+  padding-top: 0;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.4rem;
+}
+
+.post-card--mobile-feed .post-card__header-actions {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.post-card--mobile-feed .post-card__avatar--placeholder {
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
+}
+
+.post-card--mobile-feed .post-card__today {
+  color: var(--color-tertiary);
+}
+
+.post-card--mobile-feed .post-card__today-dot {
+  background: var(--color-tertiary);
+}
+
+.post-card--mobile-feed .post-card__hashtag-chip {
+  background: color-mix(in srgb, var(--color-tertiary) 10%, var(--color-surface-muted));
+  color: var(--color-tertiary-700);
 }
 
 .post-card__avatar-btn {

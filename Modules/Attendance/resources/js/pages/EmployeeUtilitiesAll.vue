@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import QuickUtilitiesGrid from '@modules/Dashboard/resources/js/components/QuickUtilitiesGrid.vue';
 import { useDashboardQuickUtilities } from '@modules/Dashboard/resources/js/composables/useDashboardQuickUtilities';
@@ -16,8 +16,18 @@ const filteredUtilities = computed(() => {
   );
 });
 
+const registerPageRefresh = inject('employeePageRefreshRegister', null);
+let unregisterPageRefresh;
+
 onMounted(() => {
   load();
+  if (typeof registerPageRefresh === 'function') {
+    unregisterPageRefresh = registerPageRefresh(() => load());
+  }
+});
+
+onBeforeUnmount(() => {
+  unregisterPageRefresh?.();
 });
 </script>
 

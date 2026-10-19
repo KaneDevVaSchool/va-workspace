@@ -1,9 +1,25 @@
 <script setup>
+import { inject, onBeforeUnmount, onMounted, ref } from 'vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { useEmployeeMobileView } from '@/composables/useEmployeeMobileView';
 import MemberDirectoryPanel from '../components/MemberDirectoryPanel.vue';
 
 const { isEmployeeMobile } = useEmployeeMobileView();
+const directoryRef = ref(null);
+const registerPageRefresh = inject('employeePageRefreshRegister', null);
+let unregisterPageRefresh;
+
+onMounted(() => {
+  if (typeof registerPageRefresh === 'function') {
+    unregisterPageRefresh = registerPageRefresh(async () => {
+      await directoryRef.value?.reload?.();
+    });
+  }
+});
+
+onBeforeUnmount(() => {
+  unregisterPageRefresh?.();
+});
 </script>
 
 <template>
@@ -13,7 +29,7 @@ const { isEmployeeMobile } = useEmployeeMobileView();
     class="dashboard-contacts"
     :class="{ 'dashboard-contacts--mobile': isEmployeeMobile }"
   >
-    <MemberDirectoryPanel />
+    <MemberDirectoryPanel ref="directoryRef" />
   </div>
 </template>
 

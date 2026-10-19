@@ -26,6 +26,8 @@ const contentRef = ref(null);
 const homeSearchQuery = ref('');
 let homeRefreshHandler = null;
 let feedRefreshHandler = null;
+let pageRefreshHandler = null;
+const headerRefreshing = ref(false);
 
 provide('employeeHomeSearch', homeSearchQuery);
 provide('employeeHomeRefreshRegister', (handler) => {
@@ -40,6 +42,33 @@ provide('employeeFeedRefreshRegister', (handler) => {
     if (feedRefreshHandler === handler) feedRefreshHandler = null;
   };
 });
+provide('employeePageRefreshRegister', (handler) => {
+  pageRefreshHandler = handler;
+  return () => {
+    if (pageRefreshHandler === handler) pageRefreshHandler = null;
+  };
+});
+
+function resolvePageRefreshHandler() {
+  if (route.name === 'dashboard.me' && homeRefreshHandler) return homeRefreshHandler;
+  if (route.name === 'employee.feed' && feedRefreshHandler) return feedRefreshHandler;
+  return pageRefreshHandler;
+}
+
+async function onHeaderRefresh() {
+  if (headerRefreshing.value) return;
+  const handler = resolvePageRefreshHandler();
+  headerRefreshing.value = true;
+  try {
+    if (handler) {
+      await handler();
+    } else {
+      window.location.reload();
+    }
+  } finally {
+    headerRefreshing.value = false;
+  }
+}
 
 const { pullY, refreshing: pullRefreshing } = usePullToRefresh(
   contentRef,
@@ -105,9 +134,8 @@ const avatarInitial = computed(() => {
 });
 
 const isHomeHeader = computed(() => route.name === 'dashboard.me');
-const isFeedHeader = computed(() => route.name === 'employee.feed');
 
-const compactHeaderTitle = computed(() => {
+const pageHeaderTitle = computed(() => {
   if (isHomeHeader.value) return '';
   const title = route.meta?.title;
   return typeof title === 'string' ? title.trim() : '';
@@ -138,21 +166,13 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 <template>
   <div
     class="employee-shell"
-    :class="[
-      `employee-shell--${shellMode}`,
-      { 'employee-shell--home': route.name === 'dashboard.me' },
-      { 'employee-shell--feed': isFeedHeader },
-    ]"
+    :class="[`employee-shell--${shellMode}`, 'employee-shell--unified']"
   >
     <header
-      class="employee-shell__header"
-      :class="{
-        'employee-shell__header--compact': route.name !== 'dashboard.me',
-        'employee-shell__header--feed': isFeedHeader,
-        'employee-shell__header--home': isHomeHeader,
-      }"
+      class="employee-shell__header employee-shell__header--brand"
+      :class="{ 'employee-shell__header--home': isHomeHeader }"
     >
-      <div v-if="isHomeHeader" class="employee-shell__header-deco" aria-hidden="true"></div>
+      <div class="employee-shell__header-deco" aria-hidden="true"></div>
       <div class="employee-shell__header-top">
         <div class="employee-shell__greeting">
           <template v-if="isHomeHeader">
@@ -167,18 +187,33 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
               <span v-else-if="jobTitleName" class="employee-shell__meta-extra">{{ jobTitleName }}</span>
             </div>
           </template>
-          <template v-else-if="compactHeaderTitle">
-            <p class="employee-shell__kicker">VA Workspace</p>
-            <h1 class="employee-shell__hello employee-shell__hello--page">{{ compactHeaderTitle }}</h1>
-          </template>
           <template v-else>
             <p class="employee-shell__kicker">VA Workspace</p>
-            <h1 class="employee-shell__hello employee-shell__hello--page">{{ displayName || 'Nhân sự' }}</h1>
-            <p v-if="departmentName" class="employee-shell__date">{{ departmentName }}</p>
-            <p v-else-if="jobTitleName" class="employee-shell__date">{{ jobTitleName }}</p>
+            <h1 class="employee-shell__hello employee-shell__hello--page">
+              {{ pageHeaderTitle || displayName || 'Nhân sự' }}
+            </h1>
+            <div v-if="pageHeaderTitle && (departmentName || jobTitleName)" class="employee-shell__meta">
+              <span class="employee-shell__meta-extra">{{ departmentName || jobTitleName }}</span>
+            </div>
+            <p v-else-if="!pageHeaderTitle && departmentName" class="employee-shell__date">{{ departmentName }}</p>
+            <p v-else-if="!pageHeaderTitle && jobTitleName" class="employee-shell__date">{{ jobTitleName }}</p>
           </template>
         </div>
         <div class="employee-shell__header-actions">
+          <button
+            type="button"
+            class="employee-shell__icon-btn"
+            :disabled="headerRefreshing"
+            aria-label="Làm mới trang"
+            @click="onHeaderRefresh"
+          >
+            <AppIcon
+              name="refresh"
+              :size="20"
+              :stroke-width="1.8"
+              :class="{ 'employee-shell__icon-btn-spin': headerRefreshing }"
+            />
+          </button>
           <button
             type="button"
             class="employee-shell__icon-btn"
@@ -238,11 +273,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 
     <main
       ref="contentRef"
-      class="employee-shell__content"
-      :class="{
-        'employee-shell__content--home': route.name === 'dashboard.me',
-        'employee-shell__content--feed': isFeedHeader,
-      }"
+      class="employee-shell__content employee-shell__content--unified"
     >
       <div
         v-if="route.name === 'dashboard.me' || route.name === 'employee.feed'"

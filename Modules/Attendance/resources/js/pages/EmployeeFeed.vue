@@ -6,6 +6,7 @@
 import {
   computed,
   inject,
+  nextTick,
   onBeforeUnmount,
   onMounted,
   ref,
@@ -67,6 +68,7 @@ const pinnedCompany = ref(null);
 const hashtagPanel = ref(null);
 const filterSheetOpen = ref(false);
 const colleagueSheetOpen = ref(false);
+const colleagueSearchRef = ref(null);
 const loadMoreSentinel = ref(null);
 let unregisterRefresh;
 let loadMoreObserver;
@@ -92,6 +94,24 @@ function closeSheets() {
   filterSheetOpen.value = false;
   colleagueSheetOpen.value = false;
 }
+
+function userInitial(name) {
+  return name?.trim().charAt(0).toUpperCase() || '?';
+}
+
+function userDepartment(user) {
+  const dept = user?.department;
+  if (!dept) return '';
+  if (typeof dept === 'string') return dept.trim();
+  if (typeof dept === 'object' && dept.name) return String(dept.name).trim();
+  return '';
+}
+
+watch(colleagueSheetOpen, (open) => {
+  if (open) {
+    nextTick(() => colleagueSearchRef.value?.focus());
+  }
+});
 
 function onPinnedSelect(post) {
   scrollToPost(post);
@@ -186,8 +206,22 @@ onBeforeUnmount(() => {
           class="emp-feed__people-item"
           @click="openColleagueWall(user.id)"
         >
-          <span>{{ user.name }}</span>
-          <span v-if="user.department" class="emp-feed__people-dept">{{ user.department }}</span>
+          <img
+            v-if="user.avatar_url"
+            class="emp-feed__people-avatar"
+            :src="user.avatar_url"
+            alt=""
+          />
+          <span v-else class="emp-feed__people-avatar emp-feed__people-avatar--placeholder">
+            {{ userInitial(user.name) }}
+          </span>
+          <span class="emp-feed__people-copy">
+            <span class="emp-feed__people-name">{{ user.name }}</span>
+            <span v-if="userDepartment(user)" class="emp-feed__people-dept">
+              {{ userDepartment(user) }}
+            </span>
+          </span>
+          <AppIcon name="chevronRight" :size="16" class="emp-feed__people-chevron" aria-hidden="true" />
         </button>
       </div>
 
@@ -327,6 +361,7 @@ onBeforeUnmount(() => {
             :department-name="departmentName"
             :open-comments="openCommentsPostId === post.id"
             :highlighted="focusedPostId === post.id"
+            mobile-feed-layout
             @deleted="onDeleted"
             @pinned="onPinned"
             @unpinned="onUnpinned"
@@ -415,14 +450,26 @@ onBeforeUnmount(() => {
           role="presentation"
           @mousedown.self="closeSheets"
         >
-          <div class="emp-feed-sheet__panel" role="dialog" aria-modal="true" aria-label="Tìm đồng nghiệp">
+          <div
+            class="emp-feed-sheet__panel emp-feed-sheet__panel--colleague"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Tìm đồng nghiệp"
+          >
             <header class="emp-feed-sheet__head">
-              <h2 class="emp-feed-sheet__title">Tìm đồng nghiệp</h2>
+              <div class="emp-feed-sheet__head-copy">
+                <h2 class="emp-feed-sheet__title">Tìm đồng nghiệp</h2>
+                <p class="emp-feed-sheet__subtitle">Chọn người để xem tường cá nhân</p>
+              </div>
               <button type="button" class="emp-feed-sheet__close" aria-label="Đóng" @click="closeSheets">
                 <AppIcon name="close" :size="20" />
               </button>
             </header>
-            <SocialColleagueSearch @select="(id) => { openColleagueWall(id); closeSheets(); }" />
+            <SocialColleagueSearch
+              ref="colleagueSearchRef"
+              layout="panel"
+              @select="(id) => { openColleagueWall(id); closeSheets(); }"
+            />
           </div>
         </div>
       </Transition>
@@ -449,8 +496,8 @@ onBeforeUnmount(() => {
   padding-bottom: var(--space-1);
   background: linear-gradient(
     180deg,
-    var(--color-tertiary-surface) 85%,
-    color-mix(in srgb, var(--color-tertiary-surface) 40%, transparent)
+    color-mix(in srgb, var(--color-tertiary-50) 70%, transparent) 85%,
+    transparent
   );
 }
 
@@ -534,9 +581,8 @@ onBeforeUnmount(() => {
 
 .emp-feed__people-item {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  align-items: center;
+  gap: var(--space-2);
   width: 100%;
   padding: var(--space-2) 0;
   border: none;
@@ -548,8 +594,49 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.emp-feed__people-avatar {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+}
+
+.emp-feed__people-avatar--placeholder {
+  display: grid;
+  place-items: center;
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.emp-feed__people-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.emp-feed__people-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .emp-feed__people-dept {
   font-size: 0.75rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emp-feed__people-chevron {
+  flex-shrink: 0;
   color: var(--color-text-muted);
 }
 
@@ -616,7 +703,7 @@ onBeforeUnmount(() => {
 }
 
 .emp-feed__subtab--active {
-  color: var(--color-primary);
+  color: var(--color-tertiary);
   font-weight: 600;
 }
 
@@ -628,7 +715,7 @@ onBeforeUnmount(() => {
   bottom: 0;
   height: 2px;
   border-radius: 2px 2px 0 0;
-  background: var(--color-primary);
+  background: var(--color-tertiary);
 }
 
 .emp-feed__wall-visit {
@@ -698,7 +785,7 @@ onBeforeUnmount(() => {
   font: inherit;
   font-size: 0.6875rem;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-tertiary);
   cursor: pointer;
 }
 
@@ -744,8 +831,8 @@ onBeforeUnmount(() => {
 }
 
 .emp-feed__side-panels :deep(.hashtag-panel__item--active) {
-  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface-muted));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, transparent);
+  background: color-mix(in srgb, var(--color-tertiary) 12%, var(--color-surface-muted));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-tertiary) 28%, transparent);
 }
 
 .emp-feed__side-panels :deep(.hashtag-panel__name) {
@@ -864,7 +951,7 @@ onBeforeUnmount(() => {
 
 .emp-feed__post :deep(.post-card--focused) {
   box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--color-tertiary) 40%, transparent),
     0 4px 14px rgba(9, 36, 78, 0.08);
 }
 
@@ -891,31 +978,15 @@ onBeforeUnmount(() => {
 }
 
 .emp-feed__post :deep(.post-card__header) {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  column-gap: var(--space-2);
-  row-gap: 0.125rem;
   padding-bottom: var(--space-2);
-}
-
-.emp-feed__post :deep(.post-card__avatar-btn),
-.emp-feed__post :deep(.post-card__avatar--anonymous) {
-  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  margin-bottom: var(--space-2);
 }
 
 .emp-feed__post :deep(.post-card__avatar) {
   width: 2.25rem;
   height: 2.25rem;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 80%, transparent);
-}
-
-.emp-feed__post :deep(.post-card__author-info) {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-tertiary-300) 55%, var(--color-border));
 }
 
 .emp-feed__post :deep(.post-card__author-name) {
@@ -936,12 +1007,6 @@ onBeforeUnmount(() => {
   font-size: 0.625rem;
 }
 
-.emp-feed__post :deep(.post-card__header-actions) {
-  flex-shrink: 0;
-  margin-left: auto;
-  gap: 0;
-}
-
 .emp-feed__post :deep(.post-card__icon-btn) {
   width: 1.75rem;
   height: 1.75rem;
@@ -951,21 +1016,6 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
-.emp-feed__post :deep(.post-card__when) {
-  flex: 1 1 100%;
-  margin-left: 0;
-  padding-left: calc(2.25rem + var(--space-2));
-  padding-top: 0;
-  flex-direction: row;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.2rem 0.45rem;
-}
-
-.emp-feed__post :deep(.post-card__time-row) {
-  gap: 0.35rem;
-}
-
 .emp-feed__post :deep(.post-card__time),
 .emp-feed__post :deep(.post-card__today) {
   font-size: 0.625rem;
@@ -973,18 +1023,21 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
-.emp-feed__post :deep(.post-card__today) {
-  font-weight: 600;
-  color: var(--color-primary);
-}
-
 .emp-feed__post :deep(.post-card__edited) {
   font-size: 0.5625rem;
   font-weight: 600;
 }
 
+.emp-feed__post :deep(.post-card__stream-body--horizontal .post-card__content) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  line-clamp: 5;
+  overflow: hidden;
+}
+
 .emp-feed__post :deep(.post-card__content) {
-  padding-bottom: var(--space-2);
+  padding-bottom: 0;
 }
 
 .emp-feed__post :deep(.post-card__content),
@@ -1005,7 +1058,9 @@ onBeforeUnmount(() => {
 }
 
 .emp-feed__post :deep(.post-card__images) {
-  margin: 0 calc(-1 * var(--space-3)) var(--space-2);
+  margin: 0 0 var(--space-2);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 .emp-feed__post :deep(.post-card__attachments),
@@ -1032,7 +1087,6 @@ onBeforeUnmount(() => {
   font-size: 0.625rem;
   font-weight: 600;
   padding: 0.15rem 0.5rem;
-  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface-muted));
 }
 
 .emp-feed__post :deep(.post-card__stats) {
@@ -1152,8 +1206,8 @@ onBeforeUnmount(() => {
   width: 3.25rem;
   height: 3.25rem;
   border-radius: var(--radius-full);
-  background: var(--color-surface-muted);
-  color: var(--color-primary);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
 }
 
 .emp-feed__empty p {
@@ -1233,6 +1287,23 @@ onBeforeUnmount(() => {
   box-shadow: 0 -8px 32px rgba(9, 36, 78, 0.12);
 }
 
+.emp-feed-sheet__panel--colleague {
+  display: flex;
+  flex-direction: column;
+  max-height: min(82vh, 36rem);
+  overflow: hidden;
+}
+
+.emp-feed-sheet__panel--colleague .emp-feed-sheet__head {
+  flex-shrink: 0;
+}
+
+.emp-feed-sheet__panel--colleague :deep(.colleague-search) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .emp-feed-sheet__head {
   display: flex;
   align-items: center;
@@ -1241,10 +1312,20 @@ onBeforeUnmount(() => {
   margin-bottom: var(--space-3);
 }
 
+.emp-feed-sheet__head-copy {
+  min-width: 0;
+}
+
 .emp-feed-sheet__title {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
+}
+
+.emp-feed-sheet__subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
 }
 
 .emp-feed-sheet__close {
@@ -1281,7 +1362,7 @@ onBeforeUnmount(() => {
 }
 
 .emp-feed-sheet__option--active {
-  color: var(--color-primary);
+  color: var(--color-tertiary);
   font-weight: 600;
 }
 
