@@ -13,6 +13,18 @@ function isIosDevice() {
   );
 }
 
+/** iOS PWA / Add to Home Screen: chỉ dùng env() trong CSS — gán px lên html gây lệch mọi trang. */
+function isIosEmployeeInsetsViaCssOnly() {
+  if (typeof document === 'undefined' || !isIosDevice()) return false;
+  const root = document.documentElement;
+  return (
+    root.classList.contains('employee-mobile-pwa')
+    || root.classList.contains('employee-mobile-browser')
+    || root.classList.contains('pwa-standalone')
+    || (typeof navigator !== 'undefined' && navigator.standalone === true)
+  );
+}
+
 function measureSafeAreaInset(side) {
   if (typeof document === 'undefined') return 0;
   const el = document.createElement('div');
@@ -57,15 +69,15 @@ export function syncEmployeeSafeAreaInsets() {
     }
     return;
   }
-  for (const side of SIDES) {
-    /*
-     * iOS PWA: env(safe-area-inset-bottom) trên <html> đã đủ; gán px lên root
-     * dễ lệch với footer/tabbar → tab bar trông “nổi” cao hơn Android.
-     */
-    if (side === 'bottom' && isIosDevice()) {
-      root.style.removeProperty('--employee-safe-bottom');
-      continue;
+
+  if (isIosEmployeeInsetsViaCssOnly()) {
+    for (const side of SIDES) {
+      root.style.removeProperty(`--employee-safe-${side}`);
     }
+    return;
+  }
+
+  for (const side of SIDES) {
     const px = measureSafeAreaInset(side);
     if (px > 0) {
       root.style.setProperty(`--employee-safe-${side}`, `${px}px`);

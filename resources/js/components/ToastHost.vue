@@ -356,20 +356,14 @@ onBeforeUnmount(() => {
     inset: auto 0 0 0;
     justify-content: center;
     align-items: stretch;
-    /*
-     * Tab bar đo được đã gồm safe (iOS: trong __bar). Chỉ max(safe) khi không có tabbar
-     * (chat) — tránh cộng đúp trên iOS PWA.
-     */
-    padding: 0 var(--space-4)
-      calc(
-        var(--space-3) + var(--toast-shell-bottom-inset, 0px)
-          + max(
-            0px,
-            env(safe-area-inset-bottom, 0px)
-              - var(--toast-shell-bottom-inset, 0px)
-          )
-      );
+    /* Tab bar đo được (ResizeObserver) đã gồm safe-bottom trên iOS. */
+    padding: 0 var(--space-4) calc(var(--space-3) + var(--toast-shell-bottom-inset, 0px));
     pointer-events: none;
+  }
+
+  html.employee-mobile-pwa:not(:has(.employee-tabbar--shell)) .toast-host,
+  html.employee-mobile-browser:not(:has(.employee-tabbar--shell)) .toast-host {
+    padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
   }
 
   .toast-host__stack {
