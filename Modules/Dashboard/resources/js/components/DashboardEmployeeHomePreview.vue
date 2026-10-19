@@ -135,11 +135,14 @@ const tabs = [
             <ul class="task-list">
               <li class="task-card task-card--upcoming">
                 <span class="task-card__check task-card__check--preview" aria-hidden="true"></span>
-                <div class="task-card__main">
+                <div class="task-card__detail">
                   <p class="task-card__title">Cập nhật tiến độ việc được giao</p>
                   <p class="task-card__project">Dự án triển khai hệ thống</p>
                 </div>
-                <span class="task-card__time">16:30</span>
+                <div class="task-card__aside">
+                  <span class="task-card__quick task-card__quick--preview">Đang làm</span>
+                  <span class="task-card__time">16:30</span>
+                </div>
               </li>
             </ul>
           </section>
@@ -156,8 +159,8 @@ const tabs = [
                     <AppIcon name="megaphone" :size="20" :stroke-width="1.8" />
                   </span>
                   <span class="notice-card__body">
-                    <span class="notice-card__title">Thông báo nghỉ lễ</span>
-                    <span class="notice-card__meta">Phòng Nhân sự • Hôm nay</span>
+                    <span class="notice-card__title">Thông báo nghỉ lễ 30/4 và 1/5</span>
+                    <span class="notice-card__meta">Hôm nay</span>
                   </span>
                 </span>
               </li>
@@ -333,9 +336,9 @@ const tabs = [
 
 .task-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-3);
+  padding: var(--space-4) var(--space-3);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
@@ -348,28 +351,46 @@ const tabs = [
 
 .task-card__check--preview {
   flex-shrink: 0;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2.125rem;
+  height: 2.125rem;
+  margin-top: 1px;
   border-radius: var(--radius-full);
   box-shadow: inset 0 0 0 2.5px var(--color-tertiary);
 }
 
-.task-card__main {
+.task-card__detail {
   flex: 1;
   min-width: 0;
 }
 
 .task-card__title {
   margin: 0;
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-size: 1.0625rem;
+  font-weight: 600;
   color: var(--color-text);
+  line-height: 1.35;
 }
 
 .task-card__project {
-  margin: 2px 0 0;
-  font-size: 0.6875rem;
+  margin: 4px 0 0;
+  font-size: 0.75rem;
   color: var(--color-text-muted);
+}
+
+.task-card__aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.task-card__quick--preview {
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary);
+  color: var(--color-on-tertiary);
+  font-size: 0.6875rem;
+  font-weight: 700;
 }
 
 .task-card__time {
@@ -409,9 +430,15 @@ const tabs = [
 }
 
 .notice-card__title {
-  font-size: 0.875rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--color-text);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
 }
 
 .notice-card__meta {

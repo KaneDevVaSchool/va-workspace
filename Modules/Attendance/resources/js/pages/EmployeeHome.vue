@@ -12,6 +12,7 @@ import QuickUtilitiesGrid from '@modules/Dashboard/resources/js/components/Quick
 import { useDashboardQuickUtilities } from '@modules/Dashboard/resources/js/composables/useDashboardQuickUtilities';
 import { unwrapOverview, asList } from '@modules/Dashboard/resources/js/utils/dashboardPayload';
 import { formatSocialTime } from '@modules/Social/resources/js/lib/formatSocialTime.js';
+import { postDisplayHeading } from '@modules/Social/resources/js/lib/postContentSnippet.js';
 
 const SOCIAL_HOME_LIMIT = 3;
 
@@ -91,9 +92,16 @@ function isSameCalendarDay(value, date) {
 
 function taskCardStatus(task) {
   if (task.status === 'completed') return 'done';
+  if (task.status === 'in_progress') return 'progress';
   if (task.is_overdue) return 'overdue';
   if (task.end_date && isSameCalendarDay(task.end_date, new Date())) return 'upcoming';
   return 'pending';
+}
+
+function canMarkInProgress(task) {
+  return task.status !== 'completed'
+    && task.status !== 'in_progress'
+    && task.status !== 'cancelled';
 }
 
 function formatTaskTime(task) {
@@ -109,29 +117,12 @@ function formatTaskTime(task) {
   return '—';
 }
 
-function plainTextFromHtml(html) {
-  if (!html || typeof html !== 'string') return '';
-  if (typeof document === 'undefined') {
-    return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  }
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  return (div.textContent || '').replace(/\s+/g, ' ').trim();
-}
-
 function postTitle(post) {
-  const text = plainTextFromHtml(post?.content);
-  if (!text) return 'Bài viết bảng tin';
-  return text.length > 96 ? `${text.slice(0, 96)}…` : text;
-}
-
-function postAuthorLabel(post) {
-  if (post?.is_anonymous) return post.anonymous_name || 'Ẩn danh';
-  return post?.author?.name || 'Bảng tin chung';
+  return postDisplayHeading(post);
 }
 
 function postMeta(post) {
-  return `${postAuthorLabel(post)} • ${formatSocialTime(post?.created_at)}`;
+  return formatSocialTime(post?.created_at);
 }
 
 function postIconTone(post) {
@@ -150,22 +141,36 @@ function promptDesktopOnly(event) {
   showClientToast('info', EMPLOYEE_SHELL_BLOCK_MESSAGE, { duration: 9000 });
 }
 
-async function toggleDone(task) {
+async function patchTaskStatus(task, nextStatus) {
   if (taskBusyId.value === task.id) return;
-  const nextStatus = task.status === 'completed' ? 'in_progress' : 'completed';
+  const previousStatus = task.status;
+  const previousOverdue = task.is_overdue;
+
   taskBusyId.value = task.id;
+  task.status = nextStatus;
+  if (nextStatus === 'completed') {
+    task.is_overdue = false;
+  }
+
   try {
     await window.axios.put(`/api/project/tasks/${task.id}`, { status: nextStatus });
-    task.status = nextStatus;
-    if (nextStatus === 'completed') {
-      task.is_overdue = false;
-    }
-    await loadOverview();
   } catch (error) {
+    task.status = previousStatus;
+    task.is_overdue = previousOverdue;
     showClientToast('error', error?.response?.data?.message || 'Không cập nhật được trạng thái công việc.');
   } finally {
     taskBusyId.value = null;
   }
+}
+
+function toggleDone(task) {
+  const nextStatus = task.status === 'completed' ? 'in_progress' : 'completed';
+  patchTaskStatus(task, nextStatus);
+}
+
+function markInProgress(task) {
+  if (!canMarkInProgress(task)) return;
+  patchTaskStatus(task, 'in_progress');
 }
 
 function goAttendance() {
@@ -244,20 +249,39 @@ function goAttendance() {
             <button
               type="button"
               class="task-card__check"
-              :class="{ 'task-card__check--done': item.status === 'completed' }"
+              :class="{
+                'task-card__check--done': item.status === 'completed',
+                'task-card__check--progress': item.status === 'in_progress',
+              }"
               :disabled="taskBusyId === item.id"
               :aria-label="item.status === 'completed' ? `Bỏ đánh dấu xong: ${item.title}` : `Đánh dấu đã xong: ${item.title}`"
               @click="toggleDone(item)"
             >
-              <AppIcon v-if="item.status === 'completed'" name="check" :size="16" :stroke-width="2.5" />
+              <AppIcon v-if="item.status === 'completed'" name="check" :size="18" :stroke-width="2.5" />
+              <span v-else-if="item.status === 'in_progress'" class="task-card__check-dot" aria-hidden="true"></span>
             </button>
-            <div class="task-card__main">
+            <button
+              type="button"
+              class="task-card__detail"
+              @click="promptDesktopOnly"
+            >
               <p class="task-card__title" :class="{ 'task-card__title--done': item.status === 'completed' }">
                 {{ item.title }}
               </p>
               <p v-if="item.project_name" class="task-card__project">{{ item.project_name }}</p>
+            </button>
+            <div class="task-card__aside">
+              <button
+                v-if="canMarkInProgress(item)"
+                type="button"
+                class="task-card__quick"
+                :disabled="taskBusyId === item.id"
+                @click="markInProgress(item)"
+              >
+                Đang làm
+              </button>
+              <span class="task-card__time">{{ formatTaskTime(item) }}</span>
             </div>
-            <span class="task-card__time">{{ formatTaskTime(item) }}</span>
           </li>
         </ul>
       </div>
@@ -271,7 +295,7 @@ function goAttendance() {
         </button>
       </div>
       <p v-if="feedLoading" class="employee-home__loading">Đang tải thông báo…</p>
-      <p v-else-if="feedPosts.length === 0" class="employee-home__empty">Chưa có bài đăng nào trên bảng tin chung.</p>
+      <p v-else-if="feedPosts.length === 0" class="employee-home__empty">Chưa có thông báo mới.</p>
       <ul v-else class="notice-list">
         <li v-for="note in feedPosts" :key="note.id">
           <button type="button" class="notice-card" @click="promptDesktopOnly">
@@ -282,7 +306,6 @@ function goAttendance() {
               <span class="notice-card__title">{{ postTitle(note) }}</span>
               <span class="notice-card__meta">{{ postMeta(note) }}</span>
             </span>
-            <AppIcon name="chevronRight" :size="18" class="notice-card__chevron" />
           </button>
         </li>
       </ul>
@@ -463,9 +486,9 @@ function goAttendance() {
 
 .task-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-3);
+  padding: var(--space-4) var(--space-3);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
@@ -473,6 +496,11 @@ function goAttendance() {
 
 .task-card--done {
   background: var(--color-surface-muted);
+}
+
+.task-card--progress {
+  background: var(--color-tertiary-surface);
+  box-shadow: inset 0 0 0 1px var(--color-tertiary-200);
 }
 
 .task-card--overdue {
@@ -488,12 +516,13 @@ function goAttendance() {
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2.125rem;
+  height: 2.125rem;
+  margin-top: 1px;
   border: none;
   border-radius: var(--radius-full);
   background: transparent;
-  box-shadow: inset 0 0 0 2px var(--color-border-strong);
+  box-shadow: inset 0 0 0 2.5px var(--color-border-strong);
   color: var(--color-on-tertiary);
   cursor: pointer;
 }
@@ -507,7 +536,8 @@ function goAttendance() {
   box-shadow: inset 0 0 0 2.5px var(--color-warning);
 }
 
-.task-card--upcoming .task-card__check {
+.task-card--upcoming .task-card__check,
+.task-card--progress .task-card__check {
   box-shadow: inset 0 0 0 2.5px var(--color-tertiary);
 }
 
@@ -516,15 +546,32 @@ function goAttendance() {
   box-shadow: none;
 }
 
-.task-card__main {
+.task-card__check--progress {
+  background: var(--color-tertiary-surface-strong, var(--color-tertiary-surface));
+}
+
+.task-card__check-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary);
+}
+
+.task-card__detail {
   flex: 1;
   min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .task-card__title {
   margin: 0;
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-size: 1.0625rem;
+  font-weight: 600;
   color: var(--color-text);
   line-height: 1.35;
 }
@@ -535,17 +582,44 @@ function goAttendance() {
 }
 
 .task-card__project {
-  margin: 2px 0 0;
-  font-size: 0.6875rem;
+  margin: 4px 0 0;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--color-text-muted);
 }
 
-.task-card__time {
+.task-card__aside {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  min-width: 3.75rem;
+}
+
+.task-card__quick {
+  padding: 0.2rem 0.55rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary);
+  color: var(--color-on-tertiary);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.task-card__quick:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.task-card__time {
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-text-muted);
+  line-height: 1.2;
 }
 
 .task-card--overdue .task-card__time {
@@ -607,19 +681,20 @@ function goAttendance() {
 }
 
 .notice-card__title {
-  font-size: 0.875rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--color-text);
-  line-height: 1.3;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
 }
 
 .notice-card__meta {
   font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
-.notice-card__chevron {
-  flex-shrink: 0;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
