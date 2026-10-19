@@ -1,6 +1,6 @@
 //
-// Khung AppShell PWA: gắn kích thước shell theo visualViewport (PWAProvider pattern).
-// Tránh inset:0 + 100dvh — layout viewport iOS có thể cao hơn vùng nhìn → hở đáy.
+// Co khung AppShell theo visualViewport CHỈ khi bàn phím mở (PWA UI / BottomSheet:
+// tránh double inset — shell full màn + footer giữ safe-bottom một lần).
 //
 import { isPwaStandalone } from './pwaStandalone';
 
@@ -8,6 +8,11 @@ export const PWA_VV_HEIGHT = '--pwa-vv-height';
 export const PWA_VV_OFFSET_TOP = '--pwa-vv-offset-top';
 export const PWA_VV_OFFSET_LEFT = '--pwa-vv-offset-left';
 export const PWA_VV_WIDTH = '--pwa-vv-width';
+
+export const PWA_VV_KEYBOARD_CLASS = 'pwa-vv-keyboard';
+
+/** @type {number} px — co khung khi layout cao hơn visual viewport (keyboard / zoom UI). */
+const KEYBOARD_INSET_THRESHOLD = 72;
 
 const VV_PROPS = [PWA_VV_HEIGHT, PWA_VV_OFFSET_TOP, PWA_VV_OFFSET_LEFT, PWA_VV_WIDTH];
 
@@ -19,10 +24,16 @@ export function clearPwaVisualViewport() {
   }
 }
 
+function setKeyboardFrame(active) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.classList.toggle(PWA_VV_KEYBOARD_CLASS, active);
+}
+
 export function syncPwaVisualViewport() {
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
   if (!isPwaStandalone()) {
     clearPwaVisualViewport();
+    setKeyboardFrame(false);
     return;
   }
 
@@ -31,13 +42,25 @@ export function syncPwaVisualViewport() {
 
   if (!vv) {
     clearPwaVisualViewport();
+    setKeyboardFrame(false);
     return;
   }
 
+  const layoutHeight = window.innerHeight;
   const height = Math.max(0, Math.round(vv.height));
   const offsetTop = Math.max(0, Math.round(vv.offsetTop));
   const offsetLeft = Math.max(0, Math.round(vv.offsetLeft));
   const width = Math.max(0, Math.round(vv.width));
+  const keyboardInset = layoutHeight - height - offsetTop;
+  const keyboardOpen = keyboardInset >= KEYBOARD_INSET_THRESHOLD;
+
+  if (!keyboardOpen) {
+    clearPwaVisualViewport();
+    setKeyboardFrame(false);
+    return;
+  }
+
+  setKeyboardFrame(true);
 
   if (height > 0) {
     root.style.setProperty(PWA_VV_HEIGHT, `${height}px`);

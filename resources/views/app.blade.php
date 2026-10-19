@@ -43,17 +43,7 @@
                 window.matchMedia('(display-mode: standalone)').matches ||
                 window.matchMedia('(display-mode: fullscreen)').matches ||
                 window.navigator.standalone === true;
-            if (s) {
-                document.documentElement.classList.add('pwa-standalone');
-                var vv = window.visualViewport;
-                if (vv) {
-                    var root = document.documentElement;
-                    root.style.setProperty('--pwa-vv-height', Math.round(vv.height) + 'px');
-                    root.style.setProperty('--pwa-vv-offset-top', Math.round(vv.offsetTop) + 'px');
-                    root.style.setProperty('--pwa-vv-offset-left', Math.round(vv.offsetLeft) + 'px');
-                    root.style.setProperty('--pwa-vv-width', Math.round(vv.width) + 'px');
-                }
-            }
+            if (s) document.documentElement.classList.add('pwa-standalone');
         })();
     </script>
     <meta name="csrf-token" content="{{ csrf_token() }}">

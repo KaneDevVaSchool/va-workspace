@@ -4,8 +4,8 @@
  * App shell (header | main scroll | tabbar in-flow) — tabbar không fixed riêng.
  * Chiều cao shell:
  *   · Safari tab: --employee-shell-height (px) = visualViewport.height (JS)
- *   · PWA standalone: khung theo visualViewport (--pwa-vv-*, pwaVisualViewport.js)
- * Safe-area: header = top inset (1 lần); footer tabbar = bottom inset (1 lần) — PWA UI.
+ *   · PWA standalone: khung inset:0; chỉ co theo visualViewport khi bàn phím (pwa-vv-keyboard)
+ * Safe-area: header = top; footer tabbar = bottom (mỗi cạnh một lần) — PWA UI app layout.
  *
  * Debug trên iPhone: localStorage.setItem('va-employee-viewport-debug','1') → reload.
  */
@@ -107,19 +107,25 @@ html.employee-mobile-pwa {
     overflow: hidden;
   }
 
-  /*
-   * PWA AppShell: một khung visual viewport — không inset:0 + 100dvh (pwaui.com/guides/app-layout).
-   */
+  /* PWA: full màn — safe-area chỉ trong header/footer, không thu shell theo vv (tránh đẩy đáy lên). */
   .employee-shell--pwa:not(.emp-shell-preview__shell) {
     position: fixed;
+    inset: 0;
     z-index: 0;
+    width: 100%;
+    max-width: 100vw;
+    overflow: hidden;
+  }
+
+  /* Bàn phím: co khung theo visualViewport (BottomSheet / composer — không double safe-bottom). */
+  html.pwa-vv-keyboard .employee-shell--pwa:not(.emp-shell-preview__shell) {
+    inset: auto;
     top: var(--pwa-vv-offset-top, 0px);
     left: var(--pwa-vv-offset-left, 0px);
     width: var(--pwa-vv-width, 100%);
     max-width: 100vw;
-    height: var(--pwa-vv-height, 100svh);
-    max-height: var(--pwa-vv-height, 100svh);
-    overflow: hidden;
+    height: var(--pwa-vv-height, 100%);
+    max-height: var(--pwa-vv-height, 100%);
   }
 }
 
@@ -755,9 +761,9 @@ html.employee-mobile-pwa {
   box-shadow: none;
 }
 
-/* Footer (AppShell.Footer): bottom safe-area chỉ ở vùng tabbar ngoài — không lồng thêm trong __bar */
+/* Footer: home indicator — chỉ env (không max thêm space; space-1 đã ở padding-top wrapper). */
 .employee-tabbar--pwa.employee-tabbar--shell {
-  padding-bottom: max(var(--space-1), var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px)));
+  padding-bottom: var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px));
 }
 
 .employee-tabbar__bar {
