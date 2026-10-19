@@ -132,7 +132,6 @@ const tabs = [
               <h2 class="section-head__title">Việc thường ngày</h2>
               <span class="section-head__link">Xem tất cả</span>
             </div>
-            <p class="employee-home__hint">Công việc được giao từ dự án và module công việc.</p>
             <ul class="task-list">
               <li class="task-card task-card--upcoming">
                 <span class="task-card__check task-card__check--preview" aria-hidden="true"></span>
@@ -150,7 +149,6 @@ const tabs = [
               <h2 class="section-head__title">Thông báo mới</h2>
               <span class="section-head__link">Xem tất cả</span>
             </div>
-            <p class="employee-home__hint">Ba tin mới nhất trên bảng tin chung.</p>
             <ul class="notice-list">
               <li>
                 <span class="notice-card notice-card--preview">
@@ -321,13 +319,6 @@ const tabs = [
 
 .employee-home__section--last {
   padding-bottom: var(--space-2);
-}
-
-.employee-home__hint {
-  margin: calc(-1 * var(--space-1)) 0 0;
-  font-size: 0.75rem;
-  line-height: 1.4;
-  color: var(--color-text-muted);
 }
 
 .task-list,

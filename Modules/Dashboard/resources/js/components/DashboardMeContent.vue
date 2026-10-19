@@ -99,9 +99,6 @@ function onUtilitySelect(item) {
       <div class="dashboard-me__hero-copy">
         <p class="dashboard-me__hero-kicker">{{ greeting }}, {{ displayName }}</p>
         <h2 class="dashboard-me__hero-title">Hôm nay bạn tập trung vào việc gì?</h2>
-        <p class="dashboard-me__hero-lead">
-          Theo dõi công việc được giao, lọc theo trạng thái và mở nhanh các tiện ích thường dùng.
-        </p>
         <div v-if="activeStatusLabel" class="dashboard-me__filter-chip">
           <AppIcon name="sliders" :size="14" />
           <span>Đang lọc: {{ activeStatusLabel }}</span>
@@ -153,7 +150,6 @@ function onUtilitySelect(item) {
       <div class="dashboard-me__panel-head dashboard-me__panel-head--row">
         <div>
           <h2>Tiện ích nhanh</h2>
-          <p class="dashboard-me__panel-sub">Lối tắt do quản trị hệ thống cấu hình</p>
         </div>
         <AppIcon name="sparkles" :size="18" class="dashboard-me__panel-accent-icon" aria-hidden="true" />
       </div>
@@ -183,7 +179,6 @@ function onUtilitySelect(item) {
       <section class="dashboard-me__panel dashboard-me__panel--donut">
         <div class="dashboard-me__panel-head">
           <h2>Công việc theo trạng thái</h2>
-          <p class="dashboard-me__panel-sub">Chạm vào một phần biểu đồ để lọc bảng bên cạnh</p>
         </div>
         <DashboardSkeleton v-if="overviewLoading" height="240px" />
         <DonutChart
@@ -279,14 +274,6 @@ function onUtilitySelect(item) {
   font-size: clamp(1.25rem, 2vw, 1.625rem);
   font-weight: 800;
   line-height: 1.25;
-}
-
-.dashboard-me__hero-lead {
-  margin: 0;
-  max-width: 36rem;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  opacity: 0.9;
 }
 
 .dashboard-me__filter-chip {

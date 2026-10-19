@@ -1,7 +1,7 @@
 <script setup>
 //
 // Cấu hình tiện ích nhanh Dashboard — danh sách chỉnh bên trái, xem trước
-// song song giống /dashboard/me (desktop + mobile compact).
+// song song giao diện nhân viên trên điện thoại.
 //
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
@@ -28,7 +28,7 @@ const emit = defineEmits([
 ]);
 
 const filter = ref('all');
-const previewMode = ref('desktop');
+const previewMode = ref('mobile-home');
 const openMenuKey = ref(null);
 const menuRootRef = ref(null);
 
@@ -54,9 +54,8 @@ const canShowAll = computed(() => hiddenCount.value > 0 && !props.busy);
 const canHideAll = computed(() => visibleCount.value > 0 && !props.busy);
 
 const previewModeLabels = {
-  desktop: 'Máy tính',
-  'mobile-home': 'ĐT — trang chủ',
-  'mobile-all': 'ĐT — xem tất cả',
+  'mobile-home': 'Trang chủ',
+  'mobile-all': 'Xem tất cả',
 };
 
 function linkSummary(item) {
@@ -285,10 +284,6 @@ onBeforeUnmount(() => {
 
       <aside class="dqu-panel__preview" aria-label="Hình minh hoạ giao diện nhân viên">
         <div class="dqu-panel__preview-head">
-          <div>
-            <p class="dqu-panel__preview-kicker">Hình minh hoạ</p>
-            <p class="dqu-panel__preview-title">Đúng như nhân viên sẽ thấy</p>
-          </div>
           <div class="dqu-panel__preview-modes" role="group" aria-label="Chọn màn hình xem thử">
             <button
               v-for="(label, key) in previewModeLabels"
@@ -694,25 +689,9 @@ onBeforeUnmount(() => {
 
 .dqu-panel__preview-head {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
+  align-items: center;
+  justify-content: flex-end;
   flex-shrink: 0;
-}
-
-.dqu-panel__preview-kicker {
-  margin: 0;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
-.dqu-panel__preview-title {
-  margin: 0.15rem 0 0;
-  font-size: 0.875rem;
-  font-weight: 700;
 }
 
 .dqu-panel__preview-modes {

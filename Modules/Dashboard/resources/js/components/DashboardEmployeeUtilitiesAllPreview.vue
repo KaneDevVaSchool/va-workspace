@@ -37,9 +37,6 @@ const tabs = [
 
       <main class="employee-shell__content">
         <div class="emp-util-all-preview__body">
-          <p class="emp-util-all-preview__hint">
-            Trang này mở khi nhân viên chọn <strong>Xem tất cả</strong> ở trang chủ điện thoại.
-          </p>
           <QuickUtilitiesGrid
             :items="utilities"
             :loading="loading"
@@ -94,17 +91,5 @@ const tabs = [
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-4) var(--space-6);
-}
-
-.emp-util-all-preview__hint {
-  margin: 0;
-  font-size: 0.75rem;
-  line-height: 1.45;
-  color: var(--color-text-muted);
-}
-
-.emp-util-all-preview__hint strong {
-  font-weight: 700;
-  color: var(--color-text);
 }
 </style>

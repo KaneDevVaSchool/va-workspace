@@ -1,7 +1,7 @@
 <script setup>
 //
 // superadmin/workspace-config/quick-utilities — cấu hình lối tắt trên
-// /dashboard/me (desktop + mobile EmployeeHome), xem trước song song.
+// xem trước giao diện nhân viên (điện thoại) song song danh sách cấu hình.
 //
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
@@ -313,13 +313,6 @@ onMounted(loadUtilities);
     </PageHeader>
 
     <div class="dqu-page__body">
-      <p class="dqu-page__lead">
-        <strong>Bên trái:</strong> danh sách lối tắt — bật/tắt hiển thị, sắp thứ tự, bật bảo trì khi tính năng tạm ngưng.
-        <strong>Bên phải:</strong> hình minh hoạ đúng giao diện nhân viên (máy tính, điện thoại trang chủ, hoặc màn
-        «Xem tất cả» trên điện thoại). Công tắc xanh = nhân viên thấy lối tắt; nhãn <strong>Bảo trì</strong> = vẫn thấy
-        tên nhưng không mở được.
-      </p>
-
       <QuickUtilitiesConfigPanel
         :utilities="utilities"
         :preview-items="previewUtilities"
@@ -357,7 +350,6 @@ onMounted(loadUtilities);
                 <label v-if="dialogMode === 'create'" class="dqu-field">
                   <span class="dqu-field__label">Mã nội bộ (không bắt buộc)</span>
                   <input v-model="form.utility_key" class="dqu-field__input" type="text" placeholder="vd: phieu_luong" />
-                  <span class="dqu-field__hint">Chỉ dùng để phân biệt trong hệ thống, nhân viên không thấy.</span>
                 </label>
                 <label class="dqu-field">
                   <span class="dqu-field__label">Tên trên màn hình</span>
@@ -366,7 +358,6 @@ onMounted(loadUtilities);
                 <label class="dqu-field">
                   <span class="dqu-field__label">Biểu tượng (tên icon)</span>
                   <input v-model="form.icon" class="dqu-field__input" type="text" required maxlength="64" placeholder="vd: clock" />
-                  <span class="dqu-field__hint">Nhập tên icon có sẵn, ví dụ clock, calendar, users.</span>
                 </label>
                 <label class="dqu-field">
                   <span class="dqu-field__label">Màu ô biểu tượng</span>
@@ -392,9 +383,6 @@ onMounted(loadUtilities);
                     maxlength="512"
                     :placeholder="form.link_type === 'route' ? 'vd: employee.attendance' : 'https://…'"
                   />
-                  <span v-if="form.link_type === 'route'" class="dqu-field__hint">
-                    Hỏi bộ phận kỹ thuật nếu không chắc tên trang.
-                  </span>
                 </label>
                 <label class="dqu-field dqu-field--check">
                   <input v-model="form.is_visible" type="checkbox" />
@@ -451,20 +439,6 @@ onMounted(loadUtilities);
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5) var(--space-5);
   overflow: hidden;
-}
-
-.dqu-page__lead {
-  margin: 0;
-  max-width: 52rem;
-  font-size: 0.875rem;
-  line-height: 1.55;
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-}
-
-.dqu-page__lead code {
-  font-size: 0.8125rem;
-  color: var(--color-text);
 }
 
 .dqu-page__link {
@@ -607,12 +581,6 @@ onMounted(loadUtilities);
 .dqu-field__label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--color-text-muted);
-}
-
-.dqu-field__hint {
-  font-size: 0.6875rem;
-  line-height: 1.4;
   color: var(--color-text-muted);
 }
 

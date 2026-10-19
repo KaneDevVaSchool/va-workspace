@@ -96,13 +96,6 @@ function taskCardStatus(task) {
   return 'pending';
 }
 
-function taskCardHint(task) {
-  if (task.status === 'completed') return undefined;
-  if (task.is_overdue) return 'Quá hạn';
-  if (task.end_date && isSameCalendarDay(task.end_date, new Date())) return 'Hôm nay';
-  return undefined;
-}
-
 function formatTaskTime(task) {
   if (task.due_time && typeof task.due_time === 'string' && task.due_time.length >= 5) {
     return task.due_time.slice(0, 5);
@@ -238,39 +231,36 @@ function goAttendance() {
           Xem tất cả
         </button>
       </div>
-      <p class="employee-home__hint">
-        <AppIcon name="listChecks" :size="14" class="employee-home__hint-icon" />
-        Công việc được giao từ dự án và module công việc. Chạm vòng tròn để đánh dấu hoàn thành.
-      </p>
       <p v-if="overviewLoading" class="employee-home__loading">Đang tải công việc…</p>
       <p v-else-if="tasks.length === 0" class="employee-home__empty">Bạn chưa có công việc nào được giao.</p>
-      <ul v-else class="task-list">
-        <li
-          v-for="item in tasks"
-          :key="item.id"
-          class="task-card"
-          :class="`task-card--${taskCardStatus(item)}`"
-        >
-          <button
-            type="button"
-            class="task-card__check"
-            :class="{ 'task-card__check--done': item.status === 'completed' }"
-            :disabled="taskBusyId === item.id"
-            :aria-label="item.status === 'completed' ? `Bỏ đánh dấu xong: ${item.title}` : `Đánh dấu đã xong: ${item.title}`"
-            @click="toggleDone(item)"
+      <div v-else class="employee-home__task-scroll hide-scrollbar">
+        <ul class="task-list">
+          <li
+            v-for="item in tasks"
+            :key="item.id"
+            class="task-card"
+            :class="`task-card--${taskCardStatus(item)}`"
           >
-            <AppIcon v-if="item.status === 'completed'" name="check" :size="16" :stroke-width="2.5" />
-          </button>
-          <div class="task-card__main">
-            <p class="task-card__title" :class="{ 'task-card__title--done': item.status === 'completed' }">
-              {{ item.title }}
-            </p>
-            <p v-if="item.project_name" class="task-card__project">{{ item.project_name }}</p>
-            <p v-if="taskCardHint(item)" class="task-card__hint">{{ taskCardHint(item) }}</p>
-          </div>
-          <span class="task-card__time">{{ formatTaskTime(item) }}</span>
-        </li>
-      </ul>
+            <button
+              type="button"
+              class="task-card__check"
+              :class="{ 'task-card__check--done': item.status === 'completed' }"
+              :disabled="taskBusyId === item.id"
+              :aria-label="item.status === 'completed' ? `Bỏ đánh dấu xong: ${item.title}` : `Đánh dấu đã xong: ${item.title}`"
+              @click="toggleDone(item)"
+            >
+              <AppIcon v-if="item.status === 'completed'" name="check" :size="16" :stroke-width="2.5" />
+            </button>
+            <div class="task-card__main">
+              <p class="task-card__title" :class="{ 'task-card__title--done': item.status === 'completed' }">
+                {{ item.title }}
+              </p>
+              <p v-if="item.project_name" class="task-card__project">{{ item.project_name }}</p>
+            </div>
+            <span class="task-card__time">{{ formatTaskTime(item) }}</span>
+          </li>
+        </ul>
+      </div>
     </section>
 
     <section class="employee-home__section employee-home__section--last">
@@ -280,10 +270,6 @@ function goAttendance() {
           Xem tất cả
         </button>
       </div>
-      <p class="employee-home__hint">
-        <AppIcon name="megaphone" :size="14" class="employee-home__hint-icon" />
-        Ba tin mới nhất trên bảng tin chung. Xem thêm trên máy tính.
-      </p>
       <p v-if="feedLoading" class="employee-home__loading">Đang tải thông báo…</p>
       <p v-else-if="feedPosts.length === 0" class="employee-home__empty">Chưa có bài đăng nào trên bảng tin chung.</p>
       <ul v-else class="notice-list">
@@ -452,20 +438,11 @@ function goAttendance() {
   cursor: pointer;
 }
 
-.employee-home__hint {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-1);
-  margin: calc(-1 * var(--space-1)) 0 0;
-  font-size: 0.75rem;
-  line-height: 1.4;
-  color: var(--color-text-muted);
-}
-
-.employee-home__hint-icon {
-  flex-shrink: 0;
-  margin-top: 1px;
-  opacity: 0.7;
+.employee-home__task-scroll {
+  max-height: min(20rem, 42vh);
+  overflow-y: auto;
+  margin: 0 calc(-1 * var(--space-1));
+  padding: 0 var(--space-1);
 }
 
 .employee-home__loading,
@@ -562,20 +539,6 @@ function goAttendance() {
   font-size: 0.6875rem;
   font-weight: 500;
   color: var(--color-text-muted);
-}
-
-.task-card__hint {
-  margin: 2px 0 0;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.task-card--overdue .task-card__hint {
-  color: var(--color-warning);
-}
-
-.task-card--upcoming .task-card__hint {
-  color: var(--color-tertiary);
 }
 
 .task-card__time {

@@ -43,7 +43,7 @@ onMounted(() => {
   <EmployeeHome v-if="isEmployeeMobile" />
 
   <template v-else>
-    <PageHeader title="Dashboard của tôi" subtitle="Tổng quan tiến độ và lối tắt công việc hằng ngày">
+    <PageHeader title="Dashboard của tôi">
       <template #actions>
         <button
           type="button"
