@@ -1,12 +1,10 @@
 //
 // Chiều cao app shell mobile nhân viên — tách rõ Safari tab vs PWA standalone.
 //
-// Safari (Case browser): vùng nhìn thấy = visualViewport.height (thanh URL co giãn).
-// PWA iOS (WebKit #254868): không dùng visualViewport cho chiều cao shell;
-//   một nguồn duy nhất = document.documentElement.clientHeight (layout viewport).
-//
-// Biến CSS: --employee-shell-height (px), chỉ ghi khi đo được > 0.
-// Tabbar: safe-area qua env() + probe JS (--employee-safe-*), không bù height shell.
+// · Safari tab: ghi --employee-shell-height = visualViewport.height (px).
+// · PWA iOS: KHÔNG ghi --employee-shell-height — WebKit có thể trả clientHeight /
+//   innerHeight thiếu vài chục px (#254868); shell PWA dùng CSS position:fixed; inset:0.
+// · Safe-area tabbar: env() + probe --employee-safe-* (employeeSafeArea.js), không bù shell.
 //
 import { isPwaStandalone } from '@/lib/pwaStandalone';
 
@@ -19,7 +17,7 @@ export function employeeShellViewportMode() {
   return isPwaStandalone() ? 'pwa' : 'browser';
 }
 
-/** Safari tab — chiều cao vùng layout trừ thanh trình duyệt. */
+/** Safari tab — vùng nhìn thấy khi thanh URL co giãn. */
 export function measureBrowserShellHeightPx() {
   if (typeof window === 'undefined') return 0;
   const vv = window.visualViewport;
@@ -27,31 +25,32 @@ export function measureBrowserShellHeightPx() {
   return Math.max(0, Math.round(h));
 }
 
-/**
- * PWA standalone — layout viewport (không bù URL bar vì không có).
- * clientHeight: nguồn ổn định trên iOS A2HS; không cộng safe-area (tabbar tự xử lý).
- */
-export function measurePwaShellHeightPx() {
-  if (typeof document === 'undefined' || typeof window === 'undefined') return 0;
-  const layout = document.documentElement.clientHeight;
-  if (layout > 0) return Math.round(layout);
-  return Math.max(0, Math.round(window.innerHeight));
+/** Chỉ để debug / so sánh trên thiết bị — không ghi lên CSS trong PWA. */
+export function readPwaLayoutHeightCandidatesPx() {
+  if (typeof document === 'undefined' || typeof window === 'undefined') {
+    return { clientHeight: 0, innerHeight: 0, visualViewportLayout: 0 };
+  }
+  const vv = window.visualViewport;
+  const visualViewportLayout = vv
+    ? Math.max(0, Math.round(vv.height + vv.offsetTop))
+    : 0;
+  return {
+    clientHeight: document.documentElement.clientHeight,
+    innerHeight: window.innerHeight,
+    visualViewportLayout,
+  };
 }
 
-export function measureEmployeeShellHeightPx(mode = employeeShellViewportMode()) {
-  return mode === 'pwa' ? measurePwaShellHeightPx() : measureBrowserShellHeightPx();
-}
-
-function readDiagnostics() {
+export function readEmployeeViewportDiagnostics() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return null;
   const vv = window.visualViewport;
   return {
     mode: employeeShellViewportMode(),
-    clientHeight: document.documentElement.clientHeight,
-    innerHeight: window.innerHeight,
+    browserShellHeight: measureBrowserShellHeightPx(),
+    pwaCandidates: readPwaLayoutHeightCandidatesPx(),
     visualViewportHeight: vv?.height ?? null,
     visualViewportOffsetTop: vv?.offsetTop ?? null,
-    shellHeightApplied: document.documentElement.style.getPropertyValue(
+    shellHeightVarApplied: document.documentElement.style.getPropertyValue(
       EMPLOYEE_SHELL_HEIGHT_VAR,
     ),
   };
@@ -60,14 +59,22 @@ function readDiagnostics() {
 function maybeLogDiagnostics() {
   if (typeof localStorage === 'undefined') return;
   if (localStorage.getItem(DEBUG_KEY) !== '1') return;
-  console.info('[employee-shell viewport]', readDiagnostics());
+  console.info('[employee-shell viewport]', readEmployeeViewportDiagnostics());
 }
 
-/** Ghi hoặc xóa --employee-shell-height trên <html>. */
+/**
+ * Browser: set --employee-shell-height.
+ * PWA: luôn xóa biến — tránh khóa shell theo px đo thiếu.
+ */
 export function syncEmployeeShellHeight() {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
-  const height = measureEmployeeShellHeightPx();
+  if (employeeShellViewportMode() === 'pwa') {
+    root.style.removeProperty(EMPLOYEE_SHELL_HEIGHT_VAR);
+    maybeLogDiagnostics();
+    return;
+  }
+  const height = measureBrowserShellHeightPx();
   if (height > 0) {
     root.style.setProperty(EMPLOYEE_SHELL_HEIGHT_VAR, `${height}px`);
   } else {

@@ -2,9 +2,9 @@
  * Shell mobile nhân viên (EmployeeMobileLayout)
  *
  * App shell (header | main scroll | tabbar in-flow) — tabbar không fixed riêng.
- * Chiều cao shell: --employee-shell-height (px) từ employeeMobileViewport.js
- *   · Safari tab: visualViewport.height
- *   · PWA standalone: document.documentElement.clientHeight
+ * Chiều cao shell:
+ *   · Safari tab: --employee-shell-height (px) = visualViewport.height (JS)
+ *   · PWA standalone: không dùng biến JS — shell position:fixed; inset:0
  * Safe-area tabbar PWA: padding trong .employee-tabbar__bar (env + --employee-safe-bottom).
  *
  * Debug trên iPhone: localStorage.setItem('va-employee-viewport-debug','1') → reload.
@@ -86,12 +86,9 @@ html.employee-mobile-pwa {
   html.employee-mobile-pwa {
     background-color: var(--color-bg);
     --employee-tabbar-block-size: 3.25rem;
-    height: var(--employee-shell-height, 100svh);
-    max-height: var(--employee-shell-height, 100svh);
     overflow: hidden;
   }
 
-  html.employee-mobile-pwa body,
   html.employee-mobile-pwa #app,
   html.employee-mobile-pwa .app-shell {
     height: 100%;
@@ -100,32 +97,24 @@ html.employee-mobile-pwa {
     overflow: hidden;
   }
 
+  /*
+   * PWA: full màn qua inset — không height/max-height px từ JS (tránh Case A).
+   * body đã position:fixed; inset:0 (app.css :has(.employee-shell)).
+   */
   .employee-shell--pwa:not(.emp-shell-preview__shell) {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
+    inset: 0;
     z-index: 0;
     width: 100%;
     max-width: 100vw;
-    height: var(--employee-shell-height, 100svh);
-    max-height: var(--employee-shell-height, 100svh);
     overflow: hidden;
   }
 }
 
 @media (max-width: 768px) and (display-mode: standalone) {
-  html:has(.employee-shell--pwa:not(.emp-shell-preview__shell)),
-  html:has(.employee-shell--pwa:not(.emp-shell-preview__shell)) body,
-  html:has(.employee-shell--pwa:not(.emp-shell-preview__shell)) #app,
-  html:has(.employee-shell--pwa:not(.emp-shell-preview__shell)) .app-shell {
-    height: var(--employee-shell-height, 100svh);
-    max-height: var(--employee-shell-height, 100svh);
-  }
-
   .employee-shell--pwa:not(.emp-shell-preview__shell) {
-    height: var(--employee-shell-height, 100svh);
-    max-height: var(--employee-shell-height, 100svh);
+    position: fixed;
+    inset: 0;
   }
 }
 
