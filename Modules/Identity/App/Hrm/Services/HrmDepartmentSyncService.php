@@ -3,6 +3,7 @@
 namespace Modules\Identity\App\Hrm\Services;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
@@ -162,6 +163,24 @@ class HrmDepartmentSyncService
      */
     public function ensureUserDepartment(User $user): void
     {
+    }
+
+    /** Đồng bộ danh mục phòng ban HRM → workspace, tối đa 1 lần mỗi TTL (mặc định 15 phút). */
+    public function syncDepartmentsFromHrmIfStale(): void
+    {
+        if (! self::isConfigured()) {
+            return;
+        }
+
+        $ttlSeconds = max(60, (int) config('services.hrm.hrm_roster_cache_ttl', 900));
+        $doneKey = 'hrm:department_catalog_sync:done';
+
+        if (Cache::has($doneKey)) {
+            return;
+        }
+
+        $this->syncDepartmentsFromHrm();
+        Cache::put($doneKey, now()->timestamp, $ttlSeconds);
     }
 
     public function syncDepartmentsFromHrm(): void

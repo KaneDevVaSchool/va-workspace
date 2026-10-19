@@ -7,7 +7,6 @@ import { computed, inject, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
-import { EMPLOYEE_SHELL_BLOCK_MESSAGE } from '@/lib/employeeMobileShellRoutes';
 import QuickUtilitiesGrid from '@modules/Dashboard/resources/js/components/QuickUtilitiesGrid.vue';
 import {
   EMPLOYEE_HOME_UTILITIES_LIMIT,
@@ -26,8 +25,6 @@ const {
   overviewLoading,
   feedPosts,
   feedLoading,
-  visibleTasks,
-  hiddenTaskCount,
   doneCount,
   tasks,
   taskProgressPercent,
@@ -131,18 +128,13 @@ function openFeedAll() {
 
 function postIconTone(post) {
   if (post?.pin_scope === 'system') return 'tertiary';
-  if (post?.is_pinned) return 'success';
-  return 'tertiary';
+  if (post?.is_pinned) return 'gold';
+  return 'primary';
 }
 
 function postIconName(post) {
   if (post?.pin_scope === 'system' || post?.is_pinned) return 'megaphone';
   return 'fileText';
-}
-
-function promptDesktopOnly(event) {
-  event?.preventDefault?.();
-  showClientToast('info', EMPLOYEE_SHELL_BLOCK_MESSAGE, { duration: 9000 });
 }
 
 async function patchTaskStatus(task, nextStatus) {
@@ -256,15 +248,15 @@ function goQuick(name) {
     </div>
 
     <nav class="employee-home__quick" aria-label="Lối tắt nhanh">
-      <button type="button" class="quick-chip" @click="goQuick('employee.feed')">
+      <button type="button" class="quick-chip quick-chip--primary" @click="goQuick('employee.feed')">
         <AppIcon name="megaphone" :size="16" />
         Bảng tin
       </button>
-      <button type="button" class="quick-chip" @click="goQuick('employee.attendance')">
+      <button type="button" class="quick-chip quick-chip--secondary" @click="goQuick('employee.attendance')">
         <AppIcon name="clock" :size="16" />
         Chấm công
       </button>
-      <button type="button" class="quick-chip" @click="goQuick('employee.leave')">
+      <button type="button" class="quick-chip quick-chip--tertiary" @click="goQuick('employee.leave')">
         <AppIcon name="calendar" :size="16" />
         Nghỉ phép
       </button>
@@ -293,71 +285,80 @@ function goQuick(name) {
       />
     </section>
 
-    <section class="employee-home__section">
+    <section class="employee-home__section employee-home__section--daily">
       <div class="section-head">
         <h2 class="section-head__title">Việc thường ngày</h2>
-        <button type="button" class="section-head__link section-head__link--btn" @click="promptDesktopOnly">
-          Xem tất cả
-        </button>
-      </div>
-      <p v-if="overviewLoading" class="employee-home__loading">Đang tải công việc…</p>
-      <div v-else-if="tasks.length === 0" class="employee-home__empty-state">
-        <span class="employee-home__empty-icon" aria-hidden="true">
-          <AppIcon name="sparkles" :size="22" />
+        <span
+          v-if="!overviewLoading && tasks.length"
+          class="daily-tasks__summary"
+          :class="{ 'daily-tasks__summary--warn': overdueCount > 0 }"
+        >
+          {{ doneCount }}/{{ tasks.length }}
+          <span v-if="overdueCount > 0" class="daily-tasks__summary-overdue">{{ overdueCount }} trễ</span>
         </span>
-        <p class="employee-home__empty-title">Không có việc nào hôm nay</p>
-        <p class="employee-home__empty">Bạn có thể xem bảng tin hoặc mở tiện ích nhanh phía trên.</p>
       </div>
-      <div v-else class="employee-home__task-scroll hide-scrollbar">
-        <ul class="task-list">
+
+      <div class="daily-tasks">
+        <ul v-if="overviewLoading" class="daily-tasks__list" aria-busy="true">
+          <li v-for="n in 4" :key="n" class="daily-tasks__row daily-tasks__row--sk">
+            <span class="daily-tasks__sk-check" />
+            <span class="daily-tasks__sk-lines">
+              <span class="employee-home__shimmer daily-tasks__sk-line" />
+              <span class="employee-home__shimmer daily-tasks__sk-line daily-tasks__sk-line--short" />
+            </span>
+          </li>
+        </ul>
+
+        <div v-else-if="tasks.length === 0" class="daily-tasks__empty">
+          <AppIcon name="listChecks" :size="20" aria-hidden="true" />
+          <p>Không có việc hôm nay</p>
+        </div>
+
+        <ul v-else class="daily-tasks__list hide-scrollbar daily-tasks__list--scroll">
           <li
-            v-for="(item, index) in visibleTasks"
+            v-for="item in tasks"
             :key="item.id"
-            class="task-card"
-            :class="`task-card--${taskCardStatus(item)}`"
-            :style="{ animationDelay: `${index * 40}ms` }"
+            class="daily-tasks__row"
+            :class="[
+              `daily-tasks__row--${taskCardStatus(item)}`,
+              { 'daily-tasks__row--done': item.status === 'completed' },
+            ]"
           >
             <button
               type="button"
-              class="task-card__check"
+              class="daily-tasks__check"
               :class="{
-                'task-card__check--done': item.status === 'completed',
-                'task-card__check--progress': item.status === 'in_progress',
+                'daily-tasks__check--done': item.status === 'completed',
+                'daily-tasks__check--progress': item.status === 'in_progress',
               }"
               :disabled="taskBusyId === item.id"
               :aria-label="item.status === 'completed' ? `Bỏ đánh dấu xong: ${item.title}` : `Đánh dấu đã xong: ${item.title}`"
               @click="toggleDone(item)"
             >
-              <AppIcon v-if="item.status === 'completed'" name="check" :size="18" :stroke-width="2.5" />
-              <span v-else-if="item.status === 'in_progress'" class="task-card__check-dot" aria-hidden="true"></span>
+              <AppIcon v-if="item.status === 'completed'" name="check" :size="16" :stroke-width="2.5" />
+              <span v-else-if="item.status === 'in_progress'" class="daily-tasks__check-dot" aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              class="task-card__detail"
-              @click="promptDesktopOnly"
-            >
-              <p class="task-card__title" :class="{ 'task-card__title--done': item.status === 'completed' }">
-                {{ item.title }}
-              </p>
-              <p v-if="item.project_name" class="task-card__project">{{ item.project_name }}</p>
-            </button>
-            <div class="task-card__aside">
+
+            <div class="daily-tasks__body">
+              <p class="daily-tasks__title">{{ item.title }}</p>
+              <p v-if="item.project_name" class="daily-tasks__meta">{{ item.project_name }}</p>
+            </div>
+
+            <div class="daily-tasks__end">
               <button
                 v-if="canMarkInProgress(item)"
                 type="button"
-                class="task-card__quick"
+                class="daily-tasks__action"
                 :disabled="taskBusyId === item.id"
+                aria-label="Đánh dấu đang làm"
                 @click="markInProgress(item)"
               >
-                Đang làm
+                <AppIcon name="play" :size="14" :stroke-width="2.2" />
               </button>
-              <span class="task-card__time">{{ formatTaskTime(item) }}</span>
+              <span class="daily-tasks__time">{{ formatTaskTime(item) }}</span>
             </div>
           </li>
         </ul>
-        <p v-if="hiddenTaskCount > 0" class="employee-home__more-tasks">
-          + {{ hiddenTaskCount }} việc khác — mở trên máy tính để xem đầy đủ
-        </p>
       </div>
     </section>
 
@@ -443,7 +444,7 @@ function goQuick(name) {
   border: none;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: 0 4px 18px rgba(9, 36, 78, 0.09);
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--color-primary-900) 10%, transparent);
   text-align: left;
   font-family: inherit;
   cursor: default;
@@ -474,18 +475,24 @@ function goQuick(name) {
 }
 
 .stat-card__icon--tasks {
-  background: var(--color-tertiary-surface);
-  color: var(--color-tertiary);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
 }
 
 .stat-card__icon--attendance {
-  background: var(--color-success-tint-bg);
-  color: var(--color-success);
+  background: var(--color-secondary-surface);
+  color: var(--color-secondary);
 }
 
 .stat-card__icon--pending {
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
+  background: var(--color-gold-surface);
+  color: var(--color-gold-700);
+}
+
+.stat-card__icon--in,
+.stat-card__icon--done {
+  background: var(--color-secondary-surface);
+  color: var(--color-secondary);
 }
 
 .stat-card__ring {
@@ -503,13 +510,13 @@ function goQuick(name) {
 
 .stat-card__ring-track {
   fill: none;
-  stroke: var(--color-tertiary-surface-strong);
+  stroke: var(--color-primary-surface-strong);
   stroke-width: 10;
 }
 
 .stat-card__ring-fill {
   fill: none;
-  stroke: var(--color-tertiary);
+  stroke: var(--color-primary);
   stroke-width: 10;
   stroke-linecap: round;
   stroke-dasharray: 326.7;
@@ -523,7 +530,7 @@ function goQuick(name) {
   place-items: center;
   font-size: 0.5625rem;
   font-weight: 800;
-  color: var(--color-tertiary);
+  color: var(--color-primary);
 }
 
 .stat-card__body {
@@ -558,7 +565,7 @@ function goQuick(name) {
 }
 
 .stat-card__warn {
-  color: var(--color-warning);
+  color: var(--color-primary-600);
   font-weight: 700;
 }
 
@@ -569,14 +576,14 @@ function goQuick(name) {
   left: var(--space-3);
   height: 0.3125rem;
   border-radius: var(--radius-full);
-  background: var(--color-tertiary-surface-strong);
+  background: var(--color-primary-surface-strong);
   overflow: hidden;
 }
 
 .stat-card__progress-fill {
   height: 100%;
   border-radius: var(--radius-full);
-  background: linear-gradient(90deg, var(--color-tertiary), var(--color-secondary));
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
   transition: width 280ms ease;
 }
 
@@ -621,6 +628,33 @@ function goQuick(name) {
   background: var(--color-surface-muted);
 }
 
+.quick-chip--primary {
+  box-shadow: inset 0 0 0 1px var(--color-primary-200);
+  color: var(--color-primary-800);
+}
+
+.quick-chip--primary :deep(.app-icon) {
+  color: var(--color-primary);
+}
+
+.quick-chip--secondary {
+  box-shadow: inset 0 0 0 1px var(--color-secondary-200);
+  color: var(--color-secondary-800);
+}
+
+.quick-chip--secondary :deep(.app-icon) {
+  color: var(--color-secondary);
+}
+
+.quick-chip--tertiary {
+  box-shadow: inset 0 0 0 1px var(--color-tertiary-200);
+  color: var(--color-tertiary-800);
+}
+
+.quick-chip--tertiary :deep(.app-icon) {
+  color: var(--color-tertiary);
+}
+
 .employee-home__section {
   display: flex;
   flex-direction: column;
@@ -655,7 +689,7 @@ function goQuick(name) {
   flex-shrink: 0;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--color-tertiary);
+  color: var(--color-primary);
   text-decoration: none;
 }
 
@@ -665,13 +699,6 @@ function goQuick(name) {
   background: transparent;
   font-family: inherit;
   cursor: pointer;
-}
-
-.employee-home__task-scroll {
-  max-height: min(22rem, 48vh);
-  overflow-y: auto;
-  margin: 0 calc(-1 * var(--space-1));
-  padding: 0 var(--space-1);
 }
 
 .employee-home__loading,
@@ -703,23 +730,271 @@ function goQuick(name) {
   width: 2.75rem;
   height: 2.75rem;
   border-radius: var(--radius-full);
-  background: var(--color-tertiary-surface);
-  color: var(--color-tertiary);
+  background: var(--color-gold-surface);
+  color: var(--color-gold-700);
 }
 
-.employee-home__empty-title {
-  margin: 0;
-  font-size: 0.9375rem;
+.employee-home__section--daily {
+  gap: var(--space-2);
+}
+
+.daily-tasks__summary {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font-size: 0.75rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--color-text);
 }
 
-.employee-home__more-tasks {
-  margin: var(--space-2) 0 0;
-  font-size: 0.75rem;
+.daily-tasks__summary--warn {
+  box-shadow: inset 0 0 0 1px var(--color-primary-200);
+}
+
+.daily-tasks__summary-overdue {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.daily-tasks {
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  overflow: hidden;
+}
+
+.daily-tasks__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daily-tasks__list--scroll {
+  max-height: min(20rem, 46vh);
+  overflow-y: auto;
+}
+
+.daily-tasks__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-text-muted);
-  text-align: center;
+}
+
+.daily-tasks__empty p {
+  margin: 0;
+}
+
+.daily-tasks__empty :deep(.app-icon) {
+  color: var(--color-text-muted);
+  opacity: 0.75;
+}
+
+.daily-tasks__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
+  background: var(--color-surface);
+  box-shadow: inset 0 -1px 0 var(--color-border);
+}
+
+.daily-tasks__row:last-child {
+  box-shadow: none;
+}
+
+.daily-tasks__row::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.daily-tasks__row--overdue::before {
+  background: var(--color-primary);
+}
+
+.daily-tasks__row--progress::before {
+  background: var(--color-tertiary);
+}
+
+.daily-tasks__row--upcoming::before {
+  background: var(--color-secondary);
+}
+
+.daily-tasks__row--done {
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-surface-muted));
+}
+
+.daily-tasks__row--done .daily-tasks__title {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.daily-tasks__row--sk {
+  pointer-events: none;
+  box-shadow: inset 0 -1px 0 var(--color-border);
+}
+
+.daily-tasks__sk-check {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+}
+
+.daily-tasks__sk-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.daily-tasks__sk-line {
+  display: block;
+  height: 0.625rem;
+  width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.daily-tasks__sk-line--short {
+  width: 55%;
+}
+
+.daily-tasks__check {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--color-border-strong);
+  color: var(--color-on-tertiary);
+  cursor: pointer;
+}
+
+.daily-tasks__check:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.daily-tasks__row--overdue .daily-tasks__check {
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+
+.daily-tasks__row--progress .daily-tasks__check,
+.daily-tasks__row--upcoming .daily-tasks__check {
+  box-shadow: inset 0 0 0 2px var(--color-tertiary);
+}
+
+.daily-tasks__check--done {
+  background: var(--color-secondary);
+  box-shadow: none;
+}
+
+.daily-tasks__check--progress {
+  background: var(--color-tertiary-surface-strong, var(--color-tertiary-surface));
+}
+
+.daily-tasks__check-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary);
+}
+
+.daily-tasks__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.daily-tasks__title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.daily-tasks__meta {
+  margin: 2px 0 0;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-tasks__end {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 2.75rem;
+}
+
+.daily-tasks__action {
+  display: grid;
+  place-items: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
+  cursor: pointer;
+}
+
+.daily-tasks__action:active:not(:disabled) {
+  background: var(--color-tertiary);
+  color: var(--color-on-tertiary);
+}
+
+.daily-tasks__action:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.daily-tasks__time {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.daily-tasks__row--overdue .daily-tasks__time {
+  color: var(--color-primary);
+}
+
+.daily-tasks__row--upcoming .daily-tasks__time {
+  color: var(--color-secondary-700);
 }
 
 .employee-home__shimmer {
@@ -746,28 +1021,7 @@ function goQuick(name) {
   }
 }
 
-.task-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.task-card {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-3);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-  animation: employee-home-rise 320ms ease both;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .task-card,
   .notice-card {
     animation: none;
   }
@@ -782,142 +1036,6 @@ function goQuick(name) {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.task-card--done {
-  background: var(--color-surface-muted);
-}
-
-.task-card--progress {
-  background: var(--color-tertiary-surface);
-  box-shadow: inset 0 0 0 1px var(--color-tertiary-200);
-}
-
-.task-card--overdue {
-  box-shadow: inset 0 0 0 1.5px var(--color-warning);
-}
-
-.task-card--upcoming {
-  background: var(--color-tertiary-surface);
-  box-shadow: inset 0 0 0 1px var(--color-tertiary-200);
-}
-
-.task-card__check {
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  width: 2.125rem;
-  height: 2.125rem;
-  margin-top: 1px;
-  border: none;
-  border-radius: var(--radius-full);
-  background: transparent;
-  box-shadow: inset 0 0 0 2.5px var(--color-border-strong);
-  color: var(--color-on-tertiary);
-  cursor: pointer;
-}
-
-.task-card__check:disabled {
-  opacity: 0.55;
-  cursor: wait;
-}
-
-.task-card--overdue .task-card__check {
-  box-shadow: inset 0 0 0 2.5px var(--color-warning);
-}
-
-.task-card--upcoming .task-card__check,
-.task-card--progress .task-card__check {
-  box-shadow: inset 0 0 0 2.5px var(--color-tertiary);
-}
-
-.task-card__check--done {
-  background: var(--color-success);
-  box-shadow: none;
-}
-
-.task-card__check--progress {
-  background: var(--color-tertiary-surface-strong, var(--color-tertiary-surface));
-}
-
-.task-card__check-dot {
-  width: 0.625rem;
-  height: 0.625rem;
-  border-radius: var(--radius-full);
-  background: var(--color-tertiary);
-}
-
-.task-card__detail {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  text-align: left;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.task-card__title {
-  margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 600;
-  color: var(--color-text);
-  line-height: 1.35;
-}
-
-.task-card__title--done {
-  color: var(--color-text-muted);
-  text-decoration: line-through;
-}
-
-.task-card__project {
-  margin: 4px 0 0;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--color-text-muted);
-}
-
-.task-card__aside {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-2);
-  min-width: 3.75rem;
-}
-
-.task-card__quick {
-  padding: 0.2rem 0.55rem;
-  border: none;
-  border-radius: var(--radius-full);
-  background: var(--color-tertiary);
-  color: var(--color-on-tertiary);
-  font-family: inherit;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-}
-
-.task-card__quick:disabled {
-  opacity: 0.55;
-  cursor: wait;
-}
-
-.task-card__time {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  line-height: 1.2;
-}
-
-.task-card--overdue .task-card__time {
-  color: var(--color-warning);
-}
-
-.task-card--upcoming .task-card__time {
-  color: var(--color-tertiary);
 }
 
 .notice-list {
@@ -959,7 +1077,7 @@ function goQuick(name) {
 }
 
 .notice-card--new::before {
-  background: var(--color-tertiary);
+  background: var(--color-primary);
 }
 
 .notice-card:active {
@@ -976,14 +1094,19 @@ function goQuick(name) {
   border-radius: var(--radius-md);
 }
 
+.notice-card__icon--primary {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
 .notice-card__icon--tertiary {
   background: var(--color-tertiary-surface);
   color: var(--color-tertiary);
 }
 
-.notice-card__icon--success {
-  background: var(--color-success-tint-bg);
-  color: var(--color-success);
+.notice-card__icon--gold {
+  background: var(--color-gold-surface);
+  color: var(--color-gold-700);
 }
 
 .notice-card__body {
@@ -1018,8 +1141,8 @@ function goQuick(name) {
   flex-shrink: 0;
   padding: 0.1rem 0.45rem;
   border-radius: var(--radius-full);
-  background: var(--color-tertiary-surface-strong, var(--color-tertiary-surface));
-  color: var(--color-tertiary);
+  background: var(--color-primary-surface-strong);
+  color: var(--color-primary);
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.04em;

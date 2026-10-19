@@ -1,7 +1,6 @@
 <script setup>
 //
-// superadmin/workspace-config/unassigned — nhân sự chưa gán phòng ban workspace;
-// danh mục phòng ban đồng bộ HRM, tự gán theo danh mục khi đã có tài khoản.
+// superadmin/workspace-config/unassigned — danh sách nhân sự HRM; phòng ban hiển thị theo HRM (không ghi DB khi tải trang).
 //
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -40,18 +39,13 @@ import {
 const CELL_PAD_X = 32;
 const COL_EXTRA = 24;
 const AVATAR_EXTRA = 48;
-const ACTIONS_COL_PX = 108;
 let measureCtx = null;
 let wrapObserver = null;
 
 const allMembers = ref([]);
-const departmentOptions = ref([]);
 const source = ref('workspace');
 const loading = ref(false);
 const selected = ref(null);
-const departmentAssignId = ref('');
-const departmentAssignSaving = ref(false);
-const rowMenu = ref(null);
 
 const query = ref('');
 const orgUnit = ref('');
@@ -80,7 +74,7 @@ const columnWidths = reactive(loadColumnWidths());
 const tableZoom = ref(loadZoom());
 
 const shownColumns = computed(() => UNASSIGNED_COLUMNS.filter((col) => visibleColumns[col.key]));
-const tableColumnKeys = computed(() => [...shownColumns.value.map((col) => col.key), 'actions']);
+const tableColumnKeys = computed(() => shownColumns.value.map((col) => col.key));
 const colSpan = computed(() => Math.max(tableColumnKeys.value.length, 1));
 
 const orgUnitOptions = computed(() => {
@@ -230,11 +224,6 @@ const tableWidthPx = computed(() => {
   return sum > 0 ? `${sum}px` : '100%';
 });
 
-const departmentAssignReady = computed(() => {
-  if (!selected.value || departmentAssignId.value === '' || !selected.value.email) return false;
-  return String(selected.value.department?.id ?? '') !== String(departmentAssignId.value);
-});
-
 function kpiOn(card) {
   if (card.filter === 'new_this_month') return newThisMonth.value;
   if (card.filter === '') return !status.value && !newThisMonth.value;
@@ -296,7 +285,7 @@ function cellText(member, key) {
   if (key === 'division') return blank(divisionName(member));
   if (key === 'department_2') return blank(second?.department_name);
   if (key === 'division_2') return blank(second?.division_name);
-  if (key === 'workspace_department') return blank(departmentName(member));
+  if (key === 'workspace_department') return blank(member?.stored_department?.name || '');
   if (key === 'phone') return blank(member.phone);
   if (key === 'email') return blank(member.email);
   if (key === 'hired_at') return formatHrmDate(member.hired_at);
@@ -322,7 +311,6 @@ function sameMember(left, right) {
 
 function inspect(member) {
   selected.value = member;
-  rowMenu.value = null;
 }
 
 function clearFilters() {
@@ -360,13 +348,13 @@ function goPage(nextPage) {
 }
 
 async function load(options = {}) {
-  const { silent = false } = options;
+  const { silent = false, refresh = false } = options;
   loading.value = true;
   try {
-    const { data } = await window.axios.get('/api/workspace-config/members/by-department');
-    const rows = data.unassigned ?? data.members ?? [];
+    const params = refresh ? { refresh: 1 } : undefined;
+    const { data } = await window.axios.get('/api/workspace-config/members/by-department', { params });
+    const rows = data.members ?? data.unassigned ?? [];
     allMembers.value = Array.isArray(rows) ? rows : [];
-    departmentOptions.value = data.department_options ?? [];
     source.value = data.source ?? 'workspace';
     if (selected.value && !allMembers.value.some((member) => sameMember(member, selected.value))) {
       selected.value = null;
@@ -382,57 +370,6 @@ async function load(options = {}) {
   } finally {
     loading.value = false;
   }
-}
-
-function patchMember(member) {
-  const index = allMembers.value.findIndex((item) => sameMember(item, member));
-  if (index >= 0) allMembers.value[index] = member;
-  if (sameMember(selected.value, member)) selected.value = member;
-}
-
-async function saveMemberDepartment() {
-  if (!selected.value || !departmentAssignReady.value) return;
-
-  departmentAssignSaving.value = true;
-  try {
-    const member = selected.value;
-    const url = member.hrm_employee_uuid
-      ? `/api/workspace-config/members/hrm/${member.hrm_employee_uuid}/department`
-      : `/api/workspace-config/members/${member.id}/department`;
-    const { data } = await window.axios.put(url, {
-      department_id: Number(departmentAssignId.value),
-    });
-    patchMember(data.member);
-    showClientToast('success', `Đã gán ${data.member.name} vào phòng ban ${data.member.department?.name ?? ''}.`);
-  } catch (error) {
-    showClientToast('error', error?.response?.data?.message || 'Không gán được phòng ban. Vui lòng thử lại.');
-  } finally {
-    departmentAssignSaving.value = false;
-  }
-}
-
-function toggleRowMenu(event, member) {
-  const key = memberKey(member);
-  if (rowMenu.value?.key === key) {
-    rowMenu.value = null;
-    return;
-  }
-  const rect = event.currentTarget.getBoundingClientRect();
-  const width = 196;
-  const height = 44;
-  const openUp = rect.bottom + height > window.innerHeight - 8;
-  rowMenu.value = {
-    key,
-    member,
-    top: openUp ? rect.top - height - 4 : rect.bottom + 4,
-    left: Math.max(8, rect.right - width),
-  };
-}
-
-function assignFromMenu() {
-  const member = rowMenu.value?.member;
-  rowMenu.value = null;
-  if (member) inspect(member);
 }
 
 function loadZoom() {
@@ -490,15 +427,14 @@ function readTableFonts() {
 }
 
 function columnContentWidth(key, fonts) {
-  if (key === 'actions') return ACTIONS_COL_PX;
-  const label = UNASSIGNED_COLUMNS.find((col) => col.key === key)?.label ?? 'Thao tác';
+  const label = UNASSIGNED_COLUMNS.find((col) => col.key === key)?.label ?? '';
   let maxW = measureText(String(label).toLocaleUpperCase('vi'), fonts.header);
   const rows = allMembers.value.length ? allMembers.value : pageRows.value;
   for (const member of rows) {
     if (key === 'person') {
       maxW = Math.max(maxW, measureText(cellText(member, 'person'), fonts.person));
       if (member.employee_code) maxW = Math.max(maxW, measureText(member.employee_code, fonts.muted));
-    } else if (key !== 'actions') {
+    } else {
       const font = key === 'status' ? fonts.status : fonts.cell;
       maxW = Math.max(maxW, measureText(cellText(member, key), font));
     }
@@ -578,18 +514,8 @@ function onColumnToggle(key, checked) {
   visibleColumns[key] = checked;
 }
 
-function handleDocumentClick(event) {
-  if (!rowMenu.value) return;
-  if (event.target?.closest?.('[data-row-menu]')) return;
-  rowMenu.value = null;
-}
-
 function handleDocumentKeydown(event) {
   if (event.key !== 'Escape') return;
-  if (rowMenu.value) {
-    rowMenu.value = null;
-    return;
-  }
   selected.value = null;
 }
 
@@ -603,16 +529,7 @@ watch(tableZoom, (value) => {
   }
   nextTick(fitColumnsToContent);
 });
-watch(selected, (member) => {
-  if (member?.department?.id != null) {
-    departmentAssignId.value = String(member.department.id);
-  } else if (member?.suggested_department?.id != null) {
-    departmentAssignId.value = String(member.suggested_department.id);
-  } else {
-    departmentAssignId.value = '';
-  }
-  nextTick(fitColumnsToContent);
-});
+watch(selected, () => nextTick(fitColumnsToContent));
 watch(shownColumns, () => nextTick(fitColumnsToContent));
 watch([query, orgUnit, division, company, workplace, gender, personnelType, employmentStatus, status, newThisMonth, perPage], () => {
   page.value = 1;
@@ -622,7 +539,6 @@ watch(lastPage, (value) => {
 });
 
 onMounted(() => {
-  document.addEventListener('click', handleDocumentClick);
   document.addEventListener('keydown', handleDocumentKeydown);
   load();
   nextTick(() => {
@@ -642,7 +558,6 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  document.removeEventListener('click', handleDocumentClick);
   document.removeEventListener('keydown', handleDocumentKeydown);
   wrapObserver?.disconnect();
 });
@@ -656,7 +571,7 @@ onBeforeUnmount(() => {
       :breadcrumbs="[{ label: 'Trang chủ' }, { label: 'Nhân sự' }, { label: 'Danh sách nhân viên' }]"
     >
       <template #actions>
-        <button type="button" class="roster-page__header-btn" :disabled="loading" @click="load()">
+        <button type="button" class="roster-page__header-btn" :disabled="loading" @click="load({ refresh: true })">
           <AppIcon name="refresh" :size="16" :class="{ 'roster-page__spin': loading }" />
           Làm mới
         </button>
@@ -827,16 +742,6 @@ onBeforeUnmount(() => {
                     @mousedown.stop.prevent="startResize($event, col.key)"
                   />
                 </th>
-                <th :style="colMinWidthStyle('actions')">
-                  <span>Thao tác</span>
-                  <button
-                    type="button"
-                    class="roster-page__resize"
-                    aria-label="Kéo để đổi độ rộng cột"
-                    @click.stop
-                    @mousedown.stop.prevent="startResize($event, 'actions')"
-                  />
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -888,18 +793,6 @@ onBeforeUnmount(() => {
                     {{ cellText(member, col.key) }}
                   </span>
                   <span v-else class="roster-page__cell">{{ cellText(member, col.key) }}</span>
-                </td>
-                <td :style="colMinWidthStyle('actions')" @click.stop>
-                  <button
-                    type="button"
-                    class="roster-page__menu-btn"
-                    data-row-menu
-                    aria-label="Thao tác"
-                    :aria-expanded="rowMenu?.key === memberKey(member)"
-                    @click="toggleRowMenu($event, member)"
-                  >
-                    <AppIcon name="moreVertical" :size="18" />
-                  </button>
                 </td>
               </tr>
             </tbody>
@@ -1010,9 +903,9 @@ onBeforeUnmount(() => {
             <span class="roster-page__row-label">Kiêm nhiệm</span>
             <span class="roster-page__row-value">{{ concurrentTitleText(selected) || '—' }}</span>
           </div>
-          <div class="roster-page__row">
-            <span class="roster-page__row-label">Phòng ban workspace</span>
-            <span class="roster-page__row-value">{{ departmentName(selected) || 'Chưa gán phòng ban' }}</span>
+          <div v-if="selected.stored_department?.name" class="roster-page__row">
+            <span class="roster-page__row-label">Phòng ban đã lưu (workspace)</span>
+            <span class="roster-page__row-value">{{ selected.stored_department.name }}</span>
           </div>
           <div class="roster-page__row">
             <span class="roster-page__row-label">Nhóm</span>
@@ -1028,38 +921,11 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <form class="roster-page__assign" @submit.prevent="saveMemberDepartment">
-          <label class="roster-page__label" for="roster-assign-dept">Gán phòng ban workspace</label>
-          <select id="roster-assign-dept" v-model="departmentAssignId" class="roster-page__input">
-            <option value="">Chọn phòng ban</option>
-            <option v-for="item in departmentOptions" :key="item.id" :value="String(item.id)">
-              {{ item.name }}
-            </option>
-          </select>
-          <p v-if="!selected.email" class="roster-page__note">
-            Nhân sự này chưa có email công ty nên chưa tạo được tài khoản workspace.
-          </p>
-          <button type="submit" class="roster-page__btn" :disabled="!departmentAssignReady || departmentAssignSaving">
-            {{ departmentAssignSaving ? 'Đang gán…' : 'Lưu phòng ban' }}
-          </button>
-        </form>
+        <p v-if="selected && !selected.email" class="roster-page__note">
+          Nhân sự này chưa có email công ty nên chưa tạo được tài khoản workspace.
+        </p>
       </aside>
     </div>
-
-    <Teleport to="body">
-      <div
-        v-if="rowMenu"
-        class="roster-page__menu"
-        data-row-menu
-        role="menu"
-        :style="{ top: `${rowMenu.top}px`, left: `${rowMenu.left}px` }"
-      >
-        <button type="button" class="roster-page__menu-item" role="menuitem" @click="assignFromMenu">
-          <AppIcon name="building" :size="16" />
-          Gán phòng ban
-        </button>
-      </div>
-    </Teleport>
   </section>
 </template>
 

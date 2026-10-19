@@ -25,6 +25,7 @@ const auth = useAuthStore();
 const contentRef = ref(null);
 const homeSearchQuery = ref('');
 let homeRefreshHandler = null;
+let feedRefreshHandler = null;
 
 provide('employeeHomeSearch', homeSearchQuery);
 provide('employeeHomeRefreshRegister', (handler) => {
@@ -33,15 +34,28 @@ provide('employeeHomeRefreshRegister', (handler) => {
     if (homeRefreshHandler === handler) homeRefreshHandler = null;
   };
 });
+provide('employeeFeedRefreshRegister', (handler) => {
+  feedRefreshHandler = handler;
+  return () => {
+    if (feedRefreshHandler === handler) feedRefreshHandler = null;
+  };
+});
 
 const { pullY, refreshing: pullRefreshing } = usePullToRefresh(
   contentRef,
   async () => {
-    if (route.name !== 'dashboard.me' || !homeRefreshHandler) return;
-    await homeRefreshHandler();
+    if (route.name === 'dashboard.me' && homeRefreshHandler) {
+      await homeRefreshHandler();
+      return;
+    }
+    if (route.name === 'employee.feed' && feedRefreshHandler) {
+      await feedRefreshHandler();
+    }
   },
   {
-    enabled: () => route.name === 'dashboard.me' && Boolean(homeRefreshHandler),
+    enabled: () =>
+      (route.name === 'dashboard.me' && Boolean(homeRefreshHandler))
+      || (route.name === 'employee.feed' && Boolean(feedRefreshHandler)),
   },
 );
 
@@ -137,14 +151,24 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
       <div class="employee-shell__header-top">
         <div class="employee-shell__greeting">
           <template v-if="isHomeHeader">
-            <p class="employee-shell__hello">{{ greeting }}{{ firstName ? `, ${firstName}` : '' }}</p>
-            <p class="employee-shell__date">{{ todayLabel }}</p>
+            <p class="employee-shell__kicker">{{ greeting }}</p>
+            <h1 class="employee-shell__hello">
+              {{ firstName || displayName || 'bạn' }}
+            </h1>
+            <div class="employee-shell__meta">
+              <span class="employee-shell__date">{{ todayLabel }}</span>
+              <span v-if="departmentName || jobTitleName" class="employee-shell__meta-sep" aria-hidden="true">·</span>
+              <span v-if="departmentName" class="employee-shell__meta-extra">{{ departmentName }}</span>
+              <span v-else-if="jobTitleName" class="employee-shell__meta-extra">{{ jobTitleName }}</span>
+            </div>
           </template>
           <template v-else-if="compactHeaderTitle">
-            <p class="employee-shell__hello">{{ compactHeaderTitle }}</p>
+            <p class="employee-shell__kicker">VA Workspace</p>
+            <h1 class="employee-shell__hello employee-shell__hello--page">{{ compactHeaderTitle }}</h1>
           </template>
           <template v-else>
-            <p class="employee-shell__hello">{{ displayName || 'Nhân sự' }}</p>
+            <p class="employee-shell__kicker">VA Workspace</p>
+            <h1 class="employee-shell__hello employee-shell__hello--page">{{ displayName || 'Nhân sự' }}</h1>
             <p v-if="departmentName" class="employee-shell__date">{{ departmentName }}</p>
             <p v-else-if="jobTitleName" class="employee-shell__date">{{ jobTitleName }}</p>
           </template>
@@ -159,7 +183,11 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
             <AppIcon name="bell" :size="20" :stroke-width="1.8" />
             <span class="employee-shell__notif-dot" aria-hidden="true"></span>
           </button>
-          <div class="employee-shell__avatar" :aria-label="displayName || 'Ảnh đại diện'">
+          <div
+            class="employee-shell__avatar"
+            :class="{ 'employee-shell__avatar--home': isHomeHeader }"
+            :aria-label="displayName || 'Ảnh đại diện'"
+          >
             <img
               v-if="hasAvatarPhoto"
               class="employee-shell__avatar-img"
@@ -172,8 +200,10 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
         </div>
       </div>
 
-      <label v-if="route.name === 'dashboard.me'" class="employee-shell__search">
-        <AppIcon name="search" :size="18" class="employee-shell__search-icon" />
+      <label v-if="route.name === 'dashboard.me'" class="employee-shell__search employee-shell__search--elevated">
+        <span class="employee-shell__search-leading" aria-hidden="true">
+          <AppIcon name="search" :size="18" class="employee-shell__search-icon" />
+        </span>
         <input
           v-model="homeSearchQuery"
           type="search"
@@ -210,7 +240,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
       }"
     >
       <div
-        v-if="route.name === 'dashboard.me'"
+        v-if="route.name === 'dashboard.me' || route.name === 'employee.feed'"
         class="employee-shell__pull"
         :style="pullIndicatorStyle"
         aria-hidden="true"

@@ -14,8 +14,8 @@ export function statusColor(status) {
     not_started: '--color-border-strong',
     in_progress: '--color-tertiary',
     under_review: '--color-gold',
-    on_hold: '--color-warning',
-    completed: '--color-success',
+    on_hold: '--color-umber',
+    completed: '--color-secondary',
     cancelled: '--color-umber',
   };
   return cssVar(map[status] ?? '--color-border-strong');

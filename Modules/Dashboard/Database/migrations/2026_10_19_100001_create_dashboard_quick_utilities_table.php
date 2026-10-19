@@ -34,7 +34,7 @@ return new class extends Migration
             ['utility_key' => 'payslip', 'label' => 'Phiếu lương', 'icon' => 'dollarSign', 'tone' => 'primary', 'link_type' => 'none', 'link_target' => null, 'sort_order' => 30],
             ['utility_key' => 'training', 'label' => 'Đào tạo', 'icon' => 'star', 'tone' => 'secondary', 'link_type' => 'none', 'link_target' => null, 'sort_order' => 40],
             ['utility_key' => 'schedule', 'label' => 'Lịch dạy', 'icon' => 'layoutGrid', 'tone' => 'tertiary', 'link_type' => 'none', 'link_target' => null, 'sort_order' => 50],
-            ['utility_key' => 'contacts', 'label' => 'Danh bạ', 'icon' => 'users', 'tone' => 'primary', 'link_type' => 'none', 'link_target' => null, 'sort_order' => 60],
+            ['utility_key' => 'contacts', 'label' => 'Danh bạ', 'icon' => 'users', 'tone' => 'primary', 'link_type' => 'route', 'link_target' => 'employee.contacts', 'sort_order' => 60],
             ['utility_key' => 'request', 'label' => 'Tạo đơn', 'icon' => 'fileText', 'tone' => 'gold', 'link_type' => 'route', 'link_target' => 'employee.requests', 'sort_order' => 70],
             ['utility_key' => 'tasks', 'label' => 'Công việc', 'icon' => 'listChecks', 'tone' => 'secondary', 'link_type' => 'route', 'link_target' => 'manager.project.tasks', 'sort_order' => 80],
             ['utility_key' => 'social', 'label' => 'Bảng tin', 'icon' => 'megaphone', 'tone' => 'tertiary', 'link_type' => 'route', 'link_target' => 'social.feed', 'sort_order' => 90],

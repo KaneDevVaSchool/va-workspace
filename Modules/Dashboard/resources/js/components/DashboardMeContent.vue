@@ -163,7 +163,7 @@ function onUtilitySelect(item) {
     </section>
 
     <div class="dashboard-me__kpis">
-      <KpiCard label="Tổng công việc" :value="overview?.kpis?.total_tasks ?? null" icon="listChecks" tone="tertiary" />
+      <KpiCard label="Tổng công việc" :value="overview?.kpis?.total_tasks ?? null" icon="listChecks" tone="primary" />
       <KpiCard
         label="Tiến độ trung bình"
         :value="overview?.kpis?.average_progress_percent ?? null"
@@ -212,6 +212,8 @@ function onUtilitySelect(item) {
   gap: var(--space-4);
   padding: var(--space-4);
   max-width: 100%;
+  background: var(--color-primary-surface);
+  border-radius: var(--radius-lg);
 }
 
 .dashboard-me--preview {
@@ -239,7 +241,7 @@ function onUtilitySelect(item) {
   overflow: hidden;
   background:
     radial-gradient(ellipse 80% 120% at 100% 0%, rgba(255, 255, 255, 0.22) 0%, transparent 55%),
-    linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-700, #8b1530) 48%, var(--color-secondary) 100%);
+    linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-700) 48%, var(--color-secondary) 100%);
   color: #fff;
   box-shadow: var(--shadow-md);
 }
@@ -249,7 +251,7 @@ function onUtilitySelect(item) {
   position: absolute;
   inset: 0 auto 0 0;
   width: 0.45rem;
-  background: rgba(255, 255, 255, 0.85);
+  background: color-mix(in srgb, var(--color-gold) 78%, var(--color-on-primary));
 }
 
 .dashboard-me__hero-copy {
@@ -331,7 +333,7 @@ function onUtilitySelect(item) {
 
 .dashboard-me__ring-fill {
   fill: none;
-  stroke: #fff;
+  stroke: color-mix(in srgb, var(--color-gold) 55%, var(--color-on-primary));
   stroke-width: 10;
   stroke-linecap: round;
   stroke-dasharray: 326.7;

@@ -5,6 +5,7 @@ namespace Tests\Feature\WorkspaceConfig;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
@@ -302,7 +303,8 @@ class WorkspaceConfigOverviewTest extends TestCase
             ->assertJsonPath('source', 'hrm_database')
             ->assertJsonPath('members.0.email', 'a.nguyen@vaschools.edu.vn')
             ->assertJsonPath('members.0.org_unit.name', 'Phòng Kế toán')
-            ->assertJsonPath('members.0.department', null)
+            ->assertJsonPath('members.0.department.name', 'Phòng Kế toán')
+            ->assertJsonPath('members.0.department.source', 'hrm')
             ->assertJsonPath('members.0.has_workspace_account', false);
 
         Http::assertNothingSent();
@@ -339,17 +341,20 @@ class WorkspaceConfigOverviewTest extends TestCase
         ], ['member']);
 
         $this->useHrmDirectory([
-            $this->hrmEmployee('11111111-1111-4111-8111-111111111111', 'b.tran@vaschools.edu.vn', 'Trần Thị B'),
+            $this->hrmEmployee('11111111-1111-4111-8111-111111111111', 'b.tran@vaschools.edu.vn', 'Trần Thị B', 'ou-emp-2'),
         ], [
             $this->hrmOrgUnit('ou-emp-2', 'PB01', 'Phòng Kế toán'),
         ]);
 
         $admin = $this->makeUser([], ['super_admin']);
 
+        $hrmDeptId = (int) Department::query()->where('hrm_org_unit_uuid', 'ou-emp-2')->value('id');
+
         $this->actingAs($admin)
-            ->getJson('/api/workspace-config/members/by-department')
+            ->getJson('/api/workspace-config/members/by-department?refresh=1')
             ->assertOk()
-            ->assertJsonPath('members.0.department.id', $manualDept->id);
+            ->assertJsonPath('members.0.department.id', $hrmDeptId)
+            ->assertJsonPath('members.0.stored_department.id', $manualDept->id);
 
         Http::assertNothingSent();
         $this->assertDatabaseHas('users', [
@@ -427,7 +432,7 @@ class WorkspaceConfigOverviewTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_hrm_roster_auto_assigns_department_for_unassigned_workspace_account(): void
+    public function test_hrm_roster_exposes_department_from_hrm_without_writing_users_table(): void
     {
         $this->seed(RoleSeeder::class);
         Http::fake();
@@ -448,7 +453,7 @@ class WorkspaceConfigOverviewTest extends TestCase
         $admin = $this->makeUser([], ['super_admin']);
 
         $response = $this->actingAs($admin)
-            ->getJson('/api/workspace-config/members/by-department')
+            ->getJson('/api/workspace-config/members/by-department?refresh=1')
             ->assertOk();
 
         $departmentId = (int) Department::query()->where('hrm_org_unit_uuid', 'ou-emp-1')->value('id');
@@ -462,7 +467,7 @@ class WorkspaceConfigOverviewTest extends TestCase
 
         $this->assertDatabaseHas('users', [
             'id' => $member->id,
-            'department_id' => $departmentId,
+            'department_id' => null,
         ]);
     }
 
@@ -594,6 +599,7 @@ class WorkspaceConfigOverviewTest extends TestCase
     private function useHrmDirectory(array $employees, array $orgUnits): void
     {
         config(['database.connections.hrm.database' => 'hrm-test']);
+        Cache::flush();
 
         $catalog = $orgUnits;
 
@@ -625,8 +631,13 @@ class WorkspaceConfigOverviewTest extends TestCase
     }
 
     /** @return array<string, mixed> */
-    private function hrmEmployee(string $uuid, string $email, string $name): array
-    {
+    private function hrmEmployee(
+        string $uuid,
+        string $email,
+        string $name,
+        string $catalogDepartmentUuid = 'ou-emp-1',
+        string $departmentName = 'Phòng Kế toán',
+    ): array {
         return [
             'uuid' => $uuid,
             'code' => 'NV001',
@@ -640,9 +651,12 @@ class WorkspaceConfigOverviewTest extends TestCase
             'company_uuid' => 'co-1',
             'company_code' => 'VAS',
             'company_name' => 'VA Schools',
-            'org_unit_uuid' => 'ou-emp-1',
-            'org_unit_name' => 'Phòng Kế toán',
-            'org_unit_path' => '/ou-emp-1',
+            'org_unit_uuid' => $catalogDepartmentUuid,
+            'org_unit_name' => $departmentName,
+            'org_unit_path' => '/'.$catalogDepartmentUuid,
+            'department_name' => $departmentName,
+            'catalog_department_uuid' => $catalogDepartmentUuid,
+            'division_name' => null,
             'manager_name' => 'Trần Quản lý',
             'concurrent_positions' => [],
         ];

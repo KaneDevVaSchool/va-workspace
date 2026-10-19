@@ -1,58 +1,95 @@
 <script setup>
 //
-// Danh sách đơn đã gửi (nghỉ phép + giải trình chấm công) — mock data, UI only.
-// Trạng thái hiển thị bằng chữ thường + chấm màu (không badge/pill, mục 14
-// CLAUDE.md). Tap vào 1 dòng mở bottom sheet chi tiết.
+// Danh sách đơn nghỉ phép của tôi — lấy từ HRM qua GET /api/attendance/leave-requests.
+// Giải trình chấm công sẽ bổ sung khi có API workspace/HRM tương ứng.
 //
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 
 const STATUS_META = {
   pending: { label: 'Đang chờ duyệt', color: 'var(--color-warning)' },
   approved: { label: 'Đã duyệt', color: 'var(--color-success)' },
   rejected: { label: 'Từ chối', color: 'var(--color-primary)' },
+  cancelled: { label: 'Đã huỷ', color: 'var(--color-text-muted)' },
 };
 
-const requests = [
-  {
-    id: 1,
-    kind: 'Nghỉ phép năm',
-    submittedAt: '08/10/2026',
-    range: '12/10 - 13/10/2026',
-    reason: 'Việc gia đình',
-    status: 'pending',
-    approver: 'Chưa có người duyệt',
-  },
-  {
-    id: 2,
-    kind: 'Giải trình chấm công',
-    submittedAt: '05/10/2026',
-    range: 'Thiếu chấm công ra ngày 04/10',
-    reason: 'Quên bấm chấm công ra, đã ở lại làm đến 18:30',
-    status: 'approved',
-    approver: 'Trưởng phòng Công nghệ',
-  },
-  {
-    id: 3,
-    kind: 'Nghỉ ốm',
-    submittedAt: '28/09/2026',
-    range: '29/09/2026',
-    reason: 'Sốt, có giấy khám bệnh',
-    status: 'approved',
-    approver: 'Trưởng phòng Công nghệ',
-  },
-  {
-    id: 4,
-    kind: 'Nghỉ việc riêng',
-    submittedAt: '15/09/2026',
-    range: '16/09/2026',
-    reason: 'Giải quyết giấy tờ cá nhân',
-    status: 'rejected',
-    approver: 'Trưởng phòng Công nghệ',
-  },
-];
+/** @type {import('vue').Ref<Array<Record<string, unknown>>>} */
+const requests = ref([]);
+const loading = ref(true);
+const loadError = ref('');
 
 const selected = ref(null);
+
+function statusMeta(status) {
+  return STATUS_META[status] ?? STATUS_META.pending;
+}
+
+function formatSubmittedAt(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('vi-VN');
+}
+
+function formatRange(row) {
+  const from = row.date_from ? new Date(row.date_from).toLocaleDateString('vi-VN') : '';
+  const to =
+    row.date_to && row.date_to !== row.date_from
+      ? new Date(row.date_to).toLocaleDateString('vi-VN')
+      : '';
+
+  if (row.mode === 'hour' && (row.time_from || row.time_to)) {
+    const timePart = [row.time_from, row.time_to].filter(Boolean).join(' – ');
+    return from ? `${from} · ${timePart}` : timePart || '—';
+  }
+
+  if (from && to) return `${from} – ${to}`;
+  return from || '—';
+}
+
+function formatApprover(row, status) {
+  const name =
+    row.approver_name ??
+    row.approver?.name ??
+    row.approved_by_name ??
+    row.approved_by?.name ??
+    null;
+  if (name) return String(name);
+  if (status === 'pending') return 'Chưa có người duyệt';
+  return '—';
+}
+
+function mapLeaveRow(row, index) {
+  const status = String(row.status ?? 'pending');
+  return {
+    id: row.uuid ?? `leave-${index}`,
+    kind: row.leave_type_name ?? 'Nghỉ phép',
+    submittedAt: formatSubmittedAt(row.submitted_at ?? row.created_at),
+    range: formatRange(row),
+    reason: String(row.reason ?? '').trim() || '—',
+    status,
+    approver: formatApprover(row, status),
+    totalDays: Number(row.total_days ?? 0),
+  };
+}
+
+async function loadRequests() {
+  loading.value = true;
+  loadError.value = '';
+  try {
+    const { data } = await window.axios.get('/api/attendance/leave-requests', {
+      params: { limit: 50 },
+    });
+    const rows = Array.isArray(data?.data) ? data.data : [];
+    requests.value = rows.map(mapLeaveRow);
+  } catch (err) {
+    requests.value = [];
+    loadError.value =
+      err?.response?.data?.message ?? 'Không tải được đơn nghỉ phép từ HRM.';
+  } finally {
+    loading.value = false;
+  }
+}
 
 function openDetail(request) {
   selected.value = request;
@@ -61,11 +98,21 @@ function openDetail(request) {
 function closeDetail() {
   selected.value = null;
 }
+
+onMounted(() => {
+  void loadRequests();
+});
 </script>
 
 <template>
   <div class="requests">
-    <ul class="requests-list">
+    <p v-if="loading" class="requests-state">Đang tải đơn nghỉ phép…</p>
+    <p v-else-if="loadError" class="requests-state requests-state--error">{{ loadError }}</p>
+    <p v-else-if="requests.length === 0" class="requests-state">
+      Chưa có đơn nghỉ phép nào trên HRM.
+    </p>
+
+    <ul v-else class="requests-list">
       <li v-for="req in requests" :key="req.id">
         <button type="button" class="request-row" @click="openDetail(req)">
           <span class="request-row__main">
@@ -73,8 +120,12 @@ function closeDetail() {
             <span class="request-row__range">{{ req.range }}</span>
           </span>
           <span class="request-row__status">
-            <span class="request-row__dot" :style="{ background: STATUS_META[req.status].color }" aria-hidden="true"></span>
-            {{ STATUS_META[req.status].label }}
+            <span
+              class="request-row__dot"
+              :style="{ background: statusMeta(req.status).color }"
+              aria-hidden="true"
+            ></span>
+            {{ statusMeta(req.status).label }}
           </span>
         </button>
       </li>
@@ -95,8 +146,12 @@ function closeDetail() {
           <div class="sheet__field">
             <span class="sheet__label">Trạng thái</span>
             <span class="sheet__value sheet__value--status">
-              <span class="request-row__dot" :style="{ background: STATUS_META[selected.status].color }" aria-hidden="true"></span>
-              {{ STATUS_META[selected.status].label }}
+              <span
+                class="request-row__dot"
+                :style="{ background: statusMeta(selected.status).color }"
+                aria-hidden="true"
+              ></span>
+              {{ statusMeta(selected.status).label }}
             </span>
           </div>
           <div class="sheet__field">
@@ -106,6 +161,10 @@ function closeDetail() {
           <div class="sheet__field">
             <span class="sheet__label">Thời gian</span>
             <span class="sheet__value">{{ selected.range }}</span>
+          </div>
+          <div v-if="selected.totalDays > 0" class="sheet__field">
+            <span class="sheet__label">Số ngày</span>
+            <span class="sheet__value">{{ selected.totalDays }}</span>
           </div>
           <div class="sheet__field">
             <span class="sheet__label">Lý do</span>
@@ -122,6 +181,18 @@ function closeDetail() {
 </template>
 
 <style scoped>
+.requests-state {
+  margin: 0;
+  padding: var(--space-4);
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.requests-state--error {
+  color: var(--color-primary);
+}
+
 .requests-list {
   display: flex;
   flex-direction: column;

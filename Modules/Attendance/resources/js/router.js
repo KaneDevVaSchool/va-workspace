@@ -8,7 +8,8 @@
  * này) khi useEmployeeMobileView() = true (bất kỳ ai, kể cả quản lý, đang ở
  * viewport ≤768px). Ở đây đăng ký 4 trang hoàn toàn mới — chấm công, nghỉ
  * phép, danh sách đơn, bảng tin — chỉ dùng trên trải nghiệm mobile
- * (meta.employeeMobile). 3 trang đầu UI mock, chưa nối API thật; bảng tin gọi
+ * (meta.employeeMobile). Chấm công / đơn của tôi tùy trang; nghỉ phép + danh sách
+ * đơn nối HRM; bảng tin gọi
  * API thật /api/social/posts (dữ liệu bài đăng đã có sẵn, không có rủi ro
  * logic nghiệp vụ mới).
  */
@@ -53,6 +54,17 @@ export default [
     meta: {
       requiresAuth: true,
       title: 'Đơn của tôi',
+      requiresPermission: 'dashboard.view',
+      employeeMobile: true,
+    },
+  },
+  {
+    path: '/dashboard/me/contacts',
+    name: 'employee.contacts',
+    component: () => import('@modules/Dashboard/resources/js/pages/DashboardContacts.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Danh bạ',
       requiresPermission: 'dashboard.view',
       employeeMobile: true,
     },

@@ -4,6 +4,7 @@ namespace Modules\WorkspaceConfig\App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Modules\Evaluation\App\Services\EvaluationCriteriaService;
 use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
@@ -93,11 +94,11 @@ class WorkspaceConfigOverviewController extends Controller
     }
 
     /** Toàn bộ nhân sự: MySQL VA-HRM khi đã cấu hình, không gọi API. */
-    public function membersByDepartment(): JsonResponse
+    public function membersByDepartment(Request $request): JsonResponse
     {
         try {
             $payload = HrmEmployeeDirectory::isConfigured()
-                ? $this->members->rosterFromHrmDatabase()
+                ? $this->members->rosterFromHrmDatabase($request->boolean('refresh'))
                 : $this->members->workspaceRoster();
         } catch (HrmDatabaseUnavailable $e) {
             return response()->json(['message' => $e->getMessage()], 503);

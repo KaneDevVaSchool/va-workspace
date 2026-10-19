@@ -4,6 +4,7 @@ namespace Modules\WorkspaceConfig\App\Services;
 
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
@@ -362,16 +363,36 @@ class WorkspaceConfigMemberService
     }
 
     /**
-     * Nhân sự đọc từ MySQL VA-HRM, phủ phòng ban workspace nếu đã có tài khoản.
-     * Không gọi API HRM. Không tự gán department_id.
+     * Nhân sự đọc từ MySQL VA-HRM; phòng ban hiển thị theo HRM (không ghi users.department_id).
      *
      * @return array<string, mixed>
      *
      * @throws HrmDatabaseUnavailable
      */
-    public function rosterFromHrmDatabase(): array
+    public function rosterFromHrmDatabase(bool $refresh = false): array
     {
-        $this->hrmDepartments->syncDepartmentsFromHrm();
+        $cacheKey = 'workspace_config:hrm_roster:v3';
+        $ttlSeconds = max(60, (int) config('services.hrm.hrm_roster_cache_ttl', 900));
+
+        if ($refresh) {
+            Cache::forget($cacheKey);
+            Cache::forget('hrm:department_catalog_sync:done');
+        }
+
+        /** @var array<string, mixed> $payload */
+        $payload = Cache::remember($cacheKey, $ttlSeconds, fn (): array => $this->buildRosterFromHrmDatabase());
+
+        return $payload;
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    private function buildRosterFromHrmDatabase(): array
+    {
+        $this->hrmDepartments->syncDepartmentsFromHrmIfStale();
 
         $loaded = $this->hrmDirectory->load();
 
@@ -379,27 +400,34 @@ class WorkspaceConfigMemberService
             ? $this->departments->allSyncedFromHrm()
             : $this->departments->all();
 
-        $users = $this->usersForHrmEmployees($loaded['employees']);
-        $this->applyHrmDepartmentAssignments($loaded['employees'], $users);
+        $departmentsByHrmUuid = $departments
+            ->filter(fn (Department $department) => filled($department->hrm_org_unit_uuid))
+            ->keyBy(fn (Department $department) => (string) $department->hrm_org_unit_uuid);
+
         $users = $this->usersForHrmEmployees($loaded['employees']);
 
         $members = collect($loaded['employees'])
             ->map(fn (array $employee) => $this->presentHrmEmployee(
                 $employee,
                 $this->matchWorkspaceUser($employee, $users),
+                $departmentsByHrmUuid,
             ))
             ->values();
+
         $unassigned = $members
-            ->filter(fn (array $member) => $member['department'] === null)
+            ->filter(fn (array $member) => ($member['has_workspace_account'] ?? false) === false)
             ->values();
 
-        return $this->rosterPayload(
+        $payload = $this->rosterPayload(
             'hrm_database',
             $members,
             $unassigned,
             $this->groupMembersByDepartment($departments, $members),
             $departments,
         );
+        $payload['cached_at'] = now()->toIso8601String();
+
+        return $payload;
     }
 
     /**
@@ -460,7 +488,11 @@ class WorkspaceConfigMemberService
 
         $user = $this->assignDepartment($user->id, $departmentId);
 
-        return $this->presentHrmEmployee($employee, $user);
+        $departmentsByHrmUuid = $this->departments->allSyncedFromHrm()
+            ->filter(fn (Department $department) => filled($department->hrm_org_unit_uuid))
+            ->keyBy(fn (Department $department) => (string) $department->hrm_org_unit_uuid);
+
+        return $this->presentHrmEmployee($employee, $user, $departmentsByHrmUuid);
     }
 
     /**
@@ -632,9 +664,13 @@ class WorkspaceConfigMemberService
      * @param  array<string, mixed>  $employee
      * @return array<string, mixed>
      */
-    private function presentHrmEmployee(array $employee, ?User $user): array
+    /**
+     * @param  Collection<string, Department>  $departmentsByHrmUuid
+     */
+    private function presentHrmEmployee(array $employee, ?User $user, Collection $departmentsByHrmUuid): array
     {
         $user?->loadMissing(['department', 'team', 'roles']);
+        $departmentFromHrm = $this->departmentPresentationFromHrm($employee, $departmentsByHrmUuid);
 
         return [
             'id' => $user?->id,
@@ -669,11 +705,12 @@ class WorkspaceConfigMemberService
                 'name' => $employee['org_unit_name'],
                 'path' => $employee['org_unit_path'],
             ] : null,
-            'department' => $user?->department ? [
+            'department' => $departmentFromHrm,
+            'stored_department' => $user?->department ? [
                 'id' => $user->department->id,
                 'name' => $user->department->name,
             ] : null,
-            'suggested_department' => $this->suggestedDepartmentForHrmEmployee($employee, $user),
+            'suggested_department' => null,
             'team' => $user?->team ? [
                 'id' => $user->team->id,
                 'name' => $user->team->name,
@@ -746,65 +783,36 @@ class WorkspaceConfigMemberService
      * @param  list<array<string, mixed>>  $employees
      * @param  Collection<int, User>  $users
      */
-    private function applyHrmDepartmentAssignments(array $employees, Collection $users): void
-    {
-        if (! HrmDepartmentSyncService::isConfigured()) {
-            return;
-        }
-
-        foreach ($employees as $employee) {
-            if (! is_array($employee)) {
-                continue;
-            }
-
-            $user = $this->matchWorkspaceUser($employee, $users);
-            if ($user === null || $user->department_id !== null) {
-                continue;
-            }
-
-            $departmentId = $this->hrmDepartments->departmentIdMatchingHrm($user);
-            if ($departmentId === null) {
-                continue;
-            }
-
-            try {
-                $this->assignDepartment($user->id, $departmentId);
-            } catch (MemberDepartmentNotAssignable) {
-                continue;
-            }
-        }
-    }
-
     /**
      * @param  array<string, mixed>  $employee
-     * @return array{id: int, name: string}|null
+     * @param  Collection<string, Department>  $departmentsByHrmUuid
+     * @return array{id: int|null, name: string, source: string}|null
      */
-    private function suggestedDepartmentForHrmEmployee(array $employee, ?User $user): ?array
+    private function departmentPresentationFromHrm(array $employee, Collection $departmentsByHrmUuid): ?array
     {
-        if ($user?->department !== null) {
-            return null;
+        $catalogUuid = isset($employee['catalog_department_uuid'])
+            ? (string) $employee['catalog_department_uuid']
+            : '';
+        if ($catalogUuid !== '' && $departmentsByHrmUuid->has($catalogUuid)) {
+            $department = $departmentsByHrmUuid->get($catalogUuid);
+
+            return [
+                'id' => $department->id,
+                'name' => $department->name,
+                'source' => 'hrm',
+            ];
         }
 
-        $departmentId = $user !== null
-            ? $this->hrmDepartments->departmentIdMatchingHrm($user)
-            : $this->hrmDepartments->departmentIdForHrmEmployee(
-                isset($employee['uuid']) ? (string) $employee['uuid'] : null,
-                $this->hrmEmail($employee),
-            );
-
-        if ($departmentId === null) {
-            return null;
+        $label = $employee['department_name'] ?? null;
+        if (is_string($label) && trim($label) !== '') {
+            return [
+                'id' => null,
+                'name' => trim($label),
+                'source' => 'hrm_label',
+            ];
         }
 
-        $department = $this->departments->find($departmentId);
-        if ($department === null) {
-            return null;
-        }
-
-        return [
-            'id' => $department->id,
-            'name' => $department->name,
-        ];
+        return null;
     }
 
     /** @param  array<string, mixed>  $employee */

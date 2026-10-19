@@ -683,7 +683,7 @@ class HrmEmployeeDirectory
             ? (string) $row->level_name
             : ($row->position_level !== null && $row->position_level !== '' ? (string) $row->position_level : null);
         $concurrentRows = $concurrent->get($row->id) ?? $concurrent->get((string) $row->id) ?? collect();
-        $placement = $this->placementNames($row->org_unit_id, $unitsById);
+        $placement = $this->placementFromOrgUnit($row->org_unit_id, $unitsById);
         $accountAvatar = $avatars->get($row->id) ?? $avatars->get((string) $row->id) ?? $avatars->get((int) $row->id);
 
         return [
@@ -715,11 +715,12 @@ class HrmEmployeeDirectory
             'org_unit_path' => filled($row->org_unit_path) ? (string) $row->org_unit_path : null,
             'department_name' => $placement['department_name'],
             'division_name' => $placement['division_name'],
+            'catalog_department_uuid' => $placement['catalog_department_uuid'],
             'avatar_url' => $this->avatarUrl($row->avatar_path ?? null, is_string($accountAvatar) ? $accountAvatar : null),
             'manager_name' => $this->managerName($row, $unitsById, $names),
             'concurrent_positions' => $concurrentRows
                 ->map(function (object $item) use ($unitsById) {
-                    $placement = $this->placementNames($item->org_unit_id ?? null, $unitsById);
+                    $placement = $this->placementFromOrgUnit($item->org_unit_id ?? null, $unitsById);
 
                     return [
                         'job_title_name' => $item->job_title ?: $item->position_title,
@@ -740,12 +741,13 @@ class HrmEmployeeDirectory
      * (chính nút đó hoặc cha). Bộ phận là org unit type unit.
      *
      * @param  Collection<int|string, object>  $unitsById
-     * @return array{department_name: ?string, division_name: ?string}
+     * @return array{department_name: ?string, division_name: ?string, catalog_department_uuid: ?string}
      */
-    private function placementNames(mixed $orgUnitId, Collection $unitsById): array
+    private function placementFromOrgUnit(mixed $orgUnitId, Collection $unitsById): array
     {
         $department = null;
         $division = null;
+        $catalogUuid = null;
         $current = $orgUnitId;
         $guard = 0;
 
@@ -761,15 +763,30 @@ class HrmEmployeeDirectory
             }
             if ($type === 'department' && filled($unit->name)) {
                 $department = (string) $unit->name;
+                $catalog = $this->linkedCatalogDepartment($unit);
+                if ($catalog !== null && filled($catalog->uuid ?? null)) {
+                    $catalogUuid = (string) $catalog->uuid;
+                }
                 break;
             }
 
             $current = $unit->parent_id;
         }
 
+        if ($catalogUuid === null && $orgUnitId) {
+            $leaf = $unitsById->get($orgUnitId) ?? $unitsById->get((int) $orgUnitId) ?? $unitsById->get((string) $orgUnitId);
+            if ($leaf !== null) {
+                $catalog = $this->linkedCatalogDepartment($leaf);
+                if ($catalog !== null && filled($catalog->uuid ?? null)) {
+                    $catalogUuid = (string) $catalog->uuid;
+                }
+            }
+        }
+
         return [
             'department_name' => $department,
             'division_name' => $division,
+            'catalog_department_uuid' => $catalogUuid,
         ];
     }
 

@@ -127,24 +127,28 @@ const tabs = [
             />
           </section>
 
-          <section class="employee-home__section">
+          <section class="employee-home__section employee-home__section--daily">
             <div class="section-head">
               <h2 class="section-head__title">Việc thường ngày</h2>
-              <span class="section-head__link">Xem tất cả</span>
+              <span class="daily-tasks__summary">1/3</span>
             </div>
-            <ul class="task-list">
-              <li class="task-card task-card--upcoming">
-                <span class="task-card__check task-card__check--preview" aria-hidden="true"></span>
-                <div class="task-card__detail">
-                  <p class="task-card__title">Cập nhật tiến độ việc được giao</p>
-                  <p class="task-card__project">Dự án triển khai hệ thống</p>
-                </div>
-                <div class="task-card__aside">
-                  <span class="task-card__quick task-card__quick--preview">Đang làm</span>
-                  <span class="task-card__time">16:30</span>
-                </div>
-              </li>
-            </ul>
+            <div class="daily-tasks">
+              <ul class="daily-tasks__list">
+                <li class="daily-tasks__row daily-tasks__row--upcoming">
+                  <span class="daily-tasks__check daily-tasks__check--preview" aria-hidden="true" />
+                  <div class="daily-tasks__body">
+                    <p class="daily-tasks__title">Cập nhật tiến độ việc được giao</p>
+                    <p class="daily-tasks__meta">Dự án triển khai hệ thống</p>
+                  </div>
+                  <div class="daily-tasks__end">
+                    <span class="daily-tasks__action daily-tasks__action--preview" aria-hidden="true">
+                      <AppIcon name="play" :size="14" :stroke-width="2.2" />
+                    </span>
+                    <span class="daily-tasks__time">16:30</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
           </section>
 
           <section class="employee-home__section employee-home__section--last">
@@ -328,7 +332,6 @@ const tabs = [
   padding-bottom: var(--space-2);
 }
 
-.task-list,
 .notice-list {
   display: flex;
   flex-direction: column;
@@ -338,69 +341,102 @@ const tabs = [
   list-style: none;
 }
 
-.task-card {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-3);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
+.employee-home__section--daily {
+  gap: var(--space-2);
 }
 
-.task-card--upcoming {
-  background: var(--color-tertiary-surface);
-  box-shadow: inset 0 0 0 1px var(--color-tertiary-200);
-}
-
-.task-card__check--preview {
+.daily-tasks__summary {
   flex-shrink: 0;
-  width: 2.125rem;
-  height: 2.125rem;
-  margin-top: 1px;
+  padding: 0.2rem 0.55rem;
   border-radius: var(--radius-full);
-  box-shadow: inset 0 0 0 2.5px var(--color-tertiary);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
-.task-card__detail {
+.daily-tasks {
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  overflow: hidden;
+}
+
+.daily-tasks__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daily-tasks__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
+  background: var(--color-surface);
+}
+
+.daily-tasks__row--upcoming::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-secondary);
+}
+
+.daily-tasks__check--preview {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-full);
+  box-shadow: inset 0 0 0 2px var(--color-tertiary);
+}
+
+.daily-tasks__body {
   flex: 1;
   min-width: 0;
 }
 
-.task-card__title {
+.daily-tasks__title {
   margin: 0;
-  font-size: 1.0625rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text);
   line-height: 1.35;
 }
 
-.task-card__project {
-  margin: 4px 0 0;
-  font-size: 0.75rem;
+.daily-tasks__meta {
+  margin: 2px 0 0;
+  font-size: 0.6875rem;
   color: var(--color-text-muted);
 }
 
-.task-card__aside {
+.daily-tasks__end {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: var(--space-2);
+  gap: 4px;
 }
 
-.task-card__quick--preview {
-  padding: 0.2rem 0.55rem;
+.daily-tasks__action--preview {
+  display: grid;
+  place-items: center;
+  width: 1.625rem;
+  height: 1.625rem;
   border-radius: var(--radius-full);
-  background: var(--color-tertiary);
-  color: var(--color-on-tertiary);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
+}
+
+.daily-tasks__time {
   font-size: 0.6875rem;
   font-weight: 700;
-}
-
-.task-card__time {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--color-tertiary);
+  color: var(--color-secondary-700);
 }
 
 .notice-card--preview {

@@ -155,6 +155,11 @@ const emit = defineEmits(['select']);
   color: var(--color-gold);
 }
 
+.quick-utilities__icon--umber {
+  background: var(--color-umber-surface);
+  color: var(--color-umber);
+}
+
 .quick-utilities__icon--muted {
   background: var(--color-surface-muted);
   color: var(--color-text-muted);

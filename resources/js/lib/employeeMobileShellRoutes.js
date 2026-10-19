@@ -16,6 +16,7 @@ export const EMPLOYEE_MOBILE_SHELL_PATHS = [
   '/dashboard/me/attendance',
   '/dashboard/me/leave',
   '/dashboard/me/requests',
+  '/dashboard/me/contacts',
   '/dashboard/me/utilities',
 ];
 

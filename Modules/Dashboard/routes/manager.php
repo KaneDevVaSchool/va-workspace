@@ -48,6 +48,7 @@ Route::middleware(['auth'])->prefix('dashboard')->group(function () {
 
     Route::middleware('permission:dashboard.view')->prefix('me')->name('me.')->group(function () {
         Route::get('/overview', [MyDashboardController::class, 'overview'])->name('overview');
+        Route::get('/directory', [MyDashboardController::class, 'directory'])->name('directory');
         Route::get('/quick-utilities', [DashboardQuickUtilityController::class, 'indexForUser'])->name('quick-utilities');
     });
 
