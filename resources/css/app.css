@@ -48,10 +48,10 @@ html {
   /* height (không phải min-height) ghi đè height:100% ở trên — tránh 2 nguồn
      chiều cao lệch nhau (100% kế thừa cha vs dvh theo viewport động) khi
      thanh địa chỉ trình duyệt mobile co giãn, gây hụt/che layout. */
-  html,
-  body,
-  #app,
-  .app-shell {
+  html:not(.employee-mobile-pwa),
+  html:not(.employee-mobile-pwa) body,
+  html:not(.employee-mobile-pwa) #app,
+  html:not(.employee-mobile-pwa) .app-shell {
     height: 100svh;
     height: 100dvh;
   }

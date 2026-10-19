@@ -1,4 +1,14 @@
-/* Shell trang mobile nhân viên (EmployeeMobileLayout) — tách browser vs PWA. */
+/*
+ * Shell mobile nhân viên (EmployeeMobileLayout)
+ *
+ * App shell (header | main scroll | tabbar in-flow) — tabbar không fixed riêng.
+ * Chiều cao shell: --employee-shell-height (px) từ employeeMobileViewport.js
+ *   · Safari tab: visualViewport.height
+ *   · PWA standalone: document.documentElement.clientHeight
+ * Safe-area tabbar PWA: padding trong .employee-tabbar__bar (env + --employee-safe-bottom).
+ *
+ * Debug trên iPhone: localStorage.setItem('va-employee-viewport-debug','1') → reload.
+ */
 
 html.employee-mobile-browser,
 html.employee-mobile-pwa {
@@ -55,8 +65,8 @@ html.employee-mobile-pwa {
     z-index: 0;
     width: 100%;
     max-width: 100vw;
-    height: var(--employee-mobile-vh, 100dvh);
-    max-height: var(--employee-mobile-vh, 100dvh);
+    height: var(--employee-shell-height, 100dvh);
+    max-height: var(--employee-shell-height, 100dvh);
     overflow: hidden;
   }
 
@@ -73,14 +83,11 @@ html.employee-mobile-pwa {
 }
 
 @media (max-width: 768px) {
-  /*
-   * iOS Add to Home Screen: 100dvh / innerHeight JS hay cao hơn layout thật →
-   * shell fixed bị ngắn, tabbar “nổi”. Chuỗi chiều cao 100% + fill-available,
-   * shell chỉ inset:0 (không khóa height px).
-   */
   html.employee-mobile-pwa {
-    height: -webkit-fill-available;
-    height: 100%;
+    background-color: var(--color-bg);
+    --employee-tabbar-block-size: 3.25rem;
+    height: var(--employee-shell-height, 100svh);
+    max-height: var(--employee-shell-height, 100svh);
     overflow: hidden;
   }
 
@@ -90,26 +97,35 @@ html.employee-mobile-pwa {
     height: 100%;
     min-height: 0;
     max-height: 100%;
-  }
-
-  html.employee-mobile-pwa {
-    background-color: var(--color-bg);
-    --employee-tabbar-block-size: 3.25rem;
+    overflow: hidden;
   }
 
   .employee-shell--pwa:not(.emp-shell-preview__shell) {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
     z-index: 0;
     width: 100%;
     max-width: 100vw;
+    height: var(--employee-shell-height, 100svh);
+    max-height: var(--employee-shell-height, 100svh);
     overflow: hidden;
   }
+}
 
-  html.pwa-standalone .employee-shell--browser:not(.emp-shell-preview__shell) {
-    inset: 0;
-    height: auto;
-    max-height: none;
+@media (max-width: 768px) and (display-mode: standalone) {
+  html:has(.employee-shell--pwa:not(.emp-shell-preview__shell)),
+  html:has(.employee-shell--pwa:not(.emp-shell-preview__shell)) body,
+  html:has(.employee-shell--pwa:not(.emp-shell-preview__shell)) #app,
+  html:has(.employee-shell--pwa:not(.emp-shell-preview__shell)) .app-shell {
+    height: var(--employee-shell-height, 100svh);
+    max-height: var(--employee-shell-height, 100svh);
+  }
+
+  .employee-shell--pwa:not(.emp-shell-preview__shell) {
+    height: var(--employee-shell-height, 100svh);
+    max-height: var(--employee-shell-height, 100svh);
   }
 }
 

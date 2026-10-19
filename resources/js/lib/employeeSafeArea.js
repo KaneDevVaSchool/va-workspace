@@ -44,6 +44,10 @@ export function syncEmployeeSafeAreaInsets() {
   }
   for (const side of SIDES) {
     const px = measureSafeAreaInset(side);
-    root.style.setProperty(`--employee-safe-${side}`, `${px}px`);
+    if (px > 0) {
+      root.style.setProperty(`--employee-safe-${side}`, `${px}px`);
+    } else {
+      root.style.removeProperty(`--employee-safe-${side}`);
+    }
   }
 }

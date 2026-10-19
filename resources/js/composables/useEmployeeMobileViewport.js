@@ -1,36 +1,19 @@
 //
-// iOS Safari (tab): chiều cao layout theo visualViewport khi URL bar co giãn.
-// PWA standalone: không ghi --employee-mobile-vh; shell CSS dùng inset:0.
-// Tab Safari: visualViewport (không lắng nghe vv trên PWA — tránh co shell).
+// Composable: đồng bộ chiều cao shell + safe-area khi mount/resize.
+// Logic đo: resources/js/lib/employeeMobileViewport.js
 //
 import { onBeforeUnmount, onMounted } from 'vue';
 import { syncEmployeeSafeAreaInsets } from '@/lib/employeeSafeArea';
+import {
+  clearEmployeeShellHeight,
+  employeeShellViewportMode,
+  syncEmployeeShellHeight,
+} from '@/lib/employeeMobileViewport';
 import { isPwaStandalone } from '@/lib/pwaStandalone';
 
-const ROOT_VAR = '--employee-mobile-vh';
-
-function readBrowserViewportHeightPx() {
-  if (typeof window === 'undefined') return 0;
-  const vv = window.visualViewport;
-  const h = vv?.height ?? window.innerHeight;
-  return Math.max(0, Math.round(h));
-}
-
 export function syncEmployeeMobileViewport() {
-  syncMobileViewportHeight();
+  syncEmployeeShellHeight();
   syncEmployeeSafeAreaInsets();
-}
-
-function syncMobileViewportHeight() {
-  if (typeof document === 'undefined') return;
-  if (isPwaStandalone()) {
-    document.documentElement.style.removeProperty(ROOT_VAR);
-    return;
-  }
-  const height = readBrowserViewportHeightPx();
-  if (height > 0) {
-    document.documentElement.style.setProperty(ROOT_VAR, `${height}px`);
-  }
 }
 
 export function useEmployeeMobileViewport() {
@@ -72,6 +55,8 @@ export function useEmployeeMobileViewport() {
     window.removeEventListener('resize', scheduleSync);
     window.removeEventListener('orientationchange', scheduleSync);
     unbindVisualViewport();
-    document.documentElement.style.removeProperty(ROOT_VAR);
+    clearEmployeeShellHeight();
   });
+
+  return { viewportMode: employeeShellViewportMode };
 }
