@@ -409,6 +409,10 @@ html.employee-mobile-pwa {
   margin-top: 1px;
 }
 
+.employee-shell__meta--reserve {
+  min-height: 1.125rem;
+}
+
 .employee-shell__date {
   margin: 0;
   font-size: 0.6875rem;

@@ -622,13 +622,27 @@ const seniorityDays = computed(
           <span class="leave-progress__pct">{{ formatDays(overview.usagePercent) }}%</span>
         </div>
         <div class="leave-progress__track" aria-hidden="true">
-          <div class="leave-progress__fill" :style="{ width: progressWidth }"></div>
+          <div
+            class="leave-progress__fill"
+            :class="{ 'leave-progress__fill--instant': balanceLoading }"
+            :style="{ width: progressWidth }"
+          ></div>
         </div>
       </div>
 
       <div class="leave-breakdown">
         <h3 class="leave-breakdown__title">Diễn giải số ngày phép</h3>
-        <ul class="leave-breakdown__list">
+        <ul
+          v-if="balanceLoading"
+          class="leave-breakdown__list leave-breakdown__list--placeholder"
+          aria-hidden="true"
+        >
+          <li v-for="n in 3" :key="n" class="leave-breakdown__row leave-breakdown__row--placeholder">
+            <span class="leave-breakdown__ph leave-breakdown__ph--label"></span>
+            <span class="leave-breakdown__ph leave-breakdown__ph--value"></span>
+          </li>
+        </ul>
+        <ul v-else class="leave-breakdown__list">
           <li v-for="row in breakdown" :key="row.id" class="leave-breakdown__row">
             <span class="leave-breakdown__label">{{ row.label }}</span>
             <span class="leave-breakdown__value">+{{ formatDays(row.value) }} ngày</span>
@@ -637,16 +651,19 @@ const seniorityDays = computed(
       </div>
     </section>
 
-    <button
-      type="button"
-      class="leave-create"
-      :disabled="typesLoading || !!typesError || leaveTypes.length === 0"
-      @click="openForm"
-    >
-      <AppIcon name="plus" :size="20" :stroke-width="2" />
-      <span>{{ typesLoading ? 'Đang tải loại nghỉ…' : 'Tạo đơn xin nghỉ phép' }}</span>
-    </button>
-    <p v-if="typesError" class="leave-types-error">{{ typesError }}</p>
+    <div class="leave-action">
+      <button
+        type="button"
+        class="leave-create"
+        :disabled="typesLoading || !!typesError || leaveTypes.length === 0"
+        :aria-busy="typesLoading ? 'true' : 'false'"
+        @click="openForm"
+      >
+        <AppIcon name="plus" :size="20" :stroke-width="2" />
+        <span>Tạo đơn xin nghỉ phép</span>
+      </button>
+      <p v-if="typesError" class="leave-types-error">{{ typesError }}</p>
+    </div>
 
     <Teleport to="body">
       <div v-if="formOpen" class="leave-dialog" role="dialog" aria-modal="true" aria-labelledby="leave-form-title">
@@ -944,6 +961,15 @@ const seniorityDays = computed(
   gap: var(--space-3);
 }
 
+@media (max-width: 768px) {
+  .leave {
+    --leave-action-reserve: 4.25rem;
+    padding-bottom: calc(
+      var(--leave-action-reserve) + var(--employee-tabbar-block-size, 3.25rem) + var(--space-3)
+    );
+  }
+}
+
 .leave-hero {
   position: relative;
   padding: var(--space-4) var(--space-4) var(--space-3);
@@ -1167,6 +1193,10 @@ const seniorityDays = computed(
   transition: width 0.35s ease;
 }
 
+.leave-progress__fill--instant {
+  transition: none;
+}
+
 .leave-breakdown__title {
   margin: 0 0 var(--space-2);
   font-size: 0.8125rem;
@@ -1206,6 +1236,54 @@ const seniorityDays = computed(
   font-size: 0.8125rem;
   font-weight: 400;
   color: var(--color-secondary);
+}
+
+.leave-breakdown__row--placeholder {
+  pointer-events: none;
+}
+
+.leave-breakdown__ph {
+  display: block;
+  height: 0.75rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-border) 55%, var(--color-surface-muted));
+}
+
+.leave-breakdown__ph--label {
+  width: min(12rem, 55%);
+}
+
+.leave-breakdown__ph--value {
+  width: 4.5rem;
+}
+
+.leave-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+@media (max-width: 768px) {
+  .leave-action {
+    position: fixed;
+    z-index: 4;
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: calc(var(--employee-tabbar-block-size, 3.25rem) + var(--space-1));
+    padding-top: var(--space-2);
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      color-mix(in srgb, var(--color-bg) 88%, transparent) 35%,
+      color-mix(in srgb, var(--color-bg) 96%, transparent) 100%
+    );
+    pointer-events: none;
+  }
+
+  .leave-action .leave-create,
+  .leave-action .leave-types-error {
+    pointer-events: auto;
+  }
 }
 
 .leave-types-error {

@@ -263,8 +263,14 @@ function goBackFromSubpage() {
             <h1 class="employee-shell__hello employee-shell__hello--page">
               {{ pageHeaderTitle || displayName || 'Nhân sự' }}
             </h1>
-            <div v-if="pageHeaderTitle && (departmentName || jobTitleName)" class="employee-shell__meta">
-              <span class="employee-shell__meta-extra">{{ departmentName || jobTitleName }}</span>
+            <div
+              v-if="pageHeaderTitle"
+              class="employee-shell__meta employee-shell__meta--reserve"
+            >
+              <span
+                v-if="departmentName || jobTitleName"
+                class="employee-shell__meta-extra"
+              >{{ departmentName || jobTitleName }}</span>
             </div>
             <p v-else-if="!pageHeaderTitle && departmentName" class="employee-shell__date">{{ departmentName }}</p>
             <p v-else-if="!pageHeaderTitle && jobTitleName" class="employee-shell__date">{{ jobTitleName }}</p>
