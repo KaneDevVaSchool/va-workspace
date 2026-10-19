@@ -10,7 +10,18 @@ const STATUS_META = {
   pending: { label: 'Đang chờ duyệt', color: 'var(--color-warning)' },
   approved: { label: 'Đã duyệt', color: 'var(--color-success)' },
   rejected: { label: 'Từ chối', color: 'var(--color-primary)' },
+  cancel_requested: { label: 'Chờ duyệt huỷ', color: 'var(--color-warning)' },
   cancelled: { label: 'Đã huỷ', color: 'var(--color-text-muted)' },
+};
+
+const MODE_LABELS = {
+  day: 'Theo ngày',
+  hour: 'Theo giờ',
+};
+
+const SESSION_LABELS = {
+  morning: 'Ca sáng',
+  afternoon: 'Ca chiều',
 };
 
 /** @type {import('vue').Ref<Array<Record<string, unknown>>>} */
@@ -24,52 +35,129 @@ function statusMeta(status) {
   return STATUS_META[status] ?? STATUS_META.pending;
 }
 
-function formatSubmittedAt(value) {
-  if (!value) return '—';
+function formatDateOnly(value) {
+  if (!value) return '';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
   return d.toLocaleDateString('vi-VN');
 }
 
-function formatRange(row) {
-  const from = row.date_from ? new Date(row.date_from).toLocaleDateString('vi-VN') : '';
-  const to =
-    row.date_to && row.date_to !== row.date_from
-      ? new Date(row.date_to).toLocaleDateString('vi-VN')
-      : '';
+function formatDateTime(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
-  if (row.mode === 'hour' && (row.time_from || row.time_to)) {
-    const timePart = [row.time_from, row.time_to].filter(Boolean).join(' – ');
-    return from ? `${from} · ${timePart}` : timePart || '—';
+function formatMode(mode) {
+  return MODE_LABELS[String(mode ?? '')] ?? (mode ? String(mode) : '—');
+}
+
+function formatSession(session) {
+  if (!session) return '';
+  return SESSION_LABELS[String(session)] ?? String(session);
+}
+
+function formatTimeRange(row) {
+  const part = [row.time_from, row.time_to].filter(Boolean).join(' – ');
+  return part || '—';
+}
+
+function formatRange(row) {
+  const from = formatDateOnly(row.date_from);
+  const to =
+    row.date_to && row.date_to !== row.date_from ? formatDateOnly(row.date_to) : '';
+
+  if (row.mode === 'hour') {
+    const timePart = formatTimeRange(row);
+    if (timePart !== '—') {
+      return from ? `${from} · ${timePart}` : timePart;
+    }
+  }
+
+  const session = formatSession(row.session);
+  if (session && from && !to) {
+    return `${from} · ${session}`;
   }
 
   if (from && to) return `${from} – ${to}`;
   return from || '—';
 }
 
-function formatApprover(row, status) {
-  const name =
-    row.approver_name ??
-    row.approver?.name ??
-    row.approved_by_name ??
-    row.approved_by?.name ??
-    null;
-  if (name) return String(name);
-  if (status === 'pending') return 'Chưa có người duyệt';
-  return '—';
+function normalizePerson(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const name = String(raw.name ?? raw.full_name ?? '').trim();
+  if (!name) return null;
+  const code = raw.code != null ? String(raw.code).trim() : '';
+  const jobTitle = raw.job_title != null ? String(raw.job_title).trim() : '';
+  return {
+    name,
+    code: code || null,
+    jobTitle: jobTitle || null,
+  };
+}
+
+function resolvePerson(row, objectKeys, nameKey) {
+  for (const key of objectKeys) {
+    const person = normalizePerson(row[key]);
+    if (person) return person;
+  }
+  if (nameKey && row[nameKey]) {
+    return normalizePerson({ name: row[nameKey], code: row[`${nameKey.replace(/_name$/, '')}_code`] });
+  }
+  return null;
+}
+
+function formatPersonLine(person) {
+  if (!person) return '—';
+  const withCode = person.code ? `${person.name} (${person.code})` : person.name;
+  return person.jobTitle ? `${withCode} · ${person.jobTitle}` : withCode;
 }
 
 function mapLeaveRow(row, index) {
   const status = String(row.status ?? 'pending');
+  const approver = resolvePerson(row, ['approver'], 'approver_name');
+  const follower = resolvePerson(row, ['follower'], null);
+  const handover = resolvePerson(row, ['handover'], null);
+  const rejectReason = String(row.reject_reason ?? '').trim();
+  const cancelReason = String(row.cancel_reason ?? '').trim();
+  const documentLink = String(row.document_link ?? '').trim();
+  const dateTo =
+    row.date_to && row.date_to !== row.date_from ? formatDateOnly(row.date_to) : '';
+
   return {
     id: row.uuid ?? `leave-${index}`,
     kind: row.leave_type_name ?? 'Nghỉ phép',
-    submittedAt: formatSubmittedAt(row.submitted_at ?? row.created_at),
+    leaveTypeCode: String(row.leave_type_code ?? '').trim(),
+    submittedAt: formatDateOnly(row.submitted_at ?? row.created_at),
+    submittedAtDetail: formatDateTime(row.submitted_at ?? row.created_at),
     range: formatRange(row),
+    mode: String(row.mode ?? ''),
+    modeLabel: formatMode(row.mode),
+    sessionLabel: formatSession(row.session),
+    dateFrom: formatDateOnly(row.date_from) || '—',
+    dateTo: dateTo || '—',
+    timeRange: formatTimeRange(row),
     reason: String(row.reason ?? '').trim() || '—',
     status,
-    approver: formatApprover(row, status),
+    statusLabel: String(row.status_label ?? '').trim() || statusMeta(status).label,
+    approver,
+    approverLine: formatPersonLine(approver),
+    followerLine: formatPersonLine(follower),
+    handoverLine: formatPersonLine(handover),
+    hasFollower: Boolean(follower),
+    hasHandover: Boolean(handover),
     totalDays: Number(row.total_days ?? 0),
+    decidedAt: row.decided_at ? formatDateTime(row.decided_at) : '',
+    rejectReason,
+    cancelReason,
+    documentLink,
   };
 }
 
@@ -84,8 +172,7 @@ async function loadRequests() {
     requests.value = rows.map(mapLeaveRow);
   } catch (err) {
     requests.value = [];
-    loadError.value =
-      err?.response?.data?.message ?? 'Không tải được đơn nghỉ phép từ HRM.';
+    loadError.value = err?.response?.data?.message ?? 'Không tải được danh sách đơn.';
   } finally {
     loading.value = false;
   }
@@ -118,12 +205,9 @@ onBeforeUnmount(() => {
   <div class="requests">
     <p v-if="loading" class="requests-state">Đang tải đơn nghỉ phép…</p>
     <p v-else-if="loadError" class="requests-state requests-state--error">{{ loadError }}</p>
-    <p v-else-if="requests.length === 0" class="requests-state">
-      Chưa có đơn nghỉ phép nào trên HRM.
-    </p>
+    <p v-else-if="requests.length === 0" class="requests-state">Chưa có đơn nghỉ phép nào.</p>
 
     <template v-else>
-      <p class="requests-count">{{ requests.length }} đơn</p>
       <ul class="requests-list">
         <li v-for="req in requests" :key="req.id">
           <button
@@ -136,13 +220,14 @@ onBeforeUnmount(() => {
               <span class="request-row__line">
                 <span class="request-row__kind">{{ req.kind }}</span>
                 <span class="request-row__badge" :data-status="req.status">
-                  {{ statusMeta(req.status).label }}
+                  {{ req.statusLabel }}
                 </span>
               </span>
               <span class="request-row__range">{{ req.range }}</span>
               <span class="request-row__sub">
-                Gửi {{ req.submittedAt }}
+                {{ req.submittedAt }}
                 <template v-if="req.totalDays > 0"> · {{ req.totalDays }} ngày</template>
+                <template v-if="req.approver"> · {{ req.approver.name }}</template>
               </span>
             </span>
             <AppIcon name="chevronRight" :size="18" class="request-row__chev" aria-hidden="true" />
@@ -158,38 +243,84 @@ onBeforeUnmount(() => {
 
           <div class="sheet__header">
             <div class="sheet__header-main">
-              <p class="sheet__kicker">Chi tiết đơn</p>
-              <p class="sheet__title">{{ selected.kind }}</p>
+              <div class="sheet__title-row">
+                <p class="sheet__title">{{ selected.kind }}</p>
+                <span class="sheet__badge" :data-status="selected.status">{{ selected.statusLabel }}</span>
+              </div>
+              <p v-if="selected.leaveTypeCode" class="sheet__meta">{{ selected.leaveTypeCode }}</p>
             </div>
             <button type="button" class="sheet__close" aria-label="Đóng" @click="closeDetail">
               <AppIcon name="close" :size="18" />
             </button>
           </div>
 
-          <p class="sheet__status-banner" :data-status="selected.status">
-            {{ statusMeta(selected.status).label }}
-          </p>
-
           <dl class="sheet__details">
             <div class="sheet__row">
-              <dt>Ngày gửi</dt>
-              <dd>{{ selected.submittedAt }}</dd>
+              <dt>Thời điểm gửi</dt>
+              <dd>{{ selected.submittedAtDetail }}</dd>
             </div>
             <div class="sheet__row">
-              <dt>Thời gian nghỉ</dt>
-              <dd>{{ selected.range }}</dd>
+              <dt>Hình thức</dt>
+              <dd>{{ selected.modeLabel }}</dd>
+            </div>
+            <div class="sheet__row">
+              <dt>Từ ngày</dt>
+              <dd>{{ selected.dateFrom }}</dd>
+            </div>
+            <div v-if="selected.dateTo !== '—'" class="sheet__row">
+              <dt>Đến ngày</dt>
+              <dd>{{ selected.dateTo }}</dd>
+            </div>
+            <div v-if="selected.sessionLabel" class="sheet__row">
+              <dt>Buổi</dt>
+              <dd>{{ selected.sessionLabel }}</dd>
+            </div>
+            <div v-if="selected.mode === 'hour'" class="sheet__row">
+              <dt>Khung giờ</dt>
+              <dd>{{ selected.timeRange }}</dd>
             </div>
             <div v-if="selected.totalDays > 0" class="sheet__row">
-              <dt>Số ngày</dt>
+              <dt>Số ngày công</dt>
               <dd>{{ selected.totalDays }}</dd>
             </div>
             <div class="sheet__row sheet__row--block">
-              <dt>Lý do</dt>
+              <dt>Lý do nghỉ</dt>
               <dd class="sheet__reason">{{ selected.reason }}</dd>
             </div>
-            <div class="sheet__row">
+            <div v-if="selected.documentLink" class="sheet__row sheet__row--block">
+              <dt>Tài liệu</dt>
+              <dd class="sheet__link-wrap">
+                <a
+                  class="sheet__link"
+                  :href="selected.documentLink"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >{{ selected.documentLink }}</a>
+              </dd>
+            </div>
+            <div class="sheet__row sheet__row--person">
               <dt>Người duyệt</dt>
-              <dd>{{ selected.approver }}</dd>
+              <dd>{{ selected.approverLine }}</dd>
+            </div>
+            <div v-if="selected.hasFollower" class="sheet__row">
+              <dt>Người theo dõi</dt>
+              <dd>{{ selected.followerLine }}</dd>
+            </div>
+            <div v-if="selected.hasHandover" class="sheet__row">
+              <dt>Bàn giao</dt>
+              <dd>{{ selected.handoverLine }}</dd>
+            </div>
+            <div v-if="selected.decidedAt" class="sheet__row">
+              <dt>Thời điểm xử lý</dt>
+              <dd>{{ selected.decidedAt }}</dd>
+            </div>
+            <div v-if="selected.rejectReason" class="sheet__row sheet__row--block">
+              <dt>Lý do từ chối</dt>
+              <dd class="sheet__reason sheet__reason--warn">{{ selected.rejectReason }}</dd>
+            </div>
+            <div v-if="selected.cancelReason" class="sheet__row sheet__row--block">
+              <dt>Lý do huỷ</dt>
+              <dd class="sheet__reason">{{ selected.cancelReason }}</dd>
             </div>
           </dl>
         </div>
@@ -217,14 +348,6 @@ onBeforeUnmount(() => {
 
 .requests-state--error {
   color: var(--color-primary);
-}
-
-.requests-count {
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 400;
-  letter-spacing: 0.02em;
-  color: var(--color-text-muted);
 }
 
 .requests-list {
@@ -275,6 +398,10 @@ onBeforeUnmount(() => {
 
 .request-row--rejected::before {
   background: var(--color-primary);
+}
+
+.request-row--cancel_requested::before {
+  background: var(--color-warning);
 }
 
 .request-row--cancelled::before {
@@ -330,6 +457,11 @@ onBeforeUnmount(() => {
 .request-row__badge[data-status='rejected'] {
   color: var(--color-primary);
   background: var(--color-primary-surface);
+}
+
+.request-row__badge[data-status='cancel_requested'] {
+  color: color-mix(in srgb, var(--color-warning) 85%, var(--color-text));
+  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-surface));
 }
 
 .request-row__badge[data-status='cancelled'] {
@@ -395,21 +527,59 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.sheet__kicker {
-  margin: 0 0 2px;
-  font-size: 0.6875rem;
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
+.sheet__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 .sheet__title {
   margin: 0;
+  flex: 1;
+  min-width: 0;
   font-size: 1rem;
   font-weight: 400;
   line-height: 1.35;
   color: var(--color-text);
+}
+
+.sheet__meta {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.sheet__badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.sheet__badge[data-status='pending'],
+.sheet__badge[data-status='cancel_requested'] {
+  color: color-mix(in srgb, var(--color-warning) 85%, var(--color-text));
+  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-surface));
+}
+
+.sheet__badge[data-status='approved'] {
+  color: color-mix(in srgb, var(--color-success) 85%, var(--color-text));
+  background: color-mix(in srgb, var(--color-success) 14%, var(--color-surface));
+}
+
+.sheet__badge[data-status='rejected'] {
+  color: var(--color-primary);
+  background: var(--color-primary-surface);
+}
+
+.sheet__badge[data-status='cancelled'] {
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
 }
 
 .sheet__close {
@@ -423,35 +593,6 @@ onBeforeUnmount(() => {
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
   cursor: pointer;
-}
-
-.sheet__status-banner {
-  margin: 0 0 var(--space-4);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  font-size: 0.8125rem;
-  font-weight: 400;
-  text-align: center;
-}
-
-.sheet__status-banner[data-status='pending'] {
-  color: color-mix(in srgb, var(--color-warning) 90%, var(--color-text));
-  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface-muted));
-}
-
-.sheet__status-banner[data-status='approved'] {
-  color: color-mix(in srgb, var(--color-success) 90%, var(--color-text));
-  background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface-muted));
-}
-
-.sheet__status-banner[data-status='rejected'] {
-  color: var(--color-primary);
-  background: var(--color-primary-surface);
-}
-
-.sheet__status-banner[data-status='cancelled'] {
-  color: var(--color-text-muted);
-  background: var(--color-surface-muted);
 }
 
 .sheet__details {
@@ -501,6 +642,26 @@ onBeforeUnmount(() => {
 .sheet__reason {
   font-style: italic;
   color: var(--color-text);
+}
+
+.sheet__reason--warn {
+  color: var(--color-primary);
+}
+
+.sheet__link-wrap {
+  text-align: left;
+  word-break: break-word;
+}
+
+.sheet__link {
+  font-size: 0.8125rem;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.sheet__row--person dd {
+  line-height: 1.4;
 }
 
 @media (min-width: 480px) {

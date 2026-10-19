@@ -19,26 +19,28 @@ const emit = defineEmits(['select']);
     <template v-if="loading">
       <li v-for="n in compact ? 4 : 8" :key="`sk-${n}`" class="quick-utilities__sk" aria-hidden="true" />
     </template>
-    <li v-for="item in items" v-else :key="item.utility_key">
-      <component
-        :is="preview ? 'div' : 'button'"
-        :type="preview ? undefined : 'button'"
-        class="quick-utilities__tile"
-        :class="{
-          'quick-utilities__tile--preview': preview,
-          'quick-utilities__tile--active': activeKey && item.utility_key === activeKey,
-          'quick-utilities__tile--maintenance': item.is_under_maintenance,
-        }"
-        :aria-disabled="!preview && item.is_under_maintenance ? true : undefined"
-        @click="!preview && emit('select', item)"
-      >
-        <span v-if="item.is_under_maintenance" class="quick-utilities__badge">Bảo trì</span>
-        <span class="quick-utilities__icon" :class="`quick-utilities__icon--${item.tone || 'primary'}`">
-          <AppIcon :name="item.icon || 'layoutGrid'" :size="compact ? 20 : 22" :stroke-width="1.75" />
-        </span>
-        <span class="quick-utilities__label">{{ item.label }}</span>
-      </component>
-    </li>
+    <template v-else>
+      <li v-for="item in items" :key="item.utility_key">
+        <component
+          :is="preview ? 'div' : 'button'"
+          :type="preview ? undefined : 'button'"
+          class="quick-utilities__tile"
+          :class="{
+            'quick-utilities__tile--preview': preview,
+            'quick-utilities__tile--active': activeKey && item.utility_key === activeKey,
+            'quick-utilities__tile--maintenance': item.is_under_maintenance,
+          }"
+          :aria-disabled="!preview && item.is_under_maintenance ? true : undefined"
+          @click="!preview && emit('select', item)"
+        >
+          <span v-if="item.is_under_maintenance" class="quick-utilities__badge">Bảo trì</span>
+          <span class="quick-utilities__icon" :class="`quick-utilities__icon--${item.tone || 'primary'}`">
+            <AppIcon :name="item.icon || 'layoutGrid'" :size="compact ? 20 : 22" :stroke-width="1.75" />
+          </span>
+          <span class="quick-utilities__label">{{ item.label }}</span>
+        </component>
+      </li>
+    </template>
   </ul>
 </template>
 
@@ -55,6 +57,8 @@ const emit = defineEmits(['select']);
 .quick-utilities--compact {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-2);
+  /* Trang chủ PWA: tối đa 2 hàng — giữ chỗ khi đang tải lối tắt, tránh giật layout */
+  min-height: calc(2 * 4.75rem + var(--space-2));
 }
 
 .quick-utilities__tile {

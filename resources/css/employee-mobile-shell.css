@@ -47,7 +47,7 @@ html.employee-mobile-pwa {
     --employee-tabbar-block-size: 3.25rem;
   }
 
-  .employee-shell--browser {
+  .employee-shell--browser:not(.emp-shell-preview__shell) {
     position: fixed;
     top: 0;
     left: 0;
@@ -78,7 +78,7 @@ html.employee-mobile-pwa {
     --employee-tabbar-block-size: 3.25rem;
   }
 
-  .employee-shell--pwa {
+  .employee-shell--pwa:not(.emp-shell-preview__shell) {
     position: fixed;
     inset: 0;
     z-index: 0;
@@ -411,6 +411,10 @@ html.employee-mobile-pwa {
 
 .employee-shell__meta--reserve {
   min-height: 1.125rem;
+}
+
+.employee-shell__meta--home {
+  min-height: 2.25rem;
 }
 
 .employee-shell__date {

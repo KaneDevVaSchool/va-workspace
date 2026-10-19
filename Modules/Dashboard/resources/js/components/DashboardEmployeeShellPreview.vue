@@ -81,7 +81,7 @@ const tabs = computed(() =>
                 <h1 class="employee-shell__hello">
                   {{ firstName || displayName || 'bạn' }}
                 </h1>
-                <div class="employee-shell__meta">
+                <div class="employee-shell__meta employee-shell__meta--reserve employee-shell__meta--home">
                   <span class="employee-shell__date">{{ todayLabel }}</span>
                   <span
                     v-if="departmentName || jobTitleName"
@@ -168,13 +168,33 @@ const tabs = computed(() =>
   top: auto !important;
   left: auto !important;
   right: auto !important;
+  inset: auto !important;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 24rem;
-  height: auto !important;
-  max-height: none !important;
+  height: min(36rem, 72vh) !important;
+  min-height: 28rem;
+  max-height: min(36rem, 72vh) !important;
   overflow: hidden;
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
+}
+
+.emp-shell-preview__shell .employee-shell__header {
+  flex-shrink: 0;
+}
+
+.emp-shell-preview__shell .employee-shell__content {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.emp-shell-preview__shell .employee-tabbar--shell {
+  flex-shrink: 0;
+  margin-top: auto;
 }
 
 .emp-shell-preview__shell :is(.employee-shell__icon-btn, .employee-shell__avatar-btn, .employee-shell__brand-mark) {

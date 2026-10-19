@@ -246,7 +246,7 @@ function goBackFromSubpage() {
             <h1 class="employee-shell__hello">
               {{ firstName || displayName || 'bạn' }}
             </h1>
-            <div class="employee-shell__meta">
+            <div class="employee-shell__meta employee-shell__meta--reserve employee-shell__meta--home">
               <span class="employee-shell__date">{{ todayLabel }}</span>
               <span v-if="departmentName || jobTitleName" class="employee-shell__meta-sep" aria-hidden="true">·</span>
               <span v-if="departmentName" class="employee-shell__meta-extra">{{ departmentName }}</span>

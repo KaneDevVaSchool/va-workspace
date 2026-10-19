@@ -90,14 +90,6 @@ class DashboardQuickUtilityService
 
     public function syncCatalog(): void
     {
-        $keys = array_keys(self::CATALOG);
-
-        foreach ($this->repository->allOrdered() as $row) {
-            if (! in_array($row->utility_key, $keys, true)) {
-                $this->repository->delete($row);
-            }
-        }
-
         foreach (self::CATALOG as $utilityKey => $defaults) {
             $row = $this->repository->findByKey($utilityKey);
             if (! $row) {
@@ -138,7 +130,30 @@ class DashboardQuickUtilityService
      */
     public function create(array $data, ?int $updatedBy): DashboardQuickUtility
     {
-        throw new \InvalidArgumentException('Chỉ có 5 lối tắt cố định (chấm công, nghỉ phép, danh bạ, bảng tin, trò chuyện). Không thêm mục mới.');
+        $key = $this->normalizeKey($data['utility_key'] ?? null, $data['label']);
+
+        if ($this->isCatalogKey($key)) {
+            throw new \InvalidArgumentException('Mã này dành cho lối tắt hệ thống. Chọn mã khác.');
+        }
+
+        if ($this->repository->findByKey($key)) {
+            throw new \InvalidArgumentException('Mã tiện ích đã tồn tại.');
+        }
+
+        $linkType = $this->normalizeLinkType($data['link_type'] ?? 'none');
+
+        return $this->repository->create([
+            'utility_key' => $key,
+            'label' => trim((string) $data['label']),
+            'icon' => $this->normalizeIcon($data['icon'] ?? 'layoutGrid'),
+            'tone' => $this->normalizeTone($data['tone'] ?? 'primary'),
+            'link_type' => $linkType,
+            'link_target' => $this->normalizeLinkTarget($linkType, $data['link_target'] ?? null),
+            'sort_order' => $this->nextSortOrder(),
+            'is_visible' => (bool) ($data['is_visible'] ?? true),
+            'is_under_maintenance' => (bool) ($data['is_under_maintenance'] ?? false),
+            'updated_by' => $updatedBy,
+        ]);
     }
 
     /**

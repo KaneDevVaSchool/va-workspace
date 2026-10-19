@@ -740,7 +740,7 @@ onBeforeUnmount(() => {
 
 .dqu-panel__preview-frame {
   flex: 1;
-  min-height: 0;
+  min-height: min(36rem, 72vh);
   overflow: auto;
   padding: var(--space-2);
   border-radius: var(--radius-lg);

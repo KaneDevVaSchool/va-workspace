@@ -34,7 +34,7 @@ class DashboardQuickUtilityController extends Controller
             'meta' => [
                 'tones' => DashboardQuickUtilityService::TONES,
                 'link_types' => DashboardQuickUtilityService::LINK_TYPES,
-                'allow_create' => false,
+                'allow_create' => true,
                 'catalog_size' => count(DashboardQuickUtilityService::CATALOG),
             ],
         ]);
