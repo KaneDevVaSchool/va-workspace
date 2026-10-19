@@ -3,20 +3,23 @@
 // Bảng tin mobile — 1 cột, dùng SocialPostCard (HTML an toàn, reaction, bình luận,
 // chia sẻ) giống /social, không duplicate logic feed đơn giản cũ (chỉ xem + text thô).
 //
-import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import SocialPostCard from '@modules/Social/resources/js/components/SocialPostCard.vue';
 
 const auth = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 
 const posts = ref([]);
 const loading = ref(true);
 const loadingMore = ref(false);
 const page = ref(1);
 const hasMore = ref(true);
+const focusedPostId = ref(null);
+const openCommentsPostId = ref(null);
 
 const departmentName = computed(() => auth.user?.department?.name ?? '');
 
@@ -85,7 +88,55 @@ function onOpenHashtag(tag) {
   router.push({ name: 'social.feed', query: { hashtag: tag.replace(/^#/, '') } });
 }
 
-onMounted(() => loadPosts());
+async function scrollToPost(post) {
+  const fullPost = post && typeof post === 'object' ? post : null;
+  const postId = fullPost?.id ?? post;
+  if (!postId) return;
+
+  await nextTick();
+  let el = document.getElementById(`social-post-${postId}`);
+  if (!el && fullPost && !posts.value.some((item) => item.id === postId)) {
+    posts.value = [fullPost, ...posts.value];
+    await nextTick();
+    el = document.getElementById(`social-post-${postId}`);
+  }
+  el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function applyFocusedPost() {
+  const postId = Number(route.query.post);
+  if (!Number.isFinite(postId) || postId < 1) {
+    focusedPostId.value = null;
+    openCommentsPostId.value = null;
+    return;
+  }
+
+  focusedPostId.value = postId;
+  openCommentsPostId.value = postId;
+
+  try {
+    const { data } = await window.axios.get(`/api/social/posts/${postId}`);
+    const post = data.post;
+    if (!post) return;
+
+    if (!posts.value.some((item) => item.id === post.id)) {
+      posts.value = [post, ...posts.value];
+    }
+    await scrollToPost(post);
+  } catch {
+    showClientToast('error', 'Không tìm thấy bài viết được nhắc.');
+  }
+}
+
+watch(
+  () => route.query.post,
+  () => applyFocusedPost(),
+);
+
+onMounted(async () => {
+  await loadPosts();
+  await applyFocusedPost();
+});
 </script>
 
 <template>
@@ -99,20 +150,27 @@ onMounted(() => loadPosts());
     </div>
 
     <template v-else>
-      <SocialPostCard
+      <div
         v-for="post in posts"
+        :id="`social-post-${post.id}`"
         :key="post.id"
-        :post="post"
-        post-scope="company"
-        :department-name="departmentName"
-        @deleted="onDeleted"
-        @pinned="onPinned"
-        @unpinned="onUnpinned"
-        @shared="onShared"
-        @updated="onUpdated"
-        @open-wall="openWall"
-        @open-hashtag="onOpenHashtag"
-      />
+        class="feed__post-anchor"
+      >
+        <SocialPostCard
+          :post="post"
+          post-scope="company"
+          :department-name="departmentName"
+          :open-comments="openCommentsPostId === post.id"
+          :highlighted="focusedPostId === post.id"
+          @deleted="onDeleted"
+          @pinned="onPinned"
+          @unpinned="onUnpinned"
+          @shared="onShared"
+          @updated="onUpdated"
+          @open-wall="openWall"
+          @open-hashtag="onOpenHashtag"
+        />
+      </div>
 
       <p v-if="!posts.length" class="feed__empty">Chưa có bài đăng nào trên bảng tin.</p>
 
@@ -134,6 +192,10 @@ onMounted(() => loadPosts());
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.feed__post-anchor {
+  scroll-margin-top: var(--space-3);
 }
 
 .feed__empty {

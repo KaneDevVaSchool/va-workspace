@@ -7,7 +7,11 @@ import { onMounted, ref } from 'vue';
 import DashboardMeContent from '../components/DashboardMeContent.vue';
 import { useDashboardQuickUtilities } from '../composables/useDashboardQuickUtilities';
 import { unwrapOverview } from '../utils/dashboardPayload';
-import EmployeeHome from '@modules/Attendance/resources/js/pages/EmployeeHome.vue';
+import { defineAsyncComponent } from 'vue';
+
+const EmployeeHome = defineAsyncComponent(() =>
+  import('@modules/Attendance/resources/js/pages/EmployeeHome.vue'),
+);
 
 const { isEmployeeMobile } = useEmployeeMobileView();
 

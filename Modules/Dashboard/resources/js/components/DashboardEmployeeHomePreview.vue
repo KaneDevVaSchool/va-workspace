@@ -154,11 +154,15 @@ const tabs = [
             </div>
             <ul class="notice-list">
               <li>
-                <span class="notice-card notice-card--preview">
+                <span class="notice-card notice-card--preview notice-card--new">
                   <span class="notice-card__icon notice-card__icon--tertiary" aria-hidden="true">
-                    <AppIcon name="megaphone" :size="20" :stroke-width="1.8" />
+                    <AppIcon name="megaphone" :size="18" :stroke-width="1.75" />
                   </span>
                   <span class="notice-card__body">
+                    <span class="notice-card__top">
+                      <span class="notice-card__author">Phòng Nhân sự</span>
+                      <span class="notice-card__badge">Mới</span>
+                    </span>
                     <span class="notice-card__title">Thông báo nghỉ lễ 30/4 và 1/5</span>
                     <span class="notice-card__meta">Hôm nay</span>
                   </span>
@@ -400,33 +404,82 @@ const tabs = [
 }
 
 .notice-card--preview {
+  position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+}
+
+.notice-card--preview::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.notice-card--preview.notice-card--new::before {
+  background: var(--color-tertiary);
 }
 
 .notice-card__icon {
   display: grid;
   place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-top: 1px;
   border-radius: var(--radius-md);
-  color: var(--color-on-tertiary);
 }
 
 .notice-card__icon--tertiary {
-  background: var(--color-tertiary);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
 }
 
 .notice-card__body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
+}
+
+.notice-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.notice-card__author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.notice-card__badge {
+  flex-shrink: 0;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary-surface-strong, var(--color-tertiary-surface));
+  color: var(--color-tertiary);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .notice-card__title {
@@ -434,15 +487,15 @@ const tabs = [
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 500;
   color: var(--color-text);
-  line-height: 1.35;
-  letter-spacing: -0.01em;
+  line-height: 1.4;
 }
 
 .notice-card__meta {
   font-size: 0.75rem;
+  font-weight: 400;
   color: var(--color-text-muted);
 }
 

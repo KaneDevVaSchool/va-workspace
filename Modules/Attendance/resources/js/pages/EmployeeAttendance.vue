@@ -6,6 +6,10 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
+import {
+  readEmployeeAttendanceToday,
+  writeEmployeeAttendanceToday,
+} from '../lib/employeeAttendanceSession';
 
 const now = ref(new Date());
 let timer;
@@ -31,24 +35,35 @@ const dateLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   year: 'numeric',
 }).format(now.value));
 
-const checkedIn = ref(true);
-const checkInTime = ref('07:52');
-const checkOutTime = ref(null);
+const stored = readEmployeeAttendanceToday();
+const checkInTime = ref(stored?.checkInTime ?? null);
+const checkOutTime = ref(stored?.checkOutTime ?? null);
+const checkedIn = ref(Boolean(checkInTime.value && !checkOutTime.value));
+
+function persistAttendance() {
+  writeEmployeeAttendanceToday({
+    checkInTime: checkInTime.value,
+    checkOutTime: checkOutTime.value,
+  });
+}
 
 function handleToggle() {
   const label = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date());
   if (!checkInTime.value) {
     checkInTime.value = label;
     checkedIn.value = true;
+    persistAttendance();
     showClientToast('success', `Đã chấm công vào lúc ${label}`);
   } else if (!checkOutTime.value) {
     checkOutTime.value = label;
     checkedIn.value = false;
+    persistAttendance();
     showClientToast('success', `Đã chấm công ra lúc ${label}`);
   } else {
     checkInTime.value = label;
     checkOutTime.value = null;
     checkedIn.value = true;
+    persistAttendance();
     showClientToast('success', `Đã chấm công vào lúc ${label}`);
   }
 }

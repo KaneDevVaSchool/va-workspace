@@ -9,8 +9,9 @@
 //   .employee-shell--browser / --pwa  → header
 //   .employee-tabbar--shell (flex footer trong shell) → bottom nav
 //
-import { computed, onMounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, onMounted, provide, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { usePullToRefresh } from '@/composables/usePullToRefresh';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { usePwaInstall } from '@/composables/usePwaInstall';
 import { useEmployeeMobileShell } from '@/composables/useEmployeeMobileShell';
@@ -19,7 +20,35 @@ import { useEmployeeMobileViewport } from '@/composables/useEmployeeMobileViewpo
 import AppIcon from '@/components/AppIcon.vue';
 
 const route = useRoute();
+const router = useRouter();
 const auth = useAuthStore();
+const contentRef = ref(null);
+const homeSearchQuery = ref('');
+let homeRefreshHandler = null;
+
+provide('employeeHomeSearch', homeSearchQuery);
+provide('employeeHomeRefreshRegister', (handler) => {
+  homeRefreshHandler = handler;
+  return () => {
+    if (homeRefreshHandler === handler) homeRefreshHandler = null;
+  };
+});
+
+const { pullY, refreshing: pullRefreshing } = usePullToRefresh(
+  contentRef,
+  async () => {
+    if (route.name !== 'dashboard.me' || !homeRefreshHandler) return;
+    await homeRefreshHandler();
+  },
+  {
+    enabled: () => route.name === 'dashboard.me' && Boolean(homeRefreshHandler),
+  },
+);
+
+const pullIndicatorStyle = computed(() => ({
+  height: `${Math.max(0, pullY.value)}px`,
+  opacity: pullY.value > 4 ? Math.min(1, pullY.value / 56) : 0,
+}));
 const { canInstall, promptInstall, dismiss } = usePwaInstall();
 const { shellMode, isMobilePwa } = useEmployeeMobileShell();
 const tabbarRef = ref(null);
@@ -112,7 +141,12 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
           </template>
         </div>
         <div class="employee-shell__header-actions">
-          <button type="button" class="employee-shell__icon-btn" aria-label="Thông báo">
+          <button
+            type="button"
+            class="employee-shell__icon-btn"
+            aria-label="Thông báo"
+            @click="router.push({ name: 'employee.feed' })"
+          >
             <AppIcon name="bell" :size="20" :stroke-width="1.8" />
             <span class="employee-shell__notif-dot" aria-hidden="true"></span>
           </button>
@@ -132,10 +166,12 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
       <label v-if="route.name === 'dashboard.me'" class="employee-shell__search">
         <AppIcon name="search" :size="18" class="employee-shell__search-icon" />
         <input
+          v-model="homeSearchQuery"
           type="search"
           class="employee-shell__search-input"
-          placeholder="Tìm kiếm tiện ích, đồng nghiệp..."
+          placeholder="Tìm tiện ích nhanh..."
           autocomplete="off"
+          enterkeyhint="search"
         />
       </label>
     </header>
@@ -157,12 +193,29 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
     </div>
 
     <main
+      ref="contentRef"
       class="employee-shell__content"
       :class="{
         'employee-shell__content--home': route.name === 'dashboard.me',
         'employee-shell__content--overlap': route.name === 'employee.leave',
       }"
     >
+      <div
+        v-if="route.name === 'dashboard.me'"
+        class="employee-shell__pull"
+        :style="pullIndicatorStyle"
+        aria-hidden="true"
+      >
+        <span
+          class="employee-shell__pull-icon"
+          :class="{ 'employee-shell__pull-icon--spin': pullRefreshing }"
+        >
+          <AppIcon name="refresh" :size="18" />
+        </span>
+        <span class="employee-shell__pull-label">
+          {{ pullRefreshing ? 'Đang làm mới…' : 'Kéo để làm mới' }}
+        </span>
+      </div>
       <slot />
     </main>
 

@@ -1,9 +1,20 @@
 <script setup>
-import { onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import QuickUtilitiesGrid from '@modules/Dashboard/resources/js/components/QuickUtilitiesGrid.vue';
 import { useDashboardQuickUtilities } from '@modules/Dashboard/resources/js/composables/useDashboardQuickUtilities';
 
+const route = useRoute();
 const { utilities, loading, load, openUtility } = useDashboardQuickUtilities();
+
+const searchQuery = computed(() => String(route.query.q || '').trim().toLowerCase());
+
+const filteredUtilities = computed(() => {
+  if (!searchQuery.value) return utilities.value;
+  return utilities.value.filter((item) =>
+    String(item.label || '').toLowerCase().includes(searchQuery.value),
+  );
+});
 
 onMounted(() => {
   load();
@@ -12,8 +23,19 @@ onMounted(() => {
 
 <template>
   <div class="employee-utilities-all">
-    <p class="employee-utilities-all__hint">Chạm vào lối tắt bên dưới để mở chức năng.</p>
-    <QuickUtilitiesGrid :items="utilities" :loading="loading" @select="openUtility" />
+    <p v-if="searchQuery" class="employee-utilities-all__filter">
+      Đang lọc: “{{ route.query.q }}”
+    </p>
+    <p v-else class="employee-utilities-all__hint">Chạm vào lối tắt bên dưới để mở chức năng.</p>
+    <p v-if="!loading && filteredUtilities.length === 0" class="employee-utilities-all__empty">
+      Không có tiện ích khớp tìm kiếm.
+    </p>
+    <QuickUtilitiesGrid
+      v-else
+      :items="filteredUtilities"
+      :loading="loading"
+      @select="openUtility"
+    />
   </div>
 </template>
 
@@ -25,10 +47,17 @@ onMounted(() => {
   padding: var(--space-4) var(--space-4) var(--space-6);
 }
 
-.employee-utilities-all__hint {
+.employee-utilities-all__hint,
+.employee-utilities-all__filter,
+.employee-utilities-all__empty {
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.45;
   color: var(--color-text-muted);
+}
+
+.employee-utilities-all__filter {
+  font-weight: 600;
+  color: var(--color-text);
 }
 </style>

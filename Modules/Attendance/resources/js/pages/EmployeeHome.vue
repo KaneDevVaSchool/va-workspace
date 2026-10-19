@@ -3,92 +3,95 @@
 // Trang chủ "của tôi" bản mobile nhân viên — render bởi DashboardMe.vue khi
 // useEmployeeMobileView() = true.
 //
-import { computed, onMounted, ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { computed, inject, onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { RouterLink, useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { EMPLOYEE_SHELL_BLOCK_MESSAGE } from '@/lib/employeeMobileShellRoutes';
 import QuickUtilitiesGrid from '@modules/Dashboard/resources/js/components/QuickUtilitiesGrid.vue';
-import { useDashboardQuickUtilities } from '@modules/Dashboard/resources/js/composables/useDashboardQuickUtilities';
-import { unwrapOverview, asList } from '@modules/Dashboard/resources/js/utils/dashboardPayload';
-import { formatSocialTime } from '@modules/Social/resources/js/lib/formatSocialTime.js';
-import { postDisplayHeading } from '@modules/Social/resources/js/lib/postContentSnippet.js';
+import {
+  EMPLOYEE_HOME_UTILITIES_LIMIT,
+  useEmployeeHomeData,
+} from '../composables/useEmployeeHomeData';
+import { readEmployeeAttendanceToday } from '../lib/employeeAttendanceSession';
 
-const SOCIAL_HOME_LIMIT = 3;
+const router = useRouter();
+const homeSearchQuery = inject('employeeHomeSearch', ref(''));
+const registerHomeRefresh = inject('employeeHomeRefreshRegister', null);
 
-const { utilities, loading: utilitiesLoading, load: loadUtilities, openUtility } = useDashboardQuickUtilities();
+const {
+  utilities,
+  utilitiesLoading,
+  openUtility,
+  overviewLoading,
+  feedPosts,
+  feedLoading,
+  visibleTasks,
+  hiddenTaskCount,
+  doneCount,
+  tasks,
+  taskProgressPercent,
+  overdueCount,
+  refreshAll,
+  postTitle,
+  postMeta,
+  postAuthor,
+  isPostNew,
+  isSameCalendarDay,
+} = useEmployeeHomeData();
 
-const overview = ref(null);
-const overviewLoading = ref(true);
-const feedPosts = ref([]);
-const feedLoading = ref(true);
 const taskBusyId = ref(null);
+const attendanceToday = ref(readEmployeeAttendanceToday());
 
-const tasks = computed(() => {
-  const rows = asList(overview.value?.tasks).filter((task) => task.status !== 'cancelled');
-  return [...rows].sort((a, b) => taskSortRank(a) - taskSortRank(b));
+const filteredUtilities = computed(() => {
+  const q = homeSearchQuery.value.trim().toLowerCase();
+  let list = utilities.value;
+  if (q) {
+    list = list.filter((item) => String(item.label || '').toLowerCase().includes(q));
+  }
+  return list.slice(0, EMPLOYEE_HOME_UTILITIES_LIMIT);
 });
 
-const doneCount = computed(() => tasks.value.filter((task) => task.status === 'completed').length);
+const utilitiesEmptySearch = computed(
+  () => homeSearchQuery.value.trim() && !utilitiesLoading.value && filteredUtilities.value.length === 0,
+);
 
-const attendanceStatus = {
-  checkedInAt: '07:52',
-};
+const attendanceLabel = computed(() => {
+  const row = attendanceToday.value;
+  if (!row?.checkInTime) return { tone: 'pending', text: 'Chưa chấm công' };
+  if (row.checkOutTime) {
+    return { tone: 'done', text: `Ra lúc ${row.checkOutTime}` };
+  }
+  return { tone: 'in', text: `Vào lúc ${row.checkInTime}` };
+});
 
+const taskRingOffset = computed(() => {
+  const circumference = 326.7;
+  const pct = taskProgressPercent.value;
+  return circumference - (circumference * pct) / 100;
+});
+
+let unregisterRefresh;
 onMounted(() => {
-  loadUtilities();
-  loadOverview();
-  loadFeedPosts();
+  refreshAll();
+  if (typeof registerHomeRefresh === 'function') {
+    unregisterRefresh = registerHomeRefresh(async () => {
+      attendanceToday.value = readEmployeeAttendanceToday();
+      await refreshAll({ silent: true });
+    });
+  }
 });
 
-async function loadOverview() {
-  overviewLoading.value = true;
-  try {
-    const { data } = await window.axios.get('/api/dashboard/me/overview');
-    overview.value = unwrapOverview(data);
-  } catch (error) {
-    overview.value = null;
-    showClientToast('error', error?.response?.data?.message || 'Không tải được công việc được giao.');
-  } finally {
-    overviewLoading.value = false;
-  }
-}
+onBeforeUnmount(() => {
+  unregisterRefresh?.();
+});
 
-async function loadFeedPosts() {
-  feedLoading.value = true;
-  try {
-    const { data } = await window.axios.get('/api/social/posts', {
-      params: {
-        page: 1,
-        per_page: SOCIAL_HOME_LIMIT,
-        scope: 'all',
-        post_scope: 'company',
-      },
-    });
-    feedPosts.value = Array.isArray(data?.posts) ? data.posts.slice(0, SOCIAL_HOME_LIMIT) : [];
-  } catch (error) {
-    feedPosts.value = [];
-    showClientToast('error', error?.response?.data?.message || 'Không tải được thông báo bảng tin.');
-  } finally {
-    feedLoading.value = false;
-  }
-}
-
-function taskSortRank(task) {
-  if (task.status === 'completed') return 4;
-  if (task.is_overdue) return 0;
-  if (task.end_date && isSameCalendarDay(task.end_date, new Date())) return 1;
-  if (task.status === 'in_progress') return 2;
-  return 3;
-}
-
-function isSameCalendarDay(value, date) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return false;
-  return d.getFullYear() === date.getFullYear()
-    && d.getMonth() === date.getMonth()
-    && d.getDate() === date.getDate();
-}
+watch(
+  () => router.currentRoute.value.fullPath,
+  () => {
+    attendanceToday.value = readEmployeeAttendanceToday();
+  },
+);
 
 function taskCardStatus(task) {
   if (task.status === 'completed') return 'done';
@@ -117,12 +120,13 @@ function formatTaskTime(task) {
   return '—';
 }
 
-function postTitle(post) {
-  return postDisplayHeading(post);
+function openFeedPost(post) {
+  if (!post?.id) return;
+  router.push({ name: 'employee.feed', query: { post: String(post.id) } });
 }
 
-function postMeta(post) {
-  return formatSocialTime(post?.created_at);
+function openFeedAll() {
+  router.push({ name: 'employee.feed' });
 }
 
 function postIconTone(post) {
@@ -150,6 +154,9 @@ async function patchTaskStatus(task, nextStatus) {
   task.status = nextStatus;
   if (nextStatus === 'completed') {
     task.is_overdue = false;
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(12);
+    }
   }
 
   try {
@@ -176,53 +183,110 @@ function markInProgress(task) {
 function goAttendance() {
   openUtility({ link_type: 'route', link_target: 'employee.attendance' });
 }
+
+function goQuick(name) {
+  router.push({ name }).catch(() => {});
+}
 </script>
 
 <template>
   <div class="employee-home">
+    <div v-if="homeSearchQuery.trim()" class="employee-home__search-hint">
+      <AppIcon name="search" :size="16" />
+      <span>Kết quả cho “{{ homeSearchQuery.trim() }}”</span>
+    </div>
+
     <div class="employee-home__stat-row">
       <div class="stat-card stat-card--tasks">
-        <span class="stat-card__icon stat-card__icon--tasks" aria-hidden="true">
-          <AppIcon name="listChecks" :size="20" :stroke-width="1.8" />
-        </span>
+        <div class="stat-card__top">
+          <span class="stat-card__icon stat-card__icon--tasks" aria-hidden="true">
+            <AppIcon name="listChecks" :size="20" :stroke-width="1.8" />
+          </span>
+          <div
+            v-if="!overviewLoading && tasks.length"
+            class="stat-card__ring"
+            aria-hidden="true"
+          >
+            <svg viewBox="0 0 120 120" class="stat-card__ring-svg">
+              <circle cx="60" cy="60" r="52" class="stat-card__ring-track" />
+              <circle
+                cx="60"
+                cy="60"
+                r="52"
+                class="stat-card__ring-fill"
+                :style="{ strokeDashoffset: taskRingOffset }"
+              />
+            </svg>
+            <span class="stat-card__ring-pct">{{ taskProgressPercent }}%</span>
+          </div>
+        </div>
         <div class="stat-card__body">
           <p class="stat-card__label">Việc hôm nay</p>
-          <p class="stat-card__value">
-            {{
-              overviewLoading
-                ? '…'
-                : `${doneCount}/${tasks.length || 0} đã xong`
-            }}
+          <p v-if="overviewLoading" class="stat-card__value stat-card__value--sk">
+            <span class="employee-home__shimmer" />
+          </p>
+          <p v-else class="stat-card__value">
+            {{ doneCount }}/{{ tasks.length || 0 }} đã xong
+            <span v-if="overdueCount > 0" class="stat-card__warn"> · {{ overdueCount }} trễ</span>
           </p>
         </div>
         <div class="stat-card__progress" aria-hidden="true">
           <div
             class="stat-card__progress-fill"
-            :style="{ width: `${tasks.length ? (doneCount / tasks.length) * 100 : 0}%` }"
+            :style="{ width: `${tasks.length ? taskProgressPercent : 0}%` }"
           ></div>
         </div>
       </div>
 
       <button type="button" class="stat-card stat-card--attendance" @click="goAttendance">
-        <span class="stat-card__icon stat-card__icon--attendance" aria-hidden="true">
-          <AppIcon name="clock" :size="20" :stroke-width="1.8" />
+        <span
+          class="stat-card__icon stat-card__icon--attendance"
+          :class="`stat-card__icon--${attendanceLabel.tone}`"
+          aria-hidden="true"
+        >
+          <AppIcon :name="attendanceLabel.tone === 'pending' ? 'clock' : 'check'" :size="20" :stroke-width="1.8" />
         </span>
         <div class="stat-card__body">
           <p class="stat-card__label">Chấm công hôm nay</p>
           <p class="stat-card__value stat-card__value--inline">
-            <AppIcon name="check" :size="14" :stroke-width="2.5" class="stat-card__check" />
-            Vào lúc {{ attendanceStatus.checkedInAt }}
+            {{ attendanceLabel.text }}
           </p>
         </div>
       </button>
     </div>
-    <section class="employee-home__section">
+
+    <nav class="employee-home__quick" aria-label="Lối tắt nhanh">
+      <button type="button" class="quick-chip" @click="goQuick('employee.feed')">
+        <AppIcon name="megaphone" :size="16" />
+        Bảng tin
+      </button>
+      <button type="button" class="quick-chip" @click="goQuick('employee.attendance')">
+        <AppIcon name="clock" :size="16" />
+        Chấm công
+      </button>
+      <button type="button" class="quick-chip" @click="goQuick('employee.leave')">
+        <AppIcon name="calendar" :size="16" />
+        Nghỉ phép
+      </button>
+    </nav>
+
+    <section class="employee-home__section employee-home__section--utilities">
       <div class="section-head">
         <h2 class="section-head__title">Tiện ích nhanh</h2>
-        <RouterLink :to="{ name: 'employee.utilities' }" class="section-head__link">Xem tất cả</RouterLink>
+        <RouterLink
+          :to="{
+            name: 'employee.utilities',
+            query: homeSearchQuery.trim() ? { q: homeSearchQuery.trim() } : {},
+          }"
+          class="section-head__link"
+        >
+          Xem tất cả
+        </RouterLink>
       </div>
+      <p v-if="utilitiesEmptySearch" class="employee-home__empty">Không có tiện ích khớp tìm kiếm.</p>
       <QuickUtilitiesGrid
-        :items="utilities"
+        v-else
+        :items="filteredUtilities"
         :loading="utilitiesLoading"
         compact
         @select="openUtility"
@@ -237,14 +301,21 @@ function goAttendance() {
         </button>
       </div>
       <p v-if="overviewLoading" class="employee-home__loading">Đang tải công việc…</p>
-      <p v-else-if="tasks.length === 0" class="employee-home__empty">Bạn chưa có công việc nào được giao.</p>
+      <div v-else-if="tasks.length === 0" class="employee-home__empty-state">
+        <span class="employee-home__empty-icon" aria-hidden="true">
+          <AppIcon name="sparkles" :size="22" />
+        </span>
+        <p class="employee-home__empty-title">Không có việc nào hôm nay</p>
+        <p class="employee-home__empty">Bạn có thể xem bảng tin hoặc mở tiện ích nhanh phía trên.</p>
+      </div>
       <div v-else class="employee-home__task-scroll hide-scrollbar">
         <ul class="task-list">
           <li
-            v-for="item in tasks"
+            v-for="(item, index) in visibleTasks"
             :key="item.id"
             class="task-card"
             :class="`task-card--${taskCardStatus(item)}`"
+            :style="{ animationDelay: `${index * 40}ms` }"
           >
             <button
               type="button"
@@ -284,25 +355,43 @@ function goAttendance() {
             </div>
           </li>
         </ul>
+        <p v-if="hiddenTaskCount > 0" class="employee-home__more-tasks">
+          + {{ hiddenTaskCount }} việc khác — mở trên máy tính để xem đầy đủ
+        </p>
       </div>
     </section>
 
     <section class="employee-home__section employee-home__section--last">
       <div class="section-head">
         <h2 class="section-head__title">Thông báo mới</h2>
-        <button type="button" class="section-head__link section-head__link--btn" @click="promptDesktopOnly">
+        <button type="button" class="section-head__link section-head__link--btn" @click="openFeedAll">
           Xem tất cả
         </button>
       </div>
       <p v-if="feedLoading" class="employee-home__loading">Đang tải thông báo…</p>
-      <p v-else-if="feedPosts.length === 0" class="employee-home__empty">Chưa có thông báo mới.</p>
+      <div v-else-if="feedPosts.length === 0" class="employee-home__empty-state employee-home__empty-state--compact">
+        <span class="employee-home__empty-icon" aria-hidden="true">
+          <AppIcon name="megaphone" :size="20" />
+        </span>
+        <p class="employee-home__empty">Chưa có thông báo mới.</p>
+      </div>
       <ul v-else class="notice-list">
-        <li v-for="note in feedPosts" :key="note.id">
-          <button type="button" class="notice-card" @click="promptDesktopOnly">
+        <li v-for="(note, index) in feedPosts" :key="note.id">
+          <button
+            type="button"
+            class="notice-card"
+            :class="{ 'notice-card--new': isPostNew(note) }"
+            :style="{ animationDelay: `${index * 50}ms` }"
+            @click="openFeedPost(note)"
+          >
             <span class="notice-card__icon" :class="`notice-card__icon--${postIconTone(note)}`">
-              <AppIcon :name="postIconName(note)" :size="20" :stroke-width="1.8" />
+              <AppIcon :name="postIconName(note)" :size="18" :stroke-width="1.75" />
             </span>
             <span class="notice-card__body">
+              <span class="notice-card__top">
+                <span class="notice-card__author">{{ postAuthor(note) }}</span>
+                <span v-if="isPostNew(note)" class="notice-card__badge">Mới</span>
+              </span>
               <span class="notice-card__title">{{ postTitle(note) }}</span>
               <span class="notice-card__meta">{{ postMeta(note) }}</span>
             </span>
@@ -321,6 +410,20 @@ function goAttendance() {
   padding-bottom: var(--space-2);
 }
 
+.employee-home__search-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: calc(-1 * var(--space-2)) 0 calc(-1 * var(--space-3));
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
 .employee-home__stat-row {
   position: relative;
   z-index: 4;
@@ -335,19 +438,31 @@ function goAttendance() {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  min-height: 6.5rem;
+  min-height: 6.75rem;
   padding: var(--space-3);
   border: none;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: 0 4px 14px rgba(9, 36, 78, 0.08);
+  box-shadow: 0 4px 18px rgba(9, 36, 78, 0.09);
   text-align: left;
   font-family: inherit;
   cursor: default;
+  transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
 .stat-card--attendance {
   cursor: pointer;
+}
+
+.stat-card--attendance:active {
+  transform: scale(0.98);
+}
+
+.stat-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 .stat-card__icon {
@@ -366,6 +481,49 @@ function goAttendance() {
 .stat-card__icon--attendance {
   background: var(--color-success-tint-bg);
   color: var(--color-success);
+}
+
+.stat-card__icon--pending {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.stat-card__ring {
+  position: relative;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+}
+
+.stat-card__ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.stat-card__ring-track {
+  fill: none;
+  stroke: var(--color-tertiary-surface-strong);
+  stroke-width: 10;
+}
+
+.stat-card__ring-fill {
+  fill: none;
+  stroke: var(--color-tertiary);
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-dasharray: 326.7;
+  transition: stroke-dashoffset 0.5s ease;
+}
+
+.stat-card__ring-pct {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.5625rem;
+  font-weight: 800;
+  color: var(--color-tertiary);
 }
 
 .stat-card__body {
@@ -395,8 +553,13 @@ function goAttendance() {
   flex-wrap: wrap;
 }
 
-.stat-card__check {
-  color: var(--color-success);
+.stat-card__value--sk {
+  min-height: 1rem;
+}
+
+.stat-card__warn {
+  color: var(--color-warning);
+  font-weight: 700;
 }
 
 .stat-card__progress {
@@ -413,18 +576,61 @@ function goAttendance() {
 .stat-card__progress-fill {
   height: 100%;
   border-radius: var(--radius-full);
-  background: var(--color-tertiary);
-  transition: width 200ms ease;
+  background: linear-gradient(90deg, var(--color-tertiary), var(--color-secondary));
+  transition: width 280ms ease;
 }
 
 .stat-card--tasks {
   padding-bottom: calc(var(--space-3) + 0.5rem);
 }
 
+.employee-home__quick {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  margin: calc(-1 * var(--space-2)) 0 0;
+  padding: var(--space-1) 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.employee-home__quick::-webkit-scrollbar {
+  display: none;
+}
+
+.quick-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.45rem 0.75rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.quick-chip:active {
+  transform: scale(0.97);
+  background: var(--color-surface-muted);
+}
+
 .employee-home__section {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 12rem;
+}
+
+.employee-home__section--utilities {
+  contain-intrinsic-size: auto 10rem;
 }
 
 .employee-home__section--last {
@@ -462,7 +668,7 @@ function goAttendance() {
 }
 
 .employee-home__task-scroll {
-  max-height: min(20rem, 42vh);
+  max-height: min(22rem, 48vh);
   overflow-y: auto;
   margin: 0 calc(-1 * var(--space-1));
   padding: 0 var(--space-1);
@@ -473,6 +679,71 @@ function goAttendance() {
   margin: 0;
   font-size: 0.8125rem;
   color: var(--color-text-muted);
+}
+
+.employee-home__empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  text-align: center;
+}
+
+.employee-home__empty-state--compact {
+  padding: var(--space-4);
+}
+
+.employee-home__empty-icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
+}
+
+.employee-home__empty-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.employee-home__more-tasks {
+  margin: var(--space-2) 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.employee-home__shimmer {
+  display: block;
+  width: 5rem;
+  height: 0.75rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-muted) 25%,
+    var(--color-border) 50%,
+    var(--color-surface-muted) 75%
+  );
+  background-size: 200% 100%;
+  animation: employee-home-shimmer 1.2s ease infinite;
+}
+
+@keyframes employee-home-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 .task-list {
@@ -492,6 +763,25 @@ function goAttendance() {
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
+  animation: employee-home-rise 320ms ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-card,
+  .notice-card {
+    animation: none;
+  }
+}
+
+@keyframes employee-home-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .task-card--done {
@@ -640,36 +930,60 @@ function goAttendance() {
 }
 
 .notice-card {
+  position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
   width: 100%;
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
   border: none;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
   text-align: left;
   cursor: pointer;
   font-family: inherit;
+  transition: background 150ms ease, box-shadow 150ms ease;
+  animation: employee-home-rise 320ms ease both;
+}
+
+.notice-card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.notice-card--new::before {
+  background: var(--color-tertiary);
+}
+
+.notice-card:active {
+  background: var(--color-surface-muted);
 }
 
 .notice-card__icon {
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-top: 1px;
   border-radius: var(--radius-md);
-  color: var(--color-on-tertiary);
 }
 
 .notice-card__icon--tertiary {
-  background: var(--color-tertiary);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
 }
 
 .notice-card__icon--success {
-  background: var(--color-success);
+  background: var(--color-success-tint-bg);
+  color: var(--color-success);
 }
 
 .notice-card__body {
@@ -677,7 +991,39 @@ function goAttendance() {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+}
+
+.notice-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.notice-card__author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.notice-card__badge {
+  flex-shrink: 0;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary-surface-strong, var(--color-tertiary-surface));
+  color: var(--color-tertiary);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .notice-card__title {
@@ -685,16 +1031,15 @@ function goAttendance() {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 500;
   color: var(--color-text);
-  line-height: 1.35;
-  letter-spacing: -0.01em;
+  line-height: 1.4;
 }
 
 .notice-card__meta {
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--color-text-muted);
 }
 

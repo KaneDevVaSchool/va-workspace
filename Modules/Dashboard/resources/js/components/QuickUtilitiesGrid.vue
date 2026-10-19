@@ -85,6 +85,10 @@ const emit = defineEmits(['select']);
   box-shadow: inset 0 0 0 1px var(--color-border-strong, var(--color-border)), var(--shadow-md);
 }
 
+.quick-utilities__tile:not(.quick-utilities__tile--preview):not(.quick-utilities__tile--maintenance):active {
+  transform: scale(0.96);
+}
+
 .quick-utilities__tile--preview {
   cursor: default;
 }
