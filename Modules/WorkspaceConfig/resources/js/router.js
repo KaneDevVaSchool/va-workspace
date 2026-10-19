@@ -78,6 +78,12 @@ export default [
     meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Ẩn/hiện menu toàn hệ thống' },
   },
   {
+    path: '/superadmin/workspace-config/quick-utilities',
+    name: 'superadmin.workspace-config.quick-utilities',
+    component: () => import('./pages/WorkspaceConfigDashboardQuickUtilitiesSuperadmin.vue'),
+    meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Tiện ích nhanh Dashboard' },
+  },
+  {
     path: '/superadmin/workspace-config/departments/:departmentId',
     name: 'superadmin.workspace-config.department-detail',
     component: () => import('./pages/WorkspaceConfigDepartmentDetailHub.vue'),

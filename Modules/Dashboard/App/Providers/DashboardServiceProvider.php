@@ -7,7 +7,9 @@ use Illuminate\Support\ServiceProvider;
 use Modules\Dashboard\App\Repositories\CompanyDashboardRepository;
 use Modules\Dashboard\App\Repositories\Contracts\CompanyDashboardRepositoryInterface;
 use Modules\Dashboard\App\Repositories\Contracts\DepartmentDashboardRepositoryInterface;
+use Modules\Dashboard\App\Repositories\Contracts\DashboardQuickUtilityRepositoryInterface;
 use Modules\Dashboard\App\Repositories\Contracts\MyDashboardRepositoryInterface;
+use Modules\Dashboard\App\Repositories\DashboardQuickUtilityRepository;
 use Modules\Dashboard\App\Repositories\DepartmentDashboardRepository;
 use Modules\Dashboard\App\Repositories\MyDashboardRepository;
 
@@ -29,10 +31,16 @@ class DashboardServiceProvider extends ServiceProvider
             MyDashboardRepositoryInterface::class,
             MyDashboardRepository::class,
         );
+
+        $this->app->bind(
+            DashboardQuickUtilityRepositoryInterface::class,
+            DashboardQuickUtilityRepository::class,
+        );
     }
 
     public function boot(): void
     {
+        $this->loadMigrationsFrom(module_path('Dashboard', 'Database/migrations'));
         $this->registerRoutes();
     }
 

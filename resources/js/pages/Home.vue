@@ -47,6 +47,13 @@ const flows = {
                 button: { label: 'Ẩn hoặc hiện menu', to: { name: 'superadmin.workspace-config.global-menu' } },
             },
             {
+                icon: 'sparkles',
+                title: 'Lối tắt Dashboard của tôi',
+                teaser: 'Thêm, sắp xếp và ẩn các tiện ích nhanh trên trang cá nhân của nhân viên.',
+                items: ['Áp dụng desktop và mobile'],
+                button: { label: 'Cấu hình tiện ích nhanh', to: { name: 'superadmin.workspace-config.quick-utilities' } },
+            },
+            {
                 icon: 'search',
                 title: 'Xem ai đã làm gì',
                 teaser: 'Mở nhật ký để biết người nào thao tác lúc nào, và phát hiện việc bất thường.',

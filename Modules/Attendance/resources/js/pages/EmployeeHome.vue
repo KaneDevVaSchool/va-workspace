@@ -3,11 +3,12 @@
 // Trang chủ "của tôi" bản mobile nhân viên — render bởi DashboardMe.vue khi
 // useEmployeeMobileView() = true. Dữ liệu mock cố định, chưa gọi API (UI-only).
 //
-import { computed, reactive } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, reactive } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
+import QuickUtilitiesGrid from '@modules/Dashboard/resources/js/components/QuickUtilitiesGrid.vue';
+import { useDashboardQuickUtilities } from '@modules/Dashboard/resources/js/composables/useDashboardQuickUtilities';
 
-const router = useRouter();
+const { utilities, loading: utilitiesLoading, load: loadUtilities, openUtility } = useDashboardQuickUtilities();
 
 const checklist = reactive([
   {
@@ -53,16 +54,9 @@ const attendanceStatus = {
   checkedInAt: '07:52',
 };
 
-const utilities = [
-  { id: 'attendance', label: 'Chấm công', icon: 'clock', tone: 'tertiary', route: 'employee.attendance' },
-  { id: 'leave', label: 'Nghỉ phép', icon: 'calendar', tone: 'gold', route: 'employee.leave' },
-  { id: 'payslip', label: 'Phiếu lương', icon: 'dollarSign', tone: 'primary', route: null },
-  { id: 'training', label: 'Đào tạo', icon: 'star', tone: 'secondary', route: null },
-  { id: 'schedule', label: 'Lịch dạy', icon: 'layoutGrid', tone: 'tertiary', route: null },
-  { id: 'contacts', label: 'Danh bạ', icon: 'users', tone: 'primary', route: null },
-  { id: 'request', label: 'Tạo đơn', icon: 'fileText', tone: 'gold', route: 'employee.requests' },
-  { id: 'more', label: 'Thêm', icon: 'moreVertical', tone: 'muted', route: null },
-];
+onMounted(() => {
+  loadUtilities();
+});
 
 const notifications = [
   {
@@ -90,13 +84,7 @@ const upcomingEvent = {
 };
 
 function goAttendance() {
-  router.push({ name: 'employee.attendance' });
-}
-
-function goUtility(item) {
-  if (item.route) {
-    router.push({ name: item.route });
-  }
+  openUtility({ link_type: 'route', link_target: 'employee.attendance' });
 }
 
 function noopLink(event) {
@@ -141,16 +129,12 @@ function noopLink(event) {
         <h2 class="section-head__title">Tiện ích nhanh</h2>
         <a href="#" class="section-head__link" @click="noopLink">Xem tất cả</a>
       </div>
-      <ul class="utility-grid">
-        <li v-for="item in utilities" :key="item.id">
-          <button type="button" class="utility-tile" @click="goUtility(item)">
-            <span class="utility-tile__icon" :class="`utility-tile__icon--${item.tone}`">
-              <AppIcon :name="item.icon" :size="22" :stroke-width="1.75" />
-            </span>
-            <span class="utility-tile__label">{{ item.label }}</span>
-          </button>
-        </li>
-      </ul>
+      <QuickUtilitiesGrid
+        :items="utilities"
+        :loading="utilitiesLoading"
+        compact
+        @select="openUtility"
+      />
     </section>
 
     <section class="employee-home__section">

@@ -12,6 +12,9 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AppIcon from './AppIcon.vue';
+import SidebarLogo from './sidebar/SidebarLogo.vue';
+import SidebarNavSection from './sidebar/SidebarNavSection.vue';
+import { loadExpandedSections, persistExpandedSections } from '../composables/useSidebarSectionExpand.js';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -119,6 +122,22 @@ onBeforeUnmount(() => {
 // hệ thống → cấu hình. Cùng 1 danh sách section dùng chung cho mọi role, mỗi
 // mục tự ẩn/hiện theo quyền (itemPasses) nên super-admin và trưởng phòng thấy
 // bố cục khác nhau tự nhiên mà không cần nhánh riêng theo role.
+/** Icon tiêu đề nhóm — đồng bộ phong cách accordion va-hrm */
+const SECTION_ICONS = {
+  general: 'target',
+  news: 'megaphone',
+  evaluation: 'clipboardCheck',
+  operations: 'layoutList',
+  manager: 'settings',
+  control: 'shield',
+  admin: 'settings',
+  'superadmin-workspace-config': 'settings',
+};
+
+const DEFAULT_SECTION_OPEN = {
+  general: true,
+};
+
 const MENU_SECTIONS = [
   {
     id: 'general',
@@ -348,6 +367,12 @@ const MENU_SECTIONS = [
         icon: 'users',
         requiresSuperAdmin: true,
       },
+      {
+        name: 'superadmin.workspace-config.quick-utilities',
+        label: 'Tiện ích Dashboard',
+        icon: 'sparkles',
+        requiresSuperAdmin: true,
+      },
     ],
   },
 ];
@@ -475,6 +500,87 @@ function itemLabel(item) {
 function closeDrawer() {
   emit('close');
 }
+
+function sectionIcon(sectionId) {
+  return SECTION_ICONS[sectionId] || 'layoutGrid';
+}
+
+const expanded = ref({});
+let expandedInitialized = false;
+
+const activeSectionIds = computed(() =>
+  visibleSections.value
+    .filter((section) => section.items.some((item) => isActive(item.name)))
+    .map((section) => section.id),
+);
+
+function ensureExpandedState() {
+  const sections = visibleSections.value;
+  if (!sections.length) {
+    return;
+  }
+  const defaults = {};
+  for (const section of sections) {
+    defaults[section.id] = Boolean(DEFAULT_SECTION_OPEN[section.id]);
+  }
+  expanded.value = loadExpandedSections(
+    sections.map((s) => s.id),
+    defaults,
+    activeSectionIds.value,
+  );
+  expandedInitialized = true;
+}
+
+watch(
+  visibleSections,
+  (sections) => {
+    if (!expandedInitialized && sections.length > 0) {
+      ensureExpandedState();
+    }
+  },
+  { immediate: true },
+);
+
+watch(activeSectionIds, (ids) => {
+  if (!ids.length) {
+    return;
+  }
+  let changed = false;
+  const next = { ...expanded.value };
+  for (const id of ids) {
+    if (!next[id]) {
+      next[id] = true;
+      changed = true;
+    }
+  }
+  if (changed) {
+    expanded.value = next;
+    persistExpandedSections(next);
+  }
+});
+
+function toggleSection(id) {
+  expanded.value = {
+    ...expanded.value,
+    [id]: !expanded.value[id],
+  };
+  persistExpandedSections(expanded.value);
+}
+
+const anyExpanded = computed(() =>
+  visibleSections.value.some(
+    (section) => expanded.value[section.id] ?? Boolean(DEFAULT_SECTION_OPEN[section.id]),
+  ),
+);
+
+function setAllSections(open) {
+  const next = { ...expanded.value };
+  for (const section of visibleSections.value) {
+    next[section.id] = open;
+  }
+  expanded.value = next;
+  persistExpandedSections(next);
+}
 </script>
 
 <template>
@@ -492,554 +598,52 @@ function closeDrawer() {
       data-tour="sidebar"
       :aria-label="collapsed ? 'Menu thu gọn' : 'Menu chính'"
     >
-      <div class="sidebar__header">
-        <router-link :to="{ name: 'home' }" class="sidebar__brand" @click="closeDrawer">
-          <img
-            v-if="collapsed"
-            src="/images/congnghe/brand/vas-white-mark.png"
-            srcset="/images/congnghe/brand/vas-white-mark.png 1x, /images/congnghe/brand/vas-white-mark@2x.png 2x"
-            alt="Vietnam America Schools"
-            class="sidebar__brand-mark"
-          />
-          <img
-            v-else
-            src="/images/congnghe/brand/vas-white.png"
-            alt="Vietnam America Schools"
-            class="sidebar__brand-logo"
-          />
-        </router-link>
+      <div class="sidebar__body">
+        <SidebarLogo
+          :collapsed="collapsed"
+          show-close
+          @close="closeDrawer"
+        />
 
-        <button type="button" class="sidebar__close-btn" aria-label="Đóng menu" @click="closeDrawer">
-          <AppIcon name="close" :size="18" />
-        </button>
-      </div>
-
-      <p v-if="!collapsed" class="sidebar__tagline">
-        <AppIcon name="sparkles" :size="13" />
-        Không gian làm việc
-      </p>
-
-      <nav class="sidebar__nav sidebar-scroll" aria-label="Điều hướng chính">
-        <section
-          v-for="section in visibleSections"
-          :key="section.id"
-          class="sidebar__section"
-          :data-tour="`sidebar-section-${section.id}`"
+        <div
+          v-if="!collapsed && visibleSections.length > 1"
+          class="sidebar-nav-tools"
         >
-          <p v-if="!collapsed" class="sidebar__section-label">{{ section.label }}</p>
-
-          <router-link
-            v-for="item in section.items"
-            :key="item.name"
-            :to="{ name: item.name }"
-            class="sidebar__link sidebar-nav-item"
-            :class="{ 'sidebar__link--active sidebar-nav-item--active': isActive(item.name) }"
-            :aria-label="collapsed ? itemLabel(item) : null"
-            :aria-current="isActive(item.name) ? 'page' : null"
-            @click="closeDrawer"
+          <span class="sidebar-nav-tools__label">Menu chức năng</span>
+          <button
+            type="button"
+            class="sidebar-nav-tools__btn"
+            data-tour="sidebar-toggle-all"
+            @click="setAllSections(!anyExpanded)"
           >
-            <span class="sidebar__link-icon">
-              <AppIcon :name="item.icon" :size="18" />
-              <span v-if="collapsed && badgeLabel(item)" class="sidebar__badge sidebar__badge--icon">{{ badgeLabel(item) }}</span>
-            </span>
-            <template v-if="!collapsed">
-              <span class="sidebar__link-text">{{ itemLabel(item) }}</span>
-              <span v-if="badgeLabel(item)" class="sidebar__badge">{{ badgeLabel(item) }}</span>
-            </template>
-            <span v-else class="sidebar__flyout">{{ itemLabel(item) }}</span>
-          </router-link>
-        </section>
-      </nav>
+            <AppIcon :name="anyExpanded ? 'chevronsUp' : 'chevronsDown'" :size="14" />
+            <span>{{ anyExpanded ? 'Thu gọn tất cả' : 'Mở tất cả' }}</span>
+          </button>
+        </div>
 
-      <div v-if="!collapsed" class="sidebar__footer">
-        <router-link :to="{ name: 'home' }" class="sidebar__promo" @click="closeDrawer">
-          <span class="sidebar__promo-icon">
-            <AppIcon name="gitBranch" :size="18" />
-          </span>
-          <span class="sidebar__promo-copy">
-            <strong>Xem quy trình làm việc</strong>
-            <span>Bắt đầu từ đây nếu chưa rõ nên làm gì</span>
-          </span>
-        </router-link>
+        <nav
+          class="sidebar-scroll sidebar__nav sidebar__nav--flow"
+          aria-label="Điều hướng chính"
+        >
+          <div class="sidebar-flow" role="presentation">
+            <SidebarNavSection
+              v-for="section in visibleSections"
+              :key="section.id"
+              :section-id="section.id"
+              :label="section.label"
+              :section-icon="sectionIcon(section.id)"
+              :items="section.items"
+              :expanded="expanded[section.id] ?? Boolean(DEFAULT_SECTION_OPEN[section.id])"
+              :collapsed="collapsed"
+              :is-active="isActive"
+              :item-label="itemLabel"
+              :badge-label="badgeLabel"
+              @toggle="toggleSection(section.id)"
+              @navigate="closeDrawer"
+            />
+          </div>
+        </nav>
       </div>
     </aside>
   </div>
 </template>
-
-<style scoped>
-.sidebar-wrap {
-  position: relative;
-  z-index: 20;
-  flex-shrink: 0;
-}
-
-.sidebar-overlay {
-  display: none;
-}
-
-.sidebar {
-  position: relative;
-  width: var(--spacing-sidebar-expanded);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: visible;
-  transition: width 0.2s ease;
-}
-
-.sidebar--collapsed {
-  width: var(--spacing-sidebar-rail);
-}
-
-/* ---------- Header / brand ---------- */
-.sidebar__header {
-  position: relative;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  height: 4.5rem;
-  padding: var(--space-3) var(--space-4);
-  box-shadow: 0 1px 0 var(--color-sidebar-divider);
-}
-
-.sidebar__brand {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  text-decoration: none;
-  overflow: hidden;
-}
-
-.sidebar--collapsed .sidebar__brand {
-  justify-content: center;
-}
-
-.sidebar--collapsed .sidebar__header {
-  padding: var(--space-3) var(--space-2);
-}
-
-.sidebar__brand-mark {
-  flex-shrink: 0;
-  width: 2.5rem;
-  height: 2.5rem;
-  object-fit: contain;
-  filter: brightness(1.04);
-  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.sidebar__brand-logo {
-  display: block;
-  width: auto;
-  max-width: 100%;
-  height: clamp(2.5rem, 3.4vw, 3rem);
-  object-fit: contain;
-  filter: brightness(1.04) drop-shadow(var(--shadow-md));
-  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.sidebar__brand:hover .sidebar__brand-logo,
-.sidebar__brand:hover .sidebar__brand-mark {
-  transform: scale(1.05);
-}
-
-/* ---------- Tagline định vị dưới logo ---------- */
-.sidebar__tagline {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  margin: 0;
-  padding: 0 var(--space-4) var(--space-3);
-  color: var(--color-sidebar-text-muted);
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-align: center;
-  box-shadow: 0 1px 0 var(--color-sidebar-divider);
-  animation: sidebar-fade-up 420ms ease-out both;
-}
-
-.sidebar__tagline svg {
-  flex-shrink: 0;
-  color: var(--color-gold);
-}
-
-.sidebar__close-btn {
-  flex-shrink: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border: none;
-  border-radius: var(--radius-full);
-  background: transparent;
-  color: var(--color-sidebar-text-muted);
-  cursor: pointer;
-}
-
-.sidebar__close-btn:hover {
-  color: var(--color-on-primary);
-  background: var(--color-sidebar-hover);
-}
-
-/* ---------- Menu ---------- */
-.sidebar__nav {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-3);
-}
-
-.sidebar--collapsed .sidebar__nav {
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-2);
-  overflow: visible;
-}
-
-.sidebar__section {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-}
-
-.sidebar__section-label {
-  margin: 0 0 var(--space-2);
-  padding: 0 var(--space-3);
-  color: var(--color-sidebar-text-muted);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  animation: sidebar-fade-up 380ms ease-out both;
-}
-
-/* Vào trang: các mục hiện lên so le theo thứ tự section, không cần đánh số
-   thủ công trong template — chọn theo nth-of-type của .sidebar__section. */
-.sidebar__section:nth-of-type(1) { animation-delay: 40ms; }
-.sidebar__section:nth-of-type(2) { animation-delay: 90ms; }
-.sidebar__section:nth-of-type(3) { animation-delay: 140ms; }
-.sidebar__section:nth-of-type(4) { animation-delay: 190ms; }
-.sidebar__section:nth-of-type(n) .sidebar__link:nth-child(2) { animation-delay: 60ms; }
-.sidebar__section:nth-of-type(n) .sidebar__link:nth-child(3) { animation-delay: 110ms; }
-
-.sidebar__link {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 2.5rem;
-  padding: 0.375rem 0.625rem;
-  border-radius: var(--radius-md);
-  color: var(--color-sidebar-text);
-  text-decoration: none;
-  font-size: 0.875rem;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: visible;
-  animation: sidebar-fade-up 420ms ease-out both;
-  transition:
-    background-color 200ms ease,
-    color 200ms ease,
-    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-/* Vạch sáng bên trái - chỉ "nở" ra khi mục đang mở, thay cho việc chỉ đổi
-   màu nền (dễ nhận ra hơn ở khoé mắt). */
-.sidebar__link::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 3px;
-  height: 0;
-  border-radius: 0 var(--radius-full) var(--radius-full) 0;
-  background: var(--color-gold);
-  transform: translateY(-50%);
-  transition: height 240ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.sidebar--collapsed .sidebar__link {
-  justify-content: center;
-  width: 2.5rem;
-  padding: 0.375rem;
-}
-
-.sidebar__link-icon {
-  position: relative;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--radius-sm);
-  background: var(--color-sidebar-well);
-  color: var(--color-sidebar-text-muted);
-  transition:
-    background-color 200ms ease,
-    color 200ms ease,
-    transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.sidebar__link-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Số bài chờ xử lý (vd. bài chờ duyệt) — không phải badge trạng thái, chỉ
-   là số đếm nên vẫn dùng hình chấm tròn nhỏ nền đỏ, khác pill trạng thái
-   nền màu bị cấm ở mục 14 CLAUDE.md. */
-.sidebar__badge {
-  flex-shrink: 0;
-  margin-left: auto;
-  min-width: 1.05rem;
-  height: 1.05rem;
-  padding: 0 0.25rem;
-  border-radius: var(--radius-full);
-  background: var(--color-danger);
-  color: #fff;
-  font-size: 0.625rem;
-  font-weight: 700;
-  line-height: 1.05rem;
-  text-align: center;
-}
-
-.sidebar__badge--icon {
-  position: absolute;
-  top: -0.25rem;
-  right: -0.25rem;
-  margin-left: 0;
-}
-
-.sidebar__link:hover {
-  background: var(--color-sidebar-hover);
-  color: var(--color-on-primary);
-  transform: translateX(3px);
-}
-
-.sidebar__link:hover .sidebar__link-icon {
-  background: var(--color-sidebar-hover);
-  color: var(--color-on-primary);
-  transform: scale(1.08) rotate(-4deg);
-}
-
-.sidebar--collapsed .sidebar__link:hover {
-  transform: none;
-}
-
-.sidebar__link--active {
-  background: var(--color-sidebar-active);
-  color: var(--color-on-primary);
-  font-weight: 600;
-}
-
-.sidebar--collapsed .sidebar__link--active {
-  background: var(--color-sidebar-active);
-}
-
-.sidebar__link--active::before {
-  height: 60%;
-}
-
-.sidebar__link--active .sidebar__link-icon {
-  background: var(--color-gold);
-  color: var(--color-umber-700);
-}
-
-.sidebar__flyout {
-  position: absolute;
-  left: calc(100% + var(--space-2));
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 20;
-  display: block;
-  min-width: 8.5rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-md);
-  background: var(--color-sidebar-flyout);
-  color: var(--color-text);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  box-shadow: var(--shadow-md);
-  opacity: 0;
-  pointer-events: none;
-  white-space: nowrap;
-}
-
-.sidebar__link:hover .sidebar__flyout,
-.sidebar__link:focus-visible .sidebar__flyout {
-  opacity: 1;
-}
-
-/* ---------- Footer: thẻ dẫn sang trang quy trình ---------- */
-.sidebar__footer {
-  flex-shrink: 0;
-  padding: var(--space-3);
-}
-
-.sidebar__promo {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: 0.625rem 0.75rem;
-  border-radius: var(--radius-md);
-  background: var(--color-sidebar-well);
-  color: var(--color-on-primary);
-  text-decoration: none;
-  overflow: hidden;
-  transition:
-    background-color 200ms ease,
-    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.sidebar__promo:hover {
-  background: var(--color-sidebar-well-strong);
-  transform: translateY(-2px);
-}
-
-.sidebar__promo:focus-visible {
-  outline: 2px solid var(--color-sidebar-focus);
-  outline-offset: 2px;
-}
-
-.sidebar__promo-icon {
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: var(--radius-sm);
-  background: var(--color-sidebar-well-strong);
-  color: var(--color-gold);
-}
-
-.sidebar__promo-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.sidebar__promo-copy strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.sidebar__promo-copy > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-sidebar-text-muted);
-  font-size: 0.6875rem;
-  line-height: 1.3;
-}
-
-/* ---------- Keyframes ---------- */
-@keyframes sidebar-fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* ---------- Responsive: off-canvas dưới desktop ---------- */
-@media (max-width: 1279px) {
-  .sidebar-wrap {
-    position: fixed;
-    inset: 0;
-    z-index: 40;
-    pointer-events: none;
-  }
-
-  .sidebar-overlay {
-    display: block;
-    position: absolute;
-    inset: 0;
-    border: none;
-    padding: 0;
-    background: var(--color-sidebar-overlay);
-    backdrop-filter: blur(2px);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
-    cursor: pointer;
-  }
-
-  .sidebar {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: min(86vw, var(--spacing-sidebar-drawer));
-    transform: translateX(-100%);
-    transition: transform 0.2s ease;
-    box-shadow: var(--shadow-lg);
-  }
-
-  .sidebar--collapsed {
-    width: min(86vw, var(--spacing-sidebar-drawer));
-  }
-
-  .sidebar-wrap--open .sidebar {
-    animation: drawer-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .sidebar__close-btn {
-    display: flex;
-  }
-
-  .sidebar-wrap--open {
-    pointer-events: auto;
-  }
-
-  .sidebar-wrap--open .sidebar-overlay {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .sidebar-wrap--open .sidebar {
-    transform: translateX(0);
-  }
-
-  .sidebar__flyout {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sidebar,
-  .sidebar-overlay,
-  .sidebar-nav-item,
-  .sidebar-wrap--open .sidebar,
-  .sidebar__tagline,
-  .sidebar__section-label,
-  .sidebar__link,
-  .sidebar__link-icon,
-  .sidebar__link::before,
-  .sidebar__brand-logo,
-  .sidebar__brand-mark,
-  .sidebar__promo,
-  .sidebar__flyout {
-    transition: none;
-    animation: none;
-  }
-}
-</style>

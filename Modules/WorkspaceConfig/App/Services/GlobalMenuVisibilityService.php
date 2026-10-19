@@ -123,6 +123,11 @@ class GlobalMenuVisibilityService
             'section' => 'superadmin-workspace-config',
             'icon' => 'users',
         ],
+        'superadmin.workspace-config.quick-utilities' => [
+            'label' => 'Tiện ích Dashboard',
+            'section' => 'superadmin-workspace-config',
+            'icon' => 'sparkles',
+        ],
     ];
 
     /** @var array<string, string> section_key => nhãn mặc định */

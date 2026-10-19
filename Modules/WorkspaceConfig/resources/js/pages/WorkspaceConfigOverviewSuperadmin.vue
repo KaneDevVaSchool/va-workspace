@@ -531,6 +531,10 @@ onBeforeUnmount(() => {
           <AppIcon name="eyeOff" :size="16" />
           Menu toàn hệ thống
         </RouterLink>
+        <RouterLink class="wc-overview__header-btn" :to="{ name: 'superadmin.workspace-config.quick-utilities' }">
+          <AppIcon name="sparkles" :size="16" />
+          Tiện ích Dashboard
+        </RouterLink>
         <button type="button" class="wc-overview__header-btn" :disabled="loading" @click="loadDepartments">
           <AppIcon name="refresh" :size="16" :class="{ 'wc-overview__spin': loading }" />
           Làm mới

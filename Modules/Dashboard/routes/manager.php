@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Dashboard\App\Http\Controllers\CompanyDashboardController;
 use Modules\Dashboard\App\Http\Controllers\DepartmentDashboardController;
+use Modules\Dashboard\App\Http\Controllers\DashboardQuickUtilityController;
 use Modules\Dashboard\App\Http\Controllers\MyDashboardController;
 
 /*
@@ -47,5 +48,21 @@ Route::middleware(['auth'])->prefix('dashboard')->group(function () {
 
     Route::middleware('permission:dashboard.view')->prefix('me')->name('me.')->group(function () {
         Route::get('/overview', [MyDashboardController::class, 'overview'])->name('overview');
+        Route::get('/quick-utilities', [DashboardQuickUtilityController::class, 'indexForUser'])->name('quick-utilities');
     });
+
+    Route::middleware('permission:workspace_config.manage_dashboard_quick_utilities')
+        ->prefix('quick-utilities')
+        ->name('quick-utilities.')
+        ->group(function () {
+            Route::get('/', [DashboardQuickUtilityController::class, 'indexForAdmin'])->name('index');
+            Route::post('/', [DashboardQuickUtilityController::class, 'store'])->name('store');
+            Route::put('/layout', [DashboardQuickUtilityController::class, 'reorder'])->name('reorder');
+            Route::put('/{utilityKey}', [DashboardQuickUtilityController::class, 'update'])
+                ->where('utilityKey', '[a-z0-9_]+')
+                ->name('update');
+            Route::delete('/{utilityKey}', [DashboardQuickUtilityController::class, 'destroy'])
+                ->where('utilityKey', '[a-z0-9_]+')
+                ->name('destroy');
+        });
 });

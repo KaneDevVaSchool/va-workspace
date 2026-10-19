@@ -116,6 +116,7 @@
   --color-sidebar-well-strong: rgba(255, 255, 255, 0.14);
   --color-sidebar-text: rgba(255, 255, 255, 0.82);
   --color-sidebar-text-muted: rgba(255, 255, 255, 0.56);
+  --color-sidebar-title: color-mix(in srgb, var(--color-gold) 45%, #ffffff);
   --color-sidebar-divider: rgba(255, 255, 255, 0.1);
   --color-sidebar-accent: rgba(255, 255, 255, 0.72);
   --color-sidebar-ring: rgba(255, 255, 255, 0.16);
