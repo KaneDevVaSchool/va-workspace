@@ -21,6 +21,8 @@ const draft = ref('');
 const files = ref([]);
 const fileInput = ref(null);
 const sending = ref(false);
+/** Xem trước tin đang gửi (bubble pending trước khi API trả về). */
+const pendingOutgoing = ref(null);
 const listRef = ref(null);
 const inputRef = ref(null);
 const pickerOpen = ref(false);
@@ -105,6 +107,10 @@ watch(
     if (!editing.value) scrollToBottom();
   },
 );
+
+watch(sending, (active) => {
+  if (active && pendingOutgoing.value) scrollToBottom();
+});
 
 watch(
   () => store.activeConversationId,
@@ -332,6 +338,7 @@ function removeFile(index) {
 
 async function sendSticker(sticker) {
   if (sending.value || editing.value) return;
+  pendingOutgoing.value = { kind: 'sticker', emoji: sticker.emoji, stickerId: sticker.id };
   sending.value = true;
   try {
     await store.sendMessage(store.activeConversationId, {
@@ -346,6 +353,7 @@ async function sendSticker(sticker) {
     showClientToast('error', error?.response?.data?.message ?? 'Không gửi được sticker.');
   } finally {
     sending.value = false;
+    pendingOutgoing.value = null;
   }
 }
 
@@ -353,6 +361,16 @@ async function send() {
   const text = draft.value.trim();
   if (sending.value) return;
   if (text === '' && (editing.value || files.value.length === 0)) return;
+  if (editing.value) {
+    pendingOutgoing.value = { kind: 'edit' };
+  } else {
+    pendingOutgoing.value = {
+      kind: 'message',
+      text,
+      fileCount: files.value.length,
+      hasImages: files.value.some((file) => file.type.startsWith('image/')),
+    };
+  }
   sending.value = true;
   try {
     if (editing.value) {
@@ -373,6 +391,7 @@ async function send() {
     showClientToast('error', error?.response?.data?.message ?? 'Không gửi được tin nhắn.');
   } finally {
     sending.value = false;
+    pendingOutgoing.value = null;
   }
 }
 
@@ -443,6 +462,7 @@ function menuItems(message) {
       <span class="chat-view__who">
         <span class="chat-view__title">{{ otherUser?.name || 'Trò chuyện' }}</span>
         <span v-if="peerTyping" class="chat-view__dept">Đang nhập…</span>
+        <span v-else-if="sending" class="chat-view__dept chat-view__dept--active">Đang gửi…</span>
         <span v-else-if="otherUser?.department" class="chat-view__dept">{{ otherUser.department }}</span>
       </span>
     </div>
@@ -537,12 +557,51 @@ function menuItems(message) {
           </button>
         </div>
       </template>
+
+      <div
+        v-if="pendingOutgoing?.kind === 'message' || pendingOutgoing?.kind === 'sticker'"
+        class="chat-bubble-row chat-bubble-row--mine"
+        aria-live="polite"
+      >
+        <div
+          class="chat-bubble chat-bubble--mine chat-bubble--pending"
+          :class="{ 'chat-bubble--sticker': pendingOutgoing.kind === 'sticker' }"
+        >
+          <span
+            v-if="pendingOutgoing.kind === 'sticker' && pendingOutgoing.stickerId"
+            class="chat-sticker"
+          >
+            <SocialAnimatedSticker
+              :id="pendingOutgoing.stickerId"
+              :emoji="pendingOutgoing.emoji || ''"
+            />
+          </span>
+          <span v-else-if="pendingOutgoing.text" class="chat-bubble__text">{{ pendingOutgoing.text }}</span>
+          <span
+            v-if="pendingOutgoing.kind === 'message' && pendingOutgoing.fileCount > 0"
+            class="chat-bubble__pending-files"
+          >
+            {{
+              pendingOutgoing.fileCount > 1
+                ? `${pendingOutgoing.fileCount} tệp đính kèm`
+                : pendingOutgoing.hasImages
+                  ? 'Ảnh'
+                  : 'Tệp đính kèm'
+            }}
+          </span>
+          <span class="chat-bubble__meta">
+            <span class="chat-bubble__sending">Đang gửi…</span>
+          </span>
+        </div>
+      </div>
     </div>
 
     <div v-if="replyTo || editing" class="chat-compose-banner">
       <AppIcon :name="editing ? 'pencil' : 'reply'" :size="14" :stroke-width="1.75" />
       <span class="chat-compose-banner__copy">
-        <span class="chat-compose-banner__label">{{ editing ? 'Sửa tin nhắn' : `Trả lời ${replyTo?.sender?.name || ''}` }}</span>
+        <span class="chat-compose-banner__label">{{
+          editing ? (sending ? 'Đang lưu…' : 'Sửa tin nhắn') : `Trả lời ${replyTo?.sender?.name || ''}`
+        }}</span>
         <span class="chat-compose-banner__text">{{ editing ? draft : quoteText(replyTo) }}</span>
       </span>
       <button type="button" class="chat-view__icon-btn" aria-label="Huỷ" @click="clearModes">
@@ -626,7 +685,15 @@ function menuItems(message) {
           :aria-label="editing ? 'Sửa tin nhắn' : `Nhập tin nhắn gửi ${otherUser?.name || ''}`"
           @keydown="onKeydown"
         />
-        <button type="button" class="chat-view__send" :disabled="!canSend" aria-label="Gửi tin nhắn" @click="send">
+        <button
+          type="button"
+          class="chat-view__send"
+          :class="{ 'chat-view__send--busy': sending }"
+          :disabled="!canSend"
+          :aria-label="sending ? 'Đang gửi tin nhắn' : 'Gửi tin nhắn'"
+          :aria-busy="sending"
+          @click="send"
+        >
           <AppIcon :name="editing ? 'check' : 'send'" :size="18" :stroke-width="1.75" />
         </button>
       </div>
@@ -700,6 +767,12 @@ function menuItems(message) {
   cursor: pointer;
 }
 
+.chat-view__send--busy {
+  color: var(--color-primary);
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .chat-view__icon-btn {
   width: 1.75rem;
   height: 1.75rem;
@@ -750,6 +823,11 @@ function menuItems(message) {
 .chat-view__dept {
   color: var(--color-text-muted);
   font-size: 0.6875rem;
+}
+
+.chat-view__dept--active {
+  color: var(--color-primary);
+  font-style: italic;
 }
 
 .chat-view__messages {
@@ -809,6 +887,21 @@ function menuItems(message) {
   border-radius: 14px 14px 4px 14px;
   background: var(--color-primary-surface);
   box-shadow: none;
+}
+
+.chat-bubble--pending {
+  opacity: 0.82;
+}
+
+.chat-bubble__sending {
+  font-style: italic;
+  color: var(--color-primary);
+}
+
+.chat-bubble__pending-files {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 .chat-bubble--sticker {
