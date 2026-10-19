@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('status', 32)->default('pending');
             $table->timestamps();
 
-            $table->index(['user_id', 'status']);
+            $table->index(['user_id', 'status'], 'dash_prof_chg_req_user_status_idx');
         });
     }
 
