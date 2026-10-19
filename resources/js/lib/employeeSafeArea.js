@@ -11,6 +11,10 @@ function measureSafeAreaInset(side) {
   el.setAttribute('aria-hidden', 'true');
   el.style.cssText = [
     'position:fixed',
+    'top:0',
+    'left:0',
+    'width:0',
+    'height:0',
     'visibility:hidden',
     'pointer-events:none',
     'padding:0',
@@ -27,10 +31,13 @@ function measureSafeAreaInset(side) {
 export function isEmployeeMobileShellActive() {
   if (typeof document === 'undefined') return false;
   const root = document.documentElement;
-  return (
+  if (
     root.classList.contains('employee-mobile-pwa')
     || root.classList.contains('employee-mobile-browser')
-  );
+  ) {
+    return true;
+  }
+  return Boolean(document.querySelector('.employee-shell'));
 }
 
 export function syncEmployeeSafeAreaInsets() {

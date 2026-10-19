@@ -4,12 +4,23 @@ import '../css/app.css';
 
 import {
   applyPwaStandaloneClass,
+  isPwaStandalone,
   loadPwaStandaloneAssets,
 } from './lib/pwaStandalone';
+import { syncEmployeeSafeAreaInsets } from './lib/employeeSafeArea';
 import { bootstrapPwaServiceWorker } from './composables/usePwaUpdate';
 
 applyPwaStandaloneClass();
 loadPwaStandaloneAssets();
+
+if (typeof document !== 'undefined' && isPwaStandalone()) {
+  syncEmployeeSafeAreaInsets();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      syncEmployeeSafeAreaInsets();
+    }
+  });
+}
 bootstrapPwaServiceWorker();
 
 import { createApp } from 'vue';

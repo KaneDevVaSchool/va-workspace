@@ -46,6 +46,21 @@
     background: var(--color-primary-900);
     pointer-events: none;
   }
+
+  /*
+   * Shell nhân viên: position:fixed; inset:0 — min-height 100dvh trên #app
+   * có thể cao hơn viewport iOS (WebKit #254868) → dải trống dưới home indicator.
+   */
+  @media (max-width: 768px) {
+    html.pwa-surface-employee,
+    html.pwa-surface-employee body,
+    html.pwa-surface-employee #app,
+    html.pwa-surface-employee .app-shell {
+      min-height: 0;
+      height: 100%;
+      max-height: 100%;
+    }
+  }
 }
 
 html.pwa-standalone,
@@ -85,4 +100,15 @@ html.pwa-standalone .login::after {
   height: max(env(safe-area-inset-bottom, 0px), 2rem);
   background: var(--color-primary-900);
   pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  html.pwa-standalone.pwa-surface-employee,
+  html.pwa-standalone.pwa-surface-employee body,
+  html.pwa-standalone.pwa-surface-employee #app,
+  html.pwa-standalone.pwa-surface-employee .app-shell {
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+  }
 }
