@@ -761,9 +761,8 @@ html.employee-mobile-pwa {
   box-shadow: none;
 }
 
-/* Footer: home indicator — chỉ env (không max thêm space; space-1 đã ở padding-top wrapper). */
 .employee-tabbar--pwa.employee-tabbar--shell {
-  padding-bottom: var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0;
 }
 
 .employee-tabbar__bar {
@@ -783,6 +782,14 @@ html.employee-mobile-pwa {
     inset 0 0 0 1px color-mix(in srgb, var(--color-border) 85%, transparent),
     0 -4px 24px color-mix(in srgb, var(--color-tertiary-900) 8%, transparent),
     var(--shadow-md);
+}
+
+/*
+ * iOS PWA: safe-bottom trong pill (sau rule __bar) — nền tab bar sát đáy màn.
+ */
+.employee-tabbar--pwa .employee-tabbar__bar {
+  padding-bottom: calc(var(--space-1) + env(safe-area-inset-bottom, 0px));
+  min-height: calc(var(--employee-tabbar-height) + env(safe-area-inset-bottom, 0px));
 }
 
 .employee-tabbar__item {

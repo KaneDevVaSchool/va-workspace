@@ -356,12 +356,17 @@ onBeforeUnmount(() => {
     inset: auto 0 0 0;
     justify-content: center;
     align-items: stretch;
+    /*
+     * Tab bar đo được đã gồm safe (iOS: trong __bar). Chỉ max(safe) khi không có tabbar
+     * (chat) — tránh cộng đúp trên iOS PWA.
+     */
     padding: 0 var(--space-4)
       calc(
-        var(--space-3)
+        var(--space-3) + var(--toast-shell-bottom-inset, 0px)
           + max(
-            var(--toast-shell-bottom-inset, 0px),
-            var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px))
+            0px,
+            env(safe-area-inset-bottom, 0px)
+              - var(--toast-shell-bottom-inset, 0px)
           )
       );
     pointer-events: none;

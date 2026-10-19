@@ -5,6 +5,14 @@
 
 const SIDES = ['top', 'bottom', 'left', 'right'];
 
+function isIosDevice() {
+  if (typeof navigator === 'undefined') return false;
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+
 function measureSafeAreaInset(side) {
   if (typeof document === 'undefined') return 0;
   const el = document.createElement('div');
@@ -50,6 +58,14 @@ export function syncEmployeeSafeAreaInsets() {
     return;
   }
   for (const side of SIDES) {
+    /*
+     * iOS PWA: env(safe-area-inset-bottom) trên <html> đã đủ; gán px lên root
+     * dễ lệch với footer/tabbar → tab bar trông “nổi” cao hơn Android.
+     */
+    if (side === 'bottom' && isIosDevice()) {
+      root.style.removeProperty('--employee-safe-bottom');
+      continue;
+    }
     const px = measureSafeAreaInset(side);
     if (px > 0) {
       root.style.setProperty(`--employee-safe-${side}`, `${px}px`);
