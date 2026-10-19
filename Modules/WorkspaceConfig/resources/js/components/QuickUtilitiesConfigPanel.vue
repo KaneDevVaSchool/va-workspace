@@ -5,7 +5,7 @@
 //
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
-import QuickUtilitiesGrid from '@modules/Dashboard/resources/js/components/QuickUtilitiesGrid.vue';
+import DashboardQuickUtilitiesPreview from '@modules/Dashboard/resources/js/components/DashboardQuickUtilitiesPreview.vue';
 
 const props = defineProps({
   utilities: { type: Array, default: () => [] },
@@ -281,31 +281,16 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div
-          class="dqu-panel__preview-frame"
-          :class="{ 'dqu-panel__preview-frame--mobile': previewCompact }"
-        >
-          <section class="dqu-panel__preview-utilities">
-            <div class="dqu-panel__preview-util-head">
-              <div>
-                <h3>Tiện ích nhanh</h3>
-                <p>Lối tắt do quản trị hệ thống cấu hình</p>
-              </div>
-              <AppIcon name="sparkles" :size="16" class="dqu-panel__preview-spark" aria-hidden="true" />
-            </div>
-
-            <QuickUtilitiesGrid
-              :items="previewItems"
-              :loading="loading"
-              :compact="previewCompact"
-              preview
-              :active-key="activeKey"
-            />
-
-            <p v-if="!loading && !previewItems.length" class="dqu-panel__preview-empty">
-              Không có tiện ích nào đang hiện. Bật hiển thị hoặc thêm mục mới.
-            </p>
-          </section>
+        <div class="dqu-panel__preview-frame hide-scrollbar">
+          <DashboardQuickUtilitiesPreview
+            :mode="previewCompact ? 'mobile' : 'desktop'"
+            :utilities="previewItems"
+            :loading="loading"
+            :active-utility-key="activeKey"
+          />
+          <p v-if="!loading && !previewItems.length" class="dqu-panel__preview-empty">
+            Không có tiện ích nào đang hiện. Bật hiển thị hoặc thêm mục mới.
+          </p>
         </div>
       </aside>
     </div>
@@ -411,7 +396,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) min(22rem, 38vw);
+  grid-template-columns: minmax(0, 1fr) minmax(22rem, 1.05fr);
   gap: var(--space-4);
   overflow: hidden;
 }
@@ -705,53 +690,14 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-4);
+  padding: var(--space-2);
   border-radius: var(--radius-lg);
   background: var(--color-surface-muted);
-}
-
-.dqu-panel__preview-frame--mobile {
-  max-width: 22rem;
-  margin-inline: auto;
-  padding: var(--space-3);
-  border-radius: 1.25rem;
-  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-md);
-}
-
-.dqu-panel__preview-utilities {
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-surface-muted) 140%);
-  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
-}
-
-.dqu-panel__preview-util-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-
-.dqu-panel__preview-util-head h3 {
-  margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
-}
-
-.dqu-panel__preview-util-head p {
-  margin: 0.25rem 0 0;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
-.dqu-panel__preview-spark {
-  color: var(--color-gold);
-  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .dqu-panel__preview-empty {
-  margin: var(--space-3) 0 0;
+  margin: var(--space-3) var(--space-2) 0;
   font-size: 0.75rem;
   color: var(--color-text-muted);
   text-align: center;

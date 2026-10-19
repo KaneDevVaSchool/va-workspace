@@ -276,7 +276,7 @@ onMounted(loadUtilities);
 
     <div class="dqu-page__body">
       <p class="dqu-page__lead">
-        Chỉnh danh sách bên trái; bên phải xem trước đúng lưới trên
+        Chỉnh danh sách bên trái; bên phải là bản xem trước <strong>cùng template và theme</strong> với
         <strong>Dashboard của tôi</strong> (desktop) và trang chủ mobile nhân viên. Route Vue dùng tên route (ví dụ
         <code>employee.attendance</code>); URL mở tab mới.
       </p>
