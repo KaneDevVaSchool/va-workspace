@@ -52,7 +52,7 @@ const tabs = [
 <template>
   <div class="emp-preview" aria-hidden="true">
     <div class="employee-shell employee-shell--browser employee-shell--home emp-preview__shell">
-      <header class="employee-shell__header">
+      <header class="employee-shell__header employee-shell__header--home">
         <div class="employee-shell__header-deco" aria-hidden="true"></div>
 
         <div class="employee-shell__header-top">

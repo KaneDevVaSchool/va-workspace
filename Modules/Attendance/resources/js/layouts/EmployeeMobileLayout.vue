@@ -149,8 +149,10 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
       :class="{
         'employee-shell__header--compact': route.name !== 'dashboard.me',
         'employee-shell__header--feed': isFeedHeader,
+        'employee-shell__header--home': isHomeHeader,
       }"
     >
+      <div v-if="isHomeHeader" class="employee-shell__header-deco" aria-hidden="true"></div>
       <div class="employee-shell__header-top">
         <div class="employee-shell__greeting">
           <template v-if="isHomeHeader">

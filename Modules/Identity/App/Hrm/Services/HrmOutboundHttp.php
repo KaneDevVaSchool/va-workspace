@@ -13,7 +13,7 @@ final class HrmOutboundHttp
         return rtrim((string) config('services.hrm.api_base_url'), '/');
     }
 
-    /** Base URL catalog nghỉ phép — mặc định trùng HRM_API_BASE_URL (sau giai đoạn portal). */
+    /** Nghỉ phép — mặc định trùng baseUrl() (portal thống nhất hoặc hrm.vaschools.edu.vn sau chốt). */
     public static function leaveCatalogBaseUrl(): string
     {
         $override = config('services.hrm.leave_api_base_url');

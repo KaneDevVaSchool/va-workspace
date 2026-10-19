@@ -7,11 +7,16 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
+import { APP_ICON_NAMES } from '@/lib/appIconNames.js';
 import { showClientToast } from '@/lib/clientToast';
 import QuickUtilitiesConfigPanel from '../components/QuickUtilitiesConfigPanel.vue';
 
 const utilities = ref([]);
-const meta = ref({ tones: [], link_types: [] });
+const meta = ref({ tones: [], link_types: [], allow_create: false });
+const allowCreate = computed(() => Boolean(meta.value.allow_create));
+const editingCatalogFixed = computed(
+  () => dialogMode.value === 'edit' && utilities.value.find((u) => u.utility_key === editingKey.value)?.is_catalog_fixed,
+);
 const loading = ref(false);
 const saving = ref(false);
 const dialogOpen = ref(false);
@@ -45,8 +50,17 @@ const linkTypeLabels = {
 };
 
 const editingKey = ref(null);
+const iconSearch = ref('');
 
 const dialogTitle = computed(() => (dialogMode.value === 'create' ? 'Thêm tiện ích nhanh' : 'Sửa tiện ích nhanh'));
+
+const filteredIconNames = computed(() => {
+  const q = iconSearch.value.trim().toLowerCase();
+  if (!q) return APP_ICON_NAMES;
+  return APP_ICON_NAMES.filter((name) => name.toLowerCase().includes(q));
+});
+
+const previewLabel = computed(() => form.label.trim() || 'Tiện ích mới');
 
 const previewUtilities = computed(() => {
   const visible = utilities.value.filter((item) => item.is_visible);
@@ -114,9 +128,20 @@ async function loadUtilities() {
 function openCreate() {
   dialogMode.value = 'create';
   resetForm();
+  iconSearch.value = '';
   highlightKey.value = null;
   dialogOpen.value = true;
 }
+
+const headerPrimaryAction = computed(() => {
+  if (!allowCreate.value) return null;
+  return {
+    label: 'Thêm tiện ích nhanh',
+    icon: 'plus',
+    disabled: loading.value || saving.value,
+    onClick: openCreate,
+  };
+});
 
 function openEdit(item) {
   dialogMode.value = 'edit';
@@ -129,7 +154,12 @@ function openEdit(item) {
   form.link_target = item.link_target || '';
   form.is_visible = Boolean(item.is_visible);
   form.is_under_maintenance = Boolean(item.is_under_maintenance);
+  iconSearch.value = '';
   dialogOpen.value = true;
+}
+
+function selectIcon(name) {
+  form.icon = name;
 }
 
 function closeDialog() {
@@ -147,11 +177,13 @@ async function saveForm() {
       label: form.label,
       icon: form.icon,
       tone: form.tone,
-      link_type: form.link_type,
-      link_target: form.link_type === 'none' ? null : form.link_target,
       is_visible: form.is_visible,
       is_under_maintenance: form.is_under_maintenance,
     };
+    if (!editingCatalogFixed.value) {
+      payload.link_type = form.link_type;
+      payload.link_target = form.link_type === 'none' ? null : form.link_target;
+    }
 
     if (dialogMode.value === 'create') {
       await window.axios.post('/api/dashboard/quick-utilities', {
@@ -289,7 +321,9 @@ onMounted(loadUtilities);
   <section class="dqu-page">
     <PageHeader
       title="Lối tắt trên Dashboard"
+      subtitle="Bốn lối tắt cố định: chấm công, nghỉ phép, danh bạ, bảng tin — bật/tắt hiển thị, sắp xếp và tuỳ biểu tượng."
       icon="sparkles"
+      :primary-action="headerPrimaryAction"
       :breadcrumbs="[
         { label: 'Trang chủ', to: { name: 'home' } },
         { label: 'Cấu hình Workspace', to: { name: 'superadmin.workspace-config.overview' } },
@@ -305,10 +339,6 @@ onMounted(loadUtilities);
           <AppIcon name="refresh" :size="16" />
           Làm mới
         </button>
-        <button type="button" class="dqu-page__btn dqu-page__btn--primary" @click="openCreate">
-          <AppIcon name="plus" :size="16" />
-          Thêm tiện ích
-        </button>
       </template>
     </PageHeader>
 
@@ -319,10 +349,10 @@ onMounted(loadUtilities);
         :loading="loading"
         :busy="saving"
         :active-key="highlightKey"
+        :allow-create="allowCreate"
         @toggle="toggleVisible"
         @toggle-maintenance="toggleMaintenance"
         @edit="openEdit"
-        @delete="askDelete"
         @move="moveItem"
         @show-all="setAllVisible(true)"
         @hide-all="setAllVisible(false)"
@@ -347,51 +377,133 @@ onMounted(loadUtilities);
 
             <div class="dqu-dialog__body hide-scrollbar">
               <form class="dqu-form" @submit.prevent="saveForm">
-                <label v-if="dialogMode === 'create'" class="dqu-field">
-                  <span class="dqu-field__label">Mã nội bộ (không bắt buộc)</span>
-                  <input v-model="form.utility_key" class="dqu-field__input" type="text" placeholder="vd: phieu_luong" />
-                </label>
-                <label class="dqu-field">
-                  <span class="dqu-field__label">Tên trên màn hình</span>
-                  <input v-model="form.label" class="dqu-field__input" type="text" required maxlength="120" placeholder="vd: Chấm công" />
-                </label>
-                <label class="dqu-field">
-                  <span class="dqu-field__label">Biểu tượng (tên icon)</span>
-                  <input v-model="form.icon" class="dqu-field__input" type="text" required maxlength="64" placeholder="vd: clock" />
-                </label>
-                <label class="dqu-field">
-                  <span class="dqu-field__label">Màu ô biểu tượng</span>
-                  <select v-model="form.tone" class="dqu-field__input">
-                    <option v-for="tone in meta.tones" :key="tone" :value="tone">{{ toneLabels[tone] || tone }}</option>
-                  </select>
-                </label>
-                <label class="dqu-field">
-                  <span class="dqu-field__label">Khi nhân viên bấm vào</span>
-                  <select v-model="form.link_type" class="dqu-field__input">
-                    <option v-for="type in meta.link_types" :key="type" :value="type">{{ linkTypeLabels[type] || type }}</option>
-                  </select>
-                </label>
-                <label v-if="form.link_type !== 'none'" class="dqu-field dqu-field--wide">
-                  <span class="dqu-field__label">{{
-                    form.link_type === 'route' ? 'Tên trang trong app (kỹ thuật)' : 'Địa chỉ website (https://…)'
-                  }}</span>
-                  <input
-                    v-model="form.link_target"
-                    class="dqu-field__input"
-                    type="text"
-                    required
-                    maxlength="512"
-                    :placeholder="form.link_type === 'route' ? 'vd: employee.attendance' : 'https://…'"
-                  />
-                </label>
-                <label class="dqu-field dqu-field--check">
-                  <input v-model="form.is_visible" type="checkbox" />
-                  <span>Cho nhân viên thấy lối tắt này</span>
-                </label>
-                <label class="dqu-field dqu-field--check">
-                  <input v-model="form.is_under_maintenance" type="checkbox" />
-                  <span>Đang bảo trì (hiện tên nhưng không mở được)</span>
-                </label>
+                <div class="dqu-form__top">
+                  <div class="dqu-form__fields">
+                    <label v-if="dialogMode === 'create'" class="dqu-field">
+                      <span class="dqu-field__label">Mã nội bộ (không bắt buộc)</span>
+                      <input v-model="form.utility_key" class="dqu-field__input" type="text" placeholder="vd: phieu_luong" />
+                    </label>
+                    <label class="dqu-field" :class="{ 'dqu-field--span2': dialogMode !== 'create' }">
+                      <span class="dqu-field__label">Tên trên màn hình</span>
+                      <input
+                        v-model="form.label"
+                        class="dqu-field__input"
+                        type="text"
+                        required
+                        maxlength="120"
+                        placeholder="vd: Chấm công"
+                      />
+                    </label>
+                    <p v-if="editingCatalogFixed" class="dqu-field dqu-field--wide dqu-field__hint">
+                      Trang mở ra khi bấm là cố định theo từng loại lối tắt (chấm công, nghỉ phép, danh bạ, bảng tin).
+                    </p>
+                    <template v-else>
+                      <label class="dqu-field">
+                        <span class="dqu-field__label">Khi nhân viên bấm vào</span>
+                        <select v-model="form.link_type" class="dqu-field__input">
+                          <option v-for="type in meta.link_types" :key="type" :value="type">
+                            {{ linkTypeLabels[type] || type }}
+                          </option>
+                        </select>
+                      </label>
+                      <label v-if="form.link_type !== 'none'" class="dqu-field dqu-field--wide">
+                        <span class="dqu-field__label">{{
+                          form.link_type === 'route' ? 'Tên trang trong app (kỹ thuật)' : 'Địa chỉ website (https://…)'
+                        }}</span>
+                        <input
+                          v-model="form.link_target"
+                          class="dqu-field__input"
+                          type="text"
+                          required
+                          maxlength="512"
+                          :placeholder="form.link_type === 'route' ? 'vd: employee.attendance' : 'https://…'"
+                        />
+                      </label>
+                    </template>
+                    <div class="dqu-field dqu-field--wide dqu-form__checks">
+                      <label class="dqu-field dqu-field--check">
+                        <input v-model="form.is_visible" type="checkbox" />
+                        <span>Cho nhân viên thấy lối tắt này</span>
+                      </label>
+                      <label class="dqu-field dqu-field--check">
+                        <input v-model="form.is_under_maintenance" type="checkbox" />
+                        <span>Đang bảo trì (hiện tên nhưng không mở được)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <aside class="dqu-form__preview" aria-label="Xem trước trên điện thoại">
+                    <p class="dqu-form__preview-label">Xem trước</p>
+                    <div
+                      class="dqu-form__preview-tile"
+                      :class="{
+                        'dqu-form__preview-tile--dim': !form.is_visible,
+                        'dqu-form__preview-tile--maint': form.is_under_maintenance,
+                      }"
+                    >
+                      <span class="dqu-form__preview-icon" :class="`dqu-form__preview-icon--${form.tone}`">
+                        <AppIcon :name="form.icon || 'layoutGrid'" :size="26" />
+                      </span>
+                      <span class="dqu-form__preview-name">{{ previewLabel }}</span>
+                    </div>
+                  </aside>
+                </div>
+
+                <div class="dqu-form__section dqu-form__section--tone">
+                  <div class="dqu-form__section-head">
+                    <span class="dqu-form__section-title">Màu ô biểu tượng</span>
+                  </div>
+                  <div class="dqu-tone-grid" role="radiogroup" aria-label="Màu ô biểu tượng">
+                    <button
+                      v-for="tone in meta.tones"
+                      :key="tone"
+                      type="button"
+                      class="dqu-tone-opt"
+                      :class="{ 'dqu-tone-opt--active': form.tone === tone }"
+                      role="radio"
+                      :aria-checked="form.tone === tone"
+                      @click="form.tone = tone"
+                    >
+                      <span class="dqu-tone-opt__chip" :class="`dqu-tone-opt__chip--${tone}`">
+                        <AppIcon :name="form.icon || 'layoutGrid'" :size="22" />
+                      </span>
+                      <span class="dqu-tone-opt__label">{{ toneLabels[tone] || tone }}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="dqu-form__section dqu-form__section--icons">
+                  <div class="dqu-form__section-head">
+                    <span class="dqu-form__section-title">Biểu tượng</span>
+                    <span class="dqu-form__section-meta">{{ filteredIconNames.length }} / {{ APP_ICON_NAMES.length }}</span>
+                    <label class="dqu-icon-search">
+                      <AppIcon name="search" :size="16" />
+                      <input
+                        v-model="iconSearch"
+                        class="dqu-icon-search__input"
+                        type="search"
+                        placeholder="Tìm icon…"
+                        autocomplete="off"
+                      />
+                    </label>
+                  </div>
+                  <div class="dqu-icon-grid hide-scrollbar" role="listbox" aria-label="Chọn biểu tượng">
+                    <button
+                      v-for="iconName in filteredIconNames"
+                      :key="iconName"
+                      type="button"
+                      class="dqu-icon-cell"
+                      :class="{ 'dqu-icon-cell--active': form.icon === iconName }"
+                      role="option"
+                      :aria-selected="form.icon === iconName"
+                      :aria-label="iconName"
+                      @click="selectIcon(iconName)"
+                    >
+                      <AppIcon :name="iconName" :size="22" />
+                    </button>
+                    <p v-if="!filteredIconNames.length" class="dqu-icon-grid__empty">Không có icon khớp tìm kiếm.</p>
+                  </div>
+                </div>
               </form>
             </div>
 
@@ -502,7 +614,8 @@ onMounted(loadUtilities);
 .dqu-dialog__panel {
   display: flex;
   flex-direction: column;
-  width: min(52rem, calc(100vw - 2.5rem));
+  width: min(90rem, calc(100vw - 2.5rem));
+  height: calc(100vh - 2.5rem);
   max-height: calc(100vh - 2.5rem);
   overflow: hidden;
   border-radius: var(--radius-lg);
@@ -550,14 +663,265 @@ onMounted(loadUtilities);
 .dqu-dialog__body {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: var(--space-4);
   overflow: auto;
 }
 
 .dqu-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+.dqu-form__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(11rem, 13.5rem);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.dqu-form__fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
+}
+
+.dqu-form__checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+}
+
+.dqu-form__preview {
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dqu-form__preview-label {
+  margin: 0 0 var(--space-3);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.dqu-form__preview-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2);
+  text-align: center;
+}
+
+.dqu-form__preview-tile--dim {
+  opacity: 0.55;
+}
+
+.dqu-form__preview-tile--maint .dqu-form__preview-name::after {
+  content: ' · Bảo trì';
+  color: var(--color-warning, #b45309);
+  font-weight: 600;
+}
+
+.dqu-form__preview-icon {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: var(--radius-md);
+}
+
+.dqu-form__preview-icon--primary,
+.dqu-tone-opt__chip--primary {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
+.dqu-form__preview-icon--secondary,
+.dqu-tone-opt__chip--secondary {
+  background: var(--color-secondary-surface);
+  color: var(--color-secondary);
+}
+
+.dqu-form__preview-icon--tertiary,
+.dqu-tone-opt__chip--tertiary {
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
+}
+
+.dqu-form__preview-icon--gold,
+.dqu-tone-opt__chip--gold {
+  background: var(--color-gold-surface);
+  color: var(--color-gold);
+}
+
+.dqu-form__preview-icon--muted,
+.dqu-tone-opt__chip--muted {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.dqu-form__preview-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-text);
+}
+
+.dqu-form__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dqu-form__section--icons {
+  flex: 1;
+  min-height: 12rem;
+}
+
+.dqu-form__section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  flex-shrink: 0;
+}
+
+.dqu-form__section-title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.dqu-form__section-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.dqu-icon-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  height: 2rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.dqu-icon-search__input {
+  width: min(14rem, 40vw);
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  color: var(--color-text);
+  outline: none;
+}
+
+.dqu-tone-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.dqu-tone-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 5.5rem;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
+  transition: box-shadow 0.12s ease;
+}
+
+.dqu-tone-opt--active {
+  box-shadow:
+    inset 0 0 0 2px var(--color-primary),
+    var(--shadow-sm);
+}
+
+.dqu-tone-opt__chip {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+}
+
+.dqu-tone-opt__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-align: center;
+  line-height: 1.25;
+}
+
+.dqu-icon-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-1);
+  overflow: auto;
+  align-content: start;
+}
+
+.dqu-icon-cell {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    box-shadow 0.12s ease,
+    color 0.12s ease;
+}
+
+.dqu-icon-cell:hover {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
+.dqu-icon-cell--active {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+
+.dqu-icon-grid__empty {
+  grid-column: 1 / -1;
+  margin: var(--space-4) 0;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
 }
 
 .dqu-field {
@@ -570,8 +934,11 @@ onMounted(loadUtilities);
   grid-column: 1 / -1;
 }
 
+.dqu-field--span2 {
+  grid-column: span 2;
+}
+
 .dqu-field--check {
-  grid-column: 1 / -1;
   flex-direction: row;
   align-items: center;
   gap: var(--space-2);
@@ -581,6 +948,13 @@ onMounted(loadUtilities);
 .dqu-field__label {
   font-size: 0.75rem;
   font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.dqu-field__hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
   color: var(--color-text-muted);
 }
 
@@ -649,15 +1023,33 @@ onMounted(loadUtilities);
   opacity: 0;
 }
 
-@media (max-width: 768px) {
-  .dqu-form {
+@media (max-width: 900px) {
+  .dqu-form__top {
+    grid-template-columns: 1fr;
+  }
+
+  .dqu-form__fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dqu-field--span2 {
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 520px) {
-  .dqu-form {
+  .dqu-form__fields {
     grid-template-columns: 1fr;
+  }
+
+  .dqu-icon-search {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .dqu-icon-search__input {
+    width: 100%;
+    min-width: 0;
   }
 }
 </style>

@@ -14,6 +14,46 @@ class DashboardQuickUtilityService
     /** @var list<string> */
     public const LINK_TYPES = ['route', 'url', 'none'];
 
+    /**
+     * Bộ lối tắt cố định trên Dashboard của tôi — superadmin chỉ bật/tắt, sắp xếp và tuỳ biểu tượng.
+     *
+     * @var array<string, array{label: string, icon: string, tone: string, link_type: string, link_target: string, sort_order: int}>
+     */
+    public const CATALOG = [
+        'attendance' => [
+            'label' => 'Chấm công',
+            'icon' => 'clock',
+            'tone' => 'tertiary',
+            'link_type' => 'route',
+            'link_target' => 'employee.attendance',
+            'sort_order' => 10,
+        ],
+        'leave' => [
+            'label' => 'Nghỉ phép',
+            'icon' => 'calendar',
+            'tone' => 'gold',
+            'link_type' => 'route',
+            'link_target' => 'employee.leave',
+            'sort_order' => 20,
+        ],
+        'contacts' => [
+            'label' => 'Danh bạ',
+            'icon' => 'users',
+            'tone' => 'primary',
+            'link_type' => 'route',
+            'link_target' => 'employee.contacts',
+            'sort_order' => 30,
+        ],
+        'social' => [
+            'label' => 'Bảng tin',
+            'icon' => 'megaphone',
+            'tone' => 'tertiary',
+            'link_type' => 'route',
+            'link_target' => 'employee.feed',
+            'sort_order' => 40,
+        ],
+    ];
+
     public function __construct(
         private readonly DashboardQuickUtilityRepositoryInterface $repository,
     ) {}
@@ -21,6 +61,8 @@ class DashboardQuickUtilityService
     /** @return list<array<string, mixed>> */
     public function forDashboard(): array
     {
+        $this->syncCatalog();
+
         return $this->repository->visibleOrdered()
             ->map(fn (DashboardQuickUtility $row) => $this->serialize($row))
             ->values()
@@ -30,10 +72,57 @@ class DashboardQuickUtilityService
     /** @return list<array<string, mixed>> */
     public function forAdminListing(): array
     {
+        $this->syncCatalog();
+
         return $this->repository->allOrdered()
             ->map(fn (DashboardQuickUtility $row) => $this->serialize($row, true))
             ->values()
             ->all();
+    }
+
+    public function syncCatalog(): void
+    {
+        $keys = array_keys(self::CATALOG);
+
+        foreach ($this->repository->allOrdered() as $row) {
+            if (! in_array($row->utility_key, $keys, true)) {
+                $this->repository->delete($row);
+            }
+        }
+
+        foreach (self::CATALOG as $utilityKey => $defaults) {
+            $row = $this->repository->findByKey($utilityKey);
+            if (! $row) {
+                $this->repository->create([
+                    'utility_key' => $utilityKey,
+                    'label' => $defaults['label'],
+                    'icon' => $defaults['icon'],
+                    'tone' => $defaults['tone'],
+                    'link_type' => $defaults['link_type'],
+                    'link_target' => $defaults['link_target'],
+                    'sort_order' => $defaults['sort_order'],
+                    'is_visible' => true,
+                    'is_under_maintenance' => false,
+                ]);
+
+                continue;
+            }
+
+            $needsLinkFix = $row->link_type !== $defaults['link_type']
+                || $row->link_target !== $defaults['link_target'];
+
+            if ($needsLinkFix) {
+                $this->repository->update($row, [
+                    'link_type' => $defaults['link_type'],
+                    'link_target' => $defaults['link_target'],
+                ]);
+            }
+        }
+    }
+
+    public function isCatalogKey(string $utilityKey): bool
+    {
+        return array_key_exists($utilityKey, self::CATALOG);
     }
 
     /**
@@ -41,26 +130,7 @@ class DashboardQuickUtilityService
      */
     public function create(array $data, ?int $updatedBy): DashboardQuickUtility
     {
-        $key = $this->normalizeKey($data['utility_key'] ?? null, $data['label']);
-
-        if ($this->repository->findByKey($key)) {
-            throw new \InvalidArgumentException('Mã tiện ích đã tồn tại.');
-        }
-
-        $sortOrder = $this->nextSortOrder();
-
-        return $this->repository->create([
-            'utility_key' => $key,
-            'label' => trim((string) $data['label']),
-            'icon' => $this->normalizeIcon($data['icon'] ?? 'layoutGrid'),
-            'tone' => $this->normalizeTone($data['tone'] ?? 'primary'),
-            'link_type' => $this->normalizeLinkType($data['link_type'] ?? 'none'),
-            'link_target' => $this->normalizeLinkTarget($data['link_type'] ?? 'none', $data['link_target'] ?? null),
-            'sort_order' => $sortOrder,
-            'is_visible' => (bool) ($data['is_visible'] ?? true),
-            'is_under_maintenance' => (bool) ($data['is_under_maintenance'] ?? false),
-            'updated_by' => $updatedBy,
-        ]);
+        throw new \InvalidArgumentException('Chỉ có 4 lối tắt cố định (chấm công, nghỉ phép, danh bạ, bảng tin). Không thêm mục mới.');
     }
 
     /**
@@ -84,13 +154,15 @@ class DashboardQuickUtilityService
         if (array_key_exists('tone', $data)) {
             $patch['tone'] = $this->normalizeTone($data['tone']);
         }
-        if (array_key_exists('link_type', $data)) {
-            $patch['link_type'] = $this->normalizeLinkType($data['link_type']);
-        }
-        if (array_key_exists('link_target', $data) || array_key_exists('link_type', $data)) {
-            $linkType = $patch['link_type'] ?? $row->link_type;
-            $target = $data['link_target'] ?? $row->link_target;
-            $patch['link_target'] = $this->normalizeLinkTarget($linkType, $target);
+        if (! $this->isCatalogKey($utilityKey)) {
+            if (array_key_exists('link_type', $data)) {
+                $patch['link_type'] = $this->normalizeLinkType($data['link_type']);
+            }
+            if (array_key_exists('link_target', $data) || array_key_exists('link_type', $data)) {
+                $linkType = $patch['link_type'] ?? $row->link_type;
+                $target = $data['link_target'] ?? $row->link_target;
+                $patch['link_target'] = $this->normalizeLinkTarget($linkType, $target);
+            }
         }
         if (array_key_exists('is_visible', $data)) {
             $patch['is_visible'] = (bool) $data['is_visible'];
@@ -104,6 +176,10 @@ class DashboardQuickUtilityService
 
     public function delete(string $utilityKey): void
     {
+        if ($this->isCatalogKey($utilityKey)) {
+            throw new \InvalidArgumentException('Không thể xoá lối tắt cố định. Chỉ có thể tắt hiển thị hoặc bật bảo trì.');
+        }
+
         $row = $this->repository->findByKey($utilityKey);
         if (! $row) {
             throw new \InvalidArgumentException('Không tìm thấy tiện ích.');
@@ -206,6 +282,7 @@ class DashboardQuickUtilityService
 
         if ($includeMeta) {
             $payload['updated_at'] = $row->updated_at?->toIso8601String();
+            $payload['is_catalog_fixed'] = $this->isCatalogKey($row->utility_key);
         }
 
         return $payload;

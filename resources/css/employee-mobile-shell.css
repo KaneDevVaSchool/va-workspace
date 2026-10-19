@@ -16,6 +16,24 @@
 }
 
 @media (max-width: 768px) {
+  html.employee-mobile-browser:has(.employee-shell--home),
+  html.employee-mobile-pwa:has(.employee-shell--home) {
+    background-color: color-mix(
+      in srgb,
+      var(--color-primary-50) 38%,
+      color-mix(in srgb, var(--color-gold-50) 22%, var(--color-bg) 78%) 62%
+    );
+  }
+
+  html.employee-mobile-browser:has(.employee-shell--home) body,
+  html.employee-mobile-pwa:has(.employee-shell--home) body {
+    background-color: color-mix(
+      in srgb,
+      var(--color-primary-50) 38%,
+      color-mix(in srgb, var(--color-gold-50) 22%, var(--color-bg) 78%) 62%
+    );
+  }
+
   html.employee-mobile-browser {
     background-color: var(--color-bg);
     --employee-tabbar-block-size: 2.5rem;
@@ -108,8 +126,150 @@
   );
   box-shadow: none;
   clip-path: none;
-  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  border-radius: 0 0 var(--radius-xl, var(--radius-lg)) var(--radius-xl, var(--radius-lg));
   padding-bottom: var(--space-4);
+}
+
+/* ---------- Trang chủ /dashboard/me — 5 tông (primary · secondary · tertiary · gold · neutral) ---------- */
+.employee-shell--home {
+  --eh-card-shadow: 0 4px 18px color-mix(in srgb, var(--color-primary-900) 6%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-primary-50) 38%,
+    color-mix(in srgb, var(--color-gold-50) 22%, var(--color-bg) 78%) 62%
+  );
+}
+
+.employee-shell--home .employee-shell__header--home {
+  color: var(--color-on-primary);
+  background: linear-gradient(
+    158deg,
+    var(--color-primary-700) 0%,
+    var(--color-primary-800) 42%,
+    var(--color-primary-900) 100%
+  );
+  box-shadow: none;
+  clip-path: none;
+  border-radius: 0 0 var(--radius-xl, 1.25rem) var(--radius-xl, 1.25rem);
+  padding-bottom: var(--space-4);
+  overflow: hidden;
+}
+
+.employee-shell__header-deco {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.employee-shell__header-deco::before,
+.employee-shell__header-deco::after {
+  content: '';
+  position: absolute;
+  border-radius: var(--radius-full);
+}
+
+.employee-shell__header-deco::before {
+  top: -3.5rem;
+  right: -2rem;
+  width: 9rem;
+  height: 9rem;
+  background: radial-gradient(
+    circle at 35% 35%,
+    color-mix(in srgb, var(--color-gold) 28%, transparent) 0%,
+    transparent 68%
+  );
+  opacity: 0.85;
+}
+
+.employee-shell__header-deco::after {
+  bottom: -4rem;
+  left: -3rem;
+  width: 11rem;
+  height: 11rem;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--color-on-primary) 14%, transparent) 0%,
+    transparent 70%
+  );
+}
+
+.employee-shell--home .employee-shell__kicker {
+  color: color-mix(in srgb, var(--color-gold-200) 55%, var(--color-on-primary) 45%);
+}
+
+.employee-shell--home .employee-shell__hello {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-on-primary);
+}
+
+.employee-shell--home .employee-shell__date,
+.employee-shell--home .employee-shell__meta-extra {
+  color: color-mix(in srgb, var(--color-on-primary) 72%, transparent);
+}
+
+.employee-shell--home .employee-shell__meta-sep {
+  color: color-mix(in srgb, var(--color-on-primary) 35%, transparent);
+}
+
+.employee-shell--home .employee-shell__icon-btn {
+  background: color-mix(in srgb, var(--color-on-primary) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-on-primary) 20%, transparent);
+  color: var(--color-on-primary);
+}
+
+.employee-shell--home .employee-shell__icon-btn:active {
+  background: color-mix(in srgb, var(--color-on-primary) 22%, transparent);
+}
+
+.employee-shell--home .employee-shell__notif-dot {
+  background: var(--color-gold-400);
+  box-shadow: 0 0 0 2px var(--color-primary-900);
+}
+
+.employee-shell--home .employee-shell__avatar {
+  background: color-mix(in srgb, var(--color-on-primary) 18%, transparent);
+  color: var(--color-on-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-on-primary) 32%, transparent);
+}
+
+.employee-shell--home .employee-shell__search {
+  background: color-mix(in srgb, var(--color-on-primary) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-on-primary) 22%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.employee-shell--home .employee-shell__search-icon,
+.employee-shell--home .employee-shell__search-input,
+.employee-shell--home .employee-shell__search-input::placeholder {
+  color: color-mix(in srgb, var(--color-on-primary) 78%, transparent);
+}
+
+.employee-shell--home .employee-shell__search-input {
+  color: var(--color-on-primary);
+}
+
+.employee-shell--home .employee-shell__search-input::placeholder {
+  color: color-mix(in srgb, var(--color-on-primary) 58%, transparent);
+}
+
+.employee-shell__content--home {
+  background: transparent;
+  padding-top: var(--space-2);
+}
+
+.employee-shell--home .employee-shell__pull {
+  color: var(--color-text-muted);
+}
+
+.employee-shell--home .employee-tabbar--shell {
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-primary-50) 8%);
+  box-shadow:
+    0 -1px 0 color-mix(in srgb, var(--color-primary-200) 35%, var(--color-border) 65%),
+    var(--shadow-md);
 }
 
 .employee-shell__header--feed .employee-shell__kicker {

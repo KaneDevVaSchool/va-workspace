@@ -65,8 +65,9 @@ return [
     'hrm' => [
         'api_base_url' => env('HRM_API_BASE_URL'),
         'api_token' => env('HRM_API_TOKEN'),
-        // Catalog loại nghỉ (GET /api/v1/leave/types) — giai đoạn đầu trỏ portal HRM;
-        // khi chuyển về hrm.vaschools.edu.vn: xóa 2 biến env (fallback api_base_url/token).
+        // Tuỳ chọn tách URL/token nghỉ phép. Giai đoạn portal: để trống — mọi outbound
+        // (SSO, nhân sự, leave, timesheet) dùng HRM_API_BASE_URL + HRM_API_TOKEN.
+        // Sau chốt production: HRM_API_BASE_URL=https://hrm.vaschools.edu.vn, vẫn không cần LEAVE_*.
         'leave_api_base_url' => env('HRM_LEAVE_API_BASE_URL'),
         'leave_api_token' => env('HRM_LEAVE_API_TOKEN'),
         // Duyệt bảng chấm công (ability attendance:approve) — token riêng tùy chọn để không phải

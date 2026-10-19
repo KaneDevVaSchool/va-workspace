@@ -13,6 +13,7 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   busy: { type: Boolean, default: false },
   activeKey: { type: String, default: null },
+  allowCreate: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -47,7 +48,7 @@ const filterEmptyText = computed(() => {
   if (filter.value === 'visible') return 'Chưa bật hiển thị mục nào.';
   if (filter.value === 'hidden') return 'Không có mục nào đang tắt hiển thị.';
   if (filter.value === 'maintenance') return 'Không có mục nào đang bảo trì.';
-  return 'Chưa có lối tắt nào. Bấm «Thêm tiện ích» để tạo mục đầu tiên.';
+  return 'Chưa có lối tắt nào trong hệ thống.';
 });
 
 const canShowAll = computed(() => hiddenCount.value > 0 && !props.busy);
@@ -174,7 +175,14 @@ onBeforeUnmount(() => {
         <p v-if="loading && !utilities.length" class="dqu-panel__empty">Đang tải…</p>
         <p v-else-if="!utilities.length" class="dqu-panel__empty">
           {{ filterEmptyText }}
-          <button type="button" class="dqu-panel__empty-btn" @click="emit('create')">Thêm tiện ích đầu tiên</button>
+          <button
+            v-if="allowCreate"
+            type="button"
+            class="dqu-panel__empty-btn"
+            @click="emit('create')"
+          >
+            Thêm tiện ích đầu tiên
+          </button>
         </p>
         <p v-else-if="!filteredUtilities.length" class="dqu-panel__empty">{{ filterEmptyText }}</p>
 
@@ -268,6 +276,7 @@ onBeforeUnmount(() => {
                     Xem trên hình minh hoạ
                   </button>
                   <button
+                    v-if="!item.is_catalog_fixed"
                     type="button"
                     role="menuitem"
                     class="dqu-panel__menu-item dqu-panel__menu-item--danger"

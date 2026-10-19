@@ -405,6 +405,7 @@ function goQuick(name) {
 
 <style scoped>
 .employee-home {
+  --eh-shadow: var(--eh-card-shadow, 0 4px 18px color-mix(in srgb, var(--color-primary-900) 6%, transparent));
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -440,17 +441,32 @@ function goQuick(name) {
   min-height: 5.25rem;
   padding: var(--space-2) var(--space-3);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  box-shadow: var(--eh-shadow);
   text-align: left;
   font-family: inherit;
   cursor: default;
   transition: transform 160ms ease, box-shadow 160ms ease;
+  overflow: hidden;
+}
+
+.stat-card--tasks {
+  padding-bottom: calc(var(--space-3) + 0.5rem);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-tertiary-surface) 88%, var(--color-surface) 12%) 0%,
+    var(--color-surface) 72%
+  );
 }
 
 .stat-card--attendance {
   cursor: pointer;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-secondary-surface) 90%, var(--color-surface) 10%) 0%,
+    var(--color-surface) 70%
+  );
 }
 
 .stat-card--attendance:active {
@@ -473,24 +489,24 @@ function goQuick(name) {
 }
 
 .stat-card__icon--tasks {
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-tertiary-surface-strong) 65%, var(--color-surface) 35%);
+  color: var(--color-tertiary-700);
 }
 
 .stat-card__icon--attendance {
-  background: var(--color-secondary-surface);
-  color: var(--color-secondary);
+  background: color-mix(in srgb, var(--color-secondary-surface-strong) 65%, var(--color-surface) 35%);
+  color: var(--color-secondary-700);
 }
 
 .stat-card__icon--pending {
-  background: var(--color-gold-surface);
+  background: color-mix(in srgb, var(--color-gold-surface-strong) 60%, var(--color-surface) 40%);
   color: var(--color-gold-700);
 }
 
 .stat-card__icon--in,
 .stat-card__icon--done {
-  background: var(--color-secondary-surface);
-  color: var(--color-secondary);
+  background: color-mix(in srgb, var(--color-secondary-surface-strong) 65%, var(--color-surface) 35%);
+  color: var(--color-secondary-700);
 }
 
 .stat-card__ring {
@@ -508,13 +524,13 @@ function goQuick(name) {
 
 .stat-card__ring-track {
   fill: none;
-  stroke: var(--color-primary-surface-strong);
+  stroke: color-mix(in srgb, var(--color-tertiary-200) 55%, var(--color-surface) 45%);
   stroke-width: 10;
 }
 
 .stat-card__ring-fill {
   fill: none;
-  stroke: var(--color-primary);
+  stroke: var(--color-tertiary-600);
   stroke-width: 10;
   stroke-linecap: round;
   stroke-dasharray: 326.7;
@@ -528,7 +544,7 @@ function goQuick(name) {
   place-items: center;
   font-size: 0.5625rem;
   font-weight: 800;
-  color: var(--color-primary);
+  color: var(--color-tertiary-700);
 }
 
 .stat-card__body {
@@ -574,19 +590,15 @@ function goQuick(name) {
   left: var(--space-3);
   height: 0.3125rem;
   border-radius: var(--radius-full);
-  background: var(--color-primary-surface-strong);
+  background: color-mix(in srgb, var(--color-tertiary-100) 70%, var(--color-surface) 30%);
   overflow: hidden;
 }
 
 .stat-card__progress-fill {
   height: 100%;
   border-radius: var(--radius-full);
-  background: var(--color-primary);
+  background: linear-gradient(90deg, var(--color-tertiary-400), var(--color-tertiary-600));
   transition: width 280ms ease;
-}
-
-.stat-card--tasks {
-  padding-bottom: calc(var(--space-3) + 0.5rem);
 }
 
 .employee-home__quick {
@@ -612,45 +624,44 @@ function goQuick(name) {
   border: none;
   border-radius: var(--radius-full);
   background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  box-shadow: var(--eh-shadow);
   color: var(--color-text);
   font-family: inherit;
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 150ms ease, transform 150ms ease;
+  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
 }
 
 .quick-chip:active {
   transform: scale(0.97);
-  background: var(--color-surface-muted);
 }
 
 .quick-chip--primary {
-  box-shadow: inset 0 0 0 1px var(--color-primary-200);
+  background: color-mix(in srgb, var(--color-primary-surface) 75%, var(--color-surface) 25%);
   color: var(--color-primary-800);
 }
 
 .quick-chip--primary :deep(.app-icon) {
-  color: var(--color-primary);
+  color: var(--color-primary-700);
 }
 
 .quick-chip--secondary {
-  box-shadow: inset 0 0 0 1px var(--color-secondary-200);
+  background: color-mix(in srgb, var(--color-secondary-surface) 75%, var(--color-surface) 25%);
   color: var(--color-secondary-800);
 }
 
 .quick-chip--secondary :deep(.app-icon) {
-  color: var(--color-secondary);
+  color: var(--color-secondary-700);
 }
 
 .quick-chip--tertiary {
-  box-shadow: inset 0 0 0 1px var(--color-tertiary-200);
+  background: color-mix(in srgb, var(--color-tertiary-surface) 75%, var(--color-surface) 25%);
   color: var(--color-tertiary-800);
 }
 
 .quick-chip--tertiary :deep(.app-icon) {
-  color: var(--color-tertiary);
+  color: var(--color-tertiary-700);
 }
 
 .employee-home__section {
@@ -663,6 +674,15 @@ function goQuick(name) {
 
 .employee-home__section--utilities {
   contain-intrinsic-size: auto 10rem;
+}
+
+.employee-home__section--utilities :deep(.quick-utilities__tile) {
+  box-shadow: var(--eh-shadow);
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-primary-50) 8%);
+}
+
+.employee-home__section--utilities :deep(.quick-utilities__tile:not(.quick-utilities__tile--preview):active) {
+  background: color-mix(in srgb, var(--color-surface) 85%, var(--color-primary-100) 15%);
 }
 
 .employee-home__section--last {
@@ -678,9 +698,22 @@ function goQuick(name) {
 
 .section-head__title {
   margin: 0;
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--color-text);
+}
+
+.employee-home__section--utilities .section-head__title {
+  color: var(--color-primary-900);
+}
+
+.employee-home__section--daily .section-head__title {
+  color: color-mix(in srgb, var(--color-tertiary-800) 55%, var(--color-text) 45%);
+}
+
+.employee-home__section--last .section-head__title {
+  color: color-mix(in srgb, var(--color-gold-800) 40%, var(--color-text) 60%);
 }
 
 .section-head__link {
@@ -763,8 +796,8 @@ function goQuick(name) {
 
 .daily-tasks {
   border-radius: var(--radius-lg);
-  background: var(--color-surface-muted);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-primary-50) 12%);
+  box-shadow: var(--eh-shadow);
   overflow: hidden;
 }
 
@@ -1056,11 +1089,11 @@ function goQuick(name) {
   border: none;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+  box-shadow: var(--eh-shadow);
   text-align: left;
   cursor: pointer;
   font-family: inherit;
-  transition: background 150ms ease, box-shadow 150ms ease;
+  transition: background 150ms ease, box-shadow 150ms ease, transform 150ms ease;
   animation: employee-home-rise 320ms ease both;
 }
 
@@ -1076,7 +1109,7 @@ function goQuick(name) {
 }
 
 .notice-card--new::before {
-  background: var(--color-primary);
+  background: linear-gradient(180deg, var(--color-gold-400), var(--color-gold-700));
 }
 
 .notice-card:active {
@@ -1140,8 +1173,8 @@ function goQuick(name) {
   flex-shrink: 0;
   padding: 0.1rem 0.45rem;
   border-radius: var(--radius-full);
-  background: var(--color-primary-surface-strong);
-  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-gold-surface-strong) 80%, var(--color-surface) 20%);
+  color: var(--color-gold-800);
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.04em;
