@@ -84,7 +84,16 @@ html.employee-mobile-pwa {
     z-index: 0;
     width: 100%;
     max-width: 100vw;
+    height: var(--employee-mobile-vh, 100dvh);
+    max-height: var(--employee-mobile-vh, 100dvh);
     overflow: hidden;
+  }
+
+  /* PWA: không co shell theo visualViewport (bù thanh Safari) — full innerHeight từ JS. */
+  html.pwa-standalone .employee-shell--browser:not(.emp-shell-preview__shell) {
+    inset: 0;
+    height: var(--employee-mobile-vh, 100dvh);
+    max-height: var(--employee-mobile-vh, 100dvh);
   }
 }
 

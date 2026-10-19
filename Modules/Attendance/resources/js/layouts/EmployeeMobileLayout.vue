@@ -16,7 +16,10 @@ import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { usePwaInstall } from '@/composables/usePwaInstall';
 import { useEmployeeMobileShell } from '@/composables/useEmployeeMobileShell';
 import { useEmployeeTabbarDock } from '@/composables/useEmployeeTabbarDock';
-import { useEmployeeMobileViewport } from '@/composables/useEmployeeMobileViewport';
+import {
+  syncEmployeeMobileViewport,
+  useEmployeeMobileViewport,
+} from '@/composables/useEmployeeMobileViewport';
 import AppIcon from '@/components/AppIcon.vue';
 import { useChatStore } from '@modules/Chat/resources/js/store/chatStore';
 import { useChatRealtime } from '@/composables/useChatRealtime';
@@ -167,6 +170,10 @@ onMounted(() => {
     chatStore.fetchUnreadTotal().catch(() => {});
     chatStore.fetchConversations().catch(() => {});
   }
+});
+
+watch(isMobilePwa, () => {
+  syncEmployeeMobileViewport();
 });
 
 watch(

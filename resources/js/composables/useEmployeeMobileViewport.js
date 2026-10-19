@@ -1,17 +1,13 @@
 //
 // iOS Safari (tab): chiều cao layout theo visualViewport khi URL bar co giãn.
-// PWA standalone: dùng innerHeight + inset:0 trên shell — không lắng nghe
-// visualViewport.scroll (hay làm shell thấp hơn màn → tabbar “nổi” lên).
+// PWA standalone: khóa theo window.innerHeight (full màn) — không dùng
+// visualViewport (hay co shell → tabbar “nổi”, lộ dải trắng body phía dưới).
 //
 import { onBeforeUnmount, onMounted } from 'vue';
 import { syncEmployeeSafeAreaInsets } from '@/lib/employeeSafeArea';
+import { isPwaStandalone } from '@/lib/pwaStandalone';
 
 const ROOT_VAR = '--employee-mobile-vh';
-
-function isPwaStandalone() {
-  if (typeof document === 'undefined') return false;
-  return document.documentElement.classList.contains('pwa-standalone');
-}
 
 function readViewportHeightPx() {
   if (typeof window === 'undefined') return 0;
@@ -23,12 +19,13 @@ function readViewportHeightPx() {
   return Math.max(0, Math.round(h));
 }
 
+export function syncEmployeeMobileViewport() {
+  syncMobileViewportHeight();
+  syncEmployeeSafeAreaInsets();
+}
+
 function syncMobileViewportHeight() {
   if (typeof document === 'undefined') return;
-  if (isPwaStandalone()) {
-    document.documentElement.style.removeProperty(ROOT_VAR);
-    return;
-  }
   const height = readViewportHeightPx();
   if (height > 0) {
     document.documentElement.style.setProperty(ROOT_VAR, `${height}px`);
@@ -42,14 +39,12 @@ export function useEmployeeMobileViewport() {
     if (typeof window === 'undefined') return;
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => {
-      syncMobileViewportHeight();
-      syncEmployeeSafeAreaInsets();
+      syncEmployeeMobileViewport();
     });
   }
 
   onMounted(() => {
-    syncMobileViewportHeight();
-    syncEmployeeSafeAreaInsets();
+    syncEmployeeMobileViewport();
     scheduleSync();
     window.addEventListener('resize', scheduleSync, { passive: true });
     window.addEventListener('orientationchange', scheduleSync, { passive: true });

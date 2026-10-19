@@ -10,7 +10,7 @@
 // đang ở viewport ≤768px — áp dụng cho MỌI tài khoản, không riêng nhân viên
 // thường (xem useEmployeeMobileView.js). Desktop (>768px) luôn dùng AppLayout.
 //
-import { watch } from 'vue';
+import { onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import AppLayout from './components/AppLayout.vue';
 import ToastHost from './components/ToastHost.vue';
@@ -18,7 +18,12 @@ import PwaPushPrompt from './components/PwaPushPrompt.vue';
 import PwaUpdatePrompt from './components/PwaUpdatePrompt.vue';
 import EmployeeMobileLayout from '@modules/Attendance/resources/js/layouts/EmployeeMobileLayout.vue';
 import { useEmployeeMobileView } from './composables/useEmployeeMobileView';
-import { isPwaStandalone, setPwaShellSurface } from './lib/pwaStandalone';
+import { syncEmployeeMobileViewport } from './composables/useEmployeeMobileViewport';
+import {
+  isPwaStandalone,
+  PWA_DISPLAY_MODE_MEDIA,
+  setPwaShellSurface,
+} from './lib/pwaStandalone';
 import { syncEmployeeSafeAreaInsets } from './lib/employeeSafeArea';
 
 const route = useRoute();
@@ -37,6 +42,9 @@ function syncPwaShellSurface() {
   root.classList.toggle('employee-mobile-browser', employeeTabShell && !isPwaStandalone());
   root.classList.toggle('employee-mobile-pwa', employeeTabShell && isPwaStandalone());
   syncEmployeeSafeAreaInsets();
+  if (employeeTabShell) {
+    syncEmployeeMobileViewport();
+  }
 
   if (route.meta.requiresAuth) {
     if (employeeTabShell) {
@@ -50,6 +58,29 @@ function syncPwaShellSurface() {
 }
 
 watch([() => route.fullPath, isEmployeeMobile], syncPwaShellSurface, { immediate: true });
+
+let pwaDisplayModeMq;
+let onPwaDisplayModeChange;
+
+onMounted(() => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+  pwaDisplayModeMq = window.matchMedia(PWA_DISPLAY_MODE_MEDIA);
+  onPwaDisplayModeChange = () => syncPwaShellSurface();
+  if (typeof pwaDisplayModeMq.addEventListener === 'function') {
+    pwaDisplayModeMq.addEventListener('change', onPwaDisplayModeChange);
+  } else if (typeof pwaDisplayModeMq.addListener === 'function') {
+    pwaDisplayModeMq.addListener(onPwaDisplayModeChange);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (!pwaDisplayModeMq || !onPwaDisplayModeChange) return;
+  if (typeof pwaDisplayModeMq.removeEventListener === 'function') {
+    pwaDisplayModeMq.removeEventListener('change', onPwaDisplayModeChange);
+  } else if (typeof pwaDisplayModeMq.removeListener === 'function') {
+    pwaDisplayModeMq.removeListener(onPwaDisplayModeChange);
+  }
+});
 </script>
 
 <template>
