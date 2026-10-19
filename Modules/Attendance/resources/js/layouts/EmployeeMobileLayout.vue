@@ -9,7 +9,7 @@
 //   .employee-shell--browser / --pwa  → header
 //   .employee-tabbar--shell (flex footer trong shell) → bottom nav
 //
-import { computed, onMounted, provide, ref } from 'vue';
+import { computed, onMounted, provide, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { usePullToRefresh } from '@/composables/usePullToRefresh';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
@@ -103,6 +103,15 @@ onMounted(() => {
     auth.fetchMe();
   }
 });
+
+watch(
+  () => route.name,
+  (name) => {
+    if (name !== 'dashboard.me') {
+      homeSearchQuery.value = '';
+    }
+  },
+);
 
 const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   weekday: 'long',
