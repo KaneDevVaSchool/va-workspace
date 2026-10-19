@@ -73,6 +73,25 @@ html.employee-mobile-pwa {
 }
 
 @media (max-width: 768px) {
+  /*
+   * iOS Add to Home Screen: 100dvh / innerHeight JS hay cao hơn layout thật →
+   * shell fixed bị ngắn, tabbar “nổi”. Chuỗi chiều cao 100% + fill-available,
+   * shell chỉ inset:0 (không khóa height px).
+   */
+  html.employee-mobile-pwa {
+    height: -webkit-fill-available;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  html.employee-mobile-pwa body,
+  html.employee-mobile-pwa #app,
+  html.employee-mobile-pwa .app-shell {
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+  }
+
   html.employee-mobile-pwa {
     background-color: var(--color-bg);
     --employee-tabbar-block-size: 3.25rem;
@@ -84,16 +103,13 @@ html.employee-mobile-pwa {
     z-index: 0;
     width: 100%;
     max-width: 100vw;
-    height: var(--employee-mobile-vh, 100dvh);
-    max-height: var(--employee-mobile-vh, 100dvh);
     overflow: hidden;
   }
 
-  /* PWA: không co shell theo visualViewport (bù thanh Safari) — full innerHeight từ JS. */
   html.pwa-standalone .employee-shell--browser:not(.emp-shell-preview__shell) {
     inset: 0;
-    height: var(--employee-mobile-vh, 100dvh);
-    max-height: var(--employee-mobile-vh, 100dvh);
+    height: auto;
+    max-height: none;
   }
 }
 

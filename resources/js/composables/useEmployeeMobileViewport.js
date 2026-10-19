@@ -1,7 +1,7 @@
 //
 // iOS Safari (tab): chiều cao layout theo visualViewport khi URL bar co giãn.
-// PWA standalone: khóa theo window.innerHeight (full màn) — không dùng
-// visualViewport (hay co shell → tabbar “nổi”, lộ dải trắng body phía dưới).
+// PWA standalone: không ghi --employee-mobile-vh; shell CSS dùng inset:0.
+// Tab Safari: visualViewport (không lắng nghe vv trên PWA — tránh co shell).
 //
 import { onBeforeUnmount, onMounted } from 'vue';
 import { syncEmployeeSafeAreaInsets } from '@/lib/employeeSafeArea';
@@ -9,11 +9,8 @@ import { isPwaStandalone } from '@/lib/pwaStandalone';
 
 const ROOT_VAR = '--employee-mobile-vh';
 
-function readViewportHeightPx() {
+function readBrowserViewportHeightPx() {
   if (typeof window === 'undefined') return 0;
-  if (isPwaStandalone()) {
-    return Math.max(0, Math.round(window.innerHeight));
-  }
   const vv = window.visualViewport;
   const h = vv?.height ?? window.innerHeight;
   return Math.max(0, Math.round(h));
@@ -26,7 +23,11 @@ export function syncEmployeeMobileViewport() {
 
 function syncMobileViewportHeight() {
   if (typeof document === 'undefined') return;
-  const height = readViewportHeightPx();
+  if (isPwaStandalone()) {
+    document.documentElement.style.removeProperty(ROOT_VAR);
+    return;
+  }
+  const height = readBrowserViewportHeightPx();
   if (height > 0) {
     document.documentElement.style.setProperty(ROOT_VAR, `${height}px`);
   }
@@ -34,6 +35,7 @@ function syncMobileViewportHeight() {
 
 export function useEmployeeMobileViewport() {
   let rafId = 0;
+  let boundVisualViewport = false;
 
   function scheduleSync() {
     if (typeof window === 'undefined') return;
@@ -43,12 +45,25 @@ export function useEmployeeMobileViewport() {
     });
   }
 
+  function bindVisualViewport() {
+    if (boundVisualViewport || typeof window === 'undefined') return;
+    if (isPwaStandalone()) return;
+    window.visualViewport?.addEventListener('resize', scheduleSync, { passive: true });
+    boundVisualViewport = true;
+  }
+
+  function unbindVisualViewport() {
+    if (!boundVisualViewport || typeof window === 'undefined') return;
+    window.visualViewport?.removeEventListener('resize', scheduleSync);
+    boundVisualViewport = false;
+  }
+
   onMounted(() => {
     syncEmployeeMobileViewport();
     scheduleSync();
     window.addEventListener('resize', scheduleSync, { passive: true });
     window.addEventListener('orientationchange', scheduleSync, { passive: true });
-    window.visualViewport?.addEventListener('resize', scheduleSync, { passive: true });
+    bindVisualViewport();
   });
 
   onBeforeUnmount(() => {
@@ -56,7 +71,7 @@ export function useEmployeeMobileViewport() {
     if (typeof window === 'undefined') return;
     window.removeEventListener('resize', scheduleSync);
     window.removeEventListener('orientationchange', scheduleSync);
-    window.visualViewport?.removeEventListener('resize', scheduleSync);
+    unbindVisualViewport();
     document.documentElement.style.removeProperty(ROOT_VAR);
   });
 }
