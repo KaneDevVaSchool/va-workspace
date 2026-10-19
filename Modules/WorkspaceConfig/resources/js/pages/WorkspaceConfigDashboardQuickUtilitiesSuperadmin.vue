@@ -1,12 +1,14 @@
 <script setup>
 //
 // superadmin/workspace-config/quick-utilities — cấu hình lối tắt trên
-// /dashboard/me (desktop + mobile EmployeeHome).
+// /dashboard/me (desktop + mobile EmployeeHome), xem trước song song.
 //
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { RouterLink } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { showClientToast } from '@/lib/clientToast';
+import QuickUtilitiesConfigPanel from '../components/QuickUtilitiesConfigPanel.vue';
 
 const utilities = ref([]);
 const meta = ref({ tones: [], link_types: [] });
@@ -15,6 +17,7 @@ const saving = ref(false);
 const dialogOpen = ref(false);
 const dialogMode = ref('create');
 const deleteKey = ref(null);
+const highlightKey = ref(null);
 
 const form = reactive({
   utility_key: '',
@@ -29,6 +32,43 @@ const form = reactive({
 const editingKey = ref(null);
 
 const dialogTitle = computed(() => (dialogMode.value === 'create' ? 'Thêm tiện ích nhanh' : 'Sửa tiện ích nhanh'));
+
+const previewUtilities = computed(() => {
+  const visible = utilities.value.filter((item) => item.is_visible);
+
+  if (!dialogOpen.value) {
+    return visible;
+  }
+
+  const draft = {
+    utility_key: dialogMode.value === 'edit' ? editingKey.value : '__draft__',
+    label: form.label.trim() || 'Tiện ích mới',
+    icon: form.icon || 'layoutGrid',
+    tone: form.tone || 'primary',
+    link_type: form.link_type,
+    link_target: form.link_target,
+    is_visible: form.is_visible,
+  };
+
+  if (!draft.is_visible) {
+    if (dialogMode.value === 'edit') {
+      return visible.filter((item) => item.utility_key !== editingKey.value);
+    }
+    return visible;
+  }
+
+  if (dialogMode.value === 'edit') {
+    return visible.map((item) => (item.utility_key === editingKey.value ? { ...item, ...draft } : item));
+  }
+
+  return [...visible, draft];
+});
+
+watch(dialogOpen, (open) => {
+  if (open && dialogMode.value === 'create') {
+    highlightKey.value = '__draft__';
+  }
+});
 
 function resetForm() {
   form.utility_key = '';
@@ -57,12 +97,14 @@ async function loadUtilities() {
 function openCreate() {
   dialogMode.value = 'create';
   resetForm();
+  highlightKey.value = null;
   dialogOpen.value = true;
 }
 
 function openEdit(item) {
   dialogMode.value = 'edit';
   editingKey.value = item.utility_key;
+  highlightKey.value = item.utility_key;
   form.label = item.label;
   form.icon = item.icon;
   form.tone = item.tone;
@@ -75,6 +117,9 @@ function openEdit(item) {
 function closeDialog() {
   if (saving.value) return;
   dialogOpen.value = false;
+  if (highlightKey.value === '__draft__') {
+    highlightKey.value = null;
+  }
 }
 
 async function saveForm() {
@@ -100,6 +145,7 @@ async function saveForm() {
       showClientToast('success', 'Đã lưu thay đổi.');
     }
     dialogOpen.value = false;
+    highlightKey.value = null;
     await loadUtilities();
   } catch (error) {
     showClientToast('error', error?.response?.data?.message || 'Không lưu được tiện ích.');
@@ -120,18 +166,44 @@ async function toggleVisible(item) {
   }
 }
 
-async function moveItem(index, direction) {
+async function setAllVisible(visible) {
+  const targets = utilities.value.filter((item) => item.is_visible !== visible);
+  if (!targets.length) return;
+
+  saving.value = true;
+  try {
+    await Promise.all(
+      targets.map((item) =>
+        window.axios.put(`/api/dashboard/quick-utilities/${item.utility_key}`, { is_visible: visible }),
+      ),
+    );
+    targets.forEach((item) => {
+      item.is_visible = visible;
+    });
+    showClientToast('success', visible ? 'Đã hiện tất cả tiện ích.' : 'Đã ẩn tất cả tiện ích.');
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không cập nhật hàng loạt được.');
+    await loadUtilities();
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function moveItem(item, direction) {
+  const index = utilities.value.findIndex((row) => row.utility_key === item.utility_key);
   const nextIndex = index + direction;
-  if (nextIndex < 0 || nextIndex >= utilities.value.length) return;
+  if (index < 0 || nextIndex < 0 || nextIndex >= utilities.value.length) return;
+
   const reordered = [...utilities.value];
   const [row] = reordered.splice(index, 1);
   reordered.splice(nextIndex, 0, row);
   utilities.value = reordered;
+  highlightKey.value = item.utility_key;
 
   try {
     await window.axios.put('/api/dashboard/quick-utilities/layout', {
-      items: reordered.map((item, sortIndex) => ({
-        utility_key: item.utility_key,
+      items: reordered.map((rowItem, sortIndex) => ({
+        utility_key: rowItem.utility_key,
         sort_order: (sortIndex + 1) * 10,
       })),
     });
@@ -155,6 +227,7 @@ async function confirmDelete() {
   try {
     await window.axios.delete(`/api/dashboard/quick-utilities/${deleteKey.value}`);
     showClientToast('success', 'Đã xoá tiện ích.');
+    if (highlightKey.value === deleteKey.value) highlightKey.value = null;
     deleteKey.value = null;
     await loadUtilities();
   } catch (error) {
@@ -162,6 +235,13 @@ async function confirmDelete() {
   } finally {
     saving.value = false;
   }
+}
+
+async function scrollToHighlight(key) {
+  highlightKey.value = key;
+  await nextTick();
+  const row = document.querySelector(`[data-utility-key="${key}"]`);
+  row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 onMounted(loadUtilities);
@@ -179,7 +259,11 @@ onMounted(loadUtilities);
       ]"
     >
       <template #actions>
-        <button type="button" class="dqu-page__btn" :disabled="loading" @click="loadUtilities">
+        <RouterLink class="dqu-page__link" :to="{ name: 'dashboard.me' }">
+          <AppIcon name="externalLink" :size="16" />
+          Mở Dashboard của tôi
+        </RouterLink>
+        <button type="button" class="dqu-page__btn" :disabled="loading || saving" @click="loadUtilities">
           <AppIcon name="refresh" :size="16" />
           Làm mới
         </button>
@@ -192,51 +276,26 @@ onMounted(loadUtilities);
 
     <div class="dqu-page__body">
       <p class="dqu-page__lead">
-        Các lối tắt này hiển thị trên trang <strong>Dashboard của tôi</strong> (desktop) và trang chủ mobile nhân viên.
-        Route Vue dùng đúng tên route (ví dụ <code>employee.attendance</code>); URL mở tab mới.
+        Chỉnh danh sách bên trái; bên phải xem trước đúng lưới trên
+        <strong>Dashboard của tôi</strong> (desktop) và trang chủ mobile nhân viên. Route Vue dùng tên route (ví dụ
+        <code>employee.attendance</code>); URL mở tab mới.
       </p>
 
-      <div v-if="loading && !utilities.length" class="dqu-page__empty">Đang tải…</div>
-
-      <ul v-else class="dqu-list">
-        <li v-for="(item, index) in utilities" :key="item.utility_key" class="dqu-row" :class="{ 'dqu-row--hidden': !item.is_visible }">
-          <div class="dqu-row__order">
-            <button type="button" class="dqu-row__order-btn" aria-label="Lên" :disabled="index === 0" @click="moveItem(index, -1)">
-              <AppIcon name="chevronsUp" :size="16" />
-            </button>
-            <button
-              type="button"
-              class="dqu-row__order-btn"
-              aria-label="Xuống"
-              :disabled="index === utilities.length - 1"
-              @click="moveItem(index, 1)"
-            >
-              <AppIcon name="chevronsDown" :size="16" />
-            </button>
-          </div>
-
-          <span class="dqu-row__icon" :class="`dqu-row__icon--${item.tone}`">
-            <AppIcon :name="item.icon || 'layoutGrid'" :size="20" />
-          </span>
-
-          <div class="dqu-row__main">
-            <p class="dqu-row__title">{{ item.label }}</p>
-            <p class="dqu-row__meta">
-              <span>{{ item.utility_key }}</span>
-              <span v-if="item.link_type !== 'none'"> · {{ item.link_type === 'route' ? 'Route' : 'URL' }}: {{ item.link_target }}</span>
-              <span v-else> · Chưa gắn liên kết</span>
-            </p>
-          </div>
-
-          <div class="dqu-row__actions">
-            <button type="button" class="dqu-row__action" @click="toggleVisible(item)">
-              {{ item.is_visible ? 'Ẩn' : 'Hiện' }}
-            </button>
-            <button type="button" class="dqu-row__action" @click="openEdit(item)">Sửa</button>
-            <button type="button" class="dqu-row__action dqu-row__action--danger" @click="askDelete(item)">Xoá</button>
-          </div>
-        </li>
-      </ul>
+      <QuickUtilitiesConfigPanel
+        :utilities="utilities"
+        :preview-items="previewUtilities"
+        :loading="loading"
+        :busy="saving"
+        :active-key="highlightKey"
+        @toggle="toggleVisible"
+        @edit="openEdit"
+        @delete="askDelete"
+        @move="moveItem"
+        @show-all="setAllVisible(true)"
+        @hide-all="setAllVisible(false)"
+        @highlight="scrollToHighlight"
+        @create="openCreate"
+      />
     </div>
 
     <Teleport to="body">
@@ -307,7 +366,9 @@ onMounted(loadUtilities);
             <p class="dqu-alert__text">Thao tác không hoàn tác. Người dùng sẽ không còn thấy lối tắt trên Dashboard.</p>
             <div class="dqu-alert__actions">
               <button type="button" class="dqu-page__btn" :disabled="saving" @click="cancelDelete">Huỷ</button>
-              <button type="button" class="dqu-page__btn dqu-page__btn--danger" :disabled="saving" @click="confirmDelete">Xoá</button>
+              <button type="button" class="dqu-page__btn dqu-page__btn--danger" :disabled="saving" @click="confirmDelete">
+                Xoá
+              </button>
             </div>
           </div>
         </div>
@@ -327,21 +388,40 @@ onMounted(loadUtilities);
 .dqu-page__body {
   flex: 1;
   min-height: 0;
-  padding: var(--space-5);
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  overflow: hidden;
 }
 
 .dqu-page__lead {
-  margin: 0 0 var(--space-4);
-  max-width: 46rem;
+  margin: 0;
+  max-width: 52rem;
   font-size: 0.875rem;
   line-height: 1.55;
   color: var(--color-text-muted);
+  flex-shrink: 0;
 }
 
 .dqu-page__lead code {
   font-size: 0.8125rem;
   color: var(--color-text);
+}
+
+.dqu-page__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
 }
 
 .dqu-page__btn {
@@ -377,124 +457,6 @@ onMounted(loadUtilities);
   cursor: not-allowed;
 }
 
-.dqu-page__empty {
-  padding: var(--space-6);
-  text-align: center;
-  color: var(--color-text-muted);
-}
-
-.dqu-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.dqu-row {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
-  gap: var(--space-3);
-  align-items: center;
-  padding: var(--space-3);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
-}
-
-.dqu-row--hidden {
-  opacity: 0.72;
-}
-
-.dqu-row__order {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.dqu-row__order-btn {
-  display: grid;
-  place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.dqu-row__order-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.dqu-row__icon {
-  display: grid;
-  place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--radius-md);
-}
-
-.dqu-row__icon--primary {
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
-}
-.dqu-row__icon--secondary {
-  background: var(--color-secondary-surface);
-  color: var(--color-secondary);
-}
-.dqu-row__icon--tertiary {
-  background: var(--color-tertiary-surface);
-  color: var(--color-tertiary);
-}
-.dqu-row__icon--gold {
-  background: var(--color-gold-surface);
-  color: var(--color-gold);
-}
-.dqu-row__icon--muted {
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
-}
-
-.dqu-row__title {
-  margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
-}
-
-.dqu-row__meta {
-  margin: 0.15rem 0 0;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
-.dqu-row__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  justify-content: flex-end;
-}
-
-.dqu-row__action {
-  height: 1.875rem;
-  padding: 0 0.625rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
-  font-family: inherit;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.dqu-row__action--danger {
-  color: var(--color-danger);
-}
-
 .dqu-dialog {
   position: fixed;
   inset: 0;
@@ -508,7 +470,7 @@ onMounted(loadUtilities);
 .dqu-dialog__panel {
   display: flex;
   flex-direction: column;
-  width: min(44rem, calc(100vw - 2.5rem));
+  width: min(52rem, calc(100vw - 2.5rem));
   max-height: calc(100vh - 2.5rem);
   overflow: hidden;
   border-radius: var(--radius-lg);
@@ -562,7 +524,7 @@ onMounted(loadUtilities);
 
 .dqu-form {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
@@ -656,30 +618,12 @@ onMounted(loadUtilities);
 }
 
 @media (max-width: 768px) {
-  .dqu-row {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas:
-      'icon main'
-      'order actions';
+  .dqu-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
-  .dqu-row__icon {
-    grid-area: icon;
-  }
-
-  .dqu-row__main {
-    grid-area: main;
-  }
-
-  .dqu-row__order {
-    grid-area: order;
-    flex-direction: row;
-  }
-
-  .dqu-row__actions {
-    grid-area: actions;
-  }
-
+@media (max-width: 520px) {
   .dqu-form {
     grid-template-columns: 1fr;
   }

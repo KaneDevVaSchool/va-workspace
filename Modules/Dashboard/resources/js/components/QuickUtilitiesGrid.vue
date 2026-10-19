@@ -5,6 +5,10 @@ defineProps({
   items: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   compact: { type: Boolean, default: false },
+  /** Chỉ hiển thị (xem trước cấu hình), không điều hướng */
+  preview: { type: Boolean, default: false },
+  /** utility_key — viền nhấn ô đang chọn */
+  activeKey: { type: String, default: null },
 });
 
 const emit = defineEmits(['select']);
@@ -16,12 +20,21 @@ const emit = defineEmits(['select']);
       <li v-for="n in compact ? 4 : 8" :key="`sk-${n}`" class="quick-utilities__sk" aria-hidden="true" />
     </template>
     <li v-for="item in items" v-else :key="item.utility_key">
-      <button type="button" class="quick-utilities__tile" @click="emit('select', item)">
+      <component
+        :is="preview ? 'div' : 'button'"
+        :type="preview ? undefined : 'button'"
+        class="quick-utilities__tile"
+        :class="{
+          'quick-utilities__tile--preview': preview,
+          'quick-utilities__tile--active': activeKey && item.utility_key === activeKey,
+        }"
+        @click="!preview && emit('select', item)"
+      >
         <span class="quick-utilities__icon" :class="`quick-utilities__icon--${item.tone || 'primary'}`">
           <AppIcon :name="item.icon || 'layoutGrid'" :size="compact ? 20 : 22" :stroke-width="1.75" />
         </span>
         <span class="quick-utilities__label">{{ item.label }}</span>
-      </button>
+      </component>
     </li>
   </ul>
 </template>
@@ -63,9 +76,19 @@ const emit = defineEmits(['select']);
   padding: var(--space-2);
 }
 
-.quick-utilities__tile:hover {
+.quick-utilities__tile:not(.quick-utilities__tile--preview):hover {
   transform: translateY(-2px);
   box-shadow: inset 0 0 0 1px var(--color-border-strong, var(--color-border)), var(--shadow-md);
+}
+
+.quick-utilities__tile--preview {
+  cursor: default;
+}
+
+.quick-utilities__tile--active {
+  box-shadow:
+    inset 0 0 0 2px var(--color-primary),
+    var(--shadow-md);
 }
 
 .quick-utilities__icon {
