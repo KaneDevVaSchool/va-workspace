@@ -18,10 +18,12 @@ import { useEmployeeMobileShell } from '@/composables/useEmployeeMobileShell';
 import { useEmployeeTabbarDock } from '@/composables/useEmployeeTabbarDock';
 import { useEmployeeMobileViewport } from '@/composables/useEmployeeMobileViewport';
 import AppIcon from '@/components/AppIcon.vue';
+import { useChatStore } from '@modules/Chat/resources/js/store/chatStore';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const chatStore = useChatStore();
 const contentRef = ref(null);
 const homeSearchQuery = ref('');
 let homeRefreshHandler = null;
@@ -141,9 +143,27 @@ const pageHeaderTitle = computed(() => {
   return typeof title === 'string' ? title.trim() : '';
 });
 
+const isChatRoute = computed(() => route.name === 'employee.chat');
+const hideHeaderForChatThread = computed(
+  () => isChatRoute.value && chatStore.activeView === 'conversation',
+);
+
+const chatUnreadLabel = computed(() => {
+  if (chatStore.unreadTotal <= 0) return '';
+  return chatStore.unreadTotal > 99 ? '99+' : String(chatStore.unreadTotal);
+});
+
+const chatHeaderAria = computed(() =>
+  chatStore.unreadTotal > 0
+    ? `Trò chuyện, ${chatStore.unreadTotal} tin nhắn chưa đọc`
+    : 'Trò chuyện',
+);
+
 onMounted(() => {
   if (auth.isAuthenticated) {
     auth.fetchMe();
+    chatStore.fetchUnreadTotal().catch(() => {});
+    chatStore.fetchConversations().catch(() => {});
   }
 });
 
@@ -161,6 +181,13 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
   day: '2-digit',
   month: '2-digit',
 }).format(new Date()));
+
+const isProfileRoute = computed(() => route.name === 'employee.profile');
+
+function goToProfile() {
+  if (isProfileRoute.value) return;
+  router.push({ name: 'employee.profile' });
+}
 </script>
 
 <template>
@@ -169,12 +196,29 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
     :class="[`employee-shell--${shellMode}`, 'employee-shell--unified']"
   >
     <header
+      v-if="!hideHeaderForChatThread"
       class="employee-shell__header employee-shell__header--brand"
       :class="{ 'employee-shell__header--home': isHomeHeader }"
     >
       <div class="employee-shell__header-deco" aria-hidden="true"></div>
       <div class="employee-shell__header-top">
-        <div class="employee-shell__greeting">
+        <div class="employee-shell__header-lead">
+          <button
+            type="button"
+            class="employee-shell__brand-mark"
+            :aria-label="isProfileRoute ? 'Hồ sơ cá nhân' : 'Mở hồ sơ cá nhân'"
+            :aria-current="isProfileRoute ? 'page' : undefined"
+            @click="goToProfile"
+          >
+            <img
+              src="/images/logo-2.png"
+              alt=""
+              class="employee-shell__brand-logo"
+              width="40"
+              height="40"
+            />
+          </button>
+          <div class="employee-shell__greeting">
           <template v-if="isHomeHeader">
             <p class="employee-shell__kicker">{{ greeting }}</p>
             <h1 class="employee-shell__hello">
@@ -198,6 +242,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
             <p v-else-if="!pageHeaderTitle && departmentName" class="employee-shell__date">{{ departmentName }}</p>
             <p v-else-if="!pageHeaderTitle && jobTitleName" class="employee-shell__date">{{ jobTitleName }}</p>
           </template>
+          </div>
         </div>
         <div class="employee-shell__header-actions">
           <button
@@ -216,17 +261,20 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
           </button>
           <button
             type="button"
-            class="employee-shell__icon-btn"
-            aria-label="Thông báo"
-            @click="router.push({ name: 'employee.feed' })"
+            class="employee-shell__icon-btn employee-shell__icon-btn--chat"
+            :aria-label="chatHeaderAria"
+            @click="router.push({ name: 'employee.chat' })"
           >
-            <AppIcon name="bell" :size="20" :stroke-width="1.8" />
-            <span class="employee-shell__notif-dot" aria-hidden="true"></span>
+            <AppIcon name="messageCircle" :size="20" :stroke-width="1.8" />
+            <span v-if="chatUnreadLabel" class="employee-shell__chat-badge">{{ chatUnreadLabel }}</span>
           </button>
-          <div
-            class="employee-shell__avatar"
+          <button
+            type="button"
+            class="employee-shell__avatar employee-shell__avatar-btn"
             :class="{ 'employee-shell__avatar--home': isHomeHeader }"
-            :aria-label="displayName || 'Ảnh đại diện'"
+            :aria-label="isProfileRoute ? 'Hồ sơ cá nhân' : 'Mở hồ sơ cá nhân'"
+            :aria-current="isProfileRoute ? 'page' : undefined"
+            @click="goToProfile"
           >
             <img
               v-if="hasAvatarPhoto"
@@ -236,7 +284,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
               @error="avatarBroken = true"
             />
             <span v-else class="employee-shell__avatar-initial">{{ avatarInitial }}</span>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -274,6 +322,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
     <main
       ref="contentRef"
       class="employee-shell__content employee-shell__content--unified"
+      :class="{ 'employee-shell__content--chat': isChatRoute }"
     >
       <div
         v-if="route.name === 'dashboard.me' || route.name === 'employee.feed'"

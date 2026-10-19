@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "@/components/AppIcon.vue";
 import { showClientToast } from "@/lib/clientToast";
+import { useEmployeeMobileView } from "@/composables/useEmployeeMobileView";
 import { useChatStore } from "@modules/Chat/resources/js/store/chatStore";
 import { useAuthStore } from "@modules/Identity/resources/js/stores/auth.js";
 import SocialColleagueSearch from "./SocialColleagueSearch.vue";
@@ -20,6 +21,7 @@ const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const chat = useChatStore();
+const { isEmployeeMobile } = useEmployeeMobileView();
 const colleagueSearch = ref(null);
 const stats = ref({ posts_count: 0, reactions_received: 0, comments_count: 0 });
 const statsLoaded = ref(false);
@@ -107,7 +109,12 @@ function setScope(scope) {
 
 function messageThem() {
     const id = profileUser.value?.id;
-    if (id) chat.openWithUser(id);
+    if (!id) return;
+    if (isEmployeeMobile.value) {
+        router.push({ name: "employee.chat", query: { user: String(id) } }).catch(() => {});
+        return;
+    }
+    chat.openWithUser(id);
 }
 
 async function copyWallLink() {

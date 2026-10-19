@@ -107,6 +107,11 @@ function userDepartment(user) {
   return '';
 }
 
+function userCompany(user) {
+  const name = user?.company_name;
+  return typeof name === 'string' ? name.trim() : '';
+}
+
 watch(colleagueSheetOpen, (open) => {
   if (open) {
     nextTick(() => colleagueSearchRef.value?.focus());
@@ -155,7 +160,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="emp-feed">
-    <div class="emp-feed__sticky">
+    <div class="emp-feed__top">
       <div class="emp-feed__toolbar">
         <label class="emp-feed__search">
           <AppIcon name="search" :size="18" class="emp-feed__search-icon" />
@@ -219,6 +224,9 @@ onBeforeUnmount(() => {
             <span class="emp-feed__people-name">{{ user.name }}</span>
             <span v-if="userDepartment(user)" class="emp-feed__people-dept">
               {{ userDepartment(user) }}
+            </span>
+            <span v-if="userCompany(user)" class="emp-feed__people-company">
+              {{ userCompany(user) }}
             </span>
           </span>
           <AppIcon name="chevronRight" :size="16" class="emp-feed__people-chevron" aria-hidden="true" />
@@ -486,19 +494,11 @@ onBeforeUnmount(() => {
   padding-bottom: var(--space-2);
 }
 
-.emp-feed__sticky {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+.emp-feed__top {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   padding-bottom: var(--space-1);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-tertiary-50) 70%, transparent) 85%,
-    transparent
-  );
 }
 
 .emp-feed__toolbar {
@@ -629,6 +629,14 @@ onBeforeUnmount(() => {
 
 .emp-feed__people-dept {
   font-size: 0.75rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emp-feed__people-company {
+  font-size: 0.6875rem;
   color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1028,12 +1036,16 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.emp-feed__post :deep(.post-card__stream-body--horizontal .post-card__content) {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 5;
-  line-clamp: 5;
-  overflow: hidden;
+.emp-feed__post :deep(.post-card__stream-hero) {
+  margin-inline: calc(-1 * var(--space-3));
+}
+
+.emp-feed__post :deep(.post-card__content-block) {
+  width: 100%;
+}
+
+.emp-feed__post :deep(.post-card__read-more) {
+  color: var(--color-tertiary-700);
 }
 
 .emp-feed__post :deep(.post-card__content) {
@@ -1057,9 +1069,15 @@ onBeforeUnmount(() => {
   margin-bottom: 0;
 }
 
-.emp-feed__post :deep(.post-card__images) {
+.emp-feed__post :deep(.post-card__images:not(.post-card__stream-hero)) {
   margin: 0 0 var(--space-2);
   border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.emp-feed__post :deep(.post-card__shared .post-card__stream-hero) {
+  margin: var(--space-2) calc(-1 * var(--space-2)) var(--space-1);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 

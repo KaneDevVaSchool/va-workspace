@@ -81,7 +81,7 @@ export default [
     path: '/superadmin/workspace-config/quick-utilities',
     name: 'superadmin.workspace-config.quick-utilities',
     component: () => import('./pages/WorkspaceConfigDashboardQuickUtilitiesSuperadmin.vue'),
-    meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Tiện ích nhanh Dashboard' },
+    meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'App PWA nhân viên' },
   },
   {
     path: '/superadmin/workspace-config/departments/:departmentId',

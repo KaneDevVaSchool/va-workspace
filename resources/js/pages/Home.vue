@@ -47,11 +47,11 @@ const flows = {
                 button: { label: 'Ẩn hoặc hiện menu', to: { name: 'superadmin.workspace-config.global-menu' } },
             },
             {
-                icon: 'sparkles',
-                title: 'Lối tắt Dashboard của tôi',
-                teaser: 'Thêm, sắp xếp và ẩn các tiện ích nhanh trên trang cá nhân của nhân viên.',
-                items: ['Áp dụng desktop và mobile'],
-                button: { label: 'Cấu hình tiện ích nhanh', to: { name: 'superadmin.workspace-config.quick-utilities' } },
+                icon: 'layoutGrid',
+                title: 'App PWA nhân viên',
+                teaser: 'Cấu hình lối tắt trang chủ app mobile, bảo trì từng mục và xem thử các màn hình PWA.',
+                items: ['Trang chủ, bảng tin, chấm công, nghỉ phép, đơn'],
+                button: { label: 'Cấu hình app PWA', to: { name: 'superadmin.workspace-config.quick-utilities' } },
             },
             {
                 icon: 'search',

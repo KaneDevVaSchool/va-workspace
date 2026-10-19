@@ -81,6 +81,17 @@ export default [
     },
   },
   {
+    path: '/dashboard/me/profile',
+    name: 'employee.profile',
+    component: () => import('./pages/EmployeeProfile.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Hồ sơ cá nhân',
+      requiresPermission: 'dashboard.view',
+      employeeMobile: true,
+    },
+  },
+  {
     path: '/dashboard/me/feed',
     name: 'employee.feed',
     component: () => import('./pages/EmployeeFeed.vue'),

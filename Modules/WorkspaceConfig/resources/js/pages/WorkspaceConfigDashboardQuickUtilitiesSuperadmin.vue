@@ -1,7 +1,7 @@
 <script setup>
 //
-// superadmin/workspace-config/quick-utilities — cấu hình lối tắt trên
-// xem trước giao diện nhân viên (điện thoại) song song danh sách cấu hình.
+// superadmin/workspace-config/quick-utilities — cấu hình app PWA nhân viên
+// (lối tắt trang chủ + xem thử các màn hình mobile) song song danh sách.
 //
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
@@ -320,20 +320,20 @@ onMounted(loadUtilities);
 <template>
   <section class="dqu-page">
     <PageHeader
-      title="Lối tắt trên Dashboard"
-      subtitle="Bốn lối tắt cố định: chấm công, nghỉ phép, danh bạ, bảng tin — bật/tắt hiển thị, sắp xếp và tuỳ biểu tượng."
-      icon="sparkles"
+      title="App PWA nhân viên"
+      subtitle="Cấu hình lối tắt trên trang chủ app mobile (chấm công, nghỉ phép, danh bạ, bảng tin, trò chuyện): hiển thị, thứ tự, biểu tượng và bảo trì. Xem thử toàn bộ màn hình PWA bên phải."
+      icon="layoutGrid"
       :primary-action="headerPrimaryAction"
       :breadcrumbs="[
         { label: 'Trang chủ', to: { name: 'home' } },
         { label: 'Cấu hình Workspace', to: { name: 'superadmin.workspace-config.overview' } },
-        { label: 'Lối tắt Dashboard' },
+        { label: 'App PWA nhân viên' },
       ]"
     >
       <template #actions>
         <RouterLink class="dqu-page__link" :to="{ name: 'dashboard.me' }">
           <AppIcon name="externalLink" :size="16" />
-          Mở Dashboard của tôi
+          Mở app nhân viên
         </RouterLink>
         <button type="button" class="dqu-page__btn" :disabled="loading || saving" @click="loadUtilities">
           <AppIcon name="refresh" :size="16" />

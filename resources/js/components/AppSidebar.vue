@@ -369,8 +369,8 @@ const MENU_SECTIONS = [
       },
       {
         name: 'superadmin.workspace-config.quick-utilities',
-        label: 'Tiện ích Dashboard',
-        icon: 'sparkles',
+        label: 'App PWA nhân viên',
+        icon: 'layoutGrid',
         requiresSuperAdmin: true,
       },
     ],

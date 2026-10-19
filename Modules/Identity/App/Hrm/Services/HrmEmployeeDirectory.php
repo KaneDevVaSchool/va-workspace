@@ -264,13 +264,45 @@ class HrmEmployeeDirectory
 
     public function findEmployee(string $uuid): ?array
     {
-        foreach ($this->load()['employees'] as $employee) {
-            if (($employee['uuid'] ?? '') === $uuid) {
-                return $employee;
-            }
+        return $this->findEmployeeByUuid($uuid);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    public function findEmployeeByUuid(string $uuid): ?array
+    {
+        if ($uuid === '') {
+            return null;
         }
 
-        return null;
+        try {
+            $row = $this->employeeRowQuery()
+                ->where('e.uuid', $uuid)
+                ->first($this->employeeRowColumns());
+
+            if ($row === null) {
+                return null;
+            }
+
+            $unitsById = $this->orgUnitsById();
+            $concurrent = $this->concurrentByEmployeeId();
+            $names = $this->employeeNames();
+            $avatars = $this->avatarsByEmployeeId();
+
+            return $this->presentEmployee($row, $unitsById, $names, $concurrent, $avatars);
+        } catch (HrmDatabaseUnavailable $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            Log::warning('hrm.database.employee_lookup_failed', [
+                'uuid' => $uuid,
+                'message' => $e->getMessage(),
+            ]);
+
+            throw new HrmDatabaseUnavailable('Không đọc được hồ sơ nhân sự từ cơ sở dữ liệu HRM.');
+        }
     }
 
     /**
@@ -544,7 +576,47 @@ class HrmEmployeeDirectory
         return ! in_array($status, ['terminated', 'inactive'], true);
     }
 
-    private function employeeRows(): Collection
+    /** @return list<string> */
+    private function employeeRowColumns(): array
+    {
+        return [
+            'e.id',
+            'e.uuid',
+            'e.code',
+            'e.full_name',
+            'e.company_email',
+            'e.personal_email',
+            'e.phone',
+            'e.gender',
+            'e.birthdate',
+            'e.personnel_type',
+            'e.workplace',
+            'e.attendance_code',
+            'e.hired_at',
+            'e.actual_start_date',
+            'e.employment_status',
+            'e.created_at',
+            'e.department_name as profile_department_name',
+            'e.avatar_path',
+            'e.status',
+            'e.direct_manager_name',
+            'e.job_title_name as profile_job_title',
+            'c.uuid as company_uuid',
+            'c.code as company_code',
+            'c.name as company_name',
+            'ou.id as org_unit_id',
+            'ou.uuid as org_unit_uuid',
+            'ou.code as org_unit_code',
+            'ou.name as org_unit_name',
+            'ou.path as org_unit_path',
+            'p.title as position_title',
+            'p.level as position_level',
+            'jt.name as job_title',
+            'pl.name as level_name',
+        ];
+    }
+
+    private function employeeRowQuery()
     {
         return DB::connection('hrm')
             ->table('employees as e')
@@ -554,43 +626,14 @@ class HrmEmployeeDirectory
             ->leftJoin('positions as p', 'p.id', '=', 'a.position_id')
             ->leftJoin('job_titles as jt', 'jt.id', '=', 'p.job_title_id')
             ->leftJoin('position_levels as pl', 'pl.level', '=', 'p.level')
-            ->whereNull('e.deleted_at')
+            ->whereNull('e.deleted_at');
+    }
+
+    private function employeeRows(): Collection
+    {
+        return $this->employeeRowQuery()
             ->orderBy('e.full_name')
-            ->get([
-                'e.id',
-                'e.uuid',
-                'e.code',
-                'e.full_name',
-                'e.company_email',
-                'e.personal_email',
-                'e.phone',
-                'e.gender',
-                'e.birthdate',
-                'e.personnel_type',
-                'e.workplace',
-                'e.attendance_code',
-                'e.hired_at',
-                'e.actual_start_date',
-                'e.employment_status',
-                'e.created_at',
-                'e.department_name as profile_department_name',
-                'e.avatar_path',
-                'e.status',
-                'e.direct_manager_name',
-                'e.job_title_name as profile_job_title',
-                'c.uuid as company_uuid',
-                'c.code as company_code',
-                'c.name as company_name',
-                'ou.id as org_unit_id',
-                'ou.uuid as org_unit_uuid',
-                'ou.code as org_unit_code',
-                'ou.name as org_unit_name',
-                'ou.path as org_unit_path',
-                'p.title as position_title',
-                'p.level as position_level',
-                'jt.name as job_title',
-                'pl.name as level_name',
-            ]);
+            ->get($this->employeeRowColumns());
     }
 
     private function concurrentByEmployeeId(): Collection

@@ -98,7 +98,7 @@ class UserRepository implements UserRepositoryInterface
     public function searchActiveByName(string $query, int $limit = 8, ?int $excludeUserId = null): \Illuminate\Support\Collection
     {
         $builder = User::query()
-            ->with('department')
+            ->with(['department.company', 'company'])
             ->where('status', 'active')
             ->orderBy('name')
             ->limit($limit);

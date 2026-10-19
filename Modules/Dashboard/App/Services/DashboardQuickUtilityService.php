@@ -15,7 +15,7 @@ class DashboardQuickUtilityService
     public const LINK_TYPES = ['route', 'url', 'none'];
 
     /**
-     * Bộ lối tắt cố định trên Dashboard của tôi — superadmin chỉ bật/tắt, sắp xếp và tuỳ biểu tượng.
+     * Bộ lối tắt cố định trên trang chủ app PWA nhân viên — superadmin bật/tắt, sắp xếp, biểu tượng và bảo trì.
      *
      * @var array<string, array{label: string, icon: string, tone: string, link_type: string, link_target: string, sort_order: int}>
      */
@@ -51,6 +51,14 @@ class DashboardQuickUtilityService
             'link_type' => 'route',
             'link_target' => 'employee.feed',
             'sort_order' => 40,
+        ],
+        'chat' => [
+            'label' => 'Trò chuyện',
+            'icon' => 'messageCircle',
+            'tone' => 'secondary',
+            'link_type' => 'route',
+            'link_target' => 'employee.chat',
+            'sort_order' => 50,
         ],
     ];
 
@@ -130,7 +138,7 @@ class DashboardQuickUtilityService
      */
     public function create(array $data, ?int $updatedBy): DashboardQuickUtility
     {
-        throw new \InvalidArgumentException('Chỉ có 4 lối tắt cố định (chấm công, nghỉ phép, danh bạ, bảng tin). Không thêm mục mới.');
+        throw new \InvalidArgumentException('Chỉ có 5 lối tắt cố định (chấm công, nghỉ phép, danh bạ, bảng tin, trò chuyện). Không thêm mục mới.');
     }
 
     /**

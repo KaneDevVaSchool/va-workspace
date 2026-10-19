@@ -10,6 +10,7 @@ import dashboardRoutes from '@modules/Dashboard/resources/js/router.js';
 import featureRequestRoutes from '@modules/FeatureRequest/resources/js/router.js';
 import contractRoutes from '@modules/Contract/resources/js/router.js';
 import attendanceRoutes from '@modules/Attendance/resources/js/router.js';
+import chatRoutes from '@modules/Chat/resources/js/router.js';
 import { resolveAuthenticatedLandingRoute } from '../lib/authenticatedLanding';
 import { showClientToast } from '../lib/clientToast';
 import {
@@ -47,6 +48,7 @@ const routes = [
     ...featureRequestRoutes,
     ...contractRoutes,
     ...attendanceRoutes,
+    ...chatRoutes,
     {
         path: '/:pathMatch(.*)*',
         name: 'not-found',

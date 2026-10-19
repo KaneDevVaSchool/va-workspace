@@ -532,8 +532,8 @@ onBeforeUnmount(() => {
           Menu toàn hệ thống
         </RouterLink>
         <RouterLink class="wc-overview__header-btn" :to="{ name: 'superadmin.workspace-config.quick-utilities' }">
-          <AppIcon name="sparkles" :size="16" />
-          Tiện ích Dashboard
+          <AppIcon name="layoutGrid" :size="16" />
+          App PWA nhân viên
         </RouterLink>
         <button type="button" class="wc-overview__header-btn" :disabled="loading" @click="loadDepartments">
           <AppIcon name="refresh" :size="16" :class="{ 'wc-overview__spin': loading }" />

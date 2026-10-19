@@ -124,9 +124,9 @@ class GlobalMenuVisibilityService
             'icon' => 'users',
         ],
         'superadmin.workspace-config.quick-utilities' => [
-            'label' => 'Tiện ích Dashboard',
+            'label' => 'App PWA nhân viên',
             'section' => 'superadmin-workspace-config',
-            'icon' => 'sparkles',
+            'icon' => 'layoutGrid',
         ],
     ];
 

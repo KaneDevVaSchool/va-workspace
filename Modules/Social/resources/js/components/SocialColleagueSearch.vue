@@ -65,6 +65,11 @@ function departmentLabel(user) {
   return '';
 }
 
+function companyLabel(user) {
+  const name = user?.company_name;
+  return typeof name === 'string' ? name.trim() : '';
+}
+
 function focus() {
   inputRef.value?.focus();
 }
@@ -142,6 +147,9 @@ defineExpose({ focus });
             <span class="colleague-search__name">{{ user.name }}</span>
             <span v-if="departmentLabel(user)" class="colleague-search__dept">
               {{ departmentLabel(user) }}
+            </span>
+            <span v-if="companyLabel(user)" class="colleague-search__company">
+              {{ companyLabel(user) }}
             </span>
           </span>
           <AppIcon
@@ -366,6 +374,14 @@ defineExpose({ focus });
 .colleague-search__dept {
   color: var(--color-text-muted);
   font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.colleague-search__company {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

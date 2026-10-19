@@ -1,10 +1,14 @@
 <script setup>
 //
-// Cấu hình tiện ích nhanh Dashboard — danh sách chỉnh bên trái, xem trước
-// song song giao diện nhân viên trên điện thoại.
+// Cấu hình app PWA nhân viên — lối tắt trang chủ bên trái, xem trước từng
+// màn hình mobile (tab bar + tiện ích) song song bên phải.
 //
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
+import {
+  EMPLOYEE_PWA_PREVIEW_MODES,
+  EMPLOYEE_PWA_TAB_PREVIEW,
+} from '@modules/Dashboard/resources/js/constants/employeePwaPreview.js';
 import DashboardQuickUtilitiesPreview from '@modules/Dashboard/resources/js/components/DashboardQuickUtilitiesPreview.vue';
 
 const props = defineProps({
@@ -48,16 +52,17 @@ const filterEmptyText = computed(() => {
   if (filter.value === 'visible') return 'Chưa bật hiển thị mục nào.';
   if (filter.value === 'hidden') return 'Không có mục nào đang tắt hiển thị.';
   if (filter.value === 'maintenance') return 'Không có mục nào đang bảo trì.';
-  return 'Chưa có lối tắt nào trong hệ thống.';
+  return 'Chưa có lối tắt nào trên app PWA.';
 });
 
 const canShowAll = computed(() => hiddenCount.value > 0 && !props.busy);
 const canHideAll = computed(() => visibleCount.value > 0 && !props.busy);
 
-const previewModeLabels = {
-  'mobile-home': 'Trang chủ',
-  'mobile-all': 'Xem tất cả',
-};
+const previewModeLabels = EMPLOYEE_PWA_PREVIEW_MODES;
+
+const showPreviewFrame = computed(
+  () => props.loading || props.previewItems.length || Boolean(EMPLOYEE_PWA_TAB_PREVIEW[previewMode.value]),
+);
 
 function linkSummary(item) {
   if (item.is_under_maintenance) return 'Đang bảo trì — nhân viên không mở được';
@@ -106,7 +111,7 @@ onBeforeUnmount(() => {
     <div class="dqu-panel__toolbar">
       <div class="dqu-panel__stats">
         <span class="dqu-panel__stat">
-          <strong>{{ utilities.length }}</strong> lối tắt
+          <strong>{{ utilities.length }}</strong> lối tắt trang chủ
         </span>
         <span class="dqu-panel__stat dqu-panel__stat--ok">
           <strong>{{ visibleCount }}</strong> đang hiện cho nhân viên
@@ -169,6 +174,11 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+
+    <p class="dqu-panel__intro">
+      Cấu hình lối tắt trên <strong>trang chủ app PWA</strong> (mobile): bật/tắt, biểu tượng, bảo trì và thứ tự.
+      Thanh điều hướng dưới (Bảng tin, Chấm công, Nghỉ phép, Đơn) là menu cố định — chọn màn hình bên phải để xem thử.
+    </p>
 
     <div class="dqu-panel__main">
       <div class="dqu-panel__list-wrap hide-scrollbar">
@@ -291,7 +301,7 @@ onBeforeUnmount(() => {
         </ul>
       </div>
 
-      <aside class="dqu-panel__preview" aria-label="Hình minh hoạ giao diện nhân viên">
+      <aside class="dqu-panel__preview" aria-label="Xem thử app PWA nhân viên">
         <div class="dqu-panel__preview-head">
           <div class="dqu-panel__preview-modes" role="group" aria-label="Chọn màn hình xem thử">
             <button
@@ -310,14 +320,14 @@ onBeforeUnmount(() => {
 
         <div class="dqu-panel__preview-frame hide-scrollbar">
           <DashboardQuickUtilitiesPreview
-            v-if="loading || previewItems.length"
+            v-if="showPreviewFrame"
             :mode="previewMode"
             :utilities="previewItems"
             :loading="loading"
             :active-utility-key="activeKey"
           />
           <p v-else class="dqu-panel__preview-empty">
-            Chưa có lối tắt nào đang hiện. Bật công tắc hiển thị hoặc thêm mục mới.
+            Chưa có lối tắt nào đang hiện trên trang chủ PWA. Bật công tắc hiển thị hoặc thêm mục mới.
           </p>
         </div>
       </aside>
@@ -332,6 +342,22 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   gap: var(--space-3);
+}
+
+.dqu-panel__intro {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dqu-panel__intro strong {
+  color: var(--color-text);
+  font-weight: 600;
 }
 
 .dqu-panel__toolbar {
@@ -698,18 +724,20 @@ onBeforeUnmount(() => {
 
 .dqu-panel__preview-head {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  align-items: flex-start;
+  justify-content: stretch;
   flex-shrink: 0;
 }
 
 .dqu-panel__preview-modes {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  width: 100%;
   padding: 2px;
   border-radius: var(--radius-sm);
   background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 1px var(--color-border);
-  flex-shrink: 0;
 }
 
 .dqu-panel__mode {

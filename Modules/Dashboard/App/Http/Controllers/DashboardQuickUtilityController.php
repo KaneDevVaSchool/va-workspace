@@ -111,7 +111,7 @@ class DashboardQuickUtilityController extends Controller
 
         $this->activityLogs->record(
             'dashboard.quick_utilities.reorder',
-            'Sắp xếp lại tiện ích nhanh Dashboard của tôi',
+            'Sắp xếp lại lối tắt app PWA nhân viên',
             $request->user(),
         );
 

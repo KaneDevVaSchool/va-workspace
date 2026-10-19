@@ -313,6 +313,73 @@ async function saveEdit() {
     savingEdit.value = false;
   }
 }
+
+const contentEl = ref(null);
+const sharedContentEl = ref(null);
+const contentExpanded = ref(false);
+const sharedContentExpanded = ref(false);
+const contentNeedsClamp = ref(false);
+const sharedContentNeedsClamp = ref(false);
+let contentClampObserver;
+
+function measureContentClamp() {
+  if (!props.mobileFeedLayout) {
+    contentNeedsClamp.value = false;
+    sharedContentNeedsClamp.value = false;
+    return;
+  }
+  nextTick(() => {
+    if (contentEl.value && !contentExpanded.value) {
+      contentNeedsClamp.value = contentEl.value.scrollHeight > contentEl.value.clientHeight + 2;
+    }
+    if (sharedContentEl.value && !sharedContentExpanded.value) {
+      sharedContentNeedsClamp.value =
+        sharedContentEl.value.scrollHeight > sharedContentEl.value.clientHeight + 2;
+    }
+  });
+}
+
+function bindContentClampObserver() {
+  contentClampObserver?.disconnect();
+  if (!props.mobileFeedLayout || typeof ResizeObserver === 'undefined') return;
+  contentClampObserver = new ResizeObserver(() => measureContentClamp());
+  if (contentEl.value) contentClampObserver.observe(contentEl.value);
+  if (sharedContentEl.value) contentClampObserver.observe(sharedContentEl.value);
+}
+
+watch(
+  () => props.post.id,
+  () => {
+    contentExpanded.value = false;
+    sharedContentExpanded.value = false;
+    contentNeedsClamp.value = false;
+    sharedContentNeedsClamp.value = false;
+    measureContentClamp();
+    nextTick(bindContentClampObserver);
+  },
+);
+
+watch(
+  [sanitizedContent, sanitizedSharedContent, contentExpanded, sharedContentExpanded],
+  () => {
+    measureContentClamp();
+  },
+);
+
+watch([contentEl, sharedContentEl], () => {
+  bindContentClampObserver();
+  measureContentClamp();
+});
+
+onMounted(() => {
+  measureContentClamp();
+  bindContentClampObserver();
+});
+
+onBeforeUnmount(() => {
+  contentClampObserver?.disconnect();
+  contentClampObserver = null;
+});
 </script>
 
 <template>
@@ -480,29 +547,41 @@ async function saveEdit() {
       </div>
     </div>
 
-    <div
-      v-else-if="!localPoll"
-      class="post-card__stream-body"
-      :class="{
-        'post-card__stream-body--horizontal':
-          mobileFeedLayout && imageAttachments.length > 0 && !post.shared_from,
-      }"
-    >
+    <div v-else-if="!localPoll" class="post-card__stream-body">
       <div
         v-if="mobileFeedLayout && imageAttachments.length > 0 && !post.shared_from"
-        class="post-card__stream-thumb"
+        class="post-card__stream-hero"
       >
-        <SocialImageGrid :images="imageAttachments" compact />
+        <SocialImageGrid :images="imageAttachments" />
       </div>
 
       <div class="post-card__stream-main">
-        <div
-          v-if="post.content"
-          class="post-card__content"
-          v-html="sanitizedContent"
-          v-social-stickers
-          @click="onContentClick"
-        ></div>
+        <div v-if="post.content" class="post-card__content-block">
+          <div
+            ref="contentEl"
+            class="post-card__content"
+            :class="{ 'post-card__content--clamp': mobileFeedLayout && !contentExpanded }"
+            v-html="sanitizedContent"
+            v-social-stickers
+            @click="onContentClick"
+          ></div>
+          <button
+            v-if="mobileFeedLayout && contentNeedsClamp && !contentExpanded"
+            type="button"
+            class="post-card__read-more"
+            @click="contentExpanded = true"
+          >
+            Đọc thêm
+          </button>
+          <button
+            v-else-if="mobileFeedLayout && contentNeedsClamp && contentExpanded"
+            type="button"
+            class="post-card__read-more post-card__read-more--collapse"
+            @click="contentExpanded = false"
+          >
+            Thu gọn
+          </button>
+        </div>
 
         <div v-if="post.link_previews?.length" class="post-card__link-previews">
           <SocialLinkPreviewCard
@@ -541,21 +620,44 @@ async function saveEdit() {
       </button>
       <span v-else class="post-card__shared-author post-card__author-anonymous">{{ post.shared_from.anonymous_name || 'Người ẩn danh' }}</span>
       <div
-        v-if="post.shared_from.content"
-        class="post-card__shared-content"
-        v-html="sanitizedSharedContent"
-        v-social-stickers
-        @click="onContentClick"
-      ></div>
+        v-if="sharedImageAttachments.length > 0"
+        class="post-card__images"
+        :class="{ 'post-card__stream-hero': mobileFeedLayout }"
+      >
+        <SocialImageGrid :images="sharedImageAttachments" />
+      </div>
+      <div v-if="post.shared_from.content" class="post-card__content-block">
+        <div
+          ref="sharedContentEl"
+          class="post-card__shared-content"
+          :class="{ 'post-card__content--clamp': mobileFeedLayout && !sharedContentExpanded }"
+          v-html="sanitizedSharedContent"
+          v-social-stickers
+          @click="onContentClick"
+        ></div>
+        <button
+          v-if="mobileFeedLayout && sharedContentNeedsClamp && !sharedContentExpanded"
+          type="button"
+          class="post-card__read-more"
+          @click="sharedContentExpanded = true"
+        >
+          Đọc thêm
+        </button>
+        <button
+          v-else-if="mobileFeedLayout && sharedContentNeedsClamp && sharedContentExpanded"
+          type="button"
+          class="post-card__read-more post-card__read-more--collapse"
+          @click="sharedContentExpanded = false"
+        >
+          Thu gọn
+        </button>
+      </div>
       <div v-if="post.shared_from.link_previews?.length" class="post-card__link-previews">
         <SocialLinkPreviewCard
           v-for="preview in post.shared_from.link_previews"
           :key="preview.url"
           :preview="preview"
         />
-      </div>
-      <div v-if="sharedImageAttachments.length > 0" class="post-card__images">
-        <SocialImageGrid :images="sharedImageAttachments" />
       </div>
       <div v-if="sharedFileAttachments.length > 0" class="post-card__attachments">
         <a
@@ -837,36 +939,59 @@ async function saveEdit() {
   min-width: 0;
 }
 
-.post-card__stream-body--horizontal {
-  flex-direction: row;
-  align-items: stretch;
-  gap: var(--space-3);
-}
-
-.post-card__stream-thumb {
-  flex: 0 0 min(38%, 8.5rem);
-  min-width: 0;
-  border-radius: var(--radius-md);
+.post-card--mobile-feed .post-card__stream-hero {
+  margin-inline: calc(-1 * var(--space-3));
+  margin-bottom: var(--space-1);
+  border-radius: 0;
   overflow: hidden;
   background: var(--color-surface-muted);
-  box-shadow: inset 0 0 0 1px var(--color-border-subtle);
 }
 
-.post-card__stream-body--horizontal .post-card__stream-thumb :deep(.image-grid-wrap) {
-  height: 100%;
-  min-height: 5.75rem;
-}
-
-.post-card__stream-body--horizontal .post-card__stream-thumb :deep(.image-grid) {
-  height: 100%;
-  min-height: 5.75rem;
-}
-
-.post-card__stream-body--horizontal .post-card__stream-thumb :deep(.image-grid__image) {
-  object-fit: cover;
+.post-card--mobile-feed .post-card__stream-hero :deep(.image-grid--1 .image-grid__image) {
   width: 100%;
-  height: 100%;
-  min-height: 5.75rem;
+  max-height: min(28rem, 72vh);
+  object-fit: cover;
+}
+
+.post-card--mobile-feed .post-card__stream-hero :deep(.image-grid__image) {
+  object-fit: cover;
+}
+
+.post-card__content-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.post-card--mobile-feed .post-card__content--clamp,
+.post-card--mobile-feed .post-card__shared-content.post-card__content--clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  line-clamp: 5;
+  overflow: hidden;
+}
+
+.post-card__read-more {
+  border: none;
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.post-card__read-more:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.post-card__read-more--collapse {
+  margin-top: 0.15rem;
 }
 
 .post-card__stream-main {

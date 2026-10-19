@@ -31,6 +31,7 @@ const SHELL_PRECACHE_URLS = [
   '/dashboard/me/attendance',
   '/dashboard/me/leave',
   '/dashboard/me/requests',
+  '/dashboard/me/profile',
 ];
 
 async function precacheShellDocument(url) {
@@ -220,6 +221,7 @@ const EMPLOYEE_SHELL_PATHS = new Set([
   '/dashboard/me/attendance',
   '/dashboard/me/leave',
   '/dashboard/me/requests',
+  '/dashboard/me/profile',
 ]);
 
 const EMPLOYEE_SHELL_DEFAULT = '/dashboard/me/feed';

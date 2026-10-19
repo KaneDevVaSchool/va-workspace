@@ -18,6 +18,8 @@ export const EMPLOYEE_MOBILE_SHELL_PATHS = [
   '/dashboard/me/requests',
   '/dashboard/me/contacts',
   '/dashboard/me/utilities',
+  '/dashboard/me/profile',
+  '/dashboard/me/chat',
 ];
 
 const ALLOWED_PATHS = new Set(EMPLOYEE_MOBILE_SHELL_PATHS);

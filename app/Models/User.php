@@ -96,6 +96,14 @@ class User extends Authenticatable
         return $this->belongsTo(Company::class);
     }
 
+    /** Tên pháp nhân (HRM) — ưu tiên gán trực tiếp, fallback qua phòng ban. */
+    public function resolveCompanyName(): ?string
+    {
+        $name = $this->company?->name ?? $this->department?->company?->name;
+
+        return filled($name) ? (string) $name : null;
+    }
+
     /** Chức vụ kiêm nhiệm đồng bộ từ VA-HRM (AssignmentResource.is_primary=false). */
     public function concurrentPositions(): HasMany
     {

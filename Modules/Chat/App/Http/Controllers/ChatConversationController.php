@@ -89,6 +89,7 @@ class ChatConversationController extends Controller
                     'name' => $user->name,
                     'avatar_url' => $user->avatar_url,
                     'department' => $user->department?->name,
+                    'company_name' => $user->resolveCompanyName(),
                 ])
                 ->values()
                 ->all(),
