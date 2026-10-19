@@ -172,7 +172,7 @@ class HrmApiClient
     public function listLeaveRequests(string $employeeUuid, int $perPage = 20): array
     {
         try {
-            $response = HrmOutboundHttp::leaveCatalogClient()->get('/api/v1/leave/requests', [
+            $response = HrmOutboundHttp::leaveCatalogClient(15)->get('/api/v1/leave/requests', [
                 'employee_uuid' => $employeeUuid,
                 'per_page' => $perPage,
             ]);
@@ -207,7 +207,7 @@ class HrmApiClient
         }
 
         try {
-            $response = HrmOutboundHttp::leaveCatalogClient()->get('/api/v1/leave/balances', $query);
+            $response = HrmOutboundHttp::leaveCatalogClient(15)->get('/api/v1/leave/balances', $query);
         } catch (ConnectionException $e) {
             throw new HrmApiUnavailable('timeout/network lỗi khi gọi GET /api/v1/leave/balances', $e);
         }

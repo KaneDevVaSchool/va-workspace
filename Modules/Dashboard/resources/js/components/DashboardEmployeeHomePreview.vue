@@ -229,12 +229,10 @@ const tabs = [
 }
 
 .employee-home__stat-row {
-  position: relative;
-  z-index: 4;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-  margin: calc(-1 * var(--employee-stat-overlap, 3.25rem)) 0 var(--space-2);
+  gap: var(--space-2);
+  margin: 0;
 }
 
 .stat-card {

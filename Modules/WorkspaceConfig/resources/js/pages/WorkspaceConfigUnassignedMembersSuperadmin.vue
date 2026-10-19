@@ -281,7 +281,7 @@ function cellText(member, key) {
   if (key === 'company_2') return blank(second?.company_name);
   if (key === 'manager') return blank(member.manager_display_name);
   if (key === 'org_unit') return blank(orgUnitName(member));
-  if (key === 'department') return blank(hrmDepartmentName(member));
+  if (key === 'department') return blank(departmentName(member) || hrmDepartmentName(member));
   if (key === 'division') return blank(divisionName(member));
   if (key === 'department_2') return blank(second?.department_name);
   if (key === 'division_2') return blank(second?.division_name);
@@ -889,7 +889,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="roster-page__row">
             <span class="roster-page__row-label">Phòng ban</span>
-            <span class="roster-page__row-value">{{ hrmDepartmentName(selected) || 'Chưa cập nhật' }}</span>
+            <span class="roster-page__row-value">{{ departmentName(selected) || hrmDepartmentName(selected) || 'Chưa cập nhật' }}</span>
           </div>
           <div class="roster-page__row">
             <span class="roster-page__row-label">Bộ phận</span>

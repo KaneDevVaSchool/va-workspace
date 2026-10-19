@@ -159,10 +159,16 @@ defineExpose({ reload: loadDirectory });
                 >
                   {{ member.email }}
                 </a>
-                <span v-if="member.job_title || member.department_name" class="member-directory__meta">
-                  <template v-if="member.job_title">{{ member.job_title }}</template>
-                  <template v-if="member.job_title && member.department_name"> · </template>
-                  <template v-if="member.department_name">{{ member.department_name }}</template>
+                <span
+                  v-if="member.job_title || member.department_name"
+                  class="member-directory__meta-block"
+                >
+                  <span v-if="member.department_name" class="member-directory__meta">
+                    {{ member.department_name }}
+                  </span>
+                  <span v-if="member.job_title" class="member-directory__meta">
+                    {{ member.job_title }}
+                  </span>
                 </span>
               </span>
               <a
@@ -313,9 +319,9 @@ defineExpose({ reload: loadDirectory });
   font-weight: 500;
   color: var(--color-primary);
   text-decoration: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
 }
 
 .member-directory__email:hover {
@@ -339,13 +345,19 @@ defineExpose({ reload: loadDirectory });
   color: var(--color-primary);
 }
 
+.member-directory__meta-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
 .member-directory__meta {
   font-size: 0.6875rem;
   font-weight: 500;
   color: var(--color-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .member-directory__empty {

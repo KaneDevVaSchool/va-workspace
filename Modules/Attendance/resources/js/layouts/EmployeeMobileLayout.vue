@@ -146,8 +146,6 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
       class="employee-shell__header"
       :class="{ 'employee-shell__header--compact': route.name !== 'dashboard.me' }"
     >
-      <div class="employee-shell__header-deco" aria-hidden="true"></div>
-
       <div class="employee-shell__header-top">
         <div class="employee-shell__greeting">
           <template v-if="isHomeHeader">
@@ -236,7 +234,6 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
       class="employee-shell__content"
       :class="{
         'employee-shell__content--home': route.name === 'dashboard.me',
-        'employee-shell__content--overlap': route.name === 'employee.leave',
       }"
     >
       <div

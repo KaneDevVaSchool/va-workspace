@@ -586,7 +586,6 @@ const seniorityDays = computed(
 <template>
   <div class="leave">
     <section class="leave-hero">
-      <div class="leave-hero__glow" aria-hidden="true"></div>
       <div class="leave-hero__head">
         <span class="leave-hero__badge" aria-hidden="true">
           <AppIcon name="calendar" :size="22" :stroke-width="1.8" />
@@ -1016,28 +1015,23 @@ const seniorityDays = computed(
   --leave-clip-btn: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
 }
 
 .leave-hero {
   position: relative;
-  margin-top: calc(-1 * var(--employee-stat-overlap, 3rem));
-  padding: var(--space-5) var(--space-4) var(--space-4);
+  padding: var(--space-3);
   overflow: hidden;
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), 50% 100%, 0 calc(100% - 14px));
-  background: linear-gradient(145deg, var(--color-surface) 0%, var(--color-tertiary-surface) 100%);
-  box-shadow: var(--shadow-md);
-}
-
-.leave-hero__glow {
-  position: absolute;
-  top: -2rem;
-  right: -1.5rem;
-  width: 8rem;
-  height: 8rem;
-  clip-path: circle(50% at 50% 50%);
-  background: radial-gradient(circle, rgba(14, 51, 111, 0.12) 0%, transparent 70%);
-  pointer-events: none;
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - 8px),
+    calc(100% - 10px) 100%,
+    10px 100%,
+    0 calc(100% - 8px)
+  );
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .leave-hero__head {
@@ -1051,18 +1045,18 @@ const seniorityDays = computed(
 .leave-hero__badge {
   display: grid;
   place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  clip-path: polygon(25% 0, 100% 0, 100% 75%, 75% 100%, 0 100%, 0 25%);
-  background: linear-gradient(135deg, var(--color-tertiary-surface), #fff);
+  width: 2rem;
+  height: 2rem;
+  clip-path: polygon(20% 0, 100% 0, 100% 80%, 80% 100%, 0 100%, 0 20%);
+  background: var(--color-tertiary-surface);
   color: var(--color-tertiary);
-  box-shadow: var(--shadow-sm);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .leave-hero__label {
   margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
@@ -1075,16 +1069,16 @@ const seniorityDays = computed(
 }
 
 .leave-hero__number {
-  font-size: 2.75rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   line-height: 1;
-  color: var(--color-tertiary);
+  color: var(--color-text);
 }
 
 .leave-hero__unit {
-  font-size: 1.125rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
@@ -1097,41 +1091,43 @@ const seniorityDays = computed(
 }
 
 .leave-hero__stat {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2);
   clip-path: var(--leave-clip-chip);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .leave-hero__split-label {
   margin: 0;
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: 0.6875rem;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
 .leave-hero__split-value {
-  margin: 4px 0 0;
-  font-size: 1.0625rem;
-  font-weight: 800;
+  margin: 2px 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--color-text);
 }
 
 .leave-panel {
   position: relative;
-  padding: var(--space-5) var(--space-4) var(--space-4);
+  padding: var(--space-3);
   clip-path: var(--leave-clip-card);
   background: var(--color-surface);
-  box-shadow: var(--shadow-md);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .leave-panel__ribbon {
   position: absolute;
   top: 0;
-  left: 0;
-  width: 100%;
-  height: 0.35rem;
-  clip-path: polygon(0 0, 100% 0, 98% 100%, 2% 100%);
-  background: linear-gradient(90deg, var(--color-tertiary), var(--color-primary));
+  left: var(--space-3);
+  right: var(--space-3);
+  height: 2px;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 6px 100%);
+  background: var(--color-tertiary);
+  opacity: 0.45;
 }
 
 .leave-panel__head {
@@ -1144,9 +1140,8 @@ const seniorityDays = computed(
 
 .leave-panel__title {
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--color-text);
 }
 
@@ -1198,25 +1193,14 @@ const seniorityDays = computed(
 
 .leave-metric {
   position: relative;
-  padding: var(--space-4) var(--space-3);
+  padding: var(--space-2) var(--space-3);
   clip-path: var(--leave-clip-metric);
-  background: var(--color-tertiary-surface);
-}
-
-.leave-metric--fund {
-  background: linear-gradient(135deg, var(--color-tertiary-surface), #eef3fb);
-}
-
-.leave-metric--used {
-  background: linear-gradient(135deg, #fdeef0, #fff5f6);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .leave-metric--used .leave-metric__value {
   color: var(--color-primary);
-}
-
-.leave-metric--remain {
-  background: linear-gradient(135deg, #e8f7ee, #f4fbf7);
 }
 
 .leave-metric--remain .leave-metric__value {
@@ -1224,24 +1208,24 @@ const seniorityDays = computed(
 }
 
 .leave-metric__label {
-  margin: 0 0 var(--space-2);
-  font-size: 0.875rem;
-  font-weight: 700;
+  margin: 0 0 var(--space-1);
+  font-size: 0.6875rem;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
 .leave-metric__value {
   margin: 0;
-  font-size: 2rem;
-  font-weight: 800;
-  color: var(--color-tertiary);
-  letter-spacing: -0.03em;
-  line-height: 1.1;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .leave-metric__unit {
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
@@ -1253,24 +1237,23 @@ const seniorityDays = computed(
 }
 
 .leave-chip--warn {
-  background: linear-gradient(135deg, #fff8f0, #fff3e6);
-  box-shadow: inset 0 0 0 1px rgba(196, 122, 0, 0.22);
+  background: var(--color-gold-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .leave-chip__label {
   margin: 0;
-  font-size: 0.8125rem;
-  font-weight: 700;
+  font-size: 0.6875rem;
+  font-weight: 500;
   color: var(--color-text-muted);
   line-height: 1.3;
 }
 
 .leave-chip__value {
   margin: var(--space-1) 0 0;
-  font-size: 1.125rem;
-  font-weight: 800;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--color-text);
-  letter-spacing: -0.02em;
 }
 
 .leave-progress {
@@ -1307,7 +1290,7 @@ const seniorityDays = computed(
 .leave-progress__fill {
   height: 100%;
   clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
-  background: linear-gradient(90deg, var(--color-tertiary-600), var(--color-tertiary));
+  background: var(--color-tertiary);
 }
 
 .leave-breakdown__title {
@@ -1369,16 +1352,16 @@ const seniorityDays = computed(
   justify-content: center;
   gap: var(--space-2);
   width: 100%;
-  padding: var(--space-4) var(--space-4);
+  padding: var(--space-3);
   border: none;
   clip-path: var(--leave-clip-btn);
-  background: linear-gradient(135deg, var(--color-tertiary-700, var(--color-tertiary)), var(--color-tertiary));
-  color: var(--color-on-tertiary);
+  background: var(--color-tertiary-surface);
+  box-shadow: inset 0 0 0 1px var(--color-tertiary-200, var(--color-border));
+  color: var(--color-tertiary);
   font-family: inherit;
-  font-size: 1.0625rem;
-  font-weight: 800;
+  font-size: 0.8125rem;
+  font-weight: 600;
   cursor: pointer;
-  box-shadow: var(--shadow-md);
 }
 
 .leave-create:disabled {

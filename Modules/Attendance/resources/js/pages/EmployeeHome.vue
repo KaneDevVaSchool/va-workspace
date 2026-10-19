@@ -407,7 +407,7 @@ function goQuick(name) {
 .employee-home {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
   padding-bottom: var(--space-2);
 }
 
@@ -426,25 +426,23 @@ function goQuick(name) {
 }
 
 .employee-home__stat-row {
-  position: relative;
-  z-index: 4;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-  margin: calc(-1 * var(--employee-stat-overlap, 3.25rem)) 0 var(--space-2);
+  gap: var(--space-2);
+  margin: 0;
 }
 
 .stat-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  min-height: 6.75rem;
-  padding: var(--space-3);
+  gap: var(--space-1);
+  min-height: 5.25rem;
+  padding: var(--space-2) var(--space-3);
   border: none;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
-  box-shadow: 0 4px 18px color-mix(in srgb, var(--color-primary-900) 10%, transparent);
+  box-shadow: inset 0 0 0 1px var(--color-border);
   text-align: left;
   font-family: inherit;
   cursor: default;
@@ -469,9 +467,9 @@ function goQuick(name) {
 .stat-card__icon {
   display: grid;
   place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: var(--radius-md);
+  width: 1.875rem;
+  height: 1.875rem;
+  border-radius: var(--radius-sm);
 }
 
 .stat-card__icon--tasks {
@@ -497,8 +495,8 @@ function goQuick(name) {
 
 .stat-card__ring {
   position: relative;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2rem;
+  height: 2rem;
   flex-shrink: 0;
 }
 
@@ -547,10 +545,10 @@ function goQuick(name) {
 
 .stat-card__value {
   margin: 0;
-  font-size: 0.8125rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--color-text);
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
 .stat-card__value--inline {
@@ -583,7 +581,7 @@ function goQuick(name) {
 .stat-card__progress-fill {
   height: 100%;
   border-radius: var(--radius-full);
-  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  background: var(--color-primary);
   transition: width 280ms ease;
 }
 
@@ -680,8 +678,8 @@ function goQuick(name) {
 
 .section-head__title {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--color-text);
 }
 
@@ -908,8 +906,9 @@ function goQuick(name) {
 }
 
 .daily-tasks__check--done {
-  background: var(--color-secondary);
-  box-shadow: none;
+  background: var(--color-secondary-surface);
+  box-shadow: inset 0 0 0 2px var(--color-secondary);
+  color: var(--color-secondary);
 }
 
 .daily-tasks__check--progress {
