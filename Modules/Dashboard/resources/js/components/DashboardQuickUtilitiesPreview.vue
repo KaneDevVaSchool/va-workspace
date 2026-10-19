@@ -31,13 +31,7 @@ const tabPreview = computed(() => EMPLOYEE_PWA_TAB_PREVIEW[props.mode] ?? null);
       :active-utility-key="activeUtilityKey"
     />
 
-    <DashboardEmployeeTabPagePreview
-      v-else-if="tabPreview"
-      :active-route="tabPreview.activeRoute"
-      :kicker="tabPreview.kicker"
-      :title="tabPreview.title"
-      :hint="tabPreview.hint"
-    />
+    <DashboardEmployeeTabPagePreview v-else-if="tabPreview" :mode="mode" />
   </div>
 </template>
 

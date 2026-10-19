@@ -36,7 +36,6 @@ onBeforeUnmount(() => {
     <p v-if="searchQuery" class="employee-utilities-all__filter">
       Đang lọc: “{{ route.query.q }}”
     </p>
-    <p v-else class="employee-utilities-all__hint">Chạm vào lối tắt bên dưới để mở chức năng.</p>
     <p v-if="!loading && filteredUtilities.length === 0" class="employee-utilities-all__empty">
       Không có tiện ích khớp tìm kiếm.
     </p>
@@ -57,7 +56,6 @@ onBeforeUnmount(() => {
   padding: var(--space-4) var(--space-4) var(--space-6);
 }
 
-.employee-utilities-all__hint,
 .employee-utilities-all__filter,
 .employee-utilities-all__empty {
   margin: 0;

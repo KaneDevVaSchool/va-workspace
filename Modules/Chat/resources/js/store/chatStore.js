@@ -66,6 +66,23 @@ export const useChatStore = defineStore('chat', {
   },
 
   actions: {
+    async ensureRealtimeSubscriptions() {
+      const auth = useAuthStore();
+      if (!auth.user?.id) return;
+
+      if (this.conversations.length === 0 && !this.loadingConversations) {
+        try {
+          await this.fetchConversations();
+          return;
+        } catch {
+          // Vẫn thử inbox nếu danh sách hội thoại lỗi tạm thời.
+        }
+      }
+
+      this.subscribeToAllConversations();
+      this.subscribeInbox();
+    },
+
     async fetchConversations() {
       this.loadingConversations = true;
       try {
@@ -231,8 +248,12 @@ export const useChatStore = defineStore('chat', {
       this.appendMessage(conversationId, payload);
       if (known) return;
 
+      const pageVisible = typeof document === 'undefined' || !document.hidden;
       const isViewingThisConversation =
-        this.panelOpen && this.activeView === 'conversation' && this.activeConversationId === conversationId;
+        pageVisible
+        && this.panelOpen
+        && this.activeView === 'conversation'
+        && this.activeConversationId === conversationId;
 
       if (isViewingThisConversation) {
         this.markRead(conversationId).catch(() => {});

@@ -321,7 +321,7 @@ onMounted(loadUtilities);
   <section class="dqu-page">
     <PageHeader
       title="App PWA nhân viên"
-      subtitle="Cấu hình lối tắt trên trang chủ app mobile (chấm công, nghỉ phép, danh bạ, bảng tin, trò chuyện): hiển thị, thứ tự, biểu tượng và bảo trì. Xem thử toàn bộ màn hình PWA bên phải."
+      subtitle="Lối tắt trang chủ app PWA: hiển thị, thứ tự, biểu tượng và bảo trì."
       icon="layoutGrid"
       :primary-action="headerPrimaryAction"
       :breadcrumbs="[
@@ -394,10 +394,7 @@ onMounted(loadUtilities);
                         placeholder="vd: Chấm công"
                       />
                     </label>
-                    <p v-if="editingCatalogFixed" class="dqu-field dqu-field--wide dqu-field__hint">
-                      Trang mở ra khi bấm là cố định theo từng loại lối tắt (chấm công, nghỉ phép, danh bạ, bảng tin).
-                    </p>
-                    <template v-else>
+                    <template v-if="!editingCatalogFixed">
                       <label class="dqu-field">
                         <span class="dqu-field__label">Khi nhân viên bấm vào</span>
                         <select v-model="form.link_type" class="dqu-field__input">

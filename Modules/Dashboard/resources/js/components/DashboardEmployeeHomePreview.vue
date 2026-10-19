@@ -1,7 +1,6 @@
 <script setup>
-import { computed } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
-import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
+import DashboardEmployeeShellPreview from './DashboardEmployeeShellPreview.vue';
 import QuickUtilitiesGrid from './QuickUtilitiesGrid.vue';
 
 defineProps({
@@ -9,82 +8,11 @@ defineProps({
   loading: { type: Boolean, default: false },
   activeUtilityKey: { type: String, default: null },
 });
-
-const auth = useAuthStore();
-
-const greeting = computed(() => {
-  const hour = new Date().getHours();
-  if (hour < 11) return 'Chào buổi sáng';
-  if (hour < 14) return 'Chào buổi trưa';
-  if (hour < 18) return 'Chào buổi chiều';
-  return 'Chào buổi tối';
-});
-
-const firstName = computed(() => {
-  const name = auth.user?.name || '';
-  const parts = name.trim().split(/\s+/);
-  return parts[parts.length - 1] || name;
-});
-
-const displayName = computed(() => auth.user?.name?.trim() || '');
-const avatarInitial = computed(() => {
-  const name = displayName.value || auth.user?.email || '?';
-  return name.trim().charAt(0).toUpperCase() || '?';
-});
-
-const todayLabel = computed(() =>
-  new Intl.DateTimeFormat('vi-VN', {
-    weekday: 'long',
-    day: '2-digit',
-    month: '2-digit',
-  }).format(new Date()),
-);
-
-const tabs = [
-  { icon: 'home', label: 'Trang chủ', active: true },
-  { icon: 'megaphone', label: 'Bảng tin', active: false },
-  { icon: 'clock', label: 'Chấm công', active: false },
-  { icon: 'calendar', label: 'Nghỉ phép', active: false },
-  { icon: 'fileText', label: 'Đơn', active: false },
-];
 </script>
 
 <template>
-  <div class="emp-preview" aria-hidden="true">
-    <div class="employee-shell employee-shell--browser employee-shell--unified emp-preview__shell">
-      <header class="employee-shell__header employee-shell__header--brand employee-shell__header--home">
-        <div class="employee-shell__header-deco" aria-hidden="true"></div>
-
-        <div class="employee-shell__header-top">
-          <div class="employee-shell__greeting">
-            <p class="employee-shell__hello">{{ greeting }}{{ firstName ? `, ${firstName}` : '' }}</p>
-            <p class="employee-shell__date">{{ todayLabel }}</p>
-          </div>
-          <div class="employee-shell__header-actions">
-            <span class="employee-shell__icon-btn" aria-hidden="true">
-              <AppIcon name="bell" :size="20" :stroke-width="1.8" />
-              <span class="employee-shell__notif-dot" aria-hidden="true"></span>
-            </span>
-            <div class="employee-shell__avatar" aria-hidden="true">
-              <span class="employee-shell__avatar-initial">{{ avatarInitial }}</span>
-            </div>
-          </div>
-        </div>
-
-        <label class="employee-shell__search">
-          <AppIcon name="search" :size="18" class="employee-shell__search-icon" />
-          <input
-            type="search"
-            class="employee-shell__search-input"
-            placeholder="Tìm kiếm tiện ích, đồng nghiệp..."
-            tabindex="-1"
-            readonly
-          />
-        </label>
-      </header>
-
-      <main class="employee-shell__content employee-shell__content--home">
-        <div class="employee-home">
+  <DashboardEmployeeShellPreview active-route="dashboard.me" home>
+    <div class="employee-home">
           <div class="employee-home__stat-row">
             <div class="stat-card stat-card--tasks">
               <span class="stat-card__icon stat-card__icon--tasks" aria-hidden="true">
@@ -174,58 +102,16 @@ const tabs = [
               </li>
             </ul>
           </section>
-        </div>
-      </main>
-
-      <nav class="employee-tabbar employee-tabbar--shell employee-tabbar--browser" aria-hidden="true">
-        <div class="employee-tabbar__bar">
-          <span
-            v-for="tab in tabs"
-            :key="tab.label"
-            class="employee-tabbar__item"
-            :class="{ 'employee-tabbar__item--active': tab.active }"
-          >
-            <span class="employee-tabbar__icon">
-              <AppIcon :name="tab.icon" :size="20" :stroke-width="1.9" />
-            </span>
-            <span class="employee-tabbar__label">{{ tab.label }}</span>
-          </span>
-        </div>
-      </nav>
     </div>
-  </div>
+  </DashboardEmployeeShellPreview>
 </template>
 
 <style scoped>
-.emp-preview {
-  display: flex;
-  justify-content: center;
-  min-width: 0;
-}
-
-.emp-preview__shell {
-  position: relative !important;
-  top: auto !important;
-  left: auto !important;
-  right: auto !important;
-  width: 100%;
-  max-width: 24rem;
-  height: auto !important;
-  max-height: none !important;
-  overflow: hidden;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-}
-
-.emp-preview__shell .employee-shell__icon-btn {
-  pointer-events: none;
-}
-
 .employee-home {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  padding-bottom: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-2);
 }
 
 .employee-home__stat-row {

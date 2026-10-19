@@ -1,5 +1,5 @@
 // VA Workspace — service worker
-// v12: precache shell + start_url; offline navigate trả SPA shell (200) thay vì chỉ offline.html.
+// v13: shell paths + deep link chat PWA.
 //
 // Chiến lược:
 // - App shell (navigate): network-first, cache theo URL + bản fallback "/".
@@ -9,7 +9,7 @@
 //   âm thầm lấy bản mới cho lần sau.
 // - API (/api/...): network-only — không cache dữ liệu nhạy cảm.
 
-const CACHE_VERSION = 'v12';
+const CACHE_VERSION = 'v13';
 const SHELL_CACHE = `va-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `va-assets-${CACHE_VERSION}`;
 const IMAGE_CACHE = `va-images-${CACHE_VERSION}`;
@@ -32,6 +32,9 @@ const SHELL_PRECACHE_URLS = [
   '/dashboard/me/leave',
   '/dashboard/me/requests',
   '/dashboard/me/profile',
+  '/dashboard/me/chat',
+  '/dashboard/me/utilities',
+  '/dashboard/me/contacts',
 ];
 
 async function precacheShellDocument(url) {
@@ -222,6 +225,9 @@ const EMPLOYEE_SHELL_PATHS = new Set([
   '/dashboard/me/leave',
   '/dashboard/me/requests',
   '/dashboard/me/profile',
+  '/dashboard/me/chat',
+  '/dashboard/me/utilities',
+  '/dashboard/me/contacts',
 ]);
 
 const EMPLOYEE_SHELL_DEFAULT = '/dashboard/me/feed';
@@ -240,6 +246,10 @@ function sanitizeEmployeeShellTarget(raw) {
     const url = new URL(raw, self.location.origin);
     if (url.origin !== self.location.origin) return fallback;
     const path = normalizePathname(url.pathname);
+    const chatId = url.searchParams.get('chat');
+    if (chatId && /^\d+$/.test(chatId)) {
+      return `/dashboard/me/chat?chat=${chatId}`;
+    }
     if (!EMPLOYEE_SHELL_PATHS.has(path)) {
       return `${fallback}?vaDesktopOnly=1`;
     }

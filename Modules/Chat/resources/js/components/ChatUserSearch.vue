@@ -104,7 +104,7 @@ function initial(name) {
   background: transparent;
   color: var(--color-text);
   font-family: var(--font-family-base);
-  font-size: 0.8125rem;
+  font-size: 16px;
 }
 
 .chat-search__input:focus {

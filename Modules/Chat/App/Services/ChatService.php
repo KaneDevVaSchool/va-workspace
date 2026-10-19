@@ -331,7 +331,7 @@ class ChatService
                 'actor_id' => $actor->id,
                 'title' => $title,
                 'body' => $body,
-                'url' => '/?chat='.$conversationId,
+                'url' => '/dashboard/me/chat?chat='.$conversationId,
                 'data' => [
                     'conversation_id' => $conversationId,
                 ],
@@ -347,7 +347,7 @@ class ChatService
             type: NotificationService::TYPE_CHAT_MESSAGE,
             title: $title,
             body: $body,
-            url: '/?chat='.$conversationId,
+            url: '/dashboard/me/chat?chat='.$conversationId,
             data: $data,
         );
     }

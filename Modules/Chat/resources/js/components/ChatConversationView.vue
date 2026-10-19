@@ -1108,7 +1108,7 @@ function menuItems(message) {
   background: var(--color-surface-muted);
   color: var(--color-text);
   font-family: var(--font-family-base);
-  font-size: 0.8125rem;
+  font-size: 16px;
   padding: 0.55rem 0.75rem;
 }
 

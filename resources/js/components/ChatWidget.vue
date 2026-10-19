@@ -4,9 +4,11 @@ import { useRoute, useRouter } from 'vue-router';
 import ChatFloatingPanel from '@modules/Chat/resources/js/components/ChatFloatingPanel.vue';
 import ChatWidgetButton from '@modules/Chat/resources/js/components/ChatWidgetButton.vue';
 import { useChatStore } from '@modules/Chat/resources/js/store/chatStore';
+import { useChatRealtime } from '@/composables/useChatRealtime';
 import { notifyHeaderPopoverOpened, registerHeaderPopover } from '../composables/useHeaderPopover';
 
 const store = useChatStore();
+useChatRealtime();
 const route = useRoute();
 const router = useRouter();
 const rootRef = ref(null);

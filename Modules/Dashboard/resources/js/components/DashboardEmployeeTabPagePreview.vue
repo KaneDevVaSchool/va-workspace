@@ -1,156 +1,698 @@
 <script setup>
+import { computed } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
-import { EMPLOYEE_PWA_TABBAR } from '../constants/employeePwaPreview.js';
+import EmployeeAttendance from '@modules/Attendance/resources/js/pages/EmployeeAttendance.vue';
+import { EMPLOYEE_PWA_TAB_PREVIEW } from '../constants/employeePwaPreview.js';
+import {
+  PREVIEW_CHAT_CONVERSATIONS,
+  PREVIEW_FEED_POSTS,
+  PREVIEW_LEAVE_BALANCE,
+  PREVIEW_LEAVE_REQUESTS,
+} from '../constants/employeePwaPreviewFixtures.js';
+import DashboardEmployeeShellPreview from './DashboardEmployeeShellPreview.vue';
 
 const props = defineProps({
-  activeRoute: { type: String, required: true },
-  kicker: { type: String, default: 'VA Workspace' },
-  title: { type: String, required: true },
-  hint: { type: String, default: '' },
+  mode: { type: String, required: true },
 });
 
-const tabs = EMPLOYEE_PWA_TABBAR.map((tab) => ({
-  ...tab,
-  active: tab.routeName === props.activeRoute,
-}));
+const tabMeta = computed(() => EMPLOYEE_PWA_TAB_PREVIEW[props.mode] ?? null);
+
+function formatDays(value) {
+  return Number(value).toLocaleString('vi-VN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+const leaveBalance = PREVIEW_LEAVE_BALANCE;
+const leaveRequests = PREVIEW_LEAVE_REQUESTS;
+const feedPosts = PREVIEW_FEED_POSTS;
+const chatRows = PREVIEW_CHAT_CONVERSATIONS;
+
+function chatInitial(name) {
+  return name?.trim().charAt(0).toUpperCase() || '?';
+}
 </script>
 
 <template>
-  <div class="emp-tab-preview" aria-hidden="true">
-    <div class="employee-shell employee-shell--browser emp-tab-preview__shell">
-      <header class="employee-shell__header employee-shell__header--brand">
-        <div class="employee-shell__header-deco" aria-hidden="true"></div>
-        <div class="employee-shell__header-top">
-          <div class="employee-shell__greeting">
-            <p class="employee-shell__kicker">{{ kicker }}</p>
-            <h2 class="employee-shell__hello employee-shell__hello--page">{{ title }}</h2>
-          </div>
-          <div class="employee-shell__header-actions">
-            <span class="employee-shell__icon-btn" aria-hidden="true">
-              <AppIcon name="refresh" :size="20" :stroke-width="1.8" />
-            </span>
-            <span class="employee-shell__icon-btn" aria-hidden="true">
-              <AppIcon name="bell" :size="20" :stroke-width="1.8" />
-            </span>
-            <span class="employee-shell__avatar" aria-hidden="true">
-              <span class="employee-shell__avatar-initial">N</span>
-            </span>
-          </div>
-        </div>
-      </header>
-
-      <main class="employee-shell__content">
-        <div class="emp-tab-preview__body">
-          <p v-if="hint" class="emp-tab-preview__hint">{{ hint }}</p>
-          <div class="emp-tab-preview__placeholder" aria-hidden="true">
-            <span v-for="n in 4" :key="n" class="emp-tab-preview__sk">
-              <span class="emp-tab-preview__sk-line emp-tab-preview__sk-line--title" />
-              <span class="emp-tab-preview__sk-line" />
-              <span class="emp-tab-preview__sk-line emp-tab-preview__sk-line--short" />
-            </span>
-          </div>
-        </div>
-      </main>
-
-      <nav class="employee-tabbar employee-tabbar--shell employee-tabbar--browser" aria-hidden="true">
-        <div class="employee-tabbar__bar">
-          <span
-            v-for="tab in tabs"
-            :key="tab.routeName"
-            class="employee-tabbar__item"
-            :class="{ 'employee-tabbar__item--active': tab.active }"
-          >
-            <span class="employee-tabbar__icon">
-              <AppIcon :name="tab.icon" :size="20" :stroke-width="1.9" />
-            </span>
-            <span class="employee-tabbar__label">{{ tab.label }}</span>
+  <DashboardEmployeeShellPreview
+    v-if="tabMeta"
+    :active-route="tabMeta.activeRoute"
+    :page-title="tabMeta.title"
+  >
+    <div v-if="mode === 'mobile-feed'" class="pwa-feed-preview">
+      <div class="pwa-feed-preview__toolbar">
+        <label class="pwa-feed-preview__search">
+          <AppIcon name="search" :size="18" />
+          <span>Tìm bài viết, đồng nghiệp...</span>
+        </label>
+        <span class="pwa-feed-preview__icon-btn" aria-hidden="true">
+          <AppIcon name="users" :size="20" :stroke-width="1.8" />
+        </span>
+      </div>
+      <div class="pwa-feed-preview__segments" role="tablist" aria-hidden="true">
+        <span class="pwa-feed-preview__segment pwa-feed-preview__segment--active">Bảng tin</span>
+        <span class="pwa-feed-preview__segment">Phòng Công nghệ</span>
+        <span class="pwa-feed-preview__segment">Tường của tôi</span>
+      </div>
+      <div class="pwa-feed-preview__composer" aria-hidden="true">
+        <span class="pwa-feed-preview__composer-avatar">N</span>
+        <span class="pwa-feed-preview__composer-placeholder">Bạn đang nghĩ gì?</span>
+      </div>
+      <article
+        v-for="post in feedPosts"
+        :key="post.id"
+        class="pwa-feed-preview__post"
+        :class="{ 'pwa-feed-preview__post--pinned': post.pinned }"
+      >
+        <div class="pwa-feed-preview__post-head">
+          <span class="pwa-feed-preview__post-avatar">
+            {{ post.author.trim().charAt(0) }}
           </span>
+          <div class="pwa-feed-preview__post-meta">
+            <p class="pwa-feed-preview__post-author">
+              {{ post.author }}
+              <span v-if="post.pinned" class="pwa-feed-preview__pin">Ghim</span>
+            </p>
+            <p v-if="post.dept" class="pwa-feed-preview__post-dept">{{ post.dept }}</p>
+            <p class="pwa-feed-preview__post-time">{{ post.time }}</p>
+          </div>
         </div>
-      </nav>
+        <p class="pwa-feed-preview__post-body">{{ post.body }}</p>
+        <div class="pwa-feed-preview__post-actions" aria-hidden="true">
+          <span><AppIcon name="heart" :size="16" /> Thích</span>
+          <span><AppIcon name="messageCircle" :size="16" /> Bình luận</span>
+        </div>
+      </article>
     </div>
-  </div>
+
+    <div v-else-if="mode === 'mobile-attendance'" class="pwa-attendance-preview">
+      <EmployeeAttendance />
+    </div>
+
+    <div v-else-if="mode === 'mobile-leave'" class="pwa-leave-preview">
+      <section class="pwa-leave-preview__hero">
+        <div class="pwa-leave-preview__hero-head">
+          <span class="pwa-leave-preview__badge" aria-hidden="true">
+            <AppIcon name="calendar" :size="22" :stroke-width="1.8" />
+          </span>
+          <p class="pwa-leave-preview__hero-label">Số ngày phép còn lại</p>
+        </div>
+        <p class="pwa-leave-preview__hero-value">
+          <span class="pwa-leave-preview__number">{{ formatDays(leaveBalance.remaining) }}</span>
+          <span class="pwa-leave-preview__unit">ngày</span>
+        </p>
+        <div class="pwa-leave-preview__split">
+          <div>
+            <p class="pwa-leave-preview__split-label">Đã sử dụng</p>
+            <p class="pwa-leave-preview__split-value">{{ formatDays(leaveBalance.used) }} ngày</p>
+          </div>
+          <div>
+            <p class="pwa-leave-preview__split-label">Phép thâm niên</p>
+            <p class="pwa-leave-preview__split-value">{{ formatDays(leaveBalance.seniority) }} ngày</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="pwa-leave-preview__panel">
+        <h2 class="pwa-leave-preview__panel-title">Tổng quan phép năm</h2>
+        <dl class="pwa-leave-preview__stats">
+          <div>
+            <dt>Tổng quỹ phát sinh</dt>
+            <dd>{{ formatDays(leaveBalance.totalFund) }} ngày</dd>
+          </div>
+          <div>
+            <dt>Còn lại</dt>
+            <dd>{{ formatDays(leaveBalance.remaining) }} ngày</dd>
+          </div>
+          <div>
+            <dt>Đang chờ duyệt</dt>
+            <dd>{{ formatDays(leaveBalance.pending) }} ngày</dd>
+          </div>
+        </dl>
+        <div class="pwa-leave-preview__progress" aria-hidden="true">
+          <div class="pwa-leave-preview__progress-head">
+            <span>Tiến độ sử dụng trong năm</span>
+            <span>{{ formatDays(leaveBalance.usagePercent) }}%</span>
+          </div>
+          <div class="pwa-leave-preview__progress-track">
+            <div
+              class="pwa-leave-preview__progress-fill"
+              :style="{ width: `${Math.min(100, leaveBalance.usagePercent)}%` }"
+            />
+          </div>
+        </div>
+      </section>
+
+      <button type="button" class="pwa-leave-preview__create" tabindex="-1">
+        <AppIcon name="plus" :size="20" :stroke-width="2" />
+        <span>Tạo đơn xin nghỉ phép</span>
+      </button>
+    </div>
+
+    <div v-else-if="mode === 'mobile-requests'" class="pwa-requests-preview">
+      <p class="pwa-requests-preview__count">{{ leaveRequests.length }} đơn</p>
+      <ul class="pwa-requests-preview__list">
+        <li v-for="req in leaveRequests" :key="req.id">
+          <div class="pwa-requests-preview__row" :data-status="req.status">
+            <span class="pwa-requests-preview__body">
+              <span class="pwa-requests-preview__line">
+                <span class="pwa-requests-preview__kind">{{ req.kind }}</span>
+                <span class="pwa-requests-preview__badge">{{ req.statusLabel }}</span>
+              </span>
+              <span class="pwa-requests-preview__range">{{ req.range }}</span>
+              <span class="pwa-requests-preview__sub">
+                Gửi {{ req.submittedAt }} · {{ req.totalDays }} ngày
+              </span>
+            </span>
+            <AppIcon name="chevronRight" :size="18" aria-hidden="true" />
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <div v-else-if="mode === 'mobile-chat'" class="pwa-chat-preview">
+      <label class="pwa-chat-preview__search">
+        <AppIcon name="search" :size="16" />
+        <span>Tìm đồng nghiệp để nhắn tin</span>
+      </label>
+      <div class="pwa-chat-preview__list">
+        <div
+          v-for="row in chatRows"
+          :key="row.id"
+          class="pwa-chat-preview__item"
+          :class="{ 'pwa-chat-preview__item--unread': row.unread > 0 }"
+        >
+          <span class="pwa-chat-preview__avatar">{{ chatInitial(row.name) }}</span>
+          <span class="pwa-chat-preview__copy">
+            <span class="pwa-chat-preview__row-top">
+              <span class="pwa-chat-preview__name">{{ row.name }}</span>
+              <span class="pwa-chat-preview__time">{{ row.time }}</span>
+            </span>
+            <span class="pwa-chat-preview__dept">{{ row.dept }}</span>
+            <span class="pwa-chat-preview__excerpt">{{ row.excerpt }}</span>
+          </span>
+          <span v-if="row.unread > 0" class="pwa-chat-preview__unread">{{ row.unread }}</span>
+        </div>
+      </div>
+    </div>
+  </DashboardEmployeeShellPreview>
 </template>
 
 <style scoped>
-.emp-tab-preview {
-  display: flex;
-  justify-content: center;
-  min-width: 0;
+.pwa-attendance-preview {
+  padding: var(--space-4);
+  pointer-events: none;
 }
 
-.emp-tab-preview__shell {
-  position: relative !important;
-  top: auto !important;
-  left: auto !important;
-  right: auto !important;
-  width: 100%;
-  max-width: 24rem;
-  height: auto !important;
-  max-height: none !important;
-  overflow: hidden;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-}
-
-.emp-tab-preview__body {
+.pwa-feed-preview {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-4) var(--space-6);
+  padding: var(--space-3) var(--space-4) var(--space-6);
 }
 
-.emp-tab-preview__hint {
-  margin: 0;
+.pwa-feed-preview__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pwa-feed-preview__search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2.5rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
   font-size: 0.8125rem;
-  line-height: 1.45;
   color: var(--color-text-muted);
 }
 
-.emp-tab-preview__placeholder {
+.pwa-feed-preview__icon-btn {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.pwa-feed-preview__segments {
+  display: flex;
+  gap: var(--space-2);
+  overflow: hidden;
+}
+
+.pwa-feed-preview__segment {
+  flex-shrink: 0;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.pwa-feed-preview__segment--active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.pwa-feed-preview__composer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.pwa-feed-preview__composer-avatar {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.pwa-feed-preview__composer-placeholder {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.pwa-feed-preview__post {
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.pwa-feed-preview__post--pinned {
+  box-shadow:
+    inset 3px 0 0 var(--color-gold),
+    var(--shadow-sm);
+}
+
+.pwa-feed-preview__post-head {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.pwa-feed-preview__post-avatar {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
+  font-weight: 700;
+}
+
+.pwa-feed-preview__post-author {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pwa-feed-preview__pin {
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-full);
+  background: var(--color-gold-surface);
+  color: var(--color-gold);
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.pwa-feed-preview__post-dept,
+.pwa-feed-preview__post-time {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.pwa-feed-preview__post-body {
+  margin: 0 0 var(--space-2);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--color-text);
+}
+
+.pwa-feed-preview__post-actions {
+  display: flex;
+  gap: var(--space-4);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.pwa-feed-preview__post-actions span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pwa-leave-preview {
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.pwa-leave-preview__hero {
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: #fff;
+}
+
+.pwa-leave-preview__hero-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pwa-leave-preview__badge {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.pwa-leave-preview__hero-label {
+  margin: 0;
+  font-size: 0.8125rem;
+  opacity: 0.92;
+}
+
+.pwa-leave-preview__hero-value {
+  margin: var(--space-3) 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.pwa-leave-preview__number {
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.pwa-leave-preview__unit {
+  font-size: 1rem;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.pwa-leave-preview__split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-3);
 }
 
-.emp-tab-preview__sk {
+.pwa-leave-preview__split-label {
+  margin: 0;
+  font-size: 0.6875rem;
+  opacity: 0.85;
+}
+
+.pwa-leave-preview__split-value {
+  margin: 0.15rem 0 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.pwa-leave-preview__panel {
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.pwa-leave-preview__panel-title {
+  margin: 0 0 var(--space-3);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.pwa-leave-preview__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+}
+
+.pwa-leave-preview__stats dt {
+  margin: 0;
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+}
+
+.pwa-leave-preview__stats dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.pwa-leave-preview__progress-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.pwa-leave-preview__progress-track {
+  height: 0.375rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+
+.pwa-leave-preview__progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+}
+
+.pwa-leave-preview__create {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 2.75rem;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--color-primary);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.pwa-requests-preview {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
-  padding: var(--space-3);
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.pwa-requests-preview__count {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.pwa-requests-preview__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pwa-requests-preview__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-3));
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.pwa-requests-preview__row::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.pwa-requests-preview__row[data-status='pending']::before {
+  background: var(--color-warning);
+}
+
+.pwa-requests-preview__row[data-status='approved']::before {
+  background: var(--color-success);
+}
+
+.pwa-requests-preview__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.pwa-requests-preview__line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.pwa-requests-preview__kind {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.pwa-requests-preview__badge {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.pwa-requests-preview__range,
+.pwa-requests-preview__sub {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.pwa-chat-preview {
+  display: flex;
+  flex-direction: column;
+  min-height: 12rem;
+  margin: calc(-1 * var(--space-3));
+  background: var(--color-surface);
+}
+
+.pwa-chat-preview__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3);
+  padding: 0 var(--space-3);
+  height: 2.25rem;
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 1px var(--color-border);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
 }
 
-.emp-tab-preview__sk-line {
-  display: block;
-  height: 0.625rem;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(
-    90deg,
-    var(--color-border) 0%,
-    color-mix(in srgb, var(--color-border) 55%, transparent) 50%,
-    var(--color-border) 100%
-  );
-  background-size: 200% 100%;
-  animation: emp-tab-preview-shimmer 1.4s ease-in-out infinite;
+.pwa-chat-preview__list {
+  flex: 1;
+  border-top: 1px solid var(--color-border);
 }
 
-.emp-tab-preview__sk-line--title {
-  width: 55%;
-  height: 0.75rem;
+.pwa-chat-preview__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: 0.75rem var(--space-3);
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
-.emp-tab-preview__sk-line--short {
-  width: 40%;
+.pwa-chat-preview__item--unread {
+  background: var(--color-primary-surface);
 }
 
-@keyframes emp-tab-preview-shimmer {
-  0% {
-    background-position: 100% 0;
-  }
-  100% {
-    background-position: -100% 0;
-  }
+.pwa-chat-preview__avatar {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-secondary-surface);
+  color: var(--color-secondary);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.pwa-chat-preview__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pwa-chat-preview__row-top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.pwa-chat-preview__name {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.pwa-chat-preview__time {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+}
+
+.pwa-chat-preview__dept {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+}
+
+.pwa-chat-preview__excerpt {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pwa-chat-preview__unread {
+  flex-shrink: 0;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
 }
 </style>

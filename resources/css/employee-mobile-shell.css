@@ -36,7 +36,7 @@
 
   html.employee-mobile-browser {
     background-color: var(--color-bg);
-    --employee-tabbar-block-size: 2.5rem;
+    --employee-tabbar-block-size: 3.25rem;
   }
 
   .employee-shell--browser {
@@ -67,7 +67,7 @@
 @media (max-width: 768px) {
   html.employee-mobile-pwa {
     background-color: var(--color-bg);
-    --employee-tabbar-block-size: 2.5rem;
+    --employee-tabbar-block-size: 3.25rem;
   }
 
   .employee-shell--pwa {
@@ -293,9 +293,15 @@
 }
 
 .employee-shell--unified .employee-tabbar--shell {
-  background: color-mix(in srgb, var(--color-surface) 90%, var(--color-tertiary-50) 10%);
+  background: transparent;
+  box-shadow: none;
+}
+
+.employee-shell--unified .employee-tabbar__bar {
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-tertiary-50) 6%);
   box-shadow:
-    0 -1px 0 color-mix(in srgb, var(--color-tertiary-200) 40%, var(--color-border) 60%),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-tertiary-200) 35%, var(--color-border) 65%),
+    0 -6px 28px color-mix(in srgb, var(--color-tertiary-800) 10%, transparent),
     var(--shadow-md);
 }
 
@@ -339,6 +345,22 @@
   width: 1.65rem;
   height: 1.65rem;
   object-fit: contain;
+}
+
+.employee-shell__brand-logo--pwa {
+  width: 1.75rem;
+  height: 1.75rem;
+  object-fit: cover;
+  border-radius: 0.35rem;
+}
+
+.employee-shell__back-btn {
+  color: var(--color-on-primary);
+}
+
+.employee-shell__header--subpage .employee-shell__hello--page {
+  font-size: 1rem;
+  line-height: 1.25;
 }
 
 .employee-shell__greeting {
@@ -531,7 +553,7 @@
   background: transparent;
   color: var(--color-text);
   font-family: inherit;
-  font-size: 0.8125rem;
+  font-size: 16px;
   outline: none;
 }
 
@@ -670,20 +692,20 @@
 }
 
 .employee-tabbar--shell {
-  --employee-tabbar-height: 2.5rem;
+  --employee-tabbar-height: 3.25rem;
   position: relative;
   z-index: 3;
   flex: 0 0 auto;
   width: 100%;
   box-sizing: border-box;
   margin: 0;
-  padding: 0;
-  background: var(--color-surface);
-  box-shadow: 0 -1px 0 var(--color-border), var(--shadow-md);
+  padding: var(--space-1) var(--space-2) 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .employee-tabbar--pwa .employee-tabbar__bar {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: max(var(--space-1), env(safe-area-inset-bottom, 0px));
   min-height: calc(var(--employee-tabbar-height) + env(safe-area-inset-bottom, 0px));
 }
 
@@ -691,10 +713,19 @@
   box-sizing: border-box;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  align-items: center;
+  align-items: stretch;
+  gap: 2px;
   min-height: var(--employee-tabbar-height);
-  padding: 0 var(--space-2);
+  padding: var(--space-1) var(--space-1);
   overflow: hidden;
+  border-radius: var(--radius-xl, 1.25rem);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-border) 85%, transparent),
+    0 -4px 24px color-mix(in srgb, var(--color-tertiary-900) 8%, transparent),
+    var(--shadow-md);
 }
 
 .employee-tabbar__item {
@@ -702,40 +733,50 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
-  min-height: 2.125rem;
-  padding: 0 2px;
-  border-radius: var(--radius-md);
+  min-height: 2.625rem;
+  padding: 0.2rem 2px;
+  border-radius: var(--radius-lg);
   color: var(--color-text-muted);
   text-decoration: none;
   overflow: hidden;
+  transition: color 160ms ease, background 160ms ease, transform 120ms ease;
+}
+
+.employee-tabbar__item:active {
+  transform: scale(0.96);
 }
 
 .employee-tabbar__icon {
   display: grid;
   place-items: center;
-  width: 1.625rem;
-  height: 1.625rem;
+  width: 1.75rem;
+  height: 1.75rem;
   border-radius: var(--radius-full);
+  transition: background 160ms ease, color 160ms ease;
 }
 
 .employee-tabbar__label {
   max-width: 100%;
   font-size: 0.625rem;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.01em;
 }
 
 .employee-tabbar__item--active {
-  color: var(--color-tertiary);
+  color: var(--color-tertiary-800);
+  background: color-mix(in srgb, var(--color-tertiary-surface) 55%, transparent);
 }
 
 .employee-tabbar__item--active .employee-tabbar__icon {
-  background: var(--color-tertiary-surface);
+  background: var(--color-tertiary);
+  color: var(--color-on-primary);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-tertiary-700) 35%, transparent);
 }
 
 @media (max-width: 360px) {

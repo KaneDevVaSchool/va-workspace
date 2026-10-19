@@ -72,6 +72,16 @@ html {
     max-height: 100%;
     overflow: hidden;
   }
+
+  /* iOS Safari/PWA: input <16px gây zoom khi focus — giữ cỡ chữ tối thiểu 16px. */
+  html.employee-mobile-browser input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  html.employee-mobile-pwa input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  html.employee-mobile-browser textarea,
+  html.employee-mobile-pwa textarea,
+  html.employee-mobile-browser select,
+  html.employee-mobile-pwa select {
+    font-size: 16px;
+  }
 }
 
 body {

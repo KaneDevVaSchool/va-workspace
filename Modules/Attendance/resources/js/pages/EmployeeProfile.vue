@@ -1,11 +1,9 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 
-const router = useRouter();
 const auth = useAuthStore();
 const registerPageRefresh = inject('employeePageRefreshRegister', null);
 
@@ -189,14 +187,6 @@ async function submitChangeRequest() {
   }
 }
 
-function goBack() {
-  if (window.history.length > 1) {
-    router.back();
-    return;
-  }
-  router.push({ name: 'dashboard.me' });
-}
-
 let unregisterPageRefresh;
 onMounted(() => {
   loadProfile();
@@ -211,12 +201,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="emp-profile">
-    <button type="button" class="emp-profile__back" @click="goBack">
-      <AppIcon name="chevronLeft" :size="18" :stroke-width="2" />
-      <span>Quay lại</span>
-    </button>
-
-    <section v-if="loading" class="emp-profile__hero emp-profile__hero--loading" aria-busy="true">
+    <section v-if="loading" class="emp-profile__identity emp-profile__identity--loading" aria-busy="true">
       <div class="emp-profile__sk-avatar" />
       <div class="emp-profile__sk-lines">
         <span class="emp-profile__sk-line emp-profile__sk-line--title" />
@@ -224,44 +209,38 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section v-else class="emp-profile__hero">
-      <div class="emp-profile__hero-bg" aria-hidden="true">
-        <span class="emp-profile__orb emp-profile__orb--a" />
-        <span class="emp-profile__orb emp-profile__orb--b" />
-      </div>
-
-      <div class="emp-profile__avatar-block">
-        <button
-          type="button"
-          class="emp-profile__avatar-btn"
-          :disabled="avatarUploading"
-          aria-label="Đổi ảnh đại diện"
-          @click="openAvatarPicker"
-        >
-          <img
-            v-if="hasAvatarPhoto"
-            class="emp-profile__avatar-img"
-            :src="avatarUrl"
-            alt=""
-            @error="avatarBroken = true"
-          />
-          <span v-else class="emp-profile__avatar-fallback">{{ avatarInitial }}</span>
-          <span class="emp-profile__avatar-edit">
-            <AppIcon name="camera" :size="16" :stroke-width="2" />
-          </span>
-        </button>
-        <input
-          ref="avatarInputRef"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          class="emp-profile__avatar-input"
-          @change="onAvatarSelected"
+    <section v-else class="emp-profile__identity">
+      <button
+        type="button"
+        class="emp-profile__avatar-btn"
+        :disabled="avatarUploading"
+        aria-label="Đổi ảnh đại diện"
+        @click="openAvatarPicker"
+      >
+        <img
+          v-if="hasAvatarPhoto"
+          class="emp-profile__avatar-img"
+          :src="avatarUrl"
+          alt=""
+          @error="avatarBroken = true"
         />
-        <p class="emp-profile__avatar-hint">Chạm để đổi ảnh đại diện Workspace</p>
+        <span v-else class="emp-profile__avatar-fallback">{{ avatarInitial }}</span>
+        <span class="emp-profile__avatar-edit">
+          <AppIcon name="camera" :size="14" :stroke-width="2" />
+        </span>
+      </button>
+      <input
+        ref="avatarInputRef"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        class="emp-profile__avatar-input"
+        @change="onAvatarSelected"
+      />
+      <div class="emp-profile__identity-text">
+        <h1 class="emp-profile__name">{{ displayName || 'Hồ sơ của tôi' }}</h1>
+        <p v-if="subtitle" class="emp-profile__subtitle">{{ subtitle }}</p>
+        <p class="emp-profile__avatar-hint">Chạm ảnh để đổi đại diện</p>
       </div>
-
-      <h1 class="emp-profile__name">{{ displayName || 'Hồ sơ của tôi' }}</h1>
-      <p v-if="subtitle" class="emp-profile__subtitle">{{ subtitle }}</p>
     </section>
 
     <div v-if="hrmMissing" class="emp-profile__notice">
@@ -410,90 +389,37 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .emp-profile {
-  padding: var(--space-3) var(--space-4) var(--space-8);
+  padding: 0 var(--space-3) var(--space-5);
   max-width: 32rem;
   margin-inline: auto;
 }
 
-.emp-profile__back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin-bottom: var(--space-3);
-  padding: var(--space-1) var(--space-2);
-  border: none;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.emp-profile__hero {
-  position: relative;
-  margin-bottom: var(--space-4);
-  padding: var(--space-5) var(--space-4) var(--space-4);
-  border-radius: var(--radius-xl);
-  background: linear-gradient(
-    145deg,
-    var(--color-tertiary-600) 0%,
-    var(--color-tertiary-800) 100%
-  );
-  color: var(--color-on-primary);
-  overflow: hidden;
-  text-align: center;
-  box-shadow: var(--shadow-md);
-}
-
-.emp-profile__hero-bg {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-}
-
-.emp-profile__orb {
-  position: absolute;
-  border-radius: var(--radius-full);
-  filter: blur(0);
-}
-
-.emp-profile__orb--a {
-  top: -2rem;
-  right: -1rem;
-  width: 7rem;
-  height: 7rem;
-  background: color-mix(in srgb, var(--color-gold) 35%, transparent);
-  opacity: 0.7;
-}
-
-.emp-profile__orb--b {
-  bottom: -3rem;
-  left: -2rem;
-  width: 9rem;
-  height: 9rem;
-  background: color-mix(in srgb, var(--color-on-primary) 12%, transparent);
-}
-
-.emp-profile__avatar-block {
-  position: relative;
-  z-index: 1;
+.emp-profile__identity {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.emp-profile__identity-text {
+  min-width: 0;
+  flex: 1;
 }
 
 .emp-profile__avatar-btn {
   position: relative;
-  width: 5.5rem;
-  height: 5.5rem;
+  flex-shrink: 0;
+  width: 3.75rem;
+  height: 3.75rem;
   padding: 0;
   border: none;
   border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--color-on-primary) 18%, transparent);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--color-on-primary) 35%, transparent),
-    var(--shadow-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
   cursor: pointer;
 }
 
@@ -514,20 +440,20 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.75rem;
+  font-size: 1.125rem;
   font-weight: 700;
-  color: var(--color-on-primary);
+  color: var(--color-tertiary-700);
 }
 
 .emp-profile__avatar-edit {
   position: absolute;
-  right: 0;
-  bottom: 0;
+  right: -2px;
+  bottom: -2px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.375rem;
+  height: 1.375rem;
   border-radius: var(--radius-full);
   background: var(--color-surface);
   color: var(--color-tertiary-700);
@@ -543,46 +469,46 @@ onBeforeUnmount(() => {
 }
 
 .emp-profile__avatar-hint {
-  margin: 0;
-  font-size: var(--text-xs);
-  color: color-mix(in srgb, var(--color-on-primary) 78%, transparent);
+  margin: 0.125rem 0 0;
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
 }
 
 .emp-profile__name {
-  position: relative;
-  z-index: 1;
-  margin: var(--space-3) 0 var(--space-1);
-  font-size: 1.35rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: var(--color-text);
 }
 
 .emp-profile__subtitle {
-  position: relative;
-  z-index: 1;
-  margin: 0;
-  font-size: var(--text-sm);
-  color: color-mix(in srgb, var(--color-on-primary) 82%, transparent);
+  margin: 0.125rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
 }
 
 .emp-profile__notice {
   display: flex;
   gap: var(--space-2);
   align-items: flex-start;
-  margin-bottom: var(--space-3);
-  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-info) 10%, var(--color-surface));
   color: var(--color-text);
-  font-size: var(--text-sm);
+  font-size: 0.75rem;
+  line-height: 1.4;
   box-shadow: var(--shadow-sm);
 }
 
 .emp-profile__card {
   position: relative;
-  margin-bottom: var(--space-3);
-  padding: var(--space-4);
-  padding-left: calc(var(--space-4) + var(--space-2) + 3px);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  padding-left: calc(var(--space-3) + var(--space-1) + 3px);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
@@ -604,15 +530,15 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
 }
 
 .emp-profile__section-title {
-  margin: 0 0 var(--space-3);
-  font-size: var(--text-sm);
+  margin: 0 0 var(--space-2);
+  font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--color-text-muted);
 }
 
@@ -643,19 +569,19 @@ onBeforeUnmount(() => {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .emp-profile__row {
   display: grid;
-  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
-  gap: var(--space-2);
+  grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr);
+  gap: var(--space-1) var(--space-2);
   align-items: start;
 }
 
 .emp-profile__row dt {
   margin: 0;
-  font-size: var(--text-xs);
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--color-text-muted);
 }
@@ -666,9 +592,10 @@ onBeforeUnmount(() => {
 
 .emp-profile__row dd {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: 0.8125rem;
   font-style: italic;
   color: var(--color-text);
+  line-height: 1.35;
   word-break: break-word;
 }
 
@@ -682,32 +609,32 @@ onBeforeUnmount(() => {
 }
 
 .emp-profile__concurrent-item {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
 }
 
 .emp-profile__concurrent-title {
   display: block;
-  font-size: var(--text-sm);
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-text);
 }
 
 .emp-profile__concurrent-meta {
   display: block;
-  margin-top: 2px;
-  font-size: var(--text-xs);
+  margin-top: 1px;
+  font-size: 0.6875rem;
   color: var(--color-text-muted);
 }
 
 .emp-profile__pending {
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
 }
 
 .emp-profile__pending-card {
-  margin-top: var(--space-2);
-  padding: var(--space-3);
+  margin-top: var(--space-1);
+  padding: var(--space-2);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-warning) 8%, var(--color-surface));
   box-shadow: var(--shadow-sm);
@@ -721,8 +648,8 @@ onBeforeUnmount(() => {
 
 .emp-profile__pending-list {
   margin: 0;
-  padding-left: 1.1rem;
-  font-size: var(--text-sm);
+  padding-left: 1rem;
+  font-size: 0.8125rem;
 }
 
 .emp-profile__pending-label {
@@ -739,26 +666,25 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
-.emp-profile__hero--loading {
-  min-height: 10rem;
-  background: var(--color-surface-muted);
+.emp-profile__identity--loading {
+  min-height: 4.5rem;
 }
 
 .emp-profile__sk-avatar {
-  width: 5rem;
-  height: 5rem;
-  margin-inline: auto;
+  flex-shrink: 0;
+  width: 3.75rem;
+  height: 3.75rem;
   border-radius: var(--radius-full);
   background: var(--color-surface-muted);
   animation: emp-profile-pulse 1.2s ease-in-out infinite;
 }
 
 .emp-profile__sk-lines {
-  margin-top: var(--space-3);
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  align-items: center;
+  gap: var(--space-1);
+  align-items: stretch;
 }
 
 .emp-profile__sk-line {

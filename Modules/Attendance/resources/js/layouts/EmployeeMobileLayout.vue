@@ -19,11 +19,13 @@ import { useEmployeeTabbarDock } from '@/composables/useEmployeeTabbarDock';
 import { useEmployeeMobileViewport } from '@/composables/useEmployeeMobileViewport';
 import AppIcon from '@/components/AppIcon.vue';
 import { useChatStore } from '@modules/Chat/resources/js/store/chatStore';
+import { useChatRealtime } from '@/composables/useChatRealtime';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const chatStore = useChatStore();
+useChatRealtime();
 const contentRef = ref(null);
 const homeSearchQuery = ref('');
 let homeRefreshHandler = null;
@@ -188,6 +190,14 @@ function goToProfile() {
   if (isProfileRoute.value) return;
   router.push({ name: 'employee.profile' });
 }
+
+function goBackFromSubpage() {
+  if (window.history.length > 1) {
+    router.back();
+    return;
+  }
+  router.push({ name: 'dashboard.me' });
+}
 </script>
 
 <template>
@@ -198,22 +208,34 @@ function goToProfile() {
     <header
       v-if="!hideHeaderForChatThread"
       class="employee-shell__header employee-shell__header--brand"
-      :class="{ 'employee-shell__header--home': isHomeHeader }"
+      :class="{
+        'employee-shell__header--home': isHomeHeader,
+        'employee-shell__header--subpage': isProfileRoute,
+      }"
     >
       <div class="employee-shell__header-deco" aria-hidden="true"></div>
       <div class="employee-shell__header-top">
         <div class="employee-shell__header-lead">
           <button
+            v-if="isProfileRoute"
+            type="button"
+            class="employee-shell__brand-mark employee-shell__back-btn"
+            aria-label="Quay lại"
+            @click="goBackFromSubpage"
+          >
+            <AppIcon name="chevronLeft" :size="20" :stroke-width="2" />
+          </button>
+          <button
+            v-else
             type="button"
             class="employee-shell__brand-mark"
-            :aria-label="isProfileRoute ? 'Hồ sơ cá nhân' : 'Mở hồ sơ cá nhân'"
-            :aria-current="isProfileRoute ? 'page' : undefined"
+            aria-label="Mở hồ sơ cá nhân"
             @click="goToProfile"
           >
             <img
-              src="/images/logo-2.png"
+              src="/images/pwa/icon-192.png"
               alt=""
-              class="employee-shell__brand-logo"
+              class="employee-shell__brand-logo employee-shell__brand-logo--pwa"
               width="40"
               height="40"
             />
@@ -230,6 +252,11 @@ function goToProfile() {
               <span v-if="departmentName" class="employee-shell__meta-extra">{{ departmentName }}</span>
               <span v-else-if="jobTitleName" class="employee-shell__meta-extra">{{ jobTitleName }}</span>
             </div>
+          </template>
+          <template v-else-if="isProfileRoute">
+            <h1 class="employee-shell__hello employee-shell__hello--page">
+              Hồ sơ cá nhân
+            </h1>
           </template>
           <template v-else>
             <p class="employee-shell__kicker">VA Workspace</p>
@@ -269,11 +296,11 @@ function goToProfile() {
             <span v-if="chatUnreadLabel" class="employee-shell__chat-badge">{{ chatUnreadLabel }}</span>
           </button>
           <button
+            v-if="!isProfileRoute"
             type="button"
             class="employee-shell__avatar employee-shell__avatar-btn"
             :class="{ 'employee-shell__avatar--home': isHomeHeader }"
-            :aria-label="isProfileRoute ? 'Hồ sơ cá nhân' : 'Mở hồ sơ cá nhân'"
-            :aria-current="isProfileRoute ? 'page' : undefined"
+            aria-label="Mở hồ sơ cá nhân"
             @click="goToProfile"
           >
             <img
@@ -344,6 +371,7 @@ function goToProfile() {
     </main>
 
     <nav
+      v-if="!hideHeaderForChatThread"
       ref="tabbarRef"
       class="employee-tabbar employee-tabbar--shell"
       :class="isMobilePwa ? 'employee-tabbar--pwa' : 'employee-tabbar--browser'"

@@ -175,11 +175,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <p class="dqu-panel__intro">
-      Cấu hình lối tắt trên <strong>trang chủ app PWA</strong> (mobile): bật/tắt, biểu tượng, bảo trì và thứ tự.
-      Thanh điều hướng dưới (Bảng tin, Chấm công, Nghỉ phép, Đơn) là menu cố định — chọn màn hình bên phải để xem thử.
-    </p>
-
     <div class="dqu-panel__main">
       <div class="dqu-panel__list-wrap hide-scrollbar">
         <p v-if="loading && !utilities.length" class="dqu-panel__empty">Đang tải…</p>
@@ -342,22 +337,6 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   gap: var(--space-3);
-}
-
-.dqu-panel__intro {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  color: var(--color-text-muted);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-}
-
-.dqu-panel__intro strong {
-  color: var(--color-text);
-  font-weight: 600;
 }
 
 .dqu-panel__toolbar {

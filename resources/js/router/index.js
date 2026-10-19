@@ -174,6 +174,30 @@ router.beforeEach(async (to) => {
         });
     }
 
+    const chatDeepLink = to.query.chat;
+    if (
+        auth.isAuthenticated
+        && chatDeepLink != null
+        && chatDeepLink !== ''
+        && to.name !== 'employee.chat'
+    ) {
+        const conversationId = Number(chatDeepLink);
+        if (Number.isFinite(conversationId) && conversationId >= 1) {
+            const nextQuery = { ...to.query };
+            delete nextQuery.chat;
+            if (
+                isEmployeeShellRestrictedContext()
+                && auth.can('dashboard.view')
+            ) {
+                return {
+                    name: 'employee.chat',
+                    query: { ...nextQuery, chat: String(conversationId) },
+                    replace: true,
+                };
+            }
+        }
+    }
+
     if (
         to.name === 'home'
         && isEmployeeShellRestrictedContext()
