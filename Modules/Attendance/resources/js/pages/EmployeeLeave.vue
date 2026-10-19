@@ -412,50 +412,8 @@ async function loadLeaveTypes() {
 
 onMounted(() => {
   void loadLeaveTypes();
-  void loadLeaveHistory();
   void loadLeaveBalance();
 });
-
-/** @type {import('vue').Ref<Array<Record<string, unknown>>>} */
-const history = ref([]);
-const historyLoading = ref(false);
-
-function historyToneForStatus(status) {
-  if (status === 'approved') return 'tertiary';
-  if (status === 'rejected') return 'danger';
-  if (status === 'cancelled') return 'muted';
-  return 'gold';
-}
-
-function formatHistoryDateLabel(row) {
-  const from = row.date_from ? new Date(row.date_from).toLocaleDateString('vi-VN') : '';
-  const to = row.date_to && row.date_to !== row.date_from
-    ? new Date(row.date_to).toLocaleDateString('vi-VN')
-    : '';
-  if (from && to) return `${from} – ${to}`;
-  return from || '—';
-}
-
-async function loadLeaveHistory() {
-  historyLoading.value = true;
-  try {
-    const { data } = await window.axios.get('/api/attendance/leave-requests', { params: { limit: 20 } });
-    const rows = Array.isArray(data?.data) ? data.data : [];
-    history.value = rows.map((row, index) => ({
-      id: row.uuid ?? index,
-      type: row.leave_type_name ?? 'Nghỉ phép',
-      days: Number(row.total_days ?? 0),
-      dateLabel: formatHistoryDateLabel(row),
-      status: row.status ?? 'pending',
-      icon: 'calendar',
-      tone: historyToneForStatus(row.status),
-    }));
-  } catch {
-    history.value = [];
-  } finally {
-    historyLoading.value = false;
-  }
-}
 
 function buildPeriodsForApi() {
   return periods.value.map((period) => {
@@ -475,12 +433,6 @@ function buildPeriodsForApi() {
     };
   });
 }
-
-const statusLabel = {
-  approved: 'Đã duyệt',
-  pending: 'Đang chờ duyệt',
-  rejected: 'Từ chối',
-};
 
 function openForm() {
   formOpen.value = true;
@@ -559,7 +511,6 @@ async function submit() {
     showClientToast('success', 'Đã gửi đơn nghỉ phép qua HRM, chờ người duyệt.');
     resetForm();
     closeForm();
-    await loadLeaveHistory();
     void loadLeaveBalance({ silent: true });
   } catch (err) {
     const status = err?.response?.status;
@@ -691,32 +642,6 @@ const seniorityDays = computed(
       <span>{{ typesLoading ? 'Đang tải loại nghỉ…' : 'Tạo đơn xin nghỉ phép' }}</span>
     </button>
     <p v-if="typesError" class="leave-types-error">{{ typesError }}</p>
-
-    <section class="leave-history">
-      <h2 class="leave-history__title">Lịch sử xin phép</h2>
-      <p v-if="historyLoading" class="leave-workflow__status">Đang tải từ HRM…</p>
-      <p v-else-if="history.length === 0" class="leave-workflow__status">Chưa có đơn nghỉ nào.</p>
-      <ul v-else class="leave-history__list">
-        <li v-for="item in history" :key="item.id" class="history-row">
-          <span class="history-row__icon" :class="`history-row__icon--${item.tone}`" aria-hidden="true">
-            <AppIcon :name="item.icon" :size="20" :stroke-width="1.8" />
-          </span>
-          <span class="history-row__body">
-            <span class="history-row__type">{{ item.type }}</span>
-            <span class="history-row__meta">{{ formatDays(item.days) }} ngày · {{ item.dateLabel }}</span>
-          </span>
-          <span
-            class="history-row__status"
-            :class="{
-              'history-row__status--approved': item.status === 'approved',
-              'history-row__status--pending': item.status === 'pending',
-            }"
-          >
-            {{ statusLabel[item.status] ?? item.status }}
-          </span>
-        </li>
-      </ul>
-    </section>
 
     <Teleport to="body">
       <div v-if="formOpen" class="leave-dialog" role="dialog" aria-modal="true" aria-labelledby="leave-form-title">
@@ -1367,94 +1292,6 @@ const seniorityDays = computed(
 .leave-create:disabled {
   opacity: 0.55;
   cursor: default;
-}
-
-.leave-history__title {
-  margin: 0 0 var(--space-3);
-  font-size: 1.0625rem;
-  font-weight: 800;
-  color: var(--color-text);
-}
-
-.leave-history__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.history-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-3);
-  clip-path: var(--leave-clip-chip);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.history-row__icon {
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  clip-path: polygon(20% 0, 100% 0, 100% 80%, 80% 100%, 0 100%, 0 20%);
-}
-
-.history-row__icon--tertiary {
-  background: var(--color-tertiary-surface);
-  color: var(--color-tertiary);
-}
-
-.history-row__icon--danger {
-  background: #fdecec;
-  color: var(--color-primary);
-}
-
-.history-row__icon--gold {
-  background: var(--color-warning-surface, #fff8e6);
-  color: var(--color-warning, #c47a00);
-}
-
-.history-row__body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.history-row__type {
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.history-row__meta {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-}
-
-.history-row__status {
-  flex-shrink: 0;
-  padding: 0.35rem 0.6rem;
-  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
-  font-size: 0.75rem;
-  font-weight: 800;
-}
-
-.history-row__status--approved {
-  background: #e8f7ee;
-  color: var(--color-secondary);
-}
-
-.history-row__status--pending {
-  background: #fff4e5;
-  color: var(--color-warning, #c47a00);
 }
 
 .leave-dialog {

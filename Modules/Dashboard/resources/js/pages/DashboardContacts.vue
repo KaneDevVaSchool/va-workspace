@@ -20,12 +20,13 @@ const { isEmployeeMobile } = useEmployeeMobileView();
 <style scoped>
 .dashboard-contacts {
   padding: var(--space-4);
-  max-width: 42rem;
+  max-width: 40rem;
+  margin-inline: auto;
 }
 
 .dashboard-contacts--mobile {
-  margin-inline: calc(-1 * var(--space-3));
-  padding: 0 0 var(--space-4);
+  margin-inline: 0;
+  padding: var(--space-3) var(--space-4) var(--space-6);
   max-width: none;
 }
 
@@ -33,12 +34,13 @@ const { isEmployeeMobile } = useEmployeeMobileView();
   max-height: none;
 }
 
-.dashboard-contacts--mobile :deep(.member-directory__row) {
-  gap: var(--space-2);
+.dashboard-contacts--mobile :deep(.member-directory__card) {
   padding: var(--space-2) var(--space-3);
+  padding-left: calc(var(--space-3) + var(--space-2) + 3px);
 }
 
-.dashboard-contacts--mobile :deep(.member-directory__letter) {
-  padding-inline: var(--space-2);
+.dashboard-contacts--mobile :deep(.member-directory__mail-btn) {
+  width: 2.25rem;
+  height: 2.25rem;
 }
 </style>

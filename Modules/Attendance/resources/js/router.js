@@ -53,7 +53,7 @@ export default [
     component: () => import('./pages/EmployeeRequests.vue'),
     meta: {
       requiresAuth: true,
-      title: 'Đơn của tôi',
+      title: 'Lịch sử nghỉ phép',
       requiresPermission: 'dashboard.view',
       employeeMobile: true,
     },

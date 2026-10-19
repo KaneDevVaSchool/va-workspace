@@ -22,13 +22,13 @@ class EmployeeLeaveBalanceService
      */
     public function overviewForUser(User $user, ?int $year = null): array
     {
-        $employeeUuid = $user->hrm_employee_uuid;
-        if (! filled($employeeUuid)) {
+        if (! filled($user->hrm_employee_uuid) && ! filled($user->email)) {
             throw HrmApiUnavailable::userFacing('Tài khoản chưa liên kết nhân sự HRM.');
         }
 
+        $employeeUuid = $this->hrmApi->resolveLeaveCatalogEmployeeUuid($user);
         $year = $year ?? (int) now()->format('Y');
 
-        return $this->hrmApi->getLeaveBalance((string) $employeeUuid, $year);
+        return $this->hrmApi->getLeaveBalance($employeeUuid, $year);
     }
 }

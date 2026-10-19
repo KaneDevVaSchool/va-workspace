@@ -2,6 +2,7 @@
 
 namespace Modules\Identity\App\Hrm\Services;
 
+use App\Models\User;
 use Illuminate\Http\Client\ConnectionException;
 use Modules\Identity\App\Hrm\DTO\HrmEmployeeData;
 use Modules\Identity\App\Hrm\Exceptions\HrmApiUnavailable;
@@ -106,6 +107,54 @@ class HrmApiClient
     }
 
     /**
+     * UUID nhân sự trên portal nghỉ phép — có thể khác hrm_employee_uuid (SSO HRM chính).
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function resolveLeaveCatalogEmployeeUuid(User $user): string
+    {
+        $uuid = trim((string) $user->hrm_employee_uuid);
+        if ($uuid !== '') {
+            try {
+                if ($this->getEmployeePayloadFromLeaveCatalog($uuid) !== null) {
+                    return $uuid;
+                }
+            } catch (HrmApiUnavailable $e) {
+                if ($e->isConnectionFailure()) {
+                    throw $e;
+                }
+            }
+        }
+
+        $email = trim((string) $user->email);
+        if ($email === '') {
+            throw HrmApiUnavailable::userFacing('Tài khoản chưa liên kết nhân sự HRM (portal nghỉ phép).');
+        }
+
+        try {
+            $response = HrmOutboundHttp::leaveCatalogClient(15)->get('/api/v1/employees', [
+                'email' => $email,
+                'per_page' => 1,
+            ]);
+        } catch (ConnectionException $e) {
+            throw new HrmApiUnavailable('timeout/network lỗi khi tra cứu nhân sự portal HRM', $e);
+        }
+
+        if (! $response->successful()) {
+            $this->failLeaveCatalogResponse($response, 'GET /api/v1/employees');
+        }
+
+        $data = $response->json('data');
+        $row = is_array($data) ? ($data[0] ?? null) : null;
+        $portalUuid = is_array($row) ? trim((string) ($row['uuid'] ?? '')) : '';
+        if ($portalUuid === '') {
+            throw HrmApiUnavailable::userFacing('Không tìm thấy hồ sơ nhân sự trên portal HRM cho email này.');
+        }
+
+        return $portalUuid;
+    }
+
+    /**
      * Tạo đơn nghỉ — POST /api/v1/leave/requests (ability leave:write, portal/HRM_LEAVE_API_*).
      *
      * @param  array<string, scalar|null>  $fields
@@ -181,7 +230,7 @@ class HrmApiClient
         }
 
         if (! $response->successful()) {
-            throw new HrmApiUnavailable("HTTP {$response->status()} khi gọi GET /api/v1/leave/requests");
+            $this->failLeaveCatalogResponse($response, 'GET /api/v1/leave/requests');
         }
 
         $data = $response->json('data');
@@ -213,7 +262,7 @@ class HrmApiClient
         }
 
         if (! $response->successful()) {
-            throw new HrmApiUnavailable("HTTP {$response->status()} khi gọi GET /api/v1/leave/balances");
+            $this->failLeaveCatalogResponse($response, 'GET /api/v1/leave/balances');
         }
 
         $data = $response->json('data');
@@ -602,6 +651,39 @@ class HrmApiClient
         }
 
         return 'Không gửi được đơn nghỉ. Kiểm tra lại thông tin trên form.';
+    }
+
+    /**
+     * @throws HrmApiUnavailable
+     */
+    private function failLeaveCatalogResponse(\Illuminate\Http\Client\Response $response, string $label): void
+    {
+        $status = $response->status();
+
+        if ($status === 403) {
+            $code = $response->json('error.code');
+            $message = (string) ($response->json('error.message') ?? '');
+            if ($code === 'MISSING_ABILITY' || $this->isVerifyTokenAbilityDenied($message, $code)) {
+                throw HrmApiUnavailable::userFacing(
+                    'Hệ thống chưa được cấp quyền nghỉ phép trên HRM. Liên hệ IT hoặc HR.'
+                );
+            }
+        }
+
+        if ($status >= 500) {
+            throw new HrmApiUnavailable("HTTP {$status} khi gọi {$label}");
+        }
+
+        $message = (string) ($response->json('error.message') ?? '');
+        if ($message === '') {
+            $message = $this->firstLeaveRequestErrorMessage($response);
+        }
+
+        if ($message !== '') {
+            throw HrmApiUnavailable::userFacing($message);
+        }
+
+        throw HrmApiUnavailable::userFacing("Không thực hiện được yêu cầu trên HRM (HTTP {$status}).");
     }
 
     private function humanizeLeaveRequestErrorMessage(string $raw): string

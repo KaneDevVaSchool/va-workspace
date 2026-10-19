@@ -16,6 +16,10 @@ class EmployeeLeaveRequestController extends Controller
         try {
             $items = $submissions->recentForUser($request->user(), (int) $request->query('limit', 20));
         } catch (HrmApiUnavailable $e) {
+            if (! $e->isConnectionFailure()) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
             return response()->json([
                 'message' => 'Không tải được lịch sử đơn nghỉ từ HRM.',
                 'detail' => config('app.debug') ? $e->getMessage() : null,

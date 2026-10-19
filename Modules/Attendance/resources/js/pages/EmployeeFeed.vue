@@ -4,6 +4,7 @@
 // ghim, reaction, bình luận) với UX kiểu Facebook.
 //
 import {
+  computed,
   inject,
   onBeforeUnmount,
   onMounted,
@@ -70,6 +71,23 @@ const loadMoreSentinel = ref(null);
 let unregisterRefresh;
 let loadMoreObserver;
 
+const wallSegments = computed(() => {
+  const items = [{ id: 'company', label: 'Bảng tin' }];
+  if (departmentName.value) {
+    items.push({ id: 'department', label: departmentName.value });
+  }
+  items.push({ id: 'personal', label: 'Tường của tôi' });
+  return items;
+});
+
+const showScopeSubtabs = computed(
+  () => !viewingOtherWall.value && postScope.value === 'company',
+);
+
+const showFilterSheetTrigger = computed(
+  () => !viewingOtherWall.value && postScope.value !== 'company',
+);
+
 function closeSheets() {
   filterSheetOpen.value = false;
   colleagueSheetOpen.value = false;
@@ -117,111 +135,119 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="emp-feed">
-    <div class="emp-feed__toolbar">
-      <label class="emp-feed__search">
-        <AppIcon name="search" :size="18" class="emp-feed__search-icon" />
-        <input
-          v-model="searchQuery"
-          type="search"
-          class="emp-feed__search-input"
-          placeholder="Tìm bài viết, đồng nghiệp..."
-          autocomplete="off"
-          enterkeyhint="search"
-          @focus="peopleOpen = peopleResults.length > 0"
-        />
-      </label>
-      <button
-        type="button"
-        class="emp-feed__icon-btn"
-        aria-label="Tìm đồng nghiệp"
-        @click="colleagueSheetOpen = true"
-      >
-        <AppIcon name="users" :size="20" :stroke-width="1.8" />
-      </button>
-      <button
-        v-if="!viewingOtherWall"
-        type="button"
-        class="emp-feed__icon-btn"
-        :aria-expanded="filterSheetOpen"
-        aria-label="Lọc bảng tin"
-        @click="filterSheetOpen = !filterSheetOpen"
-      >
-        <AppIcon name="sliders" :size="20" :stroke-width="1.8" />
-      </button>
-    </div>
+    <div class="emp-feed__sticky">
+      <div class="emp-feed__toolbar">
+        <label class="emp-feed__search">
+          <AppIcon name="search" :size="18" class="emp-feed__search-icon" />
+          <input
+            v-model="searchQuery"
+            type="search"
+            class="emp-feed__search-input"
+            placeholder="Tìm bài viết, đồng nghiệp..."
+            autocomplete="off"
+            enterkeyhint="search"
+            @focus="peopleOpen = peopleResults.length > 0"
+          />
+        </label>
+        <button
+          type="button"
+          class="emp-feed__icon-btn"
+          aria-label="Tìm đồng nghiệp"
+          @click="colleagueSheetOpen = true"
+        >
+          <AppIcon name="users" :size="20" :stroke-width="1.8" />
+        </button>
+        <button
+          v-if="showFilterSheetTrigger"
+          type="button"
+          class="emp-feed__icon-btn"
+          :aria-expanded="filterSheetOpen"
+          aria-label="Lọc bài viết"
+          @click="filterSheetOpen = !filterSheetOpen"
+        >
+          <AppIcon name="sliders" :size="20" :stroke-width="1.8" />
+        </button>
+      </div>
 
-    <div
-      v-if="peopleOpen && searchQuery.trim().length >= 2"
-      class="emp-feed__people"
-      role="listbox"
-      aria-label="Đồng nghiệp"
-    >
-      <p class="emp-feed__people-label">Đồng nghiệp</p>
-      <p v-if="peopleResults.length === 0" class="emp-feed__people-empty">
-        Không có đồng nghiệp khớp tên.
-      </p>
-      <button
-        v-for="user in peopleResults"
-        :key="user.id"
-        type="button"
-        class="emp-feed__people-item"
-        @click="openColleagueWall(user.id)"
+      <div
+        v-if="peopleOpen && searchQuery.trim().length >= 2"
+        class="emp-feed__people"
+        role="listbox"
+        aria-label="Đồng nghiệp"
       >
-        <span>{{ user.name }}</span>
-        <span v-if="user.department" class="emp-feed__people-dept">{{ user.department }}</span>
-      </button>
-    </div>
+        <p class="emp-feed__people-label">Đồng nghiệp</p>
+        <p v-if="peopleResults.length === 0" class="emp-feed__people-empty">
+          Không có đồng nghiệp khớp tên.
+        </p>
+        <button
+          v-for="user in peopleResults"
+          :key="user.id"
+          type="button"
+          class="emp-feed__people-item"
+          @click="openColleagueWall(user.id)"
+        >
+          <span>{{ user.name }}</span>
+          <span v-if="user.department" class="emp-feed__people-dept">{{ user.department }}</span>
+        </button>
+      </div>
 
-    <nav class="emp-feed__walls hide-scrollbar" aria-label="Chọn tường">
-      <button
-        type="button"
-        class="emp-feed__wall-pill"
-        :class="{ 'emp-feed__wall-pill--active': postScope === 'company' }"
-        @click="onTabChange('company')"
-      >
-        Bảng tin
-      </button>
-      <button
-        v-if="departmentName"
-        type="button"
-        class="emp-feed__wall-pill"
-        :class="{ 'emp-feed__wall-pill--active': postScope === 'department' }"
-        @click="onTabChange('department')"
-      >
-        {{ departmentName }}
-      </button>
-      <button
-        type="button"
-        class="emp-feed__wall-pill"
-        :class="{
-          'emp-feed__wall-pill--active':
-            postScope === 'personal' && !viewingOtherWall,
-        }"
-        @click="onTabChange('personal')"
-      >
-        Tường của tôi
-      </button>
-      <button
-        v-if="viewingOtherWall"
-        type="button"
-        class="emp-feed__wall-pill emp-feed__wall-pill--active"
-        aria-current="page"
-      >
-        {{ wallUserName }}
-      </button>
-    </nav>
+      <section class="emp-feed__nav-card" aria-label="Chọn tường và bộ lọc">
+        <div v-if="viewingOtherWall" class="emp-feed__wall-visit">
+          <button
+            type="button"
+            class="emp-feed__wall-back"
+            aria-label="Quay lại bảng tin"
+            @click="onTabChange('company')"
+          >
+            <AppIcon name="chevronLeft" :size="20" :stroke-width="2" />
+          </button>
+          <div class="emp-feed__wall-visit-text">
+            <p class="emp-feed__wall-visit-kicker">Tường cá nhân</p>
+            <p class="emp-feed__wall-visit-name">{{ wallUserName }}</p>
+          </div>
+        </div>
 
-    <div v-if="!viewingOtherWall" class="emp-feed__filters hide-scrollbar">
-      <button
-        v-for="item in feedScopes"
-        :key="item.id"
-        type="button"
-        class="emp-feed__filter-chip"
-        :class="{ 'emp-feed__filter-chip--active': feedScope === item.id }"
-        @click="onScopeChange(item.id)"
-      >
-        {{ item.label }}
-      </button>
+        <template v-else>
+          <div class="emp-feed__segmented hide-scrollbar" role="tablist" aria-label="Chọn tường">
+            <button
+              v-for="segment in wallSegments"
+              :key="segment.id"
+              type="button"
+              role="tab"
+              class="emp-feed__segment"
+              :class="{
+                'emp-feed__segment--active':
+                  postScope === segment.id
+                  && (segment.id !== 'personal' || !viewingOtherWall),
+              }"
+              :aria-selected="postScope === segment.id"
+              @click="onTabChange(segment.id)"
+            >
+              {{ segment.label }}
+            </button>
+          </div>
+
+          <div
+            v-if="showScopeSubtabs"
+            class="emp-feed__subtabs"
+            role="tablist"
+            aria-label="Lọc nội dung bảng tin"
+          >
+            <button
+              v-for="item in feedScopes"
+              :key="item.id"
+              type="button"
+              role="tab"
+              class="emp-feed__subtab"
+              :class="{ 'emp-feed__subtab--active': feedScope === item.id }"
+              :aria-selected="feedScope === item.id"
+              @click="onScopeChange(item.id)"
+            >
+              {{ item.label }}
+            </button>
+          </div>
+        </template>
+      </section>
     </div>
 
     <div class="emp-feed__composer">
@@ -413,19 +439,25 @@ onBeforeUnmount(() => {
   padding-bottom: var(--space-2);
 }
 
+.emp-feed__sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-1);
+  background: linear-gradient(
+    180deg,
+    var(--color-tertiary-surface) 85%,
+    color-mix(in srgb, var(--color-tertiary-surface) 40%, transparent)
+  );
+}
+
 .emp-feed__toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  padding: var(--space-1) 0 var(--space-2);
-  background: linear-gradient(
-    180deg,
-    var(--color-tertiary-surface) 70%,
-    transparent
-  );
 }
 
 .emp-feed__search {
@@ -521,56 +553,125 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
-.emp-feed__walls {
-  display: flex;
-  gap: var(--space-2);
-  overflow-x: auto;
-  padding-bottom: 2px;
+.emp-feed__nav-card {
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
-.emp-feed__wall-pill {
-  flex-shrink: 0;
-  padding: var(--space-2) var(--space-3);
+.emp-feed__segmented {
+  display: flex;
+  gap: 3px;
+  margin: var(--space-2);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  overflow-x: auto;
+}
+
+.emp-feed__segment {
+  flex: 1 1 0;
+  min-width: 4.5rem;
+  padding: var(--space-2) var(--space-2);
   border: none;
-  border-radius: var(--radius-full);
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border-subtle);
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
+  line-height: 1.2;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.emp-feed__segment--active {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 1px 4px rgba(9, 36, 78, 0.1);
+}
+
+.emp-feed__subtabs {
+  display: flex;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.emp-feed__subtab {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-1) calc(var(--space-2) + 2px);
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
   color: var(--color-text-muted);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  transition: color 0.15s ease;
 }
 
-.emp-feed__wall-pill--active {
+.emp-feed__subtab--active {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.emp-feed__subtab--active::after {
+  content: '';
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
   background: var(--color-primary);
-  color: var(--color-on-primary);
-  box-shadow: none;
 }
 
-.emp-feed__filters {
+.emp-feed__wall-visit {
   display: flex;
+  align-items: center;
   gap: var(--space-2);
-  overflow-x: auto;
+  padding: var(--space-3);
 }
 
-.emp-feed__filter-chip {
+.emp-feed__wall-back {
   flex-shrink: 0;
-  padding: var(--space-1) var(--space-3);
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
   border: none;
   border-radius: var(--radius-full);
   background: var(--color-surface-muted);
-  font: inherit;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
+  color: var(--color-text);
   cursor: pointer;
 }
 
-.emp-feed__filter-chip--active {
-  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface));
-  color: var(--color-primary);
+.emp-feed__wall-visit-text {
+  min-width: 0;
+}
+
+.emp-feed__wall-visit-kicker {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.emp-feed__wall-visit-name {
+  margin: 2px 0 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .emp-feed__composer :deep(.composer) {

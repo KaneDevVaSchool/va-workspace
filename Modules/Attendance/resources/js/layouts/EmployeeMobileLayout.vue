@@ -105,6 +105,7 @@ const avatarInitial = computed(() => {
 });
 
 const isHomeHeader = computed(() => route.name === 'dashboard.me');
+const isFeedHeader = computed(() => route.name === 'employee.feed');
 
 const compactHeaderTitle = computed(() => {
   if (isHomeHeader.value) return '';
@@ -140,11 +141,15 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
     :class="[
       `employee-shell--${shellMode}`,
       { 'employee-shell--home': route.name === 'dashboard.me' },
+      { 'employee-shell--feed': isFeedHeader },
     ]"
   >
     <header
       class="employee-shell__header"
-      :class="{ 'employee-shell__header--compact': route.name !== 'dashboard.me' }"
+      :class="{
+        'employee-shell__header--compact': route.name !== 'dashboard.me',
+        'employee-shell__header--feed': isFeedHeader,
+      }"
     >
       <div class="employee-shell__header-top">
         <div class="employee-shell__greeting">
@@ -234,6 +239,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
       class="employee-shell__content"
       :class="{
         'employee-shell__content--home': route.name === 'dashboard.me',
+        'employee-shell__content--feed': isFeedHeader,
       }"
     >
       <div

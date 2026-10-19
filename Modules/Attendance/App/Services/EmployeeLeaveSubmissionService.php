@@ -34,10 +34,11 @@ class EmployeeLeaveSubmissionService
         ?string $followerEmployeeUuid,
         array $attachments = [],
     ): array {
-        $employeeUuid = $user->hrm_employee_uuid;
-        if (! filled($employeeUuid)) {
+        if (! filled($user->hrm_employee_uuid) && ! filled($user->email)) {
             throw HrmApiUnavailable::userFacing('Tài khoản chưa liên kết nhân sự HRM.');
         }
+
+        $employeeUuid = $this->hrmApi->resolveLeaveCatalogEmployeeUuid($user);
 
         if ($periods === []) {
             throw HrmApiUnavailable::userFacing('Chọn ít nhất một khoảng nghỉ.');
@@ -78,12 +79,12 @@ class EmployeeLeaveSubmissionService
      */
     public function recentForUser(User $user, int $limit = 20): array
     {
-        $employeeUuid = $user->hrm_employee_uuid;
-        if (! filled($employeeUuid)) {
+        if (! filled($user->hrm_employee_uuid) && ! filled($user->email)) {
             return [];
         }
 
-        $page = $this->hrmApi->listLeaveRequests((string) $employeeUuid, min(50, max(1, $limit)));
+        $employeeUuid = $this->hrmApi->resolveLeaveCatalogEmployeeUuid($user);
+        $page = $this->hrmApi->listLeaveRequests($employeeUuid, min(50, max(1, $limit)));
 
         return $page['items'];
     }

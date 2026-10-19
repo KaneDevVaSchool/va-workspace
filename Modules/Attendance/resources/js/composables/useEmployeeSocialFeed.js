@@ -34,7 +34,7 @@ export function useEmployeeSocialFeed() {
   let searchTimer = null;
 
   const feedScopes = [
-    { id: 'all', label: 'Bảng tin' },
+    { id: 'all', label: 'Tất cả' },
     { id: 'mine', label: 'Bài của tôi' },
     { id: 'reacted', label: 'Đã tương tác' },
   ];
@@ -63,7 +63,7 @@ export function useEmployeeSocialFeed() {
     () => postScope.value === 'personal' && wallProfile.value?.is_own === false,
   );
   const activeFilterLabel = computed(
-    () => feedScopes.find((item) => item.id === feedScope.value)?.label ?? 'Bảng tin',
+    () => feedScopes.find((item) => item.id === feedScope.value)?.label ?? 'Tất cả',
   );
   const visiblePosts = computed(() => posts.value);
   const canLoadMore = computed(

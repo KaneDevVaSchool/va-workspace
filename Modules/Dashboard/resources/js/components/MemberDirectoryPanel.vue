@@ -49,6 +49,14 @@ const memberCountLabel = computed(() => {
   return n.toLocaleString('vi-VN');
 });
 
+const isFiltering = computed(() => query.value.trim().length > 0);
+
+const countCaption = computed(() => {
+  if (loading.value) return 'Đang tải danh bạ…';
+  if (isFiltering.value) return 'kết quả tìm kiếm';
+  return 'thành viên trong hệ thống';
+});
+
 function sectionLetter(name) {
   const trimmed = String(name || '').trim();
   if (!trimmed) return '#';
@@ -104,7 +112,9 @@ defineExpose({ reload: loadDirectory });
   <div class="member-directory">
     <div class="member-directory__toolbar">
       <label class="member-directory__search">
-        <AppIcon name="search" :size="18" aria-hidden="true" />
+        <span class="member-directory__search-icon" aria-hidden="true">
+          <AppIcon name="search" :size="18" />
+        </span>
         <input
           v-model="query"
           type="search"
@@ -123,7 +133,15 @@ defineExpose({ reload: loadDirectory });
           <AppIcon name="close" :size="14" />
         </button>
       </label>
-      <p class="member-directory__count">{{ memberCountLabel }} thành viên</p>
+      <div class="member-directory__stat" aria-live="polite">
+        <span class="member-directory__stat-icon" aria-hidden="true">
+          <AppIcon name="users" :size="16" />
+        </span>
+        <span class="member-directory__stat-text">
+          <strong class="member-directory__stat-num">{{ memberCountLabel }}</strong>
+          {{ countCaption }}
+        </span>
+      </div>
     </div>
 
     <div v-if="loading" class="member-directory__loading" aria-busy="true">
@@ -137,20 +155,34 @@ defineExpose({ reload: loadDirectory });
     </div>
 
     <div v-else-if="filteredMembers.length === 0" class="member-directory__empty">
-      <AppIcon name="users" :size="28" aria-hidden="true" />
-      <p>{{ query.trim() ? 'Không tìm thấy thành viên phù hợp.' : 'Chưa có dữ liệu danh bạ.' }}</p>
+      <span class="member-directory__empty-icon" aria-hidden="true">
+        <AppIcon name="users" :size="26" />
+      </span>
+      <p class="member-directory__empty-title">
+        {{ query.trim() ? 'Không tìm thấy ai' : 'Chưa có danh bạ' }}
+      </p>
+      <p class="member-directory__empty-hint">
+        {{
+          query.trim()
+            ? 'Thử từ khóa khác hoặc xóa bộ lọc.'
+            : 'Dữ liệu sẽ hiển thị khi được đồng bộ từ HRM.'
+        }}
+      </p>
     </div>
 
     <div v-else class="member-directory__sections hide-scrollbar">
       <section v-for="section in groupedSections" :key="section.letter" class="member-directory__section">
-        <h3 class="member-directory__letter" :id="`dir-letter-${section.letter}`">
-          {{ section.letter }}
-        </h3>
+        <div class="member-directory__letter-row">
+          <h3 class="member-directory__letter" :id="`dir-letter-${section.letter}`">
+            {{ section.letter }}
+          </h3>
+          <span class="member-directory__letter-line" aria-hidden="true" />
+        </div>
         <ul class="member-directory__list">
           <li v-for="member in section.rows" :key="memberKey(member)">
-            <div class="member-directory__row">
+            <article class="member-directory__card">
               <UserAvatarTip :user="avatarUser(member)" label="Thông tin liên hệ" />
-              <span class="member-directory__info">
+              <div class="member-directory__info">
                 <span class="member-directory__name">{{ member.name }}</span>
                 <a
                   v-if="member.email"
@@ -159,18 +191,19 @@ defineExpose({ reload: loadDirectory });
                 >
                   {{ member.email }}
                 </a>
-                <span
+                <div
                   v-if="member.job_title || member.department_name"
-                  class="member-directory__meta-block"
+                  class="member-directory__chips"
                 >
-                  <span v-if="member.department_name" class="member-directory__meta">
+                  <span v-if="member.department_name" class="member-directory__chip">
+                    <AppIcon name="building" :size="12" aria-hidden="true" />
                     {{ member.department_name }}
                   </span>
-                  <span v-if="member.job_title" class="member-directory__meta">
+                  <span v-if="member.job_title" class="member-directory__chip member-directory__chip--muted">
                     {{ member.job_title }}
                   </span>
-                </span>
-              </span>
+                </div>
+              </div>
               <a
                 v-if="member.email"
                 class="member-directory__mail-btn"
@@ -179,7 +212,7 @@ defineExpose({ reload: loadDirectory });
               >
                 <AppIcon name="mail" :size="18" aria-hidden="true" />
               </a>
-            </div>
+            </article>
           </li>
         </ul>
       </section>
@@ -191,14 +224,14 @@ defineExpose({ reload: loadDirectory });
 .member-directory {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
   min-height: 0;
 }
 
 .member-directory__toolbar {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
 .member-directory__search {
@@ -206,11 +239,27 @@ defineExpose({ reload: loadDirectory });
   align-items: center;
   gap: var(--space-2);
   padding: 0 var(--space-3);
-  min-height: 2.75rem;
+  min-height: 3rem;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--color-border);
   color: var(--color-text-muted);
+  transition: box-shadow 160ms ease;
+}
+
+.member-directory__search:focus-within {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent),
+    var(--shadow-sm),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+}
+
+.member-directory__search-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--color-primary);
+  opacity: 0.85;
 }
 
 .member-directory__search-input {
@@ -231,70 +280,140 @@ defineExpose({ reload: loadDirectory });
 .member-directory__search-clear {
   display: grid;
   place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.625rem;
+  height: 1.625rem;
   padding: 0;
   border: none;
   border-radius: var(--radius-full);
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
   cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
 }
 
-.member-directory__count {
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
+.member-directory__search-clear:hover {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
+.member-directory__stat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary-surface) 55%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 12%, var(--color-border));
+}
+
+.member-directory__stat-icon {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.member-directory__stat-text {
+  font-size: 0.8125rem;
+  line-height: 1.4;
   color: var(--color-text-muted);
+}
+
+.member-directory__stat-num {
+  font-weight: 800;
+  color: var(--color-text);
 }
 
 .member-directory__sections {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   max-height: min(70vh, 42rem);
   overflow-y: auto;
 }
 
-.member-directory__letter {
+.member-directory__letter-row {
   position: sticky;
   top: 0;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block: var(--space-1);
+  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.member-directory__letter {
+  flex-shrink: 0;
   margin: 0;
-  padding: var(--space-1) var(--space-3);
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
   font-size: 0.8125rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary-surface) 65%, var(--color-surface));
-  border-radius: var(--radius-sm);
+  letter-spacing: 0.02em;
+  color: var(--color-on-primary);
+  background: linear-gradient(
+    145deg,
+    var(--color-primary-600),
+    var(--color-primary-800)
+  );
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+}
+
+.member-directory__letter-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--color-border),
+    color-mix(in srgb, var(--color-border) 25%, transparent)
+  );
 }
 
 .member-directory__list {
   margin: var(--space-2) 0 0;
   padding: 0;
   list-style: none;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
-.member-directory__row {
+.member-directory__card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
   width: 100%;
   padding: var(--space-3);
-  text-decoration: none;
-  color: inherit;
+  padding-left: calc(var(--space-3) + var(--space-2) + 3px);
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: inset 0 -1px 0 var(--color-border);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--color-border);
+  transition: box-shadow 160ms ease, transform 160ms ease;
 }
 
-.member-directory__list li:last-child .member-directory__row {
-  box-shadow: none;
+.member-directory__card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+}
+
+.member-directory__card:active {
+  transform: scale(0.995);
 }
 
 .member-directory__info {
@@ -302,7 +421,7 @@ defineExpose({ reload: loadDirectory });
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .member-directory__name {
@@ -332,32 +451,54 @@ defineExpose({ reload: loadDirectory });
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.375rem;
+  height: 2.375rem;
   border-radius: var(--radius-full);
-  color: var(--color-text-muted);
+  color: var(--color-primary);
+  background: var(--color-primary-surface);
   text-decoration: none;
-  transition: background 140ms ease, color 140ms ease;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 15%, transparent);
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
 .member-directory__mail-btn:hover {
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
+  background: var(--color-primary-surface-strong);
+  color: var(--color-primary-hover);
 }
 
-.member-directory__meta-block {
+.member-directory__mail-btn:active {
+  transform: scale(0.94);
+}
+
+.member-directory__chips {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
 }
 
-.member-directory__meta {
+.member-directory__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
   font-size: 0.6875rem;
-  font-weight: 500;
-  color: var(--color-text-muted);
+  font-weight: 600;
   line-height: 1.35;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  color: var(--color-secondary-700);
+  background: var(--color-secondary-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-secondary) 18%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-directory__chip--muted {
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .member-directory__empty {
@@ -365,17 +506,41 @@ defineExpose({ reload: loadDirectory });
   flex-direction: column;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-6) var(--space-4);
+  padding: var(--space-8) var(--space-4);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--color-border);
   text-align: center;
-  color: var(--color-text-muted);
 }
 
-.member-directory__empty p {
+.member-directory__empty-icon {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: var(--radius-full);
+  color: var(--color-primary);
+  background: linear-gradient(
+    160deg,
+    var(--color-primary-surface),
+    color-mix(in srgb, var(--color-primary-surface-strong) 80%, var(--color-surface))
+  );
+  box-shadow: var(--shadow-sm);
+}
+
+.member-directory__empty-title {
+  margin: var(--space-1) 0 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.member-directory__empty-hint {
   margin: 0;
-  font-size: 0.875rem;
+  max-width: 16rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
 }
 
 .member-directory__loading {
@@ -391,7 +556,7 @@ defineExpose({ reload: loadDirectory });
   padding: var(--space-3);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--color-border);
 }
 
 .member-directory__sk-avatar {
