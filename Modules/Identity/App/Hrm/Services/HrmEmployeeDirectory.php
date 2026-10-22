@@ -71,7 +71,7 @@ class HrmEmployeeDirectory
         } catch (Throwable $e) {
             Log::warning('hrm.database.roster_failed', ['message' => $e->getMessage()]);
 
-            throw new HrmDatabaseUnavailable('Không đọc được danh sách nhân sự từ cơ sở dữ liệu HRM.');
+            throw HrmDatabaseUnavailable::wrap($e, 'Không đọc được danh sách nhân sự từ cơ sở dữ liệu HRM.');
         }
     }
 
@@ -510,7 +510,7 @@ class HrmEmployeeDirectory
                 ->whereNull('deleted_at')
                 ->first(['uuid', 'full_name', 'code', 'job_title_name', 'status']);
         } catch (Throwable $e) {
-            throw new HrmDatabaseUnavailable('Không đọc được nhân viên HRM theo id.', $e);
+            throw HrmDatabaseUnavailable::wrap($e, 'Không đọc được nhân viên HRM theo id.');
         }
 
         if ($row === null || ! $this->isActiveHrmEmployee($row)) {

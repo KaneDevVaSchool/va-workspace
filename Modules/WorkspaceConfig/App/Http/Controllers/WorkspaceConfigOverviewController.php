@@ -5,6 +5,7 @@ namespace Modules\WorkspaceConfig\App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Modules\Evaluation\App\Services\EvaluationCriteriaService;
 use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
@@ -101,7 +102,7 @@ class WorkspaceConfigOverviewController extends Controller
                 ? $this->members->rosterFromHrmDatabase($request->boolean('refresh'))
                 : $this->members->workspaceRoster();
         } catch (HrmDatabaseUnavailable $e) {
-            return response()->json(['message' => $e->getMessage()], 503);
+            return $this->hrmDatabaseErrorResponse($e);
         }
 
         return response()->json($payload);
@@ -117,7 +118,7 @@ class WorkspaceConfigOverviewController extends Controller
         } catch (MemberDepartmentNotAssignable $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         } catch (HrmDatabaseUnavailable $e) {
-            return response()->json(['message' => $e->getMessage()], 503);
+            return $this->hrmDatabaseErrorResponse($e);
         }
 
         $this->activityLogs->record(
@@ -155,5 +156,18 @@ class WorkspaceConfigOverviewController extends Controller
         );
 
         return response()->json(['member' => $presented]);
+    }
+
+    private function hrmDatabaseErrorResponse(HrmDatabaseUnavailable $e): JsonResponse
+    {
+        Log::error('hrm.database.workspace_config', [
+            'message' => $e->getMessage(),
+            'root' => $e->getPrevious()?->getMessage(),
+        ]);
+
+        return response()->json([
+            'message' => $e->detailForClient(),
+            'hint' => 'Kiểm tra HRM_DB_* trong .env (cùng DB với hrm.vaschools.edu.vn), rồi chạy: php artisan identity:hrm-db-diagnose',
+        ], 503);
     }
 }
