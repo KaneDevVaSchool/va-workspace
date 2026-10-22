@@ -38,6 +38,6 @@ app.use(router);
 
 app.mount('#app');
 
-router.isReady().then(() => {
+router.isReady().finally(() => {
   requestAnimationFrame(() => dismissAppBoot());
 });

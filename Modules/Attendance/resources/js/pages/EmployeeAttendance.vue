@@ -1,6 +1,6 @@
 <script setup>
 //
-// Chấm công nhân viên — giới thiệu (mobile), trang chủ, hình thức, GPS,
+// Chấm công nhân viên — trang chủ, hình thức, GPS,
 // WiFi, khuôn mặt, QR, mã, thành công, cài đặt. Lịch sử xem tại tab Lịch sử
 // (/dashboard/me/requests). Chưa nối máy chấm công / HRM: lần bấm lưu trên máy.
 //
@@ -16,7 +16,6 @@ import {
   writeEmployeeAttendanceToday,
 } from '../lib/employeeAttendanceSession';
 
-const INTRO_KEY = 'employee-attendance-intro-mobile-v1';
 const PREFS_KEY = 'employee-attendance-prefs-v1';
 const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 
@@ -48,14 +47,6 @@ const HEADINGS = {
   settings: 'Cài đặt',
 };
 
-function hasSeenIntro() {
-  try {
-    return localStorage.getItem(INTRO_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
 function readPreferredMethod() {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
@@ -71,7 +62,7 @@ const auth = useAuthStore();
 const now = ref(new Date());
 const bodyRef = ref(null);
 const videoRef = ref(null);
-const stack = ref([hasSeenIntro() ? 'home' : 'welcome']);
+const stack = ref(['home']);
 const punchLog = ref(readEmployeeAttendanceLog());
 const preferredMethod = ref(readPreferredMethod());
 const geoState = ref('idle');
@@ -90,26 +81,19 @@ const checkOutTime = ref(stored?.checkOutTime ?? null);
 const checkInMethod = ref(stored?.checkInMethod ?? null);
 const checkOutMethod = ref(stored?.checkOutMethod ?? null);
 
-const avatarBroken = ref(false);
 let timer = 0;
 let cameraToken = 0;
 let mediaStream = null;
 
 const registerPageRefresh = inject('employeePageRefreshRegister', null);
+const replayWorkspaceIntro = inject('employeeWorkspaceIntroReplay', null);
 let unregisterPageRefresh;
 
 const screen = computed(() => stack.value[stack.value.length - 1] || 'home');
-const showHead = computed(() => !['welcome', 'home', 'success'].includes(screen.value));
+const showHead = computed(() => !['home', 'success'].includes(screen.value));
 const headTitle = computed(() => HEADINGS[screen.value] || 'Chấm công');
 
 const displayName = computed(() => auth.user?.name?.trim() || 'Bạn');
-const jobTitle = computed(() => (
-  auth.user?.job_title_name?.trim()
-  || auth.user?.department?.name?.trim()
-  || ''
-));
-const avatarUrl = computed(() => auth.user?.avatar_url || '');
-const avatarInitial = computed(() => displayName.value.charAt(0).toUpperCase() || '?');
 const placeLabel = computed(() => {
   const company = auth.user?.company?.name?.trim();
   const department = auth.user?.department?.name?.trim();
@@ -157,7 +141,6 @@ const faceStatus = computed(() => {
   return 'Chưa xem trước được camera';
 });
 const dock = computed(() => {
-  if (screen.value === 'welcome') return { label: 'Bắt đầu', action: 'start' };
   if (screen.value === 'success') return { label: 'Quay lại trang chủ', action: 'home' };
   if (screen.value === 'gps') return { label: 'Chấm công', action: 'punch-gps' };
   if (screen.value === 'wifi') return { label: 'Chấm công', action: 'punch-wifi' };
@@ -194,7 +177,7 @@ onMounted(() => {
   timer = window.setInterval(() => {
     now.value = new Date();
   }, 1000);
-  if (screen.value !== 'welcome') requestLocation();
+  requestLocation();
   if (typeof registerPageRefresh === 'function') {
     unregisterPageRefresh = registerPageRefresh(async () => {
       reloadPunch();
@@ -252,17 +235,6 @@ function reloadPunch() {
   checkInMethod.value = row?.checkInMethod ?? null;
   checkOutMethod.value = row?.checkOutMethod ?? null;
   punchLog.value = readEmployeeAttendanceLog();
-}
-
-function startIntro() {
-  try {
-    localStorage.setItem(INTRO_KEY, '1');
-  } catch {
-    /* ignore quota */
-  }
-  stack.value = ['home'];
-  requestLocation();
-  scrollTop();
 }
 
 function onHero() {
@@ -334,10 +306,6 @@ async function punchGps() {
 
 async function onDock() {
   const action = dock.value?.action;
-  if (action === 'start') {
-    startIntro();
-    return;
-  }
   if (action === 'home') {
     goHome();
     return;
@@ -478,67 +446,9 @@ function stopCamera() {
       </header>
 
       <div ref="bodyRef" class="att__body hide-scrollbar">
-        <section v-if="screen === 'welcome'" class="att-welcome">
-          <p class="att-kicker">VA Workspace</p>
-          <h2>Chấm công thông minh</h2>
-          <p class="att-welcome__lead">Nhanh chóng - Chính xác - Hiện đại</p>
-          <svg class="att-welcome__art" viewBox="0 0 360 250" aria-hidden="true">
-            <ellipse cx="78" cy="46" rx="28" ry="14" fill="#ffffff" opacity=".85" />
-            <ellipse cx="98" cy="48" rx="18" ry="12" fill="#ffffff" opacity=".9" />
-            <ellipse cx="250" cy="38" rx="34" ry="16" fill="#ffffff" opacity=".8" />
-            <rect x="28" y="92" width="58" height="120" rx="8" fill="var(--color-tertiary-200)" />
-            <rect x="96" y="64" width="72" height="148" rx="8" fill="var(--color-tertiary-300)" />
-            <rect x="178" y="84" width="50" height="128" rx="8" fill="var(--color-tertiary-100)" />
-            <g fill="#ffffff" opacity=".8">
-              <rect x="40" y="108" width="12" height="10" rx="1" />
-              <rect x="58" y="108" width="12" height="10" rx="1" />
-              <rect x="40" y="126" width="12" height="10" rx="1" />
-              <rect x="58" y="126" width="12" height="10" rx="1" />
-              <rect x="110" y="82" width="14" height="12" rx="1" />
-              <rect x="132" y="82" width="14" height="12" rx="1" />
-              <rect x="110" y="104" width="14" height="12" rx="1" />
-              <rect x="132" y="104" width="14" height="12" rx="1" />
-              <rect x="110" y="126" width="14" height="12" rx="1" />
-              <rect x="132" y="126" width="14" height="12" rx="1" />
-            </g>
-            <circle cx="46" cy="188" r="18" fill="var(--color-secondary-300)" />
-            <rect x="40" y="200" width="12" height="22" rx="4" fill="var(--color-secondary-600)" />
-            <circle cx="210" cy="176" r="22" fill="var(--color-secondary-200)" />
-            <rect x="202" y="192" width="16" height="28" rx="5" fill="var(--color-secondary-500)" />
-            <circle cx="262" cy="118" r="26" fill="#f2c7a8" />
-            <path d="M236 116c2-28 52-30 54-2-8-14-40-16-54 2z" fill="#2c2c31" />
-            <path d="M232 168c8-22 62-22 70 2l8 48h-88l10-50z" fill="var(--color-tertiary-600)" />
-            <path d="M250 176h28l6 28H246l4-28z" fill="#ffffff" />
-            <rect x="214" y="154" width="34" height="58" rx="14" fill="#f2c7a8" />
-            <rect x="188" y="168" width="28" height="46" rx="8" fill="#1a1a1a" />
-            <rect x="192" y="172" width="20" height="34" rx="3" fill="#d7e8ff" />
-            <circle cx="198" cy="208" r="3" fill="var(--color-tertiary-500)" />
-          </svg>
-        </section>
-
-        <section v-else-if="screen === 'home'" class="att-home">
-          <article class="att-hello">
-            <span class="att-avatar" aria-hidden="true">
-              <img
-                v-if="avatarUrl && !avatarBroken"
-                :src="avatarUrl"
-                alt=""
-                @error="avatarBroken = true"
-              />
-              <span v-else>{{ avatarInitial }}</span>
-            </span>
-            <div class="att-hello__text">
-              <p>Xin chào,</p>
-              <strong>{{ displayName }}</strong>
-              <small v-if="jobTitle">{{ jobTitle }}</small>
-            </div>
-            <button type="button" class="att-icon-btn" aria-label="Cài đặt chấm công" @click="openSettings">
-              <AppIcon name="settings" :size="18" />
-            </button>
-          </article>
-
+        <section v-if="screen === 'home'" class="att-home">
           <article class="att-clock">
-            <div>
+            <div class="att-clock__main">
               <p>Thời gian hiện tại</p>
               <strong>{{ timeLabel }}</strong>
               <small>{{ homeDateLabel }}</small>
@@ -548,6 +458,9 @@ function stopCamera() {
               <b>{{ weather ? `${weather.temp}°C` : '—°' }}</b>
               <small>{{ weather ? 'Gần bạn' : 'Thời tiết' }}</small>
             </div>
+            <button type="button" class="att-icon-btn att-clock__settings" aria-label="Cài đặt chấm công" @click="openSettings">
+              <AppIcon name="settings" :size="18" />
+            </button>
           </article>
 
           <p class="att-banner" :class="`att-banner--${geoBanner.tone}`">
@@ -773,9 +686,9 @@ function stopCamera() {
               <AppIcon v-if="preferredMethod === method.id" name="check" :size="16" />
             </button>
           </div>
-          <button type="button" class="att-choice" @click="push('welcome')">
+          <button type="button" class="att-choice" @click="replayWorkspaceIntro?.()">
             <span class="att-tile__icon att-tone--blue"><AppIcon name="sparkles" :size="16" /></span>
-            <span>Xem lại màn giới thiệu</span>
+            <span>Xem lại giới thiệu Workspace</span>
             <AppIcon name="chevronRight" :size="16" />
           </button>
           <button type="button" class="att-choice att-choice--danger" @click="clearToday">
@@ -788,7 +701,6 @@ function stopCamera() {
       <footer v-if="dock" class="att-dock">
         <button type="button" class="att-cta" :disabled="dockDisabled" @click="onDock">
           {{ dock.label }}
-          <AppIcon v-if="screen === 'welcome'" name="chevronRight" :size="18" />
         </button>
       </footer>
     </div>
@@ -817,7 +729,7 @@ function stopCamera() {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: var(--space-3) var(--space-3) 0;
+  padding: 0;
 }
 
 .att__body {
@@ -826,7 +738,7 @@ function stopCamera() {
   overflow: auto;
   display: flex;
   flex-direction: column;
-  padding-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
 }
 
 .att-head {
@@ -839,7 +751,6 @@ function stopCamera() {
 }
 
 .att-head h1,
-.att-welcome h2,
 .att-success h2,
 .att-wifi h2,
 .att-section {
@@ -884,40 +795,17 @@ function stopCamera() {
   outline-offset: 2px;
 }
 
-.att-welcome,
 .att-home,
 .att-success {
   flex: 1;
 }
 
-.att-welcome {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding-top: var(--space-5);
-}
-
-.att-kicker {
-  margin: 0 0 var(--space-2);
-  color: var(--color-tertiary-600);
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-
-.att-welcome h2 {
-  font-size: 2rem;
-  line-height: 1.15;
-}
-
-.att-welcome__lead,
 .att-lead {
   margin: var(--space-2) 0 0;
   color: var(--color-text-muted);
   font-size: 0.92rem;
 }
 
-.att-welcome__art,
 .att-skyline {
   width: 100%;
   height: auto;
@@ -928,10 +816,9 @@ function stopCamera() {
 .att-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
-.att-hello,
 .att-clock,
 .att-place,
 .att-panel,
@@ -945,24 +832,25 @@ function stopCamera() {
   box-shadow: var(--att-shadow);
 }
 
-.att-hello,
 .att-clock {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-radius: 22px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: 18px;
 }
 
-.att-hello__text,
-.att-clock > div:first-child,
+.att-clock__main,
 .att-place span:last-child,
 .att-notice span:last-child {
   min-width: 0;
   flex: 1;
 }
 
-.att-hello__text p,
+.att-clock__settings {
+  flex-shrink: 0;
+}
+
 .att-clock p,
 .att-success__time,
 .att-success__date,
@@ -972,7 +860,6 @@ function stopCamera() {
   font-size: 0.8125rem;
 }
 
-.att-hello__text strong,
 .att-place strong,
 .att-notice strong {
   display: block;
@@ -980,7 +867,6 @@ function stopCamera() {
   font-size: 1rem;
 }
 
-.att-hello__text small,
 .att-clock small,
 .att-place small,
 .att-notice small,
@@ -989,24 +875,6 @@ function stopCamera() {
   display: block;
   color: var(--color-text-muted);
   font-size: 0.75rem;
-}
-
-.att-avatar {
-  display: grid;
-  place-items: center;
-  width: 3rem;
-  height: 3rem;
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  background: var(--color-tertiary-100);
-  color: var(--color-tertiary-800);
-  font-weight: 800;
-}
-
-.att-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 .att-clock strong {
@@ -1704,14 +1572,6 @@ function stopCamera() {
 
 .att-nav__item--active {
   color: var(--color-tertiary-600);
-}
-
-@media (max-width: 768px) {
-  .att-page {
-    width: calc(100% + (var(--space-3) * 2));
-    height: calc(100% + var(--space-2) + var(--space-3));
-    margin: calc(var(--space-2) * -1) calc(var(--space-3) * -1) calc(var(--space-3) * -1);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

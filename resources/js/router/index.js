@@ -116,7 +116,11 @@ router.beforeEach(async (to) => {
     const auth = useAuthStore();
 
     if (!auth.isReady || (to.meta.requiresAuth && !auth.user)) {
-        await auth.fetchMe({ force: !auth.user });
+        try {
+            await auth.fetchMe({ force: !auth.user });
+        } catch {
+            // Mạng / server lỗi — không chặn isReady (PWA boot) vô hạn.
+        }
     }
 
     if (to.meta.requiresAuth && !auth.isAuthenticated) {

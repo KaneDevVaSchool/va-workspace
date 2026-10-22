@@ -34,9 +34,7 @@ final class HrmAssignmentData
         if ($position !== null) {
             $nestedJobTitle = $position['job_title'] ?? null;
             $jobTitleFromPosition = $position['job_title_name']
-                ?? (is_array($nestedJobTitle) ? ($nestedJobTitle['name'] ?? null) : null)
-                ?? $position['title']
-                ?? null;
+                ?? (is_array($nestedJobTitle) ? ($nestedJobTitle['name'] ?? null) : null);
         }
 
         return new self(

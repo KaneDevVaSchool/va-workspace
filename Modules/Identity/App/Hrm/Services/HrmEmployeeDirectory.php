@@ -34,6 +34,8 @@ class HrmEmployeeDirectory
     /** @var array<string, object>|null division index: "{department_id}|{key}" */
     private ?array $hrmDivisionsByDeptKey = null;
 
+    private ?bool $assignmentHasJobTitleIdColumn = null;
+
     public static function isConfigured(): bool
     {
         return filled(config('database.connections.hrm.database'));
@@ -395,9 +397,7 @@ class HrmEmployeeDirectory
                 return null;
             }
 
-            $jobTitle = $row->job_title ?: $row->position_title ?: $row->profile_job_title;
-
-            return filled($jobTitle) ? (string) $jobTitle : null;
+            return $this->hrmJobTitleLabel($row);
         } catch (HrmDatabaseUnavailable $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -678,10 +678,44 @@ class HrmEmployeeDirectory
         return ! in_array($status, ['terminated', 'inactive'], true);
     }
 
+    private function assignmentHasJobTitleIdColumn(): bool
+    {
+        if ($this->assignmentHasJobTitleIdColumn !== null) {
+            return $this->assignmentHasJobTitleIdColumn;
+        }
+
+        try {
+            $this->assignmentHasJobTitleIdColumn = Schema::connection('hrm')->hasColumn(
+                'employee_assignments',
+                'job_title_id',
+            );
+        } catch (Throwable) {
+            $this->assignmentHasJobTitleIdColumn = false;
+        }
+
+        return $this->assignmentHasJobTitleIdColumn;
+    }
+
+    /**
+     * Chỉ tên trong bảng job_titles HRM (phân công / vị trí), không dùng positions.title.
+     *
+     * @param  object{job_title?: mixed, assignment_job_title?: mixed, profile_job_title?: mixed}  $row
+     */
+    private function hrmJobTitleLabel(object $row): ?string
+    {
+        foreach (['assignment_job_title', 'job_title', 'profile_job_title'] as $key) {
+            if (filled($row->{$key} ?? null)) {
+                return (string) $row->{$key};
+            }
+        }
+
+        return null;
+    }
+
     /** @return list<string> */
     private function employeeRowColumns(): array
     {
-        return [
+        $columns = [
             'e.id',
             'e.uuid',
             'e.code',
@@ -716,19 +750,30 @@ class HrmEmployeeDirectory
             'jt.name as job_title',
             'pl.name as level_name',
         ];
+
+        if ($this->assignmentHasJobTitleIdColumn()) {
+            $columns[] = 'ajt.name as assignment_job_title';
+        }
+
+        return $columns;
     }
 
     private function employeeRowQuery()
     {
-        return DB::connection('hrm')
+        $query = DB::connection('hrm')
             ->table('employees as e')
             ->leftJoin('employee_assignments as a', 'a.open_primary_employee_id', '=', 'e.id')
             ->leftJoin('companies as c', 'c.id', '=', 'a.company_id')
             ->leftJoin('org_units as ou', 'ou.id', '=', 'a.org_unit_id')
             ->leftJoin('positions as p', 'p.id', '=', 'a.position_id')
             ->leftJoin('job_titles as jt', 'jt.id', '=', 'p.job_title_id')
-            ->leftJoin('position_levels as pl', 'pl.level', '=', 'p.level')
-            ->whereNull('e.deleted_at');
+            ->leftJoin('position_levels as pl', 'pl.level', '=', 'p.level');
+
+        if ($this->assignmentHasJobTitleIdColumn()) {
+            $query->leftJoin('job_titles as ajt', 'ajt.id', '=', 'a.job_title_id');
+        }
+
+        return $query->whereNull('e.deleted_at');
     }
 
     private function employeeRows(): Collection
@@ -823,7 +868,7 @@ class HrmEmployeeDirectory
      */
     private function presentEmployee(object $row, Collection $unitsById, Collection $names, Collection $concurrent, Collection $avatars): array
     {
-        $jobTitle = $row->job_title ?: $row->position_title ?: $row->profile_job_title;
+        $jobTitle = $this->hrmJobTitleLabel($row);
         $level = filled($row->level_name)
             ? (string) $row->level_name
             : ($row->position_level !== null && $row->position_level !== '' ? (string) $row->position_level : null);
@@ -868,7 +913,7 @@ class HrmEmployeeDirectory
                     $placement = $this->placementFromOrgUnit($item->org_unit_id ?? null, $unitsById);
 
                     return [
-                        'job_title_name' => $item->job_title ?: $item->position_title,
+                        'job_title_name' => filled($item->job_title ?? null) ? (string) $item->job_title : null,
                         'company_name' => $item->company_name,
                         'org_unit_name' => $item->org_unit_name,
                         'department_name' => $placement['department_name'],

@@ -23,6 +23,11 @@ import {
 import AppIcon from '@/components/AppIcon.vue';
 import { useChatStore } from '@modules/Chat/resources/js/store/chatStore';
 import { useChatRealtime } from '@/composables/useChatRealtime';
+import EmployeeMobileWorkspaceIntro from '../components/EmployeeMobileWorkspaceIntro.vue';
+import {
+  hasSeenWorkspaceIntro,
+  markWorkspaceIntroSeen,
+} from '../lib/employeeMobileWorkspaceIntro';
 
 const route = useRoute();
 const router = useRouter();
@@ -55,6 +60,19 @@ provide('employeePageRefreshRegister', (handler) => {
     if (pageRefreshHandler === handler) pageRefreshHandler = null;
   };
 });
+
+const showWorkspaceIntro = ref(!hasSeenWorkspaceIntro());
+
+function dismissWorkspaceIntro() {
+  markWorkspaceIntroSeen();
+  showWorkspaceIntro.value = false;
+}
+
+function replayWorkspaceIntro() {
+  showWorkspaceIntro.value = true;
+}
+
+provide('employeeWorkspaceIntroReplay', replayWorkspaceIntro);
 
 function resolvePageRefreshHandler() {
   if (route.name === 'dashboard.me' && homeRefreshHandler) return homeRefreshHandler;
@@ -192,6 +210,7 @@ const todayLabel = computed(() => new Intl.DateTimeFormat('vi-VN', {
 }).format(new Date()));
 
 const isProfileRoute = computed(() => route.name === 'employee.profile');
+const isAttendanceRoute = computed(() => route.name === 'employee.attendance');
 
 function goToProfile() {
   if (isProfileRoute.value) return;
@@ -208,6 +227,11 @@ function goBackFromSubpage() {
 </script>
 
 <template>
+  <EmployeeMobileWorkspaceIntro
+    v-if="showWorkspaceIntro"
+    @start="dismissWorkspaceIntro"
+  />
+
   <div
     class="employee-shell"
     :class="[`employee-shell--${shellMode}`, 'employee-shell--unified']"
@@ -271,7 +295,7 @@ function goBackFromSubpage() {
               {{ pageHeaderTitle || displayName || 'Nhân sự' }}
             </h1>
             <div
-              v-if="pageHeaderTitle"
+              v-if="pageHeaderTitle && !isAttendanceRoute"
               class="employee-shell__meta employee-shell__meta--reserve"
             >
               <span
@@ -362,7 +386,10 @@ function goBackFromSubpage() {
     <main
       ref="contentRef"
       class="employee-shell__content employee-shell__content--unified"
-      :class="{ 'employee-shell__content--chat': isChatRoute }"
+      :class="{
+        'employee-shell__content--chat': isChatRoute,
+        'employee-shell__content--attendance': isAttendanceRoute,
+      }"
     >
       <div
         v-if="route.name === 'dashboard.me' || route.name === 'employee.feed'"
