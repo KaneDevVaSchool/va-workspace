@@ -345,6 +345,53 @@ class HrmApiClient
     }
 
     /**
+     * Giờ chấm một ngày — GET /api/v1/attendance/punches?from=to=$workDate.
+     *
+     * @return array<string, mixed>|null phần tử đầu, hoặc null khi chưa có giờ
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function getWorkspacePunch(string $employeeUuid, string $workDate): ?array
+    {
+        $response = $this->timesheetRequest('get', '/api/v1/attendance/punches', [
+            'employee_uuid' => $employeeUuid,
+            'from' => $workDate,
+            'to' => $workDate,
+        ], forbiddenMessage: 'Workspace chưa được cấp quyền gửi giờ chấm công về HRM. Liên hệ IT.');
+
+        $data = $response?->json('data');
+        if (! is_array($data) || $data === []) {
+            return null;
+        }
+
+        $first = array_is_list($data) ? ($data[0] ?? null) : $data;
+
+        return is_array($first) ? $first : null;
+    }
+
+    /**
+     * Ghi giờ vào/ra — POST /api/v1/attendance/punches.
+     *
+     * @param  array{work_date: string, check_in_time?: string|null, check_out_time?: string|null, check_in_method?: string|null, check_out_method?: string|null}  $fields
+     * @return array<string, mixed>
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function upsertWorkspacePunch(string $employeeUuid, array $fields): array
+    {
+        $response = $this->timesheetRequest(
+            'post',
+            '/api/v1/attendance/punches',
+            array_merge($fields, ['employee_uuid' => $employeeUuid]),
+            forbiddenMessage: 'Workspace chưa được cấp quyền gửi giờ chấm công về HRM. Liên hệ IT.',
+        );
+
+        $data = $response?->json('data');
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
      * @param  'get'|'post'  $method
      * @param  array<string, scalar|null>  $payload
      *
@@ -355,6 +402,7 @@ class HrmApiClient
         string $path,
         array $payload,
         bool $allowNotFound = false,
+        ?string $forbiddenMessage = null,
     ): ?\Illuminate\Http\Client\Response {
         try {
             $http = HrmOutboundHttp::timesheetClient();
@@ -377,15 +425,17 @@ class HrmApiClient
 
         if ($status === 403 && $code === 'MISSING_ABILITY') {
             throw HrmApiUnavailable::userFacing(
-                'Workspace chưa được cấp quyền duyệt bảng chấm công trên HRM. Liên hệ IT.'
+                $forbiddenMessage ?? 'Workspace chưa được cấp quyền duyệt bảng chấm công trên HRM. Liên hệ IT.'
             );
         }
 
         if ($status === 403) {
             throw HrmApiUnavailable::userFacing(
-                $message !== '' && $code !== 'FORBIDDEN'
-                    ? $message
-                    : 'Anh/chị không phải Trưởng đơn vị của phòng này.'
+                $forbiddenMessage ?? (
+                    $message !== '' && $code !== 'FORBIDDEN'
+                        ? $message
+                        : 'Anh/chị không phải Trưởng đơn vị của phòng này.'
+                )
             );
         }
 

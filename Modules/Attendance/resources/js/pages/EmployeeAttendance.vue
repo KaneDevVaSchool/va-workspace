@@ -2,15 +2,17 @@
 //
 // Chấm công nhân viên — trang chủ, hình thức, GPS,
 // WiFi, khuôn mặt, QR, mã, thành công. Lịch sử xem tại tab Lịch sử
-// (/dashboard/me/requests). Chưa nối máy chấm công / HRM: lần bấm lưu trên máy.
+// (/dashboard/me/requests). Giờ vào/ra gửi về HRM; nếu HRM lỗi thì giữ
+// trên máy và báo đang đồng bộ lại.
 //
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import jsQR from 'jsqr';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import AppIcon from '@/components/AppIcon.vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AttendanceGlyph from '../components/AttendanceGlyph.vue';
 import {
-  readEmployeeAttendanceLog,
   readEmployeeAttendanceToday,
   writeEmployeeAttendanceToday,
 } from '../lib/employeeAttendanceSession';
@@ -27,11 +29,11 @@ const METHODS = [
 ];
 
 const HOME_TILES = [
-  { id: 'qr', label: 'Quét QR', glyph: 'qr', tone: 'violet' },
-  { id: 'face', label: 'Camera Hanet', glyph: 'camera', tone: 'orange' },
-  { id: 'gps', label: 'GPS', glyph: 'pin', tone: 'green' },
-  { id: 'wifi', label: 'Chấm bằng WiFi', glyph: 'wifi', tone: 'teal' },
-  { id: 'code', label: 'Nhập mã', glyph: 'keyboard', tone: 'rose' },
+  { id: 'qr', label: 'Quét QR', hint: 'Đưa mã tại điểm chấm vào khung', glyph: 'qr', tone: 'violet' },
+  { id: 'face', label: 'Camera Hanet', hint: 'Đưa mặt vào khung camera', glyph: 'camera', tone: 'orange' },
+  { id: 'gps', label: 'GPS', hint: 'Gắn lần chấm với vị trí máy', glyph: 'pin', tone: 'green' },
+  { id: 'wifi', label: 'Chấm bằng WiFi', hint: 'Khi đang dùng mạng công ty', glyph: 'wifi', tone: 'teal' },
+  { id: 'code', label: 'Nhập mã', hint: 'Khi không dùng được cách khác', glyph: 'keyboard', tone: 'rose' },
 ];
 
 const HEADINGS = {
@@ -48,8 +50,10 @@ const bodyRef = ref(null);
 const videoRef = ref(null);
 const qrVideoRef = ref(null);
 const qrCanvasRef = ref(null);
+const mapElRef = ref(null);
 const stack = ref(['home']);
-const punchLog = ref(readEmployeeAttendanceLog());
+const punching = ref(false);
+const syncState = ref('idle');
 const geoState = ref('idle');
 const coords = ref(null);
 const weather = ref(null);
@@ -60,6 +64,8 @@ const codeError = ref('');
 const lastResult = ref(null);
 const qrState = ref('idle');
 const qrValue = ref('');
+const wifiState = ref('idle');
+const wifiSignal = ref(0);
 
 const stored = readEmployeeAttendanceToday();
 const checkInTime = ref(stored?.checkInTime ?? null);
@@ -68,11 +74,16 @@ const checkInMethod = ref(stored?.checkInMethod ?? null);
 const checkOutMethod = ref(stored?.checkOutMethod ?? null);
 
 let timer = 0;
+let hydrateToken = 0;
 let cameraToken = 0;
 let mediaStream = null;
 let qrCameraToken = 0;
 let qrMediaStream = null;
 let qrScanFrame = 0;
+let geoMap = null;
+let geoMarker = null;
+let geoRing = null;
+let wifiTimer = 0;
 
 const registerPageRefresh = inject('employeePageRefreshRegister', null);
 let unregisterPageRefresh;
@@ -100,6 +111,18 @@ const punchHint = computed(() => {
   }
   if (checkInTime.value) return `Đã vào lúc ${checkInTime.value}`;
   return 'Chưa chấm công hôm nay';
+});
+const syncLine = computed(() => {
+  if (syncState.value === 'syncing') {
+    return { text: 'Đang đồng bộ với HRM', wait: true };
+  }
+  if (syncState.value === 'pending') {
+    return { text: 'Đã chấm công, đang đồng bộ lại với HRM', wait: true };
+  }
+  if (syncState.value === 'synced' && (checkInTime.value || checkOutTime.value)) {
+    return { text: 'Đã đồng bộ với HRM', wait: false };
+  }
+  return null;
 });
 const geoBanner = computed(() => {
   if (geoState.value === 'granted') {
@@ -145,6 +168,10 @@ const screenSubtitle = computed(() => {
   return '';
 });
 const qrFallback = computed(() => ['denied', 'unavailable'].includes(qrState.value));
+const wifiCaption = computed(() => (
+  wifiState.value === 'connected' ? 'Đã kết nối WiFi công ty' : 'Đang kiểm tra kết nối…'
+));
+const wifiBars = computed(() => Math.min(4, Math.max(0, Math.round(wifiSignal.value / 25))));
 const dock = computed(() => {
   if (screen.value === 'success') return { label: 'Quay lại trang chủ', action: 'home' };
   if (screen.value === 'gps') return { label: 'Chấm công', action: 'punch-gps' };
@@ -155,8 +182,10 @@ const dock = computed(() => {
   return null;
 });
 const dockDisabled = computed(() => {
+  if (punching.value) return true;
   if (screen.value === 'code') return codeValue.value.trim().length < 4;
   if (screen.value === 'qr' && qrFallback.value) return qrValue.value.trim().length < 4;
+  if (screen.value === 'wifi') return wifiState.value !== 'connected';
   return false;
 });
 const resultGlyph = computed(() => {
@@ -177,16 +206,25 @@ watch(screen, (value, prev) => {
   else if (prev === 'face') stopCamera();
   if (value === 'qr') startQrCamera();
   else if (prev === 'qr') stopQrCamera();
+  if (value === 'gps') nextTick(() => initGeoMap());
+  else if (prev === 'gps') destroyGeoMap();
+  if (value === 'wifi') startWifiCheck();
+  else if (prev === 'wifi') stopWifiCheck();
 }, { flush: 'post' });
+
+watch(coords, (value) => {
+  if (value) updateGeoMap(value);
+});
 
 onMounted(() => {
   timer = window.setInterval(() => {
     now.value = new Date();
   }, 1000);
+  void hydrateTodayFromHrm();
   requestLocation();
   if (typeof registerPageRefresh === 'function') {
     unregisterPageRefresh = registerPageRefresh(async () => {
-      reloadPunch();
+      await hydrateTodayFromHrm();
       now.value = new Date();
       if (geoState.value !== 'pending') await requestLocation();
     });
@@ -197,6 +235,8 @@ onBeforeUnmount(() => {
   window.clearInterval(timer);
   stopCamera();
   stopQrCamera();
+  destroyGeoMap();
+  stopWifiCheck();
   unregisterPageRefresh?.();
 });
 
@@ -236,7 +276,20 @@ function reloadPunch() {
   checkOutTime.value = row?.checkOutTime ?? null;
   checkInMethod.value = row?.checkInMethod ?? null;
   checkOutMethod.value = row?.checkOutMethod ?? null;
-  punchLog.value = readEmployeeAttendanceLog();
+}
+
+function hasPunch(record) {
+  return Boolean(record?.checkInTime || record?.checkOutTime);
+}
+
+function rememberToday(row) {
+  writeEmployeeAttendanceToday({
+    checkInTime: row?.checkInTime || row?.check_in_time || null,
+    checkOutTime: row?.checkOutTime || row?.check_out_time || null,
+    checkInMethod: row?.checkInMethod || row?.check_in_method || null,
+    checkOutMethod: row?.checkOutMethod || row?.check_out_method || null,
+  });
+  reloadPunch();
 }
 
 function onHero() {
@@ -255,38 +308,85 @@ function openMethod(id) {
   push(id);
 }
 
-function commitPunch(methodId) {
+async function commitPunch(methodId) {
+  if (punching.value) return;
   const method = METHODS.find((item) => item.id === methodId);
+  const methodLabel = method?.label || methodId;
   const fresh = new Date();
   const label = formatHm(fresh);
   now.value = fresh;
   const checkingOut = Boolean(checkInTime.value && !checkOutTime.value);
+  punching.value = true;
+  hydrateToken += 1;
   if (checkingOut) {
     checkOutTime.value = label;
-    checkOutMethod.value = method?.label || methodId;
+    checkOutMethod.value = methodLabel;
   } else {
     checkInTime.value = label;
-    checkOutTime.value = null;
-    checkInMethod.value = method?.label || methodId;
-    checkOutMethod.value = null;
+    checkInMethod.value = methodLabel;
   }
-  writeEmployeeAttendanceToday({
+  rememberToday({
     checkInTime: checkInTime.value,
     checkOutTime: checkOutTime.value,
     checkInMethod: checkInMethod.value,
     checkOutMethod: checkOutMethod.value,
   });
-  punchLog.value = readEmployeeAttendanceLog();
+  syncState.value = 'syncing';
+  let synced = false;
+  try {
+    const { data } = await window.axios.post('/api/attendance/punches', {
+      direction: checkingOut ? 'out' : 'in',
+      method: methodLabel,
+    });
+    const remote = {
+      checkInTime: data?.data?.check_in_time || null,
+      checkOutTime: data?.data?.check_out_time || null,
+      checkInMethod: data?.data?.check_in_method || null,
+      checkOutMethod: data?.data?.check_out_method || null,
+    };
+    if (hasPunch(remote)) rememberToday(remote);
+    synced = true;
+    syncState.value = 'synced';
+  } catch {
+    syncState.value = 'pending';
+  } finally {
+    punching.value = false;
+  }
   lastResult.value = {
     action: checkingOut ? 'out' : 'in',
-    time: label,
+    time: checkingOut ? (checkOutTime.value || label) : (checkInTime.value || label),
     methodId,
-    method: method?.label || methodId,
+    method: methodLabel,
     dateLabel: formatLongDate(fresh),
+    synced,
   };
   stack.value = ['home', 'success'];
   scrollTop();
   if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(12);
+}
+
+async function hydrateTodayFromHrm() {
+  const token = ++hydrateToken;
+  if (hasPunch(readEmployeeAttendanceToday())) syncState.value = 'syncing';
+  try {
+    const { data } = await window.axios.get('/api/attendance/punches/today');
+    if (token !== hydrateToken) return;
+    const remote = {
+      checkInTime: data?.data?.check_in_time || null,
+      checkOutTime: data?.data?.check_out_time || null,
+      checkInMethod: data?.data?.check_in_method || null,
+      checkOutMethod: data?.data?.check_out_method || null,
+    };
+    if (hasPunch(remote)) {
+      rememberToday(remote);
+      syncState.value = 'synced';
+      return;
+    }
+    syncState.value = hasPunch(readEmployeeAttendanceToday()) ? 'pending' : 'idle';
+  } catch {
+    if (token !== hydrateToken) return;
+    syncState.value = hasPunch(readEmployeeAttendanceToday()) ? 'pending' : 'idle';
+  }
 }
 
 async function punchGps() {
@@ -294,7 +394,7 @@ async function punchGps() {
     const ok = await requestLocation();
     if (!ok) return;
   }
-  commitPunch('gps');
+  await commitPunch('gps');
 }
 
 async function onDock() {
@@ -308,11 +408,11 @@ async function onDock() {
     return;
   }
   if (action === 'punch-wifi') {
-    commitPunch('wifi');
+    await commitPunch('wifi');
     return;
   }
   if (action === 'punch-face') {
-    commitPunch('face');
+    await commitPunch('face');
     return;
   }
   if (action === 'punch-qr-code') {
@@ -320,7 +420,7 @@ async function onDock() {
       codeError.value = 'Nhập ít nhất 4 ký tự.';
       return;
     }
-    commitPunch('qr');
+    await commitPunch('qr');
     return;
   }
   if (action === 'punch-code') {
@@ -328,7 +428,7 @@ async function onDock() {
       codeError.value = 'Nhập ít nhất 4 ký tự.';
       return;
     }
-    commitPunch('code');
+    await commitPunch('code');
   }
 }
 
@@ -373,6 +473,72 @@ async function loadWeather(latitude, longitude) {
   } catch {
     /* giữ chip thời tiết trống khi mất mạng */
   }
+}
+
+function initGeoMap() {
+  if (geoMap || !mapElRef.value) return;
+  const fallback = { lat: 21.0278, lon: 105.8342 };
+  const point = coords.value || fallback;
+  geoMap = L.map(mapElRef.value, {
+    attributionControl: false,
+    zoomControl: false,
+    dragging: true,
+    scrollWheelZoom: false,
+  }).setView([point.lat, point.lon], coords.value ? 17 : 13);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+  }).addTo(geoMap);
+
+  const pinIcon = L.divIcon({
+    className: 'att-geo-pin',
+    html: '<span></span>',
+    iconSize: [34, 34],
+    iconAnchor: [17, 30],
+  });
+  geoMarker = L.marker([point.lat, point.lon], { icon: pinIcon }).addTo(geoMap);
+  geoRing = L.circle([point.lat, point.lon], {
+    radius: coords.value?.accuracy || 40,
+    className: 'att-geo-ring',
+    weight: 1.5,
+    fillOpacity: 0.12,
+  }).addTo(geoMap);
+
+  requestAnimationFrame(() => geoMap?.invalidateSize());
+}
+
+function updateGeoMap(point) {
+  if (!geoMap) return;
+  geoMap.setView([point.lat, point.lon], 17);
+  geoMarker?.setLatLng([point.lat, point.lon]);
+  geoRing?.setLatLng([point.lat, point.lon]);
+  geoRing?.setRadius(point.accuracy || 40);
+}
+
+function destroyGeoMap() {
+  geoMap?.remove();
+  geoMap = null;
+  geoMarker = null;
+  geoRing = null;
+}
+
+function startWifiCheck() {
+  wifiState.value = 'checking';
+  wifiSignal.value = 0;
+  window.clearInterval(wifiTimer);
+  wifiTimer = window.setInterval(() => {
+    wifiSignal.value = Math.min(100, wifiSignal.value + 18);
+    if (wifiSignal.value >= 100) {
+      window.clearInterval(wifiTimer);
+      wifiState.value = 'connected';
+    }
+  }, 160);
+}
+
+function stopWifiCheck() {
+  window.clearInterval(wifiTimer);
+  wifiState.value = 'idle';
+  wifiSignal.value = 0;
 }
 
 async function startCamera() {
@@ -506,14 +672,6 @@ function stopQrCamera() {
       <div ref="bodyRef" class="att__body hide-scrollbar">
         <section v-if="screen === 'home'" class="att-home">
           <article class="att-hero">
-            <img
-              src="/images/background/background-logo.png"
-              alt=""
-              class="att-hero__watermark"
-              aria-hidden="true"
-              decoding="async"
-              fetchpriority="low"
-            />
             <div class="att-hero__top">
               <p class="att-hero__greet">
                 {{ heroLabel === 'Chấm công ngay' ? 'Chào' : 'Đang làm việc,' }} <b>{{ displayName }}</b>
@@ -537,12 +695,25 @@ function stopQrCamera() {
               <AppIcon :name="geoBanner.tone === 'ok' ? 'check' : 'info'" :size="14" />
               <span>{{ geoBanner.text }}</span>
             </p>
+            <p v-if="syncLine" class="att-sync att-sync--on-hero">
+              <span class="att-dot" :class="{ 'att-dot--wait': syncLine.wait }"></span>
+              <span>{{ syncLine.text }}</span>
+            </p>
           </article>
 
           <div class="att-punch-wrap">
-            <button type="button" class="att-punch" @click="onHero">
-              <AttendanceGlyph name="fingerprint" :size="36" />
-              <span>{{ heroLabel }}</span>
+            <button
+              type="button"
+              class="att-punch"
+              :disabled="punching"
+              :aria-busy="punching"
+              @click="onHero"
+            >
+              <svg v-if="punching" class="att-spin" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="14 42" stroke-linecap="round" />
+              </svg>
+              <AttendanceGlyph v-else name="fingerprint" :size="36" />
+              <span>{{ punching ? 'Đang gửi…' : heroLabel }}</span>
             </button>
           </div>
           <p class="att-punch-hint">{{ punchHint }}</p>
@@ -558,7 +729,8 @@ function stopQrCamera() {
               <span class="att-tile__icon" :class="`att-tone--${tile.tone}`">
                 <AttendanceGlyph :name="tile.glyph" :size="20" />
               </span>
-              <span>{{ tile.label }}</span>
+              <span class="att-tile__label">{{ tile.label }}</span>
+              <small class="att-tile__hint">{{ tile.hint }}</small>
             </button>
           </div>
         </section>
@@ -579,8 +751,8 @@ function stopQrCamera() {
             <svg v-if="cameraState !== 'live'" class="att-face__art" viewBox="0 0 300 260" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
               <defs>
                 <linearGradient id="att-face-sky" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#bcd9f7" />
-                  <stop offset="100%" stop-color="#7eaddf" />
+                  <stop offset="0%" stop-color="var(--color-tertiary-200)" />
+                  <stop offset="100%" stop-color="var(--color-tertiary-400)" />
                 </linearGradient>
               </defs>
               <rect width="300" height="260" fill="url(#att-face-sky)" />
@@ -588,11 +760,11 @@ function stopQrCamera() {
               <g transform="translate(90 70)">
                 <ellipse cx="60" cy="150" rx="70" ry="14" fill="color-mix(in srgb, black 10%, transparent)" />
                 <path d="M18 150v-40c0-30 18-52 42-52s42 22 42 52v40z" fill="var(--color-tertiary-900)" />
-                <circle cx="60" cy="48" r="30" fill="#f3d2bd" />
-                <path d="M32 40a28 28 0 0 1 56-2c-10 3-40 3-56 2z" fill="#352922" />
-                <circle cx="48" cy="48" r="2.6" fill="#352922" />
-                <circle cx="72" cy="48" r="2.6" fill="#352922" />
-                <path d="M50 60c4 4 16 4 20 0" stroke="#a9644a" stroke-width="2.4" fill="none" stroke-linecap="round" />
+                <circle cx="60" cy="48" r="30" fill="var(--color-gold-200)" />
+                <path d="M32 40a28 28 0 0 1 56-2c-10 3-40 3-56 2z" fill="var(--color-umber-900)" />
+                <circle cx="48" cy="48" r="2.6" fill="var(--color-umber-900)" />
+                <circle cx="72" cy="48" r="2.6" fill="var(--color-umber-900)" />
+                <path d="M50 60c4 4 16 4 20 0" stroke="var(--color-umber-400)" stroke-width="2.4" fill="none" stroke-linecap="round" />
               </g>
             </svg>
             <div class="att-face__frame" aria-hidden="true">
@@ -607,14 +779,15 @@ function stopQrCamera() {
         </section>
 
         <section v-else-if="screen === 'gps'" class="att-stack">
-          <div class="att-map" aria-hidden="true">
-            <span class="att-map__road"></span>
-            <span class="att-map__road att-map__road--alt"></span>
-            <span class="att-map__ring"></span>
-            <span class="att-map__pin">
-              <AttendanceGlyph name="pin" :size="22" />
-            </span>
+          <div class="att-map">
+            <div ref="mapElRef" class="att-map__canvas"></div>
             <span class="att-map__bubble">{{ placeLabel }}</span>
+            <span v-if="geoState === 'pending'" class="att-map__loading">
+              <svg class="att-spin" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="14 42" stroke-linecap="round" />
+              </svg>
+              <span>Đang định vị…</span>
+            </span>
           </div>
           <article class="att-place">
             <span class="att-tile__icon att-tone--green">
@@ -637,14 +810,14 @@ function stopQrCamera() {
         </section>
 
         <section v-else-if="screen === 'wifi'" class="att-stack att-wifi">
-          <span class="att-wifi__orb" aria-hidden="true">
+          <span class="att-wifi__orb" :class="{ 'att-wifi__orb--on': wifiState === 'connected' }" aria-hidden="true">
             <span class="att-wifi__ring att-wifi__ring--1"></span>
             <span class="att-wifi__ring att-wifi__ring--2"></span>
             <AttendanceGlyph name="wifi" :size="40" />
           </span>
-          <h2>Đã sẵn sàng chấm bằng WiFi</h2>
-          <p class="att-lead">Dùng khi máy đang vào mạng công ty.</p>
-          <article class="att-panel">
+          <h2>{{ wifiCaption }}</h2>
+
+          <article class="att-panel att-panel--wifi">
             <p>
               <AttendanceGlyph name="wifi" :size="18" />
               <span>Mạng</span>
@@ -652,13 +825,16 @@ function stopQrCamera() {
             </p>
             <p>
               <AttendanceGlyph name="signal" :size="18" />
-              <span>Tín hiệu</span>
-              <strong>Sẵn sàng</strong>
+              <span>Cường độ</span>
+              <span class="att-wifi__bars" role="img" aria-label="Cường độ tín hiệu">
+                <i v-for="bar in 4" :key="bar" :class="{ 'att-wifi__bar--on': bar <= wifiBars }"></i>
+              </span>
             </p>
           </article>
-          <p class="att-banner att-banner--ok">
+
+          <p v-if="wifiState === 'connected'" class="att-banner att-banner--ok">
             <AppIcon name="check" :size="16" />
-            <span>Bạn có thể chấm công. Tên mạng sẽ hiện khi máy đọc được WiFi nội bộ.</span>
+            <span>Đã kết nối — có thể chấm công.</span>
           </p>
         </section>
 
@@ -731,7 +907,7 @@ function stopQrCamera() {
               <rect x="208" y="14" width="6" height="6" rx="1.4" transform="rotate(30 211 17)" />
             </g>
           </svg>
-          <div class="att-success__badge" aria-hidden="true">
+          <div class="att-success__mark" aria-hidden="true">
             <AppIcon name="check" :size="40" :stroke-width="2.6" />
           </div>
           <h2>Chấm công thành công!</h2>
@@ -741,6 +917,14 @@ function stopQrCamera() {
             {{ lastResult?.time }}
           </p>
           <p class="att-success__date">{{ lastResult?.dateLabel }}</p>
+          <p v-if="lastResult?.synced" class="att-sync att-sync--plain">
+            <span class="att-dot"></span>
+            <span>Đã đồng bộ với HRM</span>
+          </p>
+          <p v-else-if="lastResult" class="att-sync att-sync--plain">
+            <span class="att-dot att-dot--wait"></span>
+            <span>Đã chấm công, đang đồng bộ lại với HRM</span>
+          </p>
           <ul class="att-facts">
             <li>
               <span class="att-tile__icon att-tone--blue">
@@ -784,8 +968,11 @@ function stopQrCamera() {
       </div>
 
       <footer v-if="dock" class="att-dock">
-        <button type="button" class="att-cta" :disabled="dockDisabled" @click="onDock">
-          {{ dock.label }}
+        <button type="button" class="att-cta" :disabled="dockDisabled" :aria-busy="punching" @click="onDock">
+          <svg v-if="punching" class="att-spin" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="14 42" stroke-linecap="round" />
+          </svg>
+          {{ punching ? 'Đang gửi…' : dock.label }}
         </button>
       </footer>
     </div>
@@ -953,22 +1140,18 @@ function stopQrCamera() {
   padding: var(--space-4);
 }
 
-.att-hero__watermark {
+.att-hero::after {
+  content: '';
   position: absolute;
-  top: 50%;
-  right: -1.5rem;
-  z-index: 0;
-  width: 9rem;
-  height: auto;
-  transform: translateY(-50%);
-  filter: brightness(0) invert(1);
-  opacity: 0.14;
+  inset: 0;
+  background: radial-gradient(70% 80% at 100% 0%, color-mix(in srgb, var(--color-on-tertiary) 18%, transparent), transparent 62%);
   pointer-events: none;
 }
 
 .att-hero__top,
 .att-hero__row,
-.att-hero__geo {
+.att-hero__geo,
+.att-sync--on-hero {
   position: relative;
   z-index: 1;
 }
@@ -1015,17 +1198,20 @@ function stopQrCamera() {
 .att-clock strong {
   display: block;
   color: var(--color-on-tertiary);
-  font-size: 2.6rem;
-  line-height: 1.05;
+  font-size: 2.85rem;
+  line-height: 1;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.045em;
+  text-shadow: 0 1px 0 color-mix(in srgb, var(--color-tertiary-900) 45%, transparent);
 }
 
 .att-clock small {
   display: block;
-  margin-top: 2px;
-  color: color-mix(in srgb, white 78%, transparent);
-  font-size: 0.78rem;
+  margin-top: 4px;
+  color: var(--color-on-tertiary);
+  font-size: 0.84rem;
+  font-weight: 600;
 }
 
 .att-weather {
@@ -1135,21 +1321,36 @@ function stopQrCamera() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
   width: 9.5rem;
   height: 9.5rem;
-  border: 8px solid color-mix(in srgb, var(--color-tertiary-200) 80%, white);
+  border: 8px solid color-mix(in srgb, var(--color-tertiary-100) 82%, var(--color-on-tertiary));
   border-radius: var(--radius-full);
-  background: radial-gradient(circle at 35% 28%, var(--color-tertiary-400), var(--color-tertiary-600) 58%, var(--color-tertiary-800));
+  background:
+    radial-gradient(circle at 32% 24%, color-mix(in srgb, var(--color-on-tertiary) 32%, var(--color-tertiary-400)), transparent 46%),
+    linear-gradient(165deg, var(--color-tertiary-400) 0%, var(--color-tertiary-600) 48%, var(--color-tertiary-900) 100%);
   color: var(--color-on-tertiary);
   font: inherit;
   cursor: pointer;
-  box-shadow: 0 16px 30px color-mix(in srgb, var(--color-tertiary-800) 32%, transparent);
-  transition: transform 0.15s ease;
+  box-shadow:
+    0 18px 34px color-mix(in srgb, var(--color-tertiary-900) 34%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-on-tertiary) 42%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.att-punch:active {
+.att-punch:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 22px 40px color-mix(in srgb, var(--color-tertiary-900) 38%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-on-tertiary) 42%, transparent);
+}
+
+.att-punch:active:not(:disabled) {
   transform: scale(0.97);
+}
+
+.att-punch:disabled {
+  cursor: progress;
 }
 
 @keyframes att-ring-spin {
@@ -1193,17 +1394,35 @@ function stopQrCamera() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  justify-content: flex-start;
+  gap: 0.35rem;
+  min-height: 7.25rem;
   padding: var(--space-3) var(--space-2);
   text-align: center;
   font-size: 0.75rem;
   font-weight: 700;
   border-radius: 20px;
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.att-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 28px color-mix(in srgb, var(--color-tertiary-900) 14%, transparent);
 }
 
 .att-tile:active {
-  transform: scale(0.96);
+  transform: translateY(0) scale(0.98);
+}
+
+.att-tile__label {
+  line-height: 1.25;
+}
+
+.att-tile__hint {
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .att-tile__icon {
@@ -1216,72 +1435,32 @@ function stopQrCamera() {
 }
 
 .att-tone--blue { background: var(--color-tertiary-500); }
-.att-tone--violet { background: #6d5efc; }
+.att-tone--violet { background: var(--color-tertiary-800); }
 .att-tone--orange { background: var(--color-warning); }
 .att-tone--green { background: var(--color-success); }
 .att-tone--teal { background: var(--color-secondary); }
-.att-tone--rose { background: #e85d8c; }
+.att-tone--rose { background: var(--color-primary-500); }
 
 .att-map {
   position: relative;
   height: 220px;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 28%),
-    repeating-linear-gradient(90deg, #d5e7c4 0 26px, #c3dcb0 26px 48px);
+  background: var(--color-tertiary-50);
   box-shadow: var(--att-shadow);
   border-radius: 24px;
 }
 
-.att-map__road {
+.att-map__canvas {
   position: absolute;
-  left: -10%;
-  right: -8%;
-  top: 46%;
-  height: 18px;
-  background: #f6f1e4;
-  transform: rotate(-8deg);
-}
-
-.att-map__road--alt {
-  top: 70%;
-  left: -14%;
-  right: 20%;
-  height: 12px;
-  transform: rotate(6deg);
-  opacity: 0.75;
-}
-
-.att-map__ring {
-  position: absolute;
-  left: 50%;
-  top: 48%;
-  width: 148px;
-  height: 148px;
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--color-success) 30%, transparent);
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-success) 75%, white);
-  transform: translate(-50%, -50%);
-}
-
-.att-map__pin {
-  position: absolute;
-  left: 50%;
-  top: 46%;
-  display: grid;
-  place-items: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: var(--radius-full);
-  background: var(--color-tertiary-600);
-  color: var(--color-on-tertiary);
-  transform: translate(-50%, -50%);
+  inset: 0;
+  z-index: 0;
 }
 
 .att-map__bubble {
   position: absolute;
+  z-index: 1;
   left: 50%;
-  top: 18%;
+  top: var(--space-3);
   max-width: 70%;
   padding: 6px 10px;
   border-radius: 12px;
@@ -1291,6 +1470,39 @@ function stopQrCamera() {
   font-weight: 700;
   transform: translateX(-50%);
   box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+
+.att-map__loading {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  background: color-mix(in srgb, var(--color-tertiary-50) 88%, transparent);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.att-spin {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex-shrink: 0;
+  animation: att-spin 0.7s linear infinite;
+}
+
+@keyframes att-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .att-spin {
+    animation: none;
+  }
 }
 
 .att-place {
@@ -1317,6 +1529,12 @@ function stopQrCamera() {
   color: var(--color-on-tertiary);
   box-shadow: 0 12px 24px color-mix(in srgb, var(--color-tertiary-700) 28%, transparent);
   border-radius: var(--radius-full);
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+
+.att-wifi__orb--on {
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, white 20%, var(--color-success)), var(--color-success));
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--color-success) 32%, transparent);
 }
 
 .att-wifi__ring {
@@ -1325,6 +1543,12 @@ function stopQrCamera() {
   border-radius: var(--radius-full);
   border: 1.5px solid color-mix(in srgb, var(--color-tertiary-400) 55%, transparent);
   animation: att-ping 2.4s ease-out infinite;
+}
+
+.att-wifi__orb--on .att-wifi__ring {
+  border-color: color-mix(in srgb, var(--color-success) 55%, transparent);
+  animation-play-state: paused;
+  opacity: 0;
 }
 
 .att-wifi__ring--2 {
@@ -1345,6 +1569,7 @@ function stopQrCamera() {
 
 .att-wifi h2 {
   font-size: 1.25rem;
+  transition: color 0.2s ease;
 }
 
 .att-panel {
@@ -1352,6 +1577,10 @@ function stopQrCamera() {
   padding: var(--space-2) var(--space-3);
   text-align: left;
   border-radius: 20px;
+}
+
+.att-panel--wifi {
+  margin-top: var(--space-2);
 }
 
 .att-panel p {
@@ -1377,12 +1606,36 @@ function stopQrCamera() {
   color: var(--color-text);
 }
 
+.att-wifi__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 1rem;
+}
+
+.att-wifi__bars i {
+  display: block;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+  transition: background 0.3s ease;
+}
+
+.att-wifi__bars i:nth-child(1) { height: 25%; }
+.att-wifi__bars i:nth-child(2) { height: 50%; }
+.att-wifi__bars i:nth-child(3) { height: 75%; }
+.att-wifi__bars i:nth-child(4) { height: 100%; }
+
+.att-wifi__bars i.att-wifi__bar--on {
+  background: var(--color-success);
+}
+
 .att-face {
   position: relative;
   height: min(62vw, 420px);
   min-height: 280px;
   overflow: hidden;
-  background: #8eb6e4;
+  background: var(--color-tertiary-300);
   border-radius: 28px;
   box-shadow: var(--att-shadow);
 }
@@ -1468,7 +1721,7 @@ function stopQrCamera() {
   overflow: hidden;
   width: min(100%, 280px);
   height: 280px;
-  background: linear-gradient(#eef5ff, #d5e6fb);
+  background: linear-gradient(var(--color-tertiary-50), var(--color-tertiary-100));
   box-shadow: var(--att-shadow);
   border-radius: 28px;
   transition: box-shadow 0.25s ease;
@@ -1567,19 +1820,19 @@ function stopQrCamera() {
   margin-bottom: calc(-1 * var(--space-3));
 }
 
-.att-success__badge {
+.att-success__mark {
   position: relative;
   display: grid;
   place-items: center;
   width: 5.5rem;
   height: 5.5rem;
   border-radius: var(--radius-full);
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, white 28%, var(--color-success)), var(--color-success));
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--color-on-tertiary) 28%, var(--color-success)), var(--color-success));
   color: var(--color-on-tertiary);
   box-shadow: 0 0 0 12px color-mix(in srgb, var(--color-success) 16%, transparent);
 }
 
-.att-success__badge::before {
+.att-success__mark::before {
   content: '';
   position: absolute;
   inset: -0.85rem;
@@ -1627,6 +1880,26 @@ function stopQrCamera() {
   color: var(--color-text);
 }
 
+.att-sync {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: var(--space-3) 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.att-sync--on-hero {
+  color: var(--color-on-tertiary);
+}
+
+.att-sync--plain {
+  justify-content: center;
+  margin-top: var(--space-2);
+  color: var(--color-text);
+}
+
 .att-note {
   margin: 0;
   padding: var(--space-3);
@@ -1664,6 +1937,51 @@ function stopQrCamera() {
   cursor: default;
 }
 
+@media (max-width: 480px) {
+  .att-hero {
+    padding: var(--space-3);
+  }
+
+  .att-clock strong {
+    font-size: 2.4rem;
+  }
+
+  .att-punch-wrap {
+    width: 11.5rem;
+    height: 11.5rem;
+  }
+
+  .att-punch {
+    width: 8.25rem;
+    height: 8.25rem;
+  }
+
+  .att-tile {
+    min-height: 6.5rem;
+    padding: var(--space-2);
+  }
+}
+
+@media (min-width: 768px) {
+  .att {
+    width: min(100%, 460px);
+  }
+
+  .att-grid {
+    gap: var(--space-3);
+  }
+}
+
+@media (min-width: 1280px) {
+  .att {
+    width: min(100%, 480px);
+  }
+
+  .att-clock strong {
+    font-size: 3rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .att-qr__frame i {
     animation: none;
@@ -1675,5 +1993,56 @@ function stopQrCamera() {
   0% { top: 16%; }
   50% { top: 78%; }
   100% { top: 16%; }
+}
+
+:global(.att-geo-pin) {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+:global(.att-geo-pin span) {
+  display: block;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50% 50% 50% 0;
+  background: var(--color-tertiary-600);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--color-tertiary-800) 35%, transparent);
+  transform: rotate(-45deg);
+  animation: att-pin-drop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+:global(.att-geo-pin span::after) {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: var(--radius-full);
+  background: var(--color-on-tertiary);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+@keyframes att-pin-drop {
+  0% { transform: rotate(-45deg) translateY(-14px) scale(0.6); opacity: 0; }
+  100% { transform: rotate(-45deg) translateY(0) scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.att-geo-pin span) {
+    animation: none;
+  }
+}
+
+:global(.leaflet-container) {
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-family-base);
+}
+
+:global(.att-geo-ring) {
+  stroke: var(--color-success);
+  fill: var(--color-success);
 }
 </style>

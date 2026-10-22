@@ -8,10 +8,8 @@ use Illuminate\Support\ServiceProvider;
 class AttendanceServiceProvider extends ServiceProvider
 {
     /**
-     * Module hiện chỉ có frontend (UI chấm công/nghỉ phép dùng dữ liệu mock,
-     * xem resources/js/pages/Employee*.vue) — chưa có Repository/Service/Model
-     * thật nên chưa cần bind gì ở đây. Bind interface -> implementation khi
-     * module này có backend thật (bảng chấm công/nghỉ phép).
+     * Route API nghỉ phép, duyệt bảng công và giờ chấm (gửi về HRM).
+     * Giờ vào/ra không lưu bảng riêng trên Workspace.
      */
     public function register(): void
     {

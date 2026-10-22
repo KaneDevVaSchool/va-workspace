@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\Attendance\App\Http\Controllers\EmployeeAttendancePunchController;
 use Modules\Attendance\App\Http\Controllers\EmployeeLeaveBalanceController;
 use Modules\Attendance\App\Http\Controllers\EmployeeLeaveCatalogController;
 use Modules\Attendance\App\Http\Controllers\EmployeeLeaveRequestController;
@@ -18,6 +19,11 @@ Route::middleware('auth')->prefix('attendance')->name('attendance.')->group(func
         ->name('leave-requests.index');
     Route::post('/leave-requests', [EmployeeLeaveRequestController::class, 'store'])
         ->name('leave-requests.store');
+
+    Route::get('/punches/today', [EmployeeAttendancePunchController::class, 'today'])
+        ->name('punches.today');
+    Route::post('/punches', [EmployeeAttendancePunchController::class, 'store'])
+        ->name('punches.store');
 
     // Trưởng đơn vị duyệt bảng chấm công HRM (API v1 attendance/timesheet-approvals).
     Route::get('/timesheet-approvals', [EmployeeTimesheetApprovalController::class, 'index'])

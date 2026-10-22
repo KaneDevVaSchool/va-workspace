@@ -26,6 +26,29 @@ class HrmTimesheetApprovalClientTest extends TestCase
         ]);
     }
 
+    public function test_gui_gio_cham_bang_token_cham_cong(): void
+    {
+        config(['services.hrm.timesheet_api_token' => 'timesheet-token']);
+        Http::fake([
+            'https://hrm.test/api/v1/attendance/punches' => Http::response([
+                'data' => ['work_date' => '2026-10-22', 'check_in_time' => '08:02', 'check_out_time' => null],
+            ]),
+        ]);
+
+        $row = app(HrmApiClient::class)->upsertWorkspacePunch('emp-1', [
+            'work_date' => '2026-10-22',
+            'check_in_time' => '08:02',
+            'check_out_time' => null,
+            'check_in_method' => 'Chấm bằng nút',
+        ]);
+
+        $this->assertSame('08:02', $row['check_in_time']);
+        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+            && $request['employee_uuid'] === 'emp-1'
+            && $request['check_in_time'] === '08:02'
+            && $request->hasHeader('Authorization', 'Bearer timesheet-token'));
+    }
+
     public function test_lists_pending_with_main_token_by_default(): void
     {
         Http::fake([

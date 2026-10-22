@@ -53,6 +53,39 @@ export function readEmployeeAttendanceToday() {
   }
 }
 
+/** Giờ HRM trả về ghi đè nhật ký trên máy (kể cả phiên hôm nay). */
+export function applyServerAttendancePunches(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  const log = readLog();
+  rows.forEach((row) => {
+    const date = String(row?.work_date || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    log[date] = {
+      checkInTime: row.check_in_time || null,
+      checkOutTime: row.check_out_time || null,
+      checkInMethod: row.check_in_method || null,
+      checkOutMethod: row.check_out_method || null,
+    };
+  });
+
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(LOG_KEY, JSON.stringify(log));
+    } catch {
+      /* ignore quota */
+    }
+  }
+
+  const today = todayKey();
+  const todayRow = log[today];
+  if (!todayRow || typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ date: today, ...todayRow }));
+  } catch {
+    /* ignore quota */
+  }
+}
+
 export function readEmployeeAttendanceLog() {
   const log = readLog();
   const out = {};
