@@ -4,7 +4,7 @@
 // WiFi, khuôn mặt, QR, mã, thành công. Lịch sử xem tại tab Lịch sử
 // (/dashboard/me/requests). Chưa nối máy chấm công / HRM: lần bấm lưu trên máy.
 //
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AttendanceGlyph from '../components/AttendanceGlyph.vue';
