@@ -133,6 +133,13 @@ Route::middleware(['auth'])->prefix('project')->name('project.')->group(function
         ->post('/tasks/{task}/report-complete', [TaskController::class, 'reportComplete'])
         ->name('tasks.report-complete');
 
+    // ---------- Xác nhận nhận việc (assignee-only) ----------
+    // Cùng pattern report-complete ở trên: quan hệ "chỉ assignee" kiểm tra
+    // trong TaskService::acceptAssignment(), route chỉ cần xem được task.
+    Route::middleware('permission:task.view|task.view_assigned')
+        ->post('/tasks/{task}/accept', [TaskController::class, 'acceptAssignment'])
+        ->name('tasks.accept');
+
     // ---------- Bulk actions (PR7) ----------
     // PATCH /tasks/bulk là route tĩnh khác method (PATCH) với PUT/DELETE
     // /tasks/{task} nên về lý thuyết không xung đột thật, nhưng đặt trước

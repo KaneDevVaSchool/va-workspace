@@ -46,9 +46,13 @@ class MyDashboardService
                 'status' => $task->status,
                 'status_label' => TaskEnums::STATUS_LABELS[$task->status] ?? $task->status,
                 'progress_percent' => $task->progress_percent,
+                'start_time' => $task->start_time,
                 'end_date' => $task->end_date,
                 'due_time' => $task->due_time,
                 'is_overdue' => $isOverdue,
+                'creator_name' => $task->creator->name ?? null,
+                'accepted_at' => $task->accepted_at?->toIso8601String(),
+                'can_accept' => $task->accepted_at === null && ! in_array($task->status, ['completed', 'cancelled'], true),
             ];
         }
 

@@ -36,6 +36,13 @@ async function refreshAll() {
   await Promise.all([loadOverview(), loadUtilities()]);
 }
 
+function onTaskAccepted({ taskId, acceptedAt }) {
+  const task = overview.value?.tasks?.find((t) => t.id === taskId);
+  if (!task) return;
+  task.accepted_at = acceptedAt;
+  task.can_accept = false;
+}
+
 onMounted(() => {
   if (!isEmployeeMobile.value) {
     refreshAll();
@@ -68,6 +75,7 @@ onMounted(() => {
       :utilities="utilities"
       :utilities-loading="utilitiesLoading"
       @utility-select="openUtility"
+      @task-accepted="onTaskAccepted"
     />
   </template>
 </template>

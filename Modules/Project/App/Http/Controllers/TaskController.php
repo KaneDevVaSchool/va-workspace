@@ -304,6 +304,30 @@ class TaskController extends Controller
         return response()->json(['task' => $this->service->present($result)]);
     }
 
+    /**
+     * POST /api/project/tasks/{task}/accept — chỉ assignee của task gọi
+     * được (kiểm tra ở Service, route chỉ cần permission:task.view vì đây
+     * là quan hệ dữ liệu chứ không phải quyền tĩnh — cùng pattern reportComplete()).
+     */
+    public function acceptAssignment(Request $request, Task $task)
+    {
+        $result = $this->service->acceptAssignment($task, $request->user());
+
+        if (is_array($result)) {
+            return response()->json(['message' => $result['error']], 422);
+        }
+
+        $this->activityLogs->record(
+            'task.accept',
+            "Xác nhận nhận công việc \"{$result->title}\"",
+            $request->user(),
+            'task',
+            $result->id,
+        );
+
+        return response()->json(['task' => $this->service->present($result)]);
+    }
+
     /** DELETE /api/project/tasks/{task} */
     public function destroy(int $task)
     {

@@ -1,10 +1,13 @@
 <script setup>
 import { statusColor } from '../utils/chartColors';
 
-defineProps({
+const props = defineProps({
   rows: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
+  acceptingTaskId: { type: Number, default: null },
 });
+
+const emit = defineEmits(['accept-task']);
 
 function dotStyle(status) {
   return { background: statusColor(status) };
@@ -20,6 +23,17 @@ function formatDate(value) {
 function formatProgress(value) {
   return value === null || value === undefined ? '—' : `${value}%`;
 }
+
+function formatTimeRange(task) {
+  if (!task.start_time && !task.due_time) return '—';
+  if (task.start_time && task.due_time) return `${task.start_time} – ${task.due_time}`;
+  return task.start_time || task.due_time;
+}
+
+function onAccept(task) {
+  if (props.acceptingTaskId) return;
+  emit('accept-task', task);
+}
 </script>
 
 <template>
@@ -34,7 +48,10 @@ function formatProgress(value) {
             <th class="my-task-table__col-project">Dự án</th>
             <th class="my-task-table__col-status">Trạng thái</th>
             <th class="my-task-table__col-progress">Tiến độ</th>
+            <th class="my-task-table__col-assigner">Người giao</th>
+            <th class="my-task-table__col-time">Giờ làm</th>
             <th class="my-task-table__col-date">Hạn</th>
+            <th class="my-task-table__col-confirm">Xác nhận</th>
           </tr>
         </thead>
         <tbody>
@@ -46,8 +63,22 @@ function formatProgress(value) {
               {{ task.status_label }}
             </td>
             <td class="my-task-table__col-progress">{{ formatProgress(task.progress_percent) }}</td>
+            <td class="my-task-table__col-assigner">{{ task.creator_name ?? '—' }}</td>
+            <td class="my-task-table__col-time">{{ formatTimeRange(task) }}</td>
             <td class="my-task-table__col-date" :class="{ 'my-task-table__col-date--overdue': task.is_overdue }">
               {{ formatDate(task.end_date) }}
+            </td>
+            <td class="my-task-table__col-confirm">
+              <button
+                v-if="task.can_accept"
+                type="button"
+                class="my-task-table__confirm-btn"
+                :disabled="acceptingTaskId === task.id"
+                @click="onAccept(task)"
+              >
+                Xác nhận
+              </button>
+              <span v-else class="my-task-table__confirm-done">Đã xác nhận</span>
             </td>
           </tr>
         </tbody>
@@ -102,13 +133,45 @@ function formatProgress(value) {
 }
 
 .my-task-table__col-progress,
-.my-task-table__col-date {
+.my-task-table__col-assigner,
+.my-task-table__col-time,
+.my-task-table__col-date,
+.my-task-table__col-confirm {
   white-space: nowrap;
 }
 
 .my-task-table__col-date--overdue {
   color: var(--color-danger);
   font-weight: 600;
+}
+
+.my-task-table__confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 1.75rem;
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.my-task-table__confirm-btn:hover:not(:disabled) {
+  background: var(--color-primary-700);
+}
+
+.my-task-table__confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.my-task-table__confirm-done {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
 }
 
 .my-task-table__dot {

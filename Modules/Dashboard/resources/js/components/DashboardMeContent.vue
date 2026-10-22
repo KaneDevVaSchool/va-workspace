@@ -1,5 +1,6 @@
 <script setup>
 import AppIcon from '@/components/AppIcon.vue';
+import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { computed, ref } from 'vue';
 import DashboardSkeleton from './DashboardSkeleton.vue';
@@ -21,10 +22,11 @@ const props = defineProps({
   forceDesktopLayout: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['utility-select']);
+const emit = defineEmits(['utility-select', 'task-accepted']);
 
 const auth = useAuthStore();
 const statusFilter = ref(null);
+const acceptingTaskId = ref(null);
 
 const greeting = computed(() => {
   const hour = new Date().getHours();
@@ -84,6 +86,22 @@ function toggleStatus(value) {
 function onUtilitySelect(item) {
   if (props.preview) return;
   emit('utility-select', item);
+}
+
+async function onAcceptTask(task) {
+  if (props.preview || acceptingTaskId.value) return;
+  acceptingTaskId.value = task.id;
+  try {
+    const { data } = await window.axios.post(`/api/project/tasks/${task.id}/accept`);
+    emit('task-accepted', {
+      taskId: task.id,
+      acceptedAt: data?.task?.accepted_at ?? new Date().toISOString(),
+    });
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không xác nhận được công việc.');
+  } finally {
+    acceptingTaskId.value = null;
+  }
 }
 </script>
 
@@ -199,7 +217,13 @@ function onUtilitySelect(item) {
           <span class="dashboard-me__count-badge">{{ filteredTasks.length }} việc</span>
         </div>
         <DashboardSkeleton v-if="overviewLoading" :rows="6" />
-        <MyTaskTable v-else :rows="filteredTasks" :loading="overviewLoading" />
+        <MyTaskTable
+          v-else
+          :rows="filteredTasks"
+          :loading="overviewLoading"
+          :accepting-task-id="acceptingTaskId"
+          @accept-task="onAcceptTask"
+        />
       </section>
     </div>
   </div>

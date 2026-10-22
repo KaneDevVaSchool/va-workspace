@@ -38,6 +38,7 @@ const {
 } = useEmployeeHomeData();
 
 const taskBusyId = ref(null);
+const acceptingTaskId = ref(null);
 const attendanceToday = ref(readEmployeeAttendanceToday());
 
 const filteredUtilities = computed(() => {
@@ -105,9 +106,10 @@ function canMarkInProgress(task) {
 }
 
 function formatTaskTime(task) {
-  if (task.due_time && typeof task.due_time === 'string' && task.due_time.length >= 5) {
-    return task.due_time.slice(0, 5);
-  }
+  const start = task.start_time && typeof task.start_time === 'string' ? task.start_time.slice(0, 5) : null;
+  const due = task.due_time && typeof task.due_time === 'string' ? task.due_time.slice(0, 5) : null;
+  if (start && due) return `${start} – ${due}`;
+  if (start || due) return start || due;
   if (task.end_date) {
     const d = new Date(task.end_date);
     if (!Number.isNaN(d.getTime())) {
@@ -115,6 +117,23 @@ function formatTaskTime(task) {
     }
   }
   return '—';
+}
+
+async function acceptTask(task) {
+  if (acceptingTaskId.value) return;
+  acceptingTaskId.value = task.id;
+  try {
+    const { data } = await window.axios.post(`/api/project/tasks/${task.id}/accept`);
+    task.accepted_at = data?.task?.accepted_at ?? new Date().toISOString();
+    task.can_accept = false;
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(12);
+    }
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không xác nhận được công việc.');
+  } finally {
+    acceptingTaskId.value = null;
+  }
 }
 
 function openFeedPost(post) {
@@ -342,11 +361,21 @@ function goQuick(name) {
             <div class="daily-tasks__body">
               <p class="daily-tasks__title">{{ item.title }}</p>
               <p v-if="item.project_name" class="daily-tasks__meta">{{ item.project_name }}</p>
+              <p v-if="item.creator_name" class="daily-tasks__meta">Người giao: {{ item.creator_name }}</p>
             </div>
 
             <div class="daily-tasks__end">
               <button
-                v-if="canMarkInProgress(item)"
+                v-if="item.can_accept"
+                type="button"
+                class="daily-tasks__confirm"
+                :disabled="acceptingTaskId === item.id"
+                @click="acceptTask(item)"
+              >
+                Xác nhận
+              </button>
+              <button
+                v-else-if="canMarkInProgress(item)"
                 type="button"
                 class="daily-tasks__action"
                 :disabled="taskBusyId === item.id"
@@ -1011,6 +1040,27 @@ function goQuick(name) {
 
 .daily-tasks__action:disabled {
   opacity: 0.5;
+  cursor: wait;
+}
+
+.daily-tasks__confirm {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 1.5rem;
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.daily-tasks__confirm:disabled {
+  opacity: 0.6;
   cursor: wait;
 }
 

@@ -952,6 +952,33 @@ class TaskService
         return $this->tasks->update($task, $data);
     }
 
+    /**
+     * Xác nhận đã nhận việc — chỉ assignee của task gọi được (cùng quan hệ
+     * dữ liệu như reportComplete(), route chỉ cần task.view|task.view_assigned).
+     * Set accepted_by/accepted_at thủ công, không phụ thuộc đổi status —
+     * khác applyAcceptedTracking() (tự set ngầm khi status rời not_started).
+     */
+    public function acceptAssignment(Task $task, User $actor): Task|array
+    {
+        if ($task->assignee_id === null || (int) $task->assignee_id !== $actor->id) {
+            return ['error' => 'Chỉ người được giao việc mới xác nhận được.'];
+        }
+
+        if ($task->accepted_at !== null) {
+            return $task;
+        }
+
+        if (in_array($task->status, ['completed', 'cancelled'], true)) {
+            return ['error' => 'Công việc đã đóng, không thể xác nhận.'];
+        }
+
+        return $this->tasks->update($task, [
+            'accepted_by' => $actor->id,
+            'accepted_at' => now(),
+            'updated_by' => $actor->id,
+        ]);
+    }
+
     /** @return array{error: string}|true */
     public function delete(Task $task): array|bool
     {
