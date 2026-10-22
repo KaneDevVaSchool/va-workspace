@@ -32,11 +32,9 @@ const HOME_TILES = [
   { id: 'gps', label: 'GPS', glyph: 'pin', tone: 'green' },
   { id: 'wifi', label: 'Chấm bằng WiFi', glyph: 'wifi', tone: 'teal' },
   { id: 'code', label: 'Nhập mã', glyph: 'keyboard', tone: 'rose' },
-  { id: 'more', label: 'Khác', glyph: 'grid', tone: 'slate' },
 ];
 
 const HEADINGS = {
-  methods: 'Chọn hình thức chấm công',
   face: 'Quét khuôn mặt với Hanet',
   gps: 'Chấm công bằng GPS',
   wifi: 'Chấm công bằng WiFi',
@@ -139,7 +137,6 @@ const qrCaption = computed(() => {
   return 'Đưa mã QR tại điểm chấm công vào khung hình';
 });
 const screenSubtitle = computed(() => {
-  if (screen.value === 'methods') return 'Vui lòng chọn phương thức phù hợp';
   if (screen.value === 'face') return 'Quét khuôn mặt tại điểm chấm công';
   if (screen.value === 'gps') return 'Đối chiếu vị trí thiết bị với vùng cho phép';
   if (screen.value === 'wifi') return 'Đối chiếu mạng WiFi công ty';
@@ -247,14 +244,6 @@ function onHero() {
 }
 
 function openMethod(id) {
-  if (id === 'more') {
-    push('methods');
-    return;
-  }
-  if (id === 'button') {
-    commitPunch('button');
-    return;
-  }
   if (id === 'code') {
     codeValue.value = '';
     codeError.value = '';
@@ -574,25 +563,6 @@ function stopQrCamera() {
           </div>
         </section>
 
-        <section v-else-if="screen === 'methods'" class="att-stack">
-          <button
-            v-for="method in METHODS"
-            :key="method.id"
-            type="button"
-            class="att-method"
-            @click="openMethod(method.id)"
-          >
-            <span class="att-tile__icon" :class="`att-tone--${method.tone}`">
-              <AttendanceGlyph :name="method.glyph" :size="20" />
-            </span>
-            <span class="att-method__text">
-              <strong>{{ method.label }}</strong>
-              <small>{{ method.hint }}</small>
-            </span>
-            <AppIcon name="chevronRight" :size="18" />
-          </button>
-        </section>
-
         <section v-else-if="screen === 'face'" class="att-stack">
           <p v-if="faceHelp" class="att-note">
             Đưa mặt vào khung và giữ yên. Camera Hanet tại văn phòng sẽ được nối sau; máy này dùng camera trước để xem trước.
@@ -900,8 +870,7 @@ function stopQrCamera() {
 
 .att-head h1,
 .att-success h2,
-.att-wifi h2,
-.att-section {
+.att-wifi h2 {
   margin: 0;
   color: var(--color-tertiary-900);
   font-weight: 800;
@@ -934,7 +903,6 @@ function stopQrCamera() {
 .att-cta:focus-visible,
 .att-punch:focus-visible,
 .att-tile:focus-visible,
-.att-method:focus-visible,
 .att-nav__item:focus-visible,
 .att-month button:focus-visible {
   outline: 2px solid var(--color-tertiary-500);
@@ -970,7 +938,6 @@ function stopQrCamera() {
 .att-facts,
 .att-day,
 .att-notice,
-.att-method,
 .att-tile {
   background: var(--color-surface);
   box-shadow: var(--att-shadow);
@@ -1214,8 +1181,7 @@ function stopQrCamera() {
   gap: var(--space-2);
 }
 
-.att-tile,
-.att-method {
+.att-tile {
   border: 0;
   font: inherit;
   color: var(--color-text);
@@ -1255,31 +1221,6 @@ function stopQrCamera() {
 .att-tone--green { background: var(--color-success); }
 .att-tone--teal { background: var(--color-secondary); }
 .att-tone--rose { background: #e85d8c; }
-.att-tone--slate { background: #64748b; }
-
-.att-method {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  width: 100%;
-  padding: var(--space-3);
-  border-radius: 20px;
-}
-
-.att-method__text {
-  flex: 1;
-  min-width: 0;
-}
-
-.att-method strong {
-  display: block;
-  color: var(--color-text);
-  font-weight: 700;
-}
-
-.att-method svg:last-child {
-  color: var(--color-text-muted);
-}
 
 .att-map {
   position: relative;
