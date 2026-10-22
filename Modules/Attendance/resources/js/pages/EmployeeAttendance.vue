@@ -122,6 +122,15 @@ const faceStatus = computed(() => {
   if (cameraState.value === 'connecting') return 'Đang kết nối camera Hanet...';
   return 'Chưa xem trước được camera';
 });
+const screenSubtitle = computed(() => {
+  if (screen.value === 'methods') return 'Vui lòng chọn phương thức phù hợp';
+  if (screen.value === 'face') return 'Quét khuôn mặt tại điểm chấm công';
+  if (screen.value === 'gps') return 'Đối chiếu vị trí thiết bị với vùng cho phép';
+  if (screen.value === 'wifi') return 'Đối chiếu mạng WiFi công ty';
+  if (screen.value === 'qr') return 'Đưa mã tại điểm chấm công vào khung hình';
+  if (screen.value === 'code') return 'Dành cho trường hợp đặc biệt';
+  return '';
+});
 const dock = computed(() => {
   if (screen.value === 'success') return { label: 'Quay lại trang chủ', action: 'home' };
   if (screen.value === 'gps') return { label: 'Chấm công', action: 'punch-gps' };
@@ -378,6 +387,7 @@ function stopCamera() {
 
 <template>
   <div class="att-page">
+    <div class="att-aurora" aria-hidden="true"></div>
     <img
       src="/images/background/background-logo.png"
       alt=""
@@ -391,7 +401,10 @@ function stopCamera() {
         <button type="button" class="att-icon-btn" aria-label="Quay lại" @click="back">
           <AppIcon name="chevronLeft" :size="20" />
         </button>
-        <h1>{{ headTitle }}</h1>
+        <span class="att-head__text">
+          <h1>{{ headTitle }}</h1>
+          <small v-if="screenSubtitle">{{ screenSubtitle }}</small>
+        </span>
         <button
           v-if="screen === 'face'"
           type="button"
@@ -407,16 +420,49 @@ function stopCamera() {
 
       <div ref="bodyRef" class="att__body hide-scrollbar">
         <section v-if="screen === 'home'" class="att-home">
-          <article class="att-clock">
-            <div class="att-clock__main">
-              <p>Thời gian hiện tại</p>
-              <strong>{{ timeLabel }}</strong>
-              <small>{{ homeDateLabel }}</small>
-            </div>
-            <div class="att-weather">
-              <AttendanceGlyph :name="weatherGlyph" :size="22" />
-              <b>{{ weather ? `${weather.temp}°C` : '—°' }}</b>
-              <small>{{ weather ? 'Gần bạn' : 'Thời tiết' }}</small>
+          <article class="att-hero">
+            <svg class="att-hero__art" viewBox="0 0 300 190" aria-hidden="true">
+              <defs>
+                <linearGradient id="att-hero-sky" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--color-tertiary-500)" />
+                  <stop offset="100%" stop-color="var(--color-tertiary-700)" />
+                </linearGradient>
+              </defs>
+              <rect width="300" height="190" fill="url(#att-hero-sky)" />
+              <circle cx="252" cy="36" r="30" fill="color-mix(in srgb, white 16%, transparent)" />
+              <circle cx="40" cy="150" r="46" fill="color-mix(in srgb, white 8%, transparent)" />
+              <path d="M0 150c36-14 70-14 100-2s64 16 96 2 72-18 104-2v40H0z" fill="color-mix(in srgb, white 10%, transparent)" />
+              <rect x="30" y="92" width="34" height="58" rx="3" fill="color-mix(in srgb, white 20%, transparent)" />
+              <rect x="70" y="70" width="42" height="80" rx="3" fill="color-mix(in srgb, white 28%, transparent)" />
+              <rect x="200" y="78" width="30" height="72" rx="3" fill="color-mix(in srgb, white 22%, transparent)" />
+              <rect x="236" y="100" width="40" height="50" rx="3" fill="color-mix(in srgb, white 16%, transparent)" />
+              <g transform="translate(118 58)">
+                <path d="M30 150v-34c0-22 14-38 34-38s34 16 34 38v34z" fill="var(--color-tertiary-900)" />
+                <circle cx="64" cy="34" r="22" fill="#ffd7b8" />
+                <path d="M44 28a20 20 0 0 1 40-2c-8 2-28 2-40 2z" fill="#2c2420" />
+                <rect x="48" y="78" width="32" height="46" rx="8" fill="var(--color-on-primary)" />
+                <rect x="48" y="78" width="32" height="14" rx="6" fill="var(--color-tertiary-300)" />
+                <rect x="40" y="96" width="10" height="34" rx="5" fill="#ffd7b8" />
+                <rect x="34" y="124" width="22" height="16" rx="6" fill="var(--color-tertiary-800)" />
+              </g>
+              <path
+                d="M236 18 238 24 244 26 238 28 236 34 234 28 228 26 234 24z"
+                fill="color-mix(in srgb, white 85%, transparent)"
+              />
+              <path d="M220 44h2.4v2.4H220zM86 118h2.4v2.4H86z" fill="color-mix(in srgb, white 70%, transparent)" />
+            </svg>
+            <div class="att-hero__face"></div>
+            <div class="att-hero__bar">
+              <div class="att-clock">
+                <p>Thời gian hiện tại</p>
+                <strong>{{ timeLabel }}</strong>
+                <small>{{ homeDateLabel }}</small>
+              </div>
+              <div class="att-weather">
+                <AttendanceGlyph :name="weatherGlyph" :size="20" />
+                <b>{{ weather ? `${weather.temp}°C` : '—°' }}</b>
+                <small>{{ weather ? 'Gần bạn' : 'Thời tiết' }}</small>
+              </div>
             </div>
           </article>
 
@@ -427,7 +473,7 @@ function stopCamera() {
 
           <div class="att-punch-wrap">
             <button type="button" class="att-punch" @click="onHero">
-              <AttendanceGlyph name="fingerprint" :size="34" />
+              <AttendanceGlyph name="fingerprint" :size="36" />
               <span>{{ heroLabel }}</span>
             </button>
           </div>
@@ -450,7 +496,6 @@ function stopCamera() {
         </section>
 
         <section v-else-if="screen === 'methods'" class="att-stack">
-          <p class="att-lead">Vui lòng chọn phương thức phù hợp:</p>
           <button
             v-for="method in METHODS"
             :key="method.id"
@@ -482,9 +527,25 @@ function stopCamera() {
               muted
               autoplay
             />
-            <div v-if="cameraState !== 'live'" class="att-face__fallback">
-              <AttendanceGlyph name="camera" :size="36" />
-            </div>
+            <svg v-if="cameraState !== 'live'" class="att-face__art" viewBox="0 0 300 260" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+              <defs>
+                <linearGradient id="att-face-sky" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#bcd9f7" />
+                  <stop offset="100%" stop-color="#7eaddf" />
+                </linearGradient>
+              </defs>
+              <rect width="300" height="260" fill="url(#att-face-sky)" />
+              <circle cx="60" cy="52" r="34" fill="color-mix(in srgb, white 30%, transparent)" />
+              <g transform="translate(90 70)">
+                <ellipse cx="60" cy="150" rx="70" ry="14" fill="color-mix(in srgb, black 10%, transparent)" />
+                <path d="M18 150v-40c0-30 18-52 42-52s42 22 42 52v40z" fill="var(--color-tertiary-900)" />
+                <circle cx="60" cy="48" r="30" fill="#f3d2bd" />
+                <path d="M32 40a28 28 0 0 1 56-2c-10 3-40 3-56 2z" fill="#352922" />
+                <circle cx="48" cy="48" r="2.6" fill="#352922" />
+                <circle cx="72" cy="48" r="2.6" fill="#352922" />
+                <path d="M50 60c4 4 16 4 20 0" stroke="#a9644a" stroke-width="2.4" fill="none" stroke-linecap="round" />
+              </g>
+            </svg>
             <div class="att-face__frame" aria-hidden="true">
               <span></span><span></span><span></span><span></span>
             </div>
@@ -499,6 +560,7 @@ function stopCamera() {
         <section v-else-if="screen === 'gps'" class="att-stack">
           <div class="att-map" aria-hidden="true">
             <span class="att-map__road"></span>
+            <span class="att-map__road att-map__road--alt"></span>
             <span class="att-map__ring"></span>
             <span class="att-map__pin">
               <AttendanceGlyph name="pin" :size="22" />
@@ -527,7 +589,9 @@ function stopCamera() {
 
         <section v-else-if="screen === 'wifi'" class="att-stack att-wifi">
           <span class="att-wifi__orb" aria-hidden="true">
-            <AttendanceGlyph name="wifi" :size="42" />
+            <span class="att-wifi__ring att-wifi__ring--1"></span>
+            <span class="att-wifi__ring att-wifi__ring--2"></span>
+            <AttendanceGlyph name="wifi" :size="40" />
           </span>
           <h2>Đã sẵn sàng chấm bằng WiFi</h2>
           <p class="att-lead">Dùng khi máy đang vào mạng công ty.</p>
@@ -558,7 +622,6 @@ function stopCamera() {
         </section>
 
         <section v-else-if="screen === 'code'" class="att-stack">
-          <p class="att-lead">Dành cho trường hợp đặc biệt, khi không dùng được các hình thức kia.</p>
           <label class="att-code">
             <span>Mã chấm công</span>
             <input
@@ -575,6 +638,21 @@ function stopCamera() {
         </section>
 
         <section v-else-if="screen === 'success'" class="att-success">
+          <svg class="att-success__confetti" viewBox="0 0 320 120" aria-hidden="true">
+            <g fill="var(--color-gold-400)">
+              <rect x="24" y="18" width="7" height="7" rx="1.5" transform="rotate(18 27 21)" />
+              <rect x="268" y="30" width="6" height="6" rx="1.5" transform="rotate(-24 271 33)" />
+              <rect x="150" y="8" width="7" height="7" rx="1.5" transform="rotate(8 153 11)" />
+            </g>
+            <g fill="var(--color-secondary-400)">
+              <circle cx="60" cy="46" r="4" />
+              <circle cx="250" cy="60" r="3.4" />
+            </g>
+            <g fill="var(--color-tertiary-400)">
+              <circle cx="110" cy="20" r="3.2" />
+              <rect x="208" y="14" width="6" height="6" rx="1.4" transform="rotate(30 211 17)" />
+            </g>
+          </svg>
           <div class="att-success__badge" aria-hidden="true">
             <AppIcon name="check" :size="40" :stroke-width="2.6" />
           </div>
@@ -648,6 +726,17 @@ function stopCamera() {
   overflow: hidden;
 }
 
+.att-aurora {
+  position: absolute;
+  inset: -10% -10% auto -10%;
+  z-index: 0;
+  height: 30rem;
+  background:
+    radial-gradient(60% 55% at 18% 0%, color-mix(in srgb, var(--color-tertiary-200) 55%, transparent), transparent 70%),
+    radial-gradient(50% 45% at 85% 6%, color-mix(in srgb, var(--color-secondary-200) 45%, transparent), transparent 72%);
+  pointer-events: none;
+}
+
 .att-watermark {
   position: absolute;
   inset: 0;
@@ -658,7 +747,7 @@ function stopCamera() {
   object-position: center 20%;
   transform: scale(1.1);
   pointer-events: none;
-  opacity: 0.05;
+  opacity: 0.04;
 }
 
 .att {
@@ -680,6 +769,7 @@ function stopCamera() {
   overflow: auto;
   display: flex;
   flex-direction: column;
+  gap: var(--space-3);
   padding-bottom: var(--space-2);
 }
 
@@ -689,7 +779,24 @@ function stopCamera() {
   align-items: center;
   gap: var(--space-2);
   min-height: 2.75rem;
-  margin-bottom: var(--space-2);
+}
+
+.att-head__text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  text-align: center;
+}
+
+.att-head__text small {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .att-head h1,
@@ -703,7 +810,6 @@ function stopCamera() {
 }
 
 .att-head h1 {
-  text-align: center;
   font-size: 1.02rem;
 }
 
@@ -757,7 +863,7 @@ function stopCamera() {
 .att-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
 .att-place,
@@ -771,14 +877,11 @@ function stopCamera() {
   box-shadow: var(--att-shadow);
 }
 
-.att-clock {
+.att-hero {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-3);
-  background: linear-gradient(140deg, var(--color-surface) 60%, var(--color-tertiary-50) 100%);
-  box-shadow: var(--att-shadow);
+  overflow: hidden;
+  background: var(--color-tertiary-600);
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--color-tertiary-800) 26%, transparent);
   clip-path: polygon(
     0 0,
     100% 0,
@@ -788,23 +891,35 @@ function stopCamera() {
   );
 }
 
-.att-clock::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: var(--att-notch);
-  height: var(--att-notch);
-  background: var(--color-tertiary-500);
-  clip-path: polygon(100% 0, 100% 100%, 0 100%);
-  opacity: 0.35;
+.att-hero__art {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
-.att-clock__main,
-.att-place span:last-child,
-.att-notice span:last-child {
-  min-width: 0;
+.att-hero__face {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(185deg, transparent 55%, color-mix(in srgb, var(--color-tertiary-900) 55%, transparent) 100%);
+  pointer-events: none;
+}
+
+.att-hero__bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: -2.9rem;
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.att-clock {
   flex: 1;
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border-radius: 20px;
+  box-shadow: var(--att-shadow);
 }
 
 .att-clock p,
@@ -816,42 +931,33 @@ function stopCamera() {
   font-size: 0.8125rem;
 }
 
-.att-place strong,
-.att-notice strong {
+.att-clock strong {
   display: block;
   color: var(--color-tertiary-900);
-  font-size: 1rem;
+  font-size: 2.1rem;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
 }
 
-.att-clock small,
-.att-place small,
-.att-notice small,
-.att-method small,
-.att-day small {
+.att-clock small {
   display: block;
   color: var(--color-text-muted);
   font-size: 0.75rem;
 }
 
-.att-clock strong {
-  display: block;
-  color: var(--color-tertiary-900);
-  font-size: 2.35rem;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.04em;
-}
-
 .att-weather {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
   min-width: 4.5rem;
-  padding: var(--space-2) var(--space-2) var(--space-2) calc(var(--space-2) + 0.3rem);
-  background: var(--color-tertiary-50);
+  padding: var(--space-3) var(--space-2);
+  background: var(--color-surface);
   color: var(--color-gold-600);
-  clip-path: polygon(14% 0, 100% 0, 100% 100%, 0 100%, 0 20%);
+  border-radius: 20px;
+  box-shadow: var(--att-shadow);
 }
 
 .att-weather b {
@@ -891,9 +997,9 @@ function stopCamera() {
   align-self: center;
   display: grid;
   place-items: center;
-  width: 12.5rem;
-  height: 12.5rem;
-  margin-top: var(--space-2);
+  width: 13rem;
+  height: 13rem;
+  margin-top: var(--space-1);
 }
 
 .att-punch-wrap::before {
@@ -902,14 +1008,23 @@ function stopCamera() {
   inset: 0;
   background: conic-gradient(
     from 140deg,
-    color-mix(in srgb, var(--color-tertiary-300) 60%, transparent),
+    color-mix(in srgb, var(--color-tertiary-300) 65%, transparent),
     transparent 30%,
-    color-mix(in srgb, var(--color-secondary-300) 55%, transparent) 65%,
+    color-mix(in srgb, var(--color-secondary-300) 60%, transparent) 65%,
     transparent 92%
   );
-  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
-  opacity: 0.55;
+  border-radius: var(--radius-full);
+  opacity: 0.6;
   animation: att-ring-spin 16s linear infinite;
+}
+
+.att-punch-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0.6rem;
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-tertiary-300) 50%, transparent);
+  opacity: 0.6;
 }
 
 .att-punch {
@@ -920,15 +1035,20 @@ function stopCamera() {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  width: 9.25rem;
-  height: 9.25rem;
+  width: 9.5rem;
+  height: 9.5rem;
   border: 8px solid color-mix(in srgb, var(--color-tertiary-200) 80%, white);
   border-radius: var(--radius-full);
   background: radial-gradient(circle at 35% 28%, var(--color-tertiary-400), var(--color-tertiary-600) 58%, var(--color-tertiary-800));
   color: var(--color-on-tertiary);
   font: inherit;
   cursor: pointer;
-  box-shadow: 0 14px 28px color-mix(in srgb, var(--color-tertiary-800) 28%, transparent);
+  box-shadow: 0 16px 30px color-mix(in srgb, var(--color-tertiary-800) 32%, transparent);
+  transition: transform 0.15s ease;
+}
+
+.att-punch:active {
+  transform: scale(0.97);
 }
 
 @keyframes att-ring-spin {
@@ -944,7 +1064,7 @@ function stopCamera() {
 
 .att-punch span {
   max-width: 6.6rem;
-  font-size: 0.84rem;
+  font-size: 0.86rem;
   font-weight: 800;
   line-height: 1.2;
   text-align: center;
@@ -978,7 +1098,7 @@ function stopCamera() {
   text-align: center;
   font-size: 0.75rem;
   font-weight: 700;
-  clip-path: polygon(0 0, calc(100% - 0.7rem) 0, 100% 0.7rem, 100% 100%, 0.7rem 100%, 0 calc(100% - 0.7rem));
+  border-radius: 20px;
   transition: transform 0.15s ease;
 }
 
@@ -992,7 +1112,7 @@ function stopCamera() {
   width: 2.5rem;
   height: 2.5rem;
   color: var(--color-on-tertiary);
-  clip-path: polygon(25% 0, 75% 0, 100% 25%, 100% 75%, 75% 100%, 25% 100%, 0 75%, 0 25%);
+  border-radius: 16px;
 }
 
 .att-tone--blue { background: var(--color-tertiary-500); }
@@ -1009,7 +1129,7 @@ function stopCamera() {
   gap: var(--space-3);
   width: 100%;
   padding: var(--space-3);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 0.85rem), calc(100% - 0.85rem) 100%, 0 100%);
+  border-radius: 20px;
 }
 
 .att-method__text {
@@ -1035,7 +1155,7 @@ function stopCamera() {
     linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 28%),
     repeating-linear-gradient(90deg, #d5e7c4 0 26px, #c3dcb0 26px 48px);
   box-shadow: var(--att-shadow);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 1.4rem 100%, 0 calc(100% - 1.4rem));
+  border-radius: 24px;
 }
 
 .att-map__road {
@@ -1046,6 +1166,15 @@ function stopCamera() {
   height: 18px;
   background: #f6f1e4;
   transform: rotate(-8deg);
+}
+
+.att-map__road--alt {
+  top: 70%;
+  left: -14%;
+  right: 20%;
+  height: 12px;
+  transform: rotate(6deg);
+  opacity: 0.75;
 }
 
 .att-map__ring {
@@ -1094,12 +1223,13 @@ function stopCamera() {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 1rem), calc(100% - 1rem) 100%, 0 100%);
+  border-radius: 20px;
 }
 
 .att-wifi {
   align-items: center;
   text-align: center;
+  padding-top: var(--space-2);
 }
 
 .att-wifi__orb {
@@ -1111,7 +1241,31 @@ function stopCamera() {
   background: radial-gradient(circle at 35% 30%, var(--color-tertiary-300), var(--color-tertiary-600));
   color: var(--color-on-tertiary);
   box-shadow: 0 12px 24px color-mix(in srgb, var(--color-tertiary-700) 28%, transparent);
-  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  border-radius: var(--radius-full);
+}
+
+.att-wifi__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-full);
+  border: 1.5px solid color-mix(in srgb, var(--color-tertiary-400) 55%, transparent);
+  animation: att-ping 2.4s ease-out infinite;
+}
+
+.att-wifi__ring--2 {
+  animation-delay: 1.2s;
+}
+
+@keyframes att-ping {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .att-wifi__ring {
+    animation: none;
+    display: none;
+  }
 }
 
 .att-wifi h2 {
@@ -1122,7 +1276,7 @@ function stopCamera() {
   width: 100%;
   padding: var(--space-2) var(--space-3);
   text-align: left;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 1.3rem 100%, 0 calc(100% - 1.3rem));
+  border-radius: 20px;
 }
 
 .att-panel p {
@@ -1154,11 +1308,12 @@ function stopCamera() {
   min-height: 280px;
   overflow: hidden;
   background: #8eb6e4;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 2rem 100%, 0 calc(100% - 2rem));
+  border-radius: 28px;
+  box-shadow: var(--att-shadow);
 }
 
 .att-face__video,
-.att-face__fallback {
+.att-face__art {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -1168,15 +1323,6 @@ function stopCamera() {
 .att-face__video {
   object-fit: cover;
   transform: scaleX(-1);
-}
-
-.att-face__fallback {
-  display: grid;
-  place-items: center;
-  color: var(--color-on-tertiary);
-  background:
-    radial-gradient(circle at 50% 42%, #f3d2bd 0 54px, transparent 55px),
-    linear-gradient(#d5e7fb, #7eaddf);
 }
 
 .att-face__frame {
@@ -1189,17 +1335,18 @@ function stopCamera() {
   position: absolute;
   width: 28px;
   height: 28px;
-  border: 3px solid #3dce86;
+  border-style: solid;
+  border-color: var(--color-success);
 }
 
 .att-face__frame span:nth-child(1),
-.att-qr__frame span:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.att-qr__frame span:nth-child(1) { top: 0; left: 0; border-width: 3px 0 0 3px; }
 .att-face__frame span:nth-child(2),
-.att-qr__frame span:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.att-qr__frame span:nth-child(2) { top: 0; right: 0; border-width: 3px 3px 0 0; }
 .att-face__frame span:nth-child(3),
-.att-qr__frame span:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.att-qr__frame span:nth-child(3) { bottom: 0; left: 0; border-width: 0 0 3px 3px; }
 .att-face__frame span:nth-child(4),
-.att-qr__frame span:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; }
+.att-qr__frame span:nth-child(4) { right: 0; bottom: 0; border-width: 0 3px 3px 0; }
 
 .att-face__caption {
   position: absolute;
@@ -1238,16 +1385,16 @@ function stopCamera() {
 
 .att-qr {
   align-items: center;
+  padding-top: var(--space-2);
 }
 
 .att-qr__frame {
   position: relative;
   width: min(100%, 280px);
   height: 280px;
-  background:
-    linear-gradient(#eef5ff, #d5e6fb);
+  background: linear-gradient(#eef5ff, #d5e6fb);
   box-shadow: var(--att-shadow);
-  clip-path: polygon(1.6rem 0, 100% 0, 100% calc(100% - 1.6rem), calc(100% - 1.6rem) 100%, 0 100%, 0 1.6rem);
+  border-radius: 28px;
 }
 
 .att-qr__frame i {
@@ -1269,7 +1416,7 @@ function stopCamera() {
   color: var(--color-text-muted);
   font-size: 0.8125rem;
   font-weight: 700;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 1.5rem 100%, 0 calc(100% - 1.5rem));
+  border-radius: 24px;
 }
 
 .att-code input {
@@ -1299,7 +1446,14 @@ function stopCamera() {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding-top: var(--space-4);
+  padding-top: var(--space-3);
+}
+
+.att-success__confetti {
+  width: 100%;
+  max-width: 20rem;
+  height: 4rem;
+  margin-bottom: calc(-1 * var(--space-3));
 }
 
 .att-success__badge {
@@ -1318,8 +1472,8 @@ function stopCamera() {
   content: '';
   position: absolute;
   inset: -0.85rem;
-  border: 2px solid color-mix(in srgb, var(--color-success) 45%, transparent);
-  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success) 45%, transparent);
 }
 
 .att-success h2 {
@@ -1338,7 +1492,7 @@ function stopCamera() {
   padding: var(--space-2) var(--space-3);
   list-style: none;
   text-align: left;
-  clip-path: polygon(1.1rem 0, 100% 0, 100% 100%, 0 100%, 0 1.1rem);
+  border-radius: 24px;
 }
 
 .att-facts li {
@@ -1362,65 +1516,6 @@ function stopCamera() {
   color: var(--color-text);
 }
 
-.att-month {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-2) var(--space-3);
-  border-radius: 16px;
-  background: var(--color-surface);
-  box-shadow: var(--att-shadow);
-  color: var(--color-tertiary-900);
-  font-weight: 800;
-}
-
-.att-month button {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border: 0;
-  border-radius: var(--radius-full);
-  background: var(--color-tertiary-50);
-  color: var(--color-tertiary-700);
-  cursor: pointer;
-}
-
-.att-month button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.att-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
-}
-
-.att-stats article {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border-radius: 16px;
-  background: var(--color-surface);
-  box-shadow: var(--att-shadow);
-}
-
-.att-stats small,
-.att-day h3 {
-  display: block;
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.att-stats strong {
-  color: var(--color-tertiary-900);
-  font-size: 0.95rem;
-}
-
 .att-note {
   margin: 0;
   padding: var(--space-3);
@@ -1429,86 +1524,6 @@ function stopCamera() {
   color: var(--color-info-tint-fg);
   font-size: 0.75rem;
   line-height: 1.45;
-}
-
-.att-day {
-  padding: var(--space-3);
-  border-radius: 18px;
-}
-
-.att-day h3 {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-  color: var(--color-tertiary-800);
-  font-size: 0.84rem;
-}
-
-.att-day__sample {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  font-size: 0.68rem;
-  font-weight: 700;
-}
-
-.att-day ul {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.att-day li {
-  display: grid;
-  grid-template-columns: 1.6rem 1fr auto;
-  gap: var(--space-2);
-  align-items: start;
-}
-
-.att-day b {
-  font-variant-numeric: tabular-nums;
-}
-
-.att-day em {
-  font-style: normal;
-  font-size: 0.68rem;
-  font-weight: 800;
-}
-
-.att-day em.is-ok { color: var(--color-success-tint-fg); }
-.att-day em.is-late { color: var(--color-warning-tint-fg); }
-
-.att-day__mark {
-  display: grid;
-  place-items: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: var(--radius-full);
-  color: var(--color-on-tertiary);
-}
-
-.att-day__mark--in { background: var(--color-success); }
-.att-day__mark--out { background: var(--color-tertiary-500); }
-
-.att-day__empty {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-}
-
-.att-notice {
-  display: flex;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: 18px;
-}
-
-.att-section {
-  font-size: 0.95rem;
 }
 
 .att-dock {
@@ -1536,34 +1551,6 @@ function stopCamera() {
 .att-cta:disabled {
   opacity: 0.45;
   cursor: default;
-}
-
-.att-nav {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 0 calc(var(--space-3) * -1);
-  padding: 8px 6px calc(8px + env(safe-area-inset-bottom, 0px));
-  border-radius: 22px 22px 0 0;
-  background: var(--color-surface);
-  box-shadow: 0 -8px 24px color-mix(in srgb, var(--color-tertiary-900) 8%, transparent);
-}
-
-.att-nav__item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  border: 0;
-  background: transparent;
-  color: var(--color-text-muted);
-  font: inherit;
-  font-size: 0.68rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.att-nav__item--active {
-  color: var(--color-tertiary-600);
 }
 
 @media (prefers-reduced-motion: reduce) {
