@@ -1,5 +1,6 @@
-const STORAGE_KEY = 'employee-attendance-session-v1';
-const LOG_KEY = 'employee-attendance-log-v1';
+const STORAGE_KEY = 'employee-attendance-session-v2';
+const LOG_KEY = 'employee-attendance-log-v2';
+const LEGACY_LOG_KEY = 'employee-attendance-log-v1';
 
 function todayKey() {
   const d = new Date();
@@ -11,20 +12,41 @@ function todayKey() {
 
 function emptyRecord() {
   return {
-    checkInTime: null,
-    checkOutTime: null,
-    checkInMethod: null,
-    checkOutMethod: null,
+    morningInTime: null,
+    morningOutTime: null,
+    afternoonInTime: null,
+    afternoonOutTime: null,
+    morningInMethod: null,
+    morningOutMethod: null,
+    afternoonInMethod: null,
+    afternoonOutMethod: null,
   };
 }
 
 function normalizeRecord(parsed) {
   if (!parsed || typeof parsed !== 'object') return emptyRecord();
+  if (parsed.morningInTime != null || parsed.morningOutTime != null
+    || parsed.afternoonInTime != null || parsed.afternoonOutTime != null) {
+    return {
+      morningInTime: parsed.morningInTime || null,
+      morningOutTime: parsed.morningOutTime || null,
+      afternoonInTime: parsed.afternoonInTime || null,
+      afternoonOutTime: parsed.afternoonOutTime || null,
+      morningInMethod: parsed.morningInMethod || null,
+      morningOutMethod: parsed.morningOutMethod || null,
+      afternoonInMethod: parsed.afternoonInMethod || null,
+      afternoonOutMethod: parsed.afternoonOutMethod || null,
+    };
+  }
   return {
-    checkInTime: parsed.checkInTime || null,
-    checkOutTime: parsed.checkOutTime || null,
-    checkInMethod: parsed.checkInMethod || null,
-    checkOutMethod: parsed.checkOutMethod || null,
+    morningInTime: parsed.checkInTime || null,
+    morningOutTime: parsed.morningOutTime || null,
+    afternoonInTime: parsed.afternoonInTime || null,
+    afternoonOutTime: parsed.checkOutTime || null,
+    morningInMethod: parsed.checkInMethod || null,
+    morningOutMethod: parsed.morningOutMethod || null,
+    afternoonInMethod: parsed.afternoonInMethod || null,
+    afternoonOutMethod: parsed.checkOutMethod || null,
   };
 }
 
@@ -32,9 +54,20 @@ function readLog() {
   if (typeof localStorage === 'undefined') return {};
   try {
     const raw = localStorage.getItem(LOG_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+    const legacyRaw = localStorage.getItem(LEGACY_LOG_KEY);
+    if (!legacyRaw) return {};
+    const legacy = JSON.parse(legacyRaw);
+    if (!legacy || typeof legacy !== 'object') return {};
+    const migrated = {};
+    Object.entries(legacy).forEach(([date, row]) => {
+      migrated[date] = normalizeRecord(row);
+    });
+    localStorage.setItem(LOG_KEY, JSON.stringify(migrated));
+    return migrated;
   } catch {
     return {};
   }
@@ -59,6 +92,41 @@ export function readEmployeeAttendanceToday() {
   return fromLog ? normalizeRecord(fromLog) : null;
 }
 
+export function recordFromServerRow(row) {
+  return normalizeRecord({
+    morningInTime: row?.check_in_time,
+    morningOutTime: row?.morning_check_out_time,
+    afternoonInTime: row?.afternoon_check_in_time,
+    afternoonOutTime: row?.check_out_time,
+    morningInMethod: row?.check_in_method,
+    morningOutMethod: row?.morning_check_out_method,
+    afternoonInMethod: row?.afternoon_check_in_method,
+    afternoonOutMethod: row?.check_out_method,
+  });
+}
+
+export function recordToServerPayload(record) {
+  const row = normalizeRecord(record);
+  const payload = {};
+  if (row.morningInTime) {
+    payload.check_in_time = row.morningInTime;
+    payload.check_in_method = row.morningInMethod;
+  }
+  if (row.morningOutTime) {
+    payload.morning_check_out_time = row.morningOutTime;
+    payload.morning_check_out_method = row.morningOutMethod;
+  }
+  if (row.afternoonInTime) {
+    payload.afternoon_check_in_time = row.afternoonInTime;
+    payload.afternoon_check_in_method = row.afternoonInMethod;
+  }
+  if (row.afternoonOutTime) {
+    payload.check_out_time = row.afternoonOutTime;
+    payload.check_out_method = row.afternoonOutMethod;
+  }
+  return payload;
+}
+
 /** Giờ HRM trả về ghi đè nhật ký trên máy (kể cả phiên hôm nay). */
 export function applyServerAttendancePunches(rows) {
   if (!Array.isArray(rows) || rows.length === 0) return;
@@ -66,12 +134,7 @@ export function applyServerAttendancePunches(rows) {
   rows.forEach((row) => {
     const date = String(row?.work_date || '');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
-    log[date] = {
-      checkInTime: row.check_in_time || null,
-      checkOutTime: row.check_out_time || null,
-      checkInMethod: row.check_in_method || null,
-      checkOutMethod: row.check_out_method || null,
-    };
+    log[date] = recordFromServerRow(row);
   });
 
   if (typeof localStorage !== 'undefined') {
@@ -102,23 +165,13 @@ export function readEmployeeAttendanceLog() {
   return out;
 }
 
-export function writeEmployeeAttendanceToday({
-  checkInTime,
-  checkOutTime,
-  checkInMethod = null,
-  checkOutMethod = null,
-}) {
-  const record = {
-    checkInTime: checkInTime || null,
-    checkOutTime: checkOutTime || null,
-    checkInMethod: checkInMethod || null,
-    checkOutMethod: checkOutMethod || null,
-  };
+export function writeEmployeeAttendanceToday(record) {
+  const normalized = normalizeRecord(record);
   const date = todayKey();
 
   if (typeof sessionStorage !== 'undefined') {
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ date, ...record }));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ date, ...normalized }));
     } catch {
       /* ignore quota */
     }
@@ -127,7 +180,7 @@ export function writeEmployeeAttendanceToday({
   if (typeof localStorage === 'undefined') return;
   try {
     const log = readLog();
-    log[date] = record;
+    log[date] = normalized;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 120);
     const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
@@ -138,6 +191,16 @@ export function writeEmployeeAttendanceToday({
   } catch {
     /* ignore quota */
   }
+}
+
+export function hasAnyPunch(record) {
+  const row = normalizeRecord(record);
+  return Boolean(
+    row.morningInTime
+    || row.morningOutTime
+    || row.afternoonInTime
+    || row.afternoonOutTime,
+  );
 }
 
 export function clearEmployeeAttendanceToday() {

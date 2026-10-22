@@ -33,9 +33,12 @@ class EmployeeAttendancePunchController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
+            'session' => ['required', Rule::in(['morning', 'afternoon'])],
             'direction' => ['required', Rule::in(['in', 'out'])],
             'method' => ['required', 'string', 'max:64'],
         ], [
+            'session.required' => 'Chưa xác định ca chấm công.',
+            'session.in' => 'Ca chấm công phải là sáng hoặc chiều.',
             'direction.required' => 'Chưa xác định chấm vào hay chấm ra.',
             'direction.in' => 'Chỉ chấm vào hoặc chấm ra.',
             'method.required' => 'Chưa chọn hình thức chấm công.',
@@ -48,7 +51,12 @@ class EmployeeAttendancePunchController extends Controller
         }
 
         try {
-            $row = $this->punches->punch($request->user(), $validated['direction'], $method);
+            $row = $this->punches->punch(
+                $request->user(),
+                $validated['session'],
+                $validated['direction'],
+                $method,
+            );
         } catch (HrmApiUnavailable $e) {
             return $this->failure($e, 'Không gửi được giờ chấm công về HRM.');
         }
@@ -63,18 +71,28 @@ class EmployeeAttendancePunchController extends Controller
     {
         $validated = $request->validate([
             'check_in_time' => ['nullable', 'date_format:H:i'],
+            'morning_check_out_time' => ['nullable', 'date_format:H:i'],
+            'afternoon_check_in_time' => ['nullable', 'date_format:H:i'],
             'check_out_time' => ['nullable', 'date_format:H:i'],
             'check_in_method' => ['nullable', 'string', 'max:64'],
+            'morning_check_out_method' => ['nullable', 'string', 'max:64'],
+            'afternoon_check_in_method' => ['nullable', 'string', 'max:64'],
             'check_out_method' => ['nullable', 'string', 'max:64'],
         ], [
-            'check_in_time.date_format' => 'Giờ vào không đúng định dạng.',
-            'check_out_time.date_format' => 'Giờ ra không đúng định dạng.',
+            'check_in_time.date_format' => 'Giờ vào sáng không đúng định dạng.',
+            'morning_check_out_time.date_format' => 'Giờ ra sáng không đúng định dạng.',
+            'afternoon_check_in_time.date_format' => 'Giờ vào chiều không đúng định dạng.',
+            'check_out_time.date_format' => 'Giờ ra chiều không đúng định dạng.',
         ]);
 
-        if (
-            ! filled($validated['check_in_time'] ?? null)
-            && ! filled($validated['check_out_time'] ?? null)
-        ) {
+        $hasTime = collect([
+            'check_in_time',
+            'morning_check_out_time',
+            'afternoon_check_in_time',
+            'check_out_time',
+        ])->contains(fn (string $key) => filled($validated[$key] ?? null));
+
+        if (! $hasTime) {
             return response()->json(['message' => 'Chưa có giờ chấm để đồng bộ.'], 422);
         }
 

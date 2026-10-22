@@ -13,13 +13,16 @@ import AppIcon from '@/components/AppIcon.vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AttendanceGlyph from '../components/AttendanceGlyph.vue';
 import {
+  hasAnyPunch,
   readEmployeeAttendanceToday,
+  recordFromServerRow,
+  recordToServerPayload,
   writeEmployeeAttendanceToday,
 } from '../lib/employeeAttendanceSession';
 import {
+  nextPunchAction,
   nextPunchSession,
-  punchActionLabel,
-  workSessionFromClock,
+  sessionSlot,
 } from '../lib/employeeAttendanceWorkSession';
 
 const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
@@ -74,10 +77,16 @@ const wifiState = ref('idle');
 const wifiSignal = ref(0);
 
 const stored = readEmployeeAttendanceToday();
-const checkInTime = ref(stored?.checkInTime ?? null);
-const checkOutTime = ref(stored?.checkOutTime ?? null);
-const checkInMethod = ref(stored?.checkInMethod ?? null);
-const checkOutMethod = ref(stored?.checkOutMethod ?? null);
+const punchRecord = ref(stored ?? {
+  morningInTime: null,
+  morningOutTime: null,
+  afternoonInTime: null,
+  afternoonOutTime: null,
+  morningInMethod: null,
+  morningOutMethod: null,
+  afternoonInMethod: null,
+  afternoonOutMethod: null,
+});
 
 let timer = 0;
 let hydrateToken = 0;
@@ -109,35 +118,26 @@ const placeLabel = computed(() => {
 
 const timeLabel = computed(() => formatHm(now.value));
 const homeDateLabel = computed(() => formatLongDate(now.value));
-const punchAction = computed(() => punchActionLabel({
-  checkInTime: checkInTime.value,
-  checkOutTime: checkOutTime.value,
-  now: now.value,
-}));
+const punchAction = computed(() => nextPunchAction(punchRecord.value, { now: now.value }));
 const heroLabel = computed(() => punchAction.value.full);
 const activeSession = computed(() => nextPunchSession({ now: now.value }));
+const punchComplete = computed(() => punchAction.value.complete);
 function slotForSession(sessionId) {
-  const inTime = checkInTime.value && workSessionFromClock(checkInTime.value).id === sessionId
-    ? checkInTime.value
-    : null;
-  const outTime = checkOutTime.value && workSessionFromClock(checkOutTime.value).id === sessionId
-    ? checkOutTime.value
-    : null;
-  const next = activeSession.value.id === sessionId && !checkOutTime.value;
-  return { in: inTime, out: outTime, next };
+  const slot = sessionSlot(punchRecord.value, sessionId);
+  const next = activeSession.value.id === sessionId && punchAction.value.direction != null;
+  return { in: slot.in, out: slot.out, next };
 }
 const morningSlot = computed(() => slotForSession('morning'));
 const afternoonSlot = computed(() => slotForSession('afternoon'));
 const punchHint = computed(() => {
-  if (checkInTime.value && checkOutTime.value) {
-    const inSession = workSessionFromClock(checkInTime.value).short;
-    const outSession = workSessionFromClock(checkOutTime.value).short;
-    return `Vào ${checkInTime.value} (${inSession}) · Ra ${checkOutTime.value} (${outSession})`;
+  if (punchComplete.value) {
+    return `Đã chấm đủ ca ${activeSession.value.label} hôm nay`;
   }
-  if (checkInTime.value) {
-    return `Đã vào lúc ${checkInTime.value} · ${workSessionFromClock(checkInTime.value).label}`;
+  if (punchAction.value.direction === 'out') {
+    const slot = sessionSlot(punchRecord.value, punchAction.value.session.id);
+    return `Đã vào ${slot.in} · tiếp theo: chấm ra ${punchAction.value.session.label}`;
   }
-  return `Chưa chấm công hôm nay · tiếp theo: ${activeSession.value.label}`;
+  return `Chưa chấm ${punchAction.value.session.label} · ${punchAction.value.verb}`;
 });
 const syncLine = computed(() => {
   if (syncState.value === 'syncing') {
@@ -150,7 +150,7 @@ const syncLine = computed(() => {
       retry: true,
     };
   }
-  if (syncState.value === 'synced' && (checkInTime.value || checkOutTime.value)) {
+  if (syncState.value === 'synced' && hasAnyPunch(punchRecord.value)) {
     return { text: 'Đã lưu và đồng bộ với HRM', wait: false, retry: false };
   }
   return null;
@@ -252,7 +252,7 @@ onMounted(() => {
     now.value = new Date();
   }, 1000);
   syncRetryTimer = window.setInterval(() => {
-    if (syncState.value === 'pending' && hasPunch(readEmployeeAttendanceToday())) {
+    if (syncState.value === 'pending' && hasAnyPunch(readEmployeeAttendanceToday())) {
       void hydrateTodayFromHrm();
     }
   }, 45000);
@@ -309,23 +309,41 @@ function goHome() {
 
 function reloadPunch() {
   const row = readEmployeeAttendanceToday();
-  checkInTime.value = row?.checkInTime ?? null;
-  checkOutTime.value = row?.checkOutTime ?? null;
-  checkInMethod.value = row?.checkInMethod ?? null;
-  checkOutMethod.value = row?.checkOutMethod ?? null;
-}
-
-function hasPunch(record) {
-  return Boolean(record?.checkInTime || record?.checkOutTime);
+  if (row) punchRecord.value = { ...punchRecord.value, ...row };
 }
 
 function normalizeRemoteRow(data) {
-  return {
-    checkInTime: data?.check_in_time || null,
-    checkOutTime: data?.check_out_time || null,
-    checkInMethod: data?.check_in_method || null,
-    checkOutMethod: data?.check_out_method || null,
-  };
+  return recordFromServerRow(data);
+}
+
+function recordSnapshot() {
+  return { ...punchRecord.value };
+}
+
+function applyLocalPunch(sessionId, direction, time, methodLabel) {
+  const next = recordSnapshot();
+  if (sessionId === 'morning' && direction === 'in') {
+    next.morningInTime = time;
+    next.morningInMethod = methodLabel;
+  } else if (sessionId === 'morning' && direction === 'out') {
+    next.morningOutTime = time;
+    next.morningOutMethod = methodLabel;
+  } else if (sessionId === 'afternoon' && direction === 'in') {
+    next.afternoonInTime = time;
+    next.afternoonInMethod = methodLabel;
+  } else if (sessionId === 'afternoon' && direction === 'out') {
+    next.afternoonOutTime = time;
+    next.afternoonOutMethod = methodLabel;
+  }
+  punchRecord.value = next;
+  return next;
+}
+
+function recordsDiffer(local, remote) {
+  const keys = [
+    'morningInTime', 'morningOutTime', 'afternoonInTime', 'afternoonOutTime',
+  ];
+  return keys.some((key) => (local?.[key] || null) !== (remote?.[key] || null));
 }
 
 function punchApiMessage(error) {
@@ -340,24 +358,18 @@ function punchApiMessage(error) {
 }
 
 function needsHrmPush(local, remote) {
-  if (!hasPunch(local)) return false;
-  if (!hasPunch(remote)) return true;
-  return local.checkInTime !== (remote.checkInTime || null)
-    || local.checkOutTime !== (remote.checkOutTime || null);
+  if (!hasAnyPunch(local)) return false;
+  if (!hasAnyPunch(remote)) return true;
+  return recordsDiffer(local, remote);
 }
 
 async function pushLocalToHrm(local, token) {
-  if (!hasPunch(local)) return false;
+  if (!hasAnyPunch(local)) return false;
   try {
-    const { data } = await window.axios.post('/api/attendance/punches/sync', {
-      check_in_time: local.checkInTime || null,
-      check_out_time: local.checkOutTime || null,
-      check_in_method: local.checkInMethod || null,
-      check_out_method: local.checkOutMethod || null,
-    });
+    const { data } = await window.axios.post('/api/attendance/punches/sync', recordToServerPayload(local));
     if (token !== hydrateToken) return false;
     const remote = normalizeRemoteRow(data?.data);
-    if (hasPunch(remote)) rememberToday(remote);
+    if (hasAnyPunch(remote)) rememberToday(remote);
     syncIssueMessage.value = '';
     return true;
   } catch (error) {
@@ -368,12 +380,7 @@ async function pushLocalToHrm(local, token) {
 }
 
 function rememberToday(row) {
-  writeEmployeeAttendanceToday({
-    checkInTime: row?.checkInTime || row?.check_in_time || null,
-    checkOutTime: row?.checkOutTime || row?.check_out_time || null,
-    checkInMethod: row?.checkInMethod || row?.check_in_method || null,
-    checkOutMethod: row?.checkOutMethod || row?.check_out_method || null,
-  });
+  writeEmployeeAttendanceToday(row);
   reloadPunch();
 }
 
@@ -394,37 +401,29 @@ function openMethod(id) {
 }
 
 async function commitPunch(methodId) {
-  if (punching.value) return;
+  if (punching.value || punchComplete.value) return;
+  const action = punchAction.value;
+  if (!action.direction) return;
   const method = METHODS.find((item) => item.id === methodId);
   const methodLabel = method?.label || methodId;
   const fresh = new Date();
   const label = formatHm(fresh);
   now.value = fresh;
-  const checkingOut = Boolean(checkInTime.value && !checkOutTime.value);
+  const { session, direction } = action;
   punching.value = true;
   hydrateToken += 1;
-  if (checkingOut) {
-    checkOutTime.value = label;
-    checkOutMethod.value = methodLabel;
-  } else {
-    checkInTime.value = label;
-    checkInMethod.value = methodLabel;
-  }
-  rememberToday({
-    checkInTime: checkInTime.value,
-    checkOutTime: checkOutTime.value,
-    checkInMethod: checkInMethod.value,
-    checkOutMethod: checkOutMethod.value,
-  });
+  const localAfter = applyLocalPunch(session.id, direction, label, methodLabel);
+  rememberToday(localAfter);
   syncState.value = 'syncing';
   let synced = false;
   try {
     const { data } = await window.axios.post('/api/attendance/punches', {
-      direction: checkingOut ? 'out' : 'in',
+      session: session.id,
+      direction,
       method: methodLabel,
     });
     const remote = normalizeRemoteRow(data?.data);
-    if (hasPunch(remote)) rememberToday(remote);
+    if (hasAnyPunch(remote)) rememberToday(remote);
     synced = true;
     syncIssueMessage.value = '';
     syncState.value = 'synced';
@@ -436,8 +435,9 @@ async function commitPunch(methodId) {
     punching.value = false;
   }
   lastResult.value = {
-    action: checkingOut ? 'out' : 'in',
-    time: checkingOut ? (checkOutTime.value || label) : (checkInTime.value || label),
+    action: direction,
+    session: session.id,
+    time: label,
     methodId,
     method: methodLabel,
     dateLabel: formatLongDate(fresh),
@@ -451,7 +451,7 @@ async function commitPunch(methodId) {
 async function hydrateTodayFromHrm() {
   const token = ++hydrateToken;
   const local = readEmployeeAttendanceToday();
-  if (hasPunch(local)) syncState.value = 'syncing';
+  if (hasAnyPunch(local)) syncState.value = 'syncing';
 
   let remote = normalizeRemoteRow(null);
   let fetchOk = false;
@@ -467,7 +467,7 @@ async function hydrateTodayFromHrm() {
     if (message) syncIssueMessage.value = message;
   }
 
-  if (hasPunch(local) && needsHrmPush(local, remote)) {
+  if (hasAnyPunch(local) && needsHrmPush(local, remote)) {
     const pushed = await pushLocalToHrm(local, token);
     if (token !== hydrateToken) return;
     if (pushed) {
@@ -476,17 +476,17 @@ async function hydrateTodayFromHrm() {
     }
   }
 
-  if (fetchOk && hasPunch(remote) && !needsHrmPush(local, remote)) {
+  if (fetchOk && hasAnyPunch(remote) && !needsHrmPush(local, remote)) {
     rememberToday(remote);
     syncState.value = 'synced';
     return;
   }
 
-  syncState.value = hasPunch(local) ? 'pending' : 'idle';
+  syncState.value = hasAnyPunch(local) ? 'pending' : 'idle';
 }
 
 async function retrySyncNow() {
-  if (syncState.value === 'syncing' || !hasPunch(readEmployeeAttendanceToday())) return;
+  if (syncState.value === 'syncing' || !hasAnyPunch(readEmployeeAttendanceToday())) return;
   await hydrateTodayFromHrm();
 }
 
@@ -775,7 +775,7 @@ function stopQrCamera() {
           <article class="att-hero">
             <div class="att-hero__top">
               <p class="att-hero__greet">
-                {{ checkInTime && !checkOutTime ? 'Đang làm việc,' : 'Chào' }} <b>{{ displayName }}</b>
+                {{ punchAction.direction === 'out' ? 'Đang làm việc,' : 'Chào' }} <b>{{ displayName }}</b>
               </p>
               <p class="att-hero__place">
                 <AttendanceGlyph name="pin" :size="13" />
@@ -855,7 +855,7 @@ function stopQrCamera() {
             <button
               type="button"
               class="att-punch"
-              :disabled="punching"
+              :disabled="punching || punchComplete"
               :aria-busy="punching"
               @click="onHero"
             >
@@ -864,7 +864,7 @@ function stopQrCamera() {
               </svg>
               <AttendanceGlyph v-else name="fingerprint" :size="36" />
               <span class="att-punch__label">{{ punching ? 'Đang gửi…' : punchAction.verb }}</span>
-              <small v-if="!punching" class="att-punch__session">{{ activeSession.label }}</small>
+              <small v-if="!punching && !punchComplete" class="att-punch__session">{{ activeSession.label }}</small>
             </button>
           </div>
           <p class="att-punch-hint">{{ punchHint }}</p>
@@ -1065,9 +1065,9 @@ function stopQrCamera() {
           <p
             v-if="lastResult?.time"
             class="att-success__session"
-            :class="`att-session--${workSessionFromClock(lastResult.time).tone}`"
+            :class="lastResult.session === 'afternoon' ? 'att-session--indigo' : 'att-session--amber'"
           >
-            {{ workSessionFromClock(lastResult.time).label }}
+            {{ lastResult.session === 'afternoon' ? 'Ca chiều' : 'Ca sáng' }}
           </p>
           <p class="att-success__name">{{ displayName }}</p>
           <p class="att-success__time">

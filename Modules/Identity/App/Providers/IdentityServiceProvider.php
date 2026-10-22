@@ -59,6 +59,7 @@ class IdentityServiceProvider extends ServiceProvider
             \Modules\Identity\App\Console\DiagnoseHrmLeaveCommand::class,
             \Modules\Identity\App\Console\DiagnoseHrmTimesheetCommand::class,
             \Modules\Identity\App\Console\MirrorHrmEmployeesCommand::class,
+            \Modules\Identity\App\Console\ReconcileHrmEmployeeUuidsCommand::class,
             \Modules\Identity\App\Console\DiagnoseHrmDatabaseCommand::class,
         ]);
     }

@@ -44,7 +44,9 @@ export function buildAttendanceMonth(cursor, log) {
       ? `Hôm nay, ${WEEKDAYS[date.getDay()]} - ${dateText}`
       : `${WEEKDAYS[date.getDay()]} - ${dateText}`;
     const real = log?.[key];
-    const hasReal = Boolean(real?.checkInTime || real?.checkOutTime);
+    const checkIn = real?.morningInTime ?? real?.checkInTime ?? null;
+    const checkOut = real?.afternoonOutTime ?? real?.checkOutTime ?? null;
+    const hasReal = Boolean(checkIn || checkOut || real?.morningOutTime || real?.afternoonInTime);
 
     if (key === todayKey && !hasReal) {
       rows.push({ key, title, kind: 'pending' });
@@ -54,7 +56,7 @@ export function buildAttendanceMonth(cursor, log) {
     stats.scheduled += 1;
 
     if (hasReal) {
-      const late = isLateTime(real.checkInTime);
+      const late = isLateTime(checkIn);
       if (late) stats.late += 1;
       else stats.onTime += 1;
       rows.push({
@@ -63,10 +65,10 @@ export function buildAttendanceMonth(cursor, log) {
         kind: 'work',
         sample: false,
         late,
-        checkIn: real.checkInTime,
-        checkOut: real.checkOutTime,
-        methodIn: real.checkInMethod,
-        methodOut: real.checkOutMethod,
+        checkIn,
+        checkOut,
+        methodIn: real.morningInMethod ?? real.checkInMethod,
+        methodOut: real.afternoonOutMethod ?? real.checkOutMethod,
       });
       continue;
     }

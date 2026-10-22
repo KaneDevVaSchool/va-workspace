@@ -28,9 +28,44 @@ export function nextPunchSession({ now = new Date() } = {}) {
   return workSessionFromDate(now);
 }
 
+/**
+ * @typedef {Object} DayPunchRecord
+ * @property {string|null} [morningInTime]
+ * @property {string|null} [morningOutTime]
+ * @property {string|null} [afternoonInTime]
+ * @property {string|null} [afternoonOutTime]
+ */
+
+export function sessionSlot(record, sessionId) {
+  if (sessionId === 'morning') {
+    return { in: record?.morningInTime ?? null, out: record?.morningOutTime ?? null };
+  }
+  return { in: record?.afternoonInTime ?? null, out: record?.afternoonOutTime ?? null };
+}
+
+/** Lần chấm tiếp theo trong ca hiện tại (theo giờ máy). */
+export function nextPunchAction(record = {}, { now = new Date() } = {}) {
+  const session = workSessionFromDate(now);
+  const slot = sessionSlot(record, session.id);
+  if (!slot.in) {
+    return { verb: 'Chấm vào', direction: 'in', session, full: `Chấm vào · ${session.label}`, complete: false };
+  }
+  if (!slot.out) {
+    return { verb: 'Chấm ra', direction: 'out', session, full: `Chấm ra · ${session.label}`, complete: false };
+  }
+  return {
+    verb: 'Đã chấm xong ca',
+    direction: null,
+    session,
+    full: `Đã chấm xong · ${session.label}`,
+    complete: true,
+  };
+}
+
+/** @deprecated dùng nextPunchAction */
 export function punchActionLabel({ checkInTime, checkOutTime, now = new Date() } = {}) {
-  const session = nextPunchSession({ now });
-  const checkingOut = Boolean(checkInTime && !checkOutTime);
-  const verb = checkingOut ? 'Chấm ra' : 'Chấm vào';
-  return { verb, session, full: `${verb} · ${session.label}` };
+  return nextPunchAction({
+    morningInTime: checkInTime,
+    afternoonOutTime: checkOutTime,
+  }, { now });
 }

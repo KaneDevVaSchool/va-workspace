@@ -63,7 +63,20 @@ Deploy app: `bash deploy.sh` (repo va-workspace).
 Nếu Workspace đọc MySQL HRM trực tiếp (`HRM_DB_*`), trỏ host/user production — **không** commit mật khẩu.  
 Chẩn đoán: `php artisan identity:hrm-db-diagnose`.
 
-## 4. Kiểm tra nhanh từ trình duyệt
+## 4. Khớp `hrm_employee_uuid` (toàn bộ users)
+
+SSOT = email nhân sự trên DB HRM (`HRM_DB_*`). Khi UUID workspace lệch (thường sau SSO/mirror cũ), chấm công và duyệt bảng công **422**.
+
+Trên server Workspace:
+
+```bash
+php artisan identity:reconcile-hrm-employee-uuids --dry-run
+php artisan identity:reconcile-hrm-employee-uuids
+```
+
+Sau đó (tuỳ chọn): `php artisan identity:hrm-mirror-employees --force` để cập nhật tên/avatar.
+
+## 5. Kiểm tra nhanh từ trình duyệt
 
 1. Đăng nhập SSO qua HRM → Workspace.
 2. Mở chấm công — không còn 422 trên `/api/attendance/punches/today`.

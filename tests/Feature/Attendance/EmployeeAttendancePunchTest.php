@@ -105,6 +105,7 @@ class EmployeeAttendancePunchTest extends TestCase
 
         $this->actingAs($this->employee())
             ->postJson('/api/attendance/punches', [
+                'session' => 'afternoon',
                 'direction' => 'out',
                 'method' => 'GPS',
                 'employee_uuid' => 'someone-else',
@@ -148,6 +149,7 @@ class EmployeeAttendancePunchTest extends TestCase
 
         $this->actingAs($this->employee())
             ->postJson('/api/attendance/punches', [
+                'session' => 'morning',
                 'direction' => 'in',
                 'method' => 'Chấm bằng nút',
             ])
@@ -181,6 +183,7 @@ class EmployeeAttendancePunchTest extends TestCase
 
         $this->actingAs($this->employee())
             ->postJson('/api/attendance/punches', [
+                'session' => 'morning',
                 'direction' => 'in',
                 'method' => 'GPS',
             ])
@@ -213,6 +216,7 @@ class EmployeeAttendancePunchTest extends TestCase
 
         $this->actingAs($user)
             ->postJson('/api/attendance/punches', [
+                'session' => 'morning',
                 'direction' => 'in',
                 'method' => 'Chấm bằng nút',
             ])
@@ -228,6 +232,7 @@ class EmployeeAttendancePunchTest extends TestCase
 
         $this->actingAs($this->employee())
             ->postJson('/api/attendance/punches', [
+                'session' => 'morning',
                 'direction' => 'sideways',
                 'method' => 'GPS',
             ])
@@ -235,6 +240,73 @@ class EmployeeAttendancePunchTest extends TestCase
             ->assertJsonValidationErrors('direction');
 
         Http::assertNothingSent();
+    }
+
+    public function test_cannot_overwrite_saved_morning_check_in(): void
+    {
+        Http::fake([
+            'https://hrm.test/api/v1/attendance/punches*' => Http::response([
+                'data' => [[
+                    'check_in_time' => '08:02',
+                    'morning_check_out_time' => null,
+                    'afternoon_check_in_time' => null,
+                    'check_out_time' => null,
+                ]],
+            ]),
+        ]);
+
+        $this->actingAs($this->employee())
+            ->postJson('/api/attendance/punches', [
+                'session' => 'morning',
+                'direction' => 'in',
+                'method' => 'Chấm bằng nút',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Giờ chấm này đã lưu, không thể thay đổi.');
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_morning_out_is_stored_separately_from_afternoon_out(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-22 11:45:10'));
+
+        Http::fake([
+            'https://hrm.test/api/v1/attendance/punches*' => function (Request $request) {
+                if ($request->method() === 'GET') {
+                    return Http::response([
+                        'data' => [[
+                            'check_in_time' => '08:02',
+                            'morning_check_out_time' => null,
+                            'afternoon_check_in_time' => null,
+                            'check_out_time' => null,
+                        ]],
+                    ]);
+                }
+
+                return Http::response([
+                    'data' => [
+                        'check_in_time' => '08:02',
+                        'morning_check_out_time' => '11:45',
+                        'morning_check_out_method' => 'GPS',
+                    ],
+                ]);
+            },
+        ]);
+
+        $this->actingAs($this->employee())
+            ->postJson('/api/attendance/punches', [
+                'session' => 'morning',
+                'direction' => 'out',
+                'method' => 'GPS',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.morning_check_out_time', '11:45')
+            ->assertJsonPath('data.check_out_time', null);
+
+        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+            && ($request['morning_check_out_time'] ?? null) === '11:45'
+            && ! array_key_exists('check_out_time', $request->data()));
     }
 
     public function test_sync_pushes_local_times_to_hrm_without_changing_them(): void

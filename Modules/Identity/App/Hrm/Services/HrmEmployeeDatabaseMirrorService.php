@@ -284,17 +284,31 @@ class HrmEmployeeDatabaseMirrorService
         $user = $this->users->findByHrmEmployeeUuid($employeeUuid)
             ?? $this->users->findByEmail($email);
 
-        if ($user !== null && filled($user->hrm_employee_uuid) && $user->hrm_employee_uuid !== $employeeUuid) {
-            Log::warning('hrm.employee_db_mirror.email_conflict', [
-                'employee_uuid' => $employeeUuid,
-                'email' => $email,
-                'existing_hrm_uuid' => $user->hrm_employee_uuid,
-            ]);
-
-            return null;
-        }
-
         $attributes = $this->displayAttributes($employee);
+
+        if ($user !== null && filled($user->hrm_employee_uuid) && $user->hrm_employee_uuid !== $employeeUuid) {
+            $holder = User::query()
+                ->where('hrm_employee_uuid', $employeeUuid)
+                ->where('id', '!=', $user->id)
+                ->exists();
+            if ($holder) {
+                Log::warning('hrm.employee_db_mirror.uuid_holder_conflict', [
+                    'employee_uuid' => $employeeUuid,
+                    'email' => $email,
+                    'user_id' => $user->id,
+                ]);
+
+                return null;
+            }
+
+            Log::info('hrm.employee_db_mirror.uuid_reconciled', [
+                'user_id' => $user->id,
+                'email' => $email,
+                'from' => $user->hrm_employee_uuid,
+                'to' => $employeeUuid,
+            ]);
+            $attributes['hrm_employee_uuid'] = $employeeUuid;
+        }
 
         if ($user === null) {
             $draft = new User();

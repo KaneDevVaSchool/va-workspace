@@ -372,7 +372,17 @@ class HrmApiClient
     /**
      * Ghi giờ vào/ra — POST /api/v1/attendance/punches.
      *
-     * @param  array{work_date: string, check_in_time?: string|null, check_out_time?: string|null, check_in_method?: string|null, check_out_method?: string|null}  $fields
+     * @param  array{
+     *     work_date: string,
+     *     check_in_time?: string|null,
+     *     morning_check_out_time?: string|null,
+     *     afternoon_check_in_time?: string|null,
+     *     check_out_time?: string|null,
+     *     check_in_method?: string|null,
+     *     morning_check_out_method?: string|null,
+     *     afternoon_check_in_method?: string|null,
+     *     check_out_method?: string|null
+     * }  $fields
      * @return array<string, mixed>
      *
      * @throws HrmApiUnavailable

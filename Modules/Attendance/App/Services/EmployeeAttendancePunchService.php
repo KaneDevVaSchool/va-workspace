@@ -9,18 +9,43 @@ use Modules\Identity\App\Hrm\Services\HrmApiClient;
 /**
  * Gửi giờ vào/ra của người đang đăng nhập về HRM.
  * Danh tính = hrm_employee_uuid trên tài khoản — không nhận uuid từ trình duyệt.
- * Giờ lấy theo server. Mỗi lần chỉ ghi đè chiều đang chấm, chiều kia giữ nguyên.
+ * Giờ lấy theo server. Bốn ô: vào/ra sáng, vào/ra chiều — đã lưu thì không ghi đè.
  */
 class EmployeeAttendancePunchService
 {
+    /** @var list<string> */
+    private const PUNCH_TIME_KEYS = [
+        'check_in_time',
+        'morning_check_out_time',
+        'afternoon_check_in_time',
+        'check_out_time',
+    ];
+
+    /** @var list<string> */
+    private const PUNCH_METHOD_KEYS = [
+        'check_in_method',
+        'morning_check_out_method',
+        'afternoon_check_in_method',
+        'check_out_method',
+    ];
+
     public function __construct(
         private readonly HrmApiClient $hrmApi,
     ) {}
 
     /**
-     * Giờ đã chấm hôm nay. Bốn trường null khi HRM chưa có bản ghi.
+     * Giờ đã chấm hôm nay. Tám trường null khi HRM chưa có bản ghi.
      *
-     * @return array{check_in_time: ?string, check_out_time: ?string, check_in_method: ?string, check_out_method: ?string}
+     * @return array{
+     *     check_in_time: ?string,
+     *     morning_check_out_time: ?string,
+     *     afternoon_check_in_time: ?string,
+     *     check_out_time: ?string,
+     *     check_in_method: ?string,
+     *     morning_check_out_method: ?string,
+     *     afternoon_check_in_method: ?string,
+     *     check_out_method: ?string
+     * }
      *
      * @throws HrmApiUnavailable
      */
@@ -32,46 +57,53 @@ class EmployeeAttendancePunchService
     }
 
     /**
+     * @param  'morning'|'afternoon'  $session
      * @param  'in'|'out'  $direction
-     * @return array{check_in_time: ?string, check_out_time: ?string, check_in_method: ?string, check_out_method: ?string}
+     * @return array{
+     *     check_in_time: ?string,
+     *     morning_check_out_time: ?string,
+     *     afternoon_check_in_time: ?string,
+     *     check_out_time: ?string,
+     *     check_in_method: ?string,
+     *     morning_check_out_method: ?string,
+     *     afternoon_check_in_method: ?string,
+     *     check_out_method: ?string
+     * }
      *
      * @throws HrmApiUnavailable
      */
-    public function punch(User $user, string $direction, string $method): array
+    public function punch(User $user, string $session, string $direction, string $method): array
     {
         $uuid = $this->employeeUuid($user);
         $workDate = now()->toDateString();
         $existing = $this->present($this->hrmApi->getWorkspacePunch($uuid, $workDate));
+        [$timeKey, $methodKey] = $this->slotKeys($session, $direction);
+
+        if ($existing[$timeKey] !== null) {
+            throw HrmApiUnavailable::userFacing('Giờ chấm này đã lưu, không thể thay đổi.');
+        }
+
         $time = now()->format('H:i');
+        $existing[$timeKey] = $time;
+        $existing[$methodKey] = $method;
 
-        if ($direction === 'out') {
-            $existing['check_out_time'] = $time;
-            $existing['check_out_method'] = $method;
-        } else {
-            $existing['check_in_time'] = $time;
-            $existing['check_in_method'] = $method;
-        }
-
-        $fields = ['work_date' => $workDate];
-        foreach (['check_in_time', 'check_out_time', 'check_in_method', 'check_out_method'] as $key) {
-            if ($existing[$key] !== null) {
-                $fields[$key] = $existing[$key];
-            }
-        }
-
-        return $this->present($this->hrmApi->upsertWorkspacePunch($uuid, $fields));
+        return $this->present($this->hrmApi->upsertWorkspacePunch($uuid, $this->fieldsPayload($workDate, $existing)));
     }
 
     /**
-     * Đẩy lại giờ đã ghi trên máy (khi HRM tạm lỗi) — giữ đúng giờ vào/ra, không ghi đè bằng giờ server.
+     * Đẩy lại giờ đã ghi trên máy (khi HRM tạm lỗi) — chỉ điền ô còn trống trên HRM.
      *
-     * @param  array{
-     *     check_in_time?: string|null,
-     *     check_out_time?: string|null,
-     *     check_in_method?: string|null,
-     *     check_out_method?: string|null
-     * }  $payload
-     * @return array{check_in_time: ?string, check_out_time: ?string, check_in_method: ?string, check_out_method: ?string}
+     * @param  array<string, mixed>  $payload
+     * @return array{
+     *     check_in_time: ?string,
+     *     morning_check_out_time: ?string,
+     *     afternoon_check_in_time: ?string,
+     *     check_out_time: ?string,
+     *     check_in_method: ?string,
+     *     morning_check_out_method: ?string,
+     *     afternoon_check_in_method: ?string,
+     *     check_out_method: ?string
+     * }
      *
      * @throws HrmApiUnavailable
      */
@@ -79,53 +111,102 @@ class EmployeeAttendancePunchService
     {
         $uuid = $this->employeeUuid($user);
         $workDate = now()->toDateString();
-
-        $checkIn = $this->clock($payload['check_in_time'] ?? null);
-        $checkOut = $this->clock($payload['check_out_time'] ?? null);
-        if ($checkIn === null && $checkOut === null) {
+        $incoming = $this->present($payload);
+        if (! $this->hasAnyTime($incoming)) {
             throw HrmApiUnavailable::userFacing('Chưa có giờ chấm để đồng bộ.');
         }
 
-        $this->assertSyncTimesAllowed($checkIn, $checkOut);
+        $this->assertSyncTimesAllowed($incoming);
 
         $existing = $this->present($this->hrmApi->getWorkspacePunch($uuid, $workDate));
 
-        if ($checkIn !== null) {
-            $existing['check_in_time'] = $checkIn;
-            $existing['check_in_method'] = $this->text($payload['check_in_method'] ?? null)
-                ?? $existing['check_in_method']
-                ?? 'Chấm bằng nút';
-        }
-
-        if ($checkOut !== null) {
-            $existing['check_out_time'] = $checkOut;
-            $existing['check_out_method'] = $this->text($payload['check_out_method'] ?? null)
-                ?? $existing['check_out_method']
-                ?? 'Chấm bằng nút';
-        }
-
-        $fields = ['work_date' => $workDate];
-        foreach (['check_in_time', 'check_out_time', 'check_in_method', 'check_out_method'] as $key) {
-            if ($existing[$key] !== null) {
-                $fields[$key] = $existing[$key];
+        foreach (self::PUNCH_TIME_KEYS as $index => $timeKey) {
+            $methodKey = self::PUNCH_METHOD_KEYS[$index];
+            if ($incoming[$timeKey] === null) {
+                continue;
+            }
+            if ($existing[$timeKey] !== null && $existing[$timeKey] !== $incoming[$timeKey]) {
+                throw HrmApiUnavailable::userFacing('Giờ chấm này đã lưu, không thể thay đổi.');
+            }
+            if ($existing[$timeKey] === null) {
+                $existing[$timeKey] = $incoming[$timeKey];
+                $existing[$methodKey] = $incoming[$methodKey] ?? 'Chấm bằng nút';
             }
         }
 
-        return $this->present($this->hrmApi->upsertWorkspacePunch($uuid, $fields));
+        return $this->present($this->hrmApi->upsertWorkspacePunch($uuid, $this->fieldsPayload($workDate, $existing)));
     }
 
     /**
      * @param  array<string, mixed>|null  $row
-     * @return array{check_in_time: ?string, check_out_time: ?string, check_in_method: ?string, check_out_method: ?string}
+     * @return array{
+     *     check_in_time: ?string,
+     *     morning_check_out_time: ?string,
+     *     afternoon_check_in_time: ?string,
+     *     check_out_time: ?string,
+     *     check_in_method: ?string,
+     *     morning_check_out_method: ?string,
+     *     afternoon_check_in_method: ?string,
+     *     check_out_method: ?string
+     * }
      */
     private function present(?array $row): array
     {
-        return [
-            'check_in_time' => $this->clock($row['check_in_time'] ?? null),
-            'check_out_time' => $this->clock($row['check_out_time'] ?? null),
-            'check_in_method' => $this->text($row['check_in_method'] ?? null),
-            'check_out_method' => $this->text($row['check_out_method'] ?? null),
-        ];
+        $out = [];
+        foreach (self::PUNCH_TIME_KEYS as $key) {
+            $out[$key] = $this->clock($row[$key] ?? null);
+        }
+        foreach (self::PUNCH_METHOD_KEYS as $key) {
+            $out[$key] = $this->text($row[$key] ?? null);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $existing
+     * @return array<string, mixed>
+     */
+    private function fieldsPayload(string $workDate, array $existing): array
+    {
+        $fields = ['work_date' => $workDate];
+        foreach ([...self::PUNCH_TIME_KEYS, ...self::PUNCH_METHOD_KEYS] as $key) {
+            if (($existing[$key] ?? null) !== null) {
+                $fields[$key] = $existing[$key];
+            }
+        }
+
+        return $fields;
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     *
+     * @throws HrmApiUnavailable
+     */
+    private function slotKeys(string $session, string $direction): array
+    {
+        return match ($session.':'.$direction) {
+            'morning:in' => ['check_in_time', 'check_in_method'],
+            'morning:out' => ['morning_check_out_time', 'morning_check_out_method'],
+            'afternoon:in' => ['afternoon_check_in_time', 'afternoon_check_in_method'],
+            'afternoon:out' => ['check_out_time', 'check_out_method'],
+            default => throw HrmApiUnavailable::userFacing('Ca hoặc chiều chấm không hợp lệ.'),
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function hasAnyTime(array $row): bool
+    {
+        foreach (self::PUNCH_TIME_KEYS as $key) {
+            if ($row[$key] !== null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function clock(mixed $value): ?string
@@ -151,19 +232,33 @@ class EmployeeAttendancePunchService
         return $text === '' ? null : $text;
     }
 
-    /** @throws HrmApiUnavailable */
-    private function assertSyncTimesAllowed(?string $checkIn, ?string $checkOut): void
+    /**
+     * @param  array<string, mixed>  $times
+     *
+     * @throws HrmApiUnavailable
+     */
+    private function assertSyncTimesAllowed(array $times): void
     {
         $now = now()->format('H:i');
 
-        foreach ([$checkIn, $checkOut] as $time) {
+        foreach (self::PUNCH_TIME_KEYS as $key) {
+            $time = $times[$key] ?? null;
             if ($time !== null && $time > $now) {
                 throw HrmApiUnavailable::userFacing('Giờ chấm không được ở tương lai.');
             }
         }
 
-        if ($checkIn !== null && $checkOut !== null && $checkIn >= $checkOut) {
-            throw HrmApiUnavailable::userFacing('Giờ ra phải sau giờ vào.');
+        $ordered = array_values(array_filter([
+            $times['check_in_time'] ?? null,
+            $times['morning_check_out_time'] ?? null,
+            $times['afternoon_check_in_time'] ?? null,
+            $times['check_out_time'] ?? null,
+        ], fn ($t) => $t !== null));
+
+        for ($i = 1, $iMax = count($ordered); $i < $iMax; $i++) {
+            if ($ordered[$i - 1] >= $ordered[$i]) {
+                throw HrmApiUnavailable::userFacing('Giờ chấm phải theo thứ tự trong ngày.');
+            }
         }
     }
 
