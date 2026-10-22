@@ -9,7 +9,7 @@ use Modules\Identity\App\Hrm\Services\HrmApiClient;
 
 /**
  * Proxy catalog nghỉ phép (GET /api/v1/leave/types) — mặc định portal HRM
- * qua HrmOutboundHttp::leaveCatalogClient() — cùng HRM_API_BASE_URL (portal) cho tới khi chốt hrm.vaschools.edu.vn.
+ * qua HrmOutboundHttp::leaveCatalogClient() — cùng HRM_API_BASE_URL (mặc định hrm.vaschools.edu.vn).
  */
 class EmployeeLeaveCatalogController extends Controller
 {

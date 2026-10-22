@@ -423,6 +423,12 @@ class HrmApiClient
         $code = $response->json('error.code');
         $message = (string) ($response->json('error.message') ?? '');
 
+        if ($status === 401 || $code === 'UNAUTHENTICATED') {
+            throw HrmApiUnavailable::userFacing(
+                'Token API HRM không hợp lệ hoặc đã thu hồi. Liên hệ IT cập nhật HRM_API_TOKEN / HRM_TIMESHEET_API_TOKEN trên Workspace.'
+            );
+        }
+
         if ($status === 403 && $code === 'MISSING_ABILITY') {
             throw HrmApiUnavailable::userFacing(
                 $forbiddenMessage ?? 'Workspace chưa được cấp quyền duyệt bảng chấm công trên HRM. Liên hệ IT.'
