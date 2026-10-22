@@ -37,6 +37,9 @@ class AuthenticatedUserPresenter
         $department = ($user->isSuperAdmin() && ! $this->viewAs->isImpersonating())
             ? null
             : $this->hrmDepartments->hrmDepartmentFor($user);
+        $jobTitleName = ($user->isSuperAdmin() && ! $this->viewAs->isImpersonating())
+            ? $user->job_title_name
+            : ($this->hrmDepartments->hrmJobTitleFor($user) ?? $user->job_title_name);
         $menuDepartment = $user->department;
 
         return [
@@ -48,7 +51,7 @@ class AuthenticatedUserPresenter
             'department' => $department,
             // Đồng bộ từ VA-HRM (Modules/Identity/App/Hrm) — chỉ hiển thị.
             'employee_code' => $user->employee_code,
-            'job_title_name' => $user->job_title_name,
+            'job_title_name' => $jobTitleName,
             'company' => $user->company ? [
                 'id' => $user->company->id,
                 'code' => $user->company->code,

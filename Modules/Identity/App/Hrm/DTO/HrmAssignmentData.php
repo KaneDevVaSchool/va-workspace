@@ -29,12 +29,20 @@ final class HrmAssignmentData
     {
         $company = $payload['company'] ?? null;
         $orgUnit = $payload['org_unit'] ?? null;
-        $position = $payload['position'] ?? null;
+        $position = is_array($payload['position'] ?? null) ? $payload['position'] : null;
+        $jobTitleFromPosition = null;
+        if ($position !== null) {
+            $nestedJobTitle = $position['job_title'] ?? null;
+            $jobTitleFromPosition = $position['job_title_name']
+                ?? (is_array($nestedJobTitle) ? ($nestedJobTitle['name'] ?? null) : null)
+                ?? $position['title']
+                ?? null;
+        }
 
         return new self(
             isPrimary: (bool) ($payload['is_primary'] ?? false),
             isCurrent: (bool) ($payload['is_current'] ?? false),
-            jobTitleName: $position['title'] ?? null,
+            jobTitleName: $jobTitleFromPosition,
             jobPositionLevel: isset($position['level']) ? (string) $position['level'] : null,
             companyHrmUuid: $company['uuid'] ?? null,
             companyCode: $company['code'] ?? null,

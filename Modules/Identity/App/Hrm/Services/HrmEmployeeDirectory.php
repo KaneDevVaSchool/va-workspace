@@ -365,6 +365,49 @@ class HrmEmployeeDirectory
     }
 
     /**
+     * Chức danh từ phân công chính đang mở (MySQL HRM) — dùng hiển thị /api/me.
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    public function primaryJobTitleForEmployee(?string $employeeUuid, ?string $email): ?string
+    {
+        if (($employeeUuid === null || $employeeUuid === '') && ($email === null || $email === '')) {
+            return null;
+        }
+
+        try {
+            $row = null;
+            if ($employeeUuid !== null && $employeeUuid !== '') {
+                $row = $this->employeeRowQuery()
+                    ->where('e.uuid', $employeeUuid)
+                    ->first($this->employeeRowColumns());
+            }
+
+            if ($row === null && $email !== null && $email !== '') {
+                $query = $this->employeeRowQuery();
+                $column = $query->getGrammar()->wrap('e.company_email');
+                $row = $query
+                    ->whereRaw('LOWER('.$column.') = ?', [strtolower($email)])
+                    ->first($this->employeeRowColumns());
+            }
+
+            if ($row === null) {
+                return null;
+            }
+
+            $jobTitle = $row->job_title ?: $row->position_title ?: $row->profile_job_title;
+
+            return filled($jobTitle) ? (string) $jobTitle : null;
+        } catch (HrmDatabaseUnavailable $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            Log::warning('hrm.database.job_title_lookup_failed', ['message' => $e->getMessage()]);
+
+            throw new HrmDatabaseUnavailable('Không đọc được chức danh nhân sự từ cơ sở dữ liệu HRM.');
+        }
+    }
+
+    /**
      * Trưởng phòng ban của nhân sự — org unit type department (leo cây từ phân công).
      *
      * @return array{uuid: string, full_name: string, job_title: ?string, department_name: ?string, source: string}|null

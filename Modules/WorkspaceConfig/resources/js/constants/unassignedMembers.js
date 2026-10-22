@@ -70,7 +70,7 @@ export function secondaryPlacement(member) {
 
 export const UNASSIGNED_COLUMNS = [
   { key: 'person', label: 'Họ Tên', defaultOn: true },
-  { key: 'timekeeping_code', label: 'Mã Nhân Viên', defaultOn: true },
+  { key: 'timekeeping_code', label: 'Mã Nhân Viên', defaultOn: false },
   { key: 'company', label: 'Pháp nhân 1', defaultOn: true },
   { key: 'company_2', label: 'Pháp nhân 2', defaultOn: true },
   { key: 'job_title', label: 'Chức danh 1', defaultOn: true },
@@ -104,7 +104,7 @@ export const UNASSIGNED_FILTERS = [
   { key: 'gender', label: 'Giới tính', defaultOn: true },
 ];
 
-export const COLUMN_STORAGE_KEY = 'va-wc-unassigned-columns-v6';
+export const COLUMN_STORAGE_KEY = 'va-wc-unassigned-columns-v7';
 export const FILTER_STORAGE_KEY = 'va-wc-unassigned-filters-v4';
 export const COLUMN_WIDTH_KEY = 'va-wc-unassigned-column-widths-v6';
 export const ZOOM_STORAGE_KEY = 'va-wc-unassigned-zoom';

@@ -63,6 +63,30 @@ class HrmDepartmentSyncService
     }
 
     /**
+     * Chức danh HRM của tài khoản (phân công chính). Không ghi users.job_title_name.
+     */
+    public function hrmJobTitleFor(User $user): ?string
+    {
+        if (! HrmEmployeeDirectory::isConfigured()) {
+            return null;
+        }
+
+        try {
+            $uuid = filled($user->hrm_employee_uuid) ? (string) $user->hrm_employee_uuid : null;
+            $email = filled($user->email) ? (string) $user->email : null;
+
+            return $this->directory->primaryJobTitleForEmployee($uuid, $email);
+        } catch (HrmDatabaseUnavailable $e) {
+            Log::warning('hrm.user_job_title.lookup_failed', [
+                'user_id' => $user->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
      * Phòng ban Workspace đã đồng bộ cùng uuid HRM, chỉ để đọc tiêu chí.
      * Không tạo dòng mới và không gán users.department_id.
      */

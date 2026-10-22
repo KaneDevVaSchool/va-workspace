@@ -56,10 +56,20 @@ class HrmWorkspaceDepartmentAssignTest extends TestCase
             $table->unsignedBigInteger('manager_employee_id')->nullable();
             $table->timestamp('deleted_at')->nullable();
         });
+        $schema->create('job_titles', function (Blueprint $table): void {
+            $table->bigIncrements('id');
+            $table->string('name')->nullable();
+        });
+        $schema->create('positions', function (Blueprint $table): void {
+            $table->bigIncrements('id');
+            $table->string('title')->nullable();
+            $table->unsignedBigInteger('job_title_id')->nullable();
+        });
         $schema->create('employee_assignments', function (Blueprint $table): void {
             $table->bigIncrements('id');
             $table->unsignedBigInteger('employee_id');
             $table->unsignedBigInteger('org_unit_id')->nullable();
+            $table->unsignedBigInteger('position_id')->nullable();
             $table->unsignedBigInteger('open_primary_employee_id')->nullable();
         });
 
@@ -94,11 +104,37 @@ class HrmWorkspaceDepartmentAssignTest extends TestCase
             'uuid' => 'emp-1',
             'company_email' => 'tu.van@vaschools.edu.vn',
         ]);
+        $hrm->table('job_titles')->insert(['id' => 1, 'name' => 'Chuyên viên Tư vấn tuyển sinh']);
+        $hrm->table('positions')->insert([
+            'id' => 1,
+            'title' => 'Chức danh position cũ',
+            'job_title_id' => 1,
+        ]);
         $hrm->table('employee_assignments')->insert([
             'employee_id' => 9,
             'org_unit_id' => 4,
+            'position_id' => 1,
             'open_primary_employee_id' => 9,
         ]);
+    }
+
+    public function test_api_me_reads_job_title_from_hrm_not_stale_user_column(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $user = User::factory()->create([
+            'status' => 'active',
+            'email' => 'tu.van@vaschools.edu.vn',
+            'hrm_employee_uuid' => 'emp-1',
+            'job_title_name' => 'Chức danh cũ trên Workspace',
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/api/me')
+            ->assertOk()
+            ->assertJsonPath('job_title_name', 'Chuyên viên Tư vấn tuyển sinh');
+
+        $this->assertSame('Chức danh cũ trên Workspace', $user->fresh()->job_title_name);
     }
 
     public function test_api_me_assigns_hrm_department_not_the_unit(): void
