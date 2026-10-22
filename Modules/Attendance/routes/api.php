@@ -24,6 +24,8 @@ Route::middleware('auth')->prefix('attendance')->name('attendance.')->group(func
         ->name('punches.today');
     Route::post('/punches', [EmployeeAttendancePunchController::class, 'store'])
         ->name('punches.store');
+    Route::post('/punches/sync', [EmployeeAttendancePunchController::class, 'sync'])
+        ->name('punches.sync');
 
     // Trưởng đơn vị duyệt bảng chấm công HRM (API v1 attendance/timesheet-approvals).
     Route::get('/timesheet-approvals', [EmployeeTimesheetApprovalController::class, 'index'])

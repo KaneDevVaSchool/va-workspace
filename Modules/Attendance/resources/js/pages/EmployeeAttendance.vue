@@ -16,6 +16,11 @@ import {
   readEmployeeAttendanceToday,
   writeEmployeeAttendanceToday,
 } from '../lib/employeeAttendanceSession';
+import {
+  nextPunchSession,
+  punchActionLabel,
+  workSessionFromClock,
+} from '../lib/employeeAttendanceWorkSession';
 
 const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 
@@ -84,6 +89,7 @@ let geoMap = null;
 let geoMarker = null;
 let geoRing = null;
 let wifiTimer = 0;
+let syncRetryTimer = 0;
 
 const registerPageRefresh = inject('employeePageRefreshRegister', null);
 let unregisterPageRefresh;
@@ -102,25 +108,45 @@ const placeLabel = computed(() => {
 
 const timeLabel = computed(() => formatHm(now.value));
 const homeDateLabel = computed(() => formatLongDate(now.value));
-const heroLabel = computed(() => (
-  checkInTime.value && !checkOutTime.value ? 'Chấm công ra' : 'Chấm công ngay'
-));
+const punchAction = computed(() => punchActionLabel({
+  checkInTime: checkInTime.value,
+  checkOutTime: checkOutTime.value,
+  now: now.value,
+}));
+const heroLabel = computed(() => punchAction.value.full);
+const activeSession = computed(() => nextPunchSession({ now: now.value }));
+function slotForSession(sessionId) {
+  const inTime = checkInTime.value && workSessionFromClock(checkInTime.value).id === sessionId
+    ? checkInTime.value
+    : null;
+  const outTime = checkOutTime.value && workSessionFromClock(checkOutTime.value).id === sessionId
+    ? checkOutTime.value
+    : null;
+  const next = activeSession.value.id === sessionId && !checkOutTime.value;
+  return { in: inTime, out: outTime, next };
+}
+const morningSlot = computed(() => slotForSession('morning'));
+const afternoonSlot = computed(() => slotForSession('afternoon'));
 const punchHint = computed(() => {
   if (checkInTime.value && checkOutTime.value) {
-    return `Vào ${checkInTime.value} · Ra ${checkOutTime.value}`;
+    const inSession = workSessionFromClock(checkInTime.value).short;
+    const outSession = workSessionFromClock(checkOutTime.value).short;
+    return `Vào ${checkInTime.value} (${inSession}) · Ra ${checkOutTime.value} (${outSession})`;
   }
-  if (checkInTime.value) return `Đã vào lúc ${checkInTime.value}`;
-  return 'Chưa chấm công hôm nay';
+  if (checkInTime.value) {
+    return `Đã vào lúc ${checkInTime.value} · ${workSessionFromClock(checkInTime.value).label}`;
+  }
+  return `Chưa chấm công hôm nay · tiếp theo: ${activeSession.value.label}`;
 });
 const syncLine = computed(() => {
   if (syncState.value === 'syncing') {
-    return { text: 'Đang đồng bộ với HRM', wait: true };
+    return { text: 'Đang đồng bộ với HRM', wait: true, retry: false };
   }
   if (syncState.value === 'pending') {
-    return { text: 'Đã chấm công, đang đồng bộ lại với HRM', wait: true };
+    return { text: 'Đã chấm trên máy — chưa lưu lên HRM', wait: true, retry: true };
   }
   if (syncState.value === 'synced' && (checkInTime.value || checkOutTime.value)) {
-    return { text: 'Đã đồng bộ với HRM', wait: false };
+    return { text: 'Đã lưu và đồng bộ với HRM', wait: false, retry: false };
   }
   return null;
 });
@@ -220,6 +246,11 @@ onMounted(() => {
   timer = window.setInterval(() => {
     now.value = new Date();
   }, 1000);
+  syncRetryTimer = window.setInterval(() => {
+    if (syncState.value === 'pending' && hasPunch(readEmployeeAttendanceToday())) {
+      void hydrateTodayFromHrm();
+    }
+  }, 45000);
   void hydrateTodayFromHrm();
   requestLocation();
   if (typeof registerPageRefresh === 'function') {
@@ -233,6 +264,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.clearInterval(timer);
+  window.clearInterval(syncRetryTimer);
   stopCamera();
   stopQrCamera();
   destroyGeoMap();
@@ -280,6 +312,40 @@ function reloadPunch() {
 
 function hasPunch(record) {
   return Boolean(record?.checkInTime || record?.checkOutTime);
+}
+
+function normalizeRemoteRow(data) {
+  return {
+    checkInTime: data?.check_in_time || null,
+    checkOutTime: data?.check_out_time || null,
+    checkInMethod: data?.check_in_method || null,
+    checkOutMethod: data?.check_out_method || null,
+  };
+}
+
+function needsHrmPush(local, remote) {
+  if (!hasPunch(local)) return false;
+  if (!hasPunch(remote)) return true;
+  return local.checkInTime !== (remote.checkInTime || null)
+    || local.checkOutTime !== (remote.checkOutTime || null);
+}
+
+async function pushLocalToHrm(local, token) {
+  if (!hasPunch(local)) return false;
+  try {
+    const { data } = await window.axios.post('/api/attendance/punches/sync', {
+      check_in_time: local.checkInTime || null,
+      check_out_time: local.checkOutTime || null,
+      check_in_method: local.checkInMethod || null,
+      check_out_method: local.checkOutMethod || null,
+    });
+    if (token !== hydrateToken) return false;
+    const remote = normalizeRemoteRow(data?.data);
+    if (hasPunch(remote)) rememberToday(remote);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function rememberToday(row) {
@@ -338,17 +404,13 @@ async function commitPunch(methodId) {
       direction: checkingOut ? 'out' : 'in',
       method: methodLabel,
     });
-    const remote = {
-      checkInTime: data?.data?.check_in_time || null,
-      checkOutTime: data?.data?.check_out_time || null,
-      checkInMethod: data?.data?.check_in_method || null,
-      checkOutMethod: data?.data?.check_out_method || null,
-    };
+    const remote = normalizeRemoteRow(data?.data);
     if (hasPunch(remote)) rememberToday(remote);
     synced = true;
     syncState.value = 'synced';
   } catch {
     syncState.value = 'pending';
+    void pushLocalToHrm(readEmployeeAttendanceToday(), hydrateToken);
   } finally {
     punching.value = false;
   }
@@ -367,26 +429,41 @@ async function commitPunch(methodId) {
 
 async function hydrateTodayFromHrm() {
   const token = ++hydrateToken;
-  if (hasPunch(readEmployeeAttendanceToday())) syncState.value = 'syncing';
+  const local = readEmployeeAttendanceToday();
+  if (hasPunch(local)) syncState.value = 'syncing';
+
+  let remote = normalizeRemoteRow(null);
+  let fetchOk = false;
   try {
     const { data } = await window.axios.get('/api/attendance/punches/today');
     if (token !== hydrateToken) return;
-    const remote = {
-      checkInTime: data?.data?.check_in_time || null,
-      checkOutTime: data?.data?.check_out_time || null,
-      checkInMethod: data?.data?.check_in_method || null,
-      checkOutMethod: data?.data?.check_out_method || null,
-    };
-    if (hasPunch(remote)) {
-      rememberToday(remote);
+    remote = normalizeRemoteRow(data?.data);
+    fetchOk = true;
+  } catch {
+    if (token !== hydrateToken) return;
+  }
+
+  if (hasPunch(local) && needsHrmPush(local, remote)) {
+    const pushed = await pushLocalToHrm(local, token);
+    if (token !== hydrateToken) return;
+    if (pushed) {
       syncState.value = 'synced';
       return;
     }
-    syncState.value = hasPunch(readEmployeeAttendanceToday()) ? 'pending' : 'idle';
-  } catch {
-    if (token !== hydrateToken) return;
-    syncState.value = hasPunch(readEmployeeAttendanceToday()) ? 'pending' : 'idle';
   }
+
+  if (fetchOk && hasPunch(remote) && !needsHrmPush(local, remote)) {
+    rememberToday(remote);
+    syncState.value = 'synced';
+    return;
+  }
+
+  syncState.value = hasPunch(local) ? 'pending' : 'idle';
+}
+
+async function retrySyncNow() {
+  if (syncState.value === 'syncing' || !hasPunch(readEmployeeAttendanceToday())) return;
+  await hydrateTodayFromHrm();
 }
 
 async function punchGps() {
@@ -674,7 +751,7 @@ function stopQrCamera() {
           <article class="att-hero">
             <div class="att-hero__top">
               <p class="att-hero__greet">
-                {{ heroLabel === 'Chấm công ngay' ? 'Chào' : 'Đang làm việc,' }} <b>{{ displayName }}</b>
+                {{ checkInTime && !checkOutTime ? 'Đang làm việc,' : 'Chào' }} <b>{{ displayName }}</b>
               </p>
               <p class="att-hero__place">
                 <AttendanceGlyph name="pin" :size="13" />
@@ -686,20 +763,69 @@ function stopQrCamera() {
                 <strong>{{ timeLabel }}</strong>
                 <small>{{ homeDateLabel }}</small>
               </div>
-              <div class="att-weather">
-                <AttendanceGlyph :name="weatherGlyph" :size="20" />
-                <b>{{ weather ? `${weather.temp}°C` : '—°' }}</b>
+              <div class="att-hero__meta">
+                <span
+                  class="att-session att-session--on-hero"
+                  :class="`att-session--${activeSession.tone}`"
+                >
+                  {{ activeSession.label }}
+                </span>
+                <div class="att-weather">
+                  <AttendanceGlyph :name="weatherGlyph" :size="20" />
+                  <b>{{ weather ? `${weather.temp}°C` : '—°' }}</b>
+                </div>
               </div>
             </div>
             <p class="att-hero__geo" :class="`att-hero__geo--${geoBanner.tone}`">
               <AppIcon :name="geoBanner.tone === 'ok' ? 'check' : 'info'" :size="14" />
               <span>{{ geoBanner.text }}</span>
             </p>
-            <p v-if="syncLine" class="att-sync att-sync--on-hero">
-              <span class="att-dot" :class="{ 'att-dot--wait': syncLine.wait }"></span>
-              <span>{{ syncLine.text }}</span>
-            </p>
+            <div v-if="syncLine" class="att-sync-row att-sync-row--on-hero">
+              <p class="att-sync att-sync--on-hero">
+                <span class="att-dot" :class="{ 'att-dot--wait': syncLine.wait }"></span>
+                <span>{{ syncLine.text }}</span>
+              </p>
+              <button
+                v-if="syncLine.retry"
+                type="button"
+                class="att-sync-retry"
+                @click="retrySyncNow"
+              >
+                Thử lại
+              </button>
+            </div>
           </article>
+
+          <div class="att-dayboard" aria-label="Tóm tắt chấm công hôm nay">
+            <article
+              class="att-dayboard__card"
+              :class="{
+                'att-dayboard__card--active': morningSlot.next,
+                'att-dayboard__card--done': morningSlot.in && morningSlot.out,
+              }"
+            >
+              <header>
+                <span class="att-session att-session--amber">Ca sáng</span>
+                <small>Trước 12:00</small>
+              </header>
+              <p><span>Vào</span><strong>{{ morningSlot.in || '—' }}</strong></p>
+              <p><span>Ra</span><strong>{{ morningSlot.out || '—' }}</strong></p>
+            </article>
+            <article
+              class="att-dayboard__card"
+              :class="{
+                'att-dayboard__card--active': afternoonSlot.next,
+                'att-dayboard__card--done': afternoonSlot.in && afternoonSlot.out,
+              }"
+            >
+              <header>
+                <span class="att-session att-session--indigo">Ca chiều</span>
+                <small>Từ 12:00</small>
+              </header>
+              <p><span>Vào</span><strong>{{ afternoonSlot.in || '—' }}</strong></p>
+              <p><span>Ra</span><strong>{{ afternoonSlot.out || '—' }}</strong></p>
+            </article>
+          </div>
 
           <div class="att-punch-wrap">
             <button
@@ -713,7 +839,8 @@ function stopQrCamera() {
                 <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="14 42" stroke-linecap="round" />
               </svg>
               <AttendanceGlyph v-else name="fingerprint" :size="36" />
-              <span>{{ punching ? 'Đang gửi…' : heroLabel }}</span>
+              <span class="att-punch__label">{{ punching ? 'Đang gửi…' : punchAction.verb }}</span>
+              <small v-if="!punching" class="att-punch__session">{{ activeSession.label }}</small>
             </button>
           </div>
           <p class="att-punch-hint">{{ punchHint }}</p>
@@ -911,9 +1038,16 @@ function stopQrCamera() {
             <AppIcon name="check" :size="40" :stroke-width="2.6" />
           </div>
           <h2>Chấm công thành công!</h2>
+          <p
+            v-if="lastResult?.time"
+            class="att-success__session"
+            :class="`att-session--${workSessionFromClock(lastResult.time).tone}`"
+          >
+            {{ workSessionFromClock(lastResult.time).label }}
+          </p>
           <p class="att-success__name">{{ displayName }}</p>
           <p class="att-success__time">
-            {{ lastResult?.action === 'out' ? 'Đã chấm ra lúc' : 'Đã chấm công lúc' }}
+            {{ lastResult?.action === 'out' ? 'Đã chấm ra lúc' : 'Đã chấm vào lúc' }}
             {{ lastResult?.time }}
           </p>
           <p class="att-success__date">{{ lastResult?.dateLabel }}</p>
@@ -923,7 +1057,7 @@ function stopQrCamera() {
           </p>
           <p v-else-if="lastResult" class="att-sync att-sync--plain">
             <span class="att-dot att-dot--wait"></span>
-            <span>Đã chấm công, đang đồng bộ lại với HRM</span>
+            <span>Đã chấm trên máy — đang thử lưu lên HRM</span>
           </p>
           <ul class="att-facts">
             <li>
@@ -1151,7 +1285,7 @@ function stopQrCamera() {
 .att-hero__top,
 .att-hero__row,
 .att-hero__geo,
-.att-sync--on-hero {
+.att-sync-row--on-hero {
   position: relative;
   z-index: 1;
 }
@@ -1228,6 +1362,158 @@ function stopQrCamera() {
 .att-weather b {
   font-size: 0.88rem;
   font-weight: 700;
+}
+
+.att-hero__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.att-session {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.att-session--on-hero {
+  background: color-mix(in srgb, white 22%, transparent);
+  color: var(--color-on-tertiary);
+  border: 1px solid color-mix(in srgb, white 28%, transparent);
+}
+
+.att-session--amber {
+  background: color-mix(in srgb, var(--color-gold-100) 88%, white);
+  color: var(--color-gold-800);
+}
+
+.att-session--indigo {
+  background: color-mix(in srgb, var(--color-secondary-100) 90%, white);
+  color: var(--color-secondary-800);
+}
+
+.att-sync-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.att-sync-row--on-hero .att-sync {
+  margin: 0;
+}
+
+.att-sync-retry {
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, white 35%, transparent);
+  border-radius: var(--radius-full);
+  padding: 5px 12px;
+  background: color-mix(in srgb, white 18%, transparent);
+  color: var(--color-on-tertiary);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.att-sync-retry:focus-visible {
+  outline: 2px solid var(--color-on-tertiary);
+  outline-offset: 2px;
+}
+
+.att-dayboard {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.att-dayboard__card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-3);
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: var(--att-shadow);
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.att-dayboard__card--active {
+  border-color: color-mix(in srgb, var(--color-tertiary-400) 55%, var(--color-border));
+  box-shadow:
+    var(--att-shadow),
+    0 0 0 2px color-mix(in srgb, var(--color-tertiary-200) 80%, transparent);
+}
+
+.att-dayboard__card--done {
+  border-color: color-mix(in srgb, var(--color-success-tint-fg) 35%, var(--color-border));
+}
+
+.att-dayboard__card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+}
+
+.att-dayboard__card header small {
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.att-dayboard__card p {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.att-dayboard__card p span {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.att-dayboard__card p strong {
+  font-size: 0.92rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-tertiary-900);
+}
+
+.att-punch__label {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.att-punch__session {
+  font-size: 0.68rem;
+  font-weight: 700;
+  opacity: 0.92;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.att-success__session {
+  display: inline-flex;
+  margin: 0 0 var(--space-1);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .att-hero__geo {

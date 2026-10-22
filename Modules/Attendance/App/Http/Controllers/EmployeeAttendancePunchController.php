@@ -59,6 +59,37 @@ class EmployeeAttendancePunchController extends Controller
         ]);
     }
 
+    public function sync(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'check_in_time' => ['nullable', 'date_format:H:i'],
+            'check_out_time' => ['nullable', 'date_format:H:i'],
+            'check_in_method' => ['nullable', 'string', 'max:64'],
+            'check_out_method' => ['nullable', 'string', 'max:64'],
+        ], [
+            'check_in_time.date_format' => 'Giờ vào không đúng định dạng.',
+            'check_out_time.date_format' => 'Giờ ra không đúng định dạng.',
+        ]);
+
+        if (
+            ! filled($validated['check_in_time'] ?? null)
+            && ! filled($validated['check_out_time'] ?? null)
+        ) {
+            return response()->json(['message' => 'Chưa có giờ chấm để đồng bộ.'], 422);
+        }
+
+        try {
+            $row = $this->punches->syncToday($request->user(), $validated);
+        } catch (HrmApiUnavailable $e) {
+            return $this->failure($e, 'Không đồng bộ được giờ chấm công lên HRM.');
+        }
+
+        return response()->json([
+            'message' => 'Đã đồng bộ giờ chấm công lên HRM.',
+            'data' => $row,
+        ]);
+    }
+
     private function failure(HrmApiUnavailable $e, string $fallback): JsonResponse
     {
         if ($e->isConnectionFailure()) {

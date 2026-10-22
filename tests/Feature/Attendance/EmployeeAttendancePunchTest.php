@@ -237,6 +237,45 @@ class EmployeeAttendancePunchTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_sync_pushes_local_times_to_hrm_without_changing_them(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-22 17:30:10'));
+
+        Http::fake([
+            'https://hrm.test/api/v1/attendance/punches*' => function (Request $request) {
+                if ($request->method() === 'GET') {
+                    return Http::response(['data' => []]);
+                }
+
+                return Http::response([
+                    'data' => [
+                        'check_in_time' => '08:02',
+                        'check_out_time' => '17:05',
+                        'check_in_method' => 'Chấm bằng nút',
+                        'check_out_method' => 'GPS',
+                    ],
+                ]);
+            },
+        ]);
+
+        $this->actingAs($this->employee())
+            ->postJson('/api/attendance/punches/sync', [
+                'check_in_time' => '08:02',
+                'check_out_time' => '17:05',
+                'check_in_method' => 'Chấm bằng nút',
+                'check_out_method' => 'GPS',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.check_in_time', '08:02')
+            ->assertJsonPath('data.check_out_time', '17:05');
+
+        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+            && ($request['check_in_time'] ?? null) === '08:02'
+            && ($request['check_out_time'] ?? null) === '17:05'
+            && ($request['check_in_method'] ?? null) === 'Chấm bằng nút'
+            && ($request['check_out_method'] ?? null) === 'GPS');
+    }
+
     private function employee(): User
     {
         return User::factory()->create([
