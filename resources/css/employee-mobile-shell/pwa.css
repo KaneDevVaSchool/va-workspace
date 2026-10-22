@@ -1,0 +1,108 @@
+/*
+ * Shell mobile nhân viên — PWA standalone (Add to Home Screen), phần CHUNG
+ * cho cả iOS và Android: khung full màn (inset:0), safe-area cộng 1 lần ở
+ * header (top) và tabbar footer (bottom) — KHÔNG cộng vào khung ngoài, tránh
+ * double safe-bottom.
+ *
+ * Hành vi bàn phím ảo (co khung theo visualViewport) khác nhau giữa 2 hệ nên
+ * tách riêng file (cùng thư mục resources/css/employee-mobile-shell/):
+ *   pwa-ios.css     — WebKit (home indicator, offsetTop)
+ *   pwa-android.css — Chrome (nav bar gesture inset)
+ * Sửa bàn phím 1 hệ thì sửa đúng file đó, không đụng file này hoặc hệ khác.
+ *
+ * File này độc lập với browser.css — không class/biến nào dùng chung giữa
+ * 2 nền tảng, sửa PWA không ảnh hưởng Safari tab.
+ */
+
+.employee-shell--pwa {
+  --employee-header-pt: max(
+    var(--space-2),
+    var(--employee-safe-top, env(safe-area-inset-top, 0px))
+  );
+}
+
+@media (max-width: 768px) {
+  html.employee-mobile-pwa,
+  html.employee-mobile-pwa body {
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+  }
+
+  html.employee-mobile-pwa {
+    background-color: var(--color-bg);
+    --employee-tabbar-block-size: 3.25rem;
+    overflow: hidden;
+  }
+
+  html.employee-mobile-pwa #app,
+  html.employee-mobile-pwa .app-shell {
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+  }
+
+  /* Trạng thái tĩnh (bàn phím đóng): full màn, safe-area chỉ trong header/footer. */
+  .employee-shell--pwa:not(.emp-shell-preview__shell) {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    max-width: 100vw;
+    overflow: hidden;
+  }
+
+  /*
+   * Fallback khi không xác định được iOS/Android (html thiếu cả 2 class
+   * employee-os-ios/employee-os-android — UA lạ, devtools PWA emulation...).
+   * pwa-ios.css / pwa-android.css override cụ thể hơn khi xác định được hệ,
+   * nên không bị áp dụng chồng lên fallback này.
+   */
+  html.pwa-vv-keyboard:not(.employee-os-ios):not(.employee-os-android)
+    .employee-shell--pwa:not(.emp-shell-preview__shell) {
+    inset: auto;
+    top: var(--pwa-vv-offset-top, 0px);
+    left: var(--pwa-vv-offset-left, 0px);
+    width: var(--pwa-vv-width, 100%);
+    max-width: 100vw;
+    height: var(--pwa-vv-height, 100%);
+    max-height: var(--pwa-vv-height, 100%);
+  }
+}
+
+/* AppShell.Footer: home indicator / nav bar một lần trên wrapper (PWA UI app layout). */
+.employee-tabbar--pwa.employee-tabbar--shell {
+  padding-bottom: var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px));
+}
+
+/* Bàn phím mở (cả 2 hệ): đáy khung đã trên home indicator/nav bar — bỏ padding safe footer, tránh double-inset đẩy tab bar lên. */
+html.pwa-vv-keyboard .employee-tabbar--pwa.employee-tabbar--shell {
+  padding-bottom: 0;
+}
+
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 768px) {
+    .employee-shell--pwa {
+      --employee-header-pt: max(
+        var(--space-2),
+        var(--employee-safe-top, env(safe-area-inset-top, 0px))
+      );
+      --employee-header-px: calc(
+        var(--space-3) + var(--employee-safe-right, env(safe-area-inset-right, 0px))
+      );
+      --employee-header-pl: calc(
+        var(--space-3) + var(--employee-safe-left, env(safe-area-inset-left, 0px))
+      );
+    }
+  }
+}
+
+@media (max-width: 360px) {
+  .employee-shell--pwa {
+    --employee-header-pt: max(
+      var(--space-1),
+      var(--employee-safe-top, env(safe-area-inset-top, 0px))
+    );
+  }
+}

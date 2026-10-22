@@ -25,6 +25,7 @@ import {
   setPwaShellSurface,
 } from './lib/pwaStandalone';
 import { syncEmployeeSafeAreaInsets } from './lib/employeeSafeArea';
+import { syncEmployeeDeviceOsClass } from './lib/employeeDeviceOs';
 
 const route = useRoute();
 const { isEmployeeMobile } = useEmployeeMobileView();
@@ -41,6 +42,7 @@ function syncPwaShellSurface() {
 
   root.classList.toggle('employee-mobile-browser', employeeTabShell && !isPwaStandalone());
   root.classList.toggle('employee-mobile-pwa', employeeTabShell && isPwaStandalone());
+  syncEmployeeDeviceOsClass();
   syncEmployeeSafeAreaInsets();
   if (employeeTabShell) {
     syncEmployeeMobileViewport();

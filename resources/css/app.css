@@ -1,6 +1,12 @@
 @import './theme.css';
 @import './sidebar.css';
-@import './employee-mobile-shell.css';
+@import './employee-mobile-shell/base.css';
+@import './employee-mobile-shell/browser.css';
+@import './employee-mobile-shell/pwa.css';
+@import './employee-mobile-shell/pwa-ios.css';
+@import './employee-mobile-shell/pwa-android.css';
+@import './employee-mobile-shell/theme.css';
+@import './employee-mobile-shell/safe-area.css';
 
 /* Be Vietnam Pro self-host — tránh Google Fonts (render-blocking) trên mobile/PWA audit */
 @font-face {

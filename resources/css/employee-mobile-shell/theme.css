@@ -1,0 +1,184 @@
+/*
+ * Shell mobile nhân viên — theme "thống nhất" (trang chủ · bảng tin · chấm
+ * công · nghỉ phép · đơn): skin màu brand (xanh tertiary + teal nhẹ) phủ lên
+ * khung dùng chung trong base.css (cùng thư mục). Không phụ thuộc browser
+ * hay PWA — cả 2 nền tảng dùng chung file này.
+ */
+
+@media (max-width: 768px) {
+  html.employee-mobile-browser:has(.employee-shell--unified),
+  html.employee-mobile-pwa:has(.employee-shell--unified) {
+    background-color: color-mix(
+      in srgb,
+      var(--color-tertiary-50) 55%,
+      color-mix(in srgb, var(--color-secondary-50) 18%, var(--color-bg) 82%) 45%
+    );
+  }
+
+  html.employee-mobile-browser:has(.employee-shell--unified) body,
+  html.employee-mobile-pwa:has(.employee-shell--unified) body {
+    background-color: color-mix(
+      in srgb,
+      var(--color-tertiary-50) 55%,
+      color-mix(in srgb, var(--color-secondary-50) 18%, var(--color-bg) 82%) 45%
+    );
+  }
+}
+
+.employee-shell--unified {
+  --eh-card-shadow: 0 4px 18px color-mix(in srgb, var(--color-tertiary-900) 7%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-tertiary-50) 55%,
+    color-mix(in srgb, var(--color-secondary-50) 18%, var(--color-bg) 82%) 45%
+  );
+}
+
+.employee-shell__header--brand {
+  color: var(--color-on-primary);
+  background: linear-gradient(
+    152deg,
+    var(--color-tertiary-600) 0%,
+    var(--color-tertiary-700) 46%,
+    var(--color-tertiary-800) 100%
+  );
+  box-shadow: none;
+  clip-path: none;
+  border-radius: 0 0 var(--radius-xl, 1.25rem) var(--radius-xl, 1.25rem);
+  padding-bottom: var(--space-4);
+  overflow: hidden;
+}
+
+.employee-shell__header.employee-shell__header--brand {
+  box-shadow: none;
+  clip-path: none;
+}
+
+.employee-shell--unified .employee-shell__header-deco::before {
+  background: radial-gradient(
+    circle at 35% 35%,
+    color-mix(in srgb, var(--color-secondary-300) 35%, transparent) 0%,
+    transparent 68%
+  );
+}
+
+.employee-shell__header-deco::before {
+  top: -3.5rem;
+  right: -2rem;
+  width: 9rem;
+  height: 9rem;
+  background: radial-gradient(
+    circle at 35% 35%,
+    color-mix(in srgb, var(--color-gold) 28%, transparent) 0%,
+    transparent 68%
+  );
+  opacity: 0.85;
+}
+
+.employee-shell__header-deco::after {
+  bottom: -4rem;
+  left: -3rem;
+  width: 11rem;
+  height: 11rem;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--color-on-primary) 14%, transparent) 0%,
+    transparent 70%
+  );
+}
+
+.employee-shell--unified .employee-shell__kicker {
+  color: color-mix(in srgb, var(--color-secondary-200) 45%, var(--color-on-primary) 55%);
+}
+
+.employee-shell--unified .employee-shell__hello {
+  color: var(--color-on-primary);
+}
+
+.employee-shell--unified .employee-shell__header--home .employee-shell__hello {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.employee-shell--unified .employee-shell__hello--page {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.employee-shell--unified .employee-shell__date,
+.employee-shell--unified .employee-shell__meta-extra {
+  color: color-mix(in srgb, var(--color-on-primary) 72%, transparent);
+}
+
+.employee-shell--unified .employee-shell__meta-sep {
+  color: color-mix(in srgb, var(--color-on-primary) 35%, transparent);
+}
+
+.employee-shell--unified .employee-shell__icon-btn {
+  background: color-mix(in srgb, var(--color-on-primary) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-on-primary) 20%, transparent);
+  color: var(--color-on-primary);
+}
+
+.employee-shell--unified .employee-shell__icon-btn:active {
+  background: color-mix(in srgb, var(--color-on-primary) 22%, transparent);
+}
+
+.employee-shell--unified .employee-shell__notif-dot {
+  background: var(--color-secondary-300);
+  box-shadow: 0 0 0 2px var(--color-tertiary-800);
+}
+
+.employee-shell--unified .employee-shell__avatar {
+  background: color-mix(in srgb, var(--color-on-primary) 18%, transparent);
+  color: var(--color-on-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-on-primary) 32%, transparent);
+}
+
+.employee-shell--unified .employee-shell__search {
+  background: color-mix(in srgb, var(--color-on-primary) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-on-primary) 22%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.employee-shell--unified .employee-shell__search-icon,
+.employee-shell--unified .employee-shell__search-input,
+.employee-shell--unified .employee-shell__search-input::placeholder {
+  color: color-mix(in srgb, var(--color-on-primary) 78%, transparent);
+}
+
+.employee-shell--unified .employee-shell__search-input {
+  color: var(--color-on-primary);
+}
+
+.employee-shell--unified .employee-shell__search-input::placeholder {
+  color: color-mix(in srgb, var(--color-on-primary) 58%, transparent);
+}
+
+.employee-shell__content--unified {
+  background: transparent;
+  padding-top: var(--space-2);
+}
+
+.employee-shell--unified .employee-shell__pull {
+  color: var(--color-text-muted);
+}
+
+.employee-shell--unified .employee-shell__pull-icon {
+  color: var(--color-tertiary);
+}
+
+.employee-shell--unified .employee-tabbar--shell {
+  background: transparent;
+  box-shadow: none;
+}
+
+.employee-shell--unified .employee-tabbar__bar {
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-tertiary-50) 6%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-tertiary-200) 35%, var(--color-border) 65%),
+    0 -6px 28px color-mix(in srgb, var(--color-tertiary-800) 10%, transparent),
+    var(--shadow-md);
+}

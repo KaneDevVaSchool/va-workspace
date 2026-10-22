@@ -39,6 +39,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <script>
         (function () {
+            var ua = window.navigator.userAgent || '';
+            var isIos = /iPad|iPhone|iPod/.test(ua) ||
+                (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+            var isAndroid = /Android/.test(ua);
+            var osRoot = document.documentElement;
+            if (isIos) {
+                osRoot.classList.add('employee-os-ios');
+            } else if (isAndroid) {
+                osRoot.classList.add('employee-os-android');
+            }
+
             var s =
                 window.matchMedia('(display-mode: standalone)').matches ||
                 window.matchMedia('(display-mode: fullscreen)').matches ||

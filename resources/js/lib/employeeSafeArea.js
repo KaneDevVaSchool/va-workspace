@@ -2,16 +2,9 @@
 // iOS PWA đôi khi không áp env(safe-area-inset-*) đúng trên phần tử lồng nhau.
 // Đo padding computed từ phần tử probe rồi gán --employee-safe-* (px) lên <html>.
 //
+import { isIosDevice } from './employeeDeviceOs';
 
 const SIDES = ['top', 'bottom', 'left', 'right'];
-
-function isIosDevice() {
-  if (typeof navigator === 'undefined') return false;
-  return (
-    /iPad|iPhone|iPod/.test(navigator.userAgent)
-    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  );
-}
 
 /**
  * iOS Safari tab: env() ổn định — probe px trên html từng lệch với thanh URL.

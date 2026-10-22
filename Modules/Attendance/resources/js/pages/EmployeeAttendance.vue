@@ -1,22 +1,19 @@
 <script setup>
 //
 // Chấm công nhân viên — trang chủ, hình thức, GPS,
-// WiFi, khuôn mặt, QR, mã, thành công, cài đặt. Lịch sử xem tại tab Lịch sử
+// WiFi, khuôn mặt, QR, mã, thành công. Lịch sử xem tại tab Lịch sử
 // (/dashboard/me/requests). Chưa nối máy chấm công / HRM: lần bấm lưu trên máy.
 //
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
-import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AttendanceGlyph from '../components/AttendanceGlyph.vue';
 import {
-  clearEmployeeAttendanceToday,
   readEmployeeAttendanceLog,
   readEmployeeAttendanceToday,
   writeEmployeeAttendanceToday,
 } from '../lib/employeeAttendanceSession';
 
-const PREFS_KEY = 'employee-attendance-prefs-v1';
 const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 
 const METHODS = [
@@ -44,19 +41,7 @@ const HEADINGS = {
   wifi: 'Chấm công bằng WiFi',
   qr: 'Quét mã QR',
   code: 'Nhập mã',
-  settings: 'Cài đặt',
 };
-
-function readPreferredMethod() {
-  try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    const id = raw ? JSON.parse(raw)?.method : '';
-    if (METHODS.some((item) => item.id === id)) return id;
-  } catch {
-    /* ignore broken prefs */
-  }
-  return 'button';
-}
 
 const auth = useAuthStore();
 const now = ref(new Date());
@@ -64,7 +49,6 @@ const bodyRef = ref(null);
 const videoRef = ref(null);
 const stack = ref(['home']);
 const punchLog = ref(readEmployeeAttendanceLog());
-const preferredMethod = ref(readPreferredMethod());
 const geoState = ref('idle');
 const coords = ref(null);
 const weather = ref(null);
@@ -72,7 +56,6 @@ const cameraState = ref('idle');
 const faceHelp = ref(false);
 const codeValue = ref('');
 const codeError = ref('');
-const clearArmed = ref(false);
 const lastResult = ref(null);
 
 const stored = readEmployeeAttendanceToday();
@@ -86,7 +69,6 @@ let cameraToken = 0;
 let mediaStream = null;
 
 const registerPageRefresh = inject('employeePageRefreshRegister', null);
-const replayWorkspaceIntro = inject('employeeWorkspaceIntroReplay', null);
 let unregisterPageRefresh;
 
 const screen = computed(() => stack.value[stack.value.length - 1] || 'home');
@@ -155,14 +137,6 @@ const resultGlyph = computed(() => {
   return METHODS.find((item) => item.id === id)?.glyph || 'check';
 });
 
-watch(preferredMethod, (id) => {
-  try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ method: id }));
-  } catch {
-    /* ignore quota */
-  }
-});
-
 watch(codeValue, () => {
   codeError.value = '';
 });
@@ -170,7 +144,6 @@ watch(codeValue, () => {
 watch(screen, (value, prev) => {
   if (value === 'face') startCamera();
   else if (prev === 'face') stopCamera();
-  if (value !== 'settings') clearArmed.value = false;
 }, { flush: 'post' });
 
 onMounted(() => {
@@ -223,11 +196,6 @@ function goHome() {
   scrollTop();
 }
 
-function openSettings() {
-  stack.value = ['home', 'settings'];
-  scrollTop();
-}
-
 function reloadPunch() {
   const row = readEmployeeAttendanceToday();
   checkInTime.value = row?.checkInTime ?? null;
@@ -238,12 +206,7 @@ function reloadPunch() {
 }
 
 function onHero() {
-  const id = preferredMethod.value || 'button';
-  if (id === 'button') {
-    commitPunch('button');
-    return;
-  }
-  openMethod(id);
+  commitPunch('button');
 }
 
 function openMethod(id) {
@@ -335,17 +298,6 @@ async function onDock() {
   }
 }
 
-function clearToday() {
-  if (!clearArmed.value) {
-    clearArmed.value = true;
-    return;
-  }
-  clearEmployeeAttendanceToday();
-  reloadPunch();
-  clearArmed.value = false;
-  showClientToast('success', 'Đã xóa lần chấm hôm nay trên máy này.');
-}
-
 function requestLocation() {
   if (typeof navigator === 'undefined' || !navigator.geolocation) {
     geoState.value = 'unsupported';
@@ -426,6 +378,14 @@ function stopCamera() {
 
 <template>
   <div class="att-page">
+    <img
+      src="/images/background/background-logo.png"
+      alt=""
+      class="att-watermark"
+      aria-hidden="true"
+      decoding="async"
+      fetchpriority="low"
+    />
     <div class="att">
       <header v-if="showHead" class="att-head">
         <button type="button" class="att-icon-btn" aria-label="Quay lại" @click="back">
@@ -458,9 +418,6 @@ function stopCamera() {
               <b>{{ weather ? `${weather.temp}°C` : '—°' }}</b>
               <small>{{ weather ? 'Gần bạn' : 'Thời tiết' }}</small>
             </div>
-            <button type="button" class="att-icon-btn att-clock__settings" aria-label="Cài đặt chấm công" @click="openSettings">
-              <AppIcon name="settings" :size="18" />
-            </button>
           </article>
 
           <p class="att-banner" :class="`att-banner--${geoBanner.tone}`">
@@ -468,10 +425,12 @@ function stopCamera() {
             <span>{{ geoBanner.text }}</span>
           </p>
 
-          <button type="button" class="att-punch" @click="onHero">
-            <AttendanceGlyph name="fingerprint" :size="34" />
-            <span>{{ heroLabel }}</span>
-          </button>
+          <div class="att-punch-wrap">
+            <button type="button" class="att-punch" @click="onHero">
+              <AttendanceGlyph name="fingerprint" :size="34" />
+              <span>{{ heroLabel }}</span>
+            </button>
+          </div>
           <p class="att-punch-hint">{{ punchHint }}</p>
 
           <div class="att-grid">
@@ -666,36 +625,6 @@ function stopCamera() {
           </svg>
         </section>
 
-        <section v-else-if="screen === 'settings'" class="att-stack">
-          <h2 class="att-section">Hình thức ưu tiên</h2>
-          <p class="att-lead">Nút Chấm công ngay sẽ mở hình thức này. Chấm bằng nút thì ghi nhận luôn.</p>
-          <div class="att-choices" role="radiogroup" aria-label="Hình thức ưu tiên">
-            <button
-              v-for="method in METHODS"
-              :key="method.id"
-              type="button"
-              role="radio"
-              class="att-choice"
-              :aria-checked="preferredMethod === method.id"
-              @click="preferredMethod = method.id"
-            >
-              <span class="att-tile__icon" :class="`att-tone--${method.tone}`">
-                <AttendanceGlyph :name="method.glyph" :size="18" />
-              </span>
-              <span>{{ method.label }}</span>
-              <AppIcon v-if="preferredMethod === method.id" name="check" :size="16" />
-            </button>
-          </div>
-          <button type="button" class="att-choice" @click="replayWorkspaceIntro?.()">
-            <span class="att-tile__icon att-tone--blue"><AppIcon name="sparkles" :size="16" /></span>
-            <span>Xem lại giới thiệu Workspace</span>
-            <AppIcon name="chevronRight" :size="16" />
-          </button>
-          <button type="button" class="att-choice att-choice--danger" @click="clearToday">
-            <span class="att-tile__icon att-tone--rose"><AppIcon name="trash" :size="16" /></span>
-            <span>{{ clearArmed ? 'Bấm lần nữa để xóa' : 'Xóa lần chấm hôm nay trên máy này' }}</span>
-          </button>
-        </section>
       </div>
 
       <footer v-if="dock" class="att-dock">
@@ -709,16 +638,34 @@ function stopCamera() {
 
 <style scoped>
 .att-page {
+  position: relative;
   height: 100%;
   min-height: 0;
   display: flex;
   justify-content: center;
   background: transparent;
   color: var(--color-text);
+  overflow: hidden;
+}
+
+.att-watermark {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  transform: scale(1.1);
+  pointer-events: none;
+  opacity: 0.05;
 }
 
 .att {
   --att-shadow: 0 10px 28px color-mix(in srgb, var(--color-tertiary-900) 8%, transparent);
+  --att-notch: 1.1rem;
+  position: relative;
+  z-index: 1;
   width: min(100%, 430px);
   height: 100%;
   min-height: 0;
@@ -783,7 +730,6 @@ function stopCamera() {
 .att-punch:focus-visible,
 .att-tile:focus-visible,
 .att-method:focus-visible,
-.att-choice:focus-visible,
 .att-nav__item:focus-visible,
 .att-month button:focus-visible {
   outline: 2px solid var(--color-tertiary-500);
@@ -814,25 +760,44 @@ function stopCamera() {
   gap: var(--space-2);
 }
 
-.att-clock,
 .att-place,
 .att-panel,
 .att-facts,
 .att-day,
 .att-notice,
 .att-method,
-.att-choice,
 .att-tile {
   background: var(--color-surface);
   box-shadow: var(--att-shadow);
 }
 
 .att-clock {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-radius: 18px;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-3);
+  background: linear-gradient(140deg, var(--color-surface) 60%, var(--color-tertiary-50) 100%);
+  box-shadow: var(--att-shadow);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - var(--att-notch)),
+    calc(100% - var(--att-notch)) 100%,
+    0 100%
+  );
+}
+
+.att-clock::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: var(--att-notch);
+  height: var(--att-notch);
+  background: var(--color-tertiary-500);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  opacity: 0.35;
 }
 
 .att-clock__main,
@@ -840,10 +805,6 @@ function stopCamera() {
 .att-notice span:last-child {
   min-width: 0;
   flex: 1;
-}
-
-.att-clock__settings {
-  flex-shrink: 0;
 }
 
 .att-clock p,
@@ -887,10 +848,10 @@ function stopCamera() {
   align-items: center;
   gap: 2px;
   min-width: 4.5rem;
-  padding: var(--space-2);
-  border-radius: 18px;
+  padding: var(--space-2) var(--space-2) var(--space-2) calc(var(--space-2) + 0.3rem);
   background: var(--color-tertiary-50);
   color: var(--color-gold-600);
+  clip-path: polygon(14% 0, 100% 0, 100% 100%, 0 100%, 0 20%);
 }
 
 .att-weather b {
@@ -925,8 +886,35 @@ function stopCamera() {
   color: var(--color-info-tint-fg);
 }
 
-.att-punch {
+.att-punch-wrap {
+  position: relative;
   align-self: center;
+  display: grid;
+  place-items: center;
+  width: 12.5rem;
+  height: 12.5rem;
+  margin-top: var(--space-2);
+}
+
+.att-punch-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(
+    from 140deg,
+    color-mix(in srgb, var(--color-tertiary-300) 60%, transparent),
+    transparent 30%,
+    color-mix(in srgb, var(--color-secondary-300) 55%, transparent) 65%,
+    transparent 92%
+  );
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  opacity: 0.55;
+  animation: att-ring-spin 16s linear infinite;
+}
+
+.att-punch {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -934,7 +922,6 @@ function stopCamera() {
   gap: 4px;
   width: 9.25rem;
   height: 9.25rem;
-  margin-top: var(--space-2);
   border: 8px solid color-mix(in srgb, var(--color-tertiary-200) 80%, white);
   border-radius: var(--radius-full);
   background: radial-gradient(circle at 35% 28%, var(--color-tertiary-400), var(--color-tertiary-600) 58%, var(--color-tertiary-800));
@@ -942,6 +929,17 @@ function stopCamera() {
   font: inherit;
   cursor: pointer;
   box-shadow: 0 14px 28px color-mix(in srgb, var(--color-tertiary-800) 28%, transparent);
+}
+
+@keyframes att-ring-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .att-punch-wrap::before {
+    animation: none;
+  }
 }
 
 .att-punch span {
@@ -963,8 +961,7 @@ function stopCamera() {
 }
 
 .att-tile,
-.att-method,
-.att-choice {
+.att-method {
   border: 0;
   font: inherit;
   color: var(--color-text);
@@ -978,10 +975,15 @@ function stopCamera() {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-2);
-  border-radius: 18px;
   text-align: center;
   font-size: 0.75rem;
   font-weight: 700;
+  clip-path: polygon(0 0, calc(100% - 0.7rem) 0, 100% 0.7rem, 100% 100%, 0.7rem 100%, 0 calc(100% - 0.7rem));
+  transition: transform 0.15s ease;
+}
+
+.att-tile:active {
+  transform: scale(0.96);
 }
 
 .att-tile__icon {
@@ -989,8 +991,8 @@ function stopCamera() {
   place-items: center;
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 14px;
   color: var(--color-on-tertiary);
+  clip-path: polygon(25% 0, 75% 0, 100% 25%, 100% 75%, 75% 100%, 25% 100%, 0 75%, 0 25%);
 }
 
 .att-tone--blue { background: var(--color-tertiary-500); }
@@ -1001,14 +1003,13 @@ function stopCamera() {
 .att-tone--rose { background: #e85d8c; }
 .att-tone--slate { background: #64748b; }
 
-.att-method,
-.att-choice {
+.att-method {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   width: 100%;
   padding: var(--space-3);
-  border-radius: 18px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 0.85rem), calc(100% - 0.85rem) 100%, 0 100%);
 }
 
 .att-method__text {
@@ -1016,39 +1017,25 @@ function stopCamera() {
   min-width: 0;
 }
 
-.att-method strong,
-.att-choice span:nth-child(2) {
+.att-method strong {
   display: block;
   color: var(--color-text);
   font-weight: 700;
 }
 
-.att-method svg:last-child,
-.att-choice svg:last-child {
+.att-method svg:last-child {
   color: var(--color-text-muted);
-}
-
-.att-choice[aria-checked='true'] {
-  box-shadow: 0 0 0 2px var(--color-tertiary-500), var(--att-shadow);
-}
-
-.att-choice[aria-checked='true'] svg:last-child {
-  color: var(--color-tertiary-600);
-}
-
-.att-choice--danger {
-  color: var(--color-danger-tint-fg);
 }
 
 .att-map {
   position: relative;
   height: 220px;
   overflow: hidden;
-  border-radius: 22px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 28%),
     repeating-linear-gradient(90deg, #d5e7c4 0 26px, #c3dcb0 26px 48px);
   box-shadow: var(--att-shadow);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 1.4rem 100%, 0 calc(100% - 1.4rem));
 }
 
 .att-map__road {
@@ -1107,7 +1094,7 @@ function stopCamera() {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3);
-  border-radius: 18px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 1rem), calc(100% - 1rem) 100%, 0 100%);
 }
 
 .att-wifi {
@@ -1116,14 +1103,15 @@ function stopCamera() {
 }
 
 .att-wifi__orb {
+  position: relative;
   display: grid;
   place-items: center;
   width: 6.5rem;
   height: 6.5rem;
-  border-radius: var(--radius-full);
   background: radial-gradient(circle at 35% 30%, var(--color-tertiary-300), var(--color-tertiary-600));
   color: var(--color-on-tertiary);
   box-shadow: 0 12px 24px color-mix(in srgb, var(--color-tertiary-700) 28%, transparent);
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
 }
 
 .att-wifi h2 {
@@ -1133,8 +1121,8 @@ function stopCamera() {
 .att-panel {
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  border-radius: 18px;
   text-align: left;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 1.3rem 100%, 0 calc(100% - 1.3rem));
 }
 
 .att-panel p {
@@ -1165,8 +1153,8 @@ function stopCamera() {
   height: min(62vw, 420px);
   min-height: 280px;
   overflow: hidden;
-  border-radius: 28px;
   background: #8eb6e4;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 2rem 100%, 0 calc(100% - 2rem));
 }
 
 .att-face__video,
@@ -1256,10 +1244,10 @@ function stopCamera() {
   position: relative;
   width: min(100%, 280px);
   height: 280px;
-  border-radius: 24px;
   background:
     linear-gradient(#eef5ff, #d5e6fb);
   box-shadow: var(--att-shadow);
+  clip-path: polygon(1.6rem 0, 100% 0, 100% calc(100% - 1.6rem), calc(100% - 1.6rem) 100%, 0 100%, 0 1.6rem);
 }
 
 .att-qr__frame i {
@@ -1276,12 +1264,12 @@ function stopCamera() {
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-4);
-  border-radius: 18px;
   background: var(--color-surface);
   box-shadow: var(--att-shadow);
   color: var(--color-text-muted);
   font-size: 0.8125rem;
   font-weight: 700;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 1.5rem 100%, 0 calc(100% - 1.5rem));
 }
 
 .att-code input {
@@ -1315,6 +1303,7 @@ function stopCamera() {
 }
 
 .att-success__badge {
+  position: relative;
   display: grid;
   place-items: center;
   width: 5.5rem;
@@ -1323,6 +1312,14 @@ function stopCamera() {
   background: radial-gradient(circle at 35% 30%, color-mix(in srgb, white 28%, var(--color-success)), var(--color-success));
   color: var(--color-on-tertiary);
   box-shadow: 0 0 0 12px color-mix(in srgb, var(--color-success) 16%, transparent);
+}
+
+.att-success__badge::before {
+  content: '';
+  position: absolute;
+  inset: -0.85rem;
+  border: 2px solid color-mix(in srgb, var(--color-success) 45%, transparent);
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
 }
 
 .att-success h2 {
@@ -1339,9 +1336,9 @@ function stopCamera() {
   width: 100%;
   margin: var(--space-4) 0 0;
   padding: var(--space-2) var(--space-3);
-  border-radius: 18px;
   list-style: none;
   text-align: left;
+  clip-path: polygon(1.1rem 0, 100% 0, 100% 100%, 0 100%, 0 1.1rem);
 }
 
 .att-facts li {

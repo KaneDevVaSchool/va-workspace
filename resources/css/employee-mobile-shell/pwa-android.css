@@ -1,0 +1,24 @@
+/*
+ * Shell mobile nhân viên — PWA standalone, bàn phím ảo trên Android (Chrome
+ * WebView / TWA).
+ *
+ * Android: Chrome tự co visualViewport.height khi bàn phím mở và thường báo
+ * offsetTop = 0 (không đẩy khung xuống như iOS) — khung chỉ cần co height,
+ * giữ top/left tại 0 để tránh khung bị kéo lệch khi thanh điều hướng cử chỉ
+ * (gesture nav bar) đổi chiều cao đồng thời với bàn phím.
+ *
+ * Chỉ áp dụng khi html có cả .employee-os-android và .pwa-vv-keyboard —
+ * không ảnh hưởng iOS (pwa-ios.css, cùng thư mục).
+ */
+
+@media (max-width: 768px) {
+  html.employee-os-android.pwa-vv-keyboard .employee-shell--pwa:not(.emp-shell-preview__shell) {
+    inset: auto;
+    top: 0;
+    left: 0;
+    width: var(--pwa-vv-width, 100%);
+    max-width: 100vw;
+    height: var(--pwa-vv-height, 100%);
+    max-height: var(--pwa-vv-height, 100%);
+  }
+}
