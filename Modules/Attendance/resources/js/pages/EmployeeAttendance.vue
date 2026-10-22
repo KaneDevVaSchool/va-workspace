@@ -5,6 +5,7 @@
 // (/dashboard/me/requests). Chưa nối máy chấm công / HRM: lần bấm lưu trên máy.
 //
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import jsQR from 'jsqr';
 import AppIcon from '@/components/AppIcon.vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AttendanceGlyph from '../components/AttendanceGlyph.vue';
@@ -47,6 +48,8 @@ const auth = useAuthStore();
 const now = ref(new Date());
 const bodyRef = ref(null);
 const videoRef = ref(null);
+const qrVideoRef = ref(null);
+const qrCanvasRef = ref(null);
 const stack = ref(['home']);
 const punchLog = ref(readEmployeeAttendanceLog());
 const geoState = ref('idle');
@@ -57,6 +60,8 @@ const faceHelp = ref(false);
 const codeValue = ref('');
 const codeError = ref('');
 const lastResult = ref(null);
+const qrState = ref('idle');
+const qrValue = ref('');
 
 const stored = readEmployeeAttendanceToday();
 const checkInTime = ref(stored?.checkInTime ?? null);
@@ -67,6 +72,9 @@ const checkOutMethod = ref(stored?.checkOutMethod ?? null);
 let timer = 0;
 let cameraToken = 0;
 let mediaStream = null;
+let qrCameraToken = 0;
+let qrMediaStream = null;
+let qrScanFrame = 0;
 
 const registerPageRefresh = inject('employeePageRefreshRegister', null);
 let unregisterPageRefresh;
@@ -122,6 +130,14 @@ const faceStatus = computed(() => {
   if (cameraState.value === 'connecting') return 'Đang kết nối camera Hanet...';
   return 'Chưa xem trước được camera';
 });
+const qrCaption = computed(() => {
+  if (qrState.value === 'found') return 'Đã nhận diện mã QR, đang ghi nhận...';
+  if (qrState.value === 'live') return 'Đưa mã QR vào giữa khung hình';
+  if (qrState.value === 'connecting') return 'Đang mở camera…';
+  if (qrState.value === 'denied') return 'Chưa cấp quyền camera — nhập mã thủ công bên dưới';
+  if (qrState.value === 'unavailable') return 'Thiết bị không hỗ trợ camera — nhập mã thủ công bên dưới';
+  return 'Đưa mã QR tại điểm chấm công vào khung hình';
+});
 const screenSubtitle = computed(() => {
   if (screen.value === 'methods') return 'Vui lòng chọn phương thức phù hợp';
   if (screen.value === 'face') return 'Quét khuôn mặt tại điểm chấm công';
@@ -131,16 +147,21 @@ const screenSubtitle = computed(() => {
   if (screen.value === 'code') return 'Dành cho trường hợp đặc biệt';
   return '';
 });
+const qrFallback = computed(() => ['denied', 'unavailable'].includes(qrState.value));
 const dock = computed(() => {
   if (screen.value === 'success') return { label: 'Quay lại trang chủ', action: 'home' };
   if (screen.value === 'gps') return { label: 'Chấm công', action: 'punch-gps' };
   if (screen.value === 'wifi') return { label: 'Chấm công', action: 'punch-wifi' };
   if (screen.value === 'face') return { label: 'Ghi nhận khuôn mặt', action: 'punch-face' };
-  if (screen.value === 'qr') return { label: 'Xác nhận đã quét', action: 'punch-qr' };
+  if (screen.value === 'qr' && qrFallback.value) return { label: 'Chấm công', action: 'punch-qr-code' };
   if (screen.value === 'code') return { label: 'Chấm công', action: 'punch-code' };
   return null;
 });
-const dockDisabled = computed(() => screen.value === 'code' && codeValue.value.trim().length < 4);
+const dockDisabled = computed(() => {
+  if (screen.value === 'code') return codeValue.value.trim().length < 4;
+  if (screen.value === 'qr' && qrFallback.value) return qrValue.value.trim().length < 4;
+  return false;
+});
 const resultGlyph = computed(() => {
   const id = lastResult.value?.methodId;
   return METHODS.find((item) => item.id === id)?.glyph || 'check';
@@ -150,9 +171,15 @@ watch(codeValue, () => {
   codeError.value = '';
 });
 
+watch(qrValue, () => {
+  codeError.value = '';
+});
+
 watch(screen, (value, prev) => {
   if (value === 'face') startCamera();
   else if (prev === 'face') stopCamera();
+  if (value === 'qr') startQrCamera();
+  else if (prev === 'qr') stopQrCamera();
 }, { flush: 'post' });
 
 onMounted(() => {
@@ -172,6 +199,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.clearInterval(timer);
   stopCamera();
+  stopQrCamera();
   unregisterPageRefresh?.();
 });
 
@@ -229,6 +257,10 @@ function openMethod(id) {
   }
   if (id === 'code') {
     codeValue.value = '';
+    codeError.value = '';
+  }
+  if (id === 'qr') {
+    qrValue.value = '';
     codeError.value = '';
   }
   push(id);
@@ -294,7 +326,11 @@ async function onDock() {
     commitPunch('face');
     return;
   }
-  if (action === 'punch-qr') {
+  if (action === 'punch-qr-code') {
+    if (qrValue.value.trim().length < 4) {
+      codeError.value = 'Nhập ít nhất 4 ký tự.';
+      return;
+    }
     commitPunch('qr');
     return;
   }
@@ -382,6 +418,74 @@ function stopCamera() {
   mediaStream?.getTracks()?.forEach((track) => track.stop());
   mediaStream = null;
   if (videoRef.value) videoRef.value.srcObject = null;
+}
+
+async function startQrCamera() {
+  const token = ++qrCameraToken;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    qrState.value = 'unavailable';
+    return;
+  }
+  qrState.value = 'connecting';
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: 'environment' } },
+    });
+    if (token !== qrCameraToken) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    qrMediaStream = stream;
+    await nextTick();
+    if (token !== qrCameraToken || !qrVideoRef.value) return;
+    qrVideoRef.value.srcObject = stream;
+    await qrVideoRef.value.play().catch(() => {});
+    if (token !== qrCameraToken) return;
+    qrState.value = 'live';
+    scanQrFrame(token);
+  } catch {
+    if (token === qrCameraToken) qrState.value = 'denied';
+  }
+}
+
+function scanQrFrame(token) {
+  qrScanFrame = requestAnimationFrame(() => {
+    if (token !== qrCameraToken || qrState.value !== 'live') return;
+    const video = qrVideoRef.value;
+    const canvas = qrCanvasRef.value;
+    if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      if (width && height) {
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, width, height);
+        const frame = ctx.getImageData(0, 0, width, height);
+        const result = jsQR(frame.data, width, height, { inversionAttempts: 'dontInvert' });
+        if (result?.data) {
+          qrState.value = 'found';
+          qrValue.value = result.data;
+          if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(16);
+          window.setTimeout(() => {
+            if (token === qrCameraToken) commitPunch('qr');
+          }, 420);
+          return;
+        }
+      }
+    }
+    scanQrFrame(token);
+  });
+}
+
+function stopQrCamera() {
+  qrCameraToken += 1;
+  cancelAnimationFrame(qrScanFrame);
+  qrMediaStream?.getTracks()?.forEach((track) => track.stop());
+  qrMediaStream = null;
+  if (qrVideoRef.value) qrVideoRef.value.srcObject = null;
+  qrState.value = 'idle';
 }
 </script>
 
@@ -589,11 +693,40 @@ function stopCamera() {
         </section>
 
         <section v-else-if="screen === 'qr'" class="att-stack att-qr">
-          <div class="att-qr__frame" aria-hidden="true">
+          <div class="att-qr__frame" :class="{ 'att-qr__frame--found': qrState === 'found' }">
+            <video
+              v-show="qrState === 'live' || qrState === 'found'"
+              ref="qrVideoRef"
+              class="att-qr__video"
+              playsinline
+              muted
+              autoplay
+            />
+            <canvas ref="qrCanvasRef" class="att-qr__canvas" aria-hidden="true"></canvas>
+            <div v-if="qrState !== 'live' && qrState !== 'found'" class="att-qr__fallback" aria-hidden="true">
+              <AttendanceGlyph name="qr" :size="40" />
+            </div>
             <span></span><span></span><span></span><span></span>
-            <i></i>
+            <i v-if="qrState === 'live'"></i>
+            <span v-if="qrState === 'found'" class="att-qr__check" aria-hidden="true">
+              <AppIcon name="check" :size="30" :stroke-width="3" />
+            </span>
           </div>
-          <p class="att-lead">Đưa mã QR tại điểm chấm công vào khung hình.</p>
+          <p class="att-lead">{{ qrCaption }}</p>
+
+          <label v-if="qrFallback" class="att-code">
+            <span>Mã QR (nhập thủ công)</span>
+            <input
+              v-model="qrValue"
+              type="text"
+              inputmode="text"
+              autocomplete="off"
+              autocapitalize="off"
+              maxlength="40"
+              placeholder="Nhập nội dung mã QR"
+            />
+          </label>
+          <p v-if="qrFallback && codeError" class="att-code__error">{{ codeError }}</p>
         </section>
 
         <section v-else-if="screen === 'code'" class="att-stack">
@@ -1391,11 +1524,47 @@ function stopCamera() {
 
 .att-qr__frame {
   position: relative;
+  overflow: hidden;
   width: min(100%, 280px);
   height: 280px;
   background: linear-gradient(#eef5ff, #d5e6fb);
   box-shadow: var(--att-shadow);
   border-radius: 28px;
+  transition: box-shadow 0.25s ease;
+}
+
+.att-qr__frame--found {
+  box-shadow: var(--att-shadow), 0 0 0 4px var(--color-success);
+}
+
+.att-qr__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.att-qr__canvas {
+  display: none;
+}
+
+.att-qr__fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--color-tertiary-400);
+}
+
+.att-qr__check {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--color-success) 22%, transparent);
+  color: var(--color-success);
 }
 
 .att-qr__frame i {
