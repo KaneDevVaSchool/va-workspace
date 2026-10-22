@@ -59,6 +59,7 @@ const mapElRef = ref(null);
 const stack = ref(['home']);
 const punching = ref(false);
 const syncState = ref('idle');
+const syncIssueMessage = ref('');
 const geoState = ref('idle');
 const coords = ref(null);
 const weather = ref(null);
@@ -143,7 +144,11 @@ const syncLine = computed(() => {
     return { text: 'Đang đồng bộ với HRM', wait: true, retry: false };
   }
   if (syncState.value === 'pending') {
-    return { text: 'Đã chấm trên máy — chưa lưu lên HRM', wait: true, retry: true };
+    return {
+      text: syncIssueMessage.value || 'Đã chấm trên máy — chưa lưu lên HRM',
+      wait: true,
+      retry: true,
+    };
   }
   if (syncState.value === 'synced' && (checkInTime.value || checkOutTime.value)) {
     return { text: 'Đã lưu và đồng bộ với HRM', wait: false, retry: false };
@@ -323,6 +328,17 @@ function normalizeRemoteRow(data) {
   };
 }
 
+function punchApiMessage(error) {
+  const data = error?.response?.data;
+  if (typeof data?.message === 'string' && data.message.trim()) return data.message.trim();
+  const errors = data?.errors;
+  if (errors && typeof errors === 'object') {
+    const first = Object.values(errors).flat().find((item) => typeof item === 'string' && item.trim());
+    if (first) return first.trim();
+  }
+  return null;
+}
+
 function needsHrmPush(local, remote) {
   if (!hasPunch(local)) return false;
   if (!hasPunch(remote)) return true;
@@ -342,8 +358,11 @@ async function pushLocalToHrm(local, token) {
     if (token !== hydrateToken) return false;
     const remote = normalizeRemoteRow(data?.data);
     if (hasPunch(remote)) rememberToday(remote);
+    syncIssueMessage.value = '';
     return true;
-  } catch {
+  } catch (error) {
+    const message = punchApiMessage(error);
+    if (message) syncIssueMessage.value = message;
     return false;
   }
 }
@@ -407,8 +426,10 @@ async function commitPunch(methodId) {
     const remote = normalizeRemoteRow(data?.data);
     if (hasPunch(remote)) rememberToday(remote);
     synced = true;
+    syncIssueMessage.value = '';
     syncState.value = 'synced';
-  } catch {
+  } catch (error) {
+    syncIssueMessage.value = punchApiMessage(error) || syncIssueMessage.value;
     syncState.value = 'pending';
     void pushLocalToHrm(readEmployeeAttendanceToday(), hydrateToken);
   } finally {
@@ -439,8 +460,11 @@ async function hydrateTodayFromHrm() {
     if (token !== hydrateToken) return;
     remote = normalizeRemoteRow(data?.data);
     fetchOk = true;
-  } catch {
+    syncIssueMessage.value = '';
+  } catch (error) {
     if (token !== hydrateToken) return;
+    const message = punchApiMessage(error);
+    if (message) syncIssueMessage.value = message;
   }
 
   if (hasPunch(local) && needsHrmPush(local, remote)) {
