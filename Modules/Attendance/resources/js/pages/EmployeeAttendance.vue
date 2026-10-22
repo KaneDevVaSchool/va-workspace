@@ -1,16 +1,14 @@
 <script setup>
 //
-// Chấm công nhân viên — giao diện theo mẫu (trang chủ, hình thức, GPS,
-// WiFi, khuôn mặt, QR, mã, thành công, lịch sử). Chưa nối máy chấm công /
-// HRM: lần bấm được lưu trên máy để trang chủ đọc trạng thái hôm nay.
-// Ngày khác trong lịch sử là số minh hoạ bố cục.
+// Chấm công nhân viên — giới thiệu (mobile), trang chủ, hình thức, GPS,
+// WiFi, khuôn mặt, QR, mã, thành công, cài đặt. Lịch sử xem tại tab Lịch sử
+// (/dashboard/me/requests). Chưa nối máy chấm công / HRM: lần bấm lưu trên máy.
 //
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AttendanceGlyph from '../components/AttendanceGlyph.vue';
-import { buildAttendanceMonth } from '../lib/employeeAttendanceHistory';
 import {
   clearEmployeeAttendanceToday,
   readEmployeeAttendanceLog,
@@ -18,7 +16,7 @@ import {
   writeEmployeeAttendanceToday,
 } from '../lib/employeeAttendanceSession';
 
-const INTRO_KEY = 'employee-attendance-intro-v1';
+const INTRO_KEY = 'employee-attendance-intro-mobile-v1';
 const PREFS_KEY = 'employee-attendance-prefs-v1';
 const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 
@@ -40,13 +38,6 @@ const HOME_TILES = [
   { id: 'more', label: 'Khác', glyph: 'grid', tone: 'slate' },
 ];
 
-const HUBS = [
-  { id: 'home', label: 'Trang chủ', icon: 'home' },
-  { id: 'history', label: 'Lịch sử', icon: 'clipboardCheck' },
-  { id: 'notices', label: 'Thông báo', icon: 'bell' },
-  { id: 'settings', label: 'Cài đặt', icon: 'settings' },
-];
-
 const HEADINGS = {
   methods: 'Chọn hình thức chấm công',
   face: 'Quét khuôn mặt với Hanet',
@@ -54,17 +45,33 @@ const HEADINGS = {
   wifi: 'Chấm công bằng WiFi',
   qr: 'Quét mã QR',
   code: 'Nhập mã',
-  history: 'Lịch sử chấm công',
-  notices: 'Thông báo',
   settings: 'Cài đặt',
 };
+
+function hasSeenIntro() {
+  try {
+    return localStorage.getItem(INTRO_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function readPreferredMethod() {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    const id = raw ? JSON.parse(raw)?.method : '';
+    if (METHODS.some((item) => item.id === id)) return id;
+  } catch {
+    /* ignore broken prefs */
+  }
+  return 'button';
+}
 
 const auth = useAuthStore();
 const now = ref(new Date());
 const bodyRef = ref(null);
 const videoRef = ref(null);
 const stack = ref([hasSeenIntro() ? 'home' : 'welcome']);
-const viewMonth = ref(new Date(now.value.getFullYear(), now.value.getMonth(), 1));
 const punchLog = ref(readEmployeeAttendanceLog());
 const preferredMethod = ref(readPreferredMethod());
 const geoState = ref('idle');
@@ -92,10 +99,8 @@ const registerPageRefresh = inject('employeePageRefreshRegister', null);
 let unregisterPageRefresh;
 
 const screen = computed(() => stack.value[stack.value.length - 1] || 'home');
-const isHub = computed(() => HUBS.some((item) => item.id === screen.value));
 const showHead = computed(() => !['welcome', 'home', 'success'].includes(screen.value));
 const headTitle = computed(() => HEADINGS[screen.value] || 'Chấm công');
-const hubCurrent = computed(() => (HUBS.some((item) => item.id === screen.value) ? screen.value : 'home'));
 
 const displayName = computed(() => auth.user?.name?.trim() || 'Bạn');
 const jobTitle = computed(() => (
@@ -141,14 +146,6 @@ const weatherGlyph = computed(() => {
   if (code <= 3) return 'cloud';
   return 'rain';
 });
-const monthLabel = computed(() => `Tháng ${viewMonth.value.getMonth() + 1}/${viewMonth.value.getFullYear()}`);
-const canNextMonth = computed(() => {
-  const cursor = viewMonth.value;
-  const today = new Date();
-  return cursor.getFullYear() < today.getFullYear()
-    || (cursor.getFullYear() === today.getFullYear() && cursor.getMonth() < today.getMonth());
-});
-const monthModel = computed(() => buildAttendanceMonth(viewMonth.value, punchLog.value));
 const faceCaption = computed(() => {
   if (cameraState.value === 'live') return 'Đưa mặt vào khung hình và giữ nguyên';
   if (cameraState.value === 'connecting') return 'Đang mở camera…';
@@ -158,28 +155,6 @@ const faceStatus = computed(() => {
   if (cameraState.value === 'live') return 'Đang xem trước camera';
   if (cameraState.value === 'connecting') return 'Đang kết nối camera Hanet...';
   return 'Chưa xem trước được camera';
-});
-const notices = computed(() => {
-  const items = [];
-  if (checkInTime.value && !checkOutTime.value) {
-    items.push({
-      id: 'in',
-      title: 'Đã ghi nhận giờ vào',
-      body: `Bạn vào lúc ${checkInTime.value}${checkInMethod.value ? ` bằng ${checkInMethod.value}` : ''}.`,
-    });
-  } else if (checkInTime.value && checkOutTime.value) {
-    items.push({
-      id: 'done',
-      title: 'Đã đủ công hôm nay',
-      body: `Vào ${checkInTime.value} · Ra ${checkOutTime.value}.`,
-    });
-  }
-  items.push({
-    id: 'preview',
-    title: 'Bảng công chính thức',
-    body: 'Màn hình này xem trước giao diện. Bảng công trên VA-HRM vẫn là số liệu chính.',
-  });
-  return items;
 });
 const dock = computed(() => {
   if (screen.value === 'welcome') return { label: 'Bắt đầu', action: 'start' };
@@ -235,25 +210,6 @@ onBeforeUnmount(() => {
   unregisterPageRefresh?.();
 });
 
-function hasSeenIntro() {
-  try {
-    return localStorage.getItem(INTRO_KEY) === '1';
-  } catch {
-    return true;
-  }
-}
-
-function readPreferredMethod() {
-  try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    const id = raw ? JSON.parse(raw)?.method : '';
-    if (METHODS.some((item) => item.id === id)) return id;
-  } catch {
-    /* ignore broken prefs */
-  }
-  return 'button';
-}
-
 function formatHm(date) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
@@ -279,8 +235,13 @@ function back() {
   scrollTop();
 }
 
-function openHub(id) {
-  stack.value = id === 'home' ? ['home'] : ['home', id];
+function goHome() {
+  stack.value = ['home'];
+  scrollTop();
+}
+
+function openSettings() {
+  stack.value = ['home', 'settings'];
   scrollTop();
 }
 
@@ -378,7 +339,7 @@ async function onDock() {
     return;
   }
   if (action === 'home') {
-    openHub('home');
+    goHome();
     return;
   }
   if (action === 'punch-gps') {
@@ -404,17 +365,6 @@ async function onDock() {
     }
     commitPunch('code');
   }
-}
-
-function shiftMonth(delta) {
-  const next = new Date(viewMonth.value);
-  next.setMonth(next.getMonth() + delta);
-  const today = new Date();
-  const nextStamp = next.getFullYear() * 12 + next.getMonth();
-  const todayStamp = today.getFullYear() * 12 + today.getMonth();
-  if (nextStamp > todayStamp || todayStamp - nextStamp > 6) return;
-  viewMonth.value = next;
-  scrollTop();
 }
 
 function clearToday() {
@@ -582,8 +532,8 @@ function stopCamera() {
               <strong>{{ displayName }}</strong>
               <small v-if="jobTitle">{{ jobTitle }}</small>
             </div>
-            <button type="button" class="att-icon-btn" aria-label="Thông báo chấm công" @click="openHub('notices')">
-              <AppIcon name="bell" :size="18" />
+            <button type="button" class="att-icon-btn" aria-label="Cài đặt chấm công" @click="openSettings">
+              <AppIcon name="settings" :size="18" />
             </button>
           </article>
 
@@ -803,80 +753,6 @@ function stopCamera() {
           </svg>
         </section>
 
-        <section v-else-if="screen === 'history'" class="att-stack">
-          <div class="att-month">
-            <button type="button" aria-label="Tháng trước" @click="shiftMonth(-1)">
-              <AppIcon name="chevronLeft" :size="18" />
-            </button>
-            <span>{{ monthLabel }}</span>
-            <button type="button" aria-label="Tháng sau" :disabled="!canNextMonth" @click="shiftMonth(1)">
-              <AppIcon name="chevronRight" :size="18" />
-            </button>
-          </div>
-
-          <div class="att-stats">
-            <article>
-              <span class="att-tile__icon att-tone--blue"><AppIcon name="calendar" :size="16" /></span>
-              <span><small>Tổng công</small><strong>{{ monthModel.stats.scheduled }} ngày</strong></span>
-            </article>
-            <article>
-              <span class="att-tile__icon att-tone--green"><AppIcon name="check" :size="16" /></span>
-              <span><small>Đi chấm công</small><strong>{{ monthModel.stats.onTime }} ngày</strong></span>
-            </article>
-            <article>
-              <span class="att-tile__icon att-tone--orange"><AppIcon name="clock" :size="16" /></span>
-              <span><small>Trễ</small><strong>{{ monthModel.stats.late }} ngày</strong></span>
-            </article>
-            <article>
-              <span class="att-tile__icon att-tone--rose"><AppIcon name="close" :size="16" /></span>
-              <span><small>Vắng</small><strong>{{ monthModel.stats.absent }} ngày</strong></span>
-            </article>
-          </div>
-
-          <p class="att-note">
-            Ngày chưa chấm trên máy này là số minh hoạ. Lần chấm của bạn được giữ trên máy và hiện ở đúng ngày đó.
-          </p>
-
-          <article v-for="row in monthModel.rows" :key="row.key" class="att-day">
-            <h3>
-              <span>{{ row.title }}</span>
-              <span v-if="row.sample" class="att-day__sample">Minh họa</span>
-            </h3>
-            <p v-if="row.kind === 'pending'" class="att-day__empty">Chưa chấm công hôm nay</p>
-            <p v-else-if="row.kind === 'absent'" class="att-day__empty">Vắng</p>
-            <ul v-else>
-              <li v-if="row.checkIn">
-                <span class="att-day__mark att-day__mark--in"><AttendanceGlyph name="pin" :size="14" /></span>
-                <span>
-                  <b>{{ row.checkIn }}</b>
-                  <small>{{ row.methodIn || 'Chấm công' }}</small>
-                  <small>{{ placeLabel }}</small>
-                </span>
-                <em :class="row.late ? 'is-late' : 'is-ok'">{{ row.late ? 'Trễ' : 'Đúng giờ' }}</em>
-              </li>
-              <li v-if="row.checkOut">
-                <span class="att-day__mark att-day__mark--out"><AttendanceGlyph name="pin" :size="14" /></span>
-                <span>
-                  <b>{{ row.checkOut }}</b>
-                  <small>{{ row.methodOut || 'Chấm công' }}</small>
-                  <small>{{ placeLabel }}</small>
-                </span>
-                <em class="is-ok">Đúng giờ</em>
-              </li>
-            </ul>
-          </article>
-        </section>
-
-        <section v-else-if="screen === 'notices'" class="att-stack">
-          <article v-for="item in notices" :key="item.id" class="att-notice">
-            <span class="att-tile__icon att-tone--blue"><AppIcon name="bell" :size="16" /></span>
-            <span>
-              <strong>{{ item.title }}</strong>
-              <small>{{ item.body }}</small>
-            </span>
-          </article>
-        </section>
-
         <section v-else-if="screen === 'settings'" class="att-stack">
           <h2 class="att-section">Hình thức ưu tiên</h2>
           <p class="att-lead">Nút Chấm công ngay sẽ mở hình thức này. Chấm bằng nút thì ghi nhận luôn.</p>
@@ -915,21 +791,6 @@ function stopCamera() {
           <AppIcon v-if="screen === 'welcome'" name="chevronRight" :size="18" />
         </button>
       </footer>
-
-      <nav v-else-if="isHub" class="att-nav" aria-label="Mục chấm công">
-        <button
-          v-for="item in HUBS"
-          :key="item.id"
-          type="button"
-          class="att-nav__item"
-          :class="{ 'att-nav__item--active': hubCurrent === item.id }"
-          :aria-current="hubCurrent === item.id ? 'page' : undefined"
-          @click="openHub(item.id)"
-        >
-          <AppIcon :name="item.icon" :size="20" :stroke-width="1.8" />
-          <span>{{ item.label }}</span>
-        </button>
-      </nav>
     </div>
   </div>
 </template>
