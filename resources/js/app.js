@@ -41,3 +41,7 @@ app.mount('#app');
 router.isReady().finally(() => {
   requestAnimationFrame(() => dismissAppBoot());
 });
+
+if (typeof window !== 'undefined') {
+  window.setTimeout(() => dismissAppBoot(), 16_000);
+}

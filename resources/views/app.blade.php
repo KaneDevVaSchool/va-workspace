@@ -43,7 +43,31 @@
                 window.matchMedia('(display-mode: standalone)').matches ||
                 window.matchMedia('(display-mode: fullscreen)').matches ||
                 window.navigator.standalone === true;
-            if (s) document.documentElement.classList.add('pwa-standalone');
+            if (s) {
+                document.documentElement.classList.add('pwa-standalone');
+                var probe = document.createElement('div');
+                probe.setAttribute('aria-hidden', 'true');
+                probe.style.cssText =
+                    'position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:0;' +
+                    'padding-top:constant(safe-area-inset-top);padding-top:env(safe-area-inset-top);' +
+                    'padding-right:constant(safe-area-inset-right);padding-right:env(safe-area-inset-right);' +
+                    'padding-bottom:constant(safe-area-inset-bottom);padding-bottom:env(safe-area-inset-bottom);' +
+                    'padding-left:constant(safe-area-inset-left);padding-left:env(safe-area-inset-left)';
+                document.documentElement.appendChild(probe);
+                var st = getComputedStyle(probe);
+                var map = [
+                    ['--employee-safe-top', 'paddingTop'],
+                    ['--employee-safe-right', 'paddingRight'],
+                    ['--employee-safe-bottom', 'paddingBottom'],
+                    ['--employee-safe-left', 'paddingLeft'],
+                ];
+                var root = document.documentElement;
+                for (var i = 0; i < map.length; i++) {
+                    var px = parseFloat(st[map[i][1]]);
+                    if (px > 0) root.style.setProperty(map[i][0], px + 'px');
+                }
+                probe.remove();
+            }
         })();
     </script>
     <meta name="csrf-token" content="{{ csrf_token() }}">

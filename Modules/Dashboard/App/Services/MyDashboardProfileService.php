@@ -117,12 +117,16 @@ class MyDashboardProfileService
      */
     private function resolveHrmProfile(User $user): ?array
     {
-        $uuid = trim((string) $user->hrm_employee_uuid);
-        if ($uuid === '' || ! HrmEmployeeDirectory::isConfigured()) {
+        if (! HrmEmployeeDirectory::isConfigured()) {
             return null;
         }
 
-        return $this->hrmEmployees->findEmployeeByUuid($uuid);
+        $uuid = trim((string) $user->hrm_employee_uuid);
+
+        return $this->hrmEmployees->findEmployeeForUser(
+            $uuid !== '' ? $uuid : null,
+            trim((string) $user->email) !== '' ? (string) $user->email : null,
+        );
     }
 
     /** @return array<string, mixed> */
@@ -132,7 +136,6 @@ class MyDashboardProfileService
             'name' => $user->name,
             'email' => $user->email,
             'employee_code' => $user->employee_code,
-            'job_title_name' => $user->job_title_name,
             'manager_display_name' => $user->manager_display_name,
             'department_name' => $user->department?->name,
             'company_name' => $user->company?->name ?? $user->resolveCompanyName(),

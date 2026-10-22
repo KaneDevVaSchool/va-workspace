@@ -36,7 +36,7 @@ const subtitle = computed(() => {
   const hrm = profile.value?.hrm;
   const ws = profile.value?.workspace;
   const parts = [
-    hrm?.job_title || ws?.job_title_name,
+    hrm?.job_title,
     hrm?.department_name || ws?.department_name,
   ].filter(Boolean);
   return parts.join(' · ');
@@ -62,7 +62,7 @@ const workRows = computed(() => {
   const hrm = profile.value?.hrm;
   const ws = profile.value?.workspace;
   return [
-    { label: 'Chức danh', value: hrm?.job_title || ws?.job_title_name },
+    { label: 'Chức danh', value: hrm?.job_title },
     { label: 'Cấp bậc', value: hrm?.level_name },
     { label: 'Phòng ban', value: hrm?.department_name || ws?.department_name },
     { label: 'Bộ phận', value: hrm?.division_name },

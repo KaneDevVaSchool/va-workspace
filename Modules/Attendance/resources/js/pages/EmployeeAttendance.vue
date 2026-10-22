@@ -713,12 +713,7 @@ function stopCamera() {
   min-height: 0;
   display: flex;
   justify-content: center;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-tertiary-200) 72%, white) 0%,
-    color-mix(in srgb, var(--color-tertiary-50) 90%, white) 46%,
-    color-mix(in srgb, var(--color-tertiary-50) 35%, white) 100%
-  );
+  background: transparent;
   color: var(--color-text);
 }
 

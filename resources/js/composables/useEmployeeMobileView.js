@@ -5,6 +5,7 @@
 // không còn phân biệt vai trò (desktop >768px vẫn luôn dùng AppLayout như cũ).
 //
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { isPwaStandalone } from '@/lib/pwaStandalone';
 
 const MOBILE_MQ = '(max-width: 768px)';
 
@@ -28,7 +29,9 @@ export function useEmployeeMobileView() {
     mq?.removeEventListener('change', onChange);
   });
 
-  const isEmployeeMobile = computed(() => isMobileViewport.value);
+  const isEmployeeMobile = computed(
+    () => isMobileViewport.value || isPwaStandalone(),
+  );
 
   return { isEmployeeMobile, isMobileViewport };
 }

@@ -4,7 +4,7 @@
 // · Safari tab: ghi --employee-shell-height = visualViewport.height (px).
 // · PWA iOS: KHÔNG ghi --employee-shell-height — WebKit có thể trả clientHeight /
 //   innerHeight thiếu vài chục px (#254868); shell PWA dùng CSS position:fixed; inset:0.
-// · Safe-area tabbar: env() + probe --employee-safe-* (employeeSafeArea.js), không bù shell.
+// · Safe-area: probe --employee-safe-* trên iOS PWA (employeeSafeArea.js); Safari tab dùng env().
 //
 import { isPwaStandalone } from '@/lib/pwaStandalone';
 

@@ -137,6 +137,25 @@ class HrmWorkspaceDepartmentAssignTest extends TestCase
         $this->assertSame('Chức danh cũ trên Workspace', $user->fresh()->job_title_name);
     }
 
+    public function test_api_me_reads_job_title_from_hrm_for_super_admin(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $user = User::factory()->create([
+            'status' => 'active',
+            'email' => 'tu.van@vaschools.edu.vn',
+            'hrm_employee_uuid' => 'emp-1',
+            'job_title_name' => 'Chức danh cũ trên Workspace',
+        ]);
+        $user->roles()->attach(Role::query()->where('code', 'super_admin')->firstOrFail());
+
+        $this->actingAs($user)
+            ->getJson('/api/me')
+            ->assertOk()
+            ->assertJsonPath('job_title_name', 'Chuyên viên Tư vấn tuyển sinh')
+            ->assertJsonPath('department', null);
+    }
+
     public function test_api_me_assigns_hrm_department_not_the_unit(): void
     {
         $this->seed(RoleSeeder::class);

@@ -4,6 +4,7 @@ namespace Modules\Identity\App\Hrm\Services;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -348,12 +349,7 @@ class HrmEmployeeDirectory
                 return null;
             }
 
-            $unitsById = $this->orgUnitsById();
-            $concurrent = $this->concurrentByEmployeeId();
-            $names = $this->employeeNames();
-            $avatars = $this->avatarsByEmployeeId();
-
-            return $this->presentEmployee($row, $unitsById, $names, $concurrent, $avatars);
+            return $this->presentEmployeeRow($row);
         } catch (HrmDatabaseUnavailable $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -364,6 +360,59 @@ class HrmEmployeeDirectory
 
             throw new HrmDatabaseUnavailable('Không đọc được hồ sơ nhân sự từ cơ sở dữ liệu HRM.');
         }
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    public function findEmployeeForUser(?string $employeeUuid, ?string $email): ?array
+    {
+        if ($employeeUuid !== null && $employeeUuid !== '') {
+            $found = $this->findEmployeeByUuid($employeeUuid);
+            if ($found !== null) {
+                return $found;
+            }
+        }
+
+        if ($email === null || $email === '') {
+            return null;
+        }
+
+        try {
+            $query = $this->employeeRowQuery();
+            $column = $query->getGrammar()->wrap('e.company_email');
+            $row = $query
+                ->whereRaw('LOWER('.$column.') = ?', [strtolower($email)])
+                ->first($this->employeeRowColumns());
+
+            if ($row === null) {
+                return null;
+            }
+
+            return $this->presentEmployeeRow($row);
+        } catch (HrmDatabaseUnavailable $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            Log::warning('hrm.database.employee_lookup_failed', [
+                'email' => $email,
+                'message' => $e->getMessage(),
+            ]);
+
+            throw new HrmDatabaseUnavailable('Không đọc được hồ sơ nhân sự từ cơ sở dữ liệu HRM.');
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function presentEmployeeRow(object $row): array
+    {
+        $unitsById = $this->orgUnitsById();
+        $concurrent = $this->concurrentByEmployeeId();
+        $names = $this->employeeNames();
+        $avatars = $this->avatarsByEmployeeId();
+
+        return $this->presentEmployee($row, $unitsById, $names, $concurrent, $avatars);
     }
 
     /**
@@ -685,9 +734,12 @@ class HrmEmployeeDirectory
         }
 
         try {
-            $this->assignmentHasJobTitleIdColumn = Schema::connection('hrm')->hasColumn(
-                'employee_assignments',
-                'job_title_id',
+            $this->assignmentHasJobTitleIdColumn = Cache::rememberForever(
+                'hrm.schema.employee_assignments.has_job_title_id',
+                fn (): bool => Schema::connection('hrm')->hasColumn(
+                    'employee_assignments',
+                    'job_title_id',
+                ),
             );
         } catch (Throwable) {
             $this->assignmentHasJobTitleIdColumn = false;

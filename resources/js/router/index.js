@@ -63,6 +63,25 @@ const router = createRouter({
 });
 
 const STALE_CHUNK_RELOAD_KEY = 'va-stale-chunk-reload';
+/** Tránh kẹt splash PWA khi /api/me treo (HRM / mạng). */
+const FETCH_ME_GUARD_TIMEOUT_MS = 15_000;
+
+function fetchMeForGuard(auth, to) {
+    const needsFetch = !auth.isReady || (to.meta.requiresAuth && !auth.user);
+    if (!needsFetch) {
+        return Promise.resolve();
+    }
+    const fetchPromise = auth.fetchMe({ force: !auth.user });
+    if (typeof window === 'undefined') {
+        return fetchPromise;
+    }
+    return Promise.race([
+        fetchPromise,
+        new Promise((_, reject) => {
+            window.setTimeout(() => reject(new Error('fetchMe timeout')), FETCH_ME_GUARD_TIMEOUT_MS);
+        }),
+    ]);
+}
 
 function isStaleChunkError(error) {
     const message = String(error?.message || error || '');
@@ -115,12 +134,10 @@ router.beforeEach(async (to) => {
     const { useAuthStore } = await import('@modules/Identity/resources/js/stores/auth.js');
     const auth = useAuthStore();
 
-    if (!auth.isReady || (to.meta.requiresAuth && !auth.user)) {
-        try {
-            await auth.fetchMe({ force: !auth.user });
-        } catch {
-            // Mạng / server lỗi — không chặn isReady (PWA boot) vô hạn.
-        }
+    try {
+        await fetchMeForGuard(auth, to);
+    } catch {
+        // Mạng / server lỗi / timeout — không chặn isReady (PWA boot) vô hạn.
     }
 
     if (to.meta.requiresAuth && !auth.isAuthenticated) {
@@ -213,6 +230,7 @@ router.beforeEach(async (to) => {
     if (
         isEmployeeShellRestrictedContext()
         && auth.isAuthenticated
+        && auth.can('dashboard.view')
         && !isEmployeeMobileShellPath(to.path)
         && !isEmployeeShellGuestPath(to.path)
     ) {

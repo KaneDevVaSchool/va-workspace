@@ -37,9 +37,8 @@ class AuthenticatedUserPresenter
         $department = ($user->isSuperAdmin() && ! $this->viewAs->isImpersonating())
             ? null
             : $this->hrmDepartments->hrmDepartmentFor($user);
-        $jobTitleName = ($user->isSuperAdmin() && ! $this->viewAs->isImpersonating())
-            ? $user->job_title_name
-            : ($this->hrmDepartments->hrmJobTitleFor($user) ?? $user->job_title_name);
+        // Chức danh chỉ từ HRM (phân công chính); không dùng users.job_title_name.
+        $jobTitleName = $this->hrmDepartments->hrmJobTitleFor($user);
         $menuDepartment = $user->department;
 
         return [

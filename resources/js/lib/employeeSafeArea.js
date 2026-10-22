@@ -13,15 +13,20 @@ function isIosDevice() {
   );
 }
 
-/** iOS PWA / Add to Home Screen: chỉ dùng env() trong CSS — gán px lên html gây lệch mọi trang. */
-function isIosEmployeeInsetsViaCssOnly() {
+/**
+ * iOS Safari tab: env() ổn định — probe px trên html từng lệch với thanh URL.
+ * iOS PWA standalone: env() / var(--*, env()) đôi khi = 0 trên WebKit → cần probe px.
+ */
+function isIosSafariTabCssOnlySafeArea() {
   if (typeof document === 'undefined' || !isIosDevice()) return false;
   const root = document.documentElement;
+  const standalone =
+    root.classList.contains('pwa-standalone')
+    || (typeof navigator !== 'undefined' && navigator.standalone === true);
+  if (standalone) return false;
   return (
     root.classList.contains('employee-mobile-pwa')
     || root.classList.contains('employee-mobile-browser')
-    || root.classList.contains('pwa-standalone')
-    || (typeof navigator !== 'undefined' && navigator.standalone === true)
   );
 }
 
@@ -60,17 +65,27 @@ export function isEmployeeMobileShellActive() {
   return Boolean(document.querySelector('.employee-shell'));
 }
 
+function shouldSyncSafeAreaInsets() {
+  if (typeof document === 'undefined') return false;
+  if (isEmployeeMobileShellActive()) return true;
+  const root = document.documentElement;
+  return (
+    root.classList.contains('pwa-standalone')
+    || (typeof navigator !== 'undefined' && navigator.standalone === true)
+  );
+}
+
 export function syncEmployeeSafeAreaInsets() {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
-  if (!isEmployeeMobileShellActive()) {
+  if (!shouldSyncSafeAreaInsets()) {
     for (const side of SIDES) {
       root.style.removeProperty(`--employee-safe-${side}`);
     }
     return;
   }
 
-  if (isIosEmployeeInsetsViaCssOnly()) {
+  if (isIosSafariTabCssOnlySafeArea()) {
     for (const side of SIDES) {
       root.style.removeProperty(`--employee-safe-${side}`);
     }

@@ -35,14 +35,15 @@ export function useEmployeeMobileViewport() {
 
   function bindVisualViewport() {
     if (boundVisualViewport || typeof window === 'undefined') return;
-    if (isPwaStandalone()) return;
     window.visualViewport?.addEventListener('resize', scheduleSync, { passive: true });
+    window.visualViewport?.addEventListener('scroll', scheduleSync, { passive: true });
     boundVisualViewport = true;
   }
 
   function unbindVisualViewport() {
     if (!boundVisualViewport || typeof window === 'undefined') return;
     window.visualViewport?.removeEventListener('resize', scheduleSync);
+    window.visualViewport?.removeEventListener('scroll', scheduleSync);
     boundVisualViewport = false;
   }
 

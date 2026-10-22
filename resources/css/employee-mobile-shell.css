@@ -29,8 +29,12 @@ html.employee-mobile-pwa {
 }
 
 .employee-shell {
-  --employee-header-px: calc(var(--space-3) + env(safe-area-inset-right, 0px));
-  --employee-header-pl: calc(var(--space-3) + env(safe-area-inset-left, 0px));
+  --employee-header-px: calc(
+    var(--space-3) + var(--employee-safe-right, env(safe-area-inset-right, 0px))
+  );
+  --employee-header-pl: calc(
+    var(--space-3) + var(--employee-safe-left, env(safe-area-inset-left, 0px))
+  );
   flex: 1;
   min-height: 0;
   display: flex;
@@ -82,14 +86,20 @@ html.employee-mobile-pwa {
 
   @supports (padding: env(safe-area-inset-top)) {
     .employee-shell--browser {
-      --employee-header-pt: max(var(--space-3), env(safe-area-inset-top, 0px));
+      --employee-header-pt: max(
+        var(--space-3),
+        var(--employee-safe-top, env(safe-area-inset-top, 0px))
+      );
     }
   }
 }
 
 /* ---------- PWA (standalone / Add to Home Screen) ---------- */
 .employee-shell--pwa {
-  --employee-header-pt: max(var(--space-2), env(safe-area-inset-top, 0px));
+  --employee-header-pt: max(
+    var(--space-2),
+    var(--employee-safe-top, env(safe-area-inset-top, 0px))
+  );
 }
 
 @media (max-width: 768px) {
@@ -140,6 +150,11 @@ html.employee-mobile-pwa {
     max-width: 100vw;
     height: var(--pwa-vv-height, 100%);
     max-height: var(--pwa-vv-height, 100%);
+  }
+
+  /* Bàn phím mở: đáy khung đã trên home indicator — bỏ padding safe footer (tránh đẩy tab bar lên). */
+  html.pwa-vv-keyboard .employee-tabbar--pwa.employee-tabbar--shell {
+    padding-bottom: 0;
   }
 }
 
@@ -779,8 +794,9 @@ html.employee-mobile-pwa {
   box-shadow: none;
 }
 
+/* AppShell.Footer: home indicator một lần trên wrapper (PWA UI app layout). */
 .employee-tabbar--pwa.employee-tabbar--shell {
-  padding-bottom: 0;
+  padding-bottom: var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px));
 }
 
 .employee-tabbar__bar {
@@ -802,23 +818,34 @@ html.employee-mobile-pwa {
     var(--shadow-md);
 }
 
-/* PWA + iOS Safari tab: safe-bottom trong pill — chỉ padding (không cộng thêm min-height). */
-.employee-tabbar--pwa .employee-tabbar__bar,
+/* Safari tab: safe-bottom trong pill (footer không tách wrapper). */
 .employee-tabbar--browser .employee-tabbar__bar {
-  padding-bottom: calc(var(--space-1) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(
+    var(--space-1) + var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px))
+  );
 }
 
 @supports (-webkit-touch-callout: none) {
   @media (max-width: 768px) {
     .employee-shell--pwa,
     .employee-shell--browser {
-      --employee-header-pt: max(var(--space-2), env(safe-area-inset-top, 0px));
-      --employee-header-px: calc(var(--space-3) + env(safe-area-inset-right, 0px));
-      --employee-header-pl: calc(var(--space-3) + env(safe-area-inset-left, 0px));
+      --employee-header-pt: max(
+        var(--space-2),
+        var(--employee-safe-top, env(safe-area-inset-top, 0px))
+      );
+      --employee-header-px: calc(
+        var(--space-3) + var(--employee-safe-right, env(safe-area-inset-right, 0px))
+      );
+      --employee-header-pl: calc(
+        var(--space-3) + var(--employee-safe-left, env(safe-area-inset-left, 0px))
+      );
     }
 
     .employee-shell--browser {
-      --employee-header-pt: max(var(--space-3), env(safe-area-inset-top, 0px));
+      --employee-header-pt: max(
+        var(--space-3),
+        var(--employee-safe-top, env(safe-area-inset-top, 0px))
+      );
     }
   }
 }
@@ -876,16 +903,26 @@ html.employee-mobile-pwa {
 
 @media (max-width: 360px) {
   .employee-shell {
-    --employee-header-px: calc(var(--space-2) + env(safe-area-inset-right, 0px));
-    --employee-header-pl: calc(var(--space-2) + env(safe-area-inset-left, 0px));
+    --employee-header-px: calc(
+      var(--space-2) + var(--employee-safe-right, env(safe-area-inset-right, 0px))
+    );
+    --employee-header-pl: calc(
+      var(--space-2) + var(--employee-safe-left, env(safe-area-inset-left, 0px))
+    );
   }
 
   .employee-shell--browser {
-    --employee-header-pt: max(var(--space-2), env(safe-area-inset-top, 0px));
+    --employee-header-pt: max(
+      var(--space-2),
+      var(--employee-safe-top, env(safe-area-inset-top, 0px))
+    );
   }
 
   .employee-shell--pwa {
-    --employee-header-pt: max(var(--space-1), env(safe-area-inset-top, 0px));
+    --employee-header-pt: max(
+      var(--space-1),
+      var(--employee-safe-top, env(safe-area-inset-top, 0px))
+    );
   }
 
   .employee-shell__hello {
@@ -919,6 +956,10 @@ html.employee-mobile-pwa {
   html.employee-mobile-browser .employee-shell__content--chat .chat-view__composer,
   html.employee-mobile-pwa .employee-shell__content--chat .chat-view__composer {
     padding-bottom: calc(var(--space-3) + var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px)));
+  }
+
+  html.pwa-vv-keyboard.employee-mobile-pwa .employee-shell__content--chat .chat-view__composer {
+    padding-bottom: var(--space-3);
   }
 
   html.employee-mobile-browser .employee-shell__content--chat .chat-compose-banner,
@@ -970,10 +1011,10 @@ html.employee-mobile-pwa {
   display: flex;
   flex-direction: column;
   padding:
-    calc(var(--employee-safe-top, env(safe-area-inset-top, 0px)) + var(--space-3))
-    calc(var(--employee-safe-right, env(safe-area-inset-right, 0px)) + var(--space-3))
-    calc(var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px)) + var(--space-3))
-    calc(var(--employee-safe-left, env(safe-area-inset-left, 0px)) + var(--space-3));
+    max(var(--space-3), var(--employee-safe-top, env(safe-area-inset-top, 0px)))
+    max(var(--space-3), var(--employee-safe-right, env(safe-area-inset-right, 0px)))
+    max(var(--space-3), var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px)))
+    max(var(--space-3), var(--employee-safe-left, env(safe-area-inset-left, 0px)));
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--color-tertiary-200) 72%, white) 0%,
