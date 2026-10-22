@@ -358,12 +358,8 @@ const MENU_SECTIONS = [
         requiresSuperAdmin: true,
       },
       {
-        // Gán phòng ban cho tài khoản mới đăng nhập Google — bước chặn
-        // trước khi trưởng phòng thấy được nút "Gán vai trò" (chưa có
-        // phòng ban thì WorkspaceConfigMemberController::departmentIdOrFail()
-        // trả lỗi và Members.vue ẩn hẳn nút "Thêm").
-        name: 'superadmin.workspace-config.unassigned',
-        label: 'Nhân sự workspace',
+        name: 'superadmin.workspace-config.employees',
+        label: 'Danh sách nhân viên',
         icon: 'users',
         requiresSuperAdmin: true,
       },

@@ -62,13 +62,15 @@ export default [
     meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Cấu hình Workspace' },
   },
   {
-    // Tài khoản chưa gắn phòng ban nào — chờ super_admin gán tay (bước
-    // chặn trước khi department_director thấy được nút "Gán vai trò" ở
-    // /manager/workspace-config/members).
     path: '/superadmin/workspace-config/unassigned',
-    name: 'superadmin.workspace-config.unassigned',
-    component: () => import('./pages/WorkspaceConfigUnassignedMembersSuperadmin.vue'),
-    meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Nhân sự chưa gán phòng ban' },
+    redirect: { name: 'superadmin.workspace-config.employees' },
+  },
+  {
+    // Toàn bộ nhân sự VA-HRM (và tài khoản workspace); phòng ban hiển thị theo HRM.
+    path: '/superadmin/workspace-config/employees',
+    name: 'superadmin.workspace-config.employees',
+    component: () => import('./pages/WorkspaceConfigEmployeeRosterSuperadmin.vue'),
+    meta: { requiresAuth: true, requiresSuperAdmin: true, title: 'Danh sách nhân viên' },
   },
   {
     // Ẩn/hiện menu sidebar TOÀN HỆ THỐNG — xem GlobalMenuVisibilityService.

@@ -1,8 +1,9 @@
 <script setup>
 //
-// superadmin/workspace-config/unassigned — danh sách nhân sự HRM; phòng ban hiển thị theo HRM (không ghi DB khi tải trang).
+// superadmin/workspace-config/employees — danh sách nhân sự HRM; phòng ban hiển thị theo HRM (không ghi DB khi tải trang).
 //
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { RouterLink } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import TablePagesBar from '@/components/TablePagesBar.vue';
@@ -39,11 +40,16 @@ import {
 const CELL_PAD_X = 32;
 const COL_EXTRA = 24;
 const AVATAR_EXTRA = 48;
+const MEASURE_ROW_CAP = 200;
+const SKELETON_ROW_COUNT = 8;
 let measureCtx = null;
 let wrapObserver = null;
+let fitColumnsFrame = null;
 
 const allMembers = ref([]);
+const searchHaystacks = ref(new Map());
 const source = ref('workspace');
+const cachedAt = ref('');
 const loading = ref(false);
 const selected = ref(null);
 
@@ -77,24 +83,6 @@ const shownColumns = computed(() => UNASSIGNED_COLUMNS.filter((col) => visibleCo
 const tableColumnKeys = computed(() => shownColumns.value.map((col) => col.key));
 const colSpan = computed(() => Math.max(tableColumnKeys.value.length, 1));
 
-const orgUnitOptions = computed(() => {
-  const names = new Set();
-  for (const member of allMembers.value) {
-    const name = hrmDepartmentName(member);
-    if (name) names.add(name);
-  }
-  return [...names].sort((a, b) => a.localeCompare(b, 'vi'));
-});
-
-const divisionOptions = computed(() => {
-  const names = new Set();
-  for (const member of allMembers.value) {
-    const name = divisionName(member);
-    if (name) names.add(name);
-  }
-  return [...names].sort((a, b) => a.localeCompare(b, 'vi'));
-});
-
 function isNewThisMonth(member) {
   const hired = String(member?.hired_at || '');
   if (!/^\d{4}-\d{2}/.test(hired)) return false;
@@ -103,45 +91,106 @@ function isNewThisMonth(member) {
   return hired.startsWith(month);
 }
 
-const summaryCards = computed(() => {
+function memberSearchHaystack(member) {
+  const second = secondaryPlacement(member);
+  return [
+    member.name,
+    member.email,
+    member.employee_code,
+    member.job_title_name,
+    member.job_position_level,
+    member.manager_display_name,
+    member.phone,
+    member.workplace,
+    member.personnel_type,
+    orgUnitName(member),
+    hrmDepartmentName(member),
+    divisionName(member),
+    departmentName(member),
+    second?.department_name,
+    second?.division_name,
+    companyName(member),
+    second?.job_title_name,
+    second?.company_name,
+    teamName(member),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+function rebuildSearchHaystacks(rows) {
+  const map = new Map();
+  for (const member of rows) {
+    map.set(memberKey(member), memberSearchHaystack(member));
+  }
+  searchHaystacks.value = map;
+}
+
+const rosterDerived = computed(() => {
+  const orgUnitNames = new Set();
+  const divisionNames = new Set();
+  const companyNames = new Set();
+  const workplaceNames = new Set();
   const counts = { active: 0, on_leave: 0, terminated: 0, onboarding: 0, new_this_month: 0 };
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
   for (const member of allMembers.value) {
+    const deptName = hrmDepartmentName(member);
+    if (deptName) orgUnitNames.add(deptName);
+    const div = divisionName(member);
+    if (div) divisionNames.add(div);
+    const co = companyName(member);
+    if (co) companyNames.add(co);
+    if (member.workplace) workplaceNames.add(member.workplace);
+
     if (member.status === 'active') counts.active += 1;
     else if (member.status === 'on_leave') counts.on_leave += 1;
     else if (member.status === 'terminated' || member.status === 'inactive') counts.terminated += 1;
     if (member.status === 'pending_confirmation' || member.status === 'processing') counts.onboarding += 1;
-    if (isNewThisMonth(member)) counts.new_this_month += 1;
+    const hired = String(member?.hired_at || '');
+    if (/^\d{4}-\d{2}/.test(hired) && hired.startsWith(month)) counts.new_this_month += 1;
   }
+
+  const sortVi = (a, b) => a.localeCompare(b, 'vi');
   const fmt = (value) => value.toLocaleString('vi-VN');
-  return [
-    { key: 'total', label: 'Tổng hồ sơ', value: fmt(allMembers.value.length), tone: 'brand', icon: 'users', filter: '' },
-    { key: 'active', label: 'Xác nhận xử lý', value: fmt(counts.active), tone: 'success', icon: 'check', filter: 'active' },
-    { key: 'on_leave', label: 'Tạm nghỉ', value: fmt(counts.on_leave), tone: 'warning', icon: 'calendar', filter: 'on_leave' },
-    { key: 'terminated', label: 'Đã nghỉ việc', value: fmt(counts.terminated), tone: 'danger', icon: 'close', filter: 'terminated' },
-    { key: 'new_this_month', label: 'Tuyển mới tháng này', value: fmt(counts.new_this_month), tone: 'info', icon: 'userPlus', filter: 'new_this_month' },
-    { key: 'onboarding', label: 'Onboarding', value: fmt(counts.onboarding), tone: 'violet', icon: 'clock', filter: 'onboarding' },
-  ];
+  const total = allMembers.value.length;
+
+  return {
+    orgUnitOptions: [...orgUnitNames].sort(sortVi),
+    divisionOptions: [...divisionNames].sort(sortVi),
+    companyOptions: [...companyNames].sort(sortVi),
+    workplaceOptions: [...workplaceNames].sort(sortVi),
+    summaryCards: [
+      { key: 'total', label: 'Tổng hồ sơ', value: fmt(total), tone: 'brand', icon: 'users', filter: '' },
+      { key: 'active', label: 'Xác nhận xử lý', value: fmt(counts.active), tone: 'success', icon: 'check', filter: 'active' },
+      { key: 'on_leave', label: 'Tạm nghỉ', value: fmt(counts.on_leave), tone: 'warning', icon: 'calendar', filter: 'on_leave' },
+      { key: 'terminated', label: 'Đã nghỉ việc', value: fmt(counts.terminated), tone: 'danger', icon: 'close', filter: 'terminated' },
+      { key: 'new_this_month', label: 'Tuyển mới tháng này', value: fmt(counts.new_this_month), tone: 'info', icon: 'userPlus', filter: 'new_this_month' },
+      { key: 'onboarding', label: 'Onboarding', value: fmt(counts.onboarding), tone: 'violet', icon: 'clock', filter: 'onboarding' },
+    ],
+  };
 });
 
-const companyOptions = computed(() => {
-  const names = new Set();
-  for (const member of allMembers.value) {
-    const name = companyName(member);
-    if (name) names.add(name);
-  }
-  return [...names].sort((a, b) => a.localeCompare(b, 'vi'));
-});
+const orgUnitOptions = computed(() => rosterDerived.value.orgUnitOptions);
+const divisionOptions = computed(() => rosterDerived.value.divisionOptions);
+const companyOptions = computed(() => rosterDerived.value.companyOptions);
+const workplaceOptions = computed(() => rosterDerived.value.workplaceOptions);
+const summaryCards = computed(() => rosterDerived.value.summaryCards);
 
-const workplaceOptions = computed(() => {
-  const names = new Set();
-  for (const member of allMembers.value) {
-    if (member.workplace) names.add(member.workplace);
-  }
-  return [...names].sort((a, b) => a.localeCompare(b, 'vi'));
+const sourceLabel = computed(() => (source.value === 'hrm_database' ? 'VA-HRM' : 'Workspace'));
+
+const cacheHint = computed(() => {
+  if (!cachedAt.value) return '';
+  const parsed = Date.parse(cachedAt.value);
+  if (Number.isNaN(parsed)) return '';
+  return new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }).format(parsed);
 });
 
 const filteredMembers = computed(() => {
   const needle = query.value.trim().toLowerCase();
+  const hayMap = searchHaystacks.value;
   const rows = allMembers.value.filter((member) => {
     if (newThisMonth.value && !isNewThisMonth(member)) return false;
     if (status.value === 'onboarding') {
@@ -157,33 +206,11 @@ const filteredMembers = computed(() => {
     if (orgUnit.value && hrmDepartmentName(member) !== orgUnit.value) return false;
     if (division.value && divisionName(member) !== division.value) return false;
     if (workplace.value && member.workplace !== workplace.value) return false;
-    if (!needle) return true;
-    const haystack = [
-      member.name,
-      member.email,
-      member.employee_code,
-      member.job_title_name,
-      member.job_position_level,
-      member.manager_display_name,
-      member.employee_code,
-      member.phone,
-      member.workplace,
-      member.personnel_type,
-      orgUnitName(member),
-      hrmDepartmentName(member),
-      divisionName(member),
-      departmentName(member),
-      secondaryPlacement(member)?.department_name,
-      secondaryPlacement(member)?.division_name,
-      companyName(member),
-      secondaryPlacement(member)?.job_title_name,
-      secondaryPlacement(member)?.company_name,
-      teamName(member),
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
-    return haystack.includes(needle);
+    if (needle) {
+      const haystack = hayMap.get(memberKey(member));
+      if (!haystack?.includes(needle)) return false;
+    }
+    return true;
   });
   if (!sortKey.value) return rows;
   const dir = sortDir.value === 'desc' ? -1 : 1;
@@ -218,6 +245,37 @@ const hasActiveFilters = computed(
     || Boolean(status.value)
     || newThisMonth.value,
 );
+
+const activeFilterChips = computed(() => {
+  const chips = [];
+  const q = query.value.trim();
+  if (q) chips.push({ key: 'q', label: `Tìm: ${q}` });
+  if (status.value) {
+    const label = HRM_STATUS_OPTIONS.find((item) => item.value === status.value)?.label ?? status.value;
+    chips.push({ key: 'status', label });
+  }
+  if (employmentStatus.value) {
+    const label = EMPLOYMENT_STATUS_OPTIONS.find((item) => item.value === employmentStatus.value)?.label ?? employmentStatus.value;
+    chips.push({ key: 'employment', label });
+  }
+  if (personnelType.value) chips.push({ key: 'personnel', label: personnelType.value });
+  if (company.value === 'none') chips.push({ key: 'company', label: 'Chưa gắn công ty' });
+  else if (company.value) chips.push({ key: 'company', label: company.value });
+  if (orgUnit.value) chips.push({ key: 'org', label: orgUnit.value });
+  if (division.value) chips.push({ key: 'division', label: division.value });
+  if (workplace.value) chips.push({ key: 'workplace', label: workplace.value });
+  if (gender.value) {
+    const label = GENDER_OPTIONS.find((item) => item.value === gender.value)?.label ?? gender.value;
+    chips.push({ key: 'gender', label });
+  }
+  if (newThisMonth.value) chips.push({ key: 'new', label: 'Tuyển mới tháng này' });
+  return chips;
+});
+
+const filteredSummary = computed(() => {
+  if (!hasActiveFilters.value) return '';
+  return `${meta.value.total.toLocaleString('vi-VN')} kết quả sau lọc`;
+});
 
 const tableWidthPx = computed(() => {
   const sum = tableColumnKeys.value.reduce((total, key) => total + (Number(columnWidths[key]) || 0), 0);
@@ -347,21 +405,45 @@ function goPage(nextPage) {
   page.value = nextPage;
 }
 
+function scheduleFitColumns() {
+  if (fitColumnsFrame != null) cancelAnimationFrame(fitColumnsFrame);
+  fitColumnsFrame = requestAnimationFrame(() => {
+    fitColumnsFrame = null;
+    fitColumnsToContent();
+  });
+}
+
+function sampleRowsForMeasure() {
+  const all = allMembers.value;
+  if (all.length <= MEASURE_ROW_CAP) return all;
+  const out = [];
+  const step = all.length / MEASURE_ROW_CAP;
+  for (let i = 0; i < MEASURE_ROW_CAP; i += 1) {
+    out.push(all[Math.min(all.length - 1, Math.floor(i * step))]);
+  }
+  for (const member of pageRows.value) {
+    if (!out.some((row) => sameMember(row, member))) out.push(member);
+  }
+  return out;
+}
+
 async function load(options = {}) {
   const { silent = false, refresh = false } = options;
   loading.value = true;
   try {
-    const params = refresh ? { refresh: 1 } : undefined;
+    const params = { compact: 1, ...(refresh ? { refresh: 1 } : {}) };
     const { data } = await window.axios.get('/api/workspace-config/members/by-department', { params });
     const rows = data.members ?? data.unassigned ?? [];
     allMembers.value = Array.isArray(rows) ? rows : [];
+    rebuildSearchHaystacks(allMembers.value);
     source.value = data.source ?? 'workspace';
+    cachedAt.value = data.cached_at ?? '';
     if (selected.value && !allMembers.value.some((member) => sameMember(member, selected.value))) {
       selected.value = null;
     } else if (selected.value) {
       selected.value = allMembers.value.find((member) => sameMember(member, selected.value)) ?? null;
     }
-    nextTick(fitColumnsToContent);
+    nextTick(scheduleFitColumns);
   } catch (error) {
     if (isTransientClientNetworkError(error)) return;
     if (!silent) {
@@ -429,7 +511,7 @@ function readTableFonts() {
 function columnContentWidth(key, fonts) {
   const label = UNASSIGNED_COLUMNS.find((col) => col.key === key)?.label ?? '';
   let maxW = measureText(String(label).toLocaleUpperCase('vi'), fonts.header);
-  const rows = allMembers.value.length ? allMembers.value : pageRows.value;
+  const rows = allMembers.value.length ? sampleRowsForMeasure() : pageRows.value;
   for (const member of rows) {
     if (key === 'person') {
       maxW = Math.max(maxW, measureText(cellText(member, 'person'), fonts.person));
@@ -466,8 +548,13 @@ function fitColumnsToContent() {
   const keys = tableColumnKeys.value;
   if (!wrap || keys.length === 0 || resizing.value) return;
   const fonts = readTableFonts();
+  const hasSaved = keys.every((key) => Number(columnWidths[key]) >= MIN_COL_PX);
   const measured = {};
-  for (const key of keys) measured[key] = columnContentWidth(key, fonts);
+  if (hasSaved) {
+    for (const key of keys) measured[key] = Number(columnWidths[key]) || MIN_COL_PX;
+  } else {
+    for (const key of keys) measured[key] = columnContentWidth(key, fonts);
+  }
   const next = distributeExtraWidth(measured, keys, wrap.clientWidth);
   for (const key of keys) columnWidths[key] = next[key];
 }
@@ -527,10 +614,10 @@ watch(tableZoom, (value) => {
   } catch {
     // Bỏ qua.
   }
-  nextTick(fitColumnsToContent);
+  nextTick(scheduleFitColumns);
 });
-watch(selected, () => nextTick(fitColumnsToContent));
-watch(shownColumns, () => nextTick(fitColumnsToContent));
+watch(selected, () => nextTick(scheduleFitColumns));
+watch(shownColumns, () => nextTick(scheduleFitColumns));
 watch([query, orgUnit, division, company, workplace, gender, personnelType, employmentStatus, status, newThisMonth, perPage], () => {
   page.value = 1;
 });
@@ -542,35 +629,47 @@ onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown);
   load();
   nextTick(() => {
-    fitColumnsToContent();
+    scheduleFitColumns();
     if (tableWrap.value) {
       let lastWrapWidth = tableWrap.value.clientWidth;
       wrapObserver = new ResizeObserver((entries) => {
         const width = Math.round(entries[0]?.contentRect?.width || 0);
         if (!width || width === lastWrapWidth || resizing.value) return;
         lastWrapWidth = width;
-        fitColumnsToContent();
+        scheduleFitColumns();
       });
       wrapObserver.observe(tableWrap.value);
     }
   });
-  document.fonts?.ready?.then(() => nextTick(fitColumnsToContent));
+  document.fonts?.ready?.then(() => nextTick(scheduleFitColumns));
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleDocumentKeydown);
   wrapObserver?.disconnect();
+  if (fitColumnsFrame != null) cancelAnimationFrame(fitColumnsFrame);
 });
 </script>
 
 <template>
   <section class="roster-page">
     <PageHeader
-      title="Nhân viên"
+      title="Danh sách nhân viên"
+      subtitle="Đồng bộ VA-HRM · phòng ban hiển thị theo HRM, không ghi đè khi mở trang"
       icon="users"
-      :breadcrumbs="[{ label: 'Trang chủ' }, { label: 'Nhân sự' }, { label: 'Danh sách nhân viên' }]"
+      :breadcrumbs="[
+        { label: 'Trang chủ', to: { name: 'home' } },
+        { label: 'Cấu hình', to: { name: 'superadmin.workspace-config.overview' } },
+        { label: 'Danh sách nhân viên' },
+      ]"
     >
       <template #actions>
+        <span v-if="sourceLabel" class="roster-page__source">{{ sourceLabel }}</span>
+        <span v-if="cacheHint" class="roster-page__cache">Cập nhật {{ cacheHint }}</span>
+        <RouterLink class="roster-page__header-btn roster-page__header-btn--link" :to="{ name: 'superadmin.workspace-config.overview' }">
+          <AppIcon name="building" :size="16" />
+          Workspace
+        </RouterLink>
         <button type="button" class="roster-page__header-btn" :disabled="loading" @click="load({ refresh: true })">
           <AppIcon name="refresh" :size="16" :class="{ 'roster-page__spin': loading }" />
           Làm mới
@@ -578,36 +677,48 @@ onBeforeUnmount(() => {
       </template>
     </PageHeader>
 
-    <div class="roster-page__summary" aria-label="Thống kê tổng quan nhân viên">
-      <p class="roster-page__summary-title">Bức tranh nhân sự</p>
-      <div class="roster-page__summary-grid">
+    <div class="roster-page__stats" aria-label="Thống kê tổng quan nhân viên">
+      <template v-if="loading && allMembers.length === 0">
+        <div v-for="n in 6" :key="n" class="roster-page__stat roster-page__stat--skeleton" aria-hidden="true">
+          <span class="roster-page__sk-line roster-page__sk-line--lg" />
+          <span class="roster-page__sk-line roster-page__sk-line--sm" />
+        </div>
+      </template>
+      <template v-else>
         <button
           v-for="card in summaryCards"
           :key="card.key"
           type="button"
-          class="roster-page__kpi"
-          :class="[`roster-page__kpi--${card.tone}`, { 'roster-page__kpi--on': kpiOn(card) }]"
+          class="roster-page__stat"
+          :class="[`roster-page__stat--${card.tone}`, { 'roster-page__stat--on': kpiOn(card) }]"
           @click="applySummary(card.filter)"
         >
-          <span class="roster-page__kpi-icon" aria-hidden="true">
-            <AppIcon :name="card.icon" :size="16" />
+          <span class="roster-page__stat-icon" aria-hidden="true">
+            <AppIcon :name="card.icon" :size="18" :stroke-width="1.75" />
           </span>
-          <span class="roster-page__kpi-copy">
-            <span class="roster-page__kpi-label">{{ card.label }}</span>
-            <span class="roster-page__kpi-value">{{ card.value }}</span>
+          <span class="roster-page__stat-copy">
+            <span class="roster-page__stat-value">{{ card.value }}</span>
+            <span class="roster-page__stat-label">{{ card.label }}</span>
           </span>
         </button>
-      </div>
+      </template>
     </div>
 
     <div class="roster-page__body">
       <div class="roster-page__main">
-        <div class="roster-page__toolbar">
-          <label class="roster-page__search">
-            <AppIcon name="search" :size="16" />
-            <input v-model="query" type="search" placeholder="Tìm tên, mã, email…" />
-          </label>
-        </div>
+        <div class="roster-page__shell">
+          <div class="roster-page__shell-head">
+            <label class="roster-page__search">
+              <AppIcon name="search" :size="16" />
+              <input v-model="query" type="search" placeholder="Tìm tên, mã, email, phòng ban…" autocomplete="off" />
+            </label>
+            <p v-if="filteredSummary" class="roster-page__shell-meta">{{ filteredSummary }}</p>
+          </div>
+
+          <div v-if="activeFilterChips.length" class="roster-page__chips" aria-label="Bộ lọc đang áp dụng">
+            <span v-for="chip in activeFilterChips" :key="chip.key" class="roster-page__chip">{{ chip.label }}</span>
+            <button type="button" class="roster-page__chip-clear" @click="clearFilters">Xoá tất cả</button>
+          </div>
 
         <TablePagesBar
           placement="top"
@@ -745,9 +856,13 @@ onBeforeUnmount(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-if="loading">
-                <td :colspan="colSpan" class="roster-page__empty">Đang tải…</td>
-              </tr>
+              <template v-if="loading && allMembers.length === 0">
+                <tr v-for="n in SKELETON_ROW_COUNT" :key="`sk-${n}`" class="roster-page__row--skeleton" aria-hidden="true">
+                  <td v-for="col in shownColumns" :key="col.key" :style="colMinWidthStyle(col.key)">
+                    <span class="roster-page__sk-cell" :class="{ 'roster-page__sk-cell--person': col.key === 'person' }" />
+                  </td>
+                </tr>
+              </template>
               <tr v-else-if="pageRows.length === 0">
                 <td :colspan="colSpan" class="roster-page__empty">
                   <span class="roster-page__empty-icon" aria-hidden="true">
@@ -772,6 +887,7 @@ onBeforeUnmount(() => {
                 v-for="member in pageRows"
                 v-else
                 :key="memberKey(member)"
+                v-memo="[memberKey(member), selected?.id, selected?.hrm_employee_uuid, tableColumnKeys.join(',')]"
                 :class="{ 'roster-page__row--active': sameMember(selected, member) }"
                 @click="inspect(member)"
               >
@@ -812,6 +928,7 @@ onBeforeUnmount(() => {
           @update:page="goPage"
           @update:per-page="perPage = $event"
         />
+        </div>
       </div>
 
       <aside v-if="selected" class="roster-page__side" aria-label="Chi tiết nhân sự">
@@ -827,10 +944,12 @@ onBeforeUnmount(() => {
           <div>
             <span class="roster-page__side-lead-action">{{ hrmStatusLabel(selected.status) }}</span>
             <p class="roster-page__side-lead-desc">{{ selected.name || '—' }}</p>
+            <p v-if="selected.email" class="roster-page__side-lead-meta">{{ selected.email }}</p>
           </div>
         </div>
 
         <div class="roster-page__rows">
+          <p class="roster-page__side-section">Liên hệ</p>
           <div class="roster-page__row">
             <span class="roster-page__row-label">Mã nhân viên</span>
             <span class="roster-page__row-value">{{ selected.employee_code || '—' }}</span>
@@ -843,6 +962,7 @@ onBeforeUnmount(() => {
             <span class="roster-page__row-label">Điện thoại</span>
             <span class="roster-page__row-value">{{ selected.phone || '—' }}</span>
           </div>
+          <p class="roster-page__side-section">Công việc</p>
           <div class="roster-page__row">
             <span class="roster-page__row-label">Chức danh</span>
             <span class="roster-page__row-value">{{ selected.job_title_name || 'Chưa cập nhật' }}</span>
@@ -903,6 +1023,7 @@ onBeforeUnmount(() => {
             <span class="roster-page__row-label">Kiêm nhiệm</span>
             <span class="roster-page__row-value">{{ concurrentTitleText(selected) || '—' }}</span>
           </div>
+          <p class="roster-page__side-section">Workspace</p>
           <div v-if="selected.stored_department?.name" class="roster-page__row">
             <span class="roster-page__row-label">Phòng ban đã lưu (workspace)</span>
             <span class="roster-page__row-value">{{ selected.stored_department.name }}</span>
@@ -960,9 +1081,32 @@ onBeforeUnmount(() => {
   background: var(--color-surface-muted);
 }
 
+.roster-page__header-btn--link {
+  text-decoration: none;
+}
+
 .roster-page__header-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.roster-page__source {
+  display: inline-flex;
+  align-items: center;
+  height: 1.625rem;
+  padding: 0 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.roster-page__cache {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .roster-page__spin {
@@ -989,23 +1133,89 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.roster-page__toolbar {
-  position: relative;
-  z-index: 6;
+.roster-page__shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.roster-page__shell-head {
   flex-shrink: 0;
-  margin: var(--space-3) 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.roster-page__shell-meta {
+  margin: 0 0 0 auto;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.roster-page__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  padding: var(--space-2) var(--space-4) 0;
+}
+
+.roster-page__chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-page__chip-clear {
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.roster-page__chip-clear:hover {
+  color: var(--color-text);
+  background: var(--color-surface-muted);
 }
 
 .roster-page__search {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--space-3);
-  padding: 0 0.75rem;
+  padding: 0 0.875rem;
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text-muted);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+  transition: box-shadow 0.15s ease;
+}
+
+.roster-page__search:focus-within {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, var(--color-border)), var(--shadow-sm);
+  color: var(--color-primary);
 }
 
 .roster-page__search input {
@@ -1089,9 +1299,10 @@ onBeforeUnmount(() => {
 .roster-page__table-wrap {
   flex: 1;
   min-height: 0;
+  margin: var(--space-2) var(--space-4) var(--space-4);
   overflow: auto;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
 }
 
 .roster-page__table-wrap--resizing {
@@ -1099,43 +1310,33 @@ onBeforeUnmount(() => {
   user-select: none;
 }
 
-.roster-page__summary {
+.roster-page__stats {
   flex-shrink: 0;
-  margin-bottom: var(--space-3);
-}
-
-.roster-page__summary-title {
-  margin: 0 0 var(--space-2);
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.roster-page__summary-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.625rem;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
 }
 
-.roster-page__kpi {
+.roster-page__stat {
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   min-width: 0;
-  padding: 0.625rem 0.75rem 0.625rem calc(var(--space-2) + 3px + var(--space-2));
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
   border: none;
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
   font-family: var(--font-family-base);
   text-align: left;
+  box-shadow: inset 0 0 0 1px transparent, var(--shadow-sm);
   cursor: pointer;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
 }
 
-.roster-page__kpi::before {
+.roster-page__stat::before {
   content: '';
   position: absolute;
   top: var(--space-2);
@@ -1146,81 +1347,129 @@ onBeforeUnmount(() => {
   background: var(--color-border);
 }
 
-.roster-page__kpi--brand::before { background: var(--color-primary); }
-.roster-page__kpi--success::before { background: var(--color-success); }
-.roster-page__kpi--warning::before { background: var(--color-warning); }
-.roster-page__kpi--danger::before { background: var(--color-danger); }
-.roster-page__kpi--umber::before { background: var(--color-umber); }
-.roster-page__kpi--info::before { background: var(--color-info); }
+.roster-page__stat--brand::before { background: var(--color-primary); }
+.roster-page__stat--success::before { background: var(--color-success); }
+.roster-page__stat--warning::before { background: var(--color-warning); }
+.roster-page__stat--danger::before { background: var(--color-danger); }
+.roster-page__stat--info::before { background: var(--color-info); }
+.roster-page__stat--violet::before { background: var(--color-tertiary); }
 
-.roster-page__kpi--on {
+.roster-page__stat--on {
   background: var(--color-primary-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, var(--color-border)), var(--shadow-sm);
 }
 
-.roster-page__kpi-icon {
+.roster-page__stat--skeleton {
+  pointer-events: none;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 4.5rem;
+}
+
+.roster-page__stat-icon {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--radius-sm);
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-md);
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
 }
 
-.roster-page__kpi--brand .roster-page__kpi-icon {
+.roster-page__stat--brand .roster-page__stat-icon {
   background: var(--color-primary-surface-strong);
   color: var(--color-primary);
 }
 
-.roster-page__kpi--success .roster-page__kpi-icon {
+.roster-page__stat--success .roster-page__stat-icon {
   background: var(--color-success-tint-bg);
   color: var(--color-success-tint-fg);
 }
 
-.roster-page__kpi--warning .roster-page__kpi-icon {
+.roster-page__stat--warning .roster-page__stat-icon {
   background: var(--color-warning-tint-bg);
   color: var(--color-warning-tint-fg);
 }
 
-.roster-page__kpi--danger .roster-page__kpi-icon {
+.roster-page__stat--danger .roster-page__stat-icon {
   background: var(--color-danger-tint-bg);
   color: var(--color-danger-tint-fg);
 }
 
-.roster-page__kpi--umber .roster-page__kpi-icon {
-  background: var(--color-umber-tint-bg);
-  color: var(--color-umber-tint-fg);
-}
-
-.roster-page__kpi--info .roster-page__kpi-icon,
-.roster-page__kpi--violet .roster-page__kpi-icon {
+.roster-page__stat--info .roster-page__stat-icon,
+.roster-page__stat--violet .roster-page__stat-icon {
   background: var(--color-tertiary-100);
   color: var(--color-tertiary-800);
 }
 
-.roster-page__kpi--violet::before { background: var(--color-tertiary); }
-
-.roster-page__kpi-copy {
+.roster-page__stat-copy {
   display: flex;
   min-width: 0;
   flex-direction: column;
+  gap: 0.125rem;
 }
 
-.roster-page__kpi-label {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.roster-page__kpi-value {
+.roster-page__stat-value {
   color: var(--color-text);
-  font-size: 1.125rem;
+  font-size: 1.375rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+  line-height: 1.1;
+}
+
+.roster-page__stat-label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.roster-page__sk-line {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-muted) 0%,
+    color-mix(in srgb, var(--color-border) 40%, var(--color-surface-muted)) 50%,
+    var(--color-surface-muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: roster-shimmer 1.2s ease-in-out infinite;
+}
+
+.roster-page__sk-line--sm {
+  width: 55%;
+  height: 0.625rem;
+}
+
+.roster-page__sk-line--lg {
+  width: 45%;
+  height: 1.125rem;
+}
+
+.roster-page__sk-cell {
+  display: block;
+  height: 0.875rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  animation: roster-shimmer 1.2s ease-in-out infinite;
+}
+
+.roster-page__sk-cell--person {
+  width: 75%;
+  height: 2rem;
+}
+
+.roster-page__row--skeleton td {
+  pointer-events: none;
+}
+
+@keyframes roster-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
 }
 
 .roster-page__table {
@@ -1483,12 +1732,26 @@ onBeforeUnmount(() => {
 
 .roster-page__side {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
   width: 28rem;
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden;
   padding: var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.roster-page__rows {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: var(--space-1);
+  padding-right: 0.125rem;
 }
 
 .roster-page__side-head {
@@ -1565,9 +1828,29 @@ onBeforeUnmount(() => {
   line-height: 1.45;
 }
 
-.roster-page__rows {
-  display: flex;
-  flex-direction: column;
+.roster-page__side-lead-meta {
+  margin: 0.125rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.roster-page__side-section {
+  margin: var(--space-3) 0 var(--space-1);
+  padding-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.roster-page__side-section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  box-shadow: none;
 }
 
 .roster-page__row {
@@ -1629,7 +1912,7 @@ onBeforeUnmount(() => {
   .roster-page__body { flex-direction: column; }
   .roster-page__side { width: 100%; max-height: 42%; }
   .roster-page__table-wrap { min-height: 16rem; }
-  .roster-page__summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .roster-page__stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 768px) {
@@ -1638,10 +1921,12 @@ onBeforeUnmount(() => {
 
 @media (max-width: 480px) {
   .roster-page { padding: var(--space-3); }
-  .roster-page__summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .roster-page__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .roster-page__spin { animation: none; }
+  .roster-page__sk-line,
+  .roster-page__sk-cell { animation: none; }
 }
 </style>

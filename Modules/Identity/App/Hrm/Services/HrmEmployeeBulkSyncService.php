@@ -11,7 +11,7 @@ use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 /**
  * Kéo TOÀN BỘ nhân viên VA-HRM (GET /api/v1/employees) và tạo sẵn User local
  * cho người CHƯA từng đăng nhập workspace — để superadmin thấy đủ nhân sự ở
- * trang "Nhân sự workspace" (/superadmin/workspace-config/unassigned) mà
+ * trang "Danh sách nhân viên" (/superadmin/workspace-config/employees) mà
  * không phải chờ từng người tự SSO lần đầu. Người đã có User (khớp
  * hrm_employee_uuid) chỉ được cập nhật hiển thị qua HrmEmployeeSyncService,
  * giống hệt luồng SSO/webhook — không tạo trùng, không đụng roles.

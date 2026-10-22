@@ -523,9 +523,9 @@ onBeforeUnmount(() => {
       ]"
     >
       <template #actions>
-        <RouterLink class="wc-overview__header-btn" :to="{ name: 'superadmin.workspace-config.unassigned' }">
-          <AppIcon name="userX" :size="16" />
-          Nhân sự chưa gán phòng ban
+        <RouterLink class="wc-overview__header-btn" :to="{ name: 'superadmin.workspace-config.employees' }">
+          <AppIcon name="users" :size="16" />
+          Danh sách nhân viên
         </RouterLink>
         <RouterLink class="wc-overview__header-btn" :to="{ name: 'superadmin.workspace-config.global-menu' }">
           <AppIcon name="eyeOff" :size="16" />

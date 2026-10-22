@@ -118,8 +118,8 @@ class GlobalMenuVisibilityService
             'section' => 'superadmin-workspace-config',
             'icon' => 'eyeOff',
         ],
-        'superadmin.workspace-config.unassigned' => [
-            'label' => 'Nhân sự workspace',
+        'superadmin.workspace-config.employees' => [
+            'label' => 'Danh sách nhân viên',
             'section' => 'superadmin-workspace-config',
             'icon' => 'users',
         ],

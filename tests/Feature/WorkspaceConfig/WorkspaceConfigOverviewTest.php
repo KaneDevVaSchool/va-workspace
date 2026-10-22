@@ -283,6 +283,21 @@ class WorkspaceConfigOverviewTest extends TestCase
         $this->assertContains($assigned->id, collect($group['members'])->pluck('id')->all());
     }
 
+    public function test_members_by_department_compact_omits_department_groups(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $dept = Department::query()->create(['code' => 'D1', 'name' => 'Dept 1', 'is_active' => true]);
+        $this->makeUser(['department_id' => $dept->id], ['member']);
+        $admin = $this->makeUser([], ['super_admin']);
+
+        $this->actingAs($admin)
+            ->getJson('/api/workspace-config/members/by-department?compact=1')
+            ->assertOk()
+            ->assertJsonMissingPath('departments')
+            ->assertJsonStructure(['source', 'members', 'unassigned', 'department_options']);
+    }
+
     public function test_members_by_department_reads_hrm_database_without_calling_api(): void
     {
         $this->seed(RoleSeeder::class);

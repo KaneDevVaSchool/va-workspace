@@ -105,6 +105,10 @@ class WorkspaceConfigOverviewController extends Controller
             return $this->hrmDatabaseErrorResponse($e);
         }
 
+        if ($request->boolean('compact')) {
+            unset($payload['departments']);
+        }
+
         return response()->json($payload);
     }
 
