@@ -110,7 +110,7 @@ const TABS = [
   { name: 'employee.feed', icon: 'megaphone', label: 'Bảng tin' },
   { name: 'employee.attendance', icon: 'clock', label: 'Chấm công' },
   { name: 'employee.leave', icon: 'calendar', label: 'Nghỉ phép' },
-  { name: 'employee.requests', icon: 'fileText', label: 'Đơn' },
+  { name: 'employee.requests', icon: 'clipboardCheck', label: 'Lịch sử' },
 ];
 
 const greeting = computed(() => {

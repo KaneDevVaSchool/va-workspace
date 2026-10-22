@@ -1,10 +1,56 @@
 <script setup>
 //
-// Danh sách đơn nghỉ phép của tôi — lấy từ HRM qua GET /api/attendance/leave-requests.
-// Giải trình chấm công sẽ bổ sung khi có API workspace/HRM tương ứng.
+// Lịch sử của tôi — hub các tiện ích lịch sử.
+// Nghỉ phép lấy từ HRM (GET /api/attendance/leave-requests).
+// Chấm công đọc nhật ký trên máy, cùng nguồn với màn Chấm công.
 //
-import { inject, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
+import EmployeeAttendanceHistory from '../components/EmployeeAttendanceHistory.vue';
+
+const HISTORY_UTILITIES = [
+  {
+    id: 'attendance',
+    label: 'Lịch sử chấm công',
+    hint: 'Ngày công, giờ vào và giờ ra',
+    icon: 'clock',
+    tone: 'tertiary',
+  },
+  {
+    id: 'leave',
+    label: 'Lịch sử nghỉ phép',
+    hint: 'Đơn đã gửi và trạng thái duyệt',
+    icon: 'calendar',
+    tone: 'primary',
+  },
+];
+
+const route = useRoute();
+const router = useRouter();
+const attendanceHistoryRef = ref(null);
+
+const activeView = computed(() => {
+  const view = String(route.query.view || '');
+  return HISTORY_UTILITIES.some((item) => item.id === view) ? view : '';
+});
+
+const activeUtility = computed(
+  () => HISTORY_UTILITIES.find((item) => item.id === activeView.value) || null,
+);
+
+function openUtility(id) {
+  router.push({ name: 'employee.requests', query: { view: id } });
+}
+
+function backToHub() {
+  const previous = window.history.state?.back;
+  if (typeof previous === 'string' && previous.split('?')[0].endsWith('/dashboard/me/requests') && !previous.includes('view=')) {
+    router.back();
+    return;
+  }
+  router.replace({ name: 'employee.requests' });
+}
 
 const STATUS_META = {
   pending: { label: 'Đang chờ duyệt', color: 'var(--color-warning)' },
@@ -26,8 +72,9 @@ const SESSION_LABELS = {
 
 /** @type {import('vue').Ref<Array<Record<string, unknown>>>} */
 const requests = ref([]);
-const loading = ref(true);
+const loading = ref(false);
 const loadError = ref('');
+const leaveLoaded = ref(false);
 
 const selected = ref(null);
 
@@ -170,6 +217,7 @@ async function loadRequests() {
     });
     const rows = Array.isArray(data?.data) ? data.data : [];
     requests.value = rows.map(mapLeaveRow);
+    leaveLoaded.value = true;
   } catch (err) {
     requests.value = [];
     loadError.value = err?.response?.data?.message ?? 'Không tải được danh sách đơn.';
@@ -186,13 +234,29 @@ function closeDetail() {
   selected.value = null;
 }
 
+async function refreshPage() {
+  if (activeView.value === 'leave') {
+    await loadRequests();
+    return;
+  }
+  if (activeView.value === 'attendance') {
+    attendanceHistoryRef.value?.reload?.();
+  }
+}
+
+watch(activeView, (view) => {
+  if (view !== 'leave') selected.value = null;
+  if (view === 'leave' && !leaveLoaded.value) {
+    void loadRequests();
+  }
+}, { immediate: true });
+
 const registerPageRefresh = inject('employeePageRefreshRegister', null);
 let unregisterPageRefresh;
 
 onMounted(() => {
-  void loadRequests();
   if (typeof registerPageRefresh === 'function') {
-    unregisterPageRefresh = registerPageRefresh(loadRequests);
+    unregisterPageRefresh = registerPageRefresh(refreshPage);
   }
 });
 
@@ -203,12 +267,43 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="requests">
-    <p v-if="loading" class="requests-state">Đang tải đơn nghỉ phép…</p>
-    <p v-else-if="loadError" class="requests-state requests-state--error">{{ loadError }}</p>
-    <p v-else-if="requests.length === 0" class="requests-state">Chưa có đơn nghỉ phép nào.</p>
+    <section v-if="!activeUtility" class="history-hub" aria-label="Tiện ích lịch sử">
+      <p class="history-hub__lead">Chọn mục để xem lịch sử của bạn.</p>
+      <ul class="history-hub__grid">
+        <li v-for="item in HISTORY_UTILITIES" :key="item.id">
+          <button
+            type="button"
+            class="history-tile"
+            :class="`history-tile--${item.tone}`"
+            @click="openUtility(item.id)"
+          >
+            <span class="history-tile__icon" :class="`history-tile__icon--${item.tone}`">
+              <AppIcon :name="item.icon" :size="22" :stroke-width="1.75" />
+            </span>
+            <span class="history-tile__label">{{ item.label }}</span>
+            <span class="history-tile__hint">{{ item.hint }}</span>
+          </button>
+        </li>
+      </ul>
+    </section>
 
     <template v-else>
-      <ul class="requests-list">
+      <button type="button" class="history-back" @click="backToHub">
+        <AppIcon name="chevronLeft" :size="18" />
+        <span>{{ activeUtility.label }}</span>
+      </button>
+
+      <EmployeeAttendanceHistory
+        v-if="activeView === 'attendance'"
+        ref="attendanceHistoryRef"
+      />
+
+      <template v-else-if="activeView === 'leave'">
+        <p v-if="loading" class="requests-state">Đang tải đơn nghỉ phép…</p>
+        <p v-else-if="loadError" class="requests-state requests-state--error">{{ loadError }}</p>
+        <p v-else-if="requests.length === 0" class="requests-state">Chưa có đơn nghỉ phép nào.</p>
+
+        <ul v-else class="requests-list">
         <li v-for="req in requests" :key="req.id">
           <button
             type="button"
@@ -233,7 +328,8 @@ onBeforeUnmount(() => {
             <AppIcon name="chevronRight" :size="18" class="request-row__chev" aria-hidden="true" />
           </button>
         </li>
-      </ul>
+        </ul>
+      </template>
     </template>
 
     <Teleport to="body">
@@ -334,6 +430,117 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.history-hub {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.history-hub__lead {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.history-hub__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 7.5rem;
+  padding: var(--space-3) var(--space-3) var(--space-3)
+    calc(var(--space-2) + 3px + var(--space-3));
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.history-tile::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.history-tile--primary::before {
+  background: var(--color-primary);
+}
+
+.history-tile--tertiary::before {
+  background: var(--color-tertiary);
+}
+
+.history-tile:active {
+  background: var(--color-surface-muted);
+}
+
+.history-tile__icon {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+}
+
+.history-tile__icon--primary {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
+.history-tile__icon--tertiary {
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
+}
+
+.history-tile__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-text);
+}
+
+.history-tile__hint {
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
+
+.history-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .requests-state {

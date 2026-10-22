@@ -10,6 +10,7 @@ import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AttendanceGlyph from '../components/AttendanceGlyph.vue';
+import { buildAttendanceMonth } from '../lib/employeeAttendanceHistory';
 import {
   clearEmployeeAttendanceToday,
   readEmployeeAttendanceLog,
@@ -147,7 +148,7 @@ const canNextMonth = computed(() => {
   return cursor.getFullYear() < today.getFullYear()
     || (cursor.getFullYear() === today.getFullYear() && cursor.getMonth() < today.getMonth());
 });
-const monthModel = computed(() => buildMonth(viewMonth.value, punchLog.value));
+const monthModel = computed(() => buildAttendanceMonth(viewMonth.value, punchLog.value));
 const faceCaption = computed(() => {
   if (cameraState.value === 'live') return 'Đưa mặt vào khung hình và giữ nguyên';
   if (cameraState.value === 'connecting') return 'Đang mở camera…';
@@ -260,89 +261,6 @@ function formatHm(date) {
 function formatLongDate(date) {
   const text = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
   return `${WEEKDAYS[date.getDay()]}, ${text}`;
-}
-
-function dateKey(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function isLateTime(value) {
-  if (!value) return false;
-  const [hour, minute] = String(value).split(':').map(Number);
-  if (Number.isNaN(hour) || Number.isNaN(minute)) return false;
-  return hour > 8 || (hour === 8 && minute > 15);
-}
-
-function buildMonth(cursor, log) {
-  const year = cursor.getFullYear();
-  const month = cursor.getMonth();
-  const today = new Date();
-  const todayKey = dateKey(today);
-  const isCurrent = today.getFullYear() === year && today.getMonth() === month;
-  const lastDay = isCurrent ? today.getDate() : new Date(year, month + 1, 0).getDate();
-  const rows = [];
-  const stats = { scheduled: 0, onTime: 0, late: 0, absent: 0 };
-  const sampleMethods = METHODS.map((item) => item.label);
-
-  for (let day = lastDay; day >= 1; day -= 1) {
-    const date = new Date(year, month, day);
-    if (date.getDay() === 0) continue;
-    const key = dateKey(date);
-    const dateText = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`;
-    const title = key === todayKey
-      ? `Hôm nay, ${WEEKDAYS[date.getDay()]} - ${dateText}`
-      : `${WEEKDAYS[date.getDay()]} - ${dateText}`;
-    const real = log?.[key];
-    const hasReal = Boolean(real?.checkInTime || real?.checkOutTime);
-
-    if (key === todayKey && !hasReal) {
-      rows.push({ key, title, kind: 'pending' });
-      continue;
-    }
-
-    stats.scheduled += 1;
-
-    if (hasReal) {
-      const late = isLateTime(real.checkInTime);
-      if (late) stats.late += 1;
-      else stats.onTime += 1;
-      rows.push({
-        key,
-        title,
-        kind: 'work',
-        sample: false,
-        late,
-        checkIn: real.checkInTime,
-        checkOut: real.checkOutTime,
-        methodIn: real.checkInMethod,
-        methodOut: real.checkOutMethod,
-      });
-      continue;
-    }
-
-    if (day % 13 === 0) {
-      stats.absent += 1;
-      rows.push({ key, title, kind: 'absent', sample: true });
-      continue;
-    }
-
-    const late = day % 9 === 0;
-    if (late) stats.late += 1;
-    else stats.onTime += 1;
-    rows.push({
-      key,
-      title,
-      kind: 'work',
-      sample: true,
-      late,
-      checkIn: late ? '08:27' : `08:0${day % 5}`,
-      checkOut: day % 2 === 0 ? '17:32' : '17:58',
-      methodIn: sampleMethods[day % sampleMethods.length],
-      methodOut: sampleMethods[(day + 2) % sampleMethods.length],
-    });
-  }
-
-  return { rows, stats };
 }
 
 function scrollTop() {

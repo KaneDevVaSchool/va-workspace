@@ -4,7 +4,7 @@ export const EMPLOYEE_PWA_TABBAR = [
   { routeName: 'employee.feed', icon: 'megaphone', label: 'Bảng tin' },
   { routeName: 'employee.attendance', icon: 'clock', label: 'Chấm công' },
   { routeName: 'employee.leave', icon: 'calendar', label: 'Nghỉ phép' },
-  { routeName: 'employee.requests', icon: 'fileText', label: 'Đơn' },
+  { routeName: 'employee.requests', icon: 'clipboardCheck', label: 'Lịch sử' },
 ];
 
 /** Nhãn màn hình xem thử trên trang cấu hình PWA. */
@@ -14,7 +14,7 @@ export const EMPLOYEE_PWA_PREVIEW_MODES = {
   'mobile-feed': 'Bảng tin',
   'mobile-attendance': 'Chấm công',
   'mobile-leave': 'Nghỉ phép',
-  'mobile-requests': 'Đơn',
+  'mobile-requests': 'Lịch sử',
   'mobile-chat': 'Trò chuyện',
 };
 
@@ -33,7 +33,7 @@ export const EMPLOYEE_PWA_TAB_PREVIEW = {
   },
   'mobile-requests': {
     activeRoute: 'employee.requests',
-    title: 'Lịch sử nghỉ phép',
+    title: 'Lịch sử',
   },
   'mobile-chat': {
     activeRoute: 'employee.chat',

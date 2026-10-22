@@ -7,7 +7,6 @@ import {
   PREVIEW_CHAT_CONVERSATIONS,
   PREVIEW_FEED_POSTS,
   PREVIEW_LEAVE_BALANCE,
-  PREVIEW_LEAVE_REQUESTS,
 } from '../constants/employeePwaPreviewFixtures.js';
 import DashboardEmployeeShellPreview from './DashboardEmployeeShellPreview.vue';
 
@@ -25,7 +24,11 @@ function formatDays(value) {
 }
 
 const leaveBalance = PREVIEW_LEAVE_BALANCE;
-const leaveRequests = PREVIEW_LEAVE_REQUESTS;
+
+const historyUtilities = [
+  { id: 'attendance', label: 'Lịch sử chấm công', hint: 'Ngày công, giờ vào và giờ ra', icon: 'clock' },
+  { id: 'leave', label: 'Lịch sử nghỉ phép', hint: 'Đơn đã gửi và trạng thái duyệt', icon: 'calendar' },
+];
 const feedPosts = PREVIEW_FEED_POSTS;
 const chatRows = PREVIEW_CHAT_CONVERSATIONS;
 
@@ -151,21 +154,15 @@ function chatInitial(name) {
     </div>
 
     <div v-else-if="mode === 'mobile-requests'" class="pwa-requests-preview">
-      <p class="pwa-requests-preview__count">{{ leaveRequests.length }} đơn</p>
-      <ul class="pwa-requests-preview__list">
-        <li v-for="req in leaveRequests" :key="req.id">
-          <div class="pwa-requests-preview__row" :data-status="req.status">
-            <span class="pwa-requests-preview__body">
-              <span class="pwa-requests-preview__line">
-                <span class="pwa-requests-preview__kind">{{ req.kind }}</span>
-                <span class="pwa-requests-preview__badge">{{ req.statusLabel }}</span>
-              </span>
-              <span class="pwa-requests-preview__range">{{ req.range }}</span>
-              <span class="pwa-requests-preview__sub">
-                Gửi {{ req.submittedAt }} · {{ req.totalDays }} ngày
-              </span>
+      <p class="pwa-requests-preview__lead">Chọn mục để xem lịch sử của bạn.</p>
+      <ul class="pwa-requests-preview__grid">
+        <li v-for="item in historyUtilities" :key="item.id">
+          <div class="pwa-requests-preview__tile">
+            <span class="pwa-requests-preview__icon">
+              <AppIcon :name="item.icon" :size="20" :stroke-width="1.75" />
             </span>
-            <AppIcon name="chevronRight" :size="18" aria-hidden="true" />
+            <span class="pwa-requests-preview__label">{{ item.label }}</span>
+            <span class="pwa-requests-preview__hint">{{ item.hint }}</span>
           </div>
         </li>
       </ul>
@@ -516,33 +513,36 @@ function chatInitial(name) {
   padding: var(--space-4);
 }
 
-.pwa-requests-preview__count {
+.pwa-requests-preview__lead {
   margin: 0;
   font-size: 0.75rem;
   color: var(--color-text-muted);
 }
 
-.pwa-requests-preview__list {
+.pwa-requests-preview__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
 }
 
-.pwa-requests-preview__row {
+.pwa-requests-preview__tile {
   position: relative;
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-3));
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-height: 6.5rem;
+  padding: var(--space-3) var(--space-3) var(--space-3)
+    calc(var(--space-2) + 3px + var(--space-2));
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
 }
 
-.pwa-requests-preview__row::before {
+.pwa-requests-preview__tile::before {
   content: '';
   position: absolute;
   top: var(--space-2);
@@ -550,47 +550,38 @@ function chatInitial(name) {
   left: var(--space-2);
   width: 3px;
   border-radius: 0;
-  background: var(--color-border);
+  background: var(--color-tertiary);
 }
 
-.pwa-requests-preview__row[data-status='pending']::before {
-  background: var(--color-warning);
+.pwa-requests-preview__grid li:last-child .pwa-requests-preview__tile::before {
+  background: var(--color-primary);
 }
 
-.pwa-requests-preview__row[data-status='approved']::before {
-  background: var(--color-success);
+.pwa-requests-preview__icon {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
 }
 
-.pwa-requests-preview__body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+.pwa-requests-preview__grid li:last-child .pwa-requests-preview__icon {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
 }
 
-.pwa-requests-preview__line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+.pwa-requests-preview__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-text);
 }
 
-.pwa-requests-preview__kind {
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.pwa-requests-preview__badge {
-  flex-shrink: 0;
+.pwa-requests-preview__hint {
   font-size: 0.6875rem;
-  font-weight: 700;
-  color: var(--color-text-muted);
-}
-
-.pwa-requests-preview__range,
-.pwa-requests-preview__sub {
-  font-size: 0.75rem;
+  line-height: 1.35;
   color: var(--color-text-muted);
 }
 
