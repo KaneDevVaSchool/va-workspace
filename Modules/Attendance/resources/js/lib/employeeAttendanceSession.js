@@ -41,16 +41,22 @@ function readLog() {
 }
 
 export function readEmployeeAttendanceToday() {
-  if (typeof sessionStorage === 'undefined') return null;
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed?.date !== todayKey()) return null;
-    return normalizeRecord(parsed);
-  } catch {
-    return null;
+  const today = todayKey();
+
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.date === today) return normalizeRecord(parsed);
+      }
+    } catch {
+      /* fall through to local log */
+    }
   }
+
+  const fromLog = readLog()[today];
+  return fromLog ? normalizeRecord(fromLog) : null;
 }
 
 /** Giờ HRM trả về ghi đè nhật ký trên máy (kể cả phiên hôm nay). */
