@@ -2,6 +2,7 @@
 
 namespace Modules\Identity\App\Hrm\Services;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -260,6 +261,64 @@ class HrmEmployeeDirectory
 
             throw new HrmDatabaseUnavailable('Không đọc được đơn vị tổ chức từ cơ sở dữ liệu HRM.');
         }
+    }
+
+    /**
+     * Sinh nhật sắp tới (đọc birthdate từ DB HRM).
+     *
+     * @return list<array{hrm_employee_uuid: string, name: string, avatar_url: ?string, department_name: ?string, birthdate: string, next_birthday: string}>
+     *
+     * @throws HrmDatabaseUnavailable
+     */
+    public function upcomingBirthdays(int $withinDays = 14): array
+    {
+        if (! self::isConfigured()) {
+            return [];
+        }
+
+        $withinDays = max(1, min(31, $withinDays));
+        $today = now()->startOfDay();
+        $limitDate = $today->copy()->addDays($withinDays);
+
+        return collect($this->load()['employees'])
+            ->filter(fn (array $employee) => filled($employee['birthdate'] ?? null))
+            ->map(function (array $employee) use ($today) {
+                $next = $this->nextBirthdayOnOrAfter((string) $employee['birthdate'], $today);
+                if ($next === null) {
+                    return null;
+                }
+
+                return [
+                    'hrm_employee_uuid' => (string) $employee['uuid'],
+                    'name' => filled($employee['full_name']) ? (string) $employee['full_name'] : '',
+                    'avatar_url' => filled($employee['avatar_url'] ?? null) ? (string) $employee['avatar_url'] : null,
+                    'department_name' => filled($employee['department_name'] ?? null) ? (string) $employee['department_name'] : null,
+                    'birthdate' => (string) $employee['birthdate'],
+                    'next_birthday' => $next->toDateString(),
+                ];
+            })
+            ->filter()
+            ->filter(fn (array $row) => Carbon::parse($row['next_birthday'])->lte($limitDate))
+            ->sortBy('next_birthday')
+            ->take(30)
+            ->values()
+            ->all();
+    }
+
+    private function nextBirthdayOnOrAfter(string $birthdate, Carbon $today): ?Carbon
+    {
+        try {
+            $parsed = Carbon::parse($birthdate);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $candidate = $parsed->copy()->year($today->year)->startOfDay();
+        if ($candidate->lt($today)) {
+            $candidate->addYear();
+        }
+
+        return $candidate;
     }
 
     public function findEmployee(string $uuid): ?array

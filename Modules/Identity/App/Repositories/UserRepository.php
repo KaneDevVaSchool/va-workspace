@@ -3,6 +3,8 @@
 namespace Modules\Identity\App\Repositories;
 
 use App\Models\User;
+use Modules\Identity\App\Hrm\Services\HrmEmployeeDatabaseMirrorService;
+use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 
 /**
@@ -41,6 +43,10 @@ class UserRepository implements UserRepositoryInterface
 
     public function allActiveByDepartment(int $departmentId): \Illuminate\Support\Collection
     {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            return app(HrmEmployeeDatabaseMirrorService::class)->mappedByDepartment($departmentId, true);
+        }
+
         return User::query()
             ->where('department_id', $departmentId)
             ->where('status', 'active')
@@ -50,6 +56,10 @@ class UserRepository implements UserRepositoryInterface
 
     public function allByDepartment(int $departmentId): \Illuminate\Support\Collection
     {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            return app(HrmEmployeeDatabaseMirrorService::class)->mappedByDepartment($departmentId);
+        }
+
         return User::query()
             ->where('department_id', $departmentId)
             ->with(['team', 'roles', 'company', 'concurrentPositions'])
@@ -59,6 +69,15 @@ class UserRepository implements UserRepositoryInterface
 
     public function allWithAssignedDepartment(): \Illuminate\Support\Collection
     {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            $departmentIds = \Modules\Identity\App\Models\Department::query()
+                ->whereNotNull('hrm_org_unit_uuid')
+                ->pluck('id')
+                ->all();
+
+            return app(HrmEmployeeDatabaseMirrorService::class)->mappedActive($departmentIds);
+        }
+
         return User::query()
             ->whereNotNull('department_id')
             ->with(['department', 'team', 'roles', 'company', 'concurrentPositions'])
@@ -70,6 +89,10 @@ class UserRepository implements UserRepositoryInterface
     {
         if ($departmentIds === []) {
             return collect();
+        }
+
+        if (HrmEmployeeDirectory::isConfigured()) {
+            return app(HrmEmployeeDatabaseMirrorService::class)->countsByWorkspaceDepartment($departmentIds);
         }
 
         return User::query()
@@ -86,6 +109,21 @@ class UserRepository implements UserRepositoryInterface
             return collect();
         }
 
+        if (HrmEmployeeDirectory::isConfigured()) {
+            $ids = collect($departmentIds)
+                ->flatMap(fn ($departmentId) => app(HrmEmployeeDatabaseMirrorService::class)->mappedByDepartment((int) $departmentId)->pluck('id'))
+                ->unique()
+                ->values();
+
+            return User::query()
+                ->whereIn('id', $ids)
+                ->whereHas('roles', fn ($query) => $query->where('code', 'department_director'))
+                ->orderBy('name')
+                ->get()
+                ->unique('department_id')
+                ->keyBy('department_id');
+        }
+
         return User::query()
             ->whereIn('department_id', $departmentIds)
             ->whereHas('roles', fn ($query) => $query->where('code', 'department_director'))
@@ -97,6 +135,12 @@ class UserRepository implements UserRepositoryInterface
 
     public function searchActiveByName(string $query, int $limit = 8, ?int $excludeUserId = null): \Illuminate\Support\Collection
     {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            return collect(app(HrmEmployeeDatabaseMirrorService::class)->mappedSearch($query, $limit, $excludeUserId))
+                ->map(fn (array $row) => User::query()->find($row['id']))
+                ->filter();
+        }
+
         $builder = User::query()
             ->with(['department.company', 'company'])
             ->where('status', 'active')
@@ -123,10 +167,14 @@ class UserRepository implements UserRepositoryInterface
             return collect();
         }
 
-        return User::query()
+        $query = User::query()
             ->whereIn('id', $ids)
-            ->where('status', 'active')
-            ->get();
+            ->where('status', 'active');
+        if (HrmEmployeeDirectory::isConfigured()) {
+            $query->whereNotNull('hrm_employee_uuid')->where('hrm_employee_uuid', '!=', '');
+        }
+
+        return $query->get();
     }
 
     public function allActiveSuperAdmins(): \Illuminate\Support\Collection
@@ -149,11 +197,29 @@ class UserRepository implements UserRepositoryInterface
 
     public function allUnassigned(): \Illuminate\Support\Collection
     {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            return app(HrmEmployeeDatabaseMirrorService::class)->mappedWithoutDepartment();
+        }
+
         return User::query()
             ->whereNull('department_id')
             ->with(['roles', 'company', 'concurrentPositions'])
             ->orderBy('name')
             ->get();
+    }
+
+    public function allActivePersonnel(?array $departmentIds = null): \Illuminate\Support\Collection
+    {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            return app(HrmEmployeeDatabaseMirrorService::class)->mappedActive($departmentIds);
+        }
+
+        $query = User::query()->where('status', 'active')->orderBy('name');
+        if ($departmentIds !== null) {
+            $query->whereIn('department_id', $departmentIds);
+        }
+
+        return $query->get();
     }
 
     public function create(array $data): User

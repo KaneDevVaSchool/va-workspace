@@ -18,12 +18,14 @@ use Modules\Social\App\Repositories\Contracts\SocialGroupRepositoryInterface;
 use Modules\Social\App\Repositories\Contracts\SocialPostRepositoryInterface;
 use Modules\Social\App\Services\SocialGroupService;
 use Modules\Social\App\Services\SocialHashtagService;
+use Modules\Social\App\Services\SocialBirthdayService;
 use Modules\Social\App\Services\SocialPostService;
 
 class SocialPostController extends Controller
 {
     public function __construct(
         private readonly SocialPostService $service,
+        private readonly SocialBirthdayService $birthdays,
         private readonly SocialPostRepositoryInterface $posts,
         private readonly PermissionService $permissions,
         private readonly ActivityLogService $activityLogs,
@@ -392,6 +394,15 @@ class SocialPostController extends Controller
         $post = $this->service->unpin($post);
 
         return response()->json(['post' => $this->service->present($post, $request->user())]);
+    }
+
+    public function birthdays(Request $request): JsonResponse
+    {
+        $withinDays = min(max((int) $request->query('days', 14), 1), 31);
+
+        return response()->json([
+            'birthdays' => $this->birthdays->upcoming($withinDays),
+        ]);
     }
 
     private function activityContentSnippet(?string $html, int $limit = 60): string

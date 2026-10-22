@@ -6,8 +6,8 @@ use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Services\PermissionService;
+use Modules\Identity\App\Services\WorkspaceColleagueSearchService;
 use Modules\Social\App\Models\SocialCommentLike;
 use Modules\Social\App\Models\SocialPost;
 use Modules\Social\App\Models\SocialPostComment;
@@ -20,7 +20,7 @@ class SocialCommentService
         private readonly SocialCommentRepositoryInterface $comments,
         private readonly PermissionService $permissions,
         private readonly SocialContentSanitizer $sanitizer,
-        private readonly UserRepositoryInterface $users,
+        private readonly WorkspaceColleagueSearchService $colleagueSearch,
         private readonly SocialMentionService $mentions,
         private readonly SocialAttachmentUploader $attachmentUploader,
     ) {}
@@ -35,16 +35,7 @@ class SocialCommentService
 
     public function searchMentions(User $viewer, string $query): array
     {
-        return $this->users->searchActiveByName($query, 8, $viewer->id)
-            ->map(fn (User $user) => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'avatar_url' => $user->avatar_url,
-                'department' => $user->department?->name,
-                'company_name' => $user->resolveCompanyName(),
-            ])
-            ->values()
-            ->all();
+        return $this->colleagueSearch->search($query, 8, $viewer->id);
     }
 
     /**

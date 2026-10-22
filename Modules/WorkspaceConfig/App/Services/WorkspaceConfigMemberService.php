@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Identity\App\Hrm\Services\HrmEmployeeDatabaseMirrorService;
 use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Models\Role;
@@ -48,6 +49,7 @@ class WorkspaceConfigMemberService
         private readonly DefaultMemberRoleBootstrap $defaultMemberRole,
         private readonly HrmEmployeeDirectory $hrmDirectory,
         private readonly HrmDepartmentSyncService $hrmDepartments,
+        private readonly HrmEmployeeDatabaseMirrorService $hrmMirror,
     ) {}
 
     public function forDepartment(int $departmentId): Collection
@@ -377,6 +379,8 @@ class WorkspaceConfigMemberService
         if ($refresh) {
             Cache::forget($cacheKey);
             Cache::forget('hrm:department_catalog_sync:done');
+            Cache::forget('hrm:employee_db_mirror:done');
+            Cache::forget('hrm:directory:snapshot:v1');
         }
 
         /** @var array<string, mixed> $payload */
@@ -393,6 +397,7 @@ class WorkspaceConfigMemberService
     private function buildRosterFromHrmDatabase(): array
     {
         $this->hrmDepartments->syncDepartmentsFromHrmIfStale();
+        $this->hrmMirror->mirrorIfStale();
 
         $loaded = $this->hrmDirectory->load();
 

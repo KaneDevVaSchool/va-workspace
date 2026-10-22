@@ -9,9 +9,11 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Hrm\Services\HrmWorkspaceConstraint;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
+use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Identity\App\Services\ViewAsService;
 use Modules\Project\App\Models\Project;
@@ -33,6 +35,7 @@ class ProjectRepository implements ProjectRepositoryInterface
 {
     public function __construct(
         private readonly HrmWorkspaceConstraint $hrmConstraint,
+        private readonly UserRepositoryInterface $users,
     ) {}
 
     public function paginate(array $filters, int $perPage, int $page, User $viewer): LengthAwarePaginator
@@ -452,6 +455,14 @@ class ProjectRepository implements ProjectRepositoryInterface
 
     public function assignableUsersInDepartment(?int $departmentId): Collection
     {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            $users = $departmentId === null
+                ? $this->users->allActivePersonnel()
+                : $this->users->allActiveByDepartment($departmentId);
+
+            return $users->values();
+        }
+
         $query = User::query()
             ->select(['id', 'name', 'email', 'avatar_url', 'department_id', 'status'])
             ->with('department:id,name');
@@ -467,6 +478,10 @@ class ProjectRepository implements ProjectRepositoryInterface
 
     public function allUsers(): Collection
     {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            return $this->users->allActivePersonnel();
+        }
+
         $query = User::query()
             ->select(['id', 'name', 'email', 'avatar_url', 'department_id', 'status'])
             ->with('department:id,name');

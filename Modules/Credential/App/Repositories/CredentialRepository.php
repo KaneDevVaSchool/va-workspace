@@ -3,7 +3,9 @@
 namespace Modules\Credential\App\Repositories;
 
 use App\Models\User;
+use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Hrm\Services\HrmWorkspaceConstraint;
+use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -20,6 +22,7 @@ class CredentialRepository implements CredentialRepositoryInterface
 {
     public function __construct(
         private readonly HrmWorkspaceConstraint $hrmConstraint,
+        private readonly UserRepositoryInterface $users,
     ) {}
 
     public function paginate(array $filters, int $perPage, int $page, ?array $departmentScope = null, ?int $viewerId = null): LengthAwarePaginator
@@ -126,6 +129,10 @@ class CredentialRepository implements CredentialRepositoryInterface
 
     public function allUsers(): Collection
     {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            return $this->users->allActivePersonnel();
+        }
+
         $query = User::query()->select(['id', 'name', 'email']);
         $this->hrmConstraint->restrictToHrmLinkedUsers($query);
 

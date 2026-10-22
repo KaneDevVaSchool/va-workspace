@@ -8,7 +8,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Dashboard\App\Repositories\Contracts\DepartmentDashboardRepositoryInterface;
+use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Models\Department;
+use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Project\App\Enums\TaskEnums;
 use Modules\Project\App\Models\Project;
 use Modules\Project\App\Models\Task;
@@ -18,6 +20,10 @@ use Modules\Project\App\Models\Task;
  */
 class DepartmentDashboardRepository implements DepartmentDashboardRepositoryInterface
 {
+    public function __construct(
+        private readonly UserRepositoryInterface $users,
+    ) {}
+
     public function departmentName(int $departmentId): ?string
     {
         return Department::query()->whereKey($departmentId)->value('name');
@@ -39,6 +45,12 @@ class DepartmentDashboardRepository implements DepartmentDashboardRepositoryInte
 
     public function userIdsForDepartment(int $departmentId, ?int $teamId = null): Collection
     {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            return $this->users->allByDepartment($departmentId)
+                ->when($teamId !== null, fn (Collection $users) => $users->where('team_id', $teamId))
+                ->pluck('id');
+        }
+
         $query = User::query()->where('department_id', $departmentId);
         if ($teamId !== null) {
             $query->where('team_id', $teamId);
@@ -102,6 +114,33 @@ class DepartmentDashboardRepository implements DepartmentDashboardRepositoryInte
 
     public function paginateEmployees(int $departmentId, ?int $teamId, array $filters, int $perPage, int $page): LengthAwarePaginator
     {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            $users = $this->users->allByDepartment($departmentId)->values();
+            if ($teamId !== null) {
+                $users = $users->where('team_id', $teamId)->values();
+            }
+            if (! empty($filters['q'])) {
+                $q = mb_strtolower(trim((string) $filters['q']));
+                if ($q !== '') {
+                    $users = $users->filter(fn (User $user) => str_contains(mb_strtolower($user->name), $q))->values();
+                }
+            }
+            if (! empty($filters['status'])) {
+                $status = $filters['status'];
+                $assigneeIds = Task::query()
+                    ->where('type', 'task')
+                    ->where('status', $status)
+                    ->whereNotNull('assignee_id')
+                    ->pluck('assignee_id');
+                $users = $users->whereIn('id', $assigneeIds)->values();
+            }
+
+            $total = $users->count();
+            $slice = $users->slice(($page - 1) * $perPage, $perPage)->values();
+
+            return new \Illuminate\Pagination\LengthAwarePaginator($slice, $total, $perPage, $page);
+        }
+
         $query = User::query()
             ->where('department_id', $departmentId)
             ->with('team:id,name');

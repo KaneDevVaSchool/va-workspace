@@ -11,6 +11,7 @@ use Modules\Social\App\Http\Controllers\SocialPostController;
 
 Route::middleware('auth')->prefix('social')->name('social.')->group(function () {
     Route::get('/me/stats', [SocialPostController::class, 'meStats']);
+    Route::get('/birthdays', [SocialPostController::class, 'birthdays']);
 
     Route::get('/groups', [SocialGroupController::class, 'index'])->name('groups.index');
     Route::post('/groups', [SocialGroupController::class, 'store'])->name('groups.store');

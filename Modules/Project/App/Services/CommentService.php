@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Services\NotificationService;
+use Modules\Identity\App\Services\WorkspaceColleagueSearchService;
 use Modules\Project\App\Models\Comment;
 use Modules\Project\App\Models\CommentReaction;
 use Modules\Project\App\Models\Project;
@@ -43,6 +44,7 @@ class CommentService
         private readonly CommentRepositoryInterface $comments,
         private readonly CommentSanitizer $sanitizer,
         private readonly UserRepositoryInterface $users,
+        private readonly WorkspaceColleagueSearchService $colleagueSearch,
         private readonly ProjectService $projects,
         private readonly ProjectRepositoryInterface $projectRepository,
         private readonly NotificationService $notifications,
@@ -112,15 +114,15 @@ class CommentService
 
     public function searchMentions(User $viewer, string $query): array
     {
-        return $this->users->searchActiveByName($query, 8, $viewer->id)
-            ->map(fn (User $user) => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'avatar_url' => $user->avatar_url,
-                'department' => $user->department?->name,
-            ])
-            ->values()
-            ->all();
+        return array_map(
+            fn (array $row) => [
+                'id' => $row['id'],
+                'name' => $row['name'],
+                'avatar_url' => $row['avatar_url'],
+                'department' => $row['department'],
+            ],
+            $this->colleagueSearch->search($query, 8, $viewer->id),
+        );
     }
 
     /** @param  UploadedFile[]  $files */

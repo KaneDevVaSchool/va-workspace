@@ -116,4 +116,12 @@ interface UserRepositoryInterface
      * @return \Illuminate\Support\Collection<int, User>
      */
     public function allUnassigned(): \Illuminate\Support\Collection;
+
+    /**
+     * Nhân sự đang hoạt động. Khi có HRM_DB_*: đọc DB HRM rồi map sang users.id.
+     *
+     * @param  list<int>|null  $departmentIds
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public function allActivePersonnel(?array $departmentIds = null): \Illuminate\Support\Collection;
 }

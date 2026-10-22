@@ -57,6 +57,7 @@ class IdentityServiceProvider extends ServiceProvider
             \Modules\Identity\App\Console\WarmHrmJwksCommand::class,
             \Modules\Identity\App\Console\DiagnoseHrmSsoCommand::class,
             \Modules\Identity\App\Console\DiagnoseHrmLeaveCommand::class,
+            \Modules\Identity\App\Console\MirrorHrmEmployeesCommand::class,
         ]);
     }
 

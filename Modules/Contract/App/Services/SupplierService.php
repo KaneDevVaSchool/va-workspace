@@ -20,6 +20,7 @@ use Modules\Contract\App\Models\SupplierDocumentVersion;
 use Modules\Contract\App\Models\SupplierGroup;
 use Modules\Contract\App\Models\SupplierType;
 use Modules\Identity\App\Models\Department;
+use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 
 class SupplierService
 {
@@ -736,11 +737,14 @@ class SupplierService
 
     private function ownerOptions(?array $departmentScope): Collection
     {
-        $query = User::query()->where('status', 'active')->orderBy('name');
-        if ($departmentScope !== null) {
-            $query->whereIn('department_id', $departmentScope);
-        }
-
-        return $query->get(['id', 'name', 'email', 'department_id'])->values();
+        return app(UserRepositoryInterface::class)
+            ->allActivePersonnel($departmentScope)
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'department_id' => $user->department_id,
+            ])
+            ->values();
     }
 }
