@@ -421,55 +421,56 @@ function stopCamera() {
       <div ref="bodyRef" class="att__body hide-scrollbar">
         <section v-if="screen === 'home'" class="att-home">
           <article class="att-hero">
-            <svg class="att-hero__art" viewBox="0 0 300 190" aria-hidden="true">
+            <svg class="att-hero__art" viewBox="0 0 300 92" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
               <defs>
                 <linearGradient id="att-hero-sky" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stop-color="var(--color-tertiary-500)" />
                   <stop offset="100%" stop-color="var(--color-tertiary-700)" />
                 </linearGradient>
               </defs>
-              <rect width="300" height="190" fill="url(#att-hero-sky)" />
-              <circle cx="252" cy="36" r="30" fill="color-mix(in srgb, white 16%, transparent)" />
-              <circle cx="40" cy="150" r="46" fill="color-mix(in srgb, white 8%, transparent)" />
-              <path d="M0 150c36-14 70-14 100-2s64 16 96 2 72-18 104-2v40H0z" fill="color-mix(in srgb, white 10%, transparent)" />
-              <rect x="30" y="92" width="34" height="58" rx="3" fill="color-mix(in srgb, white 20%, transparent)" />
-              <rect x="70" y="70" width="42" height="80" rx="3" fill="color-mix(in srgb, white 28%, transparent)" />
-              <rect x="200" y="78" width="30" height="72" rx="3" fill="color-mix(in srgb, white 22%, transparent)" />
-              <rect x="236" y="100" width="40" height="50" rx="3" fill="color-mix(in srgb, white 16%, transparent)" />
-              <g transform="translate(118 58)">
-                <path d="M30 150v-34c0-22 14-38 34-38s34 16 34 38v34z" fill="var(--color-tertiary-900)" />
-                <circle cx="64" cy="34" r="22" fill="#ffd7b8" />
-                <path d="M44 28a20 20 0 0 1 40-2c-8 2-28 2-40 2z" fill="#2c2420" />
-                <rect x="48" y="78" width="32" height="46" rx="8" fill="var(--color-on-primary)" />
-                <rect x="48" y="78" width="32" height="14" rx="6" fill="var(--color-tertiary-300)" />
-                <rect x="40" y="96" width="10" height="34" rx="5" fill="#ffd7b8" />
-                <rect x="34" y="124" width="22" height="16" rx="6" fill="var(--color-tertiary-800)" />
+              <rect width="300" height="92" fill="url(#att-hero-sky)" />
+              <circle cx="258" cy="-6" r="34" fill="color-mix(in srgb, white 16%, transparent)" />
+              <rect x="14" y="30" width="26" height="62" rx="3" fill="color-mix(in srgb, white 16%, transparent)" />
+              <rect x="44" y="14" width="32" height="78" rx="3" fill="color-mix(in srgb, white 22%, transparent)" />
+              <rect x="220" y="20" width="24" height="72" rx="3" fill="color-mix(in srgb, white 18%, transparent)" />
+              <rect x="250" y="38" width="34" height="54" rx="3" fill="color-mix(in srgb, white 14%, transparent)" />
+              <g transform="translate(196 6)">
+                <path d="M16 92V64c0-16 10-28 26-28s26 12 26 28v28z" fill="var(--color-tertiary-900)" />
+                <circle cx="42" cy="26" r="17" fill="#ffd7b8" />
+                <path d="M26 22a16 16 0 0 1 32-1c-6 2-22 2-32 1z" fill="#2c2420" />
+                <rect x="30" y="58" width="24" height="34" rx="6" fill="var(--color-on-primary)" />
+                <rect x="30" y="58" width="24" height="11" rx="5" fill="var(--color-tertiary-300)" />
               </g>
               <path
-                d="M236 18 238 24 244 26 238 28 236 34 234 28 228 26 234 24z"
+                d="M100 14 101.6 19 107 20.6 101.6 22.2 100 27.5 98.4 22.2 93 20.6 98.4 19z"
                 fill="color-mix(in srgb, white 85%, transparent)"
               />
-              <path d="M220 44h2.4v2.4H220zM86 118h2.4v2.4H86z" fill="color-mix(in srgb, white 70%, transparent)" />
+              <path d="M186 10h2.4v2.4H186zM34 56h2.4v2.4H34z" fill="color-mix(in srgb, white 65%, transparent)" />
             </svg>
-            <div class="att-hero__face"></div>
             <div class="att-hero__bar">
-              <div class="att-clock">
-                <p>Thời gian hiện tại</p>
-                <strong>{{ timeLabel }}</strong>
-                <small>{{ homeDateLabel }}</small>
+              <p class="att-hero__greet">
+                {{ heroLabel === 'Chấm công ngay' ? 'Chào' : 'Đang làm việc,' }} <b>{{ displayName }}</b>
+              </p>
+              <p class="att-hero__place">
+                <AttendanceGlyph name="pin" :size="13" />
+                <span>{{ placeLabel }}</span>
+              </p>
+              <div class="att-hero__row">
+                <div class="att-clock">
+                  <strong>{{ timeLabel }}</strong>
+                  <small>{{ homeDateLabel }}</small>
+                </div>
+                <div class="att-weather">
+                  <AttendanceGlyph :name="weatherGlyph" :size="18" />
+                  <b>{{ weather ? `${weather.temp}°C` : '—°' }}</b>
+                </div>
               </div>
-              <div class="att-weather">
-                <AttendanceGlyph :name="weatherGlyph" :size="20" />
-                <b>{{ weather ? `${weather.temp}°C` : '—°' }}</b>
-                <small>{{ weather ? 'Gần bạn' : 'Thời tiết' }}</small>
-              </div>
+              <p class="att-hero__geo" :class="`att-hero__geo--${geoBanner.tone}`">
+                <AppIcon :name="geoBanner.tone === 'ok' ? 'check' : 'info'" :size="13" />
+                <span>{{ geoBanner.text }}</span>
+              </p>
             </div>
           </article>
-
-          <p class="att-banner" :class="`att-banner--${geoBanner.tone}`">
-            <AppIcon :name="geoBanner.tone === 'ok' ? 'check' : 'info'" :size="16" />
-            <span>{{ geoBanner.text }}</span>
-          </p>
 
           <div class="att-punch-wrap">
             <button type="button" class="att-punch" @click="onHero">
@@ -747,7 +748,8 @@ function stopCamera() {
   object-position: center 20%;
   transform: scale(1.1);
   pointer-events: none;
-  opacity: 0.04;
+  opacity: 0.16;
+  mix-blend-mode: multiply;
 }
 
 .att {
@@ -880,6 +882,7 @@ function stopCamera() {
 .att-hero {
   position: relative;
   overflow: hidden;
+  min-height: 7.5rem;
   background: var(--color-tertiary-600);
   box-shadow: 0 16px 34px color-mix(in srgb, var(--color-tertiary-800) 26%, transparent);
   clip-path: polygon(
@@ -892,82 +895,106 @@ function stopCamera() {
 }
 
 .att-hero__art {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.att-hero__face {
   position: absolute;
   inset: 0;
-  background: linear-gradient(185deg, transparent 55%, color-mix(in srgb, var(--color-tertiary-900) 55%, transparent) 100%);
-  pointer-events: none;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .att-hero__bar {
   position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3) var(--space-3) var(--space-3);
+  background: linear-gradient(195deg, transparent 0%, color-mix(in srgb, var(--color-tertiary-900) 58%, transparent) 72%);
+}
+
+.att-hero__greet,
+.att-hero__place {
+  margin: 0;
+  color: color-mix(in srgb, white 88%, transparent);
+  font-size: 0.78rem;
+}
+
+.att-hero__greet b {
+  color: var(--color-on-tertiary);
+  font-weight: 800;
+}
+
+.att-hero__place {
   display: flex;
   align-items: center;
+  gap: 4px;
+  color: color-mix(in srgb, white 72%, transparent);
+  font-size: 0.72rem;
+}
+
+.att-hero__row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
   gap: var(--space-2);
-  margin-top: -2.9rem;
-  padding: 0 var(--space-3) var(--space-3);
+  margin-top: 2px;
 }
 
 .att-clock {
-  flex: 1;
   min-width: 0;
-  padding: var(--space-3);
-  background: var(--color-surface);
-  border-radius: 20px;
-  box-shadow: var(--att-shadow);
-}
-
-.att-clock p,
-.att-success__time,
-.att-success__date,
-.att-punch-hint {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
 }
 
 .att-clock strong {
   display: block;
-  color: var(--color-tertiary-900);
-  font-size: 2.1rem;
-  line-height: 1.15;
+  color: var(--color-on-tertiary);
+  font-size: 2.15rem;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.04em;
 }
 
 .att-clock small {
   display: block;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
+  color: color-mix(in srgb, white 78%, transparent);
+  font-size: 0.72rem;
 }
 
 .att-weather {
-  position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  min-width: 4.5rem;
-  padding: var(--space-3) var(--space-2);
-  background: var(--color-surface);
-  color: var(--color-gold-600);
-  border-radius: 20px;
-  box-shadow: var(--att-shadow);
+  gap: 4px;
+  padding: 5px var(--space-2);
+  background: color-mix(in srgb, white 16%, transparent);
+  color: var(--color-on-tertiary);
+  border-radius: var(--radius-full);
+  backdrop-filter: blur(4px);
 }
 
 .att-weather b {
-  color: var(--color-tertiary-900);
-  font-size: 0.95rem;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
-.att-weather small {
+.att-hero__geo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: var(--space-2) 0 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: color-mix(in srgb, white 90%, transparent);
+}
+
+.att-hero__geo--info {
+  color: color-mix(in srgb, white 72%, transparent);
+}
+
+.att-success__time,
+.att-success__date,
+.att-punch-hint {
+  margin: 0;
   color: var(--color-text-muted);
-  font-size: 0.68rem;
+  font-size: 0.8125rem;
 }
 
 .att-banner {
