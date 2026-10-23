@@ -67,4 +67,28 @@
   html.employee-os-ios.pwa-vv-keyboard.employee-mobile-pwa .employee-tabbar--pwa .employee-tabbar__bar {
     padding-bottom: var(--space-1);
   }
+
+  /*
+   * WebKit standalone: shell có thể ngắn hơn viewport vài px → lộ nền html dưới
+   * home indicator (đặc biệt subpage không tabbar). Lớp cố định khớp nền shell.
+   */
+  html.employee-os-ios.employee-mobile-pwa::after {
+    content: '';
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: max(var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px)), 3px);
+    pointer-events: none;
+    background: color-mix(
+      in srgb,
+      var(--color-tertiary-50) 55%,
+      color-mix(in srgb, var(--color-secondary-50) 18%, var(--color-bg) 82%) 45%
+    );
+  }
+
+  html.employee-os-ios.pwa-vv-keyboard.employee-mobile-pwa::after {
+    display: none;
+  }
 }

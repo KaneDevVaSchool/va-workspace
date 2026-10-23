@@ -88,10 +88,16 @@ html.pwa-standalone body {
   html.pwa-standalone.employee-mobile-pwa,
   html.pwa-standalone.employee-mobile-pwa body,
   html.pwa-standalone.employee-mobile-pwa #app,
-  html.pwa-standalone.employee-mobile-pwa .app-shell {
+  html.pwa-standalone.employee-mobile-pwa .app-shell,
+  html.pwa-standalone.employee-mobile-pwa [data-pwa-app-mount] {
     min-height: 0;
     height: 100%;
     max-height: 100%;
+  }
+
+  html.pwa-standalone.employee-mobile-pwa #app,
+  html.pwa-standalone.employee-mobile-pwa .app-shell {
+    min-height: 0;
   }
 }
 

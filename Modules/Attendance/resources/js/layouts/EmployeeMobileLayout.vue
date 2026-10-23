@@ -177,6 +177,11 @@ const hideHeaderForChatThread = computed(
   () => isChatRoute.value && chatStore.activeView === 'conversation',
 );
 
+/** Subpage full-screen (hồ sơ): không bottom nav — tránh lộ vùng đáy PWA iOS. */
+const hideTabbar = computed(
+  () => hideHeaderForChatThread.value || isProfileRoute.value,
+);
+
 const chatUnreadLabel = computed(() => {
   if (chatStore.unreadTotal <= 0) return '';
   return chatStore.unreadTotal > 99 ? '99+' : String(chatStore.unreadTotal);
@@ -281,6 +286,7 @@ function goBackFromSubpage() {
       :class="{
         'employee-shell__content--chat': isChatRoute,
         'employee-shell__content--attendance': isAttendanceRoute,
+        'employee-shell__content--profile': isProfileRoute,
       }"
     >
       <div
@@ -303,7 +309,7 @@ function goBackFromSubpage() {
     </main>
 
     <EmployeeMobileTabbar
-      v-if="!hideHeaderForChatThread"
+      v-if="!hideTabbar"
       ref="tabbarComponentRef"
       :tabs="TABS"
       :active-name="route.name"
