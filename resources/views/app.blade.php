@@ -107,18 +107,8 @@
     </script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="vapid-public-key" content="{{ config('services.webpush.public_key') }}">
-    <meta name="theme-color" content="#9a0036">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="VA Workspace">
     <title>{{ $ogTitle }}</title>
-    @php($pwaIconV = config('app.pwa_icon_version'))
-    <link rel="icon" href="/images/favicon.png?v={{ $pwaIconV }}" type="image/png" sizes="32x32">
-    {{-- iOS “Thêm vào Màn hình chính” — URL ?v= bắt buộc khi đổi logo (Safari cache cứng) --}}
-    <link rel="apple-touch-icon" href="/images/pwa/apple-touch-icon.png?v={{ $pwaIconV }}" sizes="180x180">
-    <link rel="apple-touch-icon" href="/images/pwa/icon-192.png?v={{ $pwaIconV }}" sizes="192x192">
-    <link rel="manifest" href="/manifest.json?v={{ $pwaIconV }}">
+    @include('partials.pwa-ios-meta')
     {{-- Đăng ký SW sớm (trước bundle Vite) để precache shell + offline pass Lighthouse --}}
     <script>
         (function () {

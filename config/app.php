@@ -25,6 +25,11 @@ return [
     'pwa_icon_version' => env('PWA_ICON_VERSION', '8'),
 
     /*
+    | Bump khi đổi apple-touch-startup-image (scripts/generate-pwa-ios-splash.py).
+    */
+    'pwa_splash_version' => env('PWA_SPLASH_VERSION', '1'),
+
+    /*
     | Bump khi đổi og-cover.jpg — ?v= trên og:image để Zalo/FB không giữ preview cũ.
     */
     'og_cover_version' => env('OG_COVER_VERSION', '3'),

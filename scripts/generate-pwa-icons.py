@@ -69,6 +69,7 @@ def main() -> None:
     )
 
     print("Generated PWA icons from", SOURCE.name)
+    print("Tiếp theo (iOS splash): python scripts/generate-pwa-ios-splash.py")
 
 
 if __name__ == "__main__":
