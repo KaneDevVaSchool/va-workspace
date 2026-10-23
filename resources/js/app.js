@@ -8,6 +8,7 @@ import {
   loadPwaStandaloneAssets,
 } from './lib/pwaStandalone';
 import { syncEmployeeSafeAreaInsets } from './lib/employeeSafeArea';
+import { syncEmployeeShellHeight } from './lib/employeeMobileViewport';
 import { bootstrapPwaVisualViewport } from './lib/pwaVisualViewport';
 import { bootstrapPwaServiceWorker } from './composables/usePwaUpdate';
 
@@ -17,14 +18,17 @@ bootstrapPwaVisualViewport();
 
 if (typeof document !== 'undefined' && isPwaStandalone()) {
   syncEmployeeSafeAreaInsets();
+  syncEmployeeShellHeight();
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       syncEmployeeSafeAreaInsets();
+      syncEmployeeShellHeight();
     }
   });
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) {
       syncEmployeeSafeAreaInsets();
+      syncEmployeeShellHeight();
     }
   });
 }

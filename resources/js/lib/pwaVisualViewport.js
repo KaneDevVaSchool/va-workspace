@@ -2,6 +2,7 @@
 // Co khung AppShell theo visualViewport CHỈ khi bàn phím mở (PWA UI / BottomSheet:
 // tránh double inset — shell full màn + footer giữ safe-bottom một lần).
 //
+import { syncEmployeeShellHeight } from './employeeMobileViewport';
 import { isPwaStandalone } from './pwaStandalone';
 
 export const PWA_VV_HEIGHT = '--pwa-vv-height';
@@ -57,6 +58,7 @@ export function syncPwaVisualViewport() {
   if (!keyboardOpen) {
     clearPwaVisualViewport();
     setKeyboardFrame(false);
+    syncEmployeeShellHeight();
     return;
   }
 

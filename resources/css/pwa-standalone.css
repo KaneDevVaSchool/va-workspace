@@ -24,6 +24,30 @@
     overflow: hidden;
   }
 
+  @media (max-width: 768px) {
+    html.pwa-standalone.pwa-surface-employee body,
+    html.pwa-standalone.employee-mobile-pwa body,
+    html.pwa-standalone.employee-os-ios.pwa-surface-employee body {
+      background-color: var(
+        --employee-unified-canvas-bg,
+        color-mix(
+          in srgb,
+          var(--color-tertiary-50) 55%,
+          color-mix(in srgb, var(--color-secondary-50) 18%, var(--color-bg) 82%) 45%
+        )
+      );
+    }
+
+    html.pwa-standalone.employee-mobile-pwa #app,
+    html.pwa-standalone.employee-mobile-pwa .app-shell,
+    html.pwa-standalone.employee-os-ios.pwa-surface-employee #app,
+    html.pwa-standalone.employee-os-ios.pwa-surface-employee .app-shell {
+      min-height: 0;
+      height: var(--employee-shell-height, 100%);
+      max-height: var(--employee-shell-height, 100%);
+    }
+  }
+
   html.pwa-surface-app body {
     background-color: var(--color-bg);
   }
@@ -108,6 +132,30 @@ html.pwa-standalone body {
 html.pwa-standalone.pwa-surface-employee body {
   background-color: var(--color-surface);
   overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  html.pwa-standalone.pwa-surface-employee body,
+  html.pwa-standalone.employee-mobile-pwa body,
+  html.pwa-standalone.employee-os-ios.pwa-surface-employee body {
+    background-color: var(
+      --employee-unified-canvas-bg,
+      color-mix(
+        in srgb,
+        var(--color-tertiary-50) 55%,
+        color-mix(in srgb, var(--color-secondary-50) 18%, var(--color-bg) 82%) 45%
+      )
+    );
+  }
+
+  html.pwa-standalone.employee-mobile-pwa #app,
+  html.pwa-standalone.employee-mobile-pwa .app-shell,
+  html.pwa-standalone.employee-os-ios.pwa-surface-employee #app,
+  html.pwa-standalone.employee-os-ios.pwa-surface-employee .app-shell {
+    min-height: 0;
+    height: var(--employee-shell-height, 100%);
+    max-height: var(--employee-shell-height, 100%);
+  }
 }
 
 html.pwa-standalone.pwa-surface-app body {

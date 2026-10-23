@@ -2,11 +2,13 @@
 // Chiều cao app shell mobile nhân viên — tách rõ Safari tab vs PWA standalone.
 //
 // · Safari tab: ghi --employee-shell-height = visualViewport.height (px).
-// · PWA iOS: KHÔNG ghi --employee-shell-height — WebKit có thể trả clientHeight /
-//   innerHeight thiếu vài chục px (#254868); shell PWA dùng CSS position:fixed; inset:0.
+// · PWA iOS: ghi --employee-shell-height = innerHeight (px) — WebKit fill-available
+//   thường ngắn hơn viewport thật → lộ dải trắng dưới tab bar (iPhone Plus).
+// · PWA Android: không ghi biến — dùng inset:0.
 // · Safe-area: probe --employee-safe-* trên iOS PWA (employeeSafeArea.js); Safari tab dùng env().
 //
-import { isPwaStandalone } from '@/lib/pwaStandalone';
+import { isIosDevice } from './employeeDeviceOs';
+import { isPwaStandalone } from './pwaStandalone';
 
 export const EMPLOYEE_SHELL_HEIGHT_VAR = '--employee-shell-height';
 
@@ -25,7 +27,21 @@ export function measureBrowserShellHeightPx() {
   return Math.max(0, Math.round(h));
 }
 
-/** Chỉ để debug / so sánh trên thiết bị — không ghi lên CSS trong PWA. */
+/** iOS PWA — khung layout phải khớp innerHeight (không clientHeight / fill-available). */
+export function measureIosPwaShellHeightPx() {
+  if (typeof window === 'undefined') return 0;
+  const vv = window.visualViewport;
+  const layoutFromVv = vv
+    ? Math.max(0, Math.round(vv.height + vv.offsetTop))
+    : 0;
+  return Math.max(
+    window.innerHeight,
+    document.documentElement.clientHeight,
+    layoutFromVv,
+  );
+}
+
+/** Chỉ để debug / so sánh trên thiết bị — không ghi lên CSS trong PWA Android. */
 export function readPwaLayoutHeightCandidatesPx() {
   if (typeof document === 'undefined' || typeof window === 'undefined') {
     return { clientHeight: 0, innerHeight: 0, visualViewportLayout: 0 };
@@ -47,6 +63,7 @@ export function readEmployeeViewportDiagnostics() {
   return {
     mode: employeeShellViewportMode(),
     browserShellHeight: measureBrowserShellHeightPx(),
+    iosPwaShellHeight: measureIosPwaShellHeightPx(),
     pwaCandidates: readPwaLayoutHeightCandidatesPx(),
     visualViewportHeight: vv?.height ?? null,
     visualViewportOffsetTop: vv?.offsetTop ?? null,
@@ -62,18 +79,37 @@ function maybeLogDiagnostics() {
   console.info('[employee-shell viewport]', readEmployeeViewportDiagnostics());
 }
 
+function shouldApplyIosPwaShellHeightPx() {
+  if (typeof document === 'undefined') return false;
+  if (!isPwaStandalone() || !isIosDevice()) return false;
+  return !document.documentElement.classList.contains('pwa-vv-keyboard');
+}
+
 /**
- * Browser: set --employee-shell-height.
- * PWA: luôn xóa biến — tránh khóa shell theo px đo thiếu.
+ * Browser + PWA iOS: set --employee-shell-height (px).
+ * PWA Android: xóa biến.
  */
 export function syncEmployeeShellHeight() {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
+
+  if (shouldApplyIosPwaShellHeightPx()) {
+    const height = measureIosPwaShellHeightPx();
+    if (height > 0) {
+      root.style.setProperty(EMPLOYEE_SHELL_HEIGHT_VAR, `${height}px`);
+    } else {
+      root.style.removeProperty(EMPLOYEE_SHELL_HEIGHT_VAR);
+    }
+    maybeLogDiagnostics();
+    return;
+  }
+
   if (employeeShellViewportMode() === 'pwa') {
     root.style.removeProperty(EMPLOYEE_SHELL_HEIGHT_VAR);
     maybeLogDiagnostics();
     return;
   }
+
   const height = measureBrowserShellHeightPx();
   if (height > 0) {
     root.style.setProperty(EMPLOYEE_SHELL_HEIGHT_VAR, `${height}px`);
@@ -86,4 +122,13 @@ export function syncEmployeeShellHeight() {
 export function clearEmployeeShellHeight() {
   if (typeof document === 'undefined') return;
   document.documentElement.style.removeProperty(EMPLOYEE_SHELL_HEIGHT_VAR);
+}
+
+/** Gọi sớm từ app.blade.php / app.js trước Vue — iOS PWA shortcut. */
+export function bootstrapIosPwaShellHeight() {
+  if (typeof window === 'undefined') return;
+  syncEmployeeShellHeight();
+  const onResize = () => syncEmployeeShellHeight();
+  window.addEventListener('resize', onResize, { passive: true });
+  window.visualViewport?.addEventListener('resize', onResize, { passive: true });
 }

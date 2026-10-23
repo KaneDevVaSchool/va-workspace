@@ -1,11 +1,9 @@
 /*
  * Shell mobile nhân viên — PWA standalone trên iOS (WebKit).
  *
- * · Safe-bottom: padding trên wrapper tab bar + nền canvas thống nhất (không
- *   để wrapper trong suốt — tránh dải trắng dưới pill khi mở shortcut PWA).
- * · WebKit #254868: chuỗi height 100% + fill-available, tránh min-height 100dvh
- *   tạo dải trống dưới khung position:fixed; inset:0.
- * · Bàn phím: visualViewport.offsetTop — co khung theo --pwa-vv-* (không ảnh hưởng Android).
+ * · Chiều cao: --employee-shell-height = innerHeight (JS, app.blade + viewport.js).
+ * · Tab bar: position fixed sát đáy viewport + nền canvas (tránh dải trắng body).
+ * · Bàn phím: visualViewport — co shell; tab bar trở lại in-flow.
  */
 
 @media (max-width: 768px) {
@@ -20,24 +18,8 @@
   html.employee-os-ios.employee-mobile-pwa [data-pwa-app-mount],
   html.employee-os-ios.pwa-standalone.employee-mobile-pwa [data-pwa-app-mount] {
     min-height: 0;
-    height: 100%;
-    max-height: 100%;
-  }
-
-  @supports (-webkit-touch-callout: none) {
-    html.employee-os-ios.employee-mobile-pwa,
-    html.employee-os-ios.pwa-standalone.employee-mobile-pwa,
-    html.employee-os-ios.employee-mobile-pwa body,
-    html.employee-os-ios.pwa-standalone.employee-mobile-pwa body,
-    html.employee-os-ios.employee-mobile-pwa #app,
-    html.employee-os-ios.pwa-standalone.employee-mobile-pwa #app,
-    html.employee-os-ios.employee-mobile-pwa .app-shell,
-    html.employee-os-ios.pwa-standalone.employee-mobile-pwa .app-shell,
-    html.employee-os-ios.employee-mobile-pwa [data-pwa-app-mount],
-    html.employee-os-ios.pwa-standalone.employee-mobile-pwa [data-pwa-app-mount] {
-      height: -webkit-fill-available;
-      max-height: -webkit-fill-available;
-    }
+    height: var(--employee-shell-height, 100%);
+    max-height: var(--employee-shell-height, 100%);
   }
 
   html.employee-os-ios.employee-mobile-pwa .employee-shell--pwa:not(.emp-shell-preview__shell),
@@ -45,32 +27,49 @@
     inset: unset;
     top: 0;
     right: 0;
-    bottom: 0;
+    bottom: auto;
     left: 0;
     box-sizing: border-box;
     width: 100%;
     max-width: 100vw;
-    height: 100%;
-    height: -webkit-fill-available;
-    max-height: -webkit-fill-available;
+    height: var(--employee-shell-height, 100%);
+    max-height: var(--employee-shell-height, 100%);
   }
 
   /*
-   * Tab bar: safe trên wrapper (nền canvas) — pill chỉ giữ padding nội bộ;
-   * tránh dải trắng body dưới pill (ảnh user: shortcut PWA iOS).
+   * Tab bar dính đáy màn hình — vùng safe có nền canvas (không lộ --color-surface trắng).
    */
-  html.employee-os-ios.employee-mobile-pwa .employee-tabbar--pwa.employee-tabbar--shell,
-  html.employee-os-ios.pwa-standalone .employee-tabbar--pwa.employee-tabbar--shell {
-    padding-bottom: max(
-      env(safe-area-inset-bottom, 0px),
-      var(--employee-safe-bottom, 0px)
-    );
+  html.employee-os-ios.pwa-standalone:not(.pwa-vv-keyboard)
+    .employee-shell--unified.employee-shell--pwa
+    .employee-tabbar--pwa.employee-tabbar--shell {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 24;
+    width: 100%;
+    max-width: 100vw;
+    margin: 0;
+    padding: var(--space-1) var(--space-2)
+      max(env(safe-area-inset-bottom, 0px), var(--employee-safe-bottom, 0px));
     background: var(--employee-unified-canvas-bg, var(--color-bg));
+    box-sizing: border-box;
   }
 
-  html.employee-os-ios.employee-mobile-pwa .employee-tabbar--pwa .employee-tabbar__bar,
-  html.employee-os-ios.pwa-standalone .employee-tabbar--pwa .employee-tabbar__bar {
+  html.employee-os-ios.pwa-standalone:not(.pwa-vv-keyboard)
+    .employee-shell--unified.employee-shell--pwa
+    .employee-tabbar--pwa
+    .employee-tabbar__bar {
     padding-bottom: var(--space-1);
+  }
+
+  html.employee-os-ios.pwa-standalone:not(.pwa-vv-keyboard)
+    .employee-shell--unified.employee-shell--pwa
+    .employee-shell__content--unified {
+    padding-bottom: calc(
+      var(--employee-tabbar-block-size, 3.25rem) + var(--space-2)
+        + max(env(safe-area-inset-bottom, 0px), var(--employee-safe-bottom, 0px))
+    );
   }
 
   html.employee-os-ios.pwa-vv-keyboard .employee-shell--pwa:not(.emp-shell-preview__shell) {
@@ -83,23 +82,26 @@
     max-height: var(--pwa-vv-height, 100%);
   }
 
-  html.employee-os-ios.pwa-vv-keyboard.employee-mobile-pwa .employee-tabbar--pwa.employee-tabbar--shell,
-  html.employee-os-ios.pwa-vv-keyboard.pwa-standalone .employee-tabbar--pwa.employee-tabbar--shell {
+  html.employee-os-ios.pwa-vv-keyboard .employee-shell--unified.employee-shell--pwa .employee-tabbar--pwa.employee-tabbar--shell {
+    position: relative;
+    z-index: 3;
     padding-bottom: 0;
     background: transparent;
   }
 
-  html.employee-os-ios.pwa-vv-keyboard.employee-mobile-pwa .employee-tabbar--pwa .employee-tabbar__bar,
-  html.employee-os-ios.pwa-vv-keyboard.pwa-standalone .employee-tabbar--pwa .employee-tabbar__bar {
+  html.employee-os-ios.pwa-vv-keyboard .employee-tabbar--pwa .employee-tabbar__bar {
     padding-bottom: var(--space-1);
   }
 
-  /*
-   * WebKit standalone: shell có thể ngắn hơn viewport → lộ nền dưới home indicator
-   * (subpage không tabbar). Lớp cố định khớp canvas shell, dùng env() trực tiếp.
-   */
-  html.employee-os-ios.employee-mobile-pwa::after,
-  html.employee-os-ios.pwa-standalone::after {
+  html.employee-os-ios.pwa-vv-keyboard
+    .employee-shell--unified.employee-shell--pwa
+    .employee-shell__content--unified {
+    padding-bottom: 0;
+  }
+
+  /* Subpage không tab bar — che khe dưới home indicator */
+  html.employee-os-ios.employee-mobile-pwa:not(:has(.employee-tabbar--shell))::after,
+  html.employee-os-ios.pwa-standalone:not(:has(.employee-tabbar--shell))::after {
     content: '';
     position: fixed;
     z-index: 0;

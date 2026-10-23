@@ -85,6 +85,23 @@
                     root.style.setProperty('--employee-safe-bottom', '34px');
                 }
                 probe.remove();
+                if (isIos) {
+                    var applyIosShellH = function () {
+                        var h = Math.max(
+                            window.innerHeight || 0,
+                            document.documentElement.clientHeight || 0
+                        );
+                        if (h > 0) {
+                            root.style.setProperty('--employee-shell-height', h + 'px');
+                        }
+                    };
+                    applyIosShellH();
+                    window.addEventListener('resize', applyIosShellH, { passive: true });
+                    window.visualViewport && window.visualViewport.addEventListener('resize', applyIosShellH, { passive: true });
+                }
+                if (/^\/dashboard\/me(\/|$)/.test(path)) {
+                    osRoot.classList.add('pwa-surface-employee');
+                }
             }
         })();
     </script>
@@ -137,6 +154,13 @@
             min-height: 0;
             overflow: hidden;
             background-color: #9a0036;
+        }
+
+        html.pwa-standalone.employee-os-ios.employee-mobile-pwa,
+        html.pwa-standalone.employee-os-ios.employee-mobile-pwa body {
+            height: var(--employee-shell-height, 100%);
+            max-height: var(--employee-shell-height, 100%);
+            background-color: #eef4f6;
         }
     </style>
     @vite(['resources/css/app.css', 'resources/css/pwa-standalone.css', 'resources/js/app.js'])
