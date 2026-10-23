@@ -6,32 +6,43 @@
  */
 
 @media (max-width: 768px) {
-  html.employee-mobile-browser:has(.employee-shell--unified),
-  html.employee-mobile-pwa:has(.employee-shell--unified) {
-    background-color: color-mix(
+  html.pwa-standalone.employee-os-ios {
+    --employee-unified-canvas-bg: color-mix(
       in srgb,
       var(--color-tertiary-50) 55%,
       color-mix(in srgb, var(--color-secondary-50) 18%, var(--color-bg) 82%) 45%
     );
   }
 
-  html.employee-mobile-browser:has(.employee-shell--unified) body,
-  html.employee-mobile-pwa:has(.employee-shell--unified) body {
-    background-color: color-mix(
+  html.employee-mobile-browser:has(.employee-shell--unified),
+  html.employee-mobile-pwa:has(.employee-shell--unified),
+  html.pwa-standalone.employee-os-ios:has(.employee-shell--unified) {
+    background-color: var(--employee-unified-canvas-bg, color-mix(
       in srgb,
       var(--color-tertiary-50) 55%,
       color-mix(in srgb, var(--color-secondary-50) 18%, var(--color-bg) 82%) 45%
-    );
+    ));
+  }
+
+  html.employee-mobile-browser:has(.employee-shell--unified) body,
+  html.employee-mobile-pwa:has(.employee-shell--unified) body,
+  html.pwa-standalone.employee-os-ios:has(.employee-shell--unified) body {
+    background-color: var(--employee-unified-canvas-bg, color-mix(
+      in srgb,
+      var(--color-tertiary-50) 55%,
+      color-mix(in srgb, var(--color-secondary-50) 18%, var(--color-bg) 82%) 45%
+    ));
   }
 }
 
 .employee-shell--unified {
-  --eh-card-shadow: 0 4px 18px color-mix(in srgb, var(--color-tertiary-900) 7%, transparent);
-  background: color-mix(
+  --employee-unified-canvas-bg: color-mix(
     in srgb,
     var(--color-tertiary-50) 55%,
     color-mix(in srgb, var(--color-secondary-50) 18%, var(--color-bg) 82%) 45%
   );
+  --eh-card-shadow: 0 4px 18px color-mix(in srgb, var(--color-tertiary-900) 7%, transparent);
+  background: var(--employee-unified-canvas-bg);
 }
 
 .employee-shell__header--brand {

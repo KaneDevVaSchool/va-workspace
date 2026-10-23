@@ -56,6 +56,10 @@
                 window.navigator.standalone === true;
             if (s) {
                 document.documentElement.classList.add('pwa-standalone');
+                var path = window.location.pathname || '';
+                if (/^\/dashboard\/me(\/|$)/.test(path)) {
+                    osRoot.classList.add('employee-mobile-pwa');
+                }
                 var probe = document.createElement('div');
                 probe.setAttribute('aria-hidden', 'true');
                 probe.style.cssText =
@@ -76,6 +80,9 @@
                 for (var i = 0; i < map.length; i++) {
                     var px = parseFloat(st[map[i][1]]);
                     if (px > 0) root.style.setProperty(map[i][0], px + 'px');
+                }
+                if (isIos && !(parseFloat(st.paddingBottom) > 0) && window.screen && window.screen.height >= 812) {
+                    root.style.setProperty('--employee-safe-bottom', '34px');
                 }
                 probe.remove();
             }

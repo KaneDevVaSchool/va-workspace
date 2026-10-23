@@ -3,8 +3,12 @@
 // Đo padding computed từ phần tử probe rồi gán --employee-safe-* (px) lên <html>.
 //
 import { isIosDevice } from './employeeDeviceOs';
+import { isPwaStandalone } from './pwaStandalone';
 
 const SIDES = ['top', 'bottom', 'left', 'right'];
+
+/** Home indicator — fallback khi WebKit standalone probe env() = 0. */
+const IOS_PWA_HOME_INDICATOR_FALLBACK_PX = 34;
 
 /**
  * iOS Safari tab: env() ổn định — probe px trên html từng lệch với thanh URL.
@@ -86,7 +90,17 @@ export function syncEmployeeSafeAreaInsets() {
   }
 
   for (const side of SIDES) {
-    const px = measureSafeAreaInset(side);
+    let px = measureSafeAreaInset(side);
+    if (
+      side === 'bottom'
+      && px <= 0
+      && isIosDevice()
+      && isPwaStandalone()
+      && typeof window !== 'undefined'
+      && window.screen?.height >= 812
+    ) {
+      px = IOS_PWA_HOME_INDICATOR_FALLBACK_PX;
+    }
     if (px > 0) {
       root.style.setProperty(`--employee-safe-${side}`, `${px}px`);
     } else {

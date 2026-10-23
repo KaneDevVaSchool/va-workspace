@@ -76,6 +76,11 @@
   padding-bottom: var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px));
 }
 
+/* Vùng safe dưới pill tab bar — nền trong suốt dễ lộ body trắng (iOS standalone). */
+.employee-shell--unified .employee-tabbar--pwa.employee-tabbar--shell {
+  background: var(--employee-unified-canvas-bg, var(--color-bg));
+}
+
 /* Bàn phím mở (cả 2 hệ): đáy khung đã trên home indicator/nav bar — bỏ padding safe footer, tránh double-inset đẩy tab bar lên. */
 html.pwa-vv-keyboard .employee-tabbar--pwa.employee-tabbar--shell {
   padding-bottom: 0;

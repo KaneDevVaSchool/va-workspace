@@ -22,6 +22,11 @@ if (typeof document !== 'undefined' && isPwaStandalone()) {
       syncEmployeeSafeAreaInsets();
     }
   });
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      syncEmployeeSafeAreaInsets();
+    }
+  });
 }
 bootstrapPwaServiceWorker();
 
