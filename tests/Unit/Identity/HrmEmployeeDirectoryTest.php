@@ -3,6 +3,7 @@
 namespace Tests\Unit\Identity;
 
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
@@ -24,6 +25,7 @@ class HrmEmployeeDirectoryTest extends TestCase
             ],
         ]);
         DB::purge('hrm');
+        Cache::flush();
 
         $schema = Schema::connection('hrm');
         $schema->create('employees', function (Blueprint $table): void {
@@ -62,6 +64,7 @@ class HrmEmployeeDirectoryTest extends TestCase
             $table->uuid('uuid')->nullable();
             $table->unsignedBigInteger('parent_id')->nullable();
             $table->unsignedBigInteger('company_id')->nullable();
+            $table->unsignedBigInteger('legacy_department_id')->nullable();
             $table->string('type')->nullable();
             $table->string('code')->nullable();
             $table->string('name')->nullable();
@@ -75,6 +78,7 @@ class HrmEmployeeDirectoryTest extends TestCase
             $table->bigIncrements('id');
             $table->string('title')->nullable();
             $table->unsignedBigInteger('job_title_id')->nullable();
+            $table->unsignedBigInteger('reports_to_position_id')->nullable();
             $table->unsignedTinyInteger('level')->nullable();
             $table->timestamp('deleted_at')->nullable();
         });

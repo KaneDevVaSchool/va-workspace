@@ -83,6 +83,18 @@ html.pwa-standalone body {
   overscroll-behavior: none;
 }
 
+/* Shell nhân viên mobile: không kéo document cao hơn layout iOS (xem pwa-ios.css). */
+@media (max-width: 768px) {
+  html.pwa-standalone.employee-mobile-pwa,
+  html.pwa-standalone.employee-mobile-pwa body,
+  html.pwa-standalone.employee-mobile-pwa #app,
+  html.pwa-standalone.employee-mobile-pwa .app-shell {
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+  }
+}
+
 html.pwa-standalone body {
   background-color: var(--color-primary-900);
 }

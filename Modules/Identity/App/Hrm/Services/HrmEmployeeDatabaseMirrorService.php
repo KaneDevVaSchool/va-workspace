@@ -9,6 +9,7 @@ use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
+use Modules\Identity\App\Support\UserAvatarUrl;
 
 /**
  * Tạo/cập nhật bản ghi users workspace từ MySQL VA-HRM (SSOT) — không gọi HTTP.
@@ -346,7 +347,10 @@ class HrmEmployeeDatabaseMirrorService
             $attributes['name'] = (string) $employee['full_name'];
         }
 
-        if (filled($employee['avatar_url'] ?? null)) {
+        if (
+            filled($employee['avatar_url'] ?? null)
+            && ! UserAvatarUrl::isUserUploaded($user->avatar_url)
+        ) {
             $attributes['avatar_url'] = (string) $employee['avatar_url'];
         }
 

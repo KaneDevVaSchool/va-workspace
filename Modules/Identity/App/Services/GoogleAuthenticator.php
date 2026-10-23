@@ -8,6 +8,7 @@ use Laravel\Socialite\Contracts\User as SocialiteUser;
 use Modules\Identity\App\Exceptions\AccountNotUsable;
 use Modules\Identity\App\Exceptions\EmailDomainNotAllowed;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
+use Modules\Identity\App\Support\UserAvatarUrl;
 use Modules\Identity\App\Services\SuperAdminBootstrap;
 
 /**
@@ -78,13 +79,21 @@ class GoogleAuthenticator
         $avatarUrl = $this->resolveAvatarUrl($googleUser);
 
         if ($user !== null) {
-            return $this->users->update($user, array_filter([
+            $payload = [
                 'email' => $email,
                 'google_id' => (string) $googleUser->getId(),
                 'name' => $googleUser->getName() ?: $user->name,
-                'avatar_url' => $avatarUrl ?? $user->avatar_url,
                 'email_verified_at' => $user->email_verified_at ?? now(),
-            ], fn ($value) => $value !== null));
+            ];
+
+            if (UserAvatarUrl::shouldApplyGoogleOnLogin($user->avatar_url, $avatarUrl)) {
+                $payload['avatar_url'] = $avatarUrl;
+            }
+
+            return $this->users->update($user, array_filter(
+                $payload,
+                fn ($value) => $value !== null,
+            ));
         }
 
         return $this->users->create([

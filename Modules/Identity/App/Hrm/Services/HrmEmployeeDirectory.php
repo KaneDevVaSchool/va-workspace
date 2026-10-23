@@ -37,6 +37,8 @@ class HrmEmployeeDirectory
 
     private ?bool $assignmentHasJobTitleIdColumn = null;
 
+    private ?bool $positionHasReportsToColumn = null;
+
     public static function isConfigured(): bool
     {
         return filled(config('database.connections.hrm.database'));
@@ -748,6 +750,27 @@ class HrmEmployeeDirectory
         return $this->assignmentHasJobTitleIdColumn;
     }
 
+    private function positionHasReportsToColumn(): bool
+    {
+        if ($this->positionHasReportsToColumn !== null) {
+            return $this->positionHasReportsToColumn;
+        }
+
+        try {
+            $this->positionHasReportsToColumn = Cache::rememberForever(
+                'hrm.schema.positions.has_reports_to_position_id',
+                fn (): bool => Schema::connection('hrm')->hasColumn(
+                    'positions',
+                    'reports_to_position_id',
+                ),
+            );
+        } catch (Throwable) {
+            $this->positionHasReportsToColumn = false;
+        }
+
+        return $this->positionHasReportsToColumn;
+    }
+
     /**
      * Chỉ tên trong bảng job_titles HRM (phân công / vị trí), không dùng positions.title.
      *
@@ -805,6 +828,10 @@ class HrmEmployeeDirectory
 
         if ($this->assignmentHasJobTitleIdColumn()) {
             $columns[] = 'ajt.name as assignment_job_title';
+        }
+
+        if ($this->positionHasReportsToColumn()) {
+            $columns[] = 'p.reports_to_position_id';
         }
 
         return $columns;
@@ -1064,30 +1091,86 @@ class HrmEmployeeDirectory
     {
         $direct = trim((string) ($row->direct_manager_name ?? ''));
         if ($direct !== '') {
+            $parsed = $this->personFromManagerLabel($direct);
+            if ($parsed !== null) {
+                $formatted = $this->formatManagerDisplay(
+                    (string) ($parsed['full_name'] ?? ''),
+                    $parsed['code'] ?? null,
+                );
+                if ($formatted !== '') {
+                    return $formatted;
+                }
+            }
+
             return $direct;
         }
 
-        $unitId = $row->org_unit_id;
-        $guard = 0;
-
-        while ($unitId && $guard++ < 12) {
-            $unit = $unitsById->get($unitId) ?? $unitsById->get((int) $unitId);
-            if ($unit === null) {
-                break;
+        $reportsToPositionId = $row->reports_to_position_id ?? null;
+        if (filled($reportsToPositionId)) {
+            $fromReports = $this->managerFromReportsToPosition((int) $reportsToPositionId, (int) $row->id);
+            if ($fromReports !== null) {
+                return $fromReports;
             }
+        }
 
-            $managerId = $unit->manager_employee_id;
+        $unitId = $row->org_unit_id ?? null;
+        if ($unitId) {
+            $unit = $unitsById->get($unitId) ?? $unitsById->get((int) $unitId);
+            $managerId = $unit?->manager_employee_id ?? null;
             if ($managerId && (int) $managerId !== (int) $row->id) {
                 $name = $names->get($managerId) ?? $names->get((int) $managerId);
                 if (is_string($name) && trim($name) !== '') {
                     return trim($name);
                 }
             }
-
-            $unitId = $unit->parent_id;
         }
 
         return null;
+    }
+
+    private function formatManagerDisplay(string $fullName, ?string $code): string
+    {
+        $name = trim($fullName);
+        $employeeCode = filled($code) ? trim((string) $code) : '';
+
+        if ($name !== '' && $employeeCode !== '') {
+            return "{$name} ({$employeeCode})";
+        }
+
+        return $name;
+    }
+
+    private function managerFromReportsToPosition(int $positionId, int $excludeEmployeeId): ?string
+    {
+        if ($positionId <= 0) {
+            return null;
+        }
+
+        try {
+            $holder = DB::connection('hrm')
+                ->table('employee_assignments as a')
+                ->join('employees as e', 'e.id', '=', 'a.employee_id')
+                ->where('a.position_id', $positionId)
+                ->whereNull('a.effective_to')
+                ->whereNull('e.deleted_at')
+                ->where('e.id', '!=', $excludeEmployeeId)
+                ->orderByDesc('a.is_primary')
+                ->orderByDesc('a.id')
+                ->first(['e.full_name', 'e.code']);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if ($holder === null) {
+            return null;
+        }
+
+        $formatted = $this->formatManagerDisplay(
+            (string) ($holder->full_name ?? ''),
+            filled($holder->code ?? null) ? (string) $holder->code : null,
+        );
+
+        return $formatted !== '' ? $formatted : null;
     }
 
     private function primaryAssignmentQuery(): \Illuminate\Database\Query\Builder

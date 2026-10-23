@@ -9,6 +9,7 @@ use Illuminate\Validation\ValidationException;
 use Modules\Dashboard\App\Models\DashboardProfileChangeRequest;
 use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
+use Modules\Identity\App\Support\UserAvatarUrl;
 
 class MyDashboardProfileService
 {
@@ -39,6 +40,7 @@ class MyDashboardProfileService
 
         return [
             'avatar_url' => $avatarUrl,
+            'avatar_is_custom' => UserAvatarUrl::isUserUploaded($user->avatar_url),
             'workspace' => $this->presentWorkspace($user),
             'hrm' => $hrm,
             'editable_fields' => $this->editableFieldMeta($hrm),

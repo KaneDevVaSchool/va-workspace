@@ -26,6 +26,7 @@ Thu hồi token cũ tại `/admin/api-clients` → client **va-workspace** nếu
 
 ```env
 APP_URL=https://hrm.vaschools.edu.vn
+APP_TIMEZONE=Asia/Ho_Chi_Minh
 HRM_URL=https://hrm.vaschools.edu.vn
 ```
 
@@ -37,6 +38,7 @@ Trong `public_html`, cập nhật `.env`:
 
 ```env
 APP_URL=https://workspace.vaschools.edu.vn
+APP_TIMEZONE=Asia/Ho_Chi_Minh
 HRM_API_BASE_URL=https://hrm.vaschools.edu.vn
 HRM_SSO_ISSUER=https://hrm.vaschools.edu.vn
 HRM_SSO_CALLBACK_URL=https://workspace.vaschools.edu.vn/auth/hrm/callback
