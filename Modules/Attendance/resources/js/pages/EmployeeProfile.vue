@@ -20,23 +20,6 @@ const changeNote = ref('');
 const changeDraft = ref({});
 const pageRevealed = ref(false);
 
-const STATUS_LABELS = {
-  active: 'Đang làm việc',
-  processing: 'Đang xử lý',
-  pending_confirmation: 'Chờ xác nhận',
-  on_leave: 'Tạm nghỉ',
-  suspended: 'Tạm đình chỉ',
-  terminated: 'Đã nghỉ việc',
-};
-
-const EMPLOYMENT_STATUS_LABELS = {
-  unpaid_leave: 'Không hưởng lương',
-  maternity: 'Thai sản',
-  suspended: 'Tạm ngưng',
-  resigning: 'Nghỉ việc',
-  resigned: 'Đã nghỉ việc',
-};
-
 const displayName = computed(() => {
   const hrm = profile.value?.hrm;
   return hrm?.full_name || profile.value?.workspace?.name || auth.user?.name || '';
@@ -67,59 +50,117 @@ const subtitle = computed(() => {
   return parts.join(' · ');
 });
 
-const metaChips = computed(() => {
+/** Chỉ mã NS trên hero — email/mã/công ty nằm trong thẻ bên dưới. */
+const heroCode = computed(() => {
   const hrm = profile.value?.hrm;
   const ws = profile.value?.workspace;
-  const chips = [];
-  const code = hrm?.code || ws?.employee_code;
-  if (filled(code)) {
-    chips.push({ id: 'code', icon: 'hash', label: code });
-  }
-  const company = hrm?.company_name || ws?.company_name;
-  if (filled(company)) {
-    chips.push({ id: 'company', icon: 'building', label: company });
-  }
-  const email = hrm?.company_email || ws?.email;
-  if (filled(email)) {
-    chips.push({ id: 'email', icon: 'mail', label: email });
-  }
-  return chips;
+  return hrm?.code || ws?.employee_code || null;
 });
 
 const pendingRequests = computed(() => profile.value?.pending_requests ?? []);
 
-const identityRows = computed(() => {
+function profileField(label, value, icon = 'info') {
+  if (!filled(value)) return null;
+  return { label, value, icon };
+}
+
+/** true nếu giá trị đã hiển thị trên hero (không liệt kê lại). */
+function isHeroDuplicate(value) {
+  if (!filled(value)) return true;
+  const v = String(value).trim().toLowerCase();
+  const hrm = profile.value?.hrm;
+  const ws = profile.value?.workspace;
+  const code = hrm?.code || ws?.employee_code;
+  const heroBits = [
+    hrm?.job_title,
+    hrm?.department_name || ws?.department_name,
+    displayName.value,
+    code,
+  ]
+    .filter(filled)
+    .map((s) => String(s).trim().toLowerCase());
+  return heroBits.includes(v);
+}
+
+const contactRows = computed(() => {
   const hrm = profile.value?.hrm;
   const ws = profile.value?.workspace;
   return [
-    { label: 'Họ và tên', value: hrm?.full_name || ws?.name, icon: 'user' },
-    { label: 'Mã nhân sự', value: hrm?.code || ws?.employee_code, icon: 'hash' },
-    { label: 'Email công ty', value: hrm?.company_email || ws?.email, icon: 'mail' },
-    { label: 'Email cá nhân', value: hrm?.personal_email, icon: 'mail' },
-    { label: 'Số điện thoại', value: hrm?.phone, icon: 'messageCircle' },
-    { label: 'Giới tính', value: formatGender(hrm?.gender), icon: 'user' },
-    { label: 'Ngày sinh', value: formatDate(hrm?.birthdate), icon: 'calendar' },
-  ].filter((row) => filled(row.value));
+    profileField('Email công ty', hrm?.company_email || ws?.email, 'mail'),
+    profileField('Email cá nhân', hrm?.personal_email, 'mail'),
+    profileField('Số điện thoại', hrm?.phone, 'messageCircle'),
+  ].filter(Boolean);
 });
 
-const workRows = computed(() => {
+const personalRows = computed(() => {
+  const hrm = profile.value?.hrm;
+  return [
+    profileField('Giới tính', formatGender(hrm?.gender), 'user'),
+    profileField('Ngày sinh', formatDate(hrm?.birthdate), 'calendar'),
+  ].filter(Boolean);
+});
+
+const orgGroupRows = computed(() => {
   const hrm = profile.value?.hrm;
   const ws = profile.value?.workspace;
+  const dept = hrm?.department_name || ws?.department_name;
   return [
-    { label: 'Chức danh', value: hrm?.job_title, icon: 'clipboardCheck' },
-    { label: 'Cấp bậc', value: hrm?.level_name, icon: 'layers' },
-    { label: 'Phòng ban', value: hrm?.department_name || ws?.department_name, icon: 'building' },
-    { label: 'Bộ phận', value: hrm?.division_name, icon: 'users' },
-    { label: 'Đơn vị', value: hrm?.org_unit_name, icon: 'globe' },
-    { label: 'Công ty', value: hrm?.company_name || ws?.company_name, icon: 'building' },
-    { label: 'Quản lý trực tiếp', value: directManagerLabel.value, icon: 'userPlus' },
-    { label: 'Nơi làm việc', value: hrm?.workplace, icon: 'globe' },
-    { label: 'Loại nhân sự', value: hrm?.personnel_type, icon: 'shield' },
-    { label: 'Mã chấm công', value: hrm?.attendance_code, icon: 'hash' },
-    { label: 'Ngày vào làm', value: formatDate(hrm?.hired_at), icon: 'calendar' },
-    { label: 'Ngày bắt đầu thực tế', value: formatDate(hrm?.actual_start_date), icon: 'calendar' },
-    { label: 'Trạng thái', value: workStatusLabel.value, icon: 'activity' },
-  ].filter((row) => filled(row.value));
+    profileField('Công ty', hrm?.company_name || ws?.company_name, 'building'),
+    isHeroDuplicate(dept) ? null : profileField('Phòng ban', dept, 'building'),
+    profileField('Bộ phận', hrm?.division_name, 'users'),
+    profileField('Đơn vị', hrm?.org_unit_name, 'globe'),
+    profileField('Quản lý trực tiếp', directManagerLabel.value, 'userPlus'),
+  ].filter(Boolean);
+});
+
+const workGroupRows = computed(() => {
+  const hrm = profile.value?.hrm;
+  const ws = profile.value?.workspace;
+  const code = hrm?.code || ws?.employee_code;
+  return [
+    isHeroDuplicate(code) ? null : profileField('Mã nhân sự', code, 'hash'),
+    profileField('Mã chấm công', hrm?.attendance_code, 'hash'),
+    profileField('Cấp bậc', hrm?.level_name, 'layers'),
+    profileField('Loại nhân sự', hrm?.personnel_type, 'shield'),
+    profileField('Nơi làm việc', hrm?.workplace, 'globe'),
+    profileField('Ngày vào làm', formatDate(hrm?.hired_at), 'calendar'),
+    profileField('Ngày bắt đầu thực tế', formatDate(hrm?.actual_start_date), 'calendar'),
+  ].filter(Boolean);
+});
+
+const profileBlocks = computed(() => {
+  const blocks = [];
+  const contact = contactRows.value;
+  const personal = personalRows.value;
+  if (contact.length || personal.length) {
+    blocks.push({
+      id: 'contact',
+      title: 'Liên hệ & cá nhân',
+      icon: 'user',
+      iconVariant: '',
+      showEdit: true,
+      groups: [
+        contact.length ? { title: 'Liên hệ', rows: contact } : null,
+        personal.length ? { title: 'Cá nhân', rows: personal } : null,
+      ].filter(Boolean),
+    });
+  }
+  const org = orgGroupRows.value;
+  const work = workGroupRows.value;
+  if (org.length || work.length) {
+    blocks.push({
+      id: 'work',
+      title: 'Công việc & tổ chức',
+      icon: 'clipboardCheck',
+      iconVariant: 'work',
+      showEdit: false,
+      groups: [
+        org.length ? { title: 'Tổ chức', rows: org } : null,
+        work.length ? { title: 'Hành chính', rows: work } : null,
+      ].filter(Boolean),
+    });
+  }
+  return blocks;
 });
 
 const directManagerLabel = computed(() => {
@@ -131,12 +172,6 @@ const directManagerLabel = computed(() => {
     return profile.value.workspace.manager_display_name;
   }
   return null;
-});
-
-const workStatusLabel = computed(() => {
-  const hrm = profile.value?.hrm;
-  if (!hrm) return null;
-  return formatWorkStatus(hrm.employment_status, hrm.status);
 });
 
 const concurrentRows = computed(() => profile.value?.hrm?.concurrent_positions ?? []);
@@ -160,18 +195,6 @@ function formatDate(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
   return new Intl.DateTimeFormat('vi-VN').format(d);
-}
-
-function formatWorkStatus(employmentStatus, status) {
-  if (filled(employmentStatus)) {
-    const key = String(employmentStatus).toLowerCase();
-    if (EMPLOYMENT_STATUS_LABELS[key]) return EMPLOYMENT_STATUS_LABELS[key];
-    return String(employmentStatus);
-  }
-  if (!filled(status)) return null;
-  const key = String(status).toLowerCase();
-  if (STATUS_LABELS[key]) return STATUS_LABELS[key];
-  return String(status);
 }
 
 async function loadProfile() {
@@ -343,13 +366,9 @@ onBeforeUnmount(() => {
         <div class="emp-profile__identity-text">
           <h1 class="emp-profile__name">{{ displayName || 'Hồ sơ của tôi' }}</h1>
           <p v-if="subtitle" class="emp-profile__subtitle">{{ subtitle }}</p>
-          <p v-if="workStatusLabel" class="emp-profile__status-badge">{{ workStatusLabel }}</p>
-          <ul v-if="metaChips.length" class="emp-profile__chips">
-            <li v-for="chip in metaChips" :key="chip.id" class="emp-profile__chip">
-              <AppIcon :name="chip.icon" :size="12" :stroke-width="2" />
-              <span>{{ chip.label }}</span>
-            </li>
-          </ul>
+          <p v-if="filled(heroCode)" class="emp-profile__kicker">
+            Mã {{ heroCode }}
+          </p>
         </div>
       </div>
     </section>
@@ -384,15 +403,26 @@ onBeforeUnmount(() => {
       </article>
     </div>
 
-    <section v-if="!loading" class="emp-profile__card emp-profile__card--anim" style="--emp-card-i: 0">
+    <template v-if="!loading">
+    <section
+      v-for="(block, blockIndex) in profileBlocks"
+      :key="block.id"
+      class="emp-profile__card emp-profile__card--anim"
+      :style="{ '--emp-card-i': blockIndex }"
+    >
       <div class="emp-profile__card-head">
         <div class="emp-profile__card-title">
-          <span class="emp-profile__card-icon" aria-hidden="true">
-            <AppIcon name="user" :size="16" />
+          <span
+            class="emp-profile__card-icon"
+            :class="block.iconVariant ? `emp-profile__card-icon--${block.iconVariant}` : null"
+            aria-hidden="true"
+          >
+            <AppIcon :name="block.icon" :size="16" />
           </span>
-          <h2 class="emp-profile__section-title">Thông tin cá nhân</h2>
+          <h2 class="emp-profile__section-title">{{ block.title }}</h2>
         </div>
         <button
+          v-if="block.showEdit"
           type="button"
           class="emp-profile__edit-btn"
           :disabled="!profile?.hrm"
@@ -402,36 +432,28 @@ onBeforeUnmount(() => {
           <span>Yêu cầu sửa</span>
         </button>
       </div>
-      <dl class="emp-profile__dl">
-        <div v-for="row in identityRows" :key="row.label" class="emp-profile__row">
-          <dt>
-            <AppIcon :name="row.icon" :size="14" class="emp-profile__row-icon" />
-            {{ row.label }}
-          </dt>
-          <dd>{{ row.value }}</dd>
-        </div>
-      </dl>
-    </section>
-
-    <section v-if="!loading && workRows.length" class="emp-profile__card emp-profile__card--anim" style="--emp-card-i: 1">
-      <div class="emp-profile__card-title emp-profile__card-title--solo">
-        <span class="emp-profile__card-icon emp-profile__card-icon--work" aria-hidden="true">
-          <AppIcon name="clipboardCheck" :size="16" />
-        </span>
-        <h2 class="emp-profile__section-title">Công việc &amp; tổ chức</h2>
+      <div
+        v-for="(group, groupIndex) in block.groups"
+        :key="group.title"
+        class="emp-profile__group"
+        :class="{ 'emp-profile__group--border': groupIndex > 0 }"
+      >
+        <h3 class="emp-profile__group-title">{{ group.title }}</h3>
+        <dl class="emp-profile__dl emp-profile__dl--grid">
+          <div v-for="row in group.rows" :key="row.label" class="emp-profile__row">
+            <dt>{{ row.label }}</dt>
+            <dd>{{ row.value }}</dd>
+          </div>
+        </dl>
       </div>
-      <dl class="emp-profile__dl">
-        <div v-for="row in workRows" :key="row.label" class="emp-profile__row">
-          <dt>
-            <AppIcon :name="row.icon" :size="14" class="emp-profile__row-icon" />
-            {{ row.label }}
-          </dt>
-          <dd>{{ row.value }}</dd>
-        </div>
-      </dl>
     </section>
+    </template>
 
-    <section v-if="!loading && concurrentRows.length" class="emp-profile__card emp-profile__card--anim" style="--emp-card-i: 2">
+    <section
+      v-if="!loading && concurrentRows.length"
+      class="emp-profile__card emp-profile__card--anim"
+      :style="{ '--emp-card-i': profileBlocks.length }"
+    >
       <div class="emp-profile__card-title emp-profile__card-title--solo">
         <span class="emp-profile__card-icon emp-profile__card-icon--concurrent" aria-hidden="true">
           <AppIcon name="layers" :size="16" />
@@ -721,47 +743,13 @@ onBeforeUnmount(() => {
   color: rgb(255 255 255 / 0.88);
 }
 
-.emp-profile__status-badge {
-  display: inline-flex;
+.emp-profile__kicker {
   margin: var(--space-2) 0 0;
-  padding: 0.2rem 0.65rem;
-  border-radius: var(--radius-full);
-  background: rgb(255 255 255 / 0.2);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #fff;
-}
-
-.emp-profile__chips {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-1);
-  margin: var(--space-2) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.emp-profile__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  max-width: 100%;
-  padding: 0.2rem 0.55rem;
-  border-radius: var(--radius-full);
-  background: rgb(255 255 255 / 0.16);
-  backdrop-filter: blur(6px);
   font-size: var(--text-xs);
   font-weight: 600;
-  line-height: 1.3;
-  color: #fff;
-}
-
-.emp-profile__chip span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.72);
 }
 
 .emp-profile__notice {
@@ -900,46 +888,63 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
+.emp-profile__group {
+  margin-top: var(--space-2);
+}
+
+.emp-profile__group:first-of-type {
+  margin-top: 0;
+}
+
+.emp-profile__group--border {
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent);
+}
+
+.emp-profile__group-title {
+  margin: 0 0 var(--space-2);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
 .emp-profile__dl {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 0;
+}
+
+.emp-profile__dl--grid {
+  gap: var(--space-1);
 }
 
 .emp-profile__row {
   display: grid;
-  grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr);
-  gap: var(--space-1) var(--space-2);
-  align-items: start;
-  padding: var(--space-1) 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
-}
-
-.emp-profile__row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
+  grid-template-columns: minmax(0, 6.75rem) minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: baseline;
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
 }
 
 .emp-profile__row dt {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
   margin: 0;
   font-size: var(--text-xs);
   font-weight: 600;
   color: var(--color-text-muted);
-}
-
-.emp-profile__row-icon {
-  flex-shrink: 0;
-  opacity: 0.75;
+  line-height: 1.35;
 }
 
 .emp-profile__row dd {
   margin: 0;
   font-size: var(--text-sm);
   font-weight: 500;
+  font-style: italic;
   color: var(--color-text);
   line-height: 1.4;
   word-break: break-word;
@@ -1095,13 +1100,17 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 640px) {
-  .emp-profile__row {
-    grid-template-columns: minmax(0, 1fr);
+@media (min-width: 380px) {
+  .emp-profile__dl--grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
   }
 
-  .emp-profile__row dt {
-    margin-bottom: -2px;
+  .emp-profile__dl--grid .emp-profile__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.15rem;
+    min-height: 100%;
   }
 }
 </style>
