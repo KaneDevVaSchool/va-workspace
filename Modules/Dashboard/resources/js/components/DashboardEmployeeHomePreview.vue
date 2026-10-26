@@ -13,20 +13,7 @@ defineProps({
 <template>
   <DashboardEmployeeShellPreview active-route="dashboard.me" home>
     <div class="employee-home">
-          <div class="employee-home__stat-row">
-            <div class="stat-card stat-card--tasks">
-              <span class="stat-card__icon stat-card__icon--tasks" aria-hidden="true">
-                <AppIcon name="listChecks" :size="20" :stroke-width="1.8" />
-              </span>
-              <div class="stat-card__body">
-                <p class="stat-card__label">Việc hôm nay</p>
-                <p class="stat-card__value">1/4 đã xong</p>
-              </div>
-              <div class="stat-card__progress" aria-hidden="true">
-                <div class="stat-card__progress-fill" style="width: 25%"></div>
-              </div>
-            </div>
-
+          <div class="employee-home__stat-row employee-home__stat-row--single">
             <div class="stat-card stat-card--attendance">
               <span class="stat-card__icon stat-card__icon--attendance" aria-hidden="true">
                 <AppIcon name="clock" :size="20" :stroke-width="1.8" />
@@ -53,30 +40,6 @@ defineProps({
               preview
               :active-key="activeUtilityKey"
             />
-          </section>
-
-          <section class="employee-home__section employee-home__section--daily">
-            <div class="section-head">
-              <h2 class="section-head__title">Việc thường ngày</h2>
-              <span class="daily-tasks__summary">1/3</span>
-            </div>
-            <div class="daily-tasks">
-              <ul class="daily-tasks__list">
-                <li class="daily-tasks__row daily-tasks__row--upcoming">
-                  <span class="daily-tasks__check daily-tasks__check--preview" aria-hidden="true" />
-                  <div class="daily-tasks__body">
-                    <p class="daily-tasks__title">Cập nhật tiến độ việc được giao</p>
-                    <p class="daily-tasks__meta">Dự án triển khai hệ thống</p>
-                  </div>
-                  <div class="daily-tasks__end">
-                    <span class="daily-tasks__action daily-tasks__action--preview" aria-hidden="true">
-                      <AppIcon name="play" :size="14" :stroke-width="2.2" />
-                    </span>
-                    <span class="daily-tasks__time">16:30</span>
-                  </div>
-                </li>
-              </ul>
-            </div>
           </section>
 
           <section class="employee-home__section employee-home__section--last">
@@ -119,6 +82,10 @@ defineProps({
   grid-template-columns: 1fr 1fr;
   gap: var(--space-2);
   margin: 0;
+}
+
+.employee-home__stat-row--single {
+  grid-template-columns: 1fr;
 }
 
 .stat-card {
@@ -223,104 +190,6 @@ defineProps({
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.employee-home__section--daily {
-  gap: var(--space-2);
-}
-
-.daily-tasks__summary {
-  flex-shrink: 0;
-  padding: 0.2rem 0.55rem;
-  border-radius: var(--radius-full);
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  font-size: 0.75rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.daily-tasks {
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-muted);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  overflow: hidden;
-}
-
-.daily-tasks__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.daily-tasks__row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
-  background: var(--color-surface);
-}
-
-.daily-tasks__row--upcoming::before {
-  content: '';
-  position: absolute;
-  top: var(--space-2);
-  bottom: var(--space-2);
-  left: var(--space-2);
-  width: 3px;
-  border-radius: 0;
-  background: var(--color-secondary);
-}
-
-.daily-tasks__check--preview {
-  flex-shrink: 0;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--radius-full);
-  box-shadow: inset 0 0 0 2px var(--color-tertiary);
-}
-
-.daily-tasks__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.daily-tasks__title {
-  margin: 0;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--color-text);
-  line-height: 1.35;
-}
-
-.daily-tasks__meta {
-  margin: 2px 0 0;
-  font-size: 0.6875rem;
-  color: var(--color-text-muted);
-}
-
-.daily-tasks__end {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
-
-.daily-tasks__action--preview {
-  display: grid;
-  place-items: center;
-  width: 1.625rem;
-  height: 1.625rem;
-  border-radius: var(--radius-full);
-  background: var(--color-tertiary-surface);
-  color: var(--color-tertiary);
-}
-
-.daily-tasks__time {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: var(--color-secondary-700);
 }
 
 .notice-card--preview {

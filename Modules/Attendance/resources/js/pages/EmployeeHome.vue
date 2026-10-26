@@ -9,6 +9,7 @@ import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import QuickUtilitiesGrid from '@modules/Dashboard/resources/js/components/QuickUtilitiesGrid.vue';
 import {
+  EMPLOYEE_HOME_DAILY_TASKS_ENABLED,
   EMPLOYEE_HOME_UTILITIES_LIMIT,
   useEmployeeHomeData,
 } from '../composables/useEmployeeHomeData';
@@ -207,8 +208,11 @@ function goQuick(name) {
       <span>Kết quả cho “{{ homeSearchQuery.trim() }}”</span>
     </div>
 
-    <div class="employee-home__stat-row">
-      <div class="stat-card stat-card--tasks">
+    <div
+      class="employee-home__stat-row"
+      :class="{ 'employee-home__stat-row--single': !EMPLOYEE_HOME_DAILY_TASKS_ENABLED }"
+    >
+      <div v-if="EMPLOYEE_HOME_DAILY_TASKS_ENABLED" class="stat-card stat-card--tasks">
         <div class="stat-card__top">
           <span class="stat-card__icon stat-card__icon--tasks" aria-hidden="true">
             <AppIcon name="listChecks" :size="20" :stroke-width="1.8" />
@@ -304,7 +308,10 @@ function goQuick(name) {
       />
     </section>
 
-    <section class="employee-home__section employee-home__section--daily">
+    <section
+      v-if="EMPLOYEE_HOME_DAILY_TASKS_ENABLED"
+      class="employee-home__section employee-home__section--daily"
+    >
       <div class="section-head">
         <h2 class="section-head__title">Việc thường ngày</h2>
         <span
@@ -460,6 +467,10 @@ function goQuick(name) {
   grid-template-columns: 1fr 1fr;
   gap: var(--space-3);
   margin: 0;
+}
+
+.employee-home__stat-row--single {
+  grid-template-columns: 1fr;
 }
 
 .stat-card {

@@ -9,6 +9,9 @@ export const EMPLOYEE_HOME_TASK_LIMIT = 6;
 export const EMPLOYEE_HOME_FEED_LIMIT = 3;
 export const EMPLOYEE_HOME_UTILITIES_LIMIT = 8;
 
+/** Công việc / việc thường ngày trên trang chủ mobile — tắt tạm khi chưa triển khai. */
+export const EMPLOYEE_HOME_DAILY_TASKS_ENABLED = false;
+
 function taskSortRank(task) {
   if (task.status === 'completed') return 4;
   if (task.is_overdue) return 0;
@@ -96,11 +99,13 @@ export function useEmployeeHomeData() {
   async function refreshAll({ silent = false } = {}) {
     refreshing.value = true;
     try {
-      await Promise.all([
-        loadOverview({ silent }),
-        loadFeedPosts({ silent }),
-        loadUtilities(),
-      ]);
+      const jobs = [loadFeedPosts({ silent }), loadUtilities()];
+      if (EMPLOYEE_HOME_DAILY_TASKS_ENABLED) {
+        jobs.unshift(loadOverview({ silent }));
+      } else if (!silent) {
+        overviewLoading.value = false;
+      }
+      await Promise.all(jobs);
     } finally {
       refreshing.value = false;
     }

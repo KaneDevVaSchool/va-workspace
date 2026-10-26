@@ -6,7 +6,7 @@
  *   browser.css           — Safari tab (--employee-shell-height JS)
  *   pwa.css + pwa-ios.css/pwa-android.css — PWA standalone + bàn phím (visualViewport)
  * Theme màu brand "shell thống nhất": theme.css
- * Không cộng safe-area iOS (notch / home indicator) vào padding.
+ * Header ôm tai thỏ (safe-area chỉ ở đỉnh). Đáy màn không cộng home indicator.
  *
  * Debug trên iPhone: localStorage.setItem('va-employee-viewport-debug','1') → reload.
  */

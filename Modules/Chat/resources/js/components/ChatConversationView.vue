@@ -750,7 +750,12 @@ function menuItems(message) {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3);
-  background: var(--color-surface);
+  padding-top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
+  background-color: var(--color-surface);
+  background-image: linear-gradient(var(--color-tertiary-700), var(--color-tertiary-700));
+  background-repeat: no-repeat;
+  background-size: 100% env(safe-area-inset-top, 0px);
+  background-position: top;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
