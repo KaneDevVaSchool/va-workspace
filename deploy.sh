@@ -10,6 +10,10 @@
 #   cd /home/workspace.vaschools.edu.vn/public_html
 #   bash deploy.sh
 #
+# Nếu chỉ `git pull` báo conflict (sửa tay trên server): dùng deploy.sh hoặc
+#   bash scripts/prod-sync-code.sh
+# (fetch + reset --hard origin/main — không merge, bỏ patch local trên file tracked)
+#
 # Tuỳ chọn:
 #   SKIP_NPM=1 bash deploy.sh     # bỏ qua npm ci + build (VD chỉ đổi backend)
 #   BRANCH=main bash deploy.sh    # đổi nhánh deploy (mặc định: main)
