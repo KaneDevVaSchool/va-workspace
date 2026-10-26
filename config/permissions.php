@@ -68,6 +68,7 @@ return [
             'notification.*',
             'social.*',
             'feature_request.create',
+            'don_tu.*',
         ],
 
         'director_officer' => [
@@ -168,6 +169,10 @@ return [
             'social.moderate',
             'social.pin',
             'feature_request.create',
+            'don_tu.submit',
+            'don_tu.approve',
+            'don_tu.view_department',
+            'don_tu.manage_department',
         ],
 
         'deputy_department_director' => [
@@ -218,6 +223,10 @@ return [
             'social.moderate',
             'social.pin',
             'feature_request.create',
+            'don_tu.submit',
+            'don_tu.approve',
+            'don_tu.view_department',
+            'don_tu.manage_department',
         ],
 
         'section_head' => [
@@ -249,6 +258,8 @@ return [
             'social.moderate',
             'social.pin',
             'feature_request.create',
+            'don_tu.submit',
+            'don_tu.approve',
         ],
 
         'team_lead' => [
@@ -282,6 +293,8 @@ return [
             'social.moderate',
             'social.pin',
             'feature_request.create',
+            'don_tu.submit',
+            'don_tu.approve',
         ],
 
         'member' => [
@@ -311,6 +324,8 @@ return [
             'my_work.*',
             'notification.*',
             'feature_request.create',
+            'don_tu.submit',
+            'don_tu.approve',
         ],
 
         'viewer' => [
@@ -347,6 +362,7 @@ return [
         'workspace_config.manage_global_menu',
         'workspace_config.manage_dashboard_quick_utilities',
         'feature_request.review',
+        'don_tu.manage_system',
     ],
 
     /*
@@ -526,6 +542,14 @@ return [
         'workspace_config.view_department' => ['label' => 'Xem cấu hình phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Menu trái: Cấu hình phòng ban. Xem trang cấu hình workspace của phòng ban mình (thành viên, menu, tiêu chí)', 'active' => true],
         'workspace_config.manage_sidebar_department' => ['label' => 'Cấu hình menu phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Bật/tắt mục menu hiển thị cho phòng ban mình', 'active' => true],
         'workspace_config.assign_role_department' => ['label' => 'Gán vai trò phòng ban', 'module' => 'Cấu hình phòng ban', 'description' => 'Gán vai trò (phó phòng, trưởng bộ phận, trưởng nhóm, nhân viên, người xem) cho thành viên phòng ban mình', 'active' => true],
+
+        // ---------- Đơn từ (don_tu) ----------
+        'don_tu.*' => ['label' => 'Toàn bộ đơn từ', 'module' => 'Đơn từ', 'description' => 'Toàn quyền nộp, duyệt và cấu hình đơn từ', 'active' => true],
+        'don_tu.submit' => ['label' => 'Nộp và theo dõi đơn', 'module' => 'Đơn từ', 'description' => 'Nộp đơn, lưu nháp và theo dõi hồ sơ của bản thân', 'active' => true],
+        'don_tu.approve' => ['label' => 'Duyệt đơn được giao', 'module' => 'Đơn từ', 'description' => 'Duyệt hồ sơ khi được giao bước xử lý', 'active' => true],
+        'don_tu.view_department' => ['label' => 'Tra cứu hồ sơ phòng ban', 'module' => 'Đơn từ', 'description' => 'Tra cứu hồ sơ đơn từ trong phòng ban', 'active' => true],
+        'don_tu.manage_department' => ['label' => 'Cấu hình đơn từ phòng ban', 'module' => 'Đơn từ', 'description' => 'Menu Cấu hình: mẫu biểu, quy trình và xem bộ trạng thái', 'active' => true],
+        'don_tu.manage_system' => ['label' => 'Cấu hình đơn từ hệ thống', 'module' => 'Đơn từ', 'description' => 'Sửa mẫu/quy trình toàn trường và bộ trạng thái (chỉ super_admin)', 'active' => true],
 
         // ---------- Mạng nội bộ (social) ----------
         'social.*' => ['label' => 'Toàn bộ bảng tin', 'module' => 'Mạng nội bộ', 'description' => 'Toàn quyền quản lý bảng tin nội bộ', 'active' => true],

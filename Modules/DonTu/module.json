@@ -1,0 +1,11 @@
+{
+    "name": "DonTu",
+    "alias": "don-tu",
+    "description": "Đơn từ — nộp, duyệt và cấu hình quy trình hành chính.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\DonTu\\App\\Providers\\DonTuServiceProvider"
+    ],
+    "files": []
+}

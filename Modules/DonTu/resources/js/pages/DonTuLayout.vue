@@ -14,6 +14,15 @@ import {
 const route = useRoute();
 
 const currentTitle = computed(() => route.meta.screenTitle || 'Đơn từ');
+const headerSubtitle = computed(() => {
+  if (isConfigArea.value) {
+    return 'Cấu hình mẫu biểu, quy trình và bộ trạng thái cho phòng ban';
+  }
+  if (isMonitorArea.value) {
+    return 'Giám sát tiến độ và báo cáo đơn từ';
+  }
+  return 'Nộp đơn, theo dõi và duyệt hồ sơ';
+});
 const isConfigArea = computed(() => DON_TU_CONFIG_ROUTE_NAMES.has(route.name));
 const isMonitorArea = computed(() => DON_TU_MONITOR_ROUTE_NAMES.has(route.name));
 
@@ -61,7 +70,7 @@ function tabIsActive(tabName) {
   <section class="don-tu">
     <PageHeader
       :title="currentTitle"
-      subtitle="Xem trước — chưa có dữ liệu"
+      :subtitle="headerSubtitle"
       icon="fileText"
       :breadcrumbs="breadcrumbs"
     />
@@ -69,6 +78,7 @@ function tabIsActive(tabName) {
     <nav
       v-if="hubTabs"
       class="don-tu__hub-tabs hide-scrollbar"
+      :class="{ 'don-tu__hub-tabs--config': isConfigArea, 'don-tu__hub-tabs--monitor': isMonitorArea }"
       :aria-label="hubTabs.label"
     >
       <router-link
@@ -132,6 +142,20 @@ function tabIsActive(tabName) {
   color: var(--color-text);
   background: var(--color-surface);
   box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.don-tu__hub-tabs--config .don-tu__hub-tab--active {
+  color: var(--color-primary);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, var(--color-border)),
+    inset 0 2px 0 var(--color-primary);
+}
+
+.don-tu__hub-tabs--monitor .don-tu__hub-tab--active {
+  color: #0d9488;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #0d9488 35%, var(--color-border)),
+    inset 0 2px 0 #0d9488;
 }
 
 .don-tu__main {

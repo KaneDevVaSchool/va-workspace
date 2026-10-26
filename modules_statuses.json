@@ -11,5 +11,6 @@
     "FeatureRequest": true,
     "Chat": true,
     "Contract": true,
-    "Attendance": true
+    "Attendance": true,
+    "DonTu": true
 }

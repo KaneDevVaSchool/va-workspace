@@ -42,7 +42,7 @@ export const DON_TU_GROUPS = [
       { name: 'manager.don-tu.forms', path: 'admin/forms', title: 'Mẫu biểu', ui: 'UI-07', phase: 'P2', sidebarIcon: 'clipboardCheck', configTab: true },
       {
         name: 'manager.don-tu.form',
-        path: 'admin/forms/mau',
+        path: 'admin/forms/:id',
         title: 'Cấu hình mẫu biểu',
         ui: 'UI-08',
         phase: 'P2',
@@ -53,7 +53,7 @@ export const DON_TU_GROUPS = [
       { name: 'manager.don-tu.workflows', path: 'admin/workflows', title: 'Quy trình', ui: 'UI-09', phase: 'P2', sidebarIcon: 'gitBranch', configTab: true },
       {
         name: 'manager.don-tu.workflow',
-        path: 'admin/workflows/mau',
+        path: 'admin/workflows/:id',
         title: 'Cấu hình quy trình',
         ui: 'UI-10',
         phase: 'P2',
