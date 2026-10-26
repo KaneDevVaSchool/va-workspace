@@ -108,16 +108,17 @@ onUnmounted(() => {
         </span>
       </div>
       <div class="birthday-greeting__panel">
-        <img
-          class="birthday-greeting__art"
-          :src="greeting.imageSrc"
-          alt=""
-          decoding="async"
-        />
+        <div class="birthday-greeting__art-wrap">
+          <img
+            class="birthday-greeting__art"
+            :src="greeting.imageSrc"
+            :alt="greeting.title"
+            decoding="async"
+          />
+        </div>
         <div class="birthday-greeting__body">
-          <p class="birthday-greeting__to">Hôm nay sinh nhật</p>
-          <h2 id="birthday-greeting-title" class="birthday-greeting__title">
-            {{ greeting.title }}
+          <h2 id="birthday-greeting-title" class="birthday-greeting__to">
+            Hôm nay sinh nhật
           </h2>
           <ul class="birthday-greeting__people">
             <li
@@ -131,7 +132,6 @@ onUnmounted(() => {
               </span>
             </li>
           </ul>
-          <p class="birthday-greeting__subtitle">{{ greeting.subtitle }}</p>
         </div>
         <div class="birthday-greeting__actions">
           <button type="button" class="birthday-greeting__cta" @click="dismiss">
