@@ -47,10 +47,10 @@ app.use(router);
 
 app.mount('#app');
 
-router.isReady().finally(() => {
-  requestAnimationFrame(() => dismissAppBoot());
-});
+const finishAppBoot = () => requestAnimationFrame(() => dismissAppBoot());
+
+router.isReady().finally(finishAppBoot);
 
 if (typeof window !== 'undefined') {
-  window.setTimeout(() => dismissAppBoot(), 16_000);
+  window.setTimeout(finishAppBoot, 8_000);
 }

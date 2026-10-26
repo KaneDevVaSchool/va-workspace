@@ -94,12 +94,30 @@
             });
         })();
     </script>
-    {{-- Boot splash: cream + mascot (khớp onboarding) — CSS inline tối thiểu trước Vite --}}
-    <link rel="preload" as="image" href="/images/onboarding/cheerful-red-mascot.png" fetchpriority="high">
-    <link rel="preload" as="image" href="/images/onboarding/va-logo.png">
+    {{-- Boot splash: welcome mascot chỉ mobile (≤768px); desktop splash gọn --}}
+    <link rel="preload" as="image" href="/images/onboarding/cheerful-red-mascot.png" fetchpriority="high" media="(max-width: 768px)">
+    <link rel="preload" as="image" href="/images/onboarding/va-logo.png" media="(max-width: 768px)">
+    <script>
+        (function () {
+            var root = document.documentElement;
+            var mobile = window.matchMedia('(max-width: 768px)').matches;
+            root.classList.add(mobile ? 'va-boot-mobile' : 'va-boot-desktop');
+            window.setTimeout(function () {
+                var el = document.getElementById('app-boot');
+                if (!el || el.classList.contains('welcome--hide')) return;
+                document.body.classList.remove('app-boot-active');
+                el.classList.add('welcome--hide');
+                window.setTimeout(function () { el.remove(); }, 480);
+            }, 12000);
+        })();
+    </script>
     <style>
         body.app-boot-active {
             margin: 0;
+            background: #9a0036;
+        }
+
+        html.va-boot-mobile body.app-boot-active {
             background: #fff8f0;
         }
 
@@ -108,6 +126,11 @@
             height: 100%;
             min-height: 0;
             overflow: hidden;
+            background-color: #9a0036;
+        }
+
+        html.va-boot-mobile.pwa-standalone,
+        html.va-boot-mobile.pwa-standalone body {
             background-color: #fff8f0;
         }
 
@@ -162,7 +185,21 @@
             </div>
         </header>
 
-        <footer class="welcome__footer">
+        <div class="welcome__boot-compact">
+            <img
+                src="/images/logo-2.png"
+                alt="Vietnam America Schools"
+                class="welcome__boot-compact-logo"
+                width="220"
+                height="80"
+                decoding="async"
+            />
+            <p class="welcome__boot-compact-brand">VA Workspace</p>
+            <div class="welcome__boot-spinner" aria-hidden="true"></div>
+            <p class="welcome__boot-hint">Đang tải…</p>
+        </div>
+
+        <footer class="welcome__footer welcome__footer--boot">
             <div class="welcome__boot-status">
                 <div class="welcome__boot-spinner" aria-hidden="true"></div>
                 <p class="welcome__boot-hint">Đang tải…</p>

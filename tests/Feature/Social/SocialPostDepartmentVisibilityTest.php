@@ -4,6 +4,7 @@ namespace Tests\Feature\Social;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Models\Department;
 use Tests\TestCase;
 
@@ -19,6 +20,41 @@ class SocialPostDepartmentVisibilityTest extends TestCase
     private function makeDept(string $code, string $name): Department
     {
         return Department::query()->create(['code' => $code, 'name' => $name, 'is_active' => true]);
+    }
+
+    public function test_department_picker_lists_only_active_hrm_catalog(): void
+    {
+        $company = Company::upsertFromHrm('co-vid', 'VID', 'VA Schools');
+        $hrm = Department::query()->create([
+            'code' => 'VID_PCN',
+            'name' => 'Phòng Công nghệ',
+            'external_code' => 'VM_PCN',
+            'hrm_org_unit_uuid' => 'catalog-pcn',
+            'company_id' => $company->id,
+            'is_active' => true,
+        ]);
+        Department::query()->create([
+            'code' => 'LOCAL',
+            'name' => 'Phòng nội bộ',
+            'is_active' => true,
+        ]);
+        Department::query()->create([
+            'code' => 'OLD',
+            'name' => 'Phòng cũ',
+            'external_code' => 'OLD',
+            'hrm_org_unit_uuid' => 'catalog-old',
+            'is_active' => false,
+        ]);
+
+        $this->actingAs($this->makeUser())
+            ->getJson('/api/social/departments')
+            ->assertOk()
+            ->assertJsonCount(1, 'departments')
+            ->assertJsonPath('departments.0.id', $hrm->id)
+            ->assertJsonPath('departments.0.name', 'Phòng Công nghệ')
+            ->assertJsonPath('departments.0.hrm_code', 'VM_PCN')
+            ->assertJsonPath('departments.0.company_code', 'VID')
+            ->assertJsonPath('departments.0.company_name', 'VA Schools');
     }
 
     public function test_default_mode_is_all_and_visible_to_everyone(): void

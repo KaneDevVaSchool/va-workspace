@@ -27,10 +27,26 @@
   color: var(--welcome-burgundy);
 }
 
-.welcome--boot,
-.welcome--overlay {
+.welcome--boot {
   position: fixed;
   z-index: 9999;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  height: auto;
+  box-sizing: border-box;
+  background-color: #9a0036;
+}
+
+.welcome--overlay {
+  position: fixed;
+  z-index: 120;
   top: 0;
   left: 0;
   right: 0;
@@ -45,8 +61,98 @@
   background-color: var(--welcome-floor);
 }
 
-.welcome--overlay {
-  z-index: 120;
+/* Mobile: boot = màn chào mascot (HTML mẫu). Desktop: logo + spinner gọn. */
+html.va-boot-mobile .welcome--boot {
+  bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+  background-color: var(--welcome-floor);
+}
+
+html.va-boot-mobile .welcome--boot .welcome__boot-compact {
+  display: none;
+}
+
+html.va-boot-desktop .welcome--boot .welcome__scene,
+html.va-boot-desktop .welcome--boot .welcome__wash,
+html.va-boot-desktop .welcome--boot .welcome__header,
+html.va-boot-desktop .welcome--boot .welcome__footer--boot {
+  display: none;
+}
+
+.welcome__boot-compact {
+  display: none;
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  text-align: center;
+  color: var(--welcome-cream);
+}
+
+html.va-boot-desktop .welcome--boot {
+  display: flex;
+  flex-direction: column;
+}
+
+html.va-boot-desktop .welcome--boot .welcome__boot-compact {
+  display: flex;
+}
+
+.welcome__boot-compact-logo {
+  width: auto;
+  max-width: min(100%, 220px);
+  height: auto;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.12));
+}
+
+.welcome__boot-compact-brand {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+html.va-boot-desktop .welcome--boot .welcome__boot-spinner {
+  border-color: rgba(255, 255, 255, 0.28);
+  border-top-color: var(--welcome-cream);
+}
+
+html.va-boot-desktop .welcome--boot .welcome__boot-hint {
+  color: rgba(255, 248, 240, 0.88);
+}
+
+@media (max-width: 768px) {
+  .welcome--boot {
+    bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+    background-color: var(--welcome-floor);
+  }
+
+  .welcome--boot .welcome__boot-compact {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .welcome--boot {
+    display: flex;
+    flex-direction: column;
+    background-color: #9a0036;
+    bottom: 0;
+  }
+
+  .welcome--boot .welcome__scene,
+  .welcome--boot .welcome__wash,
+  .welcome--boot .welcome__header,
+  .welcome--boot .welcome__footer--boot {
+    display: none !important;
+  }
+
+  .welcome--boot .welcome__boot-compact {
+    display: flex;
+  }
 }
 
 /* Tránh lộ nền canvas shell khi overlay mở (Teleport → body). */

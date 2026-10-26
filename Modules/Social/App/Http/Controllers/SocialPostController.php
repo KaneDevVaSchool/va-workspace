@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Identity\App\Models\Department;
+use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\Identity\App\Services\ActivityLogService;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Social\App\Http\Requests\SetSocialReactionRequest;
@@ -31,6 +34,8 @@ class SocialPostController extends Controller
         private readonly ActivityLogService $activityLogs,
         private readonly SocialGroupRepositoryInterface $groups,
         private readonly SocialGroupService $groupService,
+        private readonly DepartmentRepositoryInterface $departments,
+        private readonly HrmDepartmentSyncService $hrmDepartments,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -177,6 +182,33 @@ class SocialPostController extends Controller
     public function meStats(Request $request): JsonResponse
     {
         return response()->json($this->service->profileStats($request->user()));
+    }
+
+    /**
+     * Phòng ban danh mục HRM (đã đồng bộ vào workspace) để chọn ai được thấy bài.
+     * Không trả phòng ban tạo tay trong workspace.
+     */
+    public function departments(): JsonResponse
+    {
+        if (HrmDepartmentSyncService::isConfigured()) {
+            $this->hrmDepartments->syncDepartmentsFromHrm();
+        }
+
+        $rows = $this->departments->allActiveSyncedFromHrmForPicker()
+            ->sortBy(fn (Department $department): string => mb_strtolower(
+                ($department->company?->name ?? '')."\0".($department->name ?? '')
+            ))
+            ->values();
+
+        return response()->json([
+            'departments' => $rows->map(fn (Department $department) => [
+                'id' => $department->id,
+                'name' => $department->name,
+                'hrm_code' => $department->external_code,
+                'company_code' => $department->company?->code,
+                'company_name' => $department->company?->name,
+            ])->values(),
+        ]);
     }
 
     public function revisions(Request $request, int $postId): JsonResponse

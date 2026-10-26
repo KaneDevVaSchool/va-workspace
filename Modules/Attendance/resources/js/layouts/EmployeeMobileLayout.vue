@@ -31,10 +31,7 @@ import EmployeeMobileInstallBanner from '../components/employee-mobile-shell/Emp
 import EmployeeMobileWorkspaceIntro from '../components/employee-mobile-shell/EmployeeMobileWorkspaceIntro.vue';
 import EmployeeMobileBirthdayGreeting from '../components/employee-mobile-shell/EmployeeMobileBirthdayGreeting.vue';
 import { isBirthdayGreetingDismissedToday } from '../lib/employeeBirthdayGreeting.js';
-import {
-  hasSeenWorkspaceIntro,
-  markWorkspaceIntroSeen,
-} from '../lib/employeeMobileWorkspaceIntro';
+import { markWorkspaceIntroSeen } from '../lib/employeeMobileWorkspaceIntro';
 import { EMPLOYEE_MOBILE_TABS } from '../constants/employeeMobileTabs.js';
 import {
   EMPLOYEE_HISTORY_UTILITIES,
@@ -73,7 +70,8 @@ provide('employeePageRefreshRegister', (handler) => {
   };
 });
 
-const showWorkspaceIntro = ref(!hasSeenWorkspaceIntro());
+/** Màn chào mascot chỉ ở boot HTML (mobile); overlay chỉ khi xem lại thủ công. */
+const showWorkspaceIntro = ref(false);
 const showBirthdayGreeting = ref(false);
 const birthdayFirstName = ref('');
 
