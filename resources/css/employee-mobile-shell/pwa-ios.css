@@ -5,6 +5,8 @@
  * · Tab bar: in-flow trong flex shell (không fixed). Fixed + overflow:hidden
  *   trên shell cắt mất nhãn ở mép dưới.
  * · Bàn phím: visualViewport — co shell.
+ * · Header không phủ tai thỏ: padding-top = safe-area, nền shell (canvas)
+ *   chiếm status bar. Gradient header bắt đầu bên dưới.
  */
 
 @media (max-width: 768px) {
@@ -35,6 +37,7 @@
     max-width: 100vw;
     height: var(--employee-shell-height, 100%);
     max-height: var(--employee-shell-height, 100%);
+    padding-top: env(safe-area-inset-top, 0px);
   }
 
   /*
@@ -68,6 +71,7 @@
     max-width: 100vw;
     height: var(--pwa-vv-height, 100%);
     max-height: var(--pwa-vv-height, 100%);
+    padding-top: 0;
   }
 
   html.employee-os-ios.pwa-vv-keyboard .employee-shell--unified.employee-shell--pwa .employee-tabbar--pwa.employee-tabbar--shell {

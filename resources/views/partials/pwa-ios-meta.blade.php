@@ -7,7 +7,7 @@
     $splashV = config('app.pwa_splash_version', '1');
     $iosPwa = config('pwa_ios');
     $iosTitle = $iosPwa['apple_web_app_title'] ?? 'VA Workspace';
-    $iosStatusBar = $iosPwa['status_bar_style'] ?? 'black-translucent';
+    $iosStatusBar = $iosPwa['status_bar_style'] ?? 'default';
     $iosOrientation = $iosPwa['orientation'] ?? 'portrait';
 @endphp
 <meta name="color-scheme" content="light">
