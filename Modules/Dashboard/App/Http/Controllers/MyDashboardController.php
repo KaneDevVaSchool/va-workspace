@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Dashboard\App\Http\Requests\StoreMyProfileChangeRequest;
 use Modules\Dashboard\App\Http\Requests\UpdateMyProfileAvatarRequest;
+use Modules\Dashboard\App\Services\MyDashboardBirthdayGreetingService;
 use Modules\Dashboard\App\Services\MyDashboardDirectoryService;
 use Modules\Dashboard\App\Services\MyDashboardProfileService;
 use Modules\Dashboard\App\Services\MyDashboardService;
@@ -24,6 +25,7 @@ class MyDashboardController extends Controller
         private readonly MyDashboardService $service,
         private readonly MyDashboardDirectoryService $directory,
         private readonly MyDashboardProfileService $profile,
+        private readonly MyDashboardBirthdayGreetingService $birthdayGreeting,
         private readonly AuthenticatedUserPresenter $presenter,
     ) {}
 
@@ -45,6 +47,15 @@ class MyDashboardController extends Controller
     {
         try {
             return response()->json($this->profile->profile($request->user()));
+        } catch (HrmDatabaseUnavailable $e) {
+            return response()->json(['message' => $e->getMessage()], 503);
+        }
+    }
+
+    public function birthdayGreeting(Request $request): JsonResponse
+    {
+        try {
+            return response()->json($this->birthdayGreeting->status($request->user()));
         } catch (HrmDatabaseUnavailable $e) {
             return response()->json(['message' => $e->getMessage()], 503);
         }

@@ -50,6 +50,7 @@ Route::middleware(['auth'])->prefix('dashboard')->group(function () {
         Route::get('/overview', [MyDashboardController::class, 'overview'])->name('overview');
         Route::get('/directory', [MyDashboardController::class, 'directory'])->name('directory');
         Route::get('/profile', [MyDashboardController::class, 'profile'])->name('profile');
+        Route::get('/birthday-greeting', [MyDashboardController::class, 'birthdayGreeting'])->name('birthday-greeting');
         Route::post('/profile/avatar', [MyDashboardController::class, 'updateProfileAvatar'])->name('profile.avatar');
         Route::post('/profile/change-requests', [MyDashboardController::class, 'storeProfileChangeRequest'])
             ->name('profile.change-requests');

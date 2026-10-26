@@ -6,7 +6,7 @@
  *   browser.css           — Safari tab (--employee-shell-height JS)
  *   pwa.css + pwa-ios.css/pwa-android.css — PWA standalone + bàn phím (visualViewport)
  * Theme màu brand "shell thống nhất": theme.css
- * Header ôm tai thỏ (safe-area chỉ ở đỉnh). Đáy màn không cộng home indicator.
+ * Header và đáy màn không cộng safe-area.
  *
  * Debug trên iPhone: localStorage.setItem('va-employee-viewport-debug','1') → reload.
  */
@@ -348,7 +348,6 @@ html.pwa-standalone {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center;
 }
 
 .employee-shell__avatar-initial {

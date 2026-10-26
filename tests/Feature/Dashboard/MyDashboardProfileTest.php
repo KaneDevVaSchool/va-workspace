@@ -19,6 +19,23 @@ class MyDashboardProfileTest extends TestCase
             ->assertUnauthorized();
     }
 
+    public function test_birthday_greeting_requires_authentication(): void
+    {
+        $this->getJson('/api/dashboard/me/birthday-greeting')
+            ->assertUnauthorized();
+    }
+
+    public function test_birthday_greeting_returns_false_without_hrm(): void
+    {
+        $user = User::factory()->create(['name' => 'Test User']);
+        $user->assignRole('viewer');
+
+        $this->actingAs($user)
+            ->getJson('/api/dashboard/me/birthday-greeting')
+            ->assertOk()
+            ->assertJsonPath('is_birthday_today', false);
+    }
+
     public function test_profile_returns_workspace_fallback_without_hrm(): void
     {
         $user = User::factory()->create(['name' => 'Test User']);
