@@ -71,20 +71,18 @@ const headerTitle = computed(() => {
           </span>
           <div class="employee-shell__greeting">
               <template v-if="home">
-                <p class="employee-shell__kicker">{{ greeting }}</p>
+                <p class="employee-shell__kicker">{{ greeting }},</p>
                 <h1 class="employee-shell__hello">
                   {{ firstName || displayName || 'bạn' }}
                 </h1>
-                <div class="employee-shell__meta employee-shell__meta--reserve employee-shell__meta--home">
-                  <span class="employee-shell__date">{{ todayLabel }}</span>
-                  <span
-                    v-if="departmentName || jobTitleName"
-                    class="employee-shell__meta-sep"
-                    aria-hidden="true"
-                  >·</span>
-                  <span v-if="departmentName" class="employee-shell__meta-extra">{{ departmentName }}</span>
-                  <span v-else-if="jobTitleName" class="employee-shell__meta-extra">{{ jobTitleName }}</span>
-                </div>
+                <span class="employee-shell__meta-sep" aria-hidden="true">·</span>
+                <span class="employee-shell__date">{{ todayLabel }}</span>
+                <template v-if="departmentName || jobTitleName">
+                  <span class="employee-shell__meta-sep" aria-hidden="true">·</span>
+                  <span class="employee-shell__meta-extra">{{
+                    departmentName || jobTitleName
+                  }}</span>
+                </template>
               </template>
               <template v-else>
                 <p class="employee-shell__kicker">VA Workspace</p>

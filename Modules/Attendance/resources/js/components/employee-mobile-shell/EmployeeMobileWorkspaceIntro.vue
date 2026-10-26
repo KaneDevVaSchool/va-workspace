@@ -2,6 +2,7 @@
 //
 // Onboarding lần đầu — giao diện khớp mẫu va-workspace-html (welcome screen).
 //
+import { onMounted, onUnmounted } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import {
   EMPLOYEE_WELCOME_COPY,
@@ -11,12 +12,23 @@ import {
 
 const emit = defineEmits(['start']);
 
+const OVERLAY_HTML_CLASS = 'welcome-overlay-active';
+
+onMounted(() => {
+  document.documentElement.classList.add(OVERLAY_HTML_CLASS);
+});
+
+onUnmounted(() => {
+  document.documentElement.classList.remove(OVERLAY_HTML_CLASS);
+});
+
 function onStart() {
   emit('start');
 }
 </script>
 
 <template>
+  <Teleport to="body">
   <main
     class="welcome welcome--overlay"
     role="dialog"
@@ -59,4 +71,5 @@ function onStart() {
       <span class="welcome__school">{{ EMPLOYEE_WELCOME_COPY.school }}</span>
     </footer>
   </main>
+  </Teleport>
 </template>
