@@ -11,6 +11,8 @@ import AppIcon from '@/components/AppIcon.vue';
 const props = defineProps({
   isHome: { type: Boolean, default: false },
   isProfile: { type: Boolean, default: false },
+  /** Nút logo → quay lại (hồ sơ hoặc hub con của Lịch sử). */
+  brandBack: { type: Boolean, default: false },
   greeting: { type: String, default: '' },
   firstName: { type: String, default: '' },
   displayName: { type: String, default: '' },
@@ -54,32 +56,31 @@ const searchModel = computed({
   >
     <div class="employee-shell__header-deco" aria-hidden="true"></div>
     <div class="employee-shell__header-top">
-      <div class="employee-shell__header-lead">
-        <button
-          v-if="isProfile"
-          type="button"
-          class="employee-shell__brand-mark employee-shell__back-btn"
-          aria-label="Quay lại"
-          @click="emit('back')"
-        >
-          <AppIcon name="chevronLeft" :size="20" :stroke-width="2" />
-        </button>
-        <button
-          v-else
-          type="button"
-          class="employee-shell__brand-mark"
-          aria-label="Mở hồ sơ cá nhân"
-          @click="emit('open-profile')"
-        >
-          <img
-            src="/images/pwa/icon-192.png"
-            alt=""
-            class="employee-shell__brand-logo employee-shell__brand-logo--pwa"
-            width="40"
-            height="40"
-          />
-        </button>
-        <div class="employee-shell__greeting">
+      <button
+        v-if="isProfile || brandBack"
+        type="button"
+        class="employee-shell__brand-mark employee-shell__back-btn"
+        aria-label="Quay lại"
+        @click="emit('back')"
+      >
+        <AppIcon name="chevronLeft" :size="20" :stroke-width="2" />
+      </button>
+      <button
+        v-else
+        type="button"
+        class="employee-shell__brand-mark"
+        aria-label="Mở hồ sơ cá nhân"
+        @click="emit('open-profile')"
+      >
+        <img
+          src="/images/pwa/icon-192.png"
+          alt=""
+          class="employee-shell__brand-logo employee-shell__brand-logo--pwa"
+          width="40"
+          height="40"
+        />
+      </button>
+      <div class="employee-shell__greeting">
           <template v-if="isHome">
             <p class="employee-shell__kicker">{{ greeting }}</p>
             <h1 class="employee-shell__hello">
@@ -115,31 +116,32 @@ const searchModel = computed({
             <p v-else-if="!pageTitle && jobTitleName" class="employee-shell__date">{{ jobTitleName }}</p>
           </template>
         </div>
-      </div>
       <div class="employee-shell__header-actions">
-        <button
-          type="button"
-          class="employee-shell__icon-btn"
-          :disabled="headerRefreshing"
-          aria-label="Làm mới trang"
-          @click="emit('refresh')"
-        >
-          <AppIcon
-            name="refresh"
-            :size="20"
-            :stroke-width="1.8"
-            :class="{ 'employee-shell__icon-btn-spin': headerRefreshing }"
-          />
-        </button>
-        <button
-          type="button"
-          class="employee-shell__icon-btn employee-shell__icon-btn--chat"
-          :aria-label="chatHeaderAria"
-          @click="emit('open-chat')"
-        >
-          <AppIcon name="messageCircle" :size="20" :stroke-width="1.8" />
-          <span v-if="chatUnreadLabel" class="employee-shell__chat-badge">{{ chatUnreadLabel }}</span>
-        </button>
+        <div class="employee-shell__tool-cluster">
+          <button
+            type="button"
+            class="employee-shell__icon-btn"
+            :disabled="headerRefreshing"
+            aria-label="Làm mới trang"
+            @click="emit('refresh')"
+          >
+            <AppIcon
+              name="refresh"
+              :size="20"
+              :stroke-width="1.8"
+              :class="{ 'employee-shell__icon-btn-spin': headerRefreshing }"
+            />
+          </button>
+          <button
+            type="button"
+            class="employee-shell__icon-btn employee-shell__icon-btn--chat"
+            :aria-label="chatHeaderAria"
+            @click="emit('open-chat')"
+          >
+            <AppIcon name="messageCircle" :size="20" :stroke-width="1.8" />
+            <span v-if="chatUnreadLabel" class="employee-shell__chat-badge">{{ chatUnreadLabel }}</span>
+          </button>
+        </div>
         <button
           v-if="!isProfile"
           type="button"

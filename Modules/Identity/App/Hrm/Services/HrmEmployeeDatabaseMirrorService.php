@@ -94,7 +94,7 @@ class HrmEmployeeDatabaseMirrorService
     /**
      * Tìm trên DB HRM rồi tạo/cập nhật users.id tương ứng. Không đọc danh bạ từ bảng users.
      *
-     * @return list<array{id: int, name: string, avatar_url: ?string, department: ?string, company_name: ?string}>
+     * @return list<array{id: int, name: string, avatar_url: ?string, department: ?string, job_title_name: ?string, company_name: ?string}>
      */
     public function mappedSearch(string $needle, int $limit, ?int $excludeUserId = null): array
     {
@@ -132,6 +132,7 @@ class HrmEmployeeDatabaseMirrorService
                 'name' => filled($employee['full_name'] ?? null) ? (string) $employee['full_name'] : $user->name,
                 'avatar_url' => filled($employee['avatar_url'] ?? null) ? (string) $employee['avatar_url'] : $user->avatar_url,
                 'department' => filled($employee['department_name'] ?? null) ? (string) $employee['department_name'] : null,
+                'job_title_name' => filled($employee['job_title'] ?? null) ? (string) $employee['job_title'] : null,
                 'company_name' => filled($employee['company_name'] ?? null) ? (string) $employee['company_name'] : null,
             ];
 

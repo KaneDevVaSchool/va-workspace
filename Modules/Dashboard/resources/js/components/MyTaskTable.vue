@@ -1,4 +1,7 @@
 <script setup>
+import AppIcon from '@/components/AppIcon.vue';
+import { useDragScroll } from '@/composables/useDragScroll';
+import { ref } from 'vue';
 import { statusColor } from '../utils/chartColors';
 
 const props = defineProps({
@@ -9,8 +12,24 @@ const props = defineProps({
 
 const emit = defineEmits(['accept-task']);
 
-function dotStyle(status) {
-  return { background: statusColor(status) };
+const tableWrap = ref(null);
+useDragScroll(tableWrap, { axis: 'both' });
+
+function statusStyle(status) {
+  const color = statusColor(status);
+  return {
+    '--status-color': color,
+    background: `color-mix(in srgb, ${color} 14%, var(--color-surface))`,
+    color: `color-mix(in srgb, ${color} 72%, var(--color-text))`,
+  };
+}
+
+function progressFillStyle(task) {
+  const pct = Math.min(100, Math.max(0, Number(task.progress_percent) || 0));
+  return {
+    width: `${pct}%`,
+    background: statusColor(task.status),
+  };
 }
 
 function formatDate(value) {
@@ -38,9 +57,15 @@ function onAccept(task) {
 
 <template>
   <div class="my-task-table">
-    <div v-if="!loading && rows.length === 0" class="my-task-table__empty">Bạn chưa có công việc nào được giao.</div>
+    <div v-if="!loading && rows.length === 0" class="my-task-table__empty">
+      <span class="my-task-table__empty-icon" aria-hidden="true">
+        <AppIcon name="clipboardCheck" :size="28" />
+      </span>
+      <p class="my-task-table__empty-title">Không có công việc phù hợp</p>
+      <p class="my-task-table__empty-hint">Thử bỏ bộ lọc hoặc đổi từ khóa tìm kiếm.</p>
+    </div>
 
-    <div v-else class="my-task-table__wrap hide-scrollbar">
+    <div v-else ref="tableWrap" class="my-task-table__wrap hide-scrollbar">
       <table class="my-task-table__table">
         <thead>
           <tr>
@@ -59,10 +84,19 @@ function onAccept(task) {
             <td class="my-task-table__col-title">{{ task.title }}</td>
             <td class="my-task-table__col-project">{{ task.project_name ?? '—' }}</td>
             <td class="my-task-table__col-status">
-              <span class="my-task-table__dot" :style="dotStyle(task.status)" aria-hidden="true"></span>
-              {{ task.status_label }}
+              <span class="my-task-table__status" :style="statusStyle(task.status)">
+                <span class="my-task-table__dot" aria-hidden="true"></span>
+                {{ task.status_label }}
+              </span>
             </td>
-            <td class="my-task-table__col-progress">{{ formatProgress(task.progress_percent) }}</td>
+            <td class="my-task-table__col-progress">
+              <div class="my-task-table__progress">
+                <div class="my-task-table__progress-track" aria-hidden="true">
+                  <div class="my-task-table__progress-fill" :style="progressFillStyle(task)" />
+                </div>
+                <span class="my-task-table__progress-text">{{ formatProgress(task.progress_percent) }}</span>
+              </div>
+            </td>
             <td class="my-task-table__col-assigner">{{ task.creator_name ?? '—' }}</td>
             <td class="my-task-table__col-time">{{ formatTimeRange(task) }}</td>
             <td class="my-task-table__col-date" :class="{ 'my-task-table__col-date--overdue': task.is_overdue }">
@@ -93,10 +127,36 @@ function onAccept(task) {
 }
 
 .my-task-table__empty {
-  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
   text-align: center;
+}
+
+.my-task-table__empty-icon {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
+.my-task-table__empty-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.my-task-table__empty-hint {
+  margin: 0;
+  font-size: 0.8125rem;
   color: var(--color-text-muted);
-  font-size: 0.875rem;
+  max-width: 18rem;
 }
 
 .my-task-table__wrap {
@@ -174,12 +234,54 @@ function onAccept(task) {
   font-size: 0.8125rem;
 }
 
+.my-task-table__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-full);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .my-task-table__dot {
   display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.4rem;
+  height: 0.4rem;
   border-radius: var(--radius-full);
-  margin-right: var(--space-1);
+  background: var(--status-color);
+  flex-shrink: 0;
+}
+
+.my-task-table__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 5.5rem;
+}
+
+.my-task-table__progress-track {
+  flex: 1;
+  height: 0.375rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  overflow: hidden;
+  min-width: 3rem;
+}
+
+.my-task-table__progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.35s ease;
+}
+
+.my-task-table__progress-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  min-width: 2.25rem;
+  text-align: right;
 }
 
 @media (max-width: 480px) {

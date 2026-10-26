@@ -116,10 +116,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  margin: calc(-1 * var(--space-3));
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  border-radius: var(--radius-lg);
+  margin: 0 calc(-1 * var(--space-3)) calc(-1 * var(--space-3));
   overflow: hidden;
 }
 </style>

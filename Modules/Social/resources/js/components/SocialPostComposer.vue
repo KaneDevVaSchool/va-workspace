@@ -664,9 +664,9 @@ defineExpose({ expand });
 .composer__actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: var(--space-2);
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   min-width: 0;
   box-shadow: 0 -1px 0 var(--color-border);
   padding-top: var(--space-3);
@@ -678,11 +678,11 @@ defineExpose({ expand });
   align-items: center;
   flex-wrap: nowrap;
   gap: var(--space-1);
-  min-width: 0;
+  flex-shrink: 0;
+  max-width: 100%;
 }
 
 .composer__actions-right {
-  flex-shrink: 0;
   margin-left: auto;
 }
 
@@ -821,7 +821,7 @@ defineExpose({ expand });
   display: none;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .composer__scope-toggle span,
   .composer__system-toggle span {
     display: none;
@@ -831,6 +831,19 @@ defineExpose({ expand });
   .composer__system-toggle {
     max-width: none;
     padding: var(--space-1);
+  }
+}
+
+.composer--expanded .composer__actions-right {
+  flex: 1 1 100%;
+  justify-content: flex-end;
+  margin-left: 0;
+}
+
+@media (min-width: 641px) {
+  .composer--expanded .composer__actions-right {
+    flex: 0 1 auto;
+    margin-left: auto;
   }
 }
 

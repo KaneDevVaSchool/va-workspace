@@ -33,6 +33,11 @@ import {
   hasSeenWorkspaceIntro,
   markWorkspaceIntroSeen,
 } from '../lib/employeeMobileWorkspaceIntro';
+import { EMPLOYEE_MOBILE_TABS } from '../constants/employeeMobileTabs.js';
+import {
+  EMPLOYEE_HISTORY_UTILITIES,
+  isHistoryUtilityId,
+} from '../constants/employeeHistoryUtilities.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -129,14 +134,6 @@ const tabbarNavEl = computed(() => tabbarComponentRef.value?.navEl ?? null);
 useEmployeeTabbarDock(tabbarNavEl);
 useEmployeeMobileViewport();
 
-const TABS = [
-  { name: 'dashboard.me', icon: 'home', label: 'Trang chủ' },
-  { name: 'employee.feed', icon: 'megaphone', label: 'Bảng tin' },
-  { name: 'employee.attendance', icon: 'clock', label: 'Chấm công', primary: true },
-  { name: 'employee.leave', icon: 'calendar', label: 'Nghỉ phép' },
-  { name: 'employee.requests', icon: 'clipboardCheck', label: 'Lịch sử' },
-];
-
 function onTabReselect() {
   const el = contentRef.value;
   if (!el) return;
@@ -177,21 +174,33 @@ const avatarInitial = computed(() => {
 
 const isHomeHeader = computed(() => route.name === 'dashboard.me');
 
+const historyRequestsSubView = computed(() => {
+  if (route.name !== 'employee.requests') return '';
+  const view = String(route.query.view || '');
+  return isHistoryUtilityId(view) ? view : '';
+});
+
 const pageHeaderTitle = computed(() => {
   if (isHomeHeader.value) return '';
+  if (historyRequestsSubView.value) {
+    const item = EMPLOYEE_HISTORY_UTILITIES.find((u) => u.id === historyRequestsSubView.value);
+    return item?.label ?? 'Lịch sử';
+  }
   const title = route.meta?.title;
   return typeof title === 'string' ? title.trim() : '';
 });
+
+const brandBack = computed(
+  () => isProfileRoute.value || Boolean(historyRequestsSubView.value),
+);
 
 const isChatRoute = computed(() => route.name === 'employee.chat');
 const hideHeaderForChatThread = computed(
   () => isChatRoute.value && chatStore.activeView === 'conversation',
 );
 
-/** Subpage full-screen (hồ sơ): không bottom nav — tránh lộ vùng đáy PWA iOS. */
-const hideTabbar = computed(
-  () => hideHeaderForChatThread.value || isProfileRoute.value,
-);
+/** Chỉ ẩn tab bar khi đang trong một hội thoại chat (màn full). Hồ sơ vẫn hiện menu dưới. */
+const hideTabbar = computed(() => hideHeaderForChatThread.value);
 
 const chatUnreadLabel = computed(() => {
   if (chatStore.unreadTotal <= 0) return '';
@@ -240,6 +249,10 @@ function goToProfile() {
 }
 
 function goBackFromSubpage() {
+  if (historyRequestsSubView.value) {
+    router.replace({ name: 'employee.requests' });
+    return;
+  }
   if (window.history.length > 1) {
     router.back();
     return;
@@ -262,6 +275,7 @@ function goBackFromSubpage() {
       v-if="!hideHeaderForChatThread"
       :is-home="isHomeHeader"
       :is-profile="isProfileRoute"
+      :brand-back="brandBack"
       :greeting="greeting"
       :first-name="firstName"
       :display-name="displayName"
@@ -322,8 +336,9 @@ function goBackFromSubpage() {
     <EmployeeMobileTabbar
       v-if="!hideTabbar"
       ref="tabbarComponentRef"
-      :tabs="TABS"
+      :tabs="EMPLOYEE_MOBILE_TABS"
       :active-name="route.name"
+      :shell-page-key="route.path"
       :is-mobile-pwa="isMobilePwa"
       @reselect="onTabReselect"
     />

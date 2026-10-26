@@ -67,7 +67,8 @@
 }
 
 .employee-tabbar--pwa.employee-tabbar--shell {
-  padding-bottom: 0;
+  /* Padding nằm trong flex shell — không dán pill sát mép rồi bị overflow:hidden cắt chữ. */
+  padding-bottom: var(--space-3);
 }
 
 /* Vùng dưới pill tab bar — nền canvas, không inset safe-area. */

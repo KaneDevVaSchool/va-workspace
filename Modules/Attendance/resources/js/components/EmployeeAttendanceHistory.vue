@@ -28,6 +28,10 @@ const canNextMonth = computed(() => {
 
 const monthModel = computed(() => buildAttendanceMonth(viewMonth.value, punchLog.value));
 
+const showSampleNote = computed(() =>
+  monthModel.value.rows.some((row) => row.sample),
+);
+
 function shiftMonth(delta) {
   const cursor = viewMonth.value;
   viewMonth.value = new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1);
@@ -79,8 +83,8 @@ defineExpose({ reload });
       </article>
     </div>
 
-    <p class="att-history__note">
-      Ngày chưa chấm trên máy này là số minh họa. Lần chấm của bạn được giữ trên máy và hiện ở đúng ngày đó.
+    <p v-if="showSampleNote" class="att-history__note">
+      Có dòng minh họa — ngày bạn chấm trên máy này hiển thị không kèm nhãn đó.
     </p>
 
     <article

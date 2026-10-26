@@ -2,8 +2,9 @@
  * Shell mobile nhân viên — PWA standalone trên iOS (WebKit).
  *
  * · Chiều cao: --employee-shell-height = innerHeight (JS, app.blade + viewport.js).
- * · Tab bar: position fixed sát đáy viewport + nền canvas (tránh dải trắng body).
- * · Bàn phím: visualViewport — co shell; tab bar trở lại in-flow.
+ * · Tab bar: in-flow trong flex shell (không fixed). Fixed + overflow:hidden
+ *   trên shell cắt mất nhãn ở mép dưới.
+ * · Bàn phím: visualViewport — co shell.
  */
 
 @media (max-width: 768px) {
@@ -37,37 +38,26 @@
   }
 
   /*
-   * Tab bar dính đáy màn hình, nền canvas (không lộ --color-surface trắng).
+   * Tab bar ở lại trong cột flex. position:fixed + overflow:hidden trên shell
+   * cắt nhãn sát đáy. Nền canvas phủ khoảng trống dưới pill.
    */
   html.employee-os-ios.pwa-standalone:not(.pwa-vv-keyboard)
     .employee-shell--unified.employee-shell--pwa
     .employee-tabbar--pwa.employee-tabbar--shell {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 24;
+    position: relative;
+    z-index: 3;
     width: 100%;
     max-width: 100vw;
     margin: 0;
-    padding: 0 var(--space-2) var(--space-2);
+    padding: 0 var(--space-2) var(--space-3);
     background: var(--employee-unified-canvas-bg, var(--color-bg));
     box-sizing: border-box;
   }
 
   html.employee-os-ios.pwa-standalone:not(.pwa-vv-keyboard)
     .employee-shell--unified.employee-shell--pwa
-    .employee-tabbar--pwa
-    .employee-tabbar__bar {
-    padding-bottom: var(--space-1);
-  }
-
-  html.employee-os-ios.pwa-standalone:not(.pwa-vv-keyboard)
-    .employee-shell--unified.employee-shell--pwa
     .employee-shell__content--unified {
-    padding-bottom: calc(
-      var(--employee-tabbar-block-size, 4.5rem) + var(--space-2)
-    );
+    padding-bottom: var(--space-3);
   }
 
   html.employee-os-ios.pwa-vv-keyboard .employee-shell--pwa:not(.emp-shell-preview__shell) {

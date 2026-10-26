@@ -104,21 +104,15 @@ html.pwa-standalone {
 .employee-shell__header-top {
   position: relative;
   z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.employee-shell__header-lead {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  min-width: 0;
-  flex: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "mark greet actions";
+  align-items: start;
+  column-gap: var(--space-2);
 }
 
 .employee-shell__brand-mark {
+  grid-area: mark;
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -135,6 +129,11 @@ html.pwa-standalone {
 
 .employee-shell__brand-mark:active {
   transform: scale(0.96);
+}
+
+.employee-shell__brand-mark:focus-visible {
+  outline: 2px solid var(--color-on-primary);
+  outline-offset: 2px;
 }
 
 .employee-shell__brand-logo {
@@ -160,6 +159,7 @@ html.pwa-standalone {
 }
 
 .employee-shell__greeting {
+  grid-area: greet;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -231,10 +231,21 @@ html.pwa-standalone {
 }
 
 .employee-shell__header-actions {
+  grid-area: actions;
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 0.45rem;
+}
+
+.employee-shell__tool-cluster {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .employee-shell__icon-btn {
@@ -260,6 +271,12 @@ html.pwa-standalone {
 .employee-shell__icon-btn:disabled {
   opacity: 0.65;
   cursor: default;
+}
+
+.employee-shell__icon-btn:focus-visible,
+.employee-shell__avatar-btn:focus-visible {
+  outline: 2px solid var(--color-on-primary);
+  outline-offset: 2px;
 }
 
 .employee-shell__icon-btn-spin {
@@ -401,6 +418,13 @@ html.pwa-standalone {
 
 .employee-shell__content--attendance {
   padding: var(--space-3) var(--space-3) var(--space-5);
+  scrollbar-width: none;
+}
+
+.employee-shell__content--attendance::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .employee-shell__content--chat {
@@ -527,20 +551,68 @@ html.pwa-standalone {
   cursor: pointer;
 }
 
+@keyframes employee-tabbar-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(1.75rem) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes employee-tabbar-rise-route {
+  from {
+    opacity: 0.88;
+    transform: translateY(0.75rem) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes employee-tabbar-icon-rise {
+  from {
+    transform: translateY(0.35rem);
+  }
+
+  to {
+    transform: translateY(var(--employee-tabbar-icon-lift, -0.2rem));
+  }
+}
+
+@keyframes employee-tabbar-primary-rise {
+  from {
+    transform: translateY(-0.15rem) scale(0.94);
+  }
+
+  to {
+    transform: translateY(var(--employee-tabbar-primary-active-lift, -0.75rem)) scale(1.05);
+  }
+}
+
 .employee-tabbar--shell {
   --employee-tabbar-height: 4rem;
+  --employee-tabbar-icon-lift: -0.2rem;
+  --employee-tabbar-primary-lift: -0.55rem;
+  --employee-tabbar-primary-active-lift: -0.75rem;
   position: relative;
   z-index: 3;
   flex: 0 0 auto;
   width: 100%;
   box-sizing: border-box;
   margin: 0;
-  padding: 0 var(--space-2) var(--space-2);
+  padding: 0 var(--space-2) var(--space-3);
   background: transparent;
   box-shadow: none;
 }
 
 .employee-tabbar__bar {
+  position: relative;
   box-sizing: border-box;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -556,11 +628,47 @@ html.pwa-standalone {
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--color-border) 85%, transparent),
     0 -4px 24px color-mix(in srgb, var(--color-tertiary-900) 8%, transparent),
+    0 12px 32px color-mix(in srgb, var(--color-tertiary-900) 12%, transparent),
     var(--shadow-md);
+  transform-origin: center bottom;
+}
+
+.employee-tabbar__bar--enter-initial {
+  animation: employee-tabbar-rise-in 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+.employee-tabbar__bar--enter-route {
+  animation: employee-tabbar-rise-route 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+.employee-tabbar__indicator {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  z-index: 0;
+  height: 2.625rem;
+  margin: 0;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-tertiary-surface) 55%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-tertiary-200) 40%, transparent);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(0, -50%, 0);
+  transition:
+    transform 420ms cubic-bezier(0.34, 1.25, 0.64, 1),
+    width 420ms cubic-bezier(0.34, 1.25, 0.64, 1),
+    opacity 200ms ease;
+}
+
+.employee-tabbar__indicator--visible {
+  opacity: 1;
 }
 
 .employee-tabbar__item {
   position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -591,16 +699,22 @@ html.pwa-standalone {
   width: 1.75rem;
   height: 1.75rem;
   border-radius: var(--radius-full);
-  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+  transition:
+    background 220ms ease,
+    color 220ms ease,
+    transform 380ms cubic-bezier(0.34, 1.35, 0.64, 1),
+    box-shadow 220ms ease;
 }
 
 .employee-tabbar__item--primary .employee-tabbar__icon {
   width: 2.5rem;
   height: 2.5rem;
+  transform: translateY(var(--employee-tabbar-primary-lift));
   background: linear-gradient(165deg, var(--color-tertiary-400) 0%, var(--color-tertiary-700) 100%);
   color: var(--color-on-tertiary);
   box-shadow:
     0 8px 16px color-mix(in srgb, var(--color-tertiary-800) 32%, transparent),
+    0 14px 28px color-mix(in srgb, var(--color-tertiary-800) 18%, transparent),
     inset 0 1px 0 color-mix(in srgb, var(--color-on-tertiary) 35%, transparent);
 }
 
@@ -609,9 +723,12 @@ html.pwa-standalone {
 }
 
 .employee-tabbar__item--primary.employee-tabbar__item--active .employee-tabbar__icon {
+  transform: translateY(var(--employee-tabbar-primary-active-lift)) scale(1.05);
+  animation: employee-tabbar-primary-rise 480ms cubic-bezier(0.34, 1.35, 0.64, 1) both;
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--color-tertiary-100) 88%, white),
-    0 8px 16px color-mix(in srgb, var(--color-tertiary-800) 36%, transparent);
+    0 10px 22px color-mix(in srgb, var(--color-tertiary-800) 38%, transparent),
+    0 16px 32px color-mix(in srgb, var(--color-tertiary-800) 16%, transparent);
 }
 
 .employee-tabbar__badge {
@@ -635,20 +752,43 @@ html.pwa-standalone {
   max-width: 100%;
   font-size: 0.625rem;
   font-weight: 600;
-  line-height: 1.15;
+  line-height: 1.35;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   letter-spacing: 0.01em;
 }
 
 .employee-tabbar__item--active:not(.employee-tabbar__item--primary) {
   color: var(--color-tertiary-800);
-  background: color-mix(in srgb, var(--color-tertiary-surface) 55%, transparent);
+  background: transparent;
 }
 
 .employee-tabbar__item--active:not(.employee-tabbar__item--primary) .employee-tabbar__icon {
+  transform: translateY(var(--employee-tabbar-icon-lift));
   background: var(--color-tertiary);
   color: var(--color-on-primary);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-tertiary-700) 35%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-tertiary-700) 38%, transparent);
+  animation: employee-tabbar-icon-rise 420ms cubic-bezier(0.34, 1.35, 0.64, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .employee-tabbar__bar--enter-initial,
+  .employee-tabbar__bar--enter-route {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .employee-tabbar__item--active:not(.employee-tabbar__item--primary) .employee-tabbar__icon,
+  .employee-tabbar__item--primary.employee-tabbar__item--active .employee-tabbar__icon {
+    animation: none;
+  }
+
+  .employee-tabbar__indicator {
+    transition-duration: 0.01ms;
+  }
+
+  .employee-tabbar__icon {
+    transition-duration: 0.01ms;
+  }
 }

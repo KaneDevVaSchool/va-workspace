@@ -2,12 +2,14 @@
 import { ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { searchUsers } from '../api/chatApi';
+import { formatPeerMeta } from '../lib/chatPeerMeta';
 import { useChatStore } from '../store/chatStore';
 
 const store = useChatStore();
 const query = ref('');
 const results = ref([]);
 const searching = ref(false);
+const focused = ref(false);
 let debounceTimer = null;
 
 watch(query, (value) => {
@@ -42,59 +44,85 @@ function initial(name) {
 
 <template>
   <div class="chat-search">
-    <div class="chat-search__field">
+    <div class="chat-search__field" :class="{ 'chat-search__field--focus': focused || query.trim() !== '' }">
       <AppIcon name="search" :size="16" :stroke-width="1.75" />
       <input
         v-model="query"
         type="text"
         class="chat-search__input"
-        placeholder="Tìm tên đồng nghiệp..."
+        placeholder="Tìm tên, mã hoặc email đồng nghiệp…"
         aria-label="Tìm người để trò chuyện"
+        @focus="focused = true"
+        @blur="focused = false"
       />
-    </div>
-
-    <div v-if="query.trim() !== ''" class="chat-search__results">
-      <p v-if="searching" class="chat-search__empty">Đang tìm…</p>
-      <p v-else-if="results.length === 0" class="chat-search__empty">Không tìm thấy ai phù hợp.</p>
       <button
-        v-for="user in results"
-        v-else
-        :key="user.id"
+        v-if="query.trim() !== ''"
         type="button"
-        class="chat-search__item"
-        @click="pick(user)"
+        class="chat-search__clear"
+        aria-label="Xoá từ khoá tìm kiếm"
+        @click="query = ''"
       >
-        <img
-          v-if="user.avatar_url"
-          class="chat-search__avatar"
-          :src="user.avatar_url"
-          :alt="`Ảnh đại diện của ${user.name}`"
-        />
-        <span v-else class="chat-search__avatar chat-search__avatar--placeholder">{{ initial(user.name) }}</span>
-        <span class="chat-search__item-body">
-          <span class="chat-search__item-name">{{ user.name }}</span>
-          <span v-if="user.department" class="chat-search__item-dept">{{ user.department }}</span>
-        </span>
+        <AppIcon name="close" :size="14" :stroke-width="1.75" />
       </button>
     </div>
+
+    <Transition name="chat-picker">
+      <div v-if="query.trim() !== ''" class="chat-search__results">
+        <p v-if="searching" class="chat-search__empty">Đang tìm…</p>
+        <p v-else-if="results.length === 0" class="chat-search__empty">Không tìm thấy ai phù hợp.</p>
+        <button
+          v-for="(user, index) in results"
+          v-else
+          :key="user.id"
+          type="button"
+          class="chat-search__item"
+          :style="{ animationDelay: `${index * 40}ms` }"
+          @click="pick(user)"
+        >
+          <img
+            v-if="user.avatar_url"
+            class="chat-search__avatar"
+            :src="user.avatar_url"
+            :alt="`Ảnh đại diện của ${user.name}`"
+          />
+          <span v-else class="chat-search__avatar chat-search__avatar--placeholder">{{ initial(user.name) }}</span>
+          <span class="chat-search__item-body">
+            <span class="chat-search__item-name">{{ user.name }}</span>
+            <span v-if="formatPeerMeta(user)" class="chat-search__item-meta">{{ formatPeerMeta(user) }}</span>
+          </span>
+          <AppIcon class="chat-search__chevron" name="chevronRight" :size="16" :stroke-width="1.75" />
+        </button>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <style scoped>
 .chat-search {
   flex-shrink: 0;
-  padding: var(--space-2) var(--space-3);
-  box-shadow: 0 1px 0 var(--color-border);
+  padding: 0 var(--space-3) var(--space-2);
 }
 
 .chat-search__field {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0.5rem var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
+  padding: 0.55rem var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
   color: var(--color-text-muted);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    0 2px 10px color-mix(in srgb, var(--color-tertiary-900) 4%, transparent);
+  transition:
+    box-shadow 180ms ease,
+    background 180ms ease;
+}
+
+.chat-search__field--focus {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, var(--color-border)),
+    0 4px 14px color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
 .chat-search__input {
@@ -111,10 +139,29 @@ function initial(name) {
   outline: none;
 }
 
+.chat-search__clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
 .chat-search__results {
-  max-height: 14rem;
+  max-height: 15rem;
   overflow-y: auto;
   margin-top: var(--space-2);
+  padding: 0.25rem;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-lg);
 }
 
 .chat-search__empty {
@@ -133,19 +180,21 @@ function initial(name) {
   border: none;
   background: transparent;
   text-align: left;
-  padding: 0.5rem var(--space-2);
-  border-radius: var(--radius-sm);
+  padding: 0.55rem var(--space-2);
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-family: inherit;
+  animation: chat-list-item-in 260ms ease both;
+  transition: background 120ms ease;
 }
 
 .chat-search__item:hover {
-  background: var(--color-surface-muted);
+  background: var(--color-primary-surface);
 }
 
 .chat-search__avatar {
-  width: 2rem;
-  height: 2rem;
+  width: 2.125rem;
+  height: 2.125rem;
   border-radius: var(--radius-full);
   object-fit: cover;
   flex-shrink: 0;
@@ -166,6 +215,7 @@ function initial(name) {
   flex-direction: column;
   gap: 0.125rem;
   min-width: 0;
+  flex: 1;
 }
 
 .chat-search__item-name {
@@ -174,8 +224,17 @@ function initial(name) {
   font-weight: 600;
 }
 
-.chat-search__item-dept {
+.chat-search__item-meta {
   color: var(--color-text-muted);
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-search__chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  opacity: 0.6;
 }
 </style>

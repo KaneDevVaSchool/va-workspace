@@ -3,6 +3,7 @@
 namespace Modules\Identity\App\Services;
 
 use App\Models\User;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
 use Modules\Identity\App\Hrm\Services\HrmEmployeeDatabaseMirrorService;
 use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
@@ -16,10 +17,11 @@ class WorkspaceColleagueSearchService
     public function __construct(
         private readonly UserRepositoryInterface $users,
         private readonly HrmEmployeeDatabaseMirrorService $mirror,
+        private readonly HrmDepartmentSyncService $hrmDepartments,
     ) {}
 
     /**
-     * @return list<array{id: int, name: string, avatar_url: ?string, department: ?string, company_name: ?string}>
+     * @return list<array{id: int, name: string, avatar_url: ?string, department: ?string, job_title_name: ?string, company_name: ?string}>
      */
     public function search(string $query, int $limit = 8, ?int $excludeUserId = null): array
     {
@@ -33,6 +35,7 @@ class WorkspaceColleagueSearchService
                 'name' => $user->name,
                 'avatar_url' => $user->avatar_url,
                 'department' => $user->department?->name,
+                'job_title_name' => $this->hrmDepartments->hrmJobTitleFor($user),
                 'company_name' => $user->resolveCompanyName(),
             ])
             ->values()

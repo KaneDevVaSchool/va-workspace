@@ -89,17 +89,19 @@ onMounted(() => {
   padding: 0 var(--space-3);
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
+  background: var(--color-primary-surface);
+  color: var(--color-primary-900, var(--color-primary));
   font-family: inherit;
   font-size: 0.8125rem;
-  font-weight: 500;
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, var(--color-border));
   cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
 
 .dashboard-me__refresh:hover:not(:disabled) {
-  background: var(--color-surface-muted);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-primary-surface));
+  transform: translateY(-1px);
 }
 
 .dashboard-me__refresh:disabled {

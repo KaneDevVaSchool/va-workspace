@@ -1,11 +1,10 @@
+import { EMPLOYEE_MOBILE_TABS } from '@modules/Attendance/resources/js/constants/employeeMobileTabs.js';
+
 /** Tab bar cố định app PWA nhân viên — dùng chung preview cấu hình superadmin. */
-export const EMPLOYEE_PWA_TABBAR = [
-  { routeName: 'dashboard.me', icon: 'home', label: 'Trang chủ' },
-  { routeName: 'employee.feed', icon: 'megaphone', label: 'Bảng tin' },
-  { routeName: 'employee.attendance', icon: 'clock', label: 'Chấm công', primary: true },
-  { routeName: 'employee.leave', icon: 'calendar', label: 'Nghỉ phép' },
-  { routeName: 'employee.requests', icon: 'clipboardCheck', label: 'Lịch sử' },
-];
+export const EMPLOYEE_PWA_TABBAR = EMPLOYEE_MOBILE_TABS.map(({ name, ...rest }) => ({
+  routeName: name,
+  ...rest,
+}));
 
 /** Nhãn màn hình xem thử trên trang cấu hình PWA. */
 export const EMPLOYEE_PWA_PREVIEW_MODES = {

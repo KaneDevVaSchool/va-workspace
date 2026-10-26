@@ -19,6 +19,7 @@ use Modules\Chat\App\Models\Message;
 use Modules\Chat\App\Repositories\Contracts\ConversationRepositoryInterface;
 use Modules\Chat\App\Repositories\Contracts\MessageRepositoryInterface;
 use Modules\Identity\App\Models\UserNotification;
+use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
 use Modules\Identity\App\Services\NotificationService;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -33,6 +34,7 @@ class ChatService
         private readonly ConversationRepositoryInterface $conversations,
         private readonly MessageRepositoryInterface $messages,
         private readonly NotificationService $notifications,
+        private readonly HrmDepartmentSyncService $hrmDepartments,
     ) {}
 
     public function openPrivateConversationWith(User $actor, int $otherUserId): array
@@ -433,6 +435,7 @@ class ChatService
             'name' => $member->user->name,
             'avatar_url' => $member->user->avatar_url,
             'department' => $member->user->department?->name,
+            'job_title_name' => $this->hrmDepartments->hrmJobTitleFor($member->user),
         ];
     }
 

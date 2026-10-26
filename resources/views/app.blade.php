@@ -94,22 +94,13 @@
             });
         })();
     </script>
-    {{-- Boot splash: hiện ngay trước Vite — tránh màn trắng khi mở PWA / reload --}}
+    {{-- Boot splash: cream + mascot (khớp onboarding) — CSS inline tối thiểu trước Vite --}}
+    <link rel="preload" as="image" href="/images/onboarding/cheerful-red-mascot.png" fetchpriority="high">
+    <link rel="preload" as="image" href="/images/onboarding/va-logo.png">
     <style>
         body.app-boot-active {
             margin: 0;
-            background: #9a0036;
-        }
-
-        #app-boot {
-            position: fixed;
-            inset: 0;
-            z-index: 9999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 1.25rem 1rem;
-            background: #9a0036;
+            background: #fff8f0;
         }
 
         html.pwa-standalone,
@@ -117,7 +108,7 @@
             height: 100%;
             min-height: 0;
             overflow: hidden;
-            background-color: #9a0036;
+            background-color: #fff8f0;
         }
 
         html.pwa-standalone.employee-os-ios.employee-mobile-pwa,
@@ -132,7 +123,7 @@
 <body class="app-boot-active">
     <noscript>
         <style>
-            body.app-boot-active .app-boot { display: none !important; }
+            body.app-boot-active #app-boot { display: none !important; }
             body.app-boot-active { background: #fff; }
         </style>
         <main class="app-noscript">
@@ -141,30 +132,43 @@
             <p>Ứng dụng cần bật JavaScript. Bạn vẫn có thể <a href="/login">đăng nhập</a> sau khi bật JavaScript trong trình duyệt.</p>
         </main>
     </noscript>
-    <main id="app-boot" class="app-boot" role="status" aria-live="polite" aria-busy="true">
-        <img
-            src="/images/background/background-logo.png"
-            alt=""
-            class="app-boot__watermark"
-            aria-hidden="true"
-            decoding="async"
-            fetchpriority="low"
-        />
-        <div class="app-boot__scrim" aria-hidden="true"></div>
-        <div class="app-boot__inner">
+    <main id="app-boot" class="welcome welcome--boot" role="status" aria-live="polite" aria-busy="true" aria-labelledby="app-boot-title">
+        <div class="welcome__scene" aria-hidden="true">
             <img
-                src="/images/logo-2.png"
-                alt="Vietnam America Schools"
-                class="app-boot__logo"
-                width="220"
-                height="80"
+                class="welcome__background"
+                src="/images/onboarding/cheerful-red-mascot.png"
+                alt=""
                 decoding="async"
                 fetchpriority="high"
             />
-            <p class="app-boot__brand">VA Workspace</p>
-            <div class="app-boot__spinner" aria-hidden="true"></div>
-            <p class="app-boot__hint">Đang tải…</p>
         </div>
+        <div class="welcome__wash" aria-hidden="true"></div>
+
+        <header class="welcome__header">
+            <img
+                class="welcome__logo"
+                src="/images/onboarding/va-logo.png"
+                alt="Vietnam America Schools"
+                width="100"
+                height="116"
+                decoding="async"
+                fetchpriority="high"
+            />
+            <div class="welcome__heading">
+                <p class="welcome__eyebrow">Chào mừng bạn đến với</p>
+                <h1 id="app-boot-title" class="welcome__title">VA Workspace</h1>
+                <div class="welcome__rule" aria-hidden="true"></div>
+                <p class="welcome__intro">Một không gian. Mọi kết nối.</p>
+            </div>
+        </header>
+
+        <footer class="welcome__footer">
+            <div class="welcome__boot-status">
+                <div class="welcome__boot-spinner" aria-hidden="true"></div>
+                <p class="welcome__boot-hint">Đang tải…</p>
+            </div>
+            <span class="welcome__school">Vietnam America Schools</span>
+        </footer>
     </main>
     <div id="app" data-pwa-app-mount></div>
 </body>

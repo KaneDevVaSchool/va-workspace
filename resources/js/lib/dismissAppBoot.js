@@ -10,9 +10,9 @@ export function dismissAppBoot() {
   document.body.classList.remove('app-boot-active');
 
   const el = document.getElementById('app-boot');
-  if (!el || el.classList.contains('app-boot--hide')) return;
+  if (!el || el.classList.contains('welcome--hide')) return;
 
-  el.classList.add('app-boot--hide');
+  el.classList.add('welcome--hide');
 
   const remove = () => {
     el.remove();

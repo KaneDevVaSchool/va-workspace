@@ -109,10 +109,12 @@ function setPanel(panel) {
   flex-direction: column;
   min-height: 0;
   max-height: 16rem;
-  margin: 0 var(--space-3);
-  border-radius: 12px;
+  margin: 0 var(--space-3) var(--space-2);
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    0 8px 24px color-mix(in srgb, var(--color-tertiary-900) 8%, transparent);
   overflow: hidden;
 }
 

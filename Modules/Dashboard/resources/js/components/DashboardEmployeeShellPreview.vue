@@ -2,7 +2,8 @@
 import { computed } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
-import { EMPLOYEE_PWA_TABBAR } from '../constants/employeePwaPreview.js';
+import EmployeeMobileTabbar from '@modules/Attendance/resources/js/components/employee-mobile-shell/EmployeeMobileTabbar.vue';
+import { EMPLOYEE_MOBILE_TABS } from '@modules/Attendance/resources/js/constants/employeeMobileTabs.js';
 
 const props = defineProps({
   activeRoute: { type: String, default: 'dashboard.me' },
@@ -48,12 +49,6 @@ const headerTitle = computed(() => {
   return props.pageTitle.trim() || displayName.value || 'Nhân sự';
 });
 
-const tabs = computed(() =>
-  EMPLOYEE_PWA_TABBAR.map((tab) => ({
-    ...tab,
-    active: tab.routeName === props.activeRoute,
-  })),
-);
 </script>
 
 <template>
@@ -65,17 +60,16 @@ const tabs = computed(() =>
       >
         <div class="employee-shell__header-deco" aria-hidden="true"></div>
         <div class="employee-shell__header-top">
-          <div class="employee-shell__header-lead">
-            <span class="employee-shell__brand-mark" aria-hidden="true">
-              <img
-                src="/images/pwa/icon-192.png"
-                alt=""
-                class="employee-shell__brand-logo employee-shell__brand-logo--pwa"
-                width="40"
-                height="40"
-              />
-            </span>
-            <div class="employee-shell__greeting">
+          <span class="employee-shell__brand-mark" aria-hidden="true">
+            <img
+              src="/images/pwa/icon-192.png"
+              alt=""
+              class="employee-shell__brand-logo employee-shell__brand-logo--pwa"
+              width="40"
+              height="40"
+            />
+          </span>
+          <div class="employee-shell__greeting">
               <template v-if="home">
                 <p class="employee-shell__kicker">{{ greeting }}</p>
                 <h1 class="employee-shell__hello">
@@ -102,15 +96,20 @@ const tabs = computed(() =>
                 </div>
               </template>
             </div>
-          </div>
           <div class="employee-shell__header-actions">
-            <span class="employee-shell__icon-btn" aria-hidden="true">
-              <AppIcon name="refresh" :size="20" :stroke-width="1.8" />
-            </span>
-            <span class="employee-shell__icon-btn employee-shell__icon-btn--chat" aria-hidden="true">
-              <AppIcon name="messageCircle" :size="20" :stroke-width="1.8" />
-            </span>
-            <span class="employee-shell__avatar employee-shell__avatar-btn" aria-hidden="true">
+            <div class="employee-shell__tool-cluster">
+              <span class="employee-shell__icon-btn" aria-hidden="true">
+                <AppIcon name="refresh" :size="20" :stroke-width="1.8" />
+              </span>
+              <span class="employee-shell__icon-btn employee-shell__icon-btn--chat" aria-hidden="true">
+                <AppIcon name="messageCircle" :size="20" :stroke-width="1.8" />
+              </span>
+            </div>
+            <span
+              class="employee-shell__avatar employee-shell__avatar-btn"
+              :class="{ 'employee-shell__avatar--home': home }"
+              aria-hidden="true"
+            >
               <span class="employee-shell__avatar-initial">{{ avatarInitial }}</span>
             </span>
           </div>
@@ -137,24 +136,12 @@ const tabs = computed(() =>
         <slot />
       </main>
 
-      <nav class="employee-tabbar employee-tabbar--shell employee-tabbar--browser" aria-hidden="true">
-        <div class="employee-tabbar__bar">
-          <span
-            v-for="tab in tabs"
-            :key="tab.routeName"
-            class="employee-tabbar__item"
-            :class="{
-              'employee-tabbar__item--active': tab.active,
-              'employee-tabbar__item--primary': tab.primary,
-            }"
-          >
-            <span class="employee-tabbar__icon">
-              <AppIcon :name="tab.icon" :size="20" :stroke-width="1.9" />
-            </span>
-            <span class="employee-tabbar__label">{{ tab.label }}</span>
-          </span>
-        </div>
-      </nav>
+      <EmployeeMobileTabbar
+        preview
+        :tabs="EMPLOYEE_MOBILE_TABS"
+        :active-name="activeRoute"
+        :shell-page-key="activeRoute"
+      />
     </div>
   </div>
 </template>
@@ -195,9 +182,13 @@ const tabs = computed(() =>
   overflow-y: auto;
 }
 
-.emp-shell-preview__shell .employee-tabbar--shell {
+.emp-shell-preview__shell :deep(.employee-tabbar--shell) {
   flex-shrink: 0;
   margin-top: auto;
+}
+
+.emp-shell-preview__shell :deep(.employee-tabbar__item) {
+  pointer-events: none;
 }
 
 .emp-shell-preview__shell :is(.employee-shell__icon-btn, .employee-shell__avatar-btn, .employee-shell__brand-mark) {

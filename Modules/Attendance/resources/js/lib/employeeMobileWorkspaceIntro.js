@@ -1,4 +1,4 @@
-const INTRO_KEY = 'employee-mobile-workspace-intro-v1';
+const INTRO_KEY = 'employee-mobile-workspace-intro-v2';
 
 export function hasSeenWorkspaceIntro() {
   try {

@@ -8,22 +8,17 @@ import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import EmployeeAttendanceHistory from '../components/EmployeeAttendanceHistory.vue';
+import EmployeePwaLogoClip from '../components/EmployeePwaLogoClip.vue';
+import { EMPLOYEE_HISTORY_UTILITIES, isHistoryUtilityId } from '../constants/employeeHistoryUtilities.js';
+import { preloadEmployeePwaLogos } from '../constants/employeePwaBrandVisuals.js';
+import { buildAttendanceMonth } from '../lib/employeeAttendanceHistory';
+import { readEmployeeAttendanceLog } from '../lib/employeeAttendanceSession';
 
-const HISTORY_UTILITIES = [
-  {
-    id: 'attendance',
-    label: 'Lịch sử chấm công',
-    hint: 'Ngày công, giờ vào và giờ ra',
-    icon: 'clock',
-    tone: 'tertiary',
-  },
-  {
-    id: 'leave',
-    label: 'Lịch sử nghỉ phép',
-    hint: 'Đơn đã gửi và trạng thái duyệt',
-    icon: 'calendar',
-    tone: 'primary',
-  },
+const LEAVE_FILTERS = [
+  { id: 'all', label: 'Tất cả' },
+  { id: 'pending', label: 'Chờ duyệt' },
+  { id: 'approved', label: 'Đã duyệt' },
+  { id: 'rejected', label: 'Từ chối' },
 ];
 
 const route = useRoute();
@@ -32,24 +27,63 @@ const attendanceHistoryRef = ref(null);
 
 const activeView = computed(() => {
   const view = String(route.query.view || '');
-  return HISTORY_UTILITIES.some((item) => item.id === view) ? view : '';
+  return isHistoryUtilityId(view) ? view : '';
 });
 
-const activeUtility = computed(
-  () => HISTORY_UTILITIES.find((item) => item.id === activeView.value) || null,
-);
+const leaveFilter = ref('all');
+const hubLeaveCount = ref(null);
+const hubAttendanceDays = ref(null);
 
 function openUtility(id) {
   router.push({ name: 'employee.requests', query: { view: id } });
 }
 
-function backToHub() {
-  const previous = window.history.state?.back;
-  if (typeof previous === 'string' && previous.split('?')[0].endsWith('/dashboard/me/requests') && !previous.includes('view=')) {
-    router.back();
-    return;
+const filteredLeaveRequests = computed(() => {
+  if (leaveFilter.value === 'all') return requests.value;
+  return requests.value.filter((row) => row.status === leaveFilter.value);
+});
+
+const leaveFilterCounts = computed(() => {
+  const counts = { all: requests.value.length };
+  for (const row of requests.value) {
+    counts[row.status] = (counts[row.status] ?? 0) + 1;
   }
-  router.replace({ name: 'employee.requests' });
+  return counts;
+});
+
+function hubTileMeta(id) {
+  if (id === 'leave' && hubLeaveCount.value != null) {
+    const n = hubLeaveCount.value;
+    return n > 0 ? `${n} đơn` : 'Chưa có đơn';
+  }
+  if (id === 'attendance' && hubAttendanceDays.value != null) {
+    const n = hubAttendanceDays.value;
+    return n > 0 ? `${n} ngày tháng này` : 'Chưa có trên máy';
+  }
+  return '';
+}
+
+function refreshHubAttendanceCount() {
+  const now = new Date();
+  const model = buildAttendanceMonth(
+    new Date(now.getFullYear(), now.getMonth(), 1),
+    readEmployeeAttendanceLog(),
+  );
+  hubAttendanceDays.value = model.rows.filter(
+    (row) => row.kind === 'work' && !row.sample,
+  ).length;
+}
+
+async function loadHubLeaveCount() {
+  try {
+    const { data } = await window.axios.get('/api/attendance/leave-requests', {
+      params: { limit: 50 },
+    });
+    const rows = Array.isArray(data?.data) ? data.data : [];
+    hubLeaveCount.value = rows.length;
+  } catch {
+    hubLeaveCount.value = null;
+  }
 }
 
 const STATUS_META = {
@@ -217,6 +251,7 @@ async function loadRequests() {
     });
     const rows = Array.isArray(data?.data) ? data.data : [];
     requests.value = rows.map(mapLeaveRow);
+    hubLeaveCount.value = requests.value.length;
     leaveLoaded.value = true;
   } catch (err) {
     requests.value = [];
@@ -235,6 +270,10 @@ function closeDetail() {
 }
 
 async function refreshPage() {
+  refreshHubAttendanceCount();
+  if (!activeView.value) {
+    await loadHubLeaveCount();
+  }
   if (activeView.value === 'leave') {
     await loadRequests();
     return;
@@ -245,7 +284,10 @@ async function refreshPage() {
 }
 
 watch(activeView, (view) => {
-  if (view !== 'leave') selected.value = null;
+  if (view !== 'leave') {
+    selected.value = null;
+    leaveFilter.value = 'all';
+  }
   if (view === 'leave' && !leaveLoaded.value) {
     void loadRequests();
   }
@@ -255,6 +297,9 @@ const registerPageRefresh = inject('employeePageRefreshRegister', null);
 let unregisterPageRefresh;
 
 onMounted(() => {
+  preloadEmployeePwaLogos();
+  refreshHubAttendanceCount();
+  void loadHubLeaveCount();
   if (typeof registerPageRefresh === 'function') {
     unregisterPageRefresh = registerPageRefresh(refreshPage);
   }
@@ -267,32 +312,30 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="requests">
-    <section v-if="!activeUtility" class="history-hub" aria-label="Tiện ích lịch sử">
-      <p class="history-hub__lead">Chọn mục để xem lịch sử của bạn.</p>
+    <section v-if="!activeView" class="history-hub" aria-label="Tiện ích lịch sử">
       <ul class="history-hub__grid">
-        <li v-for="item in HISTORY_UTILITIES" :key="item.id">
+        <li v-for="item in EMPLOYEE_HISTORY_UTILITIES" :key="item.id">
           <button
             type="button"
             class="history-tile"
             :class="`history-tile--${item.tone}`"
             @click="openUtility(item.id)"
           >
+            <EmployeePwaLogoClip :visual-index="item.visualIndex" />
             <span class="history-tile__icon" :class="`history-tile__icon--${item.tone}`">
               <AppIcon :name="item.icon" :size="22" :stroke-width="1.75" />
             </span>
-            <span class="history-tile__label">{{ item.label }}</span>
-            <span class="history-tile__hint">{{ item.hint }}</span>
+            <span class="history-tile__text">
+              <span class="history-tile__label">{{ item.label }}</span>
+              <span v-if="hubTileMeta(item.id)" class="history-tile__meta">{{ hubTileMeta(item.id) }}</span>
+            </span>
+            <AppIcon name="chevronRight" :size="18" class="history-tile__chev" aria-hidden="true" />
           </button>
         </li>
       </ul>
     </section>
 
     <template v-else>
-      <button type="button" class="history-back" @click="backToHub">
-        <AppIcon name="chevronLeft" :size="18" />
-        <span>{{ activeUtility.label }}</span>
-      </button>
-
       <EmployeeAttendanceHistory
         v-if="activeView === 'attendance'"
         ref="attendanceHistoryRef"
@@ -300,11 +343,36 @@ onBeforeUnmount(() => {
 
       <template v-else-if="activeView === 'leave'">
         <p v-if="loading" class="requests-state">Đang tải đơn nghỉ phép…</p>
-        <p v-else-if="loadError" class="requests-state requests-state--error">{{ loadError }}</p>
-        <p v-else-if="requests.length === 0" class="requests-state">Chưa có đơn nghỉ phép nào.</p>
-
-        <ul v-else class="requests-list">
-        <li v-for="req in requests" :key="req.id">
+        <div v-else-if="loadError" class="requests-state requests-state--error">
+          <p>{{ loadError }}</p>
+          <button type="button" class="requests-retry" @click="loadRequests">Thử lại</button>
+        </div>
+        <template v-else-if="requests.length === 0">
+          <p class="requests-state">Chưa có đơn nghỉ phép nào.</p>
+        </template>
+        <template v-else>
+          <div class="leave-filters" role="tablist" aria-label="Lọc trạng thái đơn">
+            <button
+              v-for="chip in LEAVE_FILTERS"
+              :key="chip.id"
+              type="button"
+              role="tab"
+              class="leave-filters__chip"
+              :class="{ 'leave-filters__chip--active': leaveFilter === chip.id }"
+              :aria-selected="leaveFilter === chip.id"
+              @click="leaveFilter = chip.id"
+            >
+              {{ chip.label }}
+              <span v-if="leaveFilterCounts[chip.id]" class="leave-filters__count">
+                {{ leaveFilterCounts[chip.id] }}
+              </span>
+            </button>
+          </div>
+          <p v-if="filteredLeaveRequests.length === 0" class="requests-state">
+            Không có đơn ở trạng thái này.
+          </p>
+          <ul v-else class="requests-list">
+        <li v-for="req in filteredLeaveRequests" :key="req.id">
           <button
             type="button"
             class="request-row"
@@ -328,7 +396,8 @@ onBeforeUnmount(() => {
             <AppIcon name="chevronRight" :size="18" class="request-row__chev" aria-hidden="true" />
           </button>
         </li>
-        </ul>
+          </ul>
+        </template>
       </template>
     </template>
 
@@ -438,17 +507,10 @@ onBeforeUnmount(() => {
   gap: var(--space-3);
 }
 
-.history-hub__lead {
-  margin: 0;
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  color: var(--color-text-muted);
-}
-
 .history-hub__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -456,12 +518,13 @@ onBeforeUnmount(() => {
 
 .history-tile {
   position: relative;
+  overflow: hidden;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-direction: row;
+  align-items: center;
   gap: var(--space-2);
   width: 100%;
-  min-height: 7.5rem;
+  min-height: 4.75rem;
   padding: var(--space-3) var(--space-3) var(--space-3)
     calc(var(--space-2) + 3px + var(--space-3));
   border: none;
@@ -514,6 +577,14 @@ onBeforeUnmount(() => {
   color: var(--color-tertiary);
 }
 
+.history-tile__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .history-tile__label {
   font-size: 0.875rem;
   font-weight: 600;
@@ -521,26 +592,72 @@ onBeforeUnmount(() => {
   color: var(--color-text);
 }
 
-.history-tile__hint {
+.history-tile__meta {
   font-size: 0.75rem;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 1.35;
   color: var(--color-text-muted);
 }
 
-.history-back {
+.history-tile__chev {
+  flex-shrink: 0;
+  color: var(--color-border-strong);
+}
+
+.leave-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.leave-filters__chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  align-self: flex-start;
-  padding: 0;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
   border: none;
-  background: transparent;
-  color: var(--color-text);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text-muted);
   font-family: inherit;
-  font-size: 0.9375rem;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.leave-filters__chip--active {
+  background: var(--color-primary-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  color: var(--color-primary);
+}
+
+.leave-filters__count {
+  min-width: 1.125rem;
+  padding: 0 0.25rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, currentColor 12%, var(--color-surface));
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.requests-retry {
+  margin-top: var(--space-2);
+  padding: 0.4rem 0.85rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.requests-state--error p {
+  margin: 0;
 }
 
 .requests-state {

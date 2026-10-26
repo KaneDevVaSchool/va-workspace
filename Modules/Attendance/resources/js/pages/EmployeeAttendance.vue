@@ -869,6 +869,7 @@ function stopQrCamera() {
           </div>
           <p class="att-punch-hint">{{ punchHint }}</p>
 
+          <p class="att-methods__label">Hình thức khác</p>
           <div class="att-grid">
             <button
               v-for="tile in HOME_TILES"
@@ -1140,8 +1141,8 @@ function stopQrCamera() {
 <style scoped>
 .att-page {
   position: relative;
-  height: 100%;
-  min-height: 0;
+  min-height: 100%;
+  height: auto;
   display: flex;
   justify-content: center;
   background:
@@ -1149,6 +1150,12 @@ function stopQrCamera() {
       0 0 / 22px 22px,
     var(--color-tertiary-50);
   color: var(--color-text);
+  overflow: visible;
+}
+
+.att-page:has(.att-dock) {
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -1170,21 +1177,31 @@ function stopQrCamera() {
   position: relative;
   z-index: 1;
   width: min(100%, 430px);
-  height: 100%;
-  min-height: 0;
+  min-height: 100%;
+  height: auto;
   display: flex;
   flex-direction: column;
   padding: 0;
 }
 
-.att__body {
-  flex: 1 1 auto;
+.att-page:has(.att-dock) .att {
+  height: 100%;
   min-height: 0;
-  overflow: auto;
+}
+
+.att__body {
+  flex: 1 0 auto;
+  min-height: 0;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding-bottom: var(--space-5);
+  padding-bottom: var(--space-4);
+}
+
+.att-page:has(.att-dock) .att__body {
+  flex: 1 1 auto;
+  overflow: auto;
 }
 
 .att-head {
@@ -1589,14 +1606,24 @@ function stopQrCamera() {
   color: var(--color-info-tint-fg);
 }
 
+.att-methods__label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .att-punch-wrap {
   position: relative;
   align-self: center;
   display: grid;
   place-items: center;
-  width: 12rem;
-  height: 12rem;
-  margin-top: var(--space-2);
+  width: 10.5rem;
+  height: 10.5rem;
+  margin-top: 0;
+  overflow: visible;
 }
 
 .att-punch-wrap::before {
@@ -1632,8 +1659,8 @@ function stopQrCamera() {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  width: 9.5rem;
-  height: 9.5rem;
+  width: 8.25rem;
+  height: 8.25rem;
   border: 8px solid color-mix(in srgb, var(--color-tertiary-100) 82%, var(--color-on-tertiary));
   border-radius: var(--radius-full);
   background:
@@ -1698,8 +1725,12 @@ function stopQrCamera() {
 
 .att-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
+}
+
+.att-tile:last-child {
+  grid-column: 1 / -1;
 }
 
 .att-tile {
@@ -1711,17 +1742,19 @@ function stopQrCamera() {
 }
 
 .att-tile {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
   align-items: center;
-  justify-content: flex-start;
-  gap: 0.35rem;
-  min-height: 7.25rem;
-  padding: var(--space-3) var(--space-2);
-  text-align: center;
-  font-size: 0.75rem;
+  column-gap: var(--space-2);
+  row-gap: 2px;
+  min-height: 0;
+  padding: var(--space-3);
+  text-align: left;
+  font-size: 0.78rem;
   font-weight: 700;
-  border-radius: 20px;
+  border-radius: 18px;
+  overflow: visible;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -1735,10 +1768,14 @@ function stopQrCamera() {
 }
 
 .att-tile__label {
-  line-height: 1.25;
+  grid-column: 2;
+  grid-row: 1;
+  line-height: 1.3;
 }
 
 .att-tile__hint {
+  grid-column: 2;
+  grid-row: 2;
   color: var(--color-text-muted);
   font-size: 0.68rem;
   font-weight: 500;
@@ -1746,6 +1783,8 @@ function stopQrCamera() {
 }
 
 .att-tile__icon {
+  grid-column: 1;
+  grid-row: 1 / span 2;
   display: grid;
   place-items: center;
   width: 2.5rem;
@@ -2267,19 +2306,13 @@ function stopQrCamera() {
   }
 
   .att-punch-wrap {
-    width: 10.75rem;
-    height: 10.75rem;
-    margin-top: 0;
+    width: 10rem;
+    height: 10rem;
   }
 
   .att-punch {
     width: 8rem;
     height: 8rem;
-  }
-
-  .att-tile {
-    min-height: 6.5rem;
-    padding: var(--space-2);
   }
 }
 

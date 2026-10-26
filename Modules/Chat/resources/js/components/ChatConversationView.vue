@@ -8,6 +8,7 @@ import { formatTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import SocialAnimatedSticker from '@modules/Social/resources/js/components/SocialAnimatedSticker.vue';
 import ChatPicker from './ChatPicker.vue';
+import { formatPeerMeta } from '../lib/chatPeerMeta';
 import { useChatStore } from '../store/chatStore';
 
 const store = useChatStore();
@@ -35,6 +36,7 @@ const confirmMessage = ref(null);
 const confirming = ref(false);
 
 const otherUser = computed(() => store.activeConversation?.other_user ?? null);
+const peerMetaLine = computed(() => formatPeerMeta(otherUser.value));
 const peerTyping = computed(() => {
   const until = store.typingByConversation[store.activeConversationId];
   return Boolean(until && until > Date.now());
@@ -461,9 +463,12 @@ function menuItems(message) {
       <span v-else class="chat-view__avatar chat-view__avatar--placeholder">{{ initial(otherUser?.name) }}</span>
       <span class="chat-view__who">
         <span class="chat-view__title">{{ otherUser?.name || 'Trò chuyện' }}</span>
-        <span v-if="peerTyping" class="chat-view__dept">Đang nhập…</span>
+        <span v-if="peerTyping" class="chat-view__dept chat-view__dept--active">
+          <span class="chat-typing" aria-hidden="true"><span /><span /><span /></span>
+          Đang nhập…
+        </span>
         <span v-else-if="sending" class="chat-view__dept chat-view__dept--active">Đang gửi…</span>
-        <span v-else-if="otherUser?.department" class="chat-view__dept">{{ otherUser.department }}</span>
+        <span v-else-if="peerMetaLine" class="chat-view__dept">{{ peerMetaLine }}</span>
       </span>
     </div>
 
@@ -477,7 +482,7 @@ function menuItems(message) {
         <div
           v-else
           :id="`chat-msg-${row.message.id}`"
-          class="chat-bubble-row"
+          class="chat-bubble-row chat-bubble-row--animate"
           :class="{ 'chat-bubble-row--mine': isMine(row.message) }"
         >
           <div
@@ -596,7 +601,8 @@ function menuItems(message) {
       </div>
     </div>
 
-    <div v-if="replyTo || editing" class="chat-compose-banner">
+    <Transition name="chat-compose-banner">
+      <div v-if="replyTo || editing" class="chat-compose-banner">
       <AppIcon :name="editing ? 'pencil' : 'reply'" :size="14" :stroke-width="1.75" />
       <span class="chat-compose-banner__copy">
         <span class="chat-compose-banner__label">{{
@@ -607,15 +613,18 @@ function menuItems(message) {
       <button type="button" class="chat-view__icon-btn" aria-label="Huỷ" @click="clearModes">
         <AppIcon name="close" :size="14" :stroke-width="1.75" />
       </button>
-    </div>
+      </div>
+    </Transition>
 
-    <ChatPicker
-      v-if="pickerOpen"
-      :panel="pickerPanel"
-      @update:panel="pickerPanel = $event"
-      @pick-emoji="insertEmoji"
-      @pick-sticker="sendSticker"
-    />
+    <Transition name="chat-picker">
+      <ChatPicker
+        v-if="pickerOpen"
+        :panel="pickerPanel"
+        @update:panel="pickerPanel = $event"
+        @pick-emoji="insertEmoji"
+        @pick-sticker="sendSticker"
+      />
+    </Transition>
 
     <div class="chat-view__composer">
       <div class="chat-view__tools">
@@ -688,7 +697,7 @@ function menuItems(message) {
         <button
           type="button"
           class="chat-view__send"
-          :class="{ 'chat-view__send--busy': sending }"
+          :class="{ 'chat-view__send--busy': sending, 'chat-view__send--ready': canSend && !sending }"
           :disabled="!canSend"
           :aria-label="sending ? 'Đang gửi tin nhắn' : 'Gửi tin nhắn'"
           :aria-busy="sending"
@@ -740,8 +749,14 @@ function menuItems(message) {
   flex: 1;
   min-height: 0;
   background:
-    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--color-border) 70%, transparent) 1px, transparent 0) 0 0 / 14px 14px,
-    var(--color-surface);
+    radial-gradient(
+      ellipse 120% 80% at 50% -20%,
+      color-mix(in srgb, var(--color-tertiary-100) 55%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--color-border) 55%, transparent) 1px, transparent 0)
+      0 0 / 16px 16px,
+    color-mix(in srgb, var(--color-bg) 40%, var(--color-surface));
 }
 
 .chat-view__head {
@@ -751,12 +766,18 @@ function menuItems(message) {
   gap: var(--space-2);
   padding: var(--space-3);
   padding-top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
-  background-color: var(--color-surface);
-  background-image: linear-gradient(var(--color-tertiary-700), var(--color-tertiary-700));
+  color: var(--color-on-primary);
+  background:
+    linear-gradient(
+      152deg,
+      var(--color-tertiary-600) 0%,
+      var(--color-tertiary-700) 48%,
+      var(--color-tertiary-800) 100%
+    );
   background-repeat: no-repeat;
-  background-size: 100% env(safe-area-inset-top, 0px);
+  background-size: 100% calc(100% + env(safe-area-inset-top, 0px));
   background-position: top;
-  box-shadow: 0 1px 0 var(--color-border);
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--color-tertiary-900) 18%, transparent);
 }
 
 .chat-view__icon-btn,
@@ -785,7 +806,15 @@ function menuItems(message) {
   flex-shrink: 0;
 }
 
-.chat-view__icon-btn:hover,
+.chat-view__head .chat-view__icon-btn {
+  color: color-mix(in srgb, var(--color-on-primary) 88%, transparent);
+}
+
+.chat-view__head .chat-view__icon-btn:hover {
+  background: color-mix(in srgb, var(--color-on-primary) 12%, transparent);
+  color: var(--color-on-primary);
+}
+
 .chat-view__tool:hover,
 .chat-bubble__more:hover {
   background: var(--color-surface-muted);
@@ -804,10 +833,11 @@ function menuItems(message) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-on-primary) 18%, transparent);
+  color: var(--color-on-primary);
   font-size: 0.75rem;
   font-weight: 700;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-on-primary) 25%, transparent);
 }
 
 .chat-view__who {
@@ -817,21 +847,24 @@ function menuItems(message) {
 }
 
 .chat-view__title {
-  color: var(--color-text);
-  font-size: 0.8125rem;
+  color: var(--color-on-primary);
+  font-size: 0.9375rem;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: -0.01em;
 }
 
 .chat-view__dept {
-  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  color: color-mix(in srgb, var(--color-on-primary) 78%, transparent);
   font-size: 0.6875rem;
 }
 
 .chat-view__dept--active {
-  color: var(--color-primary);
+  color: color-mix(in srgb, var(--color-on-primary) 92%, transparent);
   font-style: italic;
 }
 
@@ -872,6 +905,10 @@ function menuItems(message) {
   gap: 0.15rem;
 }
 
+.chat-bubble-row--animate {
+  animation: chat-bubble-in 280ms ease both;
+}
+
 .chat-bubble-row--mine {
   flex-direction: row-reverse;
 }
@@ -890,8 +927,12 @@ function menuItems(message) {
 
 .chat-bubble--mine {
   border-radius: 14px 14px 4px 14px;
-  background: var(--color-primary-surface);
-  box-shadow: none;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)),
+    var(--color-primary-surface)
+  );
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 .chat-bubble--pending {
@@ -1046,8 +1087,9 @@ function menuItems(message) {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  padding: var(--space-2) var(--space-3) var(--space-3);
-  background: var(--color-surface);
+  padding: var(--space-2) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  backdrop-filter: blur(10px);
   box-shadow: 0 -1px 0 var(--color-border);
 }
 
@@ -1220,13 +1262,23 @@ function menuItems(message) {
   width: 2.25rem;
   height: 2.25rem;
   border-radius: var(--radius-full);
-  background: var(--color-primary);
+  background: linear-gradient(145deg, var(--color-primary), var(--color-tertiary-600));
   color: var(--color-on-primary);
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.chat-view__send--ready {
+  animation: chat-send-pulse 2.2s ease-in-out infinite;
+}
+
+.chat-view__send:active:not(:disabled) {
+  transform: scale(0.94);
 }
 
 .chat-view__send:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  animation: none;
 }
 </style>
 

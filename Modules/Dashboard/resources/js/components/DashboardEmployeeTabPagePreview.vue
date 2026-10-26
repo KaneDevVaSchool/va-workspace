@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import EmployeeAttendance from '@modules/Attendance/resources/js/pages/EmployeeAttendance.vue';
 import { EMPLOYEE_PWA_TAB_PREVIEW } from '../constants/employeePwaPreview.js';
+import { EMPLOYEE_HISTORY_UTILITIES } from '@modules/Attendance/resources/js/constants/employeeHistoryUtilities.js';
 import {
   PREVIEW_CHAT_CONVERSATIONS,
   PREVIEW_FEED_POSTS,
@@ -25,10 +26,7 @@ function formatDays(value) {
 
 const leaveBalance = PREVIEW_LEAVE_BALANCE;
 
-const historyUtilities = [
-  { id: 'attendance', label: 'Lịch sử chấm công', hint: 'Ngày công, giờ vào và giờ ra', icon: 'clock' },
-  { id: 'leave', label: 'Lịch sử nghỉ phép', hint: 'Đơn đã gửi và trạng thái duyệt', icon: 'calendar' },
-];
+const historyUtilities = EMPLOYEE_HISTORY_UTILITIES;
 const feedPosts = PREVIEW_FEED_POSTS;
 const chatRows = PREVIEW_CHAT_CONVERSATIONS;
 
@@ -154,15 +152,13 @@ function chatInitial(name) {
     </div>
 
     <div v-else-if="mode === 'mobile-requests'" class="pwa-requests-preview">
-      <p class="pwa-requests-preview__lead">Chọn mục để xem lịch sử của bạn.</p>
       <ul class="pwa-requests-preview__grid">
         <li v-for="item in historyUtilities" :key="item.id">
-          <div class="pwa-requests-preview__tile">
-            <span class="pwa-requests-preview__icon">
+          <div class="pwa-requests-preview__tile" :class="`pwa-requests-preview__tile--${item.tone}`">
+            <span class="pwa-requests-preview__icon" :class="`pwa-requests-preview__icon--${item.tone}`">
               <AppIcon :name="item.icon" :size="20" :stroke-width="1.75" />
             </span>
             <span class="pwa-requests-preview__label">{{ item.label }}</span>
-            <span class="pwa-requests-preview__hint">{{ item.hint }}</span>
           </div>
         </li>
       </ul>
@@ -513,15 +509,9 @@ function chatInitial(name) {
   padding: var(--space-4);
 }
 
-.pwa-requests-preview__lead {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
 .pwa-requests-preview__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: var(--space-2);
   margin: 0;
   padding: 0;
@@ -531,10 +521,10 @@ function chatInitial(name) {
 .pwa-requests-preview__tile {
   position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.35rem;
-  min-height: 6.5rem;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 3.25rem;
   padding: var(--space-3) var(--space-3) var(--space-3)
     calc(var(--space-2) + 3px + var(--space-2));
   border-radius: var(--radius-lg);
@@ -550,11 +540,15 @@ function chatInitial(name) {
   left: var(--space-2);
   width: 3px;
   border-radius: 0;
-  background: var(--color-tertiary);
+  background: var(--color-border);
 }
 
-.pwa-requests-preview__grid li:last-child .pwa-requests-preview__tile::before {
+.pwa-requests-preview__tile--primary::before {
   background: var(--color-primary);
+}
+
+.pwa-requests-preview__tile--tertiary::before {
+  background: var(--color-tertiary);
 }
 
 .pwa-requests-preview__icon {
@@ -563,26 +557,24 @@ function chatInitial(name) {
   width: 2rem;
   height: 2rem;
   border-radius: var(--radius-md);
-  background: var(--color-tertiary-surface);
-  color: var(--color-tertiary);
 }
 
-.pwa-requests-preview__grid li:last-child .pwa-requests-preview__icon {
+.pwa-requests-preview__icon--primary {
   background: var(--color-primary-surface);
   color: var(--color-primary);
 }
 
+.pwa-requests-preview__icon--tertiary {
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary);
+}
+
 .pwa-requests-preview__label {
+  flex: 1;
   font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.3;
   color: var(--color-text);
-}
-
-.pwa-requests-preview__hint {
-  font-size: 0.6875rem;
-  line-height: 1.35;
-  color: var(--color-text-muted);
 }
 
 .pwa-chat-preview {
