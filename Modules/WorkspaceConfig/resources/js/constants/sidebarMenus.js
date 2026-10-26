@@ -52,11 +52,95 @@ export const SIDEBAR_MENU_CATALOG = {
     sectionLabel: 'Điều hành',
     description: 'Tạo và xem báo cáo phòng ban. Loại đánh giá nhân sự mở sang bảng chấm điểm sau khi tạo.',
   },
-  'manager.don-tu.hub': {
+  'manager.don-tu.start': {
     icon: 'fileText',
-    section: 'operations',
-    sectionLabel: 'Điều hành',
-    description: 'Đơn từ. Bản xem trước các màn nộp, duyệt, cấu hình và giám sát.',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Nộp đơn mới — bản xem trước, chưa khóa theo quyền.',
+  },
+  'manager.don-tu.compose': {
+    icon: 'pencil',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Soạn nội dung đơn trước khi gửi.',
+  },
+  'manager.don-tu.mine': {
+    icon: 'folder',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Danh sách hồ sơ đơn từ của chính bạn.',
+  },
+  'manager.don-tu.show': {
+    icon: 'fileText',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Chi tiết một hồ sơ đơn từ.',
+  },
+  'manager.don-tu.inbox': {
+    icon: 'mail',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Hồ sơ đang chờ bạn duyệt.',
+  },
+  'manager.don-tu.registry': {
+    icon: 'search',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Tra cứu hồ sơ đơn từ toàn phòng ban.',
+  },
+  'manager.don-tu.statuses': {
+    icon: 'layers',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Cấu hình bộ mã trạng thái (Matrix V3).',
+  },
+  'manager.don-tu.forms': {
+    icon: 'clipboardCheck',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Danh sách mẫu biểu đơn từ.',
+  },
+  'manager.don-tu.form': {
+    icon: 'settings',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Thiết kế trường và luật cho một mẫu biểu.',
+  },
+  'manager.don-tu.workflows': {
+    icon: 'gitBranch',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Danh sách quy trình duyệt.',
+  },
+  'manager.don-tu.workflow': {
+    icon: 'settings',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Cấu hình bước duyệt cho một quy trình.',
+  },
+  'manager.don-tu.monitor': {
+    icon: 'activity',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Theo dõi tiến độ xử lý đơn từ.',
+  },
+  'manager.don-tu.sla': {
+    icon: 'clock',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Báo cáo SLA và cảnh báo quá hạn.',
+  },
+  'manager.don-tu.reports': {
+    icon: 'barChart',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Báo cáo nghiệp vụ đơn từ.',
+  },
+  'manager.don-tu.audits': {
+    icon: 'clock',
+    section: 'don-tu',
+    sectionLabel: 'Đơn từ',
+    description: 'Nhật ký kiểm toán thao tác trên hồ sơ.',
   },
   'manager.credential.index': {
     icon: 'lock',
@@ -71,13 +155,14 @@ export const SIDEBAR_SECTIONS = {
   news: { id: 'news', defaultLabel: 'Thông tin' },
   evaluation: { id: 'evaluation', defaultLabel: 'Đánh giá' },
   operations: { id: 'operations', defaultLabel: 'Điều hành' },
+  'don-tu': { id: 'don-tu', defaultLabel: 'Đơn từ' },
   manager: { id: 'manager', defaultLabel: 'Quản lý' },
   control: { id: 'control', defaultLabel: 'Kiểm soát' },
   admin: { id: 'admin', defaultLabel: 'Quản trị' },
   'superadmin-workspace-config': { id: 'superadmin-workspace-config', defaultLabel: 'Cấu hình' },
 };
 
-const SECTION_ORDER = ['general', 'news', 'evaluation', 'operations', 'manager', 'control', 'other'];
+const SECTION_ORDER = ['general', 'news', 'evaluation', 'operations', 'don-tu', 'manager', 'control', 'other'];
 
 export const LABEL_MAX_LENGTH = 40;
 

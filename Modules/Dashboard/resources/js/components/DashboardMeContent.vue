@@ -252,8 +252,10 @@ async function onAcceptTask(task) {
     <section class="dashboard-me__hero">
       <div class="dashboard-me__hero-orbs" aria-hidden="true" />
       <div class="dashboard-me__hero-copy">
-        <p class="dashboard-me__hero-kicker">{{ greeting }}, {{ displayName }}</p>
-        <p class="dashboard-me__hero-date">{{ todayLabel }}</p>
+        <p class="dashboard-me__hero-kicker">
+          <span>{{ greeting }}, {{ displayName }}</span>
+          <span class="dashboard-me__hero-date">{{ todayLabel }}</span>
+        </p>
         <h2 class="dashboard-me__hero-title">Hôm nay bạn tập trung vào việc gì?</h2>
         <div class="dashboard-me__hero-actions">
           <button
@@ -545,6 +547,10 @@ async function onAcceptTask(task) {
 
 .dashboard-me__hero-kicker {
   margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
   font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -552,7 +558,6 @@ async function onAcceptTask(task) {
 }
 
 .dashboard-me__hero-date {
-  margin: 0;
   font-size: 0.75rem;
   font-weight: 500;
   opacity: 0.82;

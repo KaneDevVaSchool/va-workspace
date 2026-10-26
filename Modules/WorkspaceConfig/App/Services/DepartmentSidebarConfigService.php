@@ -3,6 +3,7 @@
 namespace Modules\WorkspaceConfig\App\Services;
 
 use Illuminate\Support\Collection;
+use Modules\DonTu\App\Support\DonTuSidebarMenuCatalog;
 use Modules\Identity\App\Models\DepartmentSidebarConfig;
 use Modules\Identity\App\Repositories\Contracts\DepartmentSidebarConfigRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\GlobalMenuVisibilityRepositoryInterface;
@@ -34,6 +35,7 @@ class DepartmentSidebarConfigService
         'news' => 'Thông tin',
         'evaluation' => 'Đánh giá',
         'operations' => 'Điều hành',
+        'don-tu' => 'Đơn từ',
         'manager' => 'Quản lý',
         'control' => 'Kiểm soát',
     ];
@@ -48,7 +50,7 @@ class DepartmentSidebarConfigService
         'manager.project.index' => 'Dự án',
         'manager.project.tasks' => 'Công việc',
         'manager.reports.index' => 'Báo cáo',
-        'manager.don-tu.hub' => 'Đơn từ',
+        ...DonTuSidebarMenuCatalog::LABELS,
         'manager.contract.suppliers.index' => 'Nhà cung cấp',
         'manager.credential.index' => 'Tài khoản',
     ];
@@ -63,7 +65,7 @@ class DepartmentSidebarConfigService
         'manager.project.index' => 'operations',
         'manager.project.tasks' => 'operations',
         'manager.reports.index' => 'operations',
-        'manager.don-tu.hub' => 'operations',
+        ...DonTuSidebarMenuCatalog::DEFAULT_SECTIONS,
         'manager.contract.suppliers.index' => 'operations',
         'manager.credential.index' => 'control',
     ];

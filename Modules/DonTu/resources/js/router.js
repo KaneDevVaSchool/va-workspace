@@ -7,6 +7,7 @@ export default [
   {
     path: '/manager/don-tu',
     component: () => import('./pages/DonTuLayout.vue'),
+    redirect: { name: 'manager.don-tu.start' },
     meta: { requiresAuth: true, title: 'Đơn từ' },
     children: DON_TU_SCREENS.map((screen) => ({
       path: screen.path,

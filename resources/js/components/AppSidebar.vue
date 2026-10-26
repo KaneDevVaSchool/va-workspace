@@ -15,6 +15,7 @@ import AppIcon from './AppIcon.vue';
 import SidebarLogo from './sidebar/SidebarLogo.vue';
 import SidebarNavSection from './sidebar/SidebarNavSection.vue';
 import { loadExpandedSections, persistExpandedSections } from '../composables/useSidebarSectionExpand.js';
+import { DON_TU_ROUTE_NAMES, DON_TU_SIDEBAR_ITEMS } from '@modules/DonTu/resources/js/nav.js';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -128,6 +129,7 @@ const SECTION_ICONS = {
   news: 'megaphone',
   evaluation: 'clipboardCheck',
   operations: 'layoutList',
+  'don-tu': 'fileText',
   manager: 'settings',
   control: 'shield',
   admin: 'settings',
@@ -136,6 +138,7 @@ const SECTION_ICONS = {
 
 const DEFAULT_SECTION_OPEN = {
   general: true,
+  'don-tu': true,
 };
 
 const MENU_SECTIONS = [
@@ -243,14 +246,6 @@ const MENU_SECTIONS = [
         configurableByDepartment: true,
       },
       {
-        // Đơn từ — hub xem trước (15 màn). Chưa khóa quyền; P1 sẽ gắn don_tu.*.
-        // configurableByDepartment: true — đồng bộ CONFIGURABLE_MENUS.
-        name: 'manager.don-tu.hub',
-        label: 'Đơn từ',
-        icon: 'fileText',
-        configurableByDepartment: true,
-      },
-      {
         // Nhà cung cấp & Hợp đồng — MVP1 mở trước phần Nhà cung cấp
         // (danh sách, hồ sơ, liên hệ, tài khoản ngân hàng). Scope thật
         // chặn ở API Contract: trưởng/phó phòng theo phòng ban, cấp giám
@@ -262,6 +257,12 @@ const MENU_SECTIONS = [
         configurableByDepartment: true,
       },
     ],
+  },
+  {
+    // Đơn từ — 15 màn xem trước; danh sách đồng bộ Modules/DonTu/resources/js/nav.js.
+    id: 'don-tu',
+    label: 'Đơn từ',
+    items: DON_TU_SIDEBAR_ITEMS,
   },
   {
     // Vận hành phòng ban — trưởng phòng dùng hằng ngày. "Tài khoản"
@@ -483,8 +484,8 @@ function isActive(routeName) {
   if (routeName === 'manager.reports.index') {
     return route.path === '/manager/reports' || route.path.startsWith('/manager/reports/');
   }
-  if (routeName === 'manager.don-tu.hub') {
-    return route.path === '/manager/don-tu' || route.path.startsWith('/manager/don-tu/');
+  if (DON_TU_ROUTE_NAMES.has(routeName)) {
+    return route.name === routeName;
   }
   if (routeName === 'manager.contract.suppliers.index') {
     return route.path === '/manager/contract/suppliers' || route.path.startsWith('/manager/contract/suppliers/');
