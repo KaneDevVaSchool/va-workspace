@@ -37,7 +37,7 @@
   }
 
   /*
-   * Tab bar dính đáy màn hình — vùng safe có nền canvas (không lộ --color-surface trắng).
+   * Tab bar dính đáy màn hình, nền canvas (không lộ --color-surface trắng).
    */
   html.employee-os-ios.pwa-standalone:not(.pwa-vv-keyboard)
     .employee-shell--unified.employee-shell--pwa
@@ -50,8 +50,7 @@
     width: 100%;
     max-width: 100vw;
     margin: 0;
-    padding: var(--space-1) var(--space-2)
-      max(env(safe-area-inset-bottom, 0px), var(--employee-safe-bottom, 0px));
+    padding: var(--space-3) var(--space-2) 0;
     background: var(--employee-unified-canvas-bg, var(--color-bg));
     box-sizing: border-box;
   }
@@ -67,8 +66,7 @@
     .employee-shell--unified.employee-shell--pwa
     .employee-shell__content--unified {
     padding-bottom: calc(
-      var(--employee-tabbar-block-size, 3.25rem) + var(--space-2)
-        + max(env(safe-area-inset-bottom, 0px), var(--employee-safe-bottom, 0px))
+      var(--employee-tabbar-block-size, 3.25rem) + var(--space-4)
     );
   }
 
@@ -97,35 +95,5 @@
     .employee-shell--unified.employee-shell--pwa
     .employee-shell__content--unified {
     padding-bottom: 0;
-  }
-
-  /* Subpage không tab bar — che khe dưới home indicator */
-  html.employee-os-ios.employee-mobile-pwa:not(:has(.employee-tabbar--shell))::after,
-  html.employee-os-ios.pwa-standalone:not(:has(.employee-tabbar--shell))::after {
-    content: '';
-    position: fixed;
-    z-index: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: max(
-      env(safe-area-inset-bottom, 0px),
-      var(--employee-safe-bottom, 0px),
-      3px
-    );
-    pointer-events: none;
-    background: var(
-      --employee-unified-canvas-bg,
-      color-mix(
-        in srgb,
-        var(--color-tertiary-50) 55%,
-        color-mix(in srgb, var(--color-secondary-50) 18%, var(--color-bg) 82%) 45%
-      )
-    );
-  }
-
-  html.employee-os-ios.pwa-vv-keyboard.employee-mobile-pwa::after,
-  html.employee-os-ios.pwa-vv-keyboard.pwa-standalone::after {
-    display: none;
   }
 }

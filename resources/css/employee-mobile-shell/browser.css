@@ -31,15 +31,6 @@
     overflow: hidden;
   }
 
-  @supports (padding: env(safe-area-inset-top)) {
-    .employee-shell--browser {
-      --employee-header-pt: max(
-        var(--space-3),
-        var(--employee-safe-top, env(safe-area-inset-top, 0px))
-      );
-    }
-  }
-
   html.employee-mobile-browser,
   html.employee-mobile-browser body {
     height: 100%;
@@ -48,35 +39,12 @@
   }
 }
 
-/* Safari tab: safe-bottom nằm trong pill tabbar (footer không tách wrapper riêng). */
 .employee-tabbar--browser .employee-tabbar__bar {
-  padding-bottom: calc(
-    var(--space-1) + var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px))
-  );
-}
-
-@supports (-webkit-touch-callout: none) {
-  @media (max-width: 768px) {
-    .employee-shell--browser {
-      --employee-header-pt: max(
-        var(--space-3),
-        var(--employee-safe-top, env(safe-area-inset-top, 0px))
-      );
-      --employee-header-px: calc(
-        var(--space-3) + var(--employee-safe-right, env(safe-area-inset-right, 0px))
-      );
-      --employee-header-pl: calc(
-        var(--space-3) + var(--employee-safe-left, env(safe-area-inset-left, 0px))
-      );
-    }
-  }
+  padding-bottom: var(--space-1);
 }
 
 @media (max-width: 360px) {
   .employee-shell--browser {
-    --employee-header-pt: max(
-      var(--space-2),
-      var(--employee-safe-top, env(safe-area-inset-top, 0px))
-    );
+    --employee-header-pt: var(--space-2);
   }
 }

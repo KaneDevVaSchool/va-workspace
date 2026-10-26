@@ -114,10 +114,7 @@ function login() {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: max(var(--space-5), env(safe-area-inset-top, 0px))
-        max(var(--space-4), env(safe-area-inset-right, 0px))
-        max(var(--space-5), env(safe-area-inset-bottom, 0px))
-        max(var(--space-4), env(safe-area-inset-left, 0px));
+    padding: var(--space-5) var(--space-4);
     background: var(--color-primary-900);
 }
 

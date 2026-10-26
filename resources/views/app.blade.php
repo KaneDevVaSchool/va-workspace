@@ -36,7 +36,7 @@
     <meta name="twitter:title" content="{{ $ogTitle }}">
     <meta name="twitter:description" content="{{ $ogDescription }}">
     <meta name="twitter:image" content="{{ $ogImage }}">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <script>
         (function () {
             var ua = window.navigator.userAgent || '';
@@ -60,31 +60,6 @@
                 if (/^\/dashboard\/me(\/|$)/.test(path)) {
                     osRoot.classList.add('employee-mobile-pwa');
                 }
-                var probe = document.createElement('div');
-                probe.setAttribute('aria-hidden', 'true');
-                probe.style.cssText =
-                    'position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:0;' +
-                    'padding-top:constant(safe-area-inset-top);padding-top:env(safe-area-inset-top);' +
-                    'padding-right:constant(safe-area-inset-right);padding-right:env(safe-area-inset-right);' +
-                    'padding-bottom:constant(safe-area-inset-bottom);padding-bottom:env(safe-area-inset-bottom);' +
-                    'padding-left:constant(safe-area-inset-left);padding-left:env(safe-area-inset-left)';
-                document.documentElement.appendChild(probe);
-                var st = getComputedStyle(probe);
-                var map = [
-                    ['--employee-safe-top', 'paddingTop'],
-                    ['--employee-safe-right', 'paddingRight'],
-                    ['--employee-safe-bottom', 'paddingBottom'],
-                    ['--employee-safe-left', 'paddingLeft'],
-                ];
-                var root = document.documentElement;
-                for (var i = 0; i < map.length; i++) {
-                    var px = parseFloat(st[map[i][1]]);
-                    if (px > 0) root.style.setProperty(map[i][0], px + 'px');
-                }
-                if (isIos && !(parseFloat(st.paddingBottom) > 0) && window.screen && window.screen.height >= 812) {
-                    root.style.setProperty('--employee-safe-bottom', '34px');
-                }
-                probe.remove();
                 if (isIos) {
                     var applyIosShellH = function () {
                         var h = Math.max(
@@ -92,7 +67,7 @@
                             document.documentElement.clientHeight || 0
                         );
                         if (h > 0) {
-                            root.style.setProperty('--employee-shell-height', h + 'px');
+                            osRoot.style.setProperty('--employee-shell-height', h + 'px');
                         }
                     };
                     applyIosShellH();
@@ -133,8 +108,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
-                max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+            padding: 1.25rem 1rem;
             background: #9a0036;
         }
 

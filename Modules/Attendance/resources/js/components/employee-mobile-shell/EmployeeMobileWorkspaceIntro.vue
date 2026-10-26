@@ -63,11 +63,7 @@ function onStart() {
   z-index: 120;
   display: flex;
   flex-direction: column;
-  padding:
-    max(var(--space-3), var(--employee-safe-top, env(safe-area-inset-top, 0px)))
-    max(var(--space-3), var(--employee-safe-right, env(safe-area-inset-right, 0px)))
-    max(var(--space-3), var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px)))
-    max(var(--space-3), var(--employee-safe-left, env(safe-area-inset-left, 0px)));
+  padding: var(--space-3);
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--color-tertiary-200) 72%, white) 0%,

@@ -66,7 +66,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    height: max(env(safe-area-inset-bottom, 0px), 2rem);
+    height: 2rem;
     background: var(--color-primary-900);
     pointer-events: none;
   }
@@ -176,7 +176,7 @@ html.pwa-standalone .login::after {
   left: 0;
   right: 0;
   bottom: 0;
-  height: max(env(safe-area-inset-bottom, 0px), 2rem);
+  height: 2rem;
   background: var(--color-primary-900);
   pointer-events: none;
 }

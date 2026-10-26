@@ -363,7 +363,7 @@ onBeforeUnmount(() => {
 
   html.employee-mobile-pwa:not(:has(.employee-tabbar--shell)) .toast-host,
   html.employee-mobile-browser:not(:has(.employee-tabbar--shell)) .toast-host {
-    padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: var(--space-3);
   }
 
   .toast-host__stack {

@@ -150,9 +150,9 @@ function placePopup() {
   const el = root.value;
   if (!el || !open.value) return;
   const rect = el.getBoundingClientRect();
-  const gap = 6;
-  const pad = 8;
-  const width = Math.min(17.5 * 16, window.innerWidth - pad * 2);
+  const gap = 10;
+  const pad = 12;
+  const width = Math.min(18.75 * 16, window.innerWidth - pad * 2);
   const estimatedH = 20 * 16;
   const spaceBelow = window.innerHeight - rect.bottom - pad;
   const spaceAbove = rect.top - pad;
@@ -337,8 +337,8 @@ onBeforeUnmount(() => {
 .app-date__popup {
   position: fixed;
   z-index: 1500;
-  width: 17.5rem;
-  padding: var(--space-3);
+  width: 18.75rem;
+  padding: var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: #fff;
@@ -407,7 +407,7 @@ onBeforeUnmount(() => {
 .app-date__grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  gap: 4px;
 }
 
 .app-date__cell {
@@ -493,7 +493,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 480px) {
   .app-date__popup {
-    width: 16rem;
+    width: min(18.75rem, calc(100vw - 1.5rem));
   }
 }
 </style>

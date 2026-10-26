@@ -458,7 +458,7 @@ function goQuick(name) {
 .employee-home__stat-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin: 0;
 }
 
@@ -467,8 +467,8 @@ function goQuick(name) {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  min-height: 5.25rem;
-  padding: var(--space-2) var(--space-3);
+  min-height: 5.5rem;
+  padding: var(--space-3);
   border: none;
   border-radius: var(--radius-lg);
   background: var(--color-surface);

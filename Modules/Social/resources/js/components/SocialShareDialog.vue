@@ -966,7 +966,7 @@ onBeforeUnmount(() => {
   flex-direction: column-reverse;
   gap: var(--space-2);
   flex-shrink: 0;
-  padding: var(--space-3) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  padding: var(--space-3) var(--space-4) var(--space-4);
   padding-left: calc(var(--space-4) + 4px);
   box-shadow: 0 -1px 0 var(--color-border-subtle);
   background: color-mix(in srgb, var(--color-surface-muted) 40%, var(--color-surface));

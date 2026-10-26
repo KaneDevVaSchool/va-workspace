@@ -1,8 +1,7 @@
 <script setup>
 //
 // Bottom tab bar (5 mục cố định) của shell mobile nhân viên. CSS dùng chung:
-// resources/css/employee-mobile-shell/base.css (khung) — phần safe-area theo
-// nền tảng xem employee-mobile-shell/browser.css / employee-mobile-shell/pwa.css.
+// resources/css/employee-mobile-shell/base.css (khung). Không cộng safe-area iOS.
 //
 import { ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';

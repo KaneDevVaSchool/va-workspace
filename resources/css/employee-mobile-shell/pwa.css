@@ -1,8 +1,6 @@
 /*
  * Shell mobile nhân viên — PWA standalone (Add to Home Screen), phần CHUNG
- * cho cả iOS và Android: khung full màn (inset:0), safe-area cộng 1 lần ở
- * header (top) và tabbar footer (bottom) — KHÔNG cộng vào khung ngoài, tránh
- * double safe-bottom.
+ * cho cả iOS và Android: khung full màn (inset:0). Không cộng safe-area.
  *
  * Hành vi bàn phím ảo (co khung theo visualViewport) khác nhau giữa 2 hệ nên
  * tách riêng file (cùng thư mục resources/css/employee-mobile-shell/):
@@ -15,10 +13,7 @@
  */
 
 .employee-shell--pwa {
-  --employee-header-pt: max(
-    var(--space-2),
-    var(--employee-safe-top, env(safe-area-inset-top, 0px))
-  );
+  --employee-header-pt: var(--space-3);
 }
 
 @media (max-width: 768px) {
@@ -43,7 +38,7 @@
     overflow: hidden;
   }
 
-  /* Trạng thái tĩnh (bàn phím đóng): full màn, safe-area chỉ trong header/footer. */
+  /* Trạng thái tĩnh (bàn phím đóng): full màn, không inset safe-area. */
   .employee-shell--pwa:not(.emp-shell-preview__shell) {
     position: fixed;
     inset: 0;
@@ -71,43 +66,21 @@
   }
 }
 
-/* AppShell.Footer: home indicator / nav bar một lần trên wrapper (PWA UI app layout). */
 .employee-tabbar--pwa.employee-tabbar--shell {
-  padding-bottom: var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0;
 }
 
-/* Vùng safe dưới pill tab bar — nền trong suốt dễ lộ body trắng (iOS standalone). */
+/* Vùng dưới pill tab bar — nền canvas, không inset safe-area. */
 .employee-shell--unified .employee-tabbar--pwa.employee-tabbar--shell {
   background: var(--employee-unified-canvas-bg, var(--color-bg));
 }
 
-/* Bàn phím mở (cả 2 hệ): đáy khung đã trên home indicator/nav bar — bỏ padding safe footer, tránh double-inset đẩy tab bar lên. */
 html.pwa-vv-keyboard .employee-tabbar--pwa.employee-tabbar--shell {
   padding-bottom: 0;
 }
 
-@supports (-webkit-touch-callout: none) {
-  @media (max-width: 768px) {
-    .employee-shell--pwa {
-      --employee-header-pt: max(
-        var(--space-2),
-        var(--employee-safe-top, env(safe-area-inset-top, 0px))
-      );
-      --employee-header-px: calc(
-        var(--space-3) + var(--employee-safe-right, env(safe-area-inset-right, 0px))
-      );
-      --employee-header-pl: calc(
-        var(--space-3) + var(--employee-safe-left, env(safe-area-inset-left, 0px))
-      );
-    }
-  }
-}
-
 @media (max-width: 360px) {
   .employee-shell--pwa {
-    --employee-header-pt: max(
-      var(--space-1),
-      var(--employee-safe-top, env(safe-area-inset-top, 0px))
-    );
+    --employee-header-pt: var(--space-2);
   }
 }

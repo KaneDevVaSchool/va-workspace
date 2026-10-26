@@ -1299,7 +1299,7 @@ onBeforeUnmount(() => {
   max-height: min(70vh, 28rem);
   overflow: auto;
   padding: var(--space-4);
-  padding-bottom: calc(var(--space-4) + var(--employee-safe-bottom, env(safe-area-inset-bottom, 0px)));
+  padding-bottom: var(--space-4);
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   background: var(--color-surface);
   box-shadow: 0 -8px 32px rgba(9, 36, 78, 0.12);

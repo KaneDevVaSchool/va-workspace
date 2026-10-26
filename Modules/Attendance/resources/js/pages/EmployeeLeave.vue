@@ -1352,11 +1352,8 @@ const seniorityDays = computed(
   width: 100%;
   max-width: 32rem;
   margin: 0 auto;
-  height: min(
-    calc(100dvh - var(--employee-safe-top, env(safe-area-inset-top, 0px))),
-    calc(100dvh - 0.5rem)
-  );
-  max-height: calc(100dvh - var(--employee-safe-top, env(safe-area-inset-top, 0px)));
+  height: calc(100dvh - 0.5rem);
+  max-height: calc(100dvh - 0.5rem);
   overflow: hidden;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--color-surface-muted);

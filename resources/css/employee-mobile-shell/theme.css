@@ -60,6 +60,10 @@
   overflow: hidden;
 }
 
+.employee-shell__header--home.employee-shell__header--brand {
+  padding-bottom: var(--space-5);
+}
+
 .employee-shell__header.employee-shell__header--brand {
   box-shadow: none;
   clip-path: none;
@@ -170,7 +174,7 @@
 
 .employee-shell__content--unified {
   background: transparent;
-  padding-top: var(--space-2);
+  padding-top: var(--space-4);
 }
 
 .employee-shell--unified .employee-shell__pull {

@@ -1184,7 +1184,7 @@ function stopQrCamera() {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding-bottom: var(--space-2);
+  padding-bottom: var(--space-5);
 }
 
 .att-head {
@@ -1594,9 +1594,9 @@ function stopQrCamera() {
   align-self: center;
   display: grid;
   place-items: center;
-  width: 13rem;
-  height: 13rem;
-  margin-top: var(--space-1);
+  width: 12rem;
+  height: 12rem;
+  margin-top: var(--space-2);
 }
 
 .att-punch-wrap::before {
@@ -1683,6 +1683,16 @@ function stopQrCamera() {
 }
 
 .att-punch-hint {
+  align-self: center;
+  max-width: 100%;
+  margin: 0 0 var(--space-2);
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-tertiary-50));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-tertiary-200) 55%, var(--color-border));
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
   text-align: center;
 }
 
@@ -2257,13 +2267,14 @@ function stopQrCamera() {
   }
 
   .att-punch-wrap {
-    width: 11.5rem;
-    height: 11.5rem;
+    width: 10.75rem;
+    height: 10.75rem;
+    margin-top: 0;
   }
 
   .att-punch {
-    width: 8.25rem;
-    height: 8.25rem;
+    width: 8rem;
+    height: 8rem;
   }
 
   .att-tile {

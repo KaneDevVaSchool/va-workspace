@@ -72,6 +72,13 @@ html {
 @media (max-width: 768px) {
   html {
     zoom: 1;
+    /* manipulation: chặn zoom khi ấn đúp, vẫn pinch được. */
+    touch-action: manipulation;
+  }
+
+  body,
+  body * {
+    touch-action: manipulation;
   }
 
   /* height (không phải min-height) ghi đè height:100% ở trên — tránh 2 nguồn

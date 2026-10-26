@@ -5,7 +5,7 @@
 // · PWA iOS: ghi --employee-shell-height = innerHeight (px) — WebKit fill-available
 //   thường ngắn hơn viewport thật → lộ dải trắng dưới tab bar (iPhone Plus).
 // · PWA Android: không ghi biến — dùng inset:0.
-// · Safe-area: probe --employee-safe-* trên iOS PWA (employeeSafeArea.js); Safari tab dùng env().
+// · Safe-area iOS: không dùng. syncEmployeeSafeAreaInsets() chỉ xóa biến inline cũ.
 //
 import { isIosDevice } from './employeeDeviceOs';
 import { isPwaStandalone } from './pwaStandalone';

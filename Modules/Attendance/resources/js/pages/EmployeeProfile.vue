@@ -1346,7 +1346,7 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   gap: var(--space-2);
   padding: var(--space-4);
-  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: var(--space-4);
   box-shadow: 0 -1px 0 color-mix(in srgb, var(--color-border) 80%, transparent);
 }
 
