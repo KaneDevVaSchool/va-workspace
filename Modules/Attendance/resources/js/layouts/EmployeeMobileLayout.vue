@@ -30,7 +30,7 @@ import EmployeeMobileTabbar from '../components/employee-mobile-shell/EmployeeMo
 import EmployeeMobileInstallBanner from '../components/employee-mobile-shell/EmployeeMobileInstallBanner.vue';
 import EmployeeMobileWorkspaceIntro from '../components/employee-mobile-shell/EmployeeMobileWorkspaceIntro.vue';
 import EmployeeMobileBirthdayGreeting from '../components/employee-mobile-shell/EmployeeMobileBirthdayGreeting.vue';
-import { isBirthdayGreetingDismissedToday } from '../lib/employeeBirthdayGreeting.js';
+import { useEmployeeBirthdayGreeting } from '../composables/useEmployeeBirthdayGreeting.js';
 import { markWorkspaceIntroSeen } from '../lib/employeeMobileWorkspaceIntro';
 import { EMPLOYEE_MOBILE_TABS } from '../constants/employeeMobileTabs.js';
 import {
@@ -72,8 +72,11 @@ provide('employeePageRefreshRegister', (handler) => {
 
 /** Màn chào mascot chỉ ở boot HTML (mobile); overlay chỉ khi xem lại thủ công. */
 const showWorkspaceIntro = ref(false);
-const showBirthdayGreeting = ref(false);
-const birthdayFirstName = ref('');
+const {
+  people: birthdayPeople,
+  visible: showBirthdayGreeting,
+  hide: dismissBirthdayGreeting,
+} = useEmployeeBirthdayGreeting();
 
 function dismissWorkspaceIntro() {
   markWorkspaceIntroSeen();
@@ -215,31 +218,11 @@ const chatHeaderAria = computed(() =>
     : 'Trò chuyện',
 );
 
-async function loadBirthdayGreeting() {
-  if (!auth.isAuthenticated || isBirthdayGreetingDismissedToday()) {
-    return;
-  }
-  try {
-    const { data } = await window.axios.get('/api/dashboard/me/birthday-greeting');
-    if (data?.is_birthday_today) {
-      birthdayFirstName.value = data.first_name || firstName.value;
-      showBirthdayGreeting.value = true;
-    }
-  } catch {
-    /* HRM tạm không đọc được — bỏ qua */
-  }
-}
-
-function dismissBirthdayGreeting() {
-  showBirthdayGreeting.value = false;
-}
-
 onMounted(() => {
   if (auth.isAuthenticated) {
     auth.fetchMe();
     chatStore.fetchUnreadTotal().catch(() => {});
     chatStore.fetchConversations().catch(() => {});
-    loadBirthdayGreeting();
   }
 });
 
@@ -291,7 +274,7 @@ function goBackFromSubpage() {
 
   <EmployeeMobileBirthdayGreeting
     v-if="showBirthdayGreeting && !showWorkspaceIntro"
-    :first-name="birthdayFirstName"
+    :people="birthdayPeople"
     @close="dismissBirthdayGreeting"
   />
 

@@ -2,8 +2,6 @@
 
 namespace Tests\Unit\Dashboard;
 
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Mockery;
 use Modules\Dashboard\App\Services\MyDashboardBirthdayGreetingService;
@@ -12,8 +10,6 @@ use Tests\TestCase;
 
 class MyDashboardBirthdayGreetingServiceTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function tearDown(): void
     {
         Mockery::close();
@@ -21,43 +17,47 @@ class MyDashboardBirthdayGreetingServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_detects_birthday_from_hrm_birthdate(): void
+    public function test_returns_everyone_whose_birthday_is_today(): void
     {
         Carbon::setTestNow('2026-03-15 09:00:00');
-
-        $user = User::factory()->create([
-            'name' => 'Nguyễn Văn An',
-            'hrm_employee_uuid' => '11111111-1111-1111-1111-111111111111',
-        ]);
+        config(['database.connections.hrm.database' => 'hrm_test']);
 
         $directory = Mockery::mock(HrmEmployeeDirectory::class);
-        $directory->shouldReceive('isConfigured')->andReturnTrue();
-        $directory->shouldReceive('findEmployeeForUser')
+        $directory->shouldReceive('upcomingBirthdays')
             ->once()
-            ->andReturn(['birthdate' => '1990-03-15']);
+            ->with(1)
+            ->andReturn([
+                [
+                    'hrm_employee_uuid' => '11111111-1111-1111-1111-111111111111',
+                    'name' => 'Nguyễn Văn An',
+                    'department_name' => 'Tiểu học',
+                    'next_birthday' => '2026-03-15',
+                ],
+                [
+                    'hrm_employee_uuid' => '22222222-2222-2222-2222-222222222222',
+                    'name' => 'Trần Thị Bình',
+                    'department_name' => null,
+                    'next_birthday' => '2026-03-16',
+                ],
+            ]);
 
         $service = new MyDashboardBirthdayGreetingService($directory);
+        $people = $service->status()['people'];
 
-        $result = $service->status($user);
-
-        $this->assertTrue($result['is_birthday_today']);
-        $this->assertSame('An', $result['first_name']);
+        $this->assertCount(1, $people);
+        $this->assertSame('Nguyễn Văn An', $people[0]['name']);
+        $this->assertSame('Tiểu học', $people[0]['department_name']);
     }
 
-    public function test_not_birthday_when_hrm_missing_birthdate(): void
+    public function test_returns_empty_when_hrm_is_not_configured(): void
     {
-        Carbon::setTestNow('2026-03-15 09:00:00');
-
-        $user = User::factory()->create(['name' => 'Test User']);
+        config(['database.connections.hrm.database' => null]);
 
         $directory = Mockery::mock(HrmEmployeeDirectory::class);
-        $directory->shouldReceive('isConfigured')->andReturnTrue();
-        $directory->shouldReceive('findEmployeeForUser')
-            ->once()
-            ->andReturn(['birthdate' => null]);
+        $directory->shouldNotReceive('upcomingBirthdays');
 
         $service = new MyDashboardBirthdayGreetingService($directory);
 
-        $this->assertFalse($service->status($user)['is_birthday_today']);
+        $this->assertSame(['people' => []], $service->status());
     }
 }

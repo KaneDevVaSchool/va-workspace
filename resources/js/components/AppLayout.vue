@@ -8,6 +8,8 @@ import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AppSidebar from './AppSidebar.vue';
 import AppHeader from './AppHeader.vue';
 import AppIcon from './AppIcon.vue';
+import EmployeeMobileBirthdayGreeting from '@modules/Attendance/resources/js/components/employee-mobile-shell/EmployeeMobileBirthdayGreeting.vue';
+import { useEmployeeBirthdayGreeting } from '@modules/Attendance/resources/js/composables/useEmployeeBirthdayGreeting.js';
 import { providePageHeaderTarget } from '../composables/usePageHeaderTarget';
 import { closeHeaderPopovers } from '../composables/useHeaderPopover';
 
@@ -15,6 +17,11 @@ providePageHeaderTarget();
 
 const route = useRoute();
 const auth = useAuthStore();
+const {
+  people: birthdayPeople,
+  visible: showBirthdayGreeting,
+  hide: dismissBirthdayGreeting,
+} = useEmployeeBirthdayGreeting();
 
 const showUnassignedBanner = computed(
   () => auth.isAuthenticated
@@ -86,6 +93,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <EmployeeMobileBirthdayGreeting
+    v-if="showBirthdayGreeting"
+    :people="birthdayPeople"
+    @close="dismissBirthdayGreeting"
+  />
+
   <div class="app-layout">
     <AppSidebar
       :open="sidebarOpen"

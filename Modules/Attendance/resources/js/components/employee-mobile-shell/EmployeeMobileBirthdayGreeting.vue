@@ -29,7 +29,7 @@ const bursts = [
 }));
 
 const props = defineProps({
-  firstName: { type: String, default: '' },
+  people: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(['close']);
@@ -41,10 +41,9 @@ const variantIndex = pickBirthdayGreetingVariantIndex(EMPLOYEE_BIRTHDAY_GREETING
 
 const greeting = computed(() => EMPLOYEE_BIRTHDAY_GREETINGS[variantIndex] ?? EMPLOYEE_BIRTHDAY_GREETINGS[0]);
 
-const addressee = computed(() => {
-  const name = props.firstName?.trim();
-  return name || 'bạn';
-});
+const honorees = computed(() =>
+  props.people.filter((person) => String(person?.name || '').trim() !== ''),
+);
 
 function prefersReducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -116,15 +115,27 @@ onUnmounted(() => {
           decoding="async"
         />
         <div class="birthday-greeting__body">
-          <p class="birthday-greeting__to">Gửi {{ addressee }}</p>
+          <p class="birthday-greeting__to">Hôm nay sinh nhật</p>
           <h2 id="birthday-greeting-title" class="birthday-greeting__title">
             {{ greeting.title }}
           </h2>
+          <ul class="birthday-greeting__people">
+            <li
+              v-for="person in honorees"
+              :key="person.hrm_employee_uuid || person.name"
+              class="birthday-greeting__person"
+            >
+              <span class="birthday-greeting__name">{{ person.name }}</span>
+              <span v-if="person.department_name" class="birthday-greeting__dept">
+                {{ person.department_name }}
+              </span>
+            </li>
+          </ul>
           <p class="birthday-greeting__subtitle">{{ greeting.subtitle }}</p>
         </div>
         <div class="birthday-greeting__actions">
           <button type="button" class="birthday-greeting__cta" @click="dismiss">
-            Cảm ơn bạn nhé!
+            Chúc mừng!
           </button>
         </div>
       </div>

@@ -2,8 +2,6 @@
 
 namespace Modules\Dashboard\App\Services;
 
-use App\Models\User;
-use Illuminate\Support\Carbon;
 use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 
@@ -14,65 +12,35 @@ class MyDashboardBirthdayGreetingService
     ) {}
 
     /**
-     * @return array{is_birthday_today: bool, first_name: ?string}
+     * Sinh nhật hôm nay trên HRM — mọi nhân viên đăng nhập đều nhận cùng danh sách
+     * để cùng thấy lời chúc.
+     *
+     * @return array{people: list<array{hrm_employee_uuid: string, name: string, department_name: ?string}>}
      *
      * @throws HrmDatabaseUnavailable
      */
-    public function status(User $user): array
+    public function status(): array
     {
-        $firstName = $this->firstNameFrom($user->name);
-
         if (! HrmEmployeeDirectory::isConfigured()) {
-            return [
-                'is_birthday_today' => false,
-                'first_name' => $firstName,
-            ];
+            return ['people' => []];
         }
 
-        $uuid = trim((string) $user->hrm_employee_uuid);
-        $email = trim((string) $user->email);
+        $today = now()->toDateString();
 
-        $hrm = $this->hrmEmployees->findEmployeeForUser(
-            $uuid !== '' ? $uuid : null,
-            $email !== '' ? $email : null,
-        );
+        $people = collect($this->hrmEmployees->upcomingBirthdays(1))
+            ->filter(fn (array $row) => ($row['next_birthday'] ?? null) === $today)
+            ->map(fn (array $row) => [
+                'hrm_employee_uuid' => (string) ($row['hrm_employee_uuid'] ?? ''),
+                'name' => trim((string) ($row['name'] ?? '')),
+                'department_name' => filled($row['department_name'] ?? null)
+                    ? (string) $row['department_name']
+                    : null,
+            ])
+            ->filter(fn (array $row) => $row['name'] !== '')
+            ->unique(fn (array $row) => $row['hrm_employee_uuid'] !== '' ? $row['hrm_employee_uuid'] : $row['name'])
+            ->values()
+            ->all();
 
-        $birthdate = is_array($hrm) ? ($hrm['birthdate'] ?? null) : null;
-
-        return [
-            'is_birthday_today' => $this->isBirthdayToday(is_string($birthdate) ? $birthdate : null),
-            'first_name' => $firstName,
-        ];
-    }
-
-    private function isBirthdayToday(?string $birthdate): bool
-    {
-        if (! filled($birthdate)) {
-            return false;
-        }
-
-        try {
-            $parsed = Carbon::parse($birthdate);
-        } catch (\Throwable) {
-            return false;
-        }
-
-        $today = now()->startOfDay();
-
-        return $parsed->month === $today->month && $parsed->day === $today->day;
-    }
-
-    private function firstNameFrom(?string $fullName): ?string
-    {
-        if (! filled($fullName)) {
-            return null;
-        }
-
-        $parts = preg_split('/\s+/u', trim($fullName), -1, PREG_SPLIT_NO_EMPTY);
-        if ($parts === false || $parts === []) {
-            return null;
-        }
-
-        return (string) end($parts);
+        return ['people' => $people];
     }
 }

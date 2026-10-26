@@ -12,34 +12,83 @@ const props = defineProps({
 const emit = defineEmits(['close', 'update:mode', 'update:department-ids']);
 
 const MODES = [
-  { value: 'all', label: 'Tất cả phòng ban', detail: 'Mọi phòng ban đều thấy bài viết.' },
-  { value: 'include', label: 'Chỉ vài phòng ban', detail: 'Chỉ phòng ban được chọn mới thấy.' },
-  { value: 'exclude', label: 'Trừ vài phòng ban', detail: 'Ẩn bài với phòng ban được chọn.' },
+  { value: 'all', label: 'Tất cả phòng ban', detail: 'Mọi phòng ban đều thấy bài viết.', icon: 'globe' },
+  { value: 'include', label: 'Chỉ vài phòng ban', detail: 'Chỉ phòng ban được chọn mới thấy.', icon: 'building' },
+  { value: 'exclude', label: 'Trừ vài phòng ban', detail: 'Ẩn bài với phòng ban được chọn.', icon: 'eyeOff' },
 ];
 
 const departments = ref([]);
 const loading = ref(false);
+const loaded = ref(false);
 const search = ref('');
 const draftMode = ref('all');
 const draftIds = ref([]);
+let previousBodyOverflow = '';
+
+const needsDepartments = computed(() => draftMode.value !== 'all');
+const selectedCount = computed(() => draftIds.value.length);
+
+function deptMeta(department) {
+  const hrm = String(department?.hrm_code ?? '').trim();
+  const company = String(department?.company_code ?? '').trim();
+  if (hrm && company) return `${hrm} · ${company}`;
+  return hrm || company;
+}
 
 const filteredDepartments = computed(() => {
   const needle = search.value.trim().toLowerCase();
   if (!needle) return departments.value;
-  return departments.value.filter((d) => d.name.toLowerCase().includes(needle));
+  return departments.value.filter((department) => {
+    const haystack = [department.name, department.hrm_code, department.company_code, department.company_name]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(needle);
+  });
 });
 
-const selectedCount = computed(() => draftIds.value.length);
-const needsDepartments = computed(() => draftMode.value !== 'all');
+const showCompanyHeadings = computed(() => {
+  const names = new Set(
+    filteredDepartments.value
+      .map((department) => String(department.company_name || department.company_code || '').trim())
+      .filter(Boolean),
+  );
+  return names.size > 1;
+});
+
+const departmentGroups = computed(() => {
+  const groups = new Map();
+  for (const department of filteredDepartments.value) {
+    const label = String(department.company_name || department.company_code || 'Phòng ban').trim() || 'Phòng ban';
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(department);
+  }
+  return [...groups.entries()].map(([label, items]) => ({ label, items }));
+});
+
+const summaryText = computed(() => {
+  if (draftMode.value === 'include') {
+    return selectedCount.value > 0
+      ? `Chỉ ${selectedCount.value} phòng ban được chọn thấy bài viết.`
+      : 'Chọn phòng ban được thấy bài viết.';
+  }
+  if (draftMode.value === 'exclude') {
+    return selectedCount.value > 0
+      ? `Ẩn bài với ${selectedCount.value} phòng ban được chọn.`
+      : 'Chọn phòng ban sẽ không thấy bài viết.';
+  }
+  return 'Mọi phòng ban đều thấy bài viết này.';
+});
 
 async function loadDepartments() {
-  if (departments.value.length > 0) return;
+  if (loaded.value) return;
   loading.value = true;
   try {
-    const { data } = await window.axios.get('/manager/departments');
-    departments.value = data.departments ?? [];
+    const { data } = await window.axios.get('/api/social/departments');
+    departments.value = Array.isArray(data?.departments) ? data.departments : [];
+    loaded.value = departments.value.length > 0;
   } catch {
-    showClientToast('error', 'Không tải được danh sách phòng ban.');
+    showClientToast('error', 'Không tải được danh sách phòng ban HRM.');
   } finally {
     loading.value = false;
   }
@@ -54,13 +103,14 @@ function setMode(nextMode) {
 }
 
 function isChecked(id) {
-  return draftIds.value.includes(id);
+  return draftIds.value.some((existing) => Number(existing) === Number(id));
 }
 
 function toggleDepartment(id) {
-  draftIds.value = isChecked(id)
-    ? draftIds.value.filter((existing) => existing !== id)
-    : [...draftIds.value, id];
+  const numericId = Number(id);
+  draftIds.value = isChecked(numericId)
+    ? draftIds.value.filter((existing) => Number(existing) !== numericId)
+    : [...draftIds.value, numericId];
 }
 
 function close() {
@@ -73,7 +123,7 @@ function apply() {
     return;
   }
   emit('update:mode', draftMode.value);
-  emit('update:department-ids', draftMode.value === 'all' ? [] : [...draftIds.value]);
+  emit('update:department-ids', draftMode.value === 'all' ? [] : draftIds.value.map((id) => Number(id)));
   emit('close');
 }
 
@@ -81,24 +131,37 @@ function onKeydown(event) {
   if (event.key === 'Escape' && props.open) close();
 }
 
+function setBodyLock(locked) {
+  if (typeof document === 'undefined') return;
+  if (locked) {
+    previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return;
+  }
+  document.body.style.overflow = previousBodyOverflow;
+}
+
 watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) {
       draftMode.value = props.mode;
-      draftIds.value = [...props.departmentIds];
+      draftIds.value = props.departmentIds.map((id) => Number(id));
       search.value = '';
       loadDepartments();
       document.addEventListener('keydown', onKeydown);
+      setBodyLock(true);
       return;
     }
     document.removeEventListener('keydown', onKeydown);
+    setBodyLock(false);
   },
   { immediate: true },
 );
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown);
+  setBodyLock(false);
 });
 </script>
 
@@ -113,84 +176,98 @@ onBeforeUnmount(() => {
       >
         <div
           class="dept-picker__panel"
+          :class="{ 'dept-picker__panel--pick': needsDepartments }"
           role="dialog"
           aria-modal="true"
           aria-labelledby="dept-picker-title"
         >
           <div class="dept-picker__head">
             <span class="dept-picker__icon" aria-hidden="true">
-              <AppIcon name="users" :size="16" :stroke-width="1.75" />
+              <AppIcon name="users" :size="18" :stroke-width="1.75" />
             </span>
             <div class="dept-picker__head-copy">
               <h2 id="dept-picker-title" class="dept-picker__title">Ai được thấy bài viết này?</h2>
+              <p class="dept-picker__subtitle">{{ summaryText }}</p>
             </div>
             <button type="button" class="dept-picker__close" aria-label="Đóng" @click="close">
-              <AppIcon name="close" :size="15" />
+              <AppIcon name="close" :size="16" />
             </button>
           </div>
 
           <div class="dept-picker__body hide-scrollbar">
             <div class="dept-picker__modes" role="radiogroup" aria-label="Cách chọn phòng ban">
-              <label
+              <button
                 v-for="item in MODES"
                 :key="item.value"
+                type="button"
                 class="dept-picker__mode"
                 :class="{ 'dept-picker__mode--on': draftMode === item.value }"
+                role="radio"
+                :aria-checked="draftMode === item.value ? 'true' : 'false'"
+                @click="setMode(item.value)"
               >
-                <input
-                  class="dept-picker__mode-input"
-                  type="radio"
-                  name="dept-visibility-mode"
-                  :checked="draftMode === item.value"
-                  @change="setMode(item.value)"
-                />
+                <span class="dept-picker__mode-icon" aria-hidden="true">
+                  <AppIcon :name="item.icon" :size="16" :stroke-width="1.75" />
+                </span>
                 <span class="dept-picker__mode-copy">
                   <span class="dept-picker__mode-label">{{ item.label }}</span>
                   <span class="dept-picker__mode-detail">{{ item.detail }}</span>
                 </span>
-              </label>
+              </button>
             </div>
 
-            <div class="dept-picker__depts">
-              <template v-if="needsDepartments">
-                <div class="dept-picker__depts-toolbar">
-                  <input
-                    v-model="search"
-                    type="search"
-                    class="dept-picker__search"
-                    placeholder="Tìm phòng ban..."
-                    aria-label="Tìm phòng ban"
-                    autocomplete="off"
-                  />
-                  <p v-if="selectedCount > 0" class="dept-picker__summary">
-                    Đã chọn {{ selectedCount }}
-                  </p>
-                </div>
+            <div v-if="needsDepartments" class="dept-picker__depts">
+              <div class="dept-picker__toolbar">
+                <input
+                  v-model="search"
+                  type="search"
+                  class="dept-picker__search"
+                  placeholder="Tìm theo tên, mã HRM hoặc công ty"
+                  aria-label="Tìm phòng ban"
+                  autocomplete="off"
+                />
+                <p class="dept-picker__count">
+                  {{ selectedCount }} / {{ departments.length }}
+                </p>
+              </div>
 
-                <div class="dept-picker__list hide-scrollbar">
-                  <p v-if="loading" class="dept-picker__empty">Đang tải danh sách phòng ban...</p>
-                  <label
-                    v-for="dept in filteredDepartments"
-                    v-else
-                    :key="dept.id"
-                    class="dept-picker__row"
-                  >
-                    <input
-                      type="checkbox"
-                      class="dept-picker__checkbox"
-                      :checked="isChecked(dept.id)"
-                      @change="toggleDepartment(dept.id)"
-                    />
-                    <span class="dept-picker__row-name">{{ dept.name }}</span>
-                  </label>
-                  <p v-if="!loading && filteredDepartments.length === 0" class="dept-picker__empty">
-                    Không tìm thấy phòng ban phù hợp.
-                  </p>
-                </div>
-              </template>
-              <p v-else class="dept-picker__empty dept-picker__empty--panel">
-                Mọi phòng ban đều thấy bài viết này.
-              </p>
+              <div class="dept-picker__list hide-scrollbar">
+                <p v-if="loading" class="dept-picker__empty">Đang tải phòng ban HRM...</p>
+                <p v-else-if="departments.length === 0" class="dept-picker__empty">
+                  Chưa có phòng ban HRM.
+                </p>
+                <p v-else-if="filteredDepartments.length === 0" class="dept-picker__empty">
+                  Không tìm thấy phòng ban phù hợp.
+                </p>
+                <template v-else>
+                <section
+                  v-for="group in departmentGroups"
+                  :key="group.label"
+                  class="dept-picker__group"
+                >
+                  <h3 v-if="showCompanyHeadings" class="dept-picker__group-title">{{ group.label }}</h3>
+                  <div class="dept-picker__grid">
+                    <label
+                      v-for="dept in group.items"
+                      :key="dept.id"
+                      class="dept-picker__row"
+                      :class="{ 'dept-picker__row--on': isChecked(dept.id) }"
+                    >
+                      <input
+                        type="checkbox"
+                        class="dept-picker__checkbox"
+                        :checked="isChecked(dept.id)"
+                        @change="toggleDepartment(dept.id)"
+                      />
+                      <span class="dept-picker__row-copy">
+                        <span class="dept-picker__row-name">{{ dept.name }}</span>
+                        <span v-if="deptMeta(dept)" class="dept-picker__row-meta">{{ deptMeta(dept) }}</span>
+                      </span>
+                    </label>
+                  </div>
+                </section>
+                </template>
+              </div>
             </div>
           </div>
 
@@ -212,7 +289,7 @@ onBeforeUnmount(() => {
 .dept-picker {
   position: fixed;
   inset: 0;
-  z-index: 300;
+  z-index: 400;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -221,8 +298,7 @@ onBeforeUnmount(() => {
 }
 
 .dept-picker__panel {
-  width: min(48rem, calc(100vw - 2.5rem));
-  height: min(36rem, calc(100vh - 2.5rem));
+  width: min(52rem, calc(100vw - 2.5rem));
   max-height: calc(100vh - 2.5rem);
   display: flex;
   flex-direction: column;
@@ -230,6 +306,11 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-lg);
+}
+
+.dept-picker__panel--pick {
+  width: min(72rem, calc(100vw - 2.5rem));
+  height: calc(100vh - 2.5rem);
 }
 
 .dept-picker__head,
@@ -240,8 +321,8 @@ onBeforeUnmount(() => {
 .dept-picker__head {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: 0.7rem 0.9rem;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) var(--space-3);
   box-shadow: 0 1px 0 var(--color-border);
 }
 
@@ -250,9 +331,9 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 1.85rem;
-  height: 1.85rem;
-  border-radius: var(--radius-sm);
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   color: var(--color-primary);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 15%, transparent);
@@ -266,9 +347,16 @@ onBeforeUnmount(() => {
 .dept-picker__title {
   margin: 0;
   color: var(--color-text);
-  font-size: 0.9375rem;
+  font-size: 1.0625rem;
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.3;
+}
+
+.dept-picker__subtitle {
+  margin: 0.15rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.35;
 }
 
 .dept-picker__close {
@@ -276,8 +364,8 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
+  width: 1.75rem;
+  height: 1.75rem;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -294,40 +382,64 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
-  display: grid;
-  grid-template-columns: minmax(14rem, 16.5rem) minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
-  padding: 0.85rem 0.9rem;
+  padding: var(--space-4);
+  overflow: hidden;
 }
 
 .dept-picker__modes {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
-  min-width: 0;
+  flex-shrink: 0;
 }
 
 .dept-picker__mode {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+  min-height: 4.75rem;
+  margin: 0;
   padding: var(--space-3);
+  border: none;
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
   color: var(--color-text);
+  text-align: left;
+  font-family: inherit;
   cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dept-picker__mode:hover {
+  background: var(--color-surface);
 }
 
 .dept-picker__mode--on {
   background: var(--color-primary-surface);
   color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
-.dept-picker__mode-input {
-  margin-top: 0.15rem;
+.dept-picker__mode-icon {
+  display: inline-flex;
   flex-shrink: 0;
-  accent-color: var(--color-primary);
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.dept-picker__mode--on .dept-picker__mode-icon {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 .dept-picker__mode-copy {
@@ -339,7 +451,8 @@ onBeforeUnmount(() => {
 
 .dept-picker__mode-label {
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .dept-picker__mode-detail {
@@ -350,22 +463,19 @@ onBeforeUnmount(() => {
 }
 
 .dept-picker__mode--on .dept-picker__mode-detail {
-  color: color-mix(in srgb, var(--color-primary) 75%, var(--color-text-muted));
+  color: color-mix(in srgb, var(--color-primary) 72%, var(--color-text));
 }
 
 .dept-picker__depts {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  min-width: 0;
-  min-height: 0;
   overflow: hidden;
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
 }
 
-.dept-picker__depts-toolbar {
+.dept-picker__toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -375,38 +485,64 @@ onBeforeUnmount(() => {
 .dept-picker__search {
   flex: 1;
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
+  width: 100%;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border: none;
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
   font-family: inherit;
   font-size: 0.8125rem;
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .dept-picker__search:focus {
-  outline: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
-  outline-offset: 1px;
-  border-color: var(--color-primary);
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1px var(--color-primary),
+    0 0 0 3px color-mix(in srgb, var(--color-primary) 16%, transparent);
 }
 
-.dept-picker__summary {
+.dept-picker__count {
   margin: 0;
   flex-shrink: 0;
   color: var(--color-text-muted);
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
 }
 
 .dept-picker__list {
   flex: 1;
   min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 2px;
+}
+
+.dept-picker__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.dept-picker__group-title {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.dept-picker__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
   align-content: start;
-  gap: 0.125rem var(--space-2);
-  overflow-y: auto;
 }
 
 .dept-picker__row {
@@ -414,53 +550,77 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
   color: var(--color-text);
-  font-size: 0.8125rem;
   cursor: pointer;
+  box-shadow: inset 0 0 0 1px transparent;
 }
 
 .dept-picker__row:hover {
   background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dept-picker__row--on {
+  background: var(--color-primary-surface);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 .dept-picker__checkbox {
-  margin-top: 0.15rem;
+  width: 1rem;
+  height: 1rem;
+  margin: 0.15rem 0 0;
   accent-color: var(--color-primary);
   flex-shrink: 0;
 }
 
-.dept-picker__row-name {
+.dept-picker__row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
   min-width: 0;
+}
+
+.dept-picker__row-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.dept-picker__row-meta {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 
 .dept-picker__empty {
   margin: 0;
-  padding: var(--space-2);
+  padding: var(--space-4) var(--space-2);
   color: var(--color-text-muted);
   font-size: 0.8125rem;
   text-align: center;
-  grid-column: 1 / -1;
-}
-
-.dept-picker__empty--panel {
-  margin: auto;
 }
 
 .dept-picker__actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
-  padding: 0.65rem 0.9rem;
+  padding: var(--space-3) var(--space-4);
   box-shadow: 0 -1px 0 var(--color-border);
 }
 
 .dept-picker__btn {
-  padding: 0.4rem 0.85rem;
-  border: 1px solid transparent;
+  width: auto;
+  margin: 0;
+  padding: 0.45rem 0.9rem;
+  border: none;
   border-radius: var(--radius-md);
   font-family: inherit;
   font-size: 0.8125rem;
@@ -469,9 +629,9 @@ onBeforeUnmount(() => {
 }
 
 .dept-picker__btn--ghost {
-  border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .dept-picker__btn--ghost:hover {
@@ -479,7 +639,6 @@ onBeforeUnmount(() => {
 }
 
 .dept-picker__btn--primary {
-  border-color: var(--color-primary);
   background: var(--color-primary);
   color: var(--color-on-primary);
 }
@@ -498,47 +657,39 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 
-@media (max-width: 768px) {
-  .dept-picker__body {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .dept-picker__modes {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-1);
-  }
-
-  .dept-picker__mode {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: var(--space-2);
-  }
-
-  .dept-picker__mode-detail {
-    display: none;
-  }
-
-  .dept-picker__list {
-    grid-template-columns: minmax(0, 1fr);
+@media (max-width: 900px) {
+  .dept-picker__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 640px) {
-  .dept-picker__panel {
-    width: calc(100vw - 2.5rem);
-    height: calc(100vh - 2.5rem);
+@media (max-width: 720px) {
+  .dept-picker {
+    padding: var(--space-3);
   }
 
-  .dept-picker__depts-toolbar {
-    flex-direction: column;
+  .dept-picker__panel,
+  .dept-picker__panel--pick {
+    width: min(100%, calc(100vw - 1.5rem));
+    max-height: calc(100dvh - 1.5rem);
+  }
+
+  .dept-picker__panel--pick {
+    height: calc(100dvh - 1.5rem);
+  }
+
+  .dept-picker__modes,
+  .dept-picker__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dept-picker__mode {
+    min-height: 0;
+    align-items: center;
+  }
+
+  .dept-picker__toolbar {
     align-items: stretch;
-  }
-
-  .dept-picker__summary {
-    white-space: normal;
   }
 }
 

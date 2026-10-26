@@ -33,7 +33,7 @@ class MyDashboardProfileTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/dashboard/me/birthday-greeting')
             ->assertOk()
-            ->assertJsonPath('is_birthday_today', false);
+            ->assertJsonPath('people', []);
     }
 
     public function test_profile_returns_workspace_fallback_without_hrm(): void

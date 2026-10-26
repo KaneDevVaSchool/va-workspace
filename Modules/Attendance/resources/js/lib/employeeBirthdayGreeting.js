@@ -1,4 +1,4 @@
-const DISMISS_PREFIX = 'employee-birthday-greeting-dismissed-';
+const DISMISS_PREFIX = 'employee-birthday-greeting-dismissed-v2-';
 const VARIANT_PREFIX = 'employee-birthday-greeting-variant-';
 
 function todayKey() {

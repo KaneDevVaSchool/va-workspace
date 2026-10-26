@@ -2,11 +2,8 @@
  * Shell mobile nhân viên — PWA standalone trên iOS (WebKit).
  *
  * · Chiều cao: --employee-shell-height = innerHeight (JS, app.blade + viewport.js).
- * · Tab bar: in-flow trong flex shell (không fixed). Fixed + overflow:hidden
- *   trên shell cắt mất nhãn ở mép dưới.
- * · Bàn phím: visualViewport — co shell.
- * · Header không phủ tai thỏ: margin-top trên header brand = safe-area-top
- *   (nền canvas shell lấp vùng trên; tab bar vẫn sát đáy, không padding shell).
+ * · Tab bar: position fixed sát đáy viewport + nền canvas (tránh dải trắng body).
+ * · Bàn phím: visualViewport — co shell; tab bar trở lại in-flow.
  */
 
 @media (max-width: 768px) {
@@ -39,33 +36,38 @@
     max-height: var(--employee-shell-height, 100%);
   }
 
-  html.employee-os-ios.pwa-standalone.employee-mobile-pwa:not(.pwa-vv-keyboard)
-    .employee-shell--unified.employee-shell--pwa
-    .employee-shell__header--brand {
-    margin-top: env(safe-area-inset-top, 0px);
-  }
-
   /*
-   * Tab bar ở lại trong cột flex. position:fixed + overflow:hidden trên shell
-   * cắt nhãn sát đáy. Nền canvas phủ khoảng trống dưới pill.
+   * Tab bar dính đáy màn hình, nền canvas (không lộ --color-surface trắng).
    */
   html.employee-os-ios.pwa-standalone:not(.pwa-vv-keyboard)
     .employee-shell--unified.employee-shell--pwa
     .employee-tabbar--pwa.employee-tabbar--shell {
-    position: relative;
-    z-index: 3;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 24;
     width: 100%;
     max-width: 100vw;
     margin: 0;
-    padding: 0 var(--space-2) 0;
+    padding: var(--space-3) var(--space-2) 0;
     background: var(--employee-unified-canvas-bg, var(--color-bg));
     box-sizing: border-box;
   }
 
   html.employee-os-ios.pwa-standalone:not(.pwa-vv-keyboard)
     .employee-shell--unified.employee-shell--pwa
+    .employee-tabbar--pwa
+    .employee-tabbar__bar {
+    padding-bottom: var(--space-1);
+  }
+
+  html.employee-os-ios.pwa-standalone:not(.pwa-vv-keyboard)
+    .employee-shell--unified.employee-shell--pwa
     .employee-shell__content--unified {
-    padding-bottom: var(--space-3);
+    padding-bottom: calc(
+      var(--employee-tabbar-block-size, 4.5rem) + var(--space-4)
+    );
   }
 
   html.employee-os-ios.pwa-vv-keyboard .employee-shell--pwa:not(.emp-shell-preview__shell) {
@@ -76,12 +78,6 @@
     max-width: 100vw;
     height: var(--pwa-vv-height, 100%);
     max-height: var(--pwa-vv-height, 100%);
-  }
-
-  html.employee-os-ios.pwa-vv-keyboard
-    .employee-shell--unified.employee-shell--pwa
-    .employee-shell__header--brand {
-    margin-top: 0;
   }
 
   html.employee-os-ios.pwa-vv-keyboard .employee-shell--unified.employee-shell--pwa .employee-tabbar--pwa.employee-tabbar--shell {

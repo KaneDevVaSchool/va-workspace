@@ -67,7 +67,6 @@
 }
 
 .employee-tabbar--pwa.employee-tabbar--shell {
-  /* PWA: pill sát đáy màn (không safe-area-bottom). */
   padding-bottom: 0;
 }
 

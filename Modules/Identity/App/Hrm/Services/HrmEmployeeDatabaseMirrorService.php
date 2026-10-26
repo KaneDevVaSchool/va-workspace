@@ -286,7 +286,7 @@ class HrmEmployeeDatabaseMirrorService
         $user = $this->users->findByHrmEmployeeUuid($employeeUuid)
             ?? $this->users->findByEmail($email);
 
-        $attributes = $this->displayAttributes($employee);
+        $attributes = $this->displayAttributes($employee, $user);
 
         if ($user !== null && filled($user->hrm_employee_uuid) && $user->hrm_employee_uuid !== $employeeUuid) {
             $holder = User::query()
@@ -334,7 +334,7 @@ class HrmEmployeeDatabaseMirrorService
     }
 
     /** @param array<string, mixed> $employee */
-    private function displayAttributes(array $employee): array
+    private function displayAttributes(array $employee, ?User $user = null): array
     {
         $attributes = [
             'employee_code' => $employee['code'] ?? null,
@@ -350,7 +350,7 @@ class HrmEmployeeDatabaseMirrorService
 
         if (
             filled($employee['avatar_url'] ?? null)
-            && ! UserAvatarUrl::isUserUploaded($user->avatar_url)
+            && ($user === null || ! UserAvatarUrl::isUserUploaded($user->avatar_url))
         ) {
             $attributes['avatar_url'] = (string) $employee['avatar_url'];
         }

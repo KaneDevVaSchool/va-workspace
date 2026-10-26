@@ -52,10 +52,10 @@ class MyDashboardController extends Controller
         }
     }
 
-    public function birthdayGreeting(Request $request): JsonResponse
+    public function birthdayGreeting(): JsonResponse
     {
         try {
-            return response()->json($this->birthdayGreeting->status($request->user()));
+            return response()->json($this->birthdayGreeting->status());
         } catch (HrmDatabaseUnavailable $e) {
             return response()->json(['message' => $e->getMessage()], 503);
         }
