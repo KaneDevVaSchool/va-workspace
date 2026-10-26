@@ -6,14 +6,25 @@
 import { ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 
-defineProps({
+const props = defineProps({
   tabs: { type: Array, required: true },
   activeName: { type: String, default: '' },
   isMobilePwa: { type: Boolean, default: false },
 });
 
+const emit = defineEmits(['reselect']);
+
 const navEl = ref(null);
 defineExpose({ navEl });
+
+function onTabClick(event, tab) {
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    navigator.vibrate(10);
+  }
+  if (props.activeName !== tab.name) return;
+  event.preventDefault();
+  emit('reselect', tab.name);
+}
 </script>
 
 <template>
@@ -29,15 +40,21 @@ defineExpose({ navEl });
         :key="tab.name"
         :to="{ name: tab.name }"
         class="employee-tabbar__item"
-        :class="{ 'employee-tabbar__item--active': activeName === tab.name }"
+        :class="{
+          'employee-tabbar__item--active': activeName === tab.name,
+          'employee-tabbar__item--primary': tab.primary,
+        }"
+        :aria-current="activeName === tab.name ? 'page' : undefined"
+        @click="onTabClick($event, tab)"
       >
         <span class="employee-tabbar__icon">
           <AppIcon
             :name="tab.icon"
-            :size="20"
+            :size="tab.primary ? 22 : 20"
             :stroke-width="1.9"
           />
         </span>
+        <span v-if="tab.badge" class="employee-tabbar__badge">{{ tab.badge }}</span>
         <span class="employee-tabbar__label">{{ tab.label }}</span>
       </router-link>
     </div>

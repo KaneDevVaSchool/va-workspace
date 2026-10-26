@@ -15,7 +15,7 @@
 @media (max-width: 768px) {
   html.employee-mobile-browser {
     background-color: var(--color-bg);
-    --employee-tabbar-block-size: 3.25rem;
+    --employee-tabbar-block-size: 4.5rem;
   }
 
   .employee-shell--browser:not(.emp-shell-preview__shell) {

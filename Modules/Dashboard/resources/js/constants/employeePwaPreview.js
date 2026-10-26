@@ -2,7 +2,7 @@
 export const EMPLOYEE_PWA_TABBAR = [
   { routeName: 'dashboard.me', icon: 'home', label: 'Trang chủ' },
   { routeName: 'employee.feed', icon: 'megaphone', label: 'Bảng tin' },
-  { routeName: 'employee.attendance', icon: 'clock', label: 'Chấm công' },
+  { routeName: 'employee.attendance', icon: 'clock', label: 'Chấm công', primary: true },
   { routeName: 'employee.leave', icon: 'calendar', label: 'Nghỉ phép' },
   { routeName: 'employee.requests', icon: 'clipboardCheck', label: 'Lịch sử' },
 ];

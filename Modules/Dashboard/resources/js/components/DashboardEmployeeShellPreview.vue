@@ -143,7 +143,10 @@ const tabs = computed(() =>
             v-for="tab in tabs"
             :key="tab.routeName"
             class="employee-tabbar__item"
-            :class="{ 'employee-tabbar__item--active': tab.active }"
+            :class="{
+              'employee-tabbar__item--active': tab.active,
+              'employee-tabbar__item--primary': tab.primary,
+            }"
           >
             <span class="employee-tabbar__icon">
               <AppIcon :name="tab.icon" :size="20" :stroke-width="1.9" />

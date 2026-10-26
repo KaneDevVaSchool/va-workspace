@@ -53,6 +53,11 @@ html.pwa-standalone {
     height: 1.5rem;
   }
 
+  .employee-tabbar__item--primary .employee-tabbar__icon {
+    width: 2.15rem;
+    height: 2.15rem;
+  }
+
   .employee-tabbar__label {
     font-size: 0.5625rem;
   }
@@ -523,14 +528,14 @@ html.pwa-standalone {
 }
 
 .employee-tabbar--shell {
-  --employee-tabbar-height: 3.25rem;
+  --employee-tabbar-height: 4rem;
   position: relative;
   z-index: 3;
   flex: 0 0 auto;
   width: 100%;
   box-sizing: border-box;
   margin: 0;
-  padding: var(--space-3) var(--space-2) 0;
+  padding: 0 var(--space-2) var(--space-2);
   background: transparent;
   box-shadow: none;
 }
@@ -543,7 +548,7 @@ html.pwa-standalone {
   gap: 2px;
   min-height: var(--employee-tabbar-height);
   padding: var(--space-1) var(--space-1);
-  overflow: hidden;
+  overflow: visible;
   border-radius: var(--radius-xl, 1.25rem);
   background: color-mix(in srgb, var(--color-surface) 92%, transparent);
   backdrop-filter: blur(12px);
@@ -555,6 +560,7 @@ html.pwa-standalone {
 }
 
 .employee-tabbar__item {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -566,12 +572,17 @@ html.pwa-standalone {
   border-radius: var(--radius-lg);
   color: var(--color-text-muted);
   text-decoration: none;
-  overflow: hidden;
+  overflow: visible;
   transition: color 160ms ease, background 160ms ease, transform 120ms ease;
 }
 
 .employee-tabbar__item:active {
   transform: scale(0.96);
+}
+
+.employee-tabbar__item:focus-visible {
+  outline: 2px solid var(--color-tertiary-500);
+  outline-offset: 2px;
 }
 
 .employee-tabbar__icon {
@@ -580,7 +591,44 @@ html.pwa-standalone {
   width: 1.75rem;
   height: 1.75rem;
   border-radius: var(--radius-full);
-  transition: background 160ms ease, color 160ms ease;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.employee-tabbar__item--primary .employee-tabbar__icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: linear-gradient(165deg, var(--color-tertiary-400) 0%, var(--color-tertiary-700) 100%);
+  color: var(--color-on-tertiary);
+  box-shadow:
+    0 8px 16px color-mix(in srgb, var(--color-tertiary-800) 32%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-on-tertiary) 35%, transparent);
+}
+
+.employee-tabbar__item--primary.employee-tabbar__item--active {
+  color: var(--color-tertiary-800);
+}
+
+.employee-tabbar__item--primary.employee-tabbar__item--active .employee-tabbar__icon {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-tertiary-100) 88%, white),
+    0 8px 16px color-mix(in srgb, var(--color-tertiary-800) 36%, transparent);
+}
+
+.employee-tabbar__badge {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.35rem;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  border-radius: var(--radius-full);
+  background: var(--color-danger);
+  color: var(--color-on-primary);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  line-height: 1rem;
+  text-align: center;
+  pointer-events: none;
 }
 
 .employee-tabbar__label {
@@ -594,12 +642,12 @@ html.pwa-standalone {
   letter-spacing: 0.01em;
 }
 
-.employee-tabbar__item--active {
+.employee-tabbar__item--active:not(.employee-tabbar__item--primary) {
   color: var(--color-tertiary-800);
   background: color-mix(in srgb, var(--color-tertiary-surface) 55%, transparent);
 }
 
-.employee-tabbar__item--active .employee-tabbar__icon {
+.employee-tabbar__item--active:not(.employee-tabbar__item--primary) .employee-tabbar__icon {
   background: var(--color-tertiary);
   color: var(--color-on-primary);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--color-tertiary-700) 35%, transparent);

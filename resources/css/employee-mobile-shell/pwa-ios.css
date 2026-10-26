@@ -50,7 +50,7 @@
     width: 100%;
     max-width: 100vw;
     margin: 0;
-    padding: var(--space-3) var(--space-2) 0;
+    padding: 0 var(--space-2) var(--space-2);
     background: var(--employee-unified-canvas-bg, var(--color-bg));
     box-sizing: border-box;
   }
@@ -66,7 +66,7 @@
     .employee-shell--unified.employee-shell--pwa
     .employee-shell__content--unified {
     padding-bottom: calc(
-      var(--employee-tabbar-block-size, 3.25rem) + var(--space-4)
+      var(--employee-tabbar-block-size, 4.5rem) + var(--space-2)
     );
   }
 

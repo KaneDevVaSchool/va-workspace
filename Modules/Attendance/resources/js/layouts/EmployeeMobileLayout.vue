@@ -132,10 +132,21 @@ useEmployeeMobileViewport();
 const TABS = [
   { name: 'dashboard.me', icon: 'home', label: 'Trang chủ' },
   { name: 'employee.feed', icon: 'megaphone', label: 'Bảng tin' },
-  { name: 'employee.attendance', icon: 'clock', label: 'Chấm công' },
+  { name: 'employee.attendance', icon: 'clock', label: 'Chấm công', primary: true },
   { name: 'employee.leave', icon: 'calendar', label: 'Nghỉ phép' },
   { name: 'employee.requests', icon: 'clipboardCheck', label: 'Lịch sử' },
 ];
+
+function onTabReselect() {
+  const el = contentRef.value;
+  if (!el) return;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (el.scrollTop > 12) {
+    el.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+    return;
+  }
+  onHeaderRefresh();
+}
 
 const greeting = computed(() => {
   const hour = new Date().getHours();
@@ -314,6 +325,7 @@ function goBackFromSubpage() {
       :tabs="TABS"
       :active-name="route.name"
       :is-mobile-pwa="isMobilePwa"
+      @reselect="onTabReselect"
     />
   </div>
 </template>

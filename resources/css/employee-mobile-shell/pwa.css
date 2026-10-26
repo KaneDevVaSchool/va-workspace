@@ -26,7 +26,7 @@
 
   html.employee-mobile-pwa {
     background-color: var(--color-bg);
-    --employee-tabbar-block-size: 3.25rem;
+    --employee-tabbar-block-size: 4.5rem;
     overflow: hidden;
   }
 
