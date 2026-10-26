@@ -80,6 +80,12 @@ class GlobalMenuVisibilityService
             'icon' => 'barChart',
             'audience' => 'Trưởng phòng tạo báo cáo; người được chia sẻ chỉ xem các báo cáo có tên mình.',
         ],
+        'manager.don-tu.hub' => [
+            'label' => 'Đơn từ',
+            'section' => 'operations',
+            'icon' => 'fileText',
+            'audience' => 'Mọi tài khoản đã đăng nhập. Bản xem trước các màn đơn từ, chưa khóa theo quyền.',
+        ],
         // section: control (Kiểm soát) — dữ liệu/thao tác dùng chung toàn
         // công ty, cần giám sát, không phải việc vận hành riêng của 1 phòng ban.
         'manager.social.moderation' => [

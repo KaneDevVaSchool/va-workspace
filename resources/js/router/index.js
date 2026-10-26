@@ -11,6 +11,7 @@ import featureRequestRoutes from '@modules/FeatureRequest/resources/js/router.js
 import contractRoutes from '@modules/Contract/resources/js/router.js';
 import attendanceRoutes from '@modules/Attendance/resources/js/router.js';
 import chatRoutes from '@modules/Chat/resources/js/router.js';
+import donTuRoutes from '@modules/DonTu/resources/js/router.js';
 import { resolveAuthenticatedLandingRoute } from '../lib/authenticatedLanding';
 import { showClientToast } from '../lib/clientToast';
 import {
@@ -49,6 +50,7 @@ const routes = [
     ...contractRoutes,
     ...attendanceRoutes,
     ...chatRoutes,
+    ...donTuRoutes,
     {
         path: '/:pathMatch(.*)*',
         name: 'not-found',

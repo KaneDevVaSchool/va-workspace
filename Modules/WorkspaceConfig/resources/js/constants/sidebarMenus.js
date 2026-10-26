@@ -52,6 +52,12 @@ export const SIDEBAR_MENU_CATALOG = {
     sectionLabel: 'Điều hành',
     description: 'Tạo và xem báo cáo phòng ban. Loại đánh giá nhân sự mở sang bảng chấm điểm sau khi tạo.',
   },
+  'manager.don-tu.hub': {
+    icon: 'fileText',
+    section: 'operations',
+    sectionLabel: 'Điều hành',
+    description: 'Đơn từ. Bản xem trước các màn nộp, duyệt, cấu hình và giám sát.',
+  },
   'manager.credential.index': {
     icon: 'lock',
     section: 'control',
