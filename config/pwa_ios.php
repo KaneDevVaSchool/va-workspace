@@ -12,7 +12,7 @@ $ratio2 = '(-webkit-device-pixel-ratio: 2)';
 return [
 
     'apple_web_app_title' => 'VA Workspace',
-    'status_bar_style' => 'default',
+    'status_bar_style' => 'black-translucent',
     'orientation' => 'portrait',
 
     'touch_icons' => [

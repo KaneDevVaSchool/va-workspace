@@ -1,5 +1,4 @@
 <script setup>
-import { computed } from 'vue';
 import { formatRelativeTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
@@ -8,10 +7,6 @@ import { useChatStore } from '../store/chatStore';
 
 const store = useChatStore();
 const auth = useAuthStore();
-
-const unreadInList = computed(() =>
-  store.conversations.reduce((sum, item) => sum + (item.unread_count > 0 ? item.unread_count : 0), 0),
-);
 
 function initial(name) {
   return name?.trim().charAt(0).toUpperCase() || '?';
@@ -38,16 +33,6 @@ function open(conversationId) {
 
 <template>
   <div class="chat-list">
-    <header class="chat-list__hero">
-      <div class="chat-list__hero-copy">
-        <h2 class="chat-list__hero-title">Tin nhắn</h2>
-        <p v-if="unreadInList > 0" class="chat-list__hero-sub">
-          {{ unreadInList > 99 ? '99+' : unreadInList }} chưa đọc
-        </p>
-        <p v-else class="chat-list__hero-sub">Trao đổi nhanh với đồng nghiệp</p>
-      </div>
-    </header>
-
     <ChatUserSearch />
 
     <div class="chat-list__items">
@@ -117,25 +102,6 @@ function open(conversationId) {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-}
-
-.chat-list__hero {
-  flex-shrink: 0;
-  padding: var(--space-3) var(--space-3) var(--space-2);
-}
-
-.chat-list__hero-title {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: var(--color-text);
-  letter-spacing: -0.02em;
-}
-
-.chat-list__hero-sub {
-  margin: 0.2rem 0 0;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
 }
 
 .chat-list__items {
