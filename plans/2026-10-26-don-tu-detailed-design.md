@@ -261,41 +261,45 @@ năm + tiền tố, unique toàn hệ thống.
 
 ## 5. Vị trí trong Workspace
 
-### Sidebar
+### Sidebar (xem trước hiện tại)
 
-| Thuộc tính | Giá trị |
-|---|---|
-| Nhóm | `operations` — Điều hành |
-| `menu_key` / route name | `manager.don-tu.hub` |
-| Nhãn | Đơn từ |
-| Icon | `fileText` (đã có trong `appIconNames.js`) |
-| Path | `/manager/don-tu` |
-| Hiện khi | `don_tu.submit` **hoặc** `don_tu.approve` **hoặc** `don_tu.view_department` **hoặc** `don_tu.manage_department` **hoặc** `don_tu.manage_system` |
-| Cấu hình phòng ban | `configurableByDepartment: true` |
-
-Đồng bộ thủ công 4 chỗ (cùng quy ước menu hiện tại):
-
-- `resources/js/components/AppSidebar.vue` — `MENU_SECTIONS.operations`
-- `Modules/WorkspaceConfig/App/Services/DepartmentSidebarConfigService.php` — `CONFIGURABLE_MENUS` + `MENU_DEFAULT_SECTIONS`
-- `Modules/WorkspaceConfig/App/Services/GlobalMenuVisibilityService.php` — `CATALOG`
-- `Modules/WorkspaceConfig/resources/js/constants/sidebarMenus.js` — `SIDEBAR_MENU_CATALOG`
-
-Badge số hồ sơ đang chờ user: poll `GET /api/don-tu/inbox/count`, key
-`manager.don-tu.hub`, cùng nhịp badge Duyệt bài / Duyệt bảng công trong
-`AppSidebar.vue`.
-
-### Hub (sub-nav trong trang, không thêm mục sidebar)
-
-| Tab | Path | Route name | Quyền vào tab |
+| Nhóm section | `menu_key` | Nhãn | Ghi chú |
 |---|---|---|---|
-| Nộp đơn | `/manager/don-tu` | `manager.don-tu.hub` | `don_tu.submit` |
-| Hồ sơ của tôi | `/manager/don-tu/mine` | `manager.don-tu.mine` | `don_tu.submit` |
-| Cần tôi duyệt | `/manager/don-tu/inbox` | `manager.don-tu.inbox` | `don_tu.approve` |
-| Tra cứu | `/manager/don-tu/registry` | `manager.don-tu.registry` | `don_tu.view_department` |
-| Cấu hình | `/manager/don-tu/admin` | `manager.don-tu.admin` | `don_tu.manage_department` hoặc `don_tu.manage_system` |
+| `don-tu` | `manager.don-tu.start` | Nộp đơn | Path `/manager/don-tu` |
+| `don-tu` | `manager.don-tu.mine` | Hồ sơ của tôi | |
+| `don-tu` | `manager.don-tu.inbox` | Cần tôi duyệt | Badge poll: `GET /api/don-tu/inbox/count` |
+| `don-tu` | `manager.don-tu.registry` | Tra cứu | |
+| `don-tu` | `manager.don-tu.config` | Cấu hình | Hub → tab trong `DonTuLayout` |
+| `don-tu` | `manager.don-tu.monitor-hub` | Giám sát | Hub → tab trong `DonTuLayout` |
 
-`/manager/don-tu` là lối sidebar. User chỉ có quyền duyệt (không có `submit`)
-vào hub thì redirect sang `inbox`.
+**Không phải mục sidebar** (deep link): `manager.don-tu.compose`, `manager.don-tu.show`,
+`manager.don-tu.form`, `manager.don-tu.workflow`.
+
+Nguồn đồng bộ: `Modules/DonTu/resources/js/nav.js` +
+`DonTuSidebarMenuCatalog.php` + `AppSidebar.vue` + `DepartmentSidebarConfigService` +
+`GlobalMenuVisibilityService` + `sidebarMenus.js`.
+
+Quyền (P1): `don_tu.submit` / `approve` / `view_department` / `manage_*` — gắn sau;
+xem trước mở cho mọi user đã đăng nhập.
+
+### Hub trong trang (`DonTuLayout`)
+
+**Cấu hình** (`manager.don-tu.config` → redirect `manager.don-tu.statuses`):
+
+| Tab | Route name | Quyền (P1+) |
+|---|---|---|
+| Bộ trạng thái | `manager.don-tu.statuses` | `don_tu.manage_department` hoặc `manage_system` |
+| Mẫu biểu | `manager.don-tu.forms` | idem |
+| Quy trình | `manager.don-tu.workflows` | idem |
+
+Sửa một mẫu / quy trình: `manager.don-tu.form`, `manager.don-tu.workflow` — không tab riêng;
+tab cha vẫn sáng (Mẫu biểu / Quy trình).
+
+**Giám sát** (`manager.don-tu.monitor-hub` → `manager.don-tu.monitor`):
+
+Tiến độ · Báo cáo SLA · Báo cáo nghiệp vụ · Nhật ký kiểm toán.
+
+User chỉ duyệt (không `submit`): vào `/manager/don-tu` redirect `inbox` (P1).
 
 Cấu hình P1 chỉ đọc bộ trạng thái + bật/tắt quy trình pilot. Builder đầy đủ
 là P2, vẫn nằm trong tab Cấu hình.

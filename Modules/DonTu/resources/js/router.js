@@ -15,6 +15,11 @@ export default [
         name: 'manager.don-tu.config',
         redirect: { name: 'manager.don-tu.statuses' },
       },
+      {
+        path: 'monitor-hub',
+        name: 'manager.don-tu.monitor-hub',
+        redirect: { name: 'manager.don-tu.monitor' },
+      },
       ...DON_TU_SCREENS.map((screen) => ({
         path: screen.path,
         name: screen.name,

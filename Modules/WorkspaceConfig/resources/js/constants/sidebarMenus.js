@@ -58,12 +58,6 @@ export const SIDEBAR_MENU_CATALOG = {
     sectionLabel: 'Đơn từ',
     description: 'Nộp đơn mới — bản xem trước, chưa khóa theo quyền.',
   },
-  'manager.don-tu.compose': {
-    icon: 'pencil',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Soạn nội dung đơn trước khi gửi.',
-  },
   'manager.don-tu.mine': {
     icon: 'folder',
     section: 'don-tu',
@@ -86,31 +80,13 @@ export const SIDEBAR_MENU_CATALOG = {
     icon: 'settings',
     section: 'don-tu',
     sectionLabel: 'Đơn từ',
-    description: 'Bộ trạng thái, mẫu biểu và quy trình — chuyển tab trong trang, không phải mục sidebar riêng.',
+    description: 'Trạng thái, mẫu biểu, quy trình — tab trong trang.',
   },
-  'manager.don-tu.monitor': {
+  'manager.don-tu.monitor-hub': {
     icon: 'activity',
     section: 'don-tu',
     sectionLabel: 'Đơn từ',
-    description: 'Theo dõi tiến độ xử lý đơn từ.',
-  },
-  'manager.don-tu.sla': {
-    icon: 'clock',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Báo cáo SLA và cảnh báo quá hạn.',
-  },
-  'manager.don-tu.reports': {
-    icon: 'barChart',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Báo cáo nghiệp vụ đơn từ.',
-  },
-  'manager.don-tu.audits': {
-    icon: 'clock',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Nhật ký kiểm toán thao tác trên hồ sơ.',
+    description: 'Tiến độ, SLA, báo cáo và nhật ký — tab trong trang.',
   },
   'manager.credential.index': {
     icon: 'lock',

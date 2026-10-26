@@ -3,12 +3,19 @@ import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
-import { DON_TU_ADMIN_SCREENS, DON_TU_CONFIG_ROUTE_NAMES } from '../nav.js';
+import {
+  DON_TU_CONFIG_ROUTE_NAMES,
+  DON_TU_CONFIG_TAB_ACTIVE,
+  DON_TU_CONFIG_TABS,
+  DON_TU_MONITOR_ROUTE_NAMES,
+  DON_TU_MONITOR_TABS,
+} from '../nav.js';
 
 const route = useRoute();
 
 const currentTitle = computed(() => route.meta.screenTitle || 'Đơn từ');
 const isConfigArea = computed(() => DON_TU_CONFIG_ROUTE_NAMES.has(route.name));
+const isMonitorArea = computed(() => DON_TU_MONITOR_ROUTE_NAMES.has(route.name));
 
 const breadcrumbs = computed(() => {
   const base = [
@@ -22,8 +29,32 @@ const breadcrumbs = computed(() => {
       { label: currentTitle.value },
     ];
   }
+  if (isMonitorArea.value) {
+    return [
+      ...base,
+      { label: 'Giám sát', to: { name: 'manager.don-tu.monitor-hub' } },
+      { label: currentTitle.value },
+    ];
+  }
   return [...base, { label: currentTitle.value }];
 });
+
+const hubTabs = computed(() => {
+  if (isConfigArea.value) {
+    return { label: 'Mục cấu hình đơn từ', items: DON_TU_CONFIG_TABS };
+  }
+  if (isMonitorArea.value) {
+    return { label: 'Mục giám sát đơn từ', items: DON_TU_MONITOR_TABS };
+  }
+  return null;
+});
+
+function tabIsActive(tabName) {
+  if (route.name === tabName) {
+    return true;
+  }
+  return DON_TU_CONFIG_TAB_ACTIVE[route.name] === tabName;
+}
 </script>
 
 <template>
@@ -36,17 +67,17 @@ const breadcrumbs = computed(() => {
     />
 
     <nav
-      v-if="isConfigArea"
-      class="don-tu__config-tabs hide-scrollbar"
-      aria-label="Mục cấu hình đơn từ"
+      v-if="hubTabs"
+      class="don-tu__hub-tabs hide-scrollbar"
+      :aria-label="hubTabs.label"
     >
       <router-link
-        v-for="tab in DON_TU_ADMIN_SCREENS"
+        v-for="tab in hubTabs.items"
         :key="tab.name"
         :to="{ name: tab.name }"
-        class="don-tu__config-tab"
-        :class="{ 'don-tu__config-tab--active': route.name === tab.name }"
-        :aria-current="route.name === tab.name ? 'page' : undefined"
+        class="don-tu__hub-tab"
+        :class="{ 'don-tu__hub-tab--active': tabIsActive(tab.name) }"
+        :aria-current="tabIsActive(tab.name) ? 'page' : undefined"
       >
         <AppIcon :name="tab.sidebarIcon" :size="15" :stroke-width="1.75" />
         {{ tab.title }}
@@ -69,7 +100,7 @@ const breadcrumbs = computed(() => {
   overflow: hidden;
 }
 
-.don-tu__config-tabs {
+.don-tu__hub-tabs {
   flex-shrink: 0;
   display: flex;
   gap: var(--space-1);
@@ -79,7 +110,7 @@ const breadcrumbs = computed(() => {
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.don-tu__config-tab {
+.don-tu__hub-tab {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -92,12 +123,12 @@ const breadcrumbs = computed(() => {
   text-decoration: none;
 }
 
-.don-tu__config-tab:hover {
+.don-tu__hub-tab:hover {
   color: var(--color-text);
   background: var(--color-surface-muted);
 }
 
-.don-tu__config-tab--active {
+.don-tu__hub-tab--active {
   color: var(--color-text);
   background: var(--color-surface);
   box-shadow: inset 0 0 0 1px var(--color-border);

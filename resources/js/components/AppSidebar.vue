@@ -17,6 +17,7 @@ import SidebarNavSection from './sidebar/SidebarNavSection.vue';
 import { loadExpandedSections, persistExpandedSections } from '../composables/useSidebarSectionExpand.js';
 import {
   DON_TU_CONFIG_ROUTE_NAMES,
+  DON_TU_MONITOR_ROUTE_NAMES,
   DON_TU_ROUTE_NAMES,
   DON_TU_SIDEBAR_ITEMS,
 } from '@modules/DonTu/resources/js/nav.js';
@@ -490,6 +491,9 @@ function isActive(routeName) {
   }
   if (routeName === 'manager.don-tu.config') {
     return DON_TU_CONFIG_ROUTE_NAMES.has(route.name);
+  }
+  if (routeName === 'manager.don-tu.monitor-hub') {
+    return DON_TU_MONITOR_ROUTE_NAMES.has(route.name);
   }
   if (DON_TU_ROUTE_NAMES.has(routeName)) {
     return route.name === routeName;
