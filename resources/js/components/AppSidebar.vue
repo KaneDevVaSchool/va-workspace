@@ -15,7 +15,11 @@ import AppIcon from './AppIcon.vue';
 import SidebarLogo from './sidebar/SidebarLogo.vue';
 import SidebarNavSection from './sidebar/SidebarNavSection.vue';
 import { loadExpandedSections, persistExpandedSections } from '../composables/useSidebarSectionExpand.js';
-import { DON_TU_ROUTE_NAMES, DON_TU_SIDEBAR_ITEMS } from '@modules/DonTu/resources/js/nav.js';
+import {
+  DON_TU_CONFIG_ROUTE_NAMES,
+  DON_TU_ROUTE_NAMES,
+  DON_TU_SIDEBAR_ITEMS,
+} from '@modules/DonTu/resources/js/nav.js';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -259,7 +263,7 @@ const MENU_SECTIONS = [
     ],
   },
   {
-    // Đơn từ — 15 màn xem trước; danh sách đồng bộ Modules/DonTu/resources/js/nav.js.
+    // Đơn từ — sidebar đồng bộ nav.js; màn cấu hình gom vào hub manager.don-tu.config.
     id: 'don-tu',
     label: 'Đơn từ',
     items: DON_TU_SIDEBAR_ITEMS,
@@ -483,6 +487,9 @@ function isActive(routeName) {
   }
   if (routeName === 'manager.reports.index') {
     return route.path === '/manager/reports' || route.path.startsWith('/manager/reports/');
+  }
+  if (routeName === 'manager.don-tu.config') {
+    return DON_TU_CONFIG_ROUTE_NAMES.has(route.name);
   }
   if (DON_TU_ROUTE_NAMES.has(routeName)) {
     return route.name === routeName;

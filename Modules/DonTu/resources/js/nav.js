@@ -40,12 +40,38 @@ export const DON_TU_GROUPS = [
 
 export const DON_TU_SCREENS = DON_TU_GROUPS.flatMap((group) => group.items);
 
-/** Mục sidebar trái (AppSidebar) — đồng bộ thủ công với GlobalMenuVisibilityService::CATALOG. */
-export const DON_TU_SIDEBAR_ITEMS = DON_TU_SCREENS.map((screen) => ({
-  name: screen.name,
-  label: screen.title,
-  icon: screen.sidebarIcon,
+const dailySidebar = DON_TU_GROUPS.find((g) => g.id === 'daily').items.filter(
+  (screen) => screen.name !== 'manager.don-tu.show',
+);
+const monitorSidebar = DON_TU_GROUPS.find((g) => g.id === 'monitor').items;
+
+/** Một mục sidebar — các màn con điều hướng trong DonTuLayout (tab Cấu hình). */
+export const DON_TU_CONFIG_HUB = {
+  name: 'manager.don-tu.config',
+  label: 'Cấu hình',
+  icon: 'settings',
   configurableByDepartment: true,
-}));
+};
+
+export const DON_TU_ADMIN_SCREENS = DON_TU_GROUPS.find((g) => g.id === 'admin').items;
+
+export const DON_TU_CONFIG_ROUTE_NAMES = new Set(DON_TU_ADMIN_SCREENS.map((screen) => screen.name));
+
+/** Mục sidebar trái (AppSidebar) — đồng bộ thủ công với DonTuSidebarMenuCatalog.php. */
+export const DON_TU_SIDEBAR_ITEMS = [
+  ...dailySidebar.map((screen) => ({
+    name: screen.name,
+    label: screen.title,
+    icon: screen.sidebarIcon,
+    configurableByDepartment: true,
+  })),
+  DON_TU_CONFIG_HUB,
+  ...monitorSidebar.map((screen) => ({
+    name: screen.name,
+    label: screen.title,
+    icon: screen.sidebarIcon,
+    configurableByDepartment: true,
+  })),
+];
 
 export const DON_TU_ROUTE_NAMES = new Set(DON_TU_SCREENS.map((screen) => screen.name));

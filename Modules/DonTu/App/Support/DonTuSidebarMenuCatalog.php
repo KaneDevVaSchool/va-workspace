@@ -4,24 +4,24 @@ namespace Modules\DonTu\App\Support;
 
 /**
  * menu_key sidebar Đơn từ — đồng bộ thủ công với Modules/DonTu/resources/js/nav.js.
+ *
+ * Các màn cấu hình (trạng thái, mẫu biểu, quy trình…) không phải mục sidebar riêng;
+ * chỉ có hub `manager.don-tu.config`, tab con trong DonTuLayout.vue.
  */
 final class DonTuSidebarMenuCatalog
 {
     public const SECTION = 'don-tu';
 
-    /** @var array<string, string> menu_key => nhãn mặc định */
+    public const CONFIG_HUB_KEY = 'manager.don-tu.config';
+
+    /** @var array<string, string> menu_key => nhãn mặc định (chỉ mục sidebar) */
     public const LABELS = [
         'manager.don-tu.start' => 'Nộp đơn',
         'manager.don-tu.compose' => 'Soạn đơn',
         'manager.don-tu.mine' => 'Hồ sơ của tôi',
-        'manager.don-tu.show' => 'Chi tiết hồ sơ',
         'manager.don-tu.inbox' => 'Cần tôi duyệt',
         'manager.don-tu.registry' => 'Tra cứu',
-        'manager.don-tu.statuses' => 'Bộ trạng thái',
-        'manager.don-tu.forms' => 'Mẫu biểu',
-        'manager.don-tu.form' => 'Cấu hình mẫu biểu',
-        'manager.don-tu.workflows' => 'Quy trình',
-        'manager.don-tu.workflow' => 'Cấu hình quy trình',
+        self::CONFIG_HUB_KEY => 'Cấu hình',
         'manager.don-tu.monitor' => 'Tiến độ',
         'manager.don-tu.sla' => 'Báo cáo SLA',
         'manager.don-tu.reports' => 'Báo cáo nghiệp vụ',
@@ -33,14 +33,9 @@ final class DonTuSidebarMenuCatalog
         'manager.don-tu.start' => 'don-tu',
         'manager.don-tu.compose' => 'don-tu',
         'manager.don-tu.mine' => 'don-tu',
-        'manager.don-tu.show' => 'don-tu',
         'manager.don-tu.inbox' => 'don-tu',
         'manager.don-tu.registry' => 'don-tu',
-        'manager.don-tu.statuses' => 'don-tu',
-        'manager.don-tu.forms' => 'don-tu',
-        'manager.don-tu.form' => 'don-tu',
-        'manager.don-tu.workflows' => 'don-tu',
-        'manager.don-tu.workflow' => 'don-tu',
+        self::CONFIG_HUB_KEY => 'don-tu',
         'manager.don-tu.monitor' => 'don-tu',
         'manager.don-tu.sla' => 'don-tu',
         'manager.don-tu.reports' => 'don-tu',
@@ -61,14 +56,14 @@ final class DonTuSidebarMenuCatalog
         ],
         'manager.don-tu.compose' => ['label' => 'Soạn đơn', 'section' => 'don-tu', 'icon' => 'pencil'],
         'manager.don-tu.mine' => ['label' => 'Hồ sơ của tôi', 'section' => 'don-tu', 'icon' => 'folder'],
-        'manager.don-tu.show' => ['label' => 'Chi tiết hồ sơ', 'section' => 'don-tu', 'icon' => 'fileText'],
         'manager.don-tu.inbox' => ['label' => 'Cần tôi duyệt', 'section' => 'don-tu', 'icon' => 'mail'],
         'manager.don-tu.registry' => ['label' => 'Tra cứu', 'section' => 'don-tu', 'icon' => 'search'],
-        'manager.don-tu.statuses' => ['label' => 'Bộ trạng thái', 'section' => 'don-tu', 'icon' => 'layers'],
-        'manager.don-tu.forms' => ['label' => 'Mẫu biểu', 'section' => 'don-tu', 'icon' => 'clipboardCheck'],
-        'manager.don-tu.form' => ['label' => 'Cấu hình mẫu biểu', 'section' => 'don-tu', 'icon' => 'settings'],
-        'manager.don-tu.workflows' => ['label' => 'Quy trình', 'section' => 'don-tu', 'icon' => 'gitBranch'],
-        'manager.don-tu.workflow' => ['label' => 'Cấu hình quy trình', 'section' => 'don-tu', 'icon' => 'settings'],
+        self::CONFIG_HUB_KEY => [
+            'label' => 'Cấu hình',
+            'section' => 'don-tu',
+            'icon' => 'settings',
+            'audience' => 'Bộ trạng thái, mẫu biểu và quy trình — tab con trong trang, không phải mục sidebar riêng.',
+        ],
         'manager.don-tu.monitor' => ['label' => 'Tiến độ', 'section' => 'don-tu', 'icon' => 'activity'],
         'manager.don-tu.sla' => ['label' => 'Báo cáo SLA', 'section' => 'don-tu', 'icon' => 'clock'],
         'manager.don-tu.reports' => ['label' => 'Báo cáo nghiệp vụ', 'section' => 'don-tu', 'icon' => 'barChart'],

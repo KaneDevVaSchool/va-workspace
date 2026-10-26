@@ -70,12 +70,6 @@ export const SIDEBAR_MENU_CATALOG = {
     sectionLabel: 'Đơn từ',
     description: 'Danh sách hồ sơ đơn từ của chính bạn.',
   },
-  'manager.don-tu.show': {
-    icon: 'fileText',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Chi tiết một hồ sơ đơn từ.',
-  },
   'manager.don-tu.inbox': {
     icon: 'mail',
     section: 'don-tu',
@@ -88,35 +82,11 @@ export const SIDEBAR_MENU_CATALOG = {
     sectionLabel: 'Đơn từ',
     description: 'Tra cứu hồ sơ đơn từ toàn phòng ban.',
   },
-  'manager.don-tu.statuses': {
-    icon: 'layers',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Cấu hình bộ mã trạng thái (Matrix V3).',
-  },
-  'manager.don-tu.forms': {
-    icon: 'clipboardCheck',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Danh sách mẫu biểu đơn từ.',
-  },
-  'manager.don-tu.form': {
+  'manager.don-tu.config': {
     icon: 'settings',
     section: 'don-tu',
     sectionLabel: 'Đơn từ',
-    description: 'Thiết kế trường và luật cho một mẫu biểu.',
-  },
-  'manager.don-tu.workflows': {
-    icon: 'gitBranch',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Danh sách quy trình duyệt.',
-  },
-  'manager.don-tu.workflow': {
-    icon: 'settings',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Cấu hình bước duyệt cho một quy trình.',
+    description: 'Bộ trạng thái, mẫu biểu và quy trình — chuyển tab trong trang, không phải mục sidebar riêng.',
   },
   'manager.don-tu.monitor': {
     icon: 'activity',
