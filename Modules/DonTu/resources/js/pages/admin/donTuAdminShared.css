@@ -1535,7 +1535,7 @@ section.dt-kpi-strip {
 
 .dt-setup__layout {
   display: grid;
-  grid-template-columns: minmax(13rem, 16rem) minmax(0, 1fr);
+  grid-template-columns: minmax(16.5rem, 20rem) minmax(0, 1fr);
   gap: var(--space-4);
   align-items: start;
 }
@@ -1559,6 +1559,335 @@ section.dt-kpi-strip {
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-text);
+}
+
+/* ---- Thanh chọn bộ trạng thái (freestyle) ---- */
+
+.dt-set-rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.dt-set-rail__palette {
+  display: flex;
+  height: 4px;
+  margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) 0;
+  overflow: hidden;
+}
+
+.dt-set-rail__palette-seg {
+  flex: 1;
+  min-width: 0;
+}
+
+.dt-set-rail__palette-seg--c1 {
+  background: var(--dt-c1, var(--color-primary));
+}
+
+.dt-set-rail__palette-seg--c2 {
+  background: var(--dt-c2, var(--color-secondary));
+}
+
+.dt-set-rail__palette-seg--c3 {
+  background: var(--dt-c3, var(--color-tertiary));
+}
+
+.dt-set-rail__palette-seg--c4 {
+  background: var(--dt-c4, var(--color-gold));
+}
+
+.dt-set-rail__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.dt-set-rail__head-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 11%, var(--color-surface));
+  color: var(--color-primary-700);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, var(--color-border));
+}
+
+.dt-set-rail__head-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.dt-set-rail__title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--color-text);
+}
+
+.dt-set-rail__lead {
+  margin: var(--space-1) 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.dt-set-rail__toolbar {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.dt-set-rail__search {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 0.65rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.dt-set-rail__search:focus-within {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  color: var(--color-primary-700);
+}
+
+.dt-set-rail__search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0.45rem 0;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--color-text);
+}
+
+.dt-set-rail__search input:focus {
+  outline: none;
+}
+
+.dt-set-rail__search input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.85;
+}
+
+.dt-set-rail__add {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.375rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--color-on-primary, #fff);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.dt-set-rail__add:hover {
+  background: var(--color-primary-700);
+}
+
+.dt-set-rail__add:active {
+  transform: scale(0.97);
+}
+
+.dt-set-rail__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: min(52vh, 28rem);
+  overflow-y: auto;
+}
+
+.dt-set-rail__empty {
+  padding: var(--space-4) var(--space-2);
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.dt-set-rail__empty p {
+  margin: 0;
+}
+
+.dt-set-rail__loading {
+  margin: 0;
+  padding: var(--space-3);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.dt-set-pick {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  padding-right: calc(var(--space-3) + 1.25rem);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: var(--color-text);
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+.dt-set-pick::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--dt-set-pick-accent, var(--color-border));
+}
+
+.dt-set-pick:hover {
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-set-pick-accent, var(--color-primary)) 28%, var(--color-border)),
+    var(--shadow-sm);
+}
+
+.dt-set-pick--active {
+  background: color-mix(in srgb, var(--dt-set-pick-accent, var(--color-primary)) 9%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-set-pick-accent, var(--color-primary)) 38%, var(--color-border)),
+    var(--shadow-sm);
+}
+
+.dt-set-pick--tone-0 {
+  --dt-set-pick-accent: var(--color-primary);
+}
+
+.dt-set-pick--tone-1 {
+  --dt-set-pick-accent: var(--color-secondary);
+}
+
+.dt-set-pick--tone-2 {
+  --dt-set-pick-accent: var(--color-tertiary);
+}
+
+.dt-set-pick--tone-3 {
+  --dt-set-pick-accent: var(--color-gold);
+}
+
+.dt-set-pick--tone-4 {
+  --dt-set-pick-accent: var(--color-info);
+}
+
+.dt-set-pick__glyph {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-left: calc(var(--space-2) + 3px);
+  border-radius: 999px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--dt-set-pick-accent, var(--color-primary)) 88%, var(--color-text));
+  background: color-mix(in srgb, var(--dt-set-pick-accent, var(--color-primary)) 14%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-set-pick-accent, var(--color-primary)) 22%, var(--color-border));
+}
+
+.dt-set-pick__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.dt-set-pick__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.dt-set-pick__blurb {
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dt-set-pick__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.dt-set-pick__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.08rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: color-mix(in srgb, var(--dt-set-pick-accent, var(--color-primary)) 12%, var(--color-surface));
+  color: color-mix(in srgb, var(--dt-set-pick-accent, var(--color-primary)) 75%, var(--color-text));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dt-set-pick-accent, var(--color-primary)) 20%, var(--color-border));
+}
+
+.dt-set-pick__chip--soft {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font-weight: 500;
+}
+
+.dt-set-pick__chip--system {
+  background: var(--color-info-tint-bg);
+  color: var(--color-info);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-info) 22%, var(--color-border));
+}
+
+.dt-set-pick__mark {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 999px;
+  background: var(--dt-set-pick-accent, var(--color-primary));
+  color: var(--color-on-primary, #fff);
 }
 
 .dt-setup__main {
