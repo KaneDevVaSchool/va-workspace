@@ -28,6 +28,30 @@ class DonTuStatusSetController extends Controller
         return response()->json(['items' => $this->catalog->listSets()]);
     }
 
+    public function store(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'Bạn cần đăng nhập.'], 401);
+        }
+
+        if (! $this->access->canWriteConfig($user)) {
+            return response()->json(['message' => 'Bạn không có quyền tạo nhóm trạng thái.'], 403);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'copy_from_id' => ['nullable', 'integer'],
+        ], [
+            'name.required' => 'Nhập tên nhóm trạng thái.',
+        ]);
+
+        $item = $this->catalog->createSet($validated);
+
+        return response()->json(['item' => $item], 201);
+    }
+
     public function show(Request $request, int $id): JsonResponse
     {
         if (! $request->user()) {

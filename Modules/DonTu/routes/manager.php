@@ -7,6 +7,7 @@ use Modules\DonTu\App\Http\Controllers\DonTuWorkflowController;
 
 Route::prefix('don-tu')->name('don_tu.')->group(function () {
     Route::get('status-sets', [DonTuStatusSetController::class, 'index'])->name('status_sets.index');
+    Route::post('status-sets', [DonTuStatusSetController::class, 'store'])->name('status_sets.store');
     Route::get('status-sets/{id}', [DonTuStatusSetController::class, 'show'])
         ->whereNumber('id')
         ->name('status_sets.show');

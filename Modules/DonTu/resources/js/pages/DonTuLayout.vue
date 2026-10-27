@@ -16,7 +16,7 @@ const route = useRoute();
 const currentTitle = computed(() => route.meta.screenTitle || 'Đơn từ');
 const headerSubtitle = computed(() => {
   if (isConfigArea.value) {
-    return '';
+    return 'Thiết lập trạng thái, mẫu biểu và quy trình duyệt đơn';
   }
   if (isMonitorArea.value) {
     return 'Giám sát tiến độ và báo cáo đơn từ';

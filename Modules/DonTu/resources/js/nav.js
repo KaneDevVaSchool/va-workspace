@@ -38,7 +38,7 @@ export const DON_TU_GROUPS = [
     id: 'admin',
     label: 'Cấu hình',
     items: [
-      { name: 'manager.don-tu.statuses', path: 'admin', title: 'Trạng thái hồ sơ', ui: 'UI-11', phase: 'P0', sidebarIcon: 'layers', configTab: true },
+      { name: 'manager.don-tu.statuses', path: 'admin', title: 'Thiết lập trạng thái', ui: 'UI-11', phase: 'P0', sidebarIcon: 'layers', configTab: true },
       { name: 'manager.don-tu.forms', path: 'admin/forms', title: 'Mẫu biểu', ui: 'UI-07', phase: 'P2', sidebarIcon: 'clipboardCheck', configTab: true },
       {
         name: 'manager.don-tu.form',

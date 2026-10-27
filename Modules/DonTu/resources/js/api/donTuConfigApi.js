@@ -3,6 +3,11 @@ export async function fetchStatusSets() {
   return data.items ?? [];
 }
 
+export async function createStatusSet(payload) {
+  const { data } = await window.axios.post('/api/don-tu/status-sets', payload);
+  return data.item;
+}
+
 export async function fetchStatusSet(id) {
   const { data } = await window.axios.get(`/api/don-tu/status-sets/${id}`);
   return data.item;

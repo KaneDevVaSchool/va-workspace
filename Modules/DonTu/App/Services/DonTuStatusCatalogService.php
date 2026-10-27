@@ -123,6 +123,126 @@ class DonTuStatusCatalogService
         return $this->findSet($set->id);
     }
 
+    public function createSet(array $data): array
+    {
+        $name = trim((string) ($data['name'] ?? ''));
+        if ($name === '') {
+            throw ValidationException::withMessages(['name' => 'Nhập tên nhóm trạng thái.']);
+        }
+
+        $copyFromId = array_key_exists('copy_from_id', $data) && $data['copy_from_id'] !== null && $data['copy_from_id'] !== ''
+            ? (int) $data['copy_from_id']
+            : null;
+
+        $code = $this->uniqueSetCode($name);
+        $description = isset($data['description']) ? trim((string) $data['description']) : null;
+        if ($description === '') {
+            $description = null;
+        }
+
+        $setId = DB::transaction(function () use ($name, $code, $description, $copyFromId) {
+            $set = DonTuStatusSet::query()->create([
+                'code' => $code,
+                'name' => $name,
+                'description' => $description,
+                'is_system' => false,
+            ]);
+
+            if ($copyFromId) {
+                $this->cloneStatusesAndTransitions($copyFromId, $set->id);
+            } else {
+                $default = DonTuStatusSet::query()->where('code', 'STATUS_SET_DEFAULT')->first();
+                if ($default !== null) {
+                    $this->cloneStatusesAndTransitions($default->id, $set->id);
+                } else {
+                    $this->seedMinimalSet($set->id);
+                }
+            }
+
+            return $set->id;
+        });
+
+        $detail = $this->findSet($setId);
+        if ($detail === null) {
+            throw ValidationException::withMessages(['name' => 'Không tạo được nhóm trạng thái.']);
+        }
+
+        return $detail;
+    }
+
+    private function cloneStatusesAndTransitions(int $fromSetId, int $toSetId): void
+    {
+        $source = DonTuStatusSet::query()
+            ->with(['statuses', 'transitions'])
+            ->find($fromSetId);
+        if ($source === null) {
+            throw ValidationException::withMessages([
+                'copy_from_id' => 'Nhóm sao chép không tồn tại.',
+            ]);
+        }
+
+        foreach ($source->statuses as $status) {
+            DonTuStatus::query()->create([
+                'status_set_id' => $toSetId,
+                'code' => $status->code,
+                'label' => $status->label,
+                'group_kind' => $status->group_kind,
+                'terminal_kind' => $status->terminal_kind,
+                'sort_order' => $status->sort_order,
+            ]);
+        }
+
+        foreach ($source->transitions as $transition) {
+            DonTuTransition::query()->create([
+                'status_set_id' => $toSetId,
+                'from_code' => $transition->from_code,
+                'to_code' => $transition->to_code,
+                'action_key' => $transition->action_key,
+                'actor_policy' => $transition->actor_policy,
+                'guard_json' => $transition->guard_json,
+            ]);
+        }
+    }
+
+    private function seedMinimalSet(int $setId): void
+    {
+        $rows = [
+            ['code' => 'DRAFT', 'label' => 'Nháp', 'group_kind' => 'main', 'terminal_kind' => 'draft', 'sort_order' => 1],
+            ['code' => 'PENDING_APPROVAL', 'label' => 'Chờ duyệt', 'group_kind' => 'main', 'terminal_kind' => null, 'sort_order' => 2],
+            ['code' => 'COMPLETED', 'label' => 'Hoàn thành', 'group_kind' => 'terminal', 'terminal_kind' => 'success', 'sort_order' => 3],
+        ];
+        foreach ($rows as $row) {
+            DonTuStatus::query()->create(['status_set_id' => $setId, ...$row]);
+        }
+        $transitions = [
+            ['from_code' => 'NONE', 'to_code' => 'DRAFT', 'action_key' => 'SAVE_DRAFT', 'actor_policy' => 'requester'],
+            ['from_code' => 'DRAFT', 'to_code' => 'PENDING_APPROVAL', 'action_key' => 'SUBMIT', 'actor_policy' => 'requester'],
+            ['from_code' => 'PENDING_APPROVAL', 'to_code' => 'COMPLETED', 'action_key' => 'APPROVE', 'actor_policy' => 'assignee'],
+        ];
+        foreach ($transitions as $row) {
+            DonTuTransition::query()->create([
+                'status_set_id' => $setId,
+                ...$row,
+                'guard_json' => null,
+            ]);
+        }
+    }
+
+    private function uniqueSetCode(string $name): string
+    {
+        $base = Str::upper(Str::slug($name, '_'));
+        $base = preg_replace('/[^A-Z0-9_]/', '', $base) ?: 'NHOM_TRANG_THAI';
+        $base = 'STATUS_SET_'.Str::limit($base, 48, '');
+        $code = $base;
+        $n = 2;
+        while (DonTuStatusSet::query()->where('code', $code)->exists()) {
+            $code = $base.'_'.$n;
+            $n++;
+        }
+
+        return Str::limit($code, 64, '');
+    }
+
     private function uniqueStatusCode(int $setId, string $label): string
     {
         $base = Str::upper(Str::slug($label, '_'));

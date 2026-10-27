@@ -7,14 +7,13 @@ import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import DonTuConfigHubCards from '../../components/DonTuConfigHubCards.vue';
 import DonTuStatusBadge from '../../components/DonTuStatusBadge.vue';
-import { createStatus, fetchStatusSet, fetchStatusSets } from '../../api/donTuConfigApi.js';
+import { createStatus, createStatusSet, fetchStatusSet, fetchStatusSets } from '../../api/donTuConfigApi.js';
 import {
   ACTION_LABEL,
   ACTOR_LABEL,
   GROUP_KIND_LABEL,
   friendlySetName,
   guardHint,
-  humanSetDescription,
 } from '../../constants/statusTone.js';
 
 const auth = useAuthStore();
@@ -25,6 +24,10 @@ const canConfig = computed(
     auth.can('don_tu.manage_department') ||
     auth.can('don_tu.manage_system') ||
     auth.can('don_tu.*'),
+);
+
+const canWrite = computed(
+  () => auth.can('don_tu.manage_department') || auth.can('don_tu.manage_system') || auth.can('don_tu.*'),
 );
 
 const sets = ref([]);
@@ -38,6 +41,9 @@ const focusCode = ref('');
 const createOpen = ref(false);
 const createSaving = ref(false);
 const createForm = ref(emptyStatusForm());
+const createSetOpen = ref(false);
+const createSetSaving = ref(false);
+const createSetForm = ref({ name: '', description: '', copy_from_id: '' });
 
 const pipelineWrap = ref(null);
 const transWrap = ref(null);
@@ -55,7 +61,8 @@ const filteredSets = computed(() => {
   );
 });
 
-const showSetList = computed(() => sets.value.length > 1);
+const showRail = computed(() => sets.value.length > 0);
+const viewTab = ref('flow');
 
 const mainFlow = computed(() =>
   (detail.value?.statuses ?? []).filter((s) => s.group_kind === 'main').sort((a, b) => a.sort_order - b.sort_order),
@@ -94,7 +101,6 @@ const filteredTransitions = computed(() => {
 });
 
 const detailTitle = computed(() => friendlySetName(detail.value?.name, detail.value?.code));
-const detailDescription = computed(() => humanSetDescription(detail.value?.description));
 const fromOptions = computed(() => [
   { code: 'NONE', label: 'Lúc chưa có hồ sơ' },
   ...(detail.value?.statuses ?? []).map((st) => ({ code: st.code, label: st.label })),
@@ -144,6 +150,13 @@ onMounted(async () => {
   await loadSets();
 });
 
+async function reloadPage() {
+  await loadSets();
+  if (selectedId.value) {
+    await loadDetail(selectedId.value);
+  }
+}
+
 function actionLabel(key) {
   return ACTION_LABEL[key] || key;
 }
@@ -159,6 +172,9 @@ function statusLabel(code) {
 
 function toggleFocus(code) {
   focusCode.value = focusCode.value === code ? '' : code;
+  if (focusCode.value) {
+    viewTab.value = 'rules';
+  }
 }
 
 async function copyCode(code) {
@@ -199,6 +215,43 @@ function errorText(err, fallback) {
   return err.response?.data?.message || fallback;
 }
 
+function openCreateSet() {
+  const defaultSet = sets.value.find((s) => s.code === 'STATUS_SET_DEFAULT') || sets.value[0];
+  createSetForm.value = {
+    name: '',
+    description: '',
+    copy_from_id: defaultSet?.id ?? '',
+  };
+  createSetOpen.value = true;
+}
+
+async function submitCreateSet() {
+  if (!createSetForm.value.name.trim()) {
+    showClientToast('Nhập tên nhóm trạng thái.', 'error');
+    return;
+  }
+  createSetSaving.value = true;
+  try {
+    const payload = {
+      name: createSetForm.value.name.trim(),
+      description: createSetForm.value.description.trim() || null,
+    };
+    if (createSetForm.value.copy_from_id !== '' && createSetForm.value.copy_from_id != null) {
+      payload.copy_from_id = Number(createSetForm.value.copy_from_id);
+    }
+    const item = await createStatusSet(payload);
+    createSetOpen.value = false;
+    await loadSets();
+    selectedId.value = item.id;
+    detail.value = item;
+    showClientToast('Đã tạo nhóm trạng thái.', 'success');
+  } catch (err) {
+    showClientToast(errorText(err, 'Không tạo được nhóm trạng thái.'), 'error');
+  } finally {
+    createSetSaving.value = false;
+  }
+}
+
 async function submitCreate() {
   if (!selectedId.value) return;
   if (!createForm.value.label.trim()) {
@@ -235,21 +288,58 @@ async function submitCreate() {
     <p>Bạn cần quyền cấu hình đơn từ của phòng để xem trang này.</p>
   </div>
 
-  <div v-else class="dt-status-page">
+  <div v-else class="dt-setup">
     <DonTuConfigHubCards />
 
-    <div class="dt-status-page__body" :class="{ 'dt-status-page__body--solo': !showSetList }">
-      <aside v-if="showSetList" class="dt-status-page__sets">
+    <header class="dt-setup__head">
+      <div class="dt-setup__head-copy">
+        <h2 class="dt-setup__head-title">Bước 1 · Trạng thái hồ sơ</h2>
+        <p class="dt-setup__head-desc">
+          Khai báo nhóm trạng thái và quy tắc chuyển trước khi soạn mẫu biểu và quy trình duyệt.
+        </p>
+      </div>
+      <div v-if="canWrite" class="dt-setup__head-actions">
+        <button type="button" class="dt-setup__ghost-btn" @click="reloadPage">
+          <AppIcon name="refresh" :size="15" :stroke-width="2" />
+          Làm mới
+        </button>
+        <button type="button" class="dt-admin-list__primary" @click="openCreateSet">
+          <AppIcon name="plus" :size="16" :stroke-width="2" />
+          Tạo nhóm
+        </button>
+        <button
+          type="button"
+          class="dt-status-page__secondary-btn"
+          :disabled="!detail || loadingDetail"
+          @click="openCreate"
+        >
+          <AppIcon name="plus" :size="16" :stroke-width="2" />
+          Thêm trạng thái
+        </button>
+      </div>
+    </header>
+
+    <div v-if="!loadingList && !sets.length" class="dt-status-page__empty-panel">
+      <p>Chưa có nhóm trạng thái. Tạo nhóm để bắt đầu thiết lập.</p>
+      <button v-if="canWrite" type="button" class="dt-admin-list__primary" @click="openCreateSet">
+        <AppIcon name="plus" :size="16" :stroke-width="2" />
+        Tạo nhóm trạng thái
+      </button>
+    </div>
+
+    <div v-else class="dt-setup__layout" :class="{ 'dt-setup__layout--solo': !showRail }">
+      <aside v-if="showRail" class="dt-setup__rail">
+        <h3 class="dt-setup__rail-title">Nhóm đang thiết lập</h3>
         <input
           v-model="setQuery"
           type="search"
           class="dt-status-page__set-search"
-          placeholder="Tìm tên bộ trạng thái"
-          aria-label="Tìm bộ trạng thái"
+          placeholder="Tìm nhóm trạng thái"
+          aria-label="Tìm nhóm trạng thái"
         />
         <ul v-if="!loadingList" class="dt-status-page__set-list">
           <li v-if="!filteredSets.length">
-            <p class="dt-status-page__empty">Không thấy bộ nào.</p>
+            <p class="dt-status-page__empty">Không thấy nhóm nào.</p>
           </li>
           <li v-for="set in filteredSets" :key="set.id">
             <button
@@ -270,54 +360,87 @@ async function submitCreate() {
         <p v-else class="dt-status-page__loading">Đang tải…</p>
       </aside>
 
-      <div v-if="loadingDetail" class="dt-status-page__loading dt-status-page__main">
+      <div v-if="loadingDetail" class="dt-status-page__loading dt-setup__main">
         Đang tải…
       </div>
 
-      <div v-else-if="detail" class="dt-status-page__main">
-        <div class="dt-status-page__detail-head">
-          <div class="dt-status-page__detail-copy">
-            <h2 class="dt-status-page__detail-title">{{ detailTitle }}</h2>
-            <p v-if="detailDescription" class="dt-status-page__detail-desc">{{ detailDescription }}</p>
+      <div v-else-if="detail" class="dt-setup__main">
+        <div class="dt-setup__metrics">
+          <div class="dt-setup__metric">
+            <span class="dt-setup__metric-num">{{ detail.statuses?.length ?? 0 }}</span>
+            <span class="dt-setup__metric-label">trạng thái</span>
           </div>
-          <div class="dt-status-page__stats">
-            <button type="button" class="dt-admin-list__primary" @click="openCreate">
-              <AppIcon name="plus" :size="16" :stroke-width="2" />
-              Thêm trạng thái
-            </button>
-            <span>{{ detail.statuses?.length ?? 0 }} trạng thái</span>
-            <span>{{ detail.transitions?.length ?? 0 }} cách đổi</span>
-            <span>{{ detail.workflow_count ?? 0 }} quy trình</span>
-            <span v-if="detail.is_system" class="dt-set-card__tag">Có sẵn</span>
-            <button type="button" class="dt-link-btn" @click="copyCode(detail.code)">Sao chép mã</button>
+          <div class="dt-setup__metric">
+            <span class="dt-setup__metric-num">{{ detail.transitions?.length ?? 0 }}</span>
+            <span class="dt-setup__metric-label">quy tắc</span>
           </div>
+          <div class="dt-setup__metric">
+            <span class="dt-setup__metric-num">{{ detail.workflow_count ?? 0 }}</span>
+            <span class="dt-setup__metric-label">quy trình</span>
+          </div>
+          <button type="button" class="dt-link-btn" @click="copyCode(detail.code)">Sao chép mã</button>
+          <span v-if="detail.is_system" class="dt-set-card__tag">Có sẵn</span>
         </div>
 
-        <section v-if="detail.workflows?.length" class="dt-panel dt-workflow-strip">
-          <div class="dt-panel__row">
-            <h3 class="dt-panel__title">Quy trình đang dùng</h3>
+        <section v-if="detail.workflows?.length" class="dt-setup__group">
+          <header class="dt-setup__group-head">
+            <span class="dt-setup__group-icon" aria-hidden="true">
+              <AppIcon name="gitBranch" :size="18" :stroke-width="1.75" />
+            </span>
+            <h3 class="dt-setup__group-title">Quy trình gắn nhóm này</h3>
             <router-link :to="{ name: 'manager.don-tu.workflows' }" class="dt-workflow-strip__link">
-              Mở danh sách
+              Mở quy trình
               <AppIcon name="chevronRight" :size="16" :stroke-width="2" />
             </router-link>
+          </header>
+          <div class="dt-setup__group-body">
+            <ul class="dt-workflow-strip__list hide-scrollbar">
+              <li v-for="wf in detail.workflows" :key="wf.id">
+                <button type="button" class="dt-workflow-chip" @click="goWorkflow(wf.id)">
+                  <span class="dt-workflow-chip__name">{{ wf.name }}</span>
+                  <span
+                    class="dt-pill dt-pill--compact"
+                    :class="wf.is_active ? 'dt-pill--success' : 'dt-pill--muted'"
+                  >
+                    {{ wf.is_active ? 'Đang dùng' : 'Đang tắt' }}
+                  </span>
+                </button>
+              </li>
+            </ul>
           </div>
-          <ul class="dt-workflow-strip__list hide-scrollbar">
-            <li v-for="wf in detail.workflows" :key="wf.id">
-              <button type="button" class="dt-workflow-chip" @click="goWorkflow(wf.id)">
-                <span class="dt-workflow-chip__name">{{ wf.name }}</span>
-                <span
-                  class="dt-pill dt-pill--compact"
-                  :class="wf.is_active ? 'dt-pill--success' : 'dt-pill--muted'"
-                >
-                  {{ wf.is_active ? 'Đang dùng' : 'Đang tắt' }}
-                </span>
-              </button>
-            </li>
-          </ul>
         </section>
 
-        <section class="dt-panel">
-          <h3 class="dt-panel__title">Hồ sơ đi qua các trạng thái này</h3>
+        <section class="dt-setup__group dt-setup__group--tint">
+          <header class="dt-setup__group-head">
+            <span class="dt-setup__group-icon" aria-hidden="true">
+              <AppIcon name="layers" :size="18" :stroke-width="1.75" />
+            </span>
+            <h3 class="dt-setup__group-title">{{ detailTitle }}</h3>
+            <div class="dt-setup__seg" role="tablist" aria-label="Xem thiết lập">
+              <button
+                type="button"
+                role="tab"
+                class="dt-setup__seg-btn"
+                :class="{ 'dt-setup__seg-btn--on': viewTab === 'flow' }"
+                :aria-selected="viewTab === 'flow'"
+                @click="viewTab = 'flow'"
+              >
+                Luồng trạng thái
+              </button>
+              <button
+                type="button"
+                role="tab"
+                class="dt-setup__seg-btn"
+                :class="{ 'dt-setup__seg-btn--on': viewTab === 'rules' }"
+                :aria-selected="viewTab === 'rules'"
+                @click="viewTab = 'rules'"
+              >
+                Quy tắc chuyển
+              </button>
+            </div>
+          </header>
+
+          <div v-show="viewTab === 'flow'" class="dt-setup__group-body">
           <div class="dt-lanes">
             <div class="dt-lane dt-lane--main">
               <span class="dt-lane__label">{{ GROUP_KIND_LABEL.main }}</span>
@@ -378,20 +501,19 @@ async function submitCreate() {
               </div>
             </div>
           </div>
-        </section>
+          </div>
 
-        <section class="dt-panel">
+          <div v-show="viewTab === 'rules'" class="dt-setup__group-body">
           <div class="dt-panel__row">
-            <h3 class="dt-panel__title">Ai được bấm gì</h3>
             <button v-if="focusCode" type="button" class="dt-link-btn" @click="focusCode = ''">
-              Xem tất cả
+              Xem tất cả trạng thái
             </button>
             <input
               v-model="transitionQuery"
               type="search"
               class="dt-trans-table__search"
               placeholder="Tìm người, việc làm hoặc trạng thái"
-              aria-label="Tìm cách đổi trạng thái"
+              aria-label="Tìm quy tắc chuyển"
             />
           </div>
           <div ref="transWrap" class="dt-trans-table__scroll hide-scrollbar">
@@ -434,13 +556,73 @@ async function submitCreate() {
               </tbody>
             </table>
           </div>
+          </div>
         </section>
+
+        <nav class="dt-setup__next" aria-label="Bước thiết lập tiếp theo">
+          <span class="dt-setup__next-label">Bước tiếp theo</span>
+          <router-link :to="{ name: 'manager.don-tu.forms' }" class="dt-setup__next-link">
+            <AppIcon name="clipboardCheck" :size="15" :stroke-width="1.75" />
+            Mẫu biểu
+            <AppIcon name="chevronRight" :size="14" :stroke-width="2" />
+          </router-link>
+          <router-link :to="{ name: 'manager.don-tu.workflows' }" class="dt-setup__next-link">
+            <AppIcon name="gitBranch" :size="15" :stroke-width="1.75" />
+            Quy trình
+            <AppIcon name="chevronRight" :size="14" :stroke-width="2" />
+          </router-link>
+        </nav>
       </div>
     </div>
 
     <Teleport to="body">
+      <div v-if="createSetOpen" class="dt-modal-backdrop" @click.self="createSetOpen = false">
+        <div class="dt-modal dt-modal--wide" role="dialog" aria-labelledby="dt-set-create-title">
+          <header class="dt-modal__head">
+            <h2 id="dt-set-create-title">Tạo nhóm trạng thái</h2>
+            <button type="button" class="dt-modal__close" aria-label="Đóng" @click="createSetOpen = false">
+              <AppIcon name="x" :size="18" />
+            </button>
+          </header>
+          <div class="dt-modal__body dt-modal__grid">
+            <label class="dt-field dt-field--span2">
+              <span>Tên nhóm<span class="dt-req" aria-hidden="true">*</span></span>
+              <input
+                v-model="createSetForm.name"
+                type="text"
+                required
+                placeholder="Ví dụ: Trạng thái đơn phòng Hành chính"
+              />
+            </label>
+            <label class="dt-field dt-field--span2">
+              <span>Sao chép từ</span>
+              <select v-model="createSetForm.copy_from_id">
+                <option v-if="!sets.length" disabled value="">Chưa có nhóm để sao chép</option>
+                <option v-for="set in sets" :key="set.id" :value="set.id">
+                  {{ friendlySetName(set.name, set.code) }}
+                </option>
+              </select>
+            </label>
+            <label class="dt-field dt-field--span2">
+              <span>Ghi chú</span>
+              <textarea
+                v-model="createSetForm.description"
+                rows="2"
+                placeholder="Ghi ngắn nhóm này dùng cho loại đơn nào"
+              />
+            </label>
+          </div>
+          <footer class="dt-modal__foot">
+            <button type="button" class="dt-btn-ghost" @click="createSetOpen = false">Huỷ</button>
+            <button type="button" class="dt-btn-primary" :disabled="createSetSaving" @click="submitCreateSet">
+              {{ createSetSaving ? 'Đang lưu…' : 'Tạo nhóm' }}
+            </button>
+          </footer>
+        </div>
+      </div>
+
       <div v-if="createOpen" class="dt-modal-backdrop" @click.self="createOpen = false">
-        <div class="dt-modal" role="dialog" aria-labelledby="dt-status-create-title">
+        <div class="dt-modal dt-modal--wide" role="dialog" aria-labelledby="dt-status-create-title">
           <header class="dt-modal__head">
             <h2 id="dt-status-create-title">Thêm trạng thái</h2>
             <button type="button" class="dt-modal__close" aria-label="Đóng" @click="createOpen = false">
@@ -508,6 +690,56 @@ async function submitCreate() {
   padding: var(--space-6);
   color: var(--color-text-muted);
   text-align: center;
+}
+
+.dt-status-page__toolbar {
+  margin-bottom: var(--space-3);
+}
+
+.dt-status-page__secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.5rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    180deg,
+    var(--color-surface),
+    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface))
+  );
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.dt-status-page__secondary-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.dt-status-page__empty-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)) 0%,
+    var(--color-surface) 50%,
+    color-mix(in srgb, var(--color-info) 7%, var(--color-surface)) 100%
+  );
+  box-shadow: var(--shadow-sm);
+}
+
+.dt-status-page__empty-panel p {
+  margin: 0;
+  flex: 1;
+  min-width: 12rem;
+  color: var(--color-text-muted);
 }
 
 .dt-status-page__body {

@@ -17,13 +17,15 @@ const stats = ref({
 
 const cards = computed(() => [
   {
+    step: 1,
     name: 'manager.don-tu.statuses',
     icon: 'layers',
     title: 'Trạng thái hồ sơ',
     stat: stats.value.sets,
-    statLabel: 'bộ',
+    statLabel: 'nhóm',
   },
   {
+    step: 2,
     name: 'manager.don-tu.forms',
     icon: 'clipboardCheck',
     title: 'Mẫu biểu',
@@ -31,6 +33,7 @@ const cards = computed(() => [
     statLabel: stats.value.formsActive ? `${stats.value.formsActive} đang dùng` : 'mẫu',
   },
   {
+    step: 3,
     name: 'manager.don-tu.workflows',
     icon: 'gitBranch',
     title: 'Quy trình',
@@ -75,7 +78,7 @@ function isActive(name) {
 </script>
 
 <template>
-  <nav class="dt-config-hub" aria-label="Lối tắt cấu hình đơn từ">
+  <nav class="dt-config-hub" aria-label="Các bước thiết lập đơn từ">
     <router-link
       v-for="card in cards"
       :key="card.name"
@@ -88,6 +91,7 @@ function isActive(name) {
         <AppIcon :name="card.icon" :size="20" :stroke-width="1.75" />
       </span>
       <span class="dt-config-hub__body">
+        <span class="dt-config-hub__step">Bước {{ card.step }}</span>
         <span class="dt-config-hub__title">{{ card.title }}</span>
       </span>
       <span class="dt-config-hub__stat">
