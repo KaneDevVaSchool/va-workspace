@@ -21,14 +21,7 @@ export default [
       {
         path: 'config',
         name: 'manager.don-tu.config',
-        component: () => import('./pages/admin/DonTuConfigOverview.vue'),
-        meta: {
-          requiresAuth: true,
-          title: 'Cấu hình đơn từ',
-          screenTitle: 'Cấu hình đơn từ',
-          ui: 'UI-11',
-          phase: 'P0',
-        },
+        redirect: { name: 'manager.don-tu.statuses' },
       },
       {
         path: 'monitor-hub',

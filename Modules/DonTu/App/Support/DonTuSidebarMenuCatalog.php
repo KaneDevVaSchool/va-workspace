@@ -55,7 +55,7 @@ final class DonTuSidebarMenuCatalog
             'label' => 'Cấu hình',
             'section' => 'don-tu',
             'icon' => 'settings',
-            'audience' => 'Trạng thái, mẫu biểu, quy trình — tab trong trang.',
+            'audience' => 'Bộ trạng thái và trạng thái hồ sơ đơn.',
         ],
         self::MONITOR_HUB_KEY => [
             'label' => 'Giám sát',

@@ -1,8 +1,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useDonTuConfigHub } from '../../composables/useDonTuConfigHub.js';
-import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
+import DonTuStatusContentHeader from '../../components/DonTuStatusContentHeader.vue';
 import { useDragScroll } from '@/composables/useDragScroll.js';
 import { showClientToast } from '@/lib/clientToast';
 import { formatDonTuApiError } from '../../lib/donTuToast.js';
@@ -20,7 +20,6 @@ import {
 } from '../../constants/statusTone.js';
 
 const auth = useAuthStore();
-const router = useRouter();
 const configHub = useDonTuConfigHub();
 
 const canConfig = computed(
@@ -73,6 +72,10 @@ const filteredSets = computed(() => {
 
 const showRail = computed(() => sets.value.length > 0);
 const viewTab = ref('flow');
+
+const totalStatusCount = computed(() =>
+  sets.value.reduce((sum, set) => sum + (set.status_count ?? 0), 0),
+);
 
 const mainFlow = computed(() =>
   (detail.value?.statuses ?? []).filter((s) => s.group_kind === 'main').sort((a, b) => a.sort_order - b.sort_order),
@@ -228,10 +231,6 @@ async function copyCode(code) {
   } catch {
     showClientToast('error', 'Không sao chép được.');
   }
-}
-
-function goWorkflow(id) {
-  router.push({ name: 'manager.don-tu.workflow', params: { id } });
 }
 
 function nextBmttCode(list) {
@@ -472,11 +471,17 @@ async function submitCreate() {
   </div>
 
   <div v-else class="dt-setup">
+    <DonTuStatusContentHeader
+      :set-count="sets.length"
+      :status-count="totalStatusCount"
+      :loading="loadingList"
+    />
+
     <div v-if="!loadingList && !sets.length" class="dt-status-page__empty-panel">
       <AppIcon name="layers" :size="32" :stroke-width="1.75" />
       <h2 class="dt-status-page__empty-title">Chưa có bộ trạng thái</h2>
       <p class="dt-status-page__empty-lead">
-        Bộ trạng thái quy định hồ sơ đơn đi qua những bước nào trước khi gắn mẫu biểu và quy trình duyệt.
+        Bộ trạng thái quy định hồ sơ đơn đi qua những bước nào — tạo bộ đầu tiên để khai báo trạng thái.
       </p>
       <button v-if="canWrite" type="button" class="dt-btn-primary" @click="openCreateSet">Tạo bộ trạng thái</button>
     </div>
@@ -509,10 +514,7 @@ async function submitCreate() {
             >
               <span class="dt-set-card__name">{{ friendlySetName(set.name, set.code) }}</span>
               <span class="dt-set-card__code">{{ set.code }}</span>
-              <span class="dt-set-card__meta">
-                {{ set.status_count }} trạng thái
-                <template v-if="set.workflow_count"> · {{ set.workflow_count }} quy trình</template>
-              </span>
+              <span class="dt-set-card__meta">{{ set.status_count }} trạng thái</span>
               <span v-if="set.is_system" class="dt-set-card__tag">Có sẵn</span>
             </button>
           </li>
@@ -545,40 +547,8 @@ async function submitCreate() {
               <span class="dt-setup__metric-num">{{ detail.transitions?.length ?? 0 }}</span>
               <span class="dt-setup__metric-label">lần chuyển</span>
             </div>
-            <div class="dt-setup__metric">
-              <span class="dt-setup__metric-num">{{ detail.workflow_count ?? 0 }}</span>
-              <span class="dt-setup__metric-label">quy trình dùng</span>
-            </div>
           </div>
         </header>
-
-        <section v-if="detail.workflows?.length" class="dt-setup__group">
-          <header class="dt-setup__group-head">
-            <span class="dt-setup__group-icon" aria-hidden="true">
-              <AppIcon name="gitBranch" :size="18" :stroke-width="1.75" />
-            </span>
-            <h3 class="dt-setup__group-title">Quy trình gắn nhóm này</h3>
-            <router-link :to="{ name: 'manager.don-tu.workflows' }" class="dt-workflow-strip__link">
-              Mở quy trình
-              <AppIcon name="chevronRight" :size="16" :stroke-width="2" />
-            </router-link>
-          </header>
-          <div class="dt-setup__group-body">
-            <ul class="dt-workflow-strip__list hide-scrollbar">
-              <li v-for="wf in detail.workflows" :key="wf.id">
-                <button type="button" class="dt-workflow-chip" @click="goWorkflow(wf.id)">
-                  <span class="dt-workflow-chip__name">{{ wf.name }}</span>
-                  <span
-                    class="dt-pill dt-pill--compact"
-                    :class="wf.is_active ? 'dt-pill--success' : 'dt-pill--muted'"
-                  >
-                    {{ wf.is_active ? 'Đang dùng' : 'Đang tắt' }}
-                  </span>
-                </button>
-              </li>
-            </ul>
-          </div>
-        </section>
 
         <section class="dt-setup__group">
           <header class="dt-setup__group-head">
@@ -805,20 +775,6 @@ async function submitCreate() {
           </div>
           </div>
         </section>
-
-        <nav class="dt-setup__next" aria-label="Bước thiết lập tiếp theo">
-          <span class="dt-setup__next-label">Bước tiếp theo</span>
-          <router-link :to="{ name: 'manager.don-tu.forms' }" class="dt-setup__next-link">
-            <AppIcon name="clipboardCheck" :size="15" :stroke-width="1.75" />
-            Mẫu biểu
-            <AppIcon name="chevronRight" :size="14" :stroke-width="2" />
-          </router-link>
-          <router-link :to="{ name: 'manager.don-tu.workflows' }" class="dt-setup__next-link">
-            <AppIcon name="gitBranch" :size="15" :stroke-width="1.75" />
-            Quy trình
-            <AppIcon name="chevronRight" :size="14" :stroke-width="2" />
-          </router-link>
-        </nav>
       </div>
     </div>
 

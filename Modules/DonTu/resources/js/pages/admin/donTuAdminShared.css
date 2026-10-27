@@ -1416,6 +1416,107 @@ section.dt-kpi-strip {
   }
 }
 
+/* ---- Content header: chỉ trạng thái / bộ trạng thái ---- */
+
+.dt-status-content-header {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+  overflow: hidden;
+}
+
+.dt-status-content-header__wm {
+  position: absolute;
+  right: -1.5rem;
+  bottom: -2rem;
+  width: 10rem;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.dt-status-content-header__main {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  min-width: min(100%, 28rem);
+}
+
+.dt-status-content-header__icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  color: var(--color-primary);
+}
+
+.dt-status-content-header__eyebrow {
+  margin: 0 0 var(--space-1);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.dt-status-content-header__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--color-text);
+}
+
+.dt-status-content-header__lead {
+  margin: var(--space-2) 0 0;
+  max-width: 36rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.dt-status-content-header__stats {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.dt-status-content-header__stat {
+  min-width: 6.5rem;
+}
+
+.dt-status-content-header__stat dt {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.dt-status-content-header__stat dd {
+  margin: var(--space-1) 0 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
 /* ---- Thiết lập trạng thái ---- */
 
 .dt-setup {

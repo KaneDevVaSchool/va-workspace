@@ -16,20 +16,20 @@ import {
 
 const route = useRoute();
 
-const isConfigOverview = computed(() => route.name === 'manager.don-tu.config');
+const isStatusConfigPage = computed(() => route.name === 'manager.don-tu.statuses');
 const isConfigEditor = computed(
   () => route.name === 'manager.don-tu.form' || route.name === 'manager.don-tu.workflow',
 );
 
 const currentTitle = computed(() => {
-  if (isConfigOverview.value) {
-    return 'Cấu hình đơn từ';
+  if (isStatusConfigPage.value) {
+    return 'Thiết lập trạng thái';
   }
   return route.meta.screenTitle || 'Đơn từ';
 });
 const headerSubtitle = computed(() => {
-  if (isConfigOverview.value) {
-    return 'Thiết lập trạng thái, mẫu biểu và quy trình theo thứ tự';
+  if (isStatusConfigPage.value) {
+    return 'Quản lý bộ trạng thái và các bước trên hồ sơ đơn';
   }
   if (isConfigArea.value) {
     return 'Thiết lập trạng thái, mẫu biểu và quy trình duyệt đơn';
@@ -48,11 +48,7 @@ const breadcrumbs = computed(() => {
     { label: 'Đơn từ', to: { name: 'manager.don-tu.start' } },
   ];
   if (isConfigArea.value) {
-    const crumbs = [...base, { label: 'Cấu hình', to: { name: 'manager.don-tu.config' } }];
-    if (!isConfigOverview.value) {
-      crumbs.push({ label: currentTitle.value });
-    }
-    return crumbs;
+    return [...base, { label: 'Cấu hình', to: { name: 'manager.don-tu.config' } }, { label: currentTitle.value }];
   }
   if (isMonitorArea.value) {
     return [
@@ -94,7 +90,11 @@ const primaryAction = ref(null);
 
 const headerPrimaryAction = computed(() => primaryAction.value);
 
-const headerIcon = computed(() => (isConfigOverview.value ? 'settings' : 'fileText'));
+const headerIcon = computed(() => {
+  if (isStatusConfigPage.value) return 'layers';
+  if (isConfigArea.value) return 'settings';
+  return 'fileText';
+});
 
 provide(DON_TU_CONFIG_HUB_KEY, {
   registerReload(fn) {
@@ -134,7 +134,7 @@ async function reload() {
       :subtitle="headerSubtitle"
       :icon="headerIcon"
       :breadcrumbs="breadcrumbs"
-      :primary-action="isConfigArea && !isConfigOverview ? headerPrimaryAction : null"
+      :primary-action="isConfigArea ? headerPrimaryAction : null"
     >
       <template v-if="isConfigArea" #actions>
         <button type="button" class="don-tu__header-btn" :disabled="reloading" @click="reload">
