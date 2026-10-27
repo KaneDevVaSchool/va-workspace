@@ -55,7 +55,7 @@ async function load() {
   try {
     items.value = await fetchFormTemplates();
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không tải được danh sách mẫu.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không tải được danh sách mẫu.');
   } finally {
     loading.value = false;
   }
@@ -105,18 +105,18 @@ function openCreate() {
 
 async function submitCreate() {
   if (!createForm.value.name.trim()) {
-    showClientToast('Nhập tên mẫu biểu.', 'error');
+    showClientToast('error', 'Nhập tên mẫu biểu.');
     return;
   }
   createSaving.value = true;
   try {
     const item = await createFormTemplate(createForm.value);
     createOpen.value = false;
-    showClientToast('Đã tạo mẫu biểu.', 'success');
+    showClientToast('success', 'Đã tạo mẫu biểu.');
     await load();
     router.push({ name: 'manager.don-tu.form', params: { id: item.id } });
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không tạo được mẫu.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không tạo được mẫu.');
   } finally {
     createSaving.value = false;
   }
@@ -130,11 +130,11 @@ async function onDuplicate(item) {
   actionMenuId.value = null;
   try {
     const copy = await duplicateFormTemplate(item.id);
-    showClientToast('Đã nhân bản mẫu.', 'success');
+    showClientToast('success', 'Đã nhân bản mẫu.');
     await load();
     router.push({ name: 'manager.don-tu.form', params: { id: copy.id } });
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không nhân bản được.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không nhân bản được.');
   }
 }
 
@@ -142,10 +142,10 @@ async function onArchive(item) {
   actionMenuId.value = null;
   try {
     await archiveFormTemplate(item.id);
-    showClientToast('Đã chuyển mẫu sang lưu trữ.', 'success');
+    showClientToast('success', 'Đã chuyển mẫu sang lưu trữ.');
     await load();
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không ẩn được mẫu.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không ẩn được mẫu.');
   }
 }
 
@@ -160,11 +160,11 @@ async function confirmDelete() {
   if (!item) return;
   try {
     await deleteFormTemplate(item.id);
-    showClientToast('Đã xóa mẫu.', 'success');
+    showClientToast('success', 'Đã xóa mẫu.');
     deleteOpen.value = false;
     await load();
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không xóa được mẫu.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không xóa được mẫu.');
   }
 }
 </script>

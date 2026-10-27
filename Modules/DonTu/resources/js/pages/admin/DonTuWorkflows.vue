@@ -53,7 +53,7 @@ async function load() {
   try {
     [items.value, statusSets.value] = await Promise.all([fetchWorkflows(), fetchStatusSets()]);
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không tải quy trình.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không tải quy trình.');
   } finally {
     loading.value = false;
   }
@@ -109,7 +109,7 @@ function openCreate() {
 
 async function submitCreate() {
   if (!createForm.value.name.trim() || !createForm.value.status_set_id) {
-    showClientToast('Nhập tên và chọn trạng thái hồ sơ.', 'error');
+    showClientToast('error', 'Nhập tên và chọn trạng thái hồ sơ.');
     return;
   }
   createSaving.value = true;
@@ -119,11 +119,11 @@ async function submitCreate() {
       status_set_id: Number(createForm.value.status_set_id),
     });
     createOpen.value = false;
-    showClientToast('Đã tạo quy trình.', 'success');
+    showClientToast('success', 'Đã tạo quy trình.');
     await load();
     router.push({ name: 'manager.don-tu.workflow', params: { id: item.id } });
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không tạo được quy trình.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không tạo được quy trình.');
   } finally {
     createSaving.value = false;
   }
@@ -133,10 +133,10 @@ async function toggleActive(item, event) {
   event.stopPropagation();
   try {
     await updateWorkflow(item.id, { is_active: !item.is_active });
-    showClientToast(item.is_active ? 'Đã tắt quy trình.' : 'Đã bật quy trình.', 'success');
+    showClientToast('success', item.is_active ? 'Đã tắt quy trình.' : 'Đã bật quy trình.');
     await load();
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không đổi trạng thái.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không đổi trạng thái.');
   }
 }
 
@@ -151,11 +151,11 @@ async function confirmDelete() {
   if (!item) return;
   try {
     await deleteWorkflow(item.id);
-    showClientToast('Đã xóa quy trình.', 'success');
+    showClientToast('success', 'Đã xóa quy trình.');
     deleteOpen.value = false;
     await load();
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không xóa được.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không xóa được.');
   }
 }
 </script>

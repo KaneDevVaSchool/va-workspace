@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import { useDragScroll } from '@/composables/useDragScroll.js';
 import { showClientToast } from '@/lib/clientToast';
+import { formatDonTuApiError } from '../../lib/donTuToast.js';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import DonTuConfigHubCards from '../../components/DonTuConfigHubCards.vue';
 import DonTuStatusBadge from '../../components/DonTuStatusBadge.vue';
@@ -119,7 +120,7 @@ async function loadSets() {
       selectedId.value = sets.value[0]?.id ?? null;
     }
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không tải được danh sách trạng thái.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không tải được danh sách trạng thái.');
   } finally {
     loadingList.value = false;
   }
@@ -136,7 +137,7 @@ async function loadDetail(id) {
   try {
     detail.value = await fetchStatusSet(id);
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không tải được chi tiết trạng thái.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không tải được chi tiết trạng thái.');
     detail.value = null;
   } finally {
     loadingDetail.value = false;
@@ -160,7 +161,7 @@ function syncHeaderPrimary() {
         description: !detail.value ? 'Chọn hoặc tạo nhóm trước' : undefined,
         onSelect: () => {
           if (!detail.value || loadingDetail.value) {
-            showClientToast('Chọn nhóm trạng thái trước khi thêm trạng thái.', 'error');
+            showClientToast('error', 'Chọn nhóm trạng thái trước khi thêm trạng thái.');
             return;
           }
           openCreate();
@@ -215,9 +216,9 @@ function toggleFocus(code) {
 async function copyCode(code) {
   try {
     await navigator.clipboard.writeText(code);
-    showClientToast('Đã sao chép mã.', 'success');
+    showClientToast('success', 'Đã sao chép mã.');
   } catch {
-    showClientToast('Không sao chép được.', 'error');
+    showClientToast('error', 'Không sao chép được.');
   }
 }
 
@@ -241,15 +242,6 @@ function openCreate() {
   createOpen.value = true;
 }
 
-function errorText(err, fallback) {
-  const errors = err.response?.data?.errors;
-  if (errors) {
-    const first = Object.values(errors)[0];
-    if (Array.isArray(first) && first[0]) return first[0];
-  }
-  return err.response?.data?.message || fallback;
-}
-
 function openCreateSet() {
   const defaultSet = sets.value.find((s) => s.code === 'STATUS_SET_DEFAULT') || sets.value[0];
   createSetForm.value = {
@@ -262,7 +254,7 @@ function openCreateSet() {
 
 async function submitCreateSet() {
   if (!createSetForm.value.name.trim()) {
-    showClientToast('Nhập tên nhóm trạng thái.', 'error');
+    showClientToast('error', 'Nhập tên nhóm trạng thái.');
     return;
   }
   createSetSaving.value = true;
@@ -279,9 +271,9 @@ async function submitCreateSet() {
     await loadSets();
     selectedId.value = item.id;
     detail.value = item;
-    showClientToast('Đã tạo nhóm trạng thái.', 'success');
+    showClientToast('success', 'Đã tạo nhóm trạng thái.');
   } catch (err) {
-    showClientToast(errorText(err, 'Không tạo được nhóm trạng thái.'), 'error');
+    showClientToast('error', formatDonTuApiError(err, 'Không tạo được nhóm trạng thái.'));
   } finally {
     createSetSaving.value = false;
   }
@@ -290,11 +282,11 @@ async function submitCreateSet() {
 async function submitCreate() {
   if (!selectedId.value) return;
   if (!createForm.value.label.trim()) {
-    showClientToast('Nhập tên trạng thái.', 'error');
+    showClientToast('error', 'Nhập tên trạng thái.');
     return;
   }
   if (!createForm.value.from_code) {
-    showClientToast('Chọn trạng thái phía trước.', 'error');
+    showClientToast('error', 'Chọn trạng thái phía trước.');
     return;
   }
   createSaving.value = true;
@@ -308,9 +300,9 @@ async function submitCreate() {
     const row = sets.value.find((s) => s.id === selectedId.value);
     if (row) row.status_count = item.statuses?.length ?? row.status_count;
     createOpen.value = false;
-    showClientToast('Đã thêm trạng thái.', 'success');
+    showClientToast('success', 'Đã thêm trạng thái.');
   } catch (err) {
-    showClientToast(errorText(err, 'Không thêm được trạng thái.'), 'error');
+    showClientToast('error', formatDonTuApiError(err, 'Không thêm được trạng thái.'));
   } finally {
     createSaving.value = false;
   }

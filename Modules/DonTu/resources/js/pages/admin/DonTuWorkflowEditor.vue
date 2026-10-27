@@ -98,7 +98,7 @@ async function load() {
     workflowForms.value = (wf.forms || []).map((f) => ({ ...f }));
     steps.value = (wf.steps || []).map((s) => ({ ...s }));
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không tải quy trình.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không tải quy trình.');
     router.push({ name: 'manager.don-tu.workflows' });
   } finally {
     loading.value = false;
@@ -114,9 +114,9 @@ async function saveMeta() {
   saving.value = true;
   try {
     item.value = await updateWorkflow(workflowId.value, { ...meta.value });
-    showClientToast('Đã lưu thông tin quy trình.', 'success');
+    showClientToast('success', 'Đã lưu thông tin quy trình.');
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không lưu được.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không lưu được.');
   } finally {
     saving.value = false;
   }
@@ -144,9 +144,9 @@ async function saveForms() {
       })),
     });
     workflowForms.value = item.value.forms || [];
-    showClientToast('Đã lưu phiếu của quy trình.', 'success');
+    showClientToast('success', 'Đã lưu phiếu của quy trình.');
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không lưu phiếu.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không lưu phiếu.');
   } finally {
     saving.value = false;
   }
@@ -221,9 +221,9 @@ async function saveSteps() {
   try {
     item.value = await updateWorkflow(workflowId.value, { steps: steps.value });
     steps.value = item.value.steps || [];
-    showClientToast('Đã lưu các bước duyệt.', 'success');
+    showClientToast('success', 'Đã lưu các bước duyệt.');
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không lưu bước.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không lưu bước.');
   } finally {
     saving.value = false;
   }

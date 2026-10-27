@@ -60,7 +60,7 @@ async function load() {
     };
     fields.value = [...(item.value.schema_json?.fields || [])];
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không tải mẫu biểu.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không tải mẫu biểu.');
     router.push({ name: 'manager.don-tu.forms' });
   } finally {
     loading.value = false;
@@ -77,9 +77,9 @@ async function saveInfo() {
   saving.value = true;
   try {
     item.value = await updateFormTemplate(templateId.value, { ...info.value });
-    showClientToast('Đã lưu thông tin.', 'success');
+    showClientToast('success', 'Đã lưu thông tin.');
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không lưu được.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không lưu được.');
   } finally {
     saving.value = false;
   }
@@ -92,9 +92,9 @@ async function saveFields() {
       schema_json: { fields: fields.value },
     });
     fields.value = [...(item.value.schema_json?.fields || [])];
-    showClientToast('Đã lưu các ô trên phiếu.', 'success');
+    showClientToast('success', 'Đã lưu các ô trên phiếu.');
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không lưu được trường.', 'error');
+    showClientToast('error', err.response?.data?.message || 'Không lưu được trường.');
   } finally {
     saving.value = false;
   }
@@ -128,7 +128,7 @@ function openFieldDialog(index = -1) {
 function applyField() {
   const key = fieldForm.value.key.trim();
   if (!key) {
-    showClientToast('Nhập mã ô.', 'error');
+    showClientToast('error', 'Nhập mã ô.');
     return;
   }
   const payload = {
