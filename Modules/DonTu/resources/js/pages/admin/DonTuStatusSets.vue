@@ -71,7 +71,10 @@ const filteredSets = computed(() => {
 });
 
 const showRail = computed(() => sets.value.length > 0);
+const railCollapsed = ref(false);
+const RAIL_COLLAPSE_KEY = 'don-tu.status-rail-collapsed';
 const viewTab = ref('flow');
+const stepDrawerOpen = ref(false);
 
 const mainFlow = computed(() =>
   (detail.value?.statuses ?? []).filter((s) => s.group_kind === 'main').sort((a, b) => a.sort_order - b.sort_order),
@@ -110,29 +113,65 @@ const terminal = computed(() =>
     .sort((a, b) => a.sort_order - b.sort_order),
 );
 
-const filteredTransitions = computed(() => {
-  const q = transitionQuery.value.trim().toLowerCase();
-  let list = detail.value?.transitions ?? [];
-  if (focusCode.value) {
-    const code = focusCode.value;
-    list = list.filter((tr) => tr.from_code === code || tr.to_code === code);
-  }
-  if (!q) return list;
-  return list.filter((tr) => {
-    const haystack = [
-      statusLabel(tr.from_code),
-      statusLabel(tr.to_code),
-      actionLabel(tr.action_key),
-      actorLabel(tr.actor_policy),
-      guardHint(tr.guard_json),
-    ]
-      .join(' ')
-      .toLowerCase();
-    return haystack.includes(q);
-  });
-});
+const FORWARD_ACTIONS = new Set([
+  'SAVE_DRAFT',
+  'SUBMIT',
+  'ACCEPT',
+  'APPROVE',
+  'CLOSE',
+  'SUPPLEMENT',
+  'CONFIRM_PAYMENT',
+]);
+const STOP_ACTIONS = new Set(['REJECT', 'CANCEL', 'REQUEST_CHANGES']);
 
-const detailTitle = computed(() => friendlySetName(detail.value?.name, detail.value?.code));
+const trackStages = computed(() => [
+  ...mainFlow.value,
+  ...terminal.value.filter((status) => status.terminal_kind !== 'failed'),
+]);
+
+const actorTracks = computed(() => {
+  const q = transitionQuery.value.trim().toLowerCase();
+  const transitions = detail.value?.transitions ?? [];
+  const stages = trackStages.value;
+  const order = ['requester', 'assignee', 'closure_actor', 'admin'];
+  const actors = order.filter((key) => transitions.some((tr) => tr.actor_policy === key));
+  for (const tr of transitions) {
+    if (tr.actor_policy && !actors.includes(tr.actor_policy)) actors.push(tr.actor_policy);
+  }
+  return actors
+    .map((actor) => {
+      const mine = transitions.filter((tr) => tr.actor_policy === actor);
+      const nodes = stages.map((stage) => {
+        const here = mine.filter(
+          (tr) => tr.from_code === stage.code || (tr.from_code === 'NONE' && tr.to_code === stage.code),
+        );
+        const keys = here.map((tr) => tr.action_key);
+        let tone = 'off';
+        if (keys.some((key) => FORWARD_ACTIONS.has(key))) tone = 'go';
+        else if (keys.some((key) => STOP_ACTIONS.has(key))) tone = 'hold';
+        else if (keys.length) tone = 'go';
+        return {
+          code: stage.code,
+          label: stage.label,
+          tone,
+          actions: [...new Set(here.map((tr) => actionLabel(tr.action_key)))],
+        };
+      });
+      return {
+        actor,
+        label: actorLabel(actor),
+        touch: nodes.filter((node) => node.tone !== 'off').length,
+        nodes,
+      };
+    })
+    .filter((row) => {
+      if (!q) return true;
+      return [row.label, ...row.nodes.flatMap((node) => [node.label, ...node.actions])]
+        .join(' ')
+        .toLowerCase()
+        .includes(q);
+    });
+});
 const detailDescription = computed(() => humanSetDescription(detail.value?.description));
 const fromOptions = computed(() => [
   { code: 'NONE', label: 'Lúc chưa có hồ sơ' },
@@ -164,6 +203,7 @@ async function loadDetail(id) {
   loadingDetail.value = true;
   transitionQuery.value = '';
   focusCode.value = '';
+  stepDrawerOpen.value = false;
   try {
     detail.value = await fetchStatusSet(id);
   } catch (err) {
@@ -204,6 +244,11 @@ function syncHeaderPrimary() {
 watch([canWrite, detail, loadingDetail], syncHeaderPrimary, { immediate: true });
 
 onMounted(async () => {
+  try {
+    railCollapsed.value = localStorage.getItem(RAIL_COLLAPSE_KEY) === '1';
+  } catch {
+    railCollapsed.value = false;
+  }
   configHub?.registerReload(reloadPage);
   if (!canConfig.value) {
     return;
@@ -215,6 +260,15 @@ onBeforeUnmount(() => {
   configHub?.unregisterReload();
   configHub?.clearPrimaryAction();
 });
+
+function toggleRail() {
+  railCollapsed.value = !railCollapsed.value;
+  try {
+    localStorage.setItem(RAIL_COLLAPSE_KEY, railCollapsed.value ? '1' : '0');
+  } catch {
+    /* giữ trạng thái trong phiên */
+  }
+}
 
 async function reloadPage() {
   await loadSets();
@@ -268,11 +322,22 @@ function stepClass(code) {
 }
 
 function toggleFocus(code) {
-  focusCode.value = focusCode.value === code ? '' : code;
+  if (focusCode.value === code && stepDrawerOpen.value) {
+    closeStepDrawer();
+    return;
+  }
+  focusCode.value = code;
+  stepDrawerOpen.value = true;
+}
+
+function closeStepDrawer() {
+  stepDrawerOpen.value = false;
+  focusCode.value = '';
 }
 
 function openRules() {
   viewTab.value = 'rules';
+  stepDrawerOpen.value = false;
 }
 
 function scrollFlow(direction) {
@@ -546,15 +611,32 @@ async function submitCreate() {
       <button v-if="canWrite" type="button" class="dt-btn-primary" @click="openCreateSet">Tạo bộ trạng thái</button>
     </div>
 
-    <div v-else class="dt-setup__layout" :class="{ 'dt-setup__layout--solo': !showRail }">
-      <aside v-if="showRail" class="dt-set-rail">
+    <div
+      v-else
+      class="dt-setup__layout"
+      :class="{
+        'dt-setup__layout--solo': !showRail,
+        'dt-setup__layout--rail-collapsed': showRail && railCollapsed,
+      }"
+    >
+      <aside v-if="showRail" class="dt-set-rail" :class="{ 'dt-set-rail--collapsed': railCollapsed }">
         <div class="dt-set-rail__top">
-          <h3 class="dt-set-rail__title">Bộ trạng thái</h3>
-          <button v-if="canWrite" type="button" class="dt-link-btn dt-set-rail__create" @click="openCreateSet">
+          <h3 v-show="!railCollapsed" class="dt-set-rail__title">Bộ trạng thái</h3>
+          <button v-if="canWrite && !railCollapsed" type="button" class="dt-link-btn dt-set-rail__create" @click="openCreateSet">
             Tạo mới
+          </button>
+          <button
+            type="button"
+            class="dt-set-rail__toggle"
+            :aria-expanded="!railCollapsed"
+            :aria-label="railCollapsed ? 'Mở danh sách bộ trạng thái' : 'Thu gọn danh sách bộ trạng thái'"
+            @click="toggleRail"
+          >
+            <AppIcon :name="railCollapsed ? 'chevronRight' : 'chevronLeft'" :size="16" :stroke-width="2" />
           </button>
         </div>
 
+        <template v-if="!railCollapsed">
         <label class="dt-set-rail__search">
           <AppIcon name="search" :size="16" :stroke-width="1.75" aria-hidden="true" />
           <input
@@ -588,6 +670,7 @@ async function submitCreate() {
           </li>
         </ul>
         <p v-else class="dt-set-rail__loading">Đang tải…</p>
+        </template>
       </aside>
 
       <div v-if="loadingDetail" class="dt-status-page__loading dt-setup__main">
@@ -638,7 +721,7 @@ async function submitCreate() {
                 @click="viewTab = 'rules'"
               >
                 <AppIcon name="users" :size="15" :stroke-width="1.75" aria-hidden="true" />
-                Ai bấm gì
+                Người phụ trách
               </button>
             </div>
           </header>
@@ -709,48 +792,121 @@ async function submitCreate() {
               </button>
             </div>
 
-            <aside v-if="focusStatus" class="dt-step-card" aria-live="polite">
-              <header class="dt-step-card__head">
-                <div>
-                  <p class="dt-step-card__kicker">{{ GROUP_KIND_LABEL[focusStatus.group_kind] || 'Trạng thái' }}</p>
-                  <h4 class="dt-step-card__title">{{ focusStatus.label }}</h4>
-                  <p v-if="statusStepLine(focusStatus.code)" class="dt-step-card__sub">
-                    {{ statusStepLine(focusStatus.code) }}
-                  </p>
-                </div>
-                <div class="dt-step-card__actions">
-                  <button type="button" class="dt-link-btn" @click="openRules">Mở bảng</button>
-                  <button type="button" class="dt-link-btn" @click="focusCode = ''">Bỏ chọn</button>
-                </div>
-              </header>
-              <div class="dt-step-card__cols">
-                <section>
-                  <h5>Đi vào</h5>
-                  <ul>
-                    <li v-if="!focusInbound.length" class="dt-step-card__empty">Không có lối vào</li>
-                    <li v-for="tr in focusInbound" :key="`in-${tr.id}`">
-                      <span class="dt-step-card__from">{{ statusLabel(tr.from_code) }}</span>
-                      <span class="dt-step-card__meta">{{ actionLabel(tr.action_key) }} · {{ actorLabel(tr.actor_policy) }}</span>
-                      <span v-if="guardHint(tr.guard_json)" class="dt-step-card__guard">{{ guardHint(tr.guard_json) }}</span>
-                    </li>
-                  </ul>
-                </section>
-                <section>
-                  <h5>Đi ra</h5>
-                  <ul>
-                    <li v-if="!focusOutbound.length" class="dt-step-card__empty">Không có lối ra</li>
-                    <li v-for="tr in focusOutbound" :key="`out-${tr.id}`">
-                      <span class="dt-step-card__from">{{ statusLabel(tr.to_code) }}</span>
-                      <span class="dt-step-card__meta">{{ actionLabel(tr.action_key) }} · {{ actorLabel(tr.actor_policy) }}</span>
-                      <span v-if="guardHint(tr.guard_json)" class="dt-step-card__guard">{{ guardHint(tr.guard_json) }}</span>
-                    </li>
-                  </ul>
-                </section>
-              </div>
-            </aside>
+          </div>
+          </div>
 
-            <div v-if="conditional.length || terminal.length" class="dt-zz-side">
-              <section v-if="conditional.length" class="dt-zz-side__col" aria-label="Khi cần thêm việc">
+          <div v-show="viewTab === 'rules'" class="dt-setup__group-body dt-track-wrap">
+            <header class="dt-track__head">
+              <div class="dt-track__head-copy">
+                <h3 class="dt-track__title">Người phụ trách từng bước</h3>
+                <ul class="dt-track__legend">
+                  <li><i class="is-go" /> Được đi tiếp</li>
+                  <li><i class="is-hold" /> Được dừng</li>
+                  <li><i class="is-off" /> Không việc</li>
+                </ul>
+              </div>
+              <div class="dt-track__tools">
+                <button v-if="focusCode" type="button" class="dt-link-btn" @click="focusCode = ''">
+                  Xem mọi bước
+                </button>
+                <label class="dt-track__search">
+                  <AppIcon name="search" :size="16" :stroke-width="1.75" aria-hidden="true" />
+                  <input
+                    v-model="transitionQuery"
+                    type="search"
+                    placeholder="Tìm vai hoặc bước"
+                    aria-label="Tìm vai hoặc bước"
+                  />
+                </label>
+              </div>
+            </header>
+            <div ref="transWrap" class="dt-track hide-scrollbar">
+              <p v-if="!actorTracks.length" class="dt-status-page__empty">Không có vai nào khớp.</p>
+              <article v-for="row in actorTracks" :key="row.actor" class="dt-track__row">
+                <div class="dt-track__who">
+                  <span class="dt-track__avatar" aria-hidden="true">
+                    <AppIcon name="user" :size="18" :stroke-width="1.75" />
+                  </span>
+                  <span class="dt-track__who-copy">
+                    <span class="dt-track__name">{{ row.label }}</span>
+                    <span class="dt-track__meta">Làm ở {{ row.touch }} bước</span>
+                  </span>
+                </div>
+                <div class="dt-track__line" :style="{ '--dt-steps': row.nodes.length }">
+                  <button
+                    v-for="node in row.nodes"
+                    :key="`${row.actor}-${node.code}`"
+                    type="button"
+                    class="dt-track__node"
+                    :class="{ 'is-dim': focusCode && focusCode !== node.code, 'is-on': focusCode === node.code }"
+                    @click="toggleFocus(node.code)"
+                  >
+                    <span class="dt-track__dot" :class="`is-${node.tone}`" aria-hidden="true">
+                      <AppIcon v-if="node.tone === 'go'" name="check" :size="14" :stroke-width="2.5" />
+                    </span>
+                    <span class="dt-track__cap">{{ node.label }}</span>
+                    <span v-if="node.actions.length" class="dt-track__act">{{ node.actions.join(' · ') }}</span>
+                  </button>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <Teleport to="body">
+      <div v-if="stepDrawerOpen && focusStatus" class="dt-drawer-backdrop" @click.self="closeStepDrawer">
+        <aside
+          class="dt-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dt-step-drawer-title"
+          @keydown.escape="closeStepDrawer"
+        >
+          <header class="dt-drawer__head">
+            <div class="dt-drawer__head-copy">
+              <p class="dt-step-card__kicker">{{ GROUP_KIND_LABEL[focusStatus.group_kind] || 'Trạng thái' }}</p>
+              <h4 id="dt-step-drawer-title" class="dt-step-card__title">{{ focusStatus.label }}</h4>
+              <p v-if="statusStepLine(focusStatus.code)" class="dt-step-card__sub">
+                {{ statusStepLine(focusStatus.code) }}
+              </p>
+            </div>
+            <button type="button" class="dt-modal__close" aria-label="Đóng" @click="closeStepDrawer">
+              <AppIcon name="close" :size="18" />
+            </button>
+          </header>
+          <div class="dt-drawer__body hide-scrollbar">
+            <div class="dt-step-card__actions">
+              <button type="button" class="dt-link-btn" @click="openRules">Xem người phụ trách</button>
+              <button type="button" class="dt-link-btn" @click="closeStepDrawer">Bỏ chọn</button>
+            </div>
+            <div class="dt-step-card__cols">
+              <section>
+                <h5>Đi vào</h5>
+                <ul>
+                  <li v-if="!focusInbound.length" class="dt-step-card__empty">Không có lối vào</li>
+                  <li v-for="tr in focusInbound" :key="`in-${tr.id}`">
+                    <span class="dt-step-card__from">{{ statusLabel(tr.from_code) }}</span>
+                    <span class="dt-step-card__meta">{{ actionLabel(tr.action_key) }} · {{ actorLabel(tr.actor_policy) }}</span>
+                    <span v-if="guardHint(tr.guard_json)" class="dt-step-card__guard">{{ guardHint(tr.guard_json) }}</span>
+                  </li>
+                </ul>
+              </section>
+              <section>
+                <h5>Đi ra</h5>
+                <ul>
+                  <li v-if="!focusOutbound.length" class="dt-step-card__empty">Không có lối ra</li>
+                  <li v-for="tr in focusOutbound" :key="`out-${tr.id}`">
+                    <span class="dt-step-card__from">{{ statusLabel(tr.to_code) }}</span>
+                    <span class="dt-step-card__meta">{{ actionLabel(tr.action_key) }} · {{ actorLabel(tr.actor_policy) }}</span>
+                    <span v-if="guardHint(tr.guard_json)" class="dt-step-card__guard">{{ guardHint(tr.guard_json) }}</span>
+                  </li>
+                </ul>
+              </section>
+            </div>
+            <div v-if="conditional.length || terminal.length" class="dt-zz-side dt-zz-side--drawer">
+              <section v-if="conditional.length" aria-label="Khi cần thêm việc">
                 <h4 class="dt-zz-side__title">{{ GROUP_KIND_LABEL.conditional }}</h4>
                 <ul class="dt-zz-side__list">
                   <li v-for="st in conditional" :key="st.code">
@@ -770,7 +926,7 @@ async function submitCreate() {
                   </li>
                 </ul>
               </section>
-              <section v-if="terminal.length" class="dt-zz-side__col" aria-label="Kết thúc">
+              <section v-if="terminal.length" aria-label="Kết thúc">
                 <h4 class="dt-zz-side__title">{{ GROUP_KIND_LABEL.terminal }}</h4>
                 <ul class="dt-zz-side__list">
                   <li v-for="st in terminal" :key="st.code">
@@ -796,83 +952,9 @@ async function submitCreate() {
               </section>
             </div>
           </div>
-          </div>
-
-          <div v-show="viewTab === 'rules'" class="dt-setup__group-body dt-trans-rules">
-          <div class="dt-trans-rules__toolbar">
-            <button v-if="focusCode" type="button" class="dt-link-btn" @click="focusCode = ''">
-              Xem tất cả trạng thái
-            </button>
-            <input
-              v-model="transitionQuery"
-              type="search"
-              class="dt-trans-table__search"
-              placeholder="Tìm người, việc làm hoặc trạng thái"
-              aria-label="Tìm quy tắc chuyển"
-            />
-          </div>
-          <div ref="transWrap" class="dt-trans-table__scroll hide-scrollbar">
-            <table class="dt-trans-table dt-trans-table--rules">
-              <colgroup>
-                <col class="dt-trans-col dt-trans-col--status" />
-                <col class="dt-trans-col dt-trans-col--action" />
-                <col class="dt-trans-col dt-trans-col--status" />
-                <col class="dt-trans-col dt-trans-col--actor" />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>Đang ở</th>
-                  <th>Việc làm</th>
-                  <th>Chuyển sang</th>
-                  <th>Ai được bấm</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="!filteredTransitions.length">
-                  <td colspan="4" class="dt-status-page__empty">Không thấy dòng nào khớp.</td>
-                </tr>
-                <tr v-for="tr in filteredTransitions" :key="tr.id" class="dt-trans-table__row">
-                  <td class="dt-trans-table__cell dt-trans-table__cell--status">
-                    <div class="dt-trans-table__status">
-                      <DonTuStatusBadge
-                        v-if="tr.from_code !== 'NONE'"
-                        compact
-                        table-chip
-                        :code="tr.from_code"
-                        :label="statusLabel(tr.from_code)"
-                      />
-                      <span v-else class="dt-trans-table__chip dt-trans-table__chip--muted">Lúc chưa có hồ sơ</span>
-                    </div>
-                  </td>
-                  <td class="dt-trans-table__cell dt-trans-table__cell--action">
-                    <div class="dt-trans-table__action">
-                      <span class="dt-action-chip">{{ actionLabel(tr.action_key) }}</span>
-                      <span v-if="guardHint(tr.guard_json)" class="dt-guard">{{ guardHint(tr.guard_json) }}</span>
-                    </div>
-                  </td>
-                  <td class="dt-trans-table__cell dt-trans-table__cell--status">
-                    <div class="dt-trans-table__status">
-                      <DonTuStatusBadge
-                        compact
-                        table-chip
-                        :code="tr.to_code"
-                        :label="statusLabel(tr.to_code)"
-                      />
-                    </div>
-                  </td>
-                  <td class="dt-trans-table__cell dt-trans-table__cell--actor">
-                    <span class="dt-trans-actor" :class="`dt-trans-actor--${tr.actor_policy}`">
-                      {{ actorLabel(tr.actor_policy) }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          </div>
-        </section>
+        </aside>
       </div>
-    </div>
+    </Teleport>
 
     <Teleport to="body">
       <div v-if="createSetOpen" class="dt-modal-backdrop" @click.self="createSetOpen = false">
