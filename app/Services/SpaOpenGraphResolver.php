@@ -189,7 +189,7 @@ final class SpaOpenGraphResolver
      */
     private function resolveWall(int $userId, string $pageUrl, string $cover): ?array
     {
-        $user = User::query()->where('id', $userId)->where('is_active', true)->first(['id', 'name']);
+        $user = User::query()->where('id', $userId)->where('status', 'active')->first(['id', 'name']);
         if ($user === null) {
             return null;
         }
