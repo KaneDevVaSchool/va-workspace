@@ -73,6 +73,29 @@ export function friendlySetCodeLabel(code) {
   return raw;
 }
 
+/** Một dòng ngắn dưới tên bước — chỉ mã đã biết, không câu hướng dẫn. */
+const STATUS_STEP_LINE = {
+  DRAFT: 'Đơn chưa gửi',
+  PENDING_HANDLING: 'Đợi được tiếp nhận',
+  PENDING_APPROVAL: 'Đợi cấp trên duyệt',
+  PENDING_SUPPLEMENTAL_FORM: 'Cần nộp thêm phiếu',
+  PENDING_PAYMENT: 'Đợi chi tiền',
+  PENDING_CLOSURE_CONFIRMATION: 'Đợi xác nhận xong',
+  COMPLETED: 'Đã hoàn tất',
+  REJECTED: 'Không được duyệt',
+  CANCELLED: 'Đã hủy hồ sơ',
+  PENDING_UNIT_HEAD: 'Đợi trưởng đơn vị',
+  PENDING_HCNS: 'Đợi phòng nhân sự',
+  PENDING_CEO: 'Đợi tổng giám đốc',
+  PENDING_HANDOVER: 'Đợi bàn giao',
+  PENDING_HCNS_PROCEDURE: 'Đang làm thủ tục',
+  WITHDRAWN: 'Người nộp đã rút',
+};
+
+export function statusStepLine(code) {
+  return STATUS_STEP_LINE[code] || '';
+}
+
 /** Ẩn mô tả dành cho người làm kỹ thuật. */
 export function humanSetDescription(text) {
   const value = (text || '').trim();

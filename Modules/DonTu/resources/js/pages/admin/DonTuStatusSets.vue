@@ -16,7 +16,7 @@ import {
   friendlySetName,
   guardHint,
   humanSetDescription,
-  toneOfStatusCode,
+  statusStepLine,
 } from '../../constants/statusTone.js';
 
 const auth = useAuthStore();
@@ -76,6 +76,29 @@ const viewTab = ref('flow');
 const mainFlow = computed(() =>
   (detail.value?.statuses ?? []).filter((s) => s.group_kind === 'main').sort((a, b) => a.sort_order - b.sort_order),
 );
+
+const ZZ_STEP = 148;
+const ZZ_H = 292;
+
+const waveWidth = computed(() => Math.max(mainFlow.value.length, 1) * ZZ_STEP);
+
+const waveD = computed(() => {
+  const n = mainFlow.value.length;
+  if (n < 2) return '';
+  const yUp = 102;
+  const yDown = 190;
+  let d = '';
+  for (let i = 0; i < n - 1; i += 1) {
+    const x1 = i * ZZ_STEP + ZZ_STEP / 2;
+    const x2 = (i + 1) * ZZ_STEP + ZZ_STEP / 2;
+    const y1 = i % 2 === 0 ? yUp : yDown;
+    const y2 = i % 2 === 0 ? yDown : yUp;
+    const mid = (x1 + x2) / 2;
+    d += i === 0 ? `M ${x1} ${y1}` : '';
+    d += ` C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`;
+  }
+  return d;
+});
 const conditional = computed(() =>
   (detail.value?.statuses ?? [])
     .filter((s) => s.group_kind === 'conditional')
@@ -213,11 +236,58 @@ function statusLabel(code) {
   return detail.value?.statuses?.find((s) => s.code === code)?.label || code;
 }
 
+const focusStatus = computed(
+  () => detail.value?.statuses?.find((status) => status.code === focusCode.value) ?? null,
+);
+
+const focusInbound = computed(() =>
+  (detail.value?.transitions ?? []).filter((tr) => tr.to_code === focusCode.value),
+);
+
+const focusOutbound = computed(() =>
+  (detail.value?.transitions ?? []).filter((tr) => tr.from_code === focusCode.value),
+);
+
+const linkedCodes = computed(() => {
+  if (!focusCode.value) return null;
+  const codes = new Set([focusCode.value]);
+  for (const tr of detail.value?.transitions ?? []) {
+    if (tr.from_code === focusCode.value && tr.to_code) codes.add(tr.to_code);
+    if (tr.to_code === focusCode.value && tr.from_code && tr.from_code !== 'NONE') codes.add(tr.from_code);
+  }
+  return codes;
+});
+
+function stepClass(code) {
+  if (!linkedCodes.value) return {};
+  return {
+    'is-on': code === focusCode.value,
+    'is-link': code !== focusCode.value && linkedCodes.value.has(code),
+    'is-dim': !linkedCodes.value.has(code),
+  };
+}
+
 function toggleFocus(code) {
   focusCode.value = focusCode.value === code ? '' : code;
-  if (focusCode.value) {
-    viewTab.value = 'rules';
-  }
+}
+
+function openRules() {
+  viewTab.value = 'rules';
+}
+
+function scrollFlow(direction) {
+  pipelineWrap.value?.scrollBy({ left: direction * ZZ_STEP * 2, behavior: 'smooth' });
+}
+
+const orderedSteps = computed(() => [...mainFlow.value, ...conditional.value, ...terminal.value]);
+
+function moveFocus(delta) {
+  const list = orderedSteps.value;
+  if (!list.length) return;
+  const index = list.findIndex((status) => status.code === focusCode.value);
+  const nextIndex = index < 0 ? (delta > 0 ? 0 : list.length - 1) : index + delta;
+  const next = list[(nextIndex + list.length) % list.length];
+  focusCode.value = next.code;
 }
 
 async function copyCode(code) {
@@ -554,7 +624,6 @@ async function submitCreate() {
             </span>
             <div class="dt-setup__group-head-copy">
               <h3 class="dt-setup__group-title">Quy trình trạng thái</h3>
-              <p class="dt-setup__group-lead">Hồ sơ đi lần lượt qua các bước; bấm một bước để xem ai được chuyển tiếp.</p>
             </div>
             <div class="dt-setup__seg dt-setup__seg--view" role="tablist" aria-label="Xem thiết lập">
               <button
@@ -583,119 +652,157 @@ async function submitCreate() {
           </header>
 
           <div v-show="viewTab === 'flow'" class="dt-setup__group-body">
-          <div v-if="!(detail.statuses?.length)" class="dt-flow-note dt-flow-note--info" role="note">
-            <span class="dt-flow-note__icon" aria-hidden="true">
-              <AppIcon name="info" :size="14" :stroke-width="2" />
-            </span>
-            <p class="dt-flow-note__text">Bộ này chưa có trạng thái. Mở menu Thêm trên trang để khai báo bước đầu tiên.</p>
-          </div>
-          <div v-else class="dt-pipeline-board">
-            <section class="dt-pipeline-section dt-pipeline-section--canvas" aria-labelledby="dt-pipeline-main-label">
-              <header class="dt-pipeline-section__head">
-                <div class="dt-pipeline-section__head-row">
-                  <h4 id="dt-pipeline-main-label" class="dt-pipeline-section__title">{{ GROUP_KIND_LABEL.main }}</h4>
-                  <span class="dt-pipeline-section__kicker">Luồng chính</span>
-                </div>
-                <div class="dt-flow-note" role="note">
-                  <span class="dt-flow-note__icon" aria-hidden="true">
-                    <AppIcon name="arrowRight" :size="14" :stroke-width="2" />
-                  </span>
-                  <p class="dt-flow-note__text">Đi từ trái sang phải — mỗi nút là một trạng thái trên hồ sơ; bấm để lọc quy tắc chuyển.</p>
-                </div>
-              </header>
-              <div ref="pipelineWrap" class="dt-pipeline hide-scrollbar">
-                <ol v-if="mainFlow.length" class="dt-pipeline__track">
-                  <li class="dt-pipeline__stop dt-pipeline__stop--origin" aria-hidden="true">
-                    <span class="dt-pipeline__node dt-pipeline__node--static">
-                      <span class="dt-pipeline__dot dt-pipeline__dot--origin" />
-                      <span class="dt-pipeline__name">Mới tạo</span>
+          <p v-if="!(detail.statuses?.length)" class="dt-status-page__empty">Chưa có trạng thái.</p>
+          <div v-else class="dt-flow-board" @keydown.left.prevent="moveFocus(-1)" @keydown.right.prevent="moveFocus(1)">
+            <div v-if="mainFlow.length" class="dt-zz-wrap">
+              <button
+                v-if="mainFlow.length > 4"
+                type="button"
+                class="dt-zz-nav dt-zz-nav--prev"
+                aria-label="Xem bước phía trước"
+                @click="scrollFlow(-1)"
+              >
+                <AppIcon name="chevronLeft" :size="18" :stroke-width="2" />
+              </button>
+              <div ref="pipelineWrap" class="dt-zz hide-scrollbar">
+              <ol class="dt-zz__track" :style="{ width: `${waveWidth}px`, height: `${ZZ_H}px` }">
+                <svg
+                  v-if="waveD"
+                  class="dt-zz__wave"
+                  :width="waveWidth"
+                  :height="ZZ_H"
+                  :viewBox="`0 0 ${waveWidth} ${ZZ_H}`"
+                  aria-hidden="true"
+                >
+                  <defs>
+                    <linearGradient :id="`dt-zz-stroke-${detail.id}`" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stop-color="var(--color-primary)" />
+                      <stop offset="100%" stop-color="var(--color-secondary)" />
+                    </linearGradient>
+                  </defs>
+                  <path :d="waveD" class="dt-zz__wave-soft" />
+                  <path :d="waveD" class="dt-zz__wave-line" :stroke="`url(#dt-zz-stroke-${detail.id})`" />
+                </svg>
+                <li
+                  v-for="(st, idx) in mainFlow"
+                  :key="st.code"
+                  class="dt-zz__step"
+                  :class="[idx % 2 === 0 ? 'is-up' : 'is-down', stepClass(st.code)]"
+                >
+                  <button
+                    type="button"
+                    class="dt-zz__hit"
+                    :aria-pressed="focusCode === st.code"
+                    @click="toggleFocus(st.code)"
+                  >
+                    <span class="dt-zz__copy">
+                      <span class="dt-zz__title">{{ st.label }}</span>
+                      <span v-if="statusStepLine(st.code)" class="dt-zz__sub">{{ statusStepLine(st.code) }}</span>
                     </span>
-                  </li>
-                  <template v-for="(st, idx) in mainFlow" :key="st.code">
-                    <li class="dt-pipeline__seg" aria-hidden="true">
-                      <span class="dt-pipeline__seg-line" />
-                    </li>
-                    <li class="dt-pipeline__stop">
-                      <button
-                        type="button"
-                        class="dt-pipeline__node"
-                        :class="{
-                          'dt-pipeline__node--on': focusCode === st.code,
-                          [`dt-pipeline__node--${toneOfStatusCode(st.code)}`]: true,
-                        }"
-                        :aria-pressed="focusCode === st.code"
-                        @click="toggleFocus(st.code)"
-                      >
-                        <span class="dt-pipeline__dot">{{ idx + 1 }}</span>
-                        <span class="dt-pipeline__name">{{ st.label }}</span>
-                      </button>
-                    </li>
-                  </template>
-                </ol>
-                <p v-else class="dt-status-page__empty">Chưa có bước trên đường đi chính.</p>
+                    <span class="dt-zz__node">
+                      {{ String(idx + 1).padStart(2, '0') }}
+                    </span>
+                  </button>
+                </li>
+              </ol>
               </div>
-            </section>
+              <button
+                v-if="mainFlow.length > 4"
+                type="button"
+                class="dt-zz-nav dt-zz-nav--next"
+                aria-label="Xem bước phía sau"
+                @click="scrollFlow(1)"
+              >
+                <AppIcon name="chevronRight" :size="18" :stroke-width="2" />
+              </button>
+            </div>
 
-            <section v-if="conditional.length" class="dt-pipeline-section dt-pipeline-section--branch" aria-labelledby="dt-pipeline-cond-label">
-              <header class="dt-pipeline-section__head">
-                <div class="dt-pipeline-section__head-row">
-                  <h4 id="dt-pipeline-cond-label" class="dt-pipeline-section__title">{{ GROUP_KIND_LABEL.conditional }}</h4>
-                  <span class="dt-pipeline-section__kicker dt-pipeline-section__kicker--branch">Nhánh</span>
+            <aside v-if="focusStatus" class="dt-step-card" aria-live="polite">
+              <header class="dt-step-card__head">
+                <div>
+                  <p class="dt-step-card__kicker">{{ GROUP_KIND_LABEL[focusStatus.group_kind] || 'Trạng thái' }}</p>
+                  <h4 class="dt-step-card__title">{{ focusStatus.label }}</h4>
+                  <p v-if="statusStepLine(focusStatus.code)" class="dt-step-card__sub">
+                    {{ statusStepLine(focusStatus.code) }}
+                  </p>
                 </div>
-                <div class="dt-flow-note dt-flow-note--info" role="note">
-                  <span class="dt-flow-note__icon" aria-hidden="true">
-                    <AppIcon name="gitBranch" :size="14" :stroke-width="2" />
-                  </span>
-                  <p class="dt-flow-note__text">Chỉ xảy ra khi cần thêm việc (bổ sung, sửa lại…).</p>
+                <div class="dt-step-card__actions">
+                  <button type="button" class="dt-link-btn" @click="openRules">Mở bảng</button>
+                  <button type="button" class="dt-link-btn" @click="focusCode = ''">Bỏ chọn</button>
                 </div>
               </header>
-              <ul class="dt-pipeline-branches">
-                <li v-for="st in conditional" :key="st.code">
-                  <button
-                    type="button"
-                    class="dt-pipeline-branch"
-                    :class="{ 'dt-pipeline-branch--on': focusCode === st.code }"
-                    :aria-pressed="focusCode === st.code"
-                    @click="toggleFocus(st.code)"
-                  >
-                    <span class="dt-pipeline-branch__mark" aria-hidden="true" />
-                    <span class="dt-pipeline-branch__label">{{ st.label }}</span>
-                  </button>
-                </li>
-              </ul>
-            </section>
+              <div class="dt-step-card__cols">
+                <section>
+                  <h5>Đi vào</h5>
+                  <ul>
+                    <li v-if="!focusInbound.length" class="dt-step-card__empty">Không có lối vào</li>
+                    <li v-for="tr in focusInbound" :key="`in-${tr.id}`">
+                      <span class="dt-step-card__from">{{ statusLabel(tr.from_code) }}</span>
+                      <span class="dt-step-card__meta">{{ actionLabel(tr.action_key) }} · {{ actorLabel(tr.actor_policy) }}</span>
+                      <span v-if="guardHint(tr.guard_json)" class="dt-step-card__guard">{{ guardHint(tr.guard_json) }}</span>
+                    </li>
+                  </ul>
+                </section>
+                <section>
+                  <h5>Đi ra</h5>
+                  <ul>
+                    <li v-if="!focusOutbound.length" class="dt-step-card__empty">Không có lối ra</li>
+                    <li v-for="tr in focusOutbound" :key="`out-${tr.id}`">
+                      <span class="dt-step-card__from">{{ statusLabel(tr.to_code) }}</span>
+                      <span class="dt-step-card__meta">{{ actionLabel(tr.action_key) }} · {{ actorLabel(tr.actor_policy) }}</span>
+                      <span v-if="guardHint(tr.guard_json)" class="dt-step-card__guard">{{ guardHint(tr.guard_json) }}</span>
+                    </li>
+                  </ul>
+                </section>
+              </div>
+            </aside>
 
-            <section v-if="terminal.length" class="dt-pipeline-section dt-pipeline-section--branch" aria-labelledby="dt-pipeline-term-label">
-              <header class="dt-pipeline-section__head">
-                <div class="dt-pipeline-section__head-row">
-                  <h4 id="dt-pipeline-term-label" class="dt-pipeline-section__title">{{ GROUP_KIND_LABEL.terminal }}</h4>
-                  <span class="dt-pipeline-section__kicker dt-pipeline-section__kicker--term">Kết thúc</span>
-                </div>
-                <div class="dt-flow-note dt-flow-note--muted" role="note">
-                  <span class="dt-flow-note__icon" aria-hidden="true">
-                    <AppIcon name="flag" :size="14" :stroke-width="2" />
-                  </span>
-                  <p class="dt-flow-note__text">Hồ sơ dừng lại ở đây — không đi tiếp trên đường chính.</p>
-                </div>
-              </header>
-              <ul class="dt-pipeline-branches">
-                <li v-for="st in terminal" :key="st.code">
-                  <button
-                    type="button"
-                    class="dt-pipeline-branch"
-                    :class="[
-                      { 'dt-pipeline-branch--on': focusCode === st.code },
-                      st.terminal_kind === 'failed' ? 'dt-pipeline-branch--fail' : 'dt-pipeline-branch--done',
-                    ]"
-                    :aria-pressed="focusCode === st.code"
-                    @click="toggleFocus(st.code)"
-                  >
-                    <span class="dt-pipeline-branch__mark" aria-hidden="true" />
-                    <span class="dt-pipeline-branch__label">{{ st.label }}</span>
-                  </button>
-                </li>
-              </ul>
-            </section>
+            <div v-if="conditional.length || terminal.length" class="dt-zz-side">
+              <section v-if="conditional.length" class="dt-zz-side__col" aria-label="Khi cần thêm việc">
+                <h4 class="dt-zz-side__title">{{ GROUP_KIND_LABEL.conditional }}</h4>
+                <ul class="dt-zz-side__list">
+                  <li v-for="st in conditional" :key="st.code">
+                    <button
+                      type="button"
+                      class="dt-zz-pill"
+                      :class="stepClass(st.code)"
+                      :aria-pressed="focusCode === st.code"
+                      @click="toggleFocus(st.code)"
+                    >
+                      <span class="dt-zz-pill__node dt-zz-pill__node--need" aria-hidden="true" />
+                      <span class="dt-zz-pill__text">
+                        <span class="dt-zz-pill__title">{{ st.label }}</span>
+                        <span v-if="statusStepLine(st.code)" class="dt-zz-pill__sub">{{ statusStepLine(st.code) }}</span>
+                      </span>
+                    </button>
+                  </li>
+                </ul>
+              </section>
+              <section v-if="terminal.length" class="dt-zz-side__col" aria-label="Kết thúc">
+                <h4 class="dt-zz-side__title">{{ GROUP_KIND_LABEL.terminal }}</h4>
+                <ul class="dt-zz-side__list">
+                  <li v-for="st in terminal" :key="st.code">
+                    <button
+                      type="button"
+                      class="dt-zz-pill"
+                      :class="stepClass(st.code)"
+                      :aria-pressed="focusCode === st.code"
+                      @click="toggleFocus(st.code)"
+                    >
+                      <span
+                        class="dt-zz-pill__node"
+                        :class="st.terminal_kind === 'failed' ? 'dt-zz-pill__node--fail' : 'dt-zz-pill__node--done'"
+                        aria-hidden="true"
+                      />
+                      <span class="dt-zz-pill__text">
+                        <span class="dt-zz-pill__title">{{ st.label }}</span>
+                        <span v-if="statusStepLine(st.code)" class="dt-zz-pill__sub">{{ statusStepLine(st.code) }}</span>
+                      </span>
+                    </button>
+                  </li>
+                </ul>
+              </section>
+            </div>
           </div>
           </div>
 
