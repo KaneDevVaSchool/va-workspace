@@ -18,14 +18,14 @@ export const DON_TU_CONFIG_MODULES = [
     routeName: 'manager.don-tu.forms',
     icon: 'clipboardCheck',
     label: 'Mẫu biểu',
-    tone: 'sky',
+    tone: 'teal',
   },
   {
     key: 'workflows',
     routeName: 'manager.don-tu.workflows',
     icon: 'gitBranch',
     label: 'Quy trình',
-    tone: 'violet',
+    tone: 'sky',
   },
 ];
 

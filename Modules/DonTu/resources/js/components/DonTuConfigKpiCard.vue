@@ -9,7 +9,7 @@ defineProps({
   tone: { type: String, default: 'brand' },
   icon: { type: String, required: true },
   active: { type: Boolean, default: false },
-  brandValue: { type: Boolean, default: false },
+  ready: { type: Boolean, default: false },
 });
 </script>
 
@@ -17,28 +17,26 @@ defineProps({
   <router-link
     v-if="to"
     :to="to"
-    class="kpi-card group kpi-card--static relative block text-left text-inherit no-underline outline-none"
-    :class="[`kpi-card--${tone}`, { 'kpi-card--active': active }]"
+    class="kpi-card group kpi-card--static"
+    :class="[`kpi-card--${tone}`, { 'kpi-card--active': active, 'kpi-card--ready': ready }]"
   >
-    <div class="pointer-events-none absolute inset-0" aria-hidden="true">
-      <div class="kpi-card__shell-outer absolute inset-0 bg-white shadow-sm transition-shadow duration-300 group-hover:shadow-md" />
-      <div class="kpi-card__shell-inner absolute inset-[3px] opacity-90" />
-      <div class="kpi-card__shell-accent absolute left-0 top-0 h-full w-[38%] max-w-[7rem] opacity-100" />
-      <div class="kpi-card__shine absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+    <div class="kpi-card__layers" aria-hidden="true">
+      <div class="kpi-card__shell-outer" />
+      <div class="kpi-card__shell-inner" />
+      <div class="kpi-card__shell-accent" />
+      <div class="kpi-card__shine" />
     </div>
-    <div class="relative z-[1] flex h-full min-h-[3.75rem] flex-col p-2 sm:p-2.5">
-      <div class="flex items-start justify-between gap-2">
-        <div class="min-w-0 flex-1">
+    <div class="kpi-card__body">
+      <div class="kpi-card__row">
+        <div class="kpi-card__copy">
           <p class="dt-kpi-card__label">{{ label }}</p>
-          <p class="dt-kpi-card__value" :class="{ 'dt-kpi-card__value--brand': brandValue }">{{ value }}</p>
+          <p class="dt-kpi-card__value">{{ value }}</p>
         </div>
         <span class="dt-kpi-card__icon" :class="`dt-kpi-card__icon--${tone}`" aria-hidden="true">
           <AppIcon :name="icon" :size="14" :stroke-width="1.75" />
         </span>
       </div>
-      <div v-if="sub" class="mt-auto pt-1">
-        <p class="dt-kpi-card__sub">{{ sub }}</p>
-      </div>
+      <p v-if="sub" class="dt-kpi-card__sub">{{ sub }}</p>
     </div>
   </router-link>
 </template>

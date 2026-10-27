@@ -72,7 +72,7 @@ function stepState(mod) {
     <p>Bạn cần quyền cấu hình đơn từ của phòng để xem trang này.</p>
   </div>
 
-  <div v-else class="dt-config-overview">
+  <div v-else class="dt-config-overview dt-config-hub-theme">
     <DonTuConfigSummaryBar :auto-load="false" />
 
     <div class="dt-config-overview__grid">
