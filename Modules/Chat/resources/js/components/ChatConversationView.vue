@@ -486,6 +486,7 @@ function menuItems(message) {
           class="chat-bubble-row chat-bubble-row--animate"
           :class="{ 'chat-bubble-row--mine': isMine(row.message) }"
         >
+          <div class="chat-message-col">
           <div
             class="chat-bubble"
             :class="{
@@ -515,10 +516,6 @@ function menuItems(message) {
               <SocialAnimatedSticker :id="row.message.sticker_id" :emoji="row.message.message || ''" />
             </span>
             <span v-else-if="row.message.message" class="chat-bubble__text">{{ row.message.message }}</span>
-            <ChatLinkPreviewEmbed
-              v-if="!row.message.recalled_at && row.message.message_type === 'text' && row.message.message"
-              :text="row.message.message"
-            />
             <div v-if="!row.message.recalled_at && imageFiles(row.message).length" class="chat-images">
               <a
                 v-for="file in imageFiles(row.message)"
@@ -554,6 +551,11 @@ function menuItems(message) {
               <span v-if="showRead(row.message)">Đã xem</span>
             </span>
           </div>
+          <ChatLinkPreviewEmbed
+            v-if="!row.message.recalled_at && row.message.message_type === 'text' && row.message.message"
+            :text="row.message.message"
+          />
+          </div>
 
           <button
             type="button"
@@ -573,6 +575,7 @@ function menuItems(message) {
         class="chat-bubble-row chat-bubble-row--mine"
         aria-live="polite"
       >
+        <div class="chat-message-col">
         <div
           class="chat-bubble chat-bubble--mine chat-bubble--pending"
           :class="{ 'chat-bubble--sticker': pendingOutgoing.kind === 'sticker' }"
@@ -602,6 +605,11 @@ function menuItems(message) {
           <span class="chat-bubble__meta">
             <span class="chat-bubble__sending">Đang gửi…</span>
           </span>
+        </div>
+        <ChatLinkPreviewEmbed
+          v-if="pendingOutgoing.kind === 'message' && pendingOutgoing.text"
+          :text="pendingOutgoing.text"
+        />
         </div>
       </div>
     </div>
@@ -918,8 +926,21 @@ function menuItems(message) {
   flex-direction: row-reverse;
 }
 
-.chat-bubble {
+.chat-message-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   max-width: 78%;
+  min-width: 0;
+}
+
+.chat-bubble-row--mine .chat-message-col {
+  align-items: flex-end;
+}
+
+.chat-bubble {
+  max-width: 100%;
+  width: fit-content;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;

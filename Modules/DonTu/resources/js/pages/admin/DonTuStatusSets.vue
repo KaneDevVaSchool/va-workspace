@@ -783,7 +783,7 @@ async function submitCreate() {
                       type="text"
                       required
                       autocomplete="off"
-                      placeholder="Ví dụ: Đơn xin nghỉ phép"
+                      placeholder="Ví dụ: Quy trình nghỉ việc"
                     />
                   </label>
                   <label class="dt-field">
@@ -823,51 +823,45 @@ async function submitCreate() {
                 </div>
               </section>
 
-              <section class="dt-form-section" aria-labelledby="dt-set-section-init">
-                <header class="dt-form-section__head">
+              <section class="dt-form-section dt-form-section--compact" aria-labelledby="dt-set-section-init">
+                <header class="dt-form-section__head dt-form-section__head--inline">
                   <span class="dt-form-section__step" aria-hidden="true">2</span>
                   <h3 id="dt-set-section-init" class="dt-form-section__title">Nội dung khởi tạo</h3>
                 </header>
-                <div class="dt-init-pick" role="radiogroup" aria-label="Cách khởi tạo trạng thái">
-                  <button
-                    type="button"
-                    class="dt-init-pick__card"
-                    :class="{ 'dt-init-pick__card--on': !createSetForm.use_template }"
-                    role="radio"
-                    :aria-checked="!createSetForm.use_template"
-                    @click="setCreateInitMode(false)"
-                  >
-                    <span class="dt-init-pick__icon" aria-hidden="true">
-                      <AppIcon name="plusCircle" :size="18" :stroke-width="1.75" />
-                    </span>
-                    <span class="dt-init-pick__label">Bắt đầu trống</span>
-                    <span class="dt-init-pick__sub">Tạo bộ rồi tự thêm từng trạng thái và quy tắc.</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="dt-init-pick__card"
-                    :class="{ 'dt-init-pick__card--on': createSetForm.use_template }"
-                    role="radio"
-                    :aria-checked="createSetForm.use_template"
-                    :disabled="!sets.length"
-                    @click="setCreateInitMode(true)"
-                  >
-                    <span class="dt-init-pick__icon" aria-hidden="true">
-                      <AppIcon name="copy" :size="18" :stroke-width="1.75" />
-                    </span>
-                    <span class="dt-init-pick__label">Sao chép từ mẫu</span>
-                    <span class="dt-init-pick__sub">Lấy sẵn trạng thái và quy tắc từ bộ đã có.</span>
-                  </button>
+                <div class="dt-init-compact">
+                  <div class="dt-setup__seg dt-init-compact__seg" role="radiogroup" aria-label="Cách khởi tạo trạng thái">
+                    <button
+                      type="button"
+                      role="radio"
+                      class="dt-setup__seg-btn"
+                      :class="{ 'dt-setup__seg-btn--on': !createSetForm.use_template }"
+                      :aria-checked="!createSetForm.use_template"
+                      @click="setCreateInitMode(false)"
+                    >
+                      Bắt đầu trống
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      class="dt-setup__seg-btn"
+                      :class="{ 'dt-setup__seg-btn--on': createSetForm.use_template }"
+                      :aria-checked="createSetForm.use_template"
+                      :disabled="!sets.length"
+                      @click="setCreateInitMode(true)"
+                    >
+                      Sao chép mẫu
+                    </button>
+                  </div>
+                  <label v-if="createSetForm.use_template" class="dt-field dt-init-compact__select">
+                    <span class="dt-sr-only">Chọn mẫu</span>
+                    <select v-model="createSetForm.copy_from_id">
+                      <option disabled value="">Chọn bộ mẫu…</option>
+                      <option v-for="set in sets" :key="set.id" :value="String(set.id)">
+                        {{ friendlySetName(set.name, set.code) }} · {{ set.status_count }} trạng thái
+                      </option>
+                    </select>
+                  </label>
                 </div>
-                <label v-if="createSetForm.use_template" class="dt-field">
-                  <span>Chọn mẫu<span class="dt-req" aria-hidden="true">*</span></span>
-                  <select v-model="createSetForm.copy_from_id">
-                    <option disabled value="">Chọn bộ trạng thái</option>
-                    <option v-for="set in sets" :key="set.id" :value="String(set.id)">
-                      {{ friendlySetName(set.name, set.code) }} · {{ set.status_count }} trạng thái
-                    </option>
-                  </select>
-                </label>
               </section>
             </div>
             <aside class="dt-set-preview" aria-label="Kết quả dự kiến">
@@ -887,7 +881,7 @@ async function submitCreate() {
                 <div v-else-if="!createSetForm.use_template" class="dt-set-preview__plan">
                   <ol class="dt-set-preview__steps">
                     <li>Tạo bộ với tên và mã đã nhập</li>
-                    <li>Thêm trạng thái từ menu <strong>Thêm</strong></li>
+                    <li>Thêm trạng thái từ menu Thêm</li>
                     <li>Gắn bộ vào quy trình duyệt</li>
                   </ol>
                 </div>
@@ -953,7 +947,13 @@ async function submitCreate() {
               <div class="dt-form-section__grid">
                 <label class="dt-field">
                   <span>Tên trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
-                  <input v-model="createForm.label" type="text" required autocomplete="off" />
+                  <input
+                    v-model="createForm.label"
+                    type="text"
+                    required
+                    autocomplete="off"
+                    placeholder="Ví dụ: Chờ trưởng phòng duyệt"
+                  />
                 </label>
                 <label class="dt-field">
                   <span>Nhóm trên luồng<span class="dt-req" aria-hidden="true">*</span></span>
@@ -979,7 +979,7 @@ async function submitCreate() {
                 <label class="dt-field">
                   <span>Từ trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
                   <select v-model="createForm.from_code" required>
-                    <option disabled value="">Chọn trạng thái phía trước</option>
+                    <option disabled value="">Chọn bước trước…</option>
                     <option v-for="opt in fromOptions" :key="opt.code" :value="opt.code">{{ opt.label }}</option>
                   </select>
                 </label>
@@ -1042,8 +1042,8 @@ async function submitCreate() {
 
 .dt-status-page__empty-title {
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 700;
+  font-size: 1.0625rem;
+  font-weight: 500;
   color: var(--color-text);
 }
 
@@ -1063,7 +1063,6 @@ async function submitCreate() {
 
 .dt-setup__rail-add {
   font-size: 0.75rem;
-  font-weight: 600;
 }
 
 .dt-setup__callout {
@@ -1081,7 +1080,6 @@ async function submitCreate() {
   display: block;
   margin-top: 0.15rem;
   font-size: 0.6875rem;
-  font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--color-text-muted);
 }
@@ -1464,11 +1462,6 @@ async function submitCreate() {
   max-height: calc(100vh - 2.5rem);
 }
 
-.dt-init-pick__card:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .dt-field .dt-code-lock {
   display: flex;
   align-items: stretch;
@@ -1489,7 +1482,6 @@ async function submitCreate() {
   min-width: 0;
   border: none;
   background: transparent;
-  font-weight: 700;
   letter-spacing: 0.06em;
 }
 
@@ -1536,8 +1528,8 @@ async function submitCreate() {
 
 .dt-set-preview__head h3 {
   margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .dt-set-preview__head p,
@@ -1555,7 +1547,6 @@ async function submitCreate() {
   gap: var(--space-2);
   padding: 0 var(--space-4) var(--space-3);
   font-size: 0.75rem;
-  font-weight: 600;
   color: var(--color-primary-700);
 }
 
@@ -1612,7 +1603,7 @@ async function submitCreate() {
 .dt-set-preview__group h4 {
   margin: 0 0 var(--space-2);
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--color-text-muted);
@@ -1662,10 +1653,6 @@ async function submitCreate() {
   .dt-modal.dt-modal--fill .dt-modal__body.dt-set-create {
     grid-template-columns: minmax(0, 1fr);
     overflow: auto;
-  }
-
-  .dt-init-pick {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .dt-set-preview {

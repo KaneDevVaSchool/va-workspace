@@ -12,13 +12,13 @@ export function extractHttpUrls(text) {
 export function isPreviewableLink(url) {
   try {
     const parsed = new URL(url);
-    if (VIDEO_HOST_PATTERN.test(parsed.hostname)) {
+    if (!/^https?:$/i.test(parsed.protocol)) return false;
+    if (!parsed.hostname) return false;
+    if (VIDEO_HOST_PATTERN.test(parsed.hostname)) return true;
+    if (typeof window !== 'undefined' && parsed.origin === window.location.origin) {
       return true;
     }
-    if (typeof window !== 'undefined') {
-      return parsed.origin === window.location.origin;
-    }
-    return false;
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
   } catch {
     return false;
   }
@@ -37,19 +37,31 @@ export function previewableUrlsFromText(text, limit = 1) {
 }
 
 const previewCache = new Map();
+const inflight = new Map();
 
 export async function fetchLinkPreview(url) {
   const key = normalizeUrl(url);
   if (previewCache.has(key)) {
     return previewCache.get(key);
   }
-  try {
-    const { data } = await window.axios.post('/api/social/link-preview', { url: key });
-    const preview = data.preview ? { ...data.preview, url: key } : null;
-    previewCache.set(key, preview);
-    return preview;
-  } catch {
-    previewCache.set(key, null);
-    return null;
+  if (inflight.has(key)) {
+    return inflight.get(key);
   }
+
+  const task = (async () => {
+    try {
+      const { data } = await window.axios.post('/api/social/link-preview', { url: key });
+      const preview = data.preview ? { ...data.preview, url: key } : null;
+      previewCache.set(key, preview);
+      return preview;
+    } catch {
+      previewCache.set(key, null);
+      return null;
+    } finally {
+      inflight.delete(key);
+    }
+  })();
+
+  inflight.set(key, task);
+  return task;
 }

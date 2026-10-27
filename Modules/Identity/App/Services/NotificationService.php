@@ -290,6 +290,20 @@ class NotificationService
         return $this->notifications->unreadCount($user->id);
     }
 
+    /** @return array<string, mixed>|null */
+    public function latestUnreadPresented(User $user): ?array
+    {
+        $notification = UserNotification::query()
+            ->with('actor')
+            ->where('user_id', $user->id)
+            ->whereNull('read_at')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first();
+
+        return $notification ? $this->present($notification) : null;
+    }
+
     public function markRead(User $user, int $id): ?UserNotification
     {
         $notification = $this->notifications->findForUser($id, $user->id);

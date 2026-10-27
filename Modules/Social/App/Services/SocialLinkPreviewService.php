@@ -2,6 +2,7 @@
 
 namespace Modules\Social\App\Services;
 
+use App\Services\ExternalOpenGraphFetcher;
 use App\Services\SpaOpenGraphResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -18,6 +19,7 @@ class SocialLinkPreviewService
 
     public function __construct(
         private readonly SpaOpenGraphResolver $openGraph,
+        private readonly ExternalOpenGraphFetcher $externalOpenGraph,
     ) {}
 
     /**
@@ -82,6 +84,10 @@ class SocialLinkPreviewService
             return SocialLinkPreview::PROVIDER_WORKSPACE;
         }
 
+        if (preg_match('#^https?://#i', $url)) {
+            return SocialLinkPreview::PROVIDER_WEBSITE;
+        }
+
         return null;
     }
 
@@ -98,6 +104,7 @@ class SocialLinkPreviewService
                 SocialLinkPreview::PROVIDER_FACEBOOK => $this->resolveFacebook($url),
                 SocialLinkPreview::PROVIDER_TIKTOK => $this->resolveTiktok($url),
                 SocialLinkPreview::PROVIDER_WORKSPACE => $this->resolveWorkspace($url),
+                SocialLinkPreview::PROVIDER_WEBSITE => $this->resolveWebsite($url),
                 default => null,
             };
         } catch (Throwable $e) {
@@ -339,6 +346,31 @@ class SocialLinkPreviewService
     /**
      * @return array{provider: string, external_id: null, title: string, description: string, site_name: string, thumbnail_url: ?string, embed_url: null, is_live: false}|null
      */
+    /**
+     * @return array{provider: string, external_id: null, title: string, description: string, site_name: string, thumbnail_url: ?string, embed_url: null, is_live: false}|null
+     */
+    private function resolveWebsite(string $url): ?array
+    {
+        $normalized = $this->normalizePreviewUrl($url);
+        $meta = $this->externalOpenGraph->fetch($normalized);
+        if ($meta === null) {
+            return null;
+        }
+
+        $host = parse_url($normalized, PHP_URL_HOST);
+
+        return [
+            'provider' => SocialLinkPreview::PROVIDER_WEBSITE,
+            'external_id' => null,
+            'title' => $meta['title'],
+            'description' => $meta['description'],
+            'site_name' => $meta['site_name'] !== '' ? $meta['site_name'] : (is_string($host) ? $host : ''),
+            'thumbnail_url' => $meta['image'],
+            'embed_url' => null,
+            'is_live' => false,
+        ];
+    }
+
     private function resolveWorkspace(string $url): ?array
     {
         $normalized = $this->normalizePreviewUrl($url);
@@ -358,14 +390,13 @@ class SocialLinkPreviewService
         }
 
         $meta = $this->openGraph->resolve(Request::create($path, 'GET', $query));
-        $host = parse_url($normalized, PHP_URL_HOST);
 
         return [
             'provider' => SocialLinkPreview::PROVIDER_WORKSPACE,
             'external_id' => null,
             'title' => (string) ($meta['title'] ?? 'VA Workspace'),
             'description' => (string) ($meta['description'] ?? ''),
-            'site_name' => is_string($host) && $host !== '' ? $host : 'VA Workspace',
+            'site_name' => 'VA Workspace',
             'thumbnail_url' => isset($meta['image']) && is_string($meta['image']) ? $meta['image'] : null,
             'embed_url' => null,
             'is_live' => false,

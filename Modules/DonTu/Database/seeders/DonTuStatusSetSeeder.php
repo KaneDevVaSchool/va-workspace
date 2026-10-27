@@ -10,7 +10,7 @@ class DonTuStatusSetSeeder extends Seeder
     public function run(): void
     {
         $this->seedDefaultMatrix();
-        $this->seedLeaveSet();
+        $this->seedResignationSet();
         $this->seedMissionSet();
     }
 
@@ -68,7 +68,7 @@ class DonTuStatusSetSeeder extends Seeder
         $this->insertTransitions($setId, $transitions);
     }
 
-    private function seedLeaveSet(): void
+    private function seedResignationSet(): void
     {
         if (DB::table('don_tu_status_sets')->where('code', 'BMTT01')->exists()) {
             return;
@@ -77,28 +77,41 @@ class DonTuStatusSetSeeder extends Seeder
         $now = now();
         $setId = DB::table('don_tu_status_sets')->insertGetId([
             'code' => 'BMTT01',
-            'name' => 'Đơn xin nghỉ phép',
-            'description' => 'Luồng ngắn: nháp, gửi duyệt, hoàn tất hoặc từ chối.',
+            'name' => 'Quy trình nghỉ việc',
+            'description' => 'BM.01/BM.02 HN.QT.05 — đơn xin nghỉ việc, duyệt, bàn giao, theo dõi thủ tục HCNS.',
             'is_system' => true,
             'created_at' => $now,
             'updated_at' => $now,
         ]);
 
         $statuses = [
-            ['code' => 'DRAFT', 'label' => 'Nháp', 'group_kind' => 'main', 'terminal_kind' => 'draft', 'sort_order' => 1],
-            ['code' => 'PENDING_APPROVAL', 'label' => 'Chờ duyệt', 'group_kind' => 'main', 'terminal_kind' => null, 'sort_order' => 2],
-            ['code' => 'COMPLETED', 'label' => 'Đã duyệt', 'group_kind' => 'terminal', 'terminal_kind' => 'success', 'sort_order' => 3],
-            ['code' => 'REJECTED', 'label' => 'Từ chối', 'group_kind' => 'terminal', 'terminal_kind' => 'failed', 'sort_order' => 4],
+            ['code' => 'DRAFT', 'label' => 'Nháp đơn', 'group_kind' => 'main', 'terminal_kind' => 'draft', 'sort_order' => 1],
+            ['code' => 'PENDING_UNIT_HEAD', 'label' => 'Chờ Trưởng đơn vị', 'group_kind' => 'main', 'terminal_kind' => null, 'sort_order' => 2],
+            ['code' => 'PENDING_HCNS', 'label' => 'Chờ Phòng HCNS', 'group_kind' => 'main', 'terminal_kind' => null, 'sort_order' => 3],
+            ['code' => 'PENDING_CEO', 'label' => 'Chờ TGĐ', 'group_kind' => 'main', 'terminal_kind' => null, 'sort_order' => 4],
+            ['code' => 'PENDING_HANDOVER', 'label' => 'Chờ bàn giao BM.02', 'group_kind' => 'conditional', 'terminal_kind' => null, 'sort_order' => 5],
+            ['code' => 'PENDING_HCNS_PROCEDURE', 'label' => 'Theo dõi thủ tục HCNS', 'group_kind' => 'main', 'terminal_kind' => null, 'sort_order' => 6],
+            ['code' => 'COMPLETED', 'label' => 'Hoàn tất thủ tục', 'group_kind' => 'terminal', 'terminal_kind' => 'success', 'sort_order' => 7],
+            ['code' => 'REJECTED', 'label' => 'Không duyệt', 'group_kind' => 'terminal', 'terminal_kind' => 'failed', 'sort_order' => 8],
+            ['code' => 'WITHDRAWN', 'label' => 'Rút đơn', 'group_kind' => 'terminal', 'terminal_kind' => 'failed', 'sort_order' => 9],
         ];
 
         $this->insertStatuses($setId, $statuses);
 
         $transitions = [
             ['from_code' => 'NONE', 'to_code' => 'DRAFT', 'action_key' => 'SAVE_DRAFT', 'actor_policy' => 'requester', 'guard_json' => null],
-            ['from_code' => 'DRAFT', 'to_code' => 'PENDING_APPROVAL', 'action_key' => 'SUBMIT', 'actor_policy' => 'requester', 'guard_json' => json_encode(['form_complete' => true])],
-            ['from_code' => 'PENDING_APPROVAL', 'to_code' => 'COMPLETED', 'action_key' => 'APPROVE', 'actor_policy' => 'assignee', 'guard_json' => null],
-            ['from_code' => 'PENDING_APPROVAL', 'to_code' => 'REJECTED', 'action_key' => 'REJECT', 'actor_policy' => 'assignee', 'guard_json' => json_encode(['reason_min' => 10])],
-            ['from_code' => 'DRAFT', 'to_code' => 'REJECTED', 'action_key' => 'CANCEL', 'actor_policy' => 'requester', 'guard_json' => null],
+            ['from_code' => 'DRAFT', 'to_code' => 'PENDING_UNIT_HEAD', 'action_key' => 'SUBMIT', 'actor_policy' => 'requester', 'guard_json' => json_encode(['form_complete' => true])],
+            ['from_code' => 'PENDING_UNIT_HEAD', 'to_code' => 'PENDING_HCNS', 'action_key' => 'APPROVE', 'actor_policy' => 'assignee', 'guard_json' => null],
+            ['from_code' => 'PENDING_HCNS', 'to_code' => 'PENDING_CEO', 'action_key' => 'APPROVE', 'actor_policy' => 'assignee', 'guard_json' => null],
+            ['from_code' => 'PENDING_CEO', 'to_code' => 'PENDING_HANDOVER', 'action_key' => 'APPROVE', 'actor_policy' => 'assignee', 'guard_json' => null],
+            ['from_code' => 'PENDING_HANDOVER', 'to_code' => 'PENDING_HCNS_PROCEDURE', 'action_key' => 'SUPPLEMENT', 'actor_policy' => 'requester', 'guard_json' => json_encode(['form_complete' => true])],
+            ['from_code' => 'PENDING_HCNS_PROCEDURE', 'to_code' => 'COMPLETED', 'action_key' => 'CLOSE', 'actor_policy' => 'closure_actor', 'guard_json' => null],
+            ['from_code' => 'PENDING_UNIT_HEAD', 'to_code' => 'REJECTED', 'action_key' => 'REJECT', 'actor_policy' => 'assignee', 'guard_json' => json_encode(['reason_min' => 10])],
+            ['from_code' => 'PENDING_HCNS', 'to_code' => 'REJECTED', 'action_key' => 'REJECT', 'actor_policy' => 'assignee', 'guard_json' => json_encode(['reason_min' => 10])],
+            ['from_code' => 'PENDING_CEO', 'to_code' => 'REJECTED', 'action_key' => 'REJECT', 'actor_policy' => 'assignee', 'guard_json' => json_encode(['reason_min' => 10])],
+            ['from_code' => 'DRAFT', 'to_code' => 'WITHDRAWN', 'action_key' => 'CANCEL', 'actor_policy' => 'requester', 'guard_json' => null],
+            ['from_code' => 'PENDING_UNIT_HEAD', 'to_code' => 'WITHDRAWN', 'action_key' => 'CANCEL', 'actor_policy' => 'requester', 'guard_json' => null],
+            ['from_code' => 'PENDING_HCNS_PROCEDURE', 'to_code' => 'WITHDRAWN', 'action_key' => 'CANCEL', 'actor_policy' => 'requester', 'guard_json' => json_encode(['revise_open' => true])],
         ];
 
         $this->insertTransitions($setId, $transitions);

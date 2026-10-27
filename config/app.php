@@ -35,6 +35,12 @@ return [
     'og_cover_version' => env('OG_COVER_VERSION', '3'),
 
     /*
+    | Link giới thiệu phần mềm (Zalo, chat, email). OG/preview đọc path này
+    | trên server; sau khi mở, SPA chuyển sang đăng nhập.
+    */
+    'share_intro_path' => env('APP_SHARE_INTRO_PATH', '/share'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------

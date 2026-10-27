@@ -29,6 +29,8 @@ class SocialLinkPreview extends Model
 
     public const PROVIDER_WORKSPACE = 'workspace';
 
+    public const PROVIDER_WEBSITE = 'website';
+
     protected $fillable = [
         'post_id',
         'url',

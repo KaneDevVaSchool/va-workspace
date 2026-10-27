@@ -55,8 +55,7 @@ async function loadUnread() {
     const next = data.unread_count ?? 0;
     if (next > lastUnread && lastUnread > 0 && document.hidden && Notification.permission === 'granted') {
       try {
-        const { data: listData } = await window.axios.get('/api/notifications', { params: { per_page: 1 } });
-        const latest = listData.notifications?.[0];
+        const latest = data.latest_unread;
         const line = latest?.push_line || latest?.body || latest?.title;
         await showSystemNotification({
           title: 'VA Workspace',

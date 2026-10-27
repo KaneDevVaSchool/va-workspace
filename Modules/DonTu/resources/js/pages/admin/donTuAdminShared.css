@@ -1186,7 +1186,6 @@ section.dt-kpi-strip {
 
 .dt-req {
   color: var(--color-danger);
-  font-weight: 700;
   margin-left: 0.15rem;
 }
 
@@ -1234,7 +1233,7 @@ section.dt-kpi-strip {
   border-radius: var(--radius-sm);
   background: var(--color-primary);
   color: #fff;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -1268,14 +1267,14 @@ section.dt-kpi-strip {
 
 .dt-modal__head-copy h2 {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: 1.125rem;
+  font-weight: 500;
 }
 
 .dt-modal__head-kicker {
   margin: 0 0 0.15rem;
   font-size: 0.6875rem;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-text-muted);
@@ -1336,19 +1335,61 @@ section.dt-kpi-strip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.625rem;
+  height: 1.625rem;
   border-radius: 999px;
   background: var(--color-primary-100);
   color: var(--color-primary-700);
-  font-size: 0.8125rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .dt-form-section__title {
   margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.dt-form-section--compact {
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.dt-form-section__head--inline {
+  align-items: center;
+}
+
+.dt-init-compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.dt-init-compact__seg {
+  flex-shrink: 0;
+}
+
+.dt-init-compact__select {
+  flex: 1;
+  min-width: 12rem;
+  margin: 0;
+}
+
+.dt-init-compact__select select {
+  width: 100%;
+}
+
+.dt-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .dt-form-section__grid {
@@ -1366,69 +1407,13 @@ section.dt-kpi-strip {
 }
 
 @media (max-width: 720px) {
-  .dt-form-section__grid,
-  .dt-init-pick {
+  .dt-form-section__grid {
     grid-template-columns: minmax(0, 1fr);
   }
-}
 
-.dt-init-pick {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.dt-init-pick__card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  color: var(--color-text);
-}
-
-.dt-init-pick__card:hover {
-  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface-muted));
-}
-
-.dt-init-pick__card--on {
-  background: var(--color-primary-100);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
-}
-
-.dt-init-pick__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-primary);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-}
-
-.dt-init-pick__card--on .dt-init-pick__icon {
-  background: var(--color-surface);
-  color: var(--color-primary-700);
-}
-
-.dt-init-pick__label {
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.dt-init-pick__sub {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  line-height: 1.45;
+  .dt-init-compact__select {
+    flex-basis: 100%;
+  }
 }
 
 /* ---- Thiết lập trạng thái ---- */
@@ -1540,9 +1525,14 @@ section.dt-kpi-strip {
   background: transparent;
   font: inherit;
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--color-text-muted);
   cursor: pointer;
+}
+
+.dt-setup__seg-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .dt-setup__seg-btn--on {
@@ -1583,7 +1573,7 @@ section.dt-kpi-strip {
 .dt-setup__hero-eyebrow {
   margin: 0 0 var(--space-1);
   font-size: 0.6875rem;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-text-muted);
@@ -1591,8 +1581,8 @@ section.dt-kpi-strip {
 
 .dt-setup__hero-title {
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 700;
+  font-size: 1.0625rem;
+  font-weight: 500;
 }
 
 .dt-setup__hero-desc {
@@ -1620,7 +1610,6 @@ section.dt-kpi-strip {
   background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 1px var(--color-border);
   font-size: 0.75rem;
-  font-weight: 700;
   letter-spacing: 0.05em;
 }
 
@@ -1643,8 +1632,8 @@ section.dt-kpi-strip {
 }
 
 .dt-setup__metric-num {
-  font-size: 1.125rem;
-  font-weight: 700;
+  font-size: 1.0625rem;
+  font-weight: 500;
   color: var(--color-text);
   line-height: 1;
 }

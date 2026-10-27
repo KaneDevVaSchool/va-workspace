@@ -17,17 +17,23 @@ final class SpaOpenGraphResolver
 {
     private const DEFAULT_TITLE = 'VA Workspace';
 
-    private const DEFAULT_DESCRIPTION = 'Hệ thống quản lý nội bộ VA Schools. Công việc, chấm công, đơn từ và kết nối nội bộ trên một nền tảng.';
+    private const DEFAULT_DESCRIPTION = 'Phần mềm làm việc nội bộ VA Schools: công việc, chấm công, đơn từ, bảng tin và trò chuyện trên một nền tảng.';
+
+    private const INTRO_DESCRIPTION = 'Mời đồng nghiệp truy cập VA Workspace bằng tài khoản mail do nhà trường cung cấp. Cài PWA trên điện thoại để nhận thông báo và làm việc mọi lúc.';
 
     /** @var array<string, array{title: string, description: string}> */
     private const STATIC_ROUTES = [
         '/' => [
-            'title' => 'VA Workspace',
+            'title' => 'VA Workspace · Phần mềm quản lý nội bộ',
             'description' => self::DEFAULT_DESCRIPTION,
+        ],
+        '/share' => [
+            'title' => 'VA Workspace · Giới thiệu phần mềm',
+            'description' => self::INTRO_DESCRIPTION,
         ],
         '/login' => [
             'title' => 'Đăng nhập · VA Workspace',
-            'description' => 'Đăng nhập vào không gian làm việc nội bộ VA Schools.',
+            'description' => 'Đăng nhập VA Workspace bằng tài khoản Google mail do nhà trường cung cấp.',
         ],
         '/social' => [
             'title' => 'Bảng tin · VA Workspace',

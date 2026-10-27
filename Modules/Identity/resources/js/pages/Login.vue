@@ -11,6 +11,7 @@
 import { onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { showClientToast } from "@/lib/clientToast";
+import { copyWorkspaceIntroLink } from "@/lib/workspaceShareLink.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -42,6 +43,16 @@ function ssoUrl(base) {
 
 function login() {
     window.location.href = ssoUrl("/auth/google/redirect");
+}
+
+async function copyIntroLink() {
+    try {
+        const url = await copyWorkspaceIntroLink();
+        showClientToast("success", `Đã sao chép link giới thiệu. Gửi cho đồng nghiệp để họ thấy preview trước khi mở.`);
+        return url;
+    } catch {
+        showClientToast("error", "Không sao chép được link.");
+    }
 }
 </script>
 
@@ -88,6 +99,10 @@ function login() {
                         />
                     </button>
                 </div>
+
+                <button type="button" class="login__share-link" @click="copyIntroLink">
+                    Sao chép link giới thiệu phần mềm
+                </button>
             </div>
         </div>
     </div>
@@ -239,6 +254,23 @@ function login() {
     width: 2.25rem;
     height: 2.25rem;
     flex-shrink: 0;
+}
+
+.login__share-link {
+    margin-top: var(--space-4);
+    border: none;
+    background: transparent;
+    color: var(--login-text-muted);
+    font-family: var(--font-family-base);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    cursor: pointer;
+}
+
+.login__share-link:hover {
+    color: var(--login-text);
 }
 
 @media (min-width: 640px) {

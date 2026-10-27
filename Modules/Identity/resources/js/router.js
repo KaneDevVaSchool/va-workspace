@@ -3,6 +3,10 @@
  */
 export default [
   {
+    path: '/share',
+    redirect: { name: 'login' },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('./pages/Login.vue'),

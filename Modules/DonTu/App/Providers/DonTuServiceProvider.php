@@ -16,9 +16,8 @@ class DonTuServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(module_path('DonTu', 'Database/migrations'));
 
-        $seeder = module_path('DonTu', 'Database/seeders/DonTuStatusSetSeeder.php');
-        if (file_exists($seeder) && $this->app->runningInConsole()) {
-            // Seeder gọi thủ công: php artisan db:seed --class=Modules\\DonTu\\Database\\Seeders\\DonTuStatusSetSeeder
+        if ($this->app->runningInConsole()) {
+            // Demo: php artisan db:seed --class="Modules\DonTu\Database\Seeders\DonTuConfigDemoSeeder"
         }
 
         $this->registerRoutes();

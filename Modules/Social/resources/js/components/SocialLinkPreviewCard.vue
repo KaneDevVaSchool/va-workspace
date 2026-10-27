@@ -16,9 +16,10 @@ const PROVIDER_LABELS = {
   facebook: 'Facebook',
   tiktok: 'TikTok',
   workspace: 'VA Workspace',
+  website: 'Liên kết',
 };
 
-const isWorkspace = computed(() => props.preview.provider === 'workspace');
+const isArticleEmbed = computed(() => ['workspace', 'website'].includes(props.preview.provider));
 const isVertical = computed(() => props.preview.provider === 'tiktok');
 
 const siteLabel = computed(() => {
@@ -51,10 +52,11 @@ function onRemove(event) {
 
 <template>
   <component
-    :is="isWorkspace ? 'a' : 'div'"
-    v-if="isWorkspace"
+    :is="isArticleEmbed ? 'a' : 'div'"
+    v-if="isArticleEmbed"
     :href="preview.url"
-    class="link-preview link-preview--workspace"
+    class="link-preview link-preview--article"
+    :class="`link-preview--${preview.provider}`"
     target="_blank"
     rel="noopener noreferrer"
   >
@@ -68,12 +70,16 @@ function onRemove(event) {
       <AppIcon name="close" :size="14" />
     </button>
 
-    <div v-if="preview.thumbnail_url" class="link-preview__media link-preview__media--article">
+    <div class="link-preview__media link-preview__media--article">
       <img
+        v-if="preview.thumbnail_url"
         :src="preview.thumbnail_url"
         alt=""
         class="link-preview__thumb-img link-preview__thumb-img--cover"
       />
+      <div v-else class="link-preview__article-fallback" aria-hidden="true">
+        <img src="/images/pwa/icon-192.png" alt="" class="link-preview__article-logo" />
+      </div>
     </div>
 
     <div class="link-preview__body link-preview__body--article">
@@ -175,21 +181,38 @@ function onRemove(event) {
   box-shadow: var(--shadow-lg);
 }
 
-.link-preview--workspace {
+.link-preview--article {
   --lp-accent: var(--color-primary);
+  position: relative;
   display: block;
   text-decoration: none;
   color: inherit;
   max-width: 26rem;
+  padding-left: calc(var(--space-2) + 3px + var(--space-2));
   box-shadow:
     inset 0 0 0 1px var(--color-border),
     var(--shadow-sm);
 }
 
-.link-preview--workspace:hover {
+.link-preview--article::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--lp-accent);
+}
+
+.link-preview--article:hover {
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, var(--color-border)),
     var(--shadow-md);
+}
+
+.link-preview--website {
+  --lp-accent: var(--color-info);
 }
 
 .link-preview--vertical {
@@ -252,6 +275,27 @@ function onRemove(event) {
   aspect-ratio: 1.91 / 1;
   max-height: 12.5rem;
   background: var(--color-surface-muted);
+}
+
+.link-preview__article-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 5.5rem;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary) 8%, var(--color-surface-muted)),
+    var(--color-surface-muted)
+  );
+}
+
+.link-preview__article-logo {
+  width: 3rem;
+  height: 3rem;
+  object-fit: contain;
+  opacity: 0.85;
 }
 
 .link-preview--vertical .link-preview__media {

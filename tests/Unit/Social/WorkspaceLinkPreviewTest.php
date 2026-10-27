@@ -18,6 +18,17 @@ class WorkspaceLinkPreviewTest extends TestCase
         $this->assertSame(SocialLinkPreview::PROVIDER_WORKSPACE, $preview['provider']);
         $this->assertStringContainsString('Đăng nhập', (string) $preview['title']);
         $this->assertNotEmpty($preview['description']);
-        $this->assertSame('workspace.test', $preview['site_name']);
+        $this->assertSame('VA Workspace', $preview['site_name']);
+    }
+
+    public function test_share_intro_url_returns_marketing_preview(): void
+    {
+        config(['app.url' => 'https://workspace.test']);
+
+        $preview = app(SocialLinkPreviewService::class)->previewForUrl('https://workspace.test/share');
+
+        $this->assertNotNull($preview);
+        $this->assertStringContainsString('Giới thiệu', (string) $preview['title']);
+        $this->assertNotEmpty($preview['thumbnail_url']);
     }
 }
