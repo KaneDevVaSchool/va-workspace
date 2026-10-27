@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useDonTuConfigHub } from '../../composables/useDonTuConfigHub.js';
 import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
@@ -15,6 +15,7 @@ import {
   GROUP_KIND_LABEL,
   friendlySetName,
   guardHint,
+  humanSetDescription,
 } from '../../constants/statusTone.js';
 
 const auth = useAuthStore();
@@ -45,7 +46,13 @@ const createSaving = ref(false);
 const createForm = ref(emptyStatusForm());
 const createSetOpen = ref(false);
 const createSetSaving = ref(false);
-const createSetForm = ref({ name: '', description: '', copy_from_id: '' });
+const createSetForm = ref(emptySetForm());
+const codeUnlocked = ref(false);
+const codeInput = ref(null);
+const templatePreview = ref(null);
+const templatePreviewLoading = ref(false);
+const previewCache = new Map();
+let previewToken = 0;
 
 const pipelineWrap = ref(null);
 const transWrap = ref(null);
@@ -103,6 +110,7 @@ const filteredTransitions = computed(() => {
 });
 
 const detailTitle = computed(() => friendlySetName(detail.value?.name, detail.value?.code));
+const detailDescription = computed(() => humanSetDescription(detail.value?.description));
 const fromOptions = computed(() => [
   { code: 'NONE', label: 'Lúc chưa có hồ sơ' },
   ...(detail.value?.statuses ?? []).map((st) => ({ code: st.code, label: st.label })),
@@ -154,13 +162,13 @@ function syncHeaderPrimary() {
     label: 'Thêm',
     icon: 'plus',
     items: [
-      { label: 'Tạo nhóm trạng thái', onSelect: () => openCreateSet() },
+      { label: 'Tạo bộ trạng thái', onSelect: () => openCreateSet() },
       {
         label: 'Thêm trạng thái',
         description: !detail.value ? 'Chọn hoặc tạo nhóm trước' : undefined,
         onSelect: () => {
           if (!detail.value || loadingDetail.value) {
-            showClientToast('error', 'Chọn nhóm trạng thái trước khi thêm trạng thái.');
+            showClientToast('error', 'Chọn bộ trạng thái trước khi thêm trạng thái.');
             return;
           }
           openCreate();
@@ -225,6 +233,25 @@ function goWorkflow(id) {
   router.push({ name: 'manager.don-tu.workflow', params: { id } });
 }
 
+function nextBmttCode(list) {
+  let max = 0;
+  for (const set of list || []) {
+    const match = /^BMTT(\d+)$/i.exec(String(set.code || '').trim());
+    if (match) max = Math.max(max, Number.parseInt(match[1], 10));
+  }
+  return `BMTT${String(max + 1).padStart(2, '0')}`;
+}
+
+function emptySetForm() {
+  return {
+    name: '',
+    code: '',
+    description: '',
+    use_template: false,
+    copy_from_id: '',
+  };
+}
+
 function emptyStatusForm() {
   return {
     label: '',
@@ -241,28 +268,157 @@ function openCreate() {
   createOpen.value = true;
 }
 
-function openCreateSet() {
-  const defaultSet = sets.value.find((s) => s.code === 'STATUS_SET_DEFAULT') || sets.value[0];
-  createSetForm.value = {
-    name: '',
-    description: '',
-    copy_from_id: defaultSet?.id ?? '',
+const previewGroups = computed(() => {
+  const statuses = templatePreview.value?.statuses ?? [];
+  return ['main', 'conditional', 'terminal']
+    .map((kind) => ({
+      kind,
+      label: GROUP_KIND_LABEL[kind],
+      items: statuses
+        .filter((status) => status.group_kind === kind)
+        .sort((a, b) => a.sort_order - b.sort_order),
+    }))
+    .filter((group) => group.items.length);
+});
+
+const previewDescription = computed(() => humanSetDescription(templatePreview.value?.description));
+
+const previewStats = computed(() => {
+  if (!templatePreview.value) return null;
+  return {
+    statuses: templatePreview.value.statuses?.length ?? 0,
+    transitions: templatePreview.value.transitions?.length ?? 0,
   };
+});
+
+const createSetFootSummary = computed(() => {
+  const name = createSetForm.value.name.trim() || '—';
+  const code = createSetForm.value.code.trim().toUpperCase() || '—';
+  if (createSetForm.value.use_template) {
+    const picked = sets.value.find((s) => String(s.id) === String(createSetForm.value.copy_from_id));
+    if (!picked) {
+      return `Bộ «${name}» · mã ${code} · chọn mẫu để sao chép trạng thái và quy tắc.`;
+    }
+    if (previewStats.value) {
+      return `Bộ «${name}» · mã ${code} · ${previewStats.value.statuses} trạng thái, ${previewStats.value.transitions} quy tắc từ «${friendlySetName(picked.name, picked.code)}».`;
+    }
+    return `Bộ «${name}» · mã ${code} · sao chép từ «${friendlySetName(picked.name, picked.code)}».`;
+  }
+  return `Bộ «${name}» · mã ${code} · bắt đầu trống, thêm trạng thái sau khi tạo.`;
+});
+
+function setCreateInitMode(useTemplate) {
+  createSetForm.value.use_template = useTemplate;
+  if (useTemplate && createSetForm.value.copy_from_id === '' && sets.value.length) {
+    const preferred = sets.value.find((s) => s.is_system) || sets.value[0];
+    createSetForm.value.copy_from_id = String(preferred.id);
+  }
+}
+
+function previewTone(status) {
+  if (status.group_kind === 'terminal') {
+    return status.terminal_kind === 'failed' ? 'danger' : 'success';
+  }
+  if (status.group_kind === 'conditional') return 'info';
+  return 'primary';
+}
+
+function openCreateSet() {
+  createSetForm.value = {
+    ...emptySetForm(),
+    code: nextBmttCode(sets.value),
+  };
+  codeUnlocked.value = false;
+  templatePreview.value = null;
+  templatePreviewLoading.value = false;
   createSetOpen.value = true;
 }
+
+async function toggleCodeLock() {
+  if (!codeUnlocked.value) {
+    codeUnlocked.value = true;
+    await nextTick();
+    codeInput.value?.focus();
+    codeInput.value?.select();
+    return;
+  }
+  const code = createSetForm.value.code.trim().toUpperCase();
+  createSetForm.value.code = code || nextBmttCode(sets.value);
+  codeUnlocked.value = false;
+}
+
+function onCodeInput(event) {
+  createSetForm.value.code = event.target.value.toUpperCase();
+}
+
+async function loadTemplatePreview() {
+  const token = ++previewToken;
+  const useTemplate = createSetForm.value.use_template;
+  const rawId = createSetForm.value.copy_from_id;
+  if (!createSetOpen.value || !useTemplate || rawId === '' || rawId == null) {
+    templatePreview.value = null;
+    templatePreviewLoading.value = false;
+    return;
+  }
+  const id = Number(rawId);
+  if (previewCache.has(id)) {
+    templatePreview.value = previewCache.get(id);
+    templatePreviewLoading.value = false;
+    return;
+  }
+  templatePreviewLoading.value = true;
+  templatePreview.value = null;
+  try {
+    const item = await fetchStatusSet(id);
+    previewCache.set(id, item);
+    if (token === previewToken) templatePreview.value = item;
+  } catch (err) {
+    if (token === previewToken) {
+      templatePreview.value = null;
+      showClientToast('error', err.response?.data?.message || 'Không tải được mẫu trạng thái.');
+    }
+  } finally {
+    if (token === previewToken) templatePreviewLoading.value = false;
+  }
+}
+
+watch(
+  () => [createSetOpen.value, createSetForm.value.use_template, createSetForm.value.copy_from_id],
+  () => {
+    if (!createSetForm.value.use_template && createSetForm.value.copy_from_id !== '') {
+      createSetForm.value.copy_from_id = '';
+      return;
+    }
+    loadTemplatePreview();
+  },
+);
 
 async function submitCreateSet() {
   if (!createSetForm.value.name.trim()) {
     showClientToast('error', 'Nhập tên nhóm trạng thái.');
     return;
   }
+  const code = createSetForm.value.code.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(code)) {
+    showClientToast('error', 'Mã bộ trạng thái chỉ gồm chữ, số và dấu gạch dưới.');
+    return;
+  }
+  if (sets.value.some((set) => String(set.code || '').toUpperCase() === code)) {
+    showClientToast('error', 'Mã bộ trạng thái đã được dùng.');
+    return;
+  }
+  if (createSetForm.value.use_template && (createSetForm.value.copy_from_id === '' || createSetForm.value.copy_from_id == null)) {
+    showClientToast('error', 'Chọn mẫu có sẵn.');
+    return;
+  }
   createSetSaving.value = true;
   try {
     const payload = {
       name: createSetForm.value.name.trim(),
+      code,
       description: createSetForm.value.description.trim() || null,
     };
-    if (createSetForm.value.copy_from_id !== '' && createSetForm.value.copy_from_id != null) {
+    if (createSetForm.value.use_template) {
       payload.copy_from_id = Number(createSetForm.value.copy_from_id);
     }
     const item = await createStatusSet(payload);
@@ -315,25 +471,29 @@ async function submitCreate() {
   </div>
 
   <div v-else class="dt-setup">
-    <p class="dt-setup__intro">
-      Khai báo nhóm trạng thái và quy tắc chuyển trước khi soạn mẫu biểu và quy trình duyệt. Bấm dấu
-      <strong>+</strong> cạnh tiêu đề trang để tạo nhóm hoặc thêm trạng thái.
-    </p>
-
     <div v-if="!loadingList && !sets.length" class="dt-status-page__empty-panel">
-      <AppIcon name="layers" :size="28" :stroke-width="1.75" />
-      <p>Chưa có nhóm trạng thái. Dùng dấu <strong>+</strong> trên thanh tiêu đề để tạo nhóm đầu tiên.</p>
+      <AppIcon name="layers" :size="32" :stroke-width="1.75" />
+      <h2 class="dt-status-page__empty-title">Chưa có bộ trạng thái</h2>
+      <p class="dt-status-page__empty-lead">
+        Bộ trạng thái quy định hồ sơ đơn đi qua những bước nào trước khi gắn mẫu biểu và quy trình duyệt.
+      </p>
+      <button v-if="canWrite" type="button" class="dt-btn-primary" @click="openCreateSet">Tạo bộ trạng thái</button>
     </div>
 
     <div v-else class="dt-setup__layout" :class="{ 'dt-setup__layout--solo': !showRail }">
       <aside v-if="showRail" class="dt-setup__rail">
-        <h3 class="dt-setup__rail-title">Nhóm đang thiết lập</h3>
+        <div class="dt-setup__rail-head">
+          <h3 class="dt-setup__rail-title">Danh sách bộ</h3>
+          <button v-if="canWrite" type="button" class="dt-link-btn dt-setup__rail-add" @click="openCreateSet">
+            Tạo mới
+          </button>
+        </div>
         <input
           v-model="setQuery"
           type="search"
           class="dt-status-page__set-search"
-          placeholder="Tìm nhóm trạng thái"
-          aria-label="Tìm nhóm trạng thái"
+          placeholder="Tìm theo tên hoặc mã"
+          aria-label="Tìm bộ trạng thái"
         />
         <ul v-if="!loadingList" class="dt-status-page__set-list">
           <li v-if="!filteredSets.length">
@@ -347,6 +507,7 @@ async function submitCreate() {
               @click="selectedId = set.id"
             >
               <span class="dt-set-card__name">{{ friendlySetName(set.name, set.code) }}</span>
+              <span class="dt-set-card__code">{{ set.code }}</span>
               <span class="dt-set-card__meta">
                 {{ set.status_count }} trạng thái
                 <template v-if="set.workflow_count"> · {{ set.workflow_count }} quy trình</template>
@@ -363,22 +524,32 @@ async function submitCreate() {
       </div>
 
       <div v-else-if="detail" class="dt-setup__main">
-        <div class="dt-setup__metrics">
-          <div class="dt-setup__metric">
-            <span class="dt-setup__metric-num">{{ detail.statuses?.length ?? 0 }}</span>
-            <span class="dt-setup__metric-label">trạng thái</span>
+        <header class="dt-setup__hero">
+          <div class="dt-setup__hero-main">
+            <p class="dt-setup__hero-eyebrow">Bộ đang xem</p>
+            <h2 class="dt-setup__hero-title">{{ detailTitle }}</h2>
+            <p v-if="detailDescription" class="dt-setup__hero-desc">{{ detailDescription }}</p>
+            <div class="dt-setup__hero-meta">
+              <span class="dt-setup__code-pill">{{ detail.code }}</span>
+              <button type="button" class="dt-link-btn" @click="copyCode(detail.code)">Sao chép mã</button>
+              <span v-if="detail.is_system" class="dt-set-card__tag">Mẫu có sẵn</span>
+            </div>
           </div>
-          <div class="dt-setup__metric">
-            <span class="dt-setup__metric-num">{{ detail.transitions?.length ?? 0 }}</span>
-            <span class="dt-setup__metric-label">quy tắc</span>
+          <div class="dt-setup__metrics" aria-label="Thống kê bộ trạng thái">
+            <div class="dt-setup__metric">
+              <span class="dt-setup__metric-num">{{ detail.statuses?.length ?? 0 }}</span>
+              <span class="dt-setup__metric-label">trạng thái</span>
+            </div>
+            <div class="dt-setup__metric">
+              <span class="dt-setup__metric-num">{{ detail.transitions?.length ?? 0 }}</span>
+              <span class="dt-setup__metric-label">quy tắc</span>
+            </div>
+            <div class="dt-setup__metric">
+              <span class="dt-setup__metric-num">{{ detail.workflow_count ?? 0 }}</span>
+              <span class="dt-setup__metric-label">quy trình</span>
+            </div>
           </div>
-          <div class="dt-setup__metric">
-            <span class="dt-setup__metric-num">{{ detail.workflow_count ?? 0 }}</span>
-            <span class="dt-setup__metric-label">quy trình</span>
-          </div>
-          <button type="button" class="dt-link-btn" @click="copyCode(detail.code)">Sao chép mã</button>
-          <span v-if="detail.is_system" class="dt-set-card__tag">Có sẵn</span>
-        </div>
+        </header>
 
         <section v-if="detail.workflows?.length" class="dt-setup__group">
           <header class="dt-setup__group-head">
@@ -439,6 +610,9 @@ async function submitCreate() {
           </header>
 
           <div v-show="viewTab === 'flow'" class="dt-setup__group-body">
+          <p v-if="!(detail.statuses?.length)" class="dt-setup__callout">
+            Bộ này chưa có trạng thái. Mở menu <strong>Thêm</strong> trên trang để khai báo bước đầu tiên.
+          </p>
           <div class="dt-lanes">
             <div class="dt-lane dt-lane--main">
               <span class="dt-lane__label">{{ GROUP_KIND_LABEL.main }}</span>
@@ -575,95 +749,243 @@ async function submitCreate() {
 
     <Teleport to="body">
       <div v-if="createSetOpen" class="dt-modal-backdrop" @click.self="createSetOpen = false">
-        <div class="dt-modal dt-modal--wide" role="dialog" aria-labelledby="dt-set-create-title">
-          <header class="dt-modal__head">
-            <h2 id="dt-set-create-title">Tạo nhóm trạng thái</h2>
+        <div
+          class="dt-modal dt-modal--fill"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dt-set-create-title"
+          @keydown.escape="createSetOpen = false"
+        >
+          <header class="dt-modal__head dt-modal__head--rich">
+            <span class="dt-modal__mark" aria-hidden="true">
+              <AppIcon name="layers" :size="22" :stroke-width="1.75" />
+            </span>
+            <div class="dt-modal__head-copy">
+              <p class="dt-modal__head-kicker">Bước 1 · Thiết lập đơn từ</p>
+              <h2 id="dt-set-create-title">Tạo bộ trạng thái</h2>
+            </div>
             <button type="button" class="dt-modal__close" aria-label="Đóng" @click="createSetOpen = false">
-              <AppIcon name="x" :size="18" />
+              <AppIcon name="close" :size="18" />
             </button>
           </header>
-          <div class="dt-modal__body dt-modal__grid">
-            <label class="dt-field dt-field--span2">
-              <span>Tên nhóm<span class="dt-req" aria-hidden="true">*</span></span>
-              <input
-                v-model="createSetForm.name"
-                type="text"
-                required
-                placeholder="Ví dụ: Trạng thái đơn phòng Hành chính"
-              />
-            </label>
-            <label class="dt-field dt-field--span2">
-              <span>Sao chép từ</span>
-              <select v-model="createSetForm.copy_from_id">
-                <option v-if="!sets.length" disabled value="">Chưa có nhóm để sao chép</option>
-                <option v-for="set in sets" :key="set.id" :value="set.id">
-                  {{ friendlySetName(set.name, set.code) }}
-                </option>
-              </select>
-            </label>
-            <label class="dt-field dt-field--span2">
-              <span>Ghi chú</span>
-              <textarea
-                v-model="createSetForm.description"
-                rows="2"
-                placeholder="Ghi ngắn nhóm này dùng cho loại đơn nào"
-              />
-            </label>
+          <div class="dt-modal__body dt-set-create">
+            <div class="dt-set-create__fields hide-scrollbar">
+              <section class="dt-form-section" aria-labelledby="dt-set-section-info">
+                <header class="dt-form-section__head">
+                  <span class="dt-form-section__step" aria-hidden="true">1</span>
+                  <h3 id="dt-set-section-info" class="dt-form-section__title">Thông tin bộ</h3>
+                </header>
+                <div class="dt-form-section__grid">
+                  <label class="dt-field">
+                    <span>Tên bộ trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
+                    <input v-model="createSetForm.name" type="text" required autocomplete="off" />
+                  </label>
+                  <label class="dt-field">
+                    <span>Mã bộ trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
+                    <span class="dt-code-lock" :class="{ 'dt-code-lock--open': codeUnlocked }">
+                      <input
+                        ref="codeInput"
+                        :value="createSetForm.code"
+                        type="text"
+                        required
+                        maxlength="64"
+                        spellcheck="false"
+                        autocomplete="off"
+                        :readonly="!codeUnlocked"
+                        @input="onCodeInput"
+                      />
+                      <button
+                        type="button"
+                        class="dt-code-lock__btn"
+                        :aria-label="codeUnlocked ? 'Khóa mã' : 'Mở khóa để sửa mã'"
+                        :aria-pressed="codeUnlocked"
+                        @click="toggleCodeLock"
+                      >
+                        <AppIcon :name="codeUnlocked ? 'unlock' : 'lock'" :size="16" :stroke-width="1.75" />
+                      </button>
+                    </span>
+                  </label>
+                  <label class="dt-field dt-field--span2">
+                    <span>Mô tả</span>
+                    <textarea v-model="createSetForm.description" rows="3" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="dt-form-section" aria-labelledby="dt-set-section-init">
+                <header class="dt-form-section__head">
+                  <span class="dt-form-section__step" aria-hidden="true">2</span>
+                  <h3 id="dt-set-section-init" class="dt-form-section__title">Nội dung khởi tạo</h3>
+                </header>
+                <div class="dt-init-pick" role="radiogroup" aria-label="Cách khởi tạo trạng thái">
+                  <button
+                    type="button"
+                    class="dt-init-pick__card"
+                    :class="{ 'dt-init-pick__card--on': !createSetForm.use_template }"
+                    role="radio"
+                    :aria-checked="!createSetForm.use_template"
+                    @click="setCreateInitMode(false)"
+                  >
+                    <span class="dt-init-pick__icon" aria-hidden="true">
+                      <AppIcon name="plusCircle" :size="18" :stroke-width="1.75" />
+                    </span>
+                    <span class="dt-init-pick__label">Bắt đầu trống</span>
+                    <span class="dt-init-pick__sub">Tạo bộ rồi tự thêm từng trạng thái và quy tắc.</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="dt-init-pick__card"
+                    :class="{ 'dt-init-pick__card--on': createSetForm.use_template }"
+                    role="radio"
+                    :aria-checked="createSetForm.use_template"
+                    :disabled="!sets.length"
+                    @click="setCreateInitMode(true)"
+                  >
+                    <span class="dt-init-pick__icon" aria-hidden="true">
+                      <AppIcon name="copy" :size="18" :stroke-width="1.75" />
+                    </span>
+                    <span class="dt-init-pick__label">Sao chép từ mẫu</span>
+                    <span class="dt-init-pick__sub">Lấy sẵn trạng thái và quy tắc từ bộ đã có.</span>
+                  </button>
+                </div>
+                <label v-if="createSetForm.use_template" class="dt-field">
+                  <span>Chọn mẫu<span class="dt-req" aria-hidden="true">*</span></span>
+                  <select v-model="createSetForm.copy_from_id">
+                    <option disabled value="">Chọn bộ trạng thái</option>
+                    <option v-for="set in sets" :key="set.id" :value="String(set.id)">
+                      {{ friendlySetName(set.name, set.code) }} · {{ set.status_count }} trạng thái
+                    </option>
+                  </select>
+                </label>
+              </section>
+            </div>
+            <aside class="dt-set-preview" aria-label="Kết quả dự kiến">
+              <header class="dt-set-preview__head">
+                <h3>Kết quả dự kiến</h3>
+                <p v-if="createSetForm.use_template && templatePreview">
+                  {{ friendlySetName(templatePreview.name, templatePreview.code) }}
+                </p>
+                <p v-else-if="!createSetForm.use_template">Bộ trống sau khi tạo</p>
+              </header>
+              <div v-if="previewStats && createSetForm.use_template" class="dt-set-preview__stats">
+                <span>{{ previewStats.statuses }} trạng thái</span>
+                <span>{{ previewStats.transitions }} quy tắc</span>
+              </div>
+              <div class="dt-set-preview__body hide-scrollbar">
+                <p v-if="templatePreviewLoading" class="dt-set-preview__empty">Đang tải…</p>
+                <div v-else-if="!createSetForm.use_template" class="dt-set-preview__plan">
+                  <ol class="dt-set-preview__steps">
+                    <li>Tạo bộ với tên và mã đã nhập</li>
+                    <li>Thêm trạng thái từ menu <strong>Thêm</strong></li>
+                    <li>Gắn bộ vào quy trình duyệt</li>
+                  </ol>
+                </div>
+                <p v-else-if="!createSetForm.copy_from_id" class="dt-set-preview__empty">Chọn mẫu bên trái</p>
+                <p v-else-if="!previewGroups.length" class="dt-set-preview__empty">Mẫu này chưa có trạng thái.</p>
+                <div v-else class="dt-set-preview__groups">
+                  <p v-if="previewDescription" class="dt-set-preview__desc">{{ previewDescription }}</p>
+                  <section v-for="group in previewGroups" :key="group.kind" class="dt-set-preview__group">
+                    <h4>{{ group.label }}</h4>
+                    <ul>
+                      <li
+                        v-for="status in group.items"
+                        :key="status.code"
+                        class="dt-set-preview__item"
+                        :class="`dt-set-preview__item--${previewTone(status)}`"
+                      >
+                        <DonTuStatusBadge :code="status.code" :label="status.label" />
+                      </li>
+                    </ul>
+                  </section>
+                </div>
+              </div>
+            </aside>
           </div>
-          <footer class="dt-modal__foot">
-            <button type="button" class="dt-btn-ghost" @click="createSetOpen = false">Huỷ</button>
-            <button type="button" class="dt-btn-primary" :disabled="createSetSaving" @click="submitCreateSet">
-              {{ createSetSaving ? 'Đang lưu…' : 'Tạo nhóm' }}
-            </button>
+          <footer class="dt-modal__foot dt-modal__foot--split">
+            <p class="dt-modal__foot-summary">{{ createSetFootSummary }}</p>
+            <div class="dt-modal__foot-actions">
+              <button type="button" class="dt-btn-ghost" @click="createSetOpen = false">Huỷ</button>
+              <button type="button" class="dt-btn-primary" :disabled="createSetSaving" @click="submitCreateSet">
+                {{ createSetSaving ? 'Đang lưu…' : 'Tạo bộ' }}
+              </button>
+            </div>
           </footer>
         </div>
       </div>
 
       <div v-if="createOpen" class="dt-modal-backdrop" @click.self="createOpen = false">
-        <div class="dt-modal dt-modal--wide" role="dialog" aria-labelledby="dt-status-create-title">
-          <header class="dt-modal__head">
-            <h2 id="dt-status-create-title">Thêm trạng thái</h2>
+        <div
+          class="dt-modal dt-modal--wide dt-modal--status-create"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dt-status-create-title"
+          @keydown.escape="createOpen = false"
+        >
+          <header class="dt-modal__head dt-modal__head--rich">
+            <span class="dt-modal__mark" aria-hidden="true">
+              <AppIcon name="plusCircle" :size="22" :stroke-width="1.75" />
+            </span>
+            <div class="dt-modal__head-copy">
+              <p class="dt-modal__head-kicker">{{ detailTitle }}</p>
+              <h2 id="dt-status-create-title">Thêm trạng thái</h2>
+            </div>
             <button type="button" class="dt-modal__close" aria-label="Đóng" @click="createOpen = false">
-              <AppIcon name="x" :size="18" />
+              <AppIcon name="close" :size="18" />
             </button>
           </header>
-          <div class="dt-modal__body dt-modal__grid">
-            <label class="dt-field">
-              <span>Tên trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
-              <input v-model="createForm.label" type="text" required placeholder="Ví dụ: Chờ ký" />
-            </label>
-            <label class="dt-field">
-              <span>Nằm ở đâu<span class="dt-req" aria-hidden="true">*</span></span>
-              <select v-model="createForm.group_kind" required>
-                <option v-for="(label, key) in GROUP_KIND_LABEL" :key="key" :value="key">{{ label }}</option>
-              </select>
-            </label>
-            <label v-if="createForm.group_kind === 'terminal'" class="dt-field">
-              <span>Kết quả<span class="dt-req" aria-hidden="true">*</span></span>
-              <select v-model="createForm.terminal_kind" required>
-                <option value="success">Xong việc</option>
-                <option value="failed">Không xong</option>
-              </select>
-            </label>
-            <label class="dt-field">
-              <span>Đi từ trạng thái nào<span class="dt-req" aria-hidden="true">*</span></span>
-              <select v-model="createForm.from_code" required>
-                <option disabled value="">Chọn trạng thái phía trước</option>
-                <option v-for="opt in fromOptions" :key="opt.code" :value="opt.code">{{ opt.label }}</option>
-              </select>
-            </label>
-            <label class="dt-field">
-              <span>Việc làm<span class="dt-req" aria-hidden="true">*</span></span>
-              <select v-model="createForm.action_key" required>
-                <option v-for="(label, key) in ACTION_LABEL" :key="key" :value="key">{{ label }}</option>
-              </select>
-            </label>
-            <label class="dt-field">
-              <span>Ai được bấm<span class="dt-req" aria-hidden="true">*</span></span>
-              <select v-model="createForm.actor_policy" required>
-                <option v-for="(label, key) in ACTOR_LABEL" :key="key" :value="key">{{ label }}</option>
-              </select>
-            </label>
+          <div class="dt-modal__body dt-status-create hide-scrollbar">
+            <section class="dt-form-section" aria-labelledby="dt-status-section-identity">
+              <header class="dt-form-section__head">
+                <span class="dt-form-section__step" aria-hidden="true">1</span>
+                <h3 id="dt-status-section-identity" class="dt-form-section__title">Tên và vị trí</h3>
+              </header>
+              <div class="dt-form-section__grid">
+                <label class="dt-field">
+                  <span>Tên trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
+                  <input v-model="createForm.label" type="text" required autocomplete="off" />
+                </label>
+                <label class="dt-field">
+                  <span>Nhóm trên luồng<span class="dt-req" aria-hidden="true">*</span></span>
+                  <select v-model="createForm.group_kind" required>
+                    <option v-for="(label, key) in GROUP_KIND_LABEL" :key="key" :value="key">{{ label }}</option>
+                  </select>
+                </label>
+                <label v-if="createForm.group_kind === 'terminal'" class="dt-field dt-field--span2">
+                  <span>Kết quả cuối<span class="dt-req" aria-hidden="true">*</span></span>
+                  <select v-model="createForm.terminal_kind" required>
+                    <option value="success">Xong việc</option>
+                    <option value="failed">Không xong</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+            <section class="dt-form-section" aria-labelledby="dt-status-section-rule">
+              <header class="dt-form-section__head">
+                <span class="dt-form-section__step" aria-hidden="true">2</span>
+                <h3 id="dt-status-section-rule" class="dt-form-section__title">Quy tắc chuyển vào trạng thái này</h3>
+              </header>
+              <div class="dt-form-section__grid">
+                <label class="dt-field">
+                  <span>Từ trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
+                  <select v-model="createForm.from_code" required>
+                    <option disabled value="">Chọn trạng thái phía trước</option>
+                    <option v-for="opt in fromOptions" :key="opt.code" :value="opt.code">{{ opt.label }}</option>
+                  </select>
+                </label>
+                <label class="dt-field">
+                  <span>Thao tác<span class="dt-req" aria-hidden="true">*</span></span>
+                  <select v-model="createForm.action_key" required>
+                    <option v-for="(label, key) in ACTION_LABEL" :key="key" :value="key">{{ label }}</option>
+                  </select>
+                </label>
+                <label class="dt-field dt-field--span2">
+                  <span>Người được thực hiện<span class="dt-req" aria-hidden="true">*</span></span>
+                  <select v-model="createForm.actor_policy" required>
+                    <option v-for="(label, key) in ACTOR_LABEL" :key="key" :value="key">{{ label }}</option>
+                  </select>
+                </label>
+              </div>
+            </section>
           </div>
           <footer class="dt-modal__foot">
             <button type="button" class="dt-btn-ghost" @click="createOpen = false">Huỷ</button>
@@ -707,11 +1029,50 @@ async function submitCreate() {
   color: var(--color-text-muted);
 }
 
-.dt-status-page__empty-panel p {
+.dt-status-page__empty-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.dt-status-page__empty-lead {
   margin: 0;
   max-width: 28rem;
   font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.dt-setup__rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.dt-setup__rail-add {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.dt-setup__callout {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-info-tint-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-info) 25%, var(--color-border));
+  font-size: 0.8125rem;
   line-height: 1.5;
+  color: var(--color-text);
+}
+
+.dt-set-card__code {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
 }
 
 .dt-status-page__body {
@@ -1047,6 +1408,262 @@ async function submitCreate() {
   margin: 0;
   color: var(--color-text-muted);
   font-size: 0.875rem;
+}
+
+.dt-modal--fill .dt-modal__close,
+.dt-modal--status-create .dt-modal__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+}
+
+.dt-modal--fill .dt-modal__close:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.dt-modal.dt-modal--fill .dt-modal__body.dt-set-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(20rem, 0.85fr);
+  gap: var(--space-5);
+  overflow: hidden;
+}
+
+.dt-set-create__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+}
+
+.dt-status-create {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.dt-modal--status-create {
+  width: min(56rem, calc(100vw - 2.5rem));
+  max-height: calc(100vh - 2.5rem);
+}
+
+.dt-init-pick__card:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dt-field .dt-code-lock {
+  display: flex;
+  align-items: stretch;
+  min-height: 2.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  overflow: hidden;
+}
+
+.dt-field .dt-code-lock--open {
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+}
+
+.dt-field .dt-code-lock input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.dt-field .dt-code-lock input[readonly] {
+  color: var(--color-text);
+}
+
+.dt-code-lock__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  box-shadow: inset 1px 0 0 var(--color-border);
+}
+
+.dt-code-lock--open .dt-code-lock__btn {
+  color: var(--color-primary);
+}
+
+.dt-code-lock__btn:hover {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.dt-set-preview {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  overflow: hidden;
+}
+
+.dt-set-preview__head {
+  flex-shrink: 0;
+  padding: var(--space-4);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.dt-set-preview__head h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.dt-set-preview__head p,
+.dt-set-preview__desc {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+.dt-set-preview__stats {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-primary-700);
+}
+
+.dt-set-preview__stats span {
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-100);
+}
+
+.dt-set-preview__plan {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.dt-set-preview__steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  max-width: 20rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--color-text);
+}
+
+.dt-set-preview__steps li + li {
+  margin-top: var(--space-2);
+}
+
+.dt-set-preview__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-4);
+}
+
+.dt-set-preview__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.dt-set-preview__groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.dt-set-preview__group h4 {
+  margin: 0 0 var(--space-2);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.dt-set-preview__group ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dt-set-preview__item {
+  position: relative;
+  padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.dt-set-preview__item::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-primary);
+}
+
+.dt-set-preview__item--info::before {
+  background: var(--color-info);
+}
+
+.dt-set-preview__item--success::before {
+  background: var(--color-success);
+}
+
+.dt-set-preview__item--danger::before {
+  background: var(--color-danger);
+}
+
+@media (max-width: 800px) {
+  .dt-modal.dt-modal--fill .dt-modal__body.dt-set-create {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: auto;
+  }
+
+  .dt-init-pick {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dt-set-preview {
+    min-height: 18rem;
+  }
+
+  .dt-form-section__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 900px) {

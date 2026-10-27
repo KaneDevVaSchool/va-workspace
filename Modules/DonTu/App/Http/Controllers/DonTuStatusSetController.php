@@ -41,10 +41,12 @@ class DonTuStatusSetController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:64'],
             'description' => ['nullable', 'string'],
             'copy_from_id' => ['nullable', 'integer'],
         ], [
             'name.required' => 'Nhập tên nhóm trạng thái.',
+            'code.max' => 'Mã bộ trạng thái tối đa 64 ký tự.',
         ]);
 
         $item = $this->catalog->createSet($validated);

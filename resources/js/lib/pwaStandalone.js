@@ -7,6 +7,11 @@
 /** Khớp media query gắn <link> PWA (mẫu Drupal / Stack Overflow). */
 export const PWA_DISPLAY_MODE_MEDIA = '(display-mode: standalone), (display-mode: fullscreen)';
 
+/** Khớp config/pwa_ios.php + --color-primary-900. */
+export const PWA_THEME_COLOR_BRAND = '#9a0036';
+/** Khớp --color-tertiary-600 (đỉnh gradient header shell nhân viên). */
+export const PWA_THEME_COLOR_EMPLOYEE = '#1750b5';
+
 export function isPwaStandalone() {
   if (typeof window === 'undefined') return false;
   return (
@@ -54,6 +59,25 @@ export function loadPwaStandaloneAssets() {
   void import('../pwa/bootstrap.js').then((m) => m.bootstrapPwaStandalone());
 }
 
+function syncPwaThemeColorMeta(color) {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+    meta.setAttribute('content', color);
+  });
+}
+
+/** Cập nhật status bar / Android chrome khi đổi shell trong PWA standalone. */
+export function syncPwaThemeColorForShell(kind) {
+  if (!isPwaStandalone()) return;
+  if (kind === 'employee') {
+    syncPwaThemeColorMeta(PWA_THEME_COLOR_EMPLOYEE);
+    return;
+  }
+  if (kind === 'guest' || kind === 'app') {
+    syncPwaThemeColorMeta(PWA_THEME_COLOR_BRAND);
+  }
+}
+
 /** @param {'guest' | 'employee' | 'app' | null} kind */
 export function setPwaShellSurface(kind) {
   if (typeof document === 'undefined') return;
@@ -62,4 +86,5 @@ export function setPwaShellSurface(kind) {
   if (kind) {
     root.classList.add(`pwa-surface-${kind}`);
   }
+  syncPwaThemeColorForShell(kind);
 }

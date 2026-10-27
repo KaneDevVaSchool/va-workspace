@@ -15,6 +15,11 @@ return [
     'status_bar_style' => 'default',
     'orientation' => 'portrait',
 
+    /** Khớp --color-primary-900 / meta PWA mặc định (manager, guest). */
+    'theme_color' => '#9a0036',
+    /** Khớp --color-tertiary-600 — header shell mobile nhân viên (/dashboard/me). */
+    'employee_theme_color' => '#1750b5',
+
     'touch_icons' => [
         ['href' => 'images/pwa/apple-touch-icon.png', 'sizes' => '180x180'],
         ['href' => 'images/pwa/icon-192.png', 'sizes' => '192x192'],

@@ -134,7 +134,7 @@ class DonTuStatusCatalogService
             ? (int) $data['copy_from_id']
             : null;
 
-        $code = $this->uniqueSetCode($name);
+        $code = $this->resolveSetCode(isset($data['code']) ? (string) $data['code'] : null);
         $description = isset($data['description']) ? trim((string) $data['description']) : null;
         if ($description === '') {
             $description = null;
@@ -150,13 +150,6 @@ class DonTuStatusCatalogService
 
             if ($copyFromId) {
                 $this->cloneStatusesAndTransitions($copyFromId, $set->id);
-            } else {
-                $default = DonTuStatusSet::query()->where('code', 'STATUS_SET_DEFAULT')->first();
-                if ($default !== null) {
-                    $this->cloneStatusesAndTransitions($default->id, $set->id);
-                } else {
-                    $this->seedMinimalSet($set->id);
-                }
             }
 
             return $set->id;
@@ -204,43 +197,44 @@ class DonTuStatusCatalogService
         }
     }
 
-    private function seedMinimalSet(int $setId): void
+    private function resolveSetCode(?string $requested): string
     {
-        $rows = [
-            ['code' => 'DRAFT', 'label' => 'Nháp', 'group_kind' => 'main', 'terminal_kind' => 'draft', 'sort_order' => 1],
-            ['code' => 'PENDING_APPROVAL', 'label' => 'Chờ duyệt', 'group_kind' => 'main', 'terminal_kind' => null, 'sort_order' => 2],
-            ['code' => 'COMPLETED', 'label' => 'Hoàn thành', 'group_kind' => 'terminal', 'terminal_kind' => 'success', 'sort_order' => 3],
-        ];
-        foreach ($rows as $row) {
-            DonTuStatus::query()->create(['status_set_id' => $setId, ...$row]);
+        $code = strtoupper(trim((string) $requested));
+        if ($code === '') {
+            $code = $this->nextBmttCode();
         }
-        $transitions = [
-            ['from_code' => 'NONE', 'to_code' => 'DRAFT', 'action_key' => 'SAVE_DRAFT', 'actor_policy' => 'requester'],
-            ['from_code' => 'DRAFT', 'to_code' => 'PENDING_APPROVAL', 'action_key' => 'SUBMIT', 'actor_policy' => 'requester'],
-            ['from_code' => 'PENDING_APPROVAL', 'to_code' => 'COMPLETED', 'action_key' => 'APPROVE', 'actor_policy' => 'assignee'],
-        ];
-        foreach ($transitions as $row) {
-            DonTuTransition::query()->create([
-                'status_set_id' => $setId,
-                ...$row,
-                'guard_json' => null,
+
+        if (! preg_match('/^[A-Z][A-Z0-9_]{1,63}$/', $code)) {
+            throw ValidationException::withMessages([
+                'code' => 'Mã bộ trạng thái chỉ gồm chữ, số và dấu gạch dưới.',
             ]);
         }
-    }
 
-    private function uniqueSetCode(string $name): string
-    {
-        $base = Str::upper(Str::slug($name, '_'));
-        $base = preg_replace('/[^A-Z0-9_]/', '', $base) ?: 'NHOM_TRANG_THAI';
-        $base = 'STATUS_SET_'.Str::limit($base, 48, '');
-        $code = $base;
-        $n = 2;
-        while (DonTuStatusSet::query()->where('code', $code)->exists()) {
-            $code = $base.'_'.$n;
-            $n++;
+        if (DonTuStatusSet::query()->where('code', $code)->exists()) {
+            throw ValidationException::withMessages([
+                'code' => 'Mã bộ trạng thái đã được dùng.',
+            ]);
         }
 
-        return Str::limit($code, 64, '');
+        return $code;
+    }
+
+    private function nextBmttCode(): string
+    {
+        $max = 0;
+        foreach (DonTuStatusSet::query()->pluck('code') as $existing) {
+            if (preg_match('/^BMTT(\d+)$/', (string) $existing, $match)) {
+                $max = max($max, (int) $match[1]);
+            }
+        }
+
+        $n = $max + 1;
+        do {
+            $code = 'BMTT'.str_pad((string) $n, 2, '0', STR_PAD_LEFT);
+            $n++;
+        } while (DonTuStatusSet::query()->where('code', $code)->exists());
+
+        return $code;
     }
 
     private function uniqueStatusCode(int $setId, string $label): string

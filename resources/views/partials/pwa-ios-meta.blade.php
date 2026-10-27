@@ -9,6 +9,10 @@
     $iosTitle = $iosPwa['apple_web_app_title'] ?? 'VA Workspace';
     $iosStatusBar = $iosPwa['status_bar_style'] ?? 'default';
     $iosOrientation = $iosPwa['orientation'] ?? 'portrait';
+    $employeeMeShell = (bool) preg_match('#^/dashboard/me(/|$)#', request()->getPathInfo());
+    $pwaThemeColor = $employeeMeShell
+        ? ($iosPwa['employee_theme_color'] ?? '#1750b5')
+        : ($iosPwa['theme_color'] ?? '#9a0036');
 @endphp
 <meta name="color-scheme" content="light">
 <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
@@ -18,8 +22,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="{{ $iosStatusBar }}">
 <meta name="apple-mobile-web-app-title" content="{{ $iosTitle }}">
 <meta name="apple-mobile-web-app-orientation" content="{{ $iosOrientation }}">
-<meta name="theme-color" content="#9a0036" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#9a0036">
+<meta name="theme-color" content="{{ $pwaThemeColor }}" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="{{ $pwaThemeColor }}">
 <link rel="icon" href="/images/favicon.png?v={{ $pwaIconV }}" type="image/png" sizes="32x32">
 @foreach ($iosPwa['touch_icons'] ?? [] as $icon)
 <link rel="apple-touch-icon" href="/{{ $icon['href'] }}?v={{ $pwaIconV }}" sizes="{{ $icon['sizes'] }}">

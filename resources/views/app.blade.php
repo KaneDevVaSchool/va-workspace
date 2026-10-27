@@ -134,6 +134,11 @@
             background-color: #fff8f0;
         }
 
+        html.pwa-standalone.pwa-surface-employee,
+        html.pwa-standalone.pwa-surface-employee body {
+            background-color: #eef4f6;
+        }
+
         html.pwa-standalone.employee-os-ios.employee-mobile-pwa,
         html.pwa-standalone.employee-os-ios.employee-mobile-pwa body {
             height: var(--employee-shell-height, 100%);
