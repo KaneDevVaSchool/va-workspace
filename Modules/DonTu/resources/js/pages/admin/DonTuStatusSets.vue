@@ -7,7 +7,6 @@ import { useDragScroll } from '@/composables/useDragScroll.js';
 import { showClientToast } from '@/lib/clientToast';
 import { formatDonTuApiError } from '../../lib/donTuToast.js';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
-import DonTuConfigHubCards from '../../components/DonTuConfigHubCards.vue';
 import DonTuStatusBadge from '../../components/DonTuStatusBadge.vue';
 import { createStatus, createStatusSet, fetchStatusSet, fetchStatusSets } from '../../api/donTuConfigApi.js';
 import {
@@ -316,8 +315,6 @@ async function submitCreate() {
   </div>
 
   <div v-else class="dt-setup">
-    <DonTuConfigHubCards />
-
     <p class="dt-setup__intro">
       Khai báo nhóm trạng thái và quy tắc chuyển trước khi soạn mẫu biểu và quy trình duyệt. Bấm dấu
       <strong>+</strong> cạnh tiêu đề trang để tạo nhóm hoặc thêm trạng thái.

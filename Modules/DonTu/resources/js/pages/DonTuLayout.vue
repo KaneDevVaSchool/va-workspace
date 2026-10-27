@@ -1,21 +1,37 @@
 <script setup>
-import { computed, provide, ref } from 'vue';
+import { computed, provide, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
+import DonTuConfigSummaryBar from '../components/DonTuConfigSummaryBar.vue';
 import { DON_TU_CONFIG_HUB_KEY } from '../composables/useDonTuConfigHub.js';
 import {
+  DON_TU_CONFIG_SUMMARY_KEY,
+  useDonTuConfigSummary,
+} from '../composables/useDonTuConfigSummary.js';
+import {
   DON_TU_CONFIG_ROUTE_NAMES,
-  DON_TU_CONFIG_TAB_ACTIVE,
-  DON_TU_CONFIG_TABS,
   DON_TU_MONITOR_ROUTE_NAMES,
   DON_TU_MONITOR_TABS,
 } from '../nav.js';
 
 const route = useRoute();
 
-const currentTitle = computed(() => route.meta.screenTitle || 'Đơn từ');
+const isConfigOverview = computed(() => route.name === 'manager.don-tu.config');
+const isConfigEditor = computed(
+  () => route.name === 'manager.don-tu.form' || route.name === 'manager.don-tu.workflow',
+);
+
+const currentTitle = computed(() => {
+  if (isConfigOverview.value) {
+    return 'Cấu hình đơn từ';
+  }
+  return route.meta.screenTitle || 'Đơn từ';
+});
 const headerSubtitle = computed(() => {
+  if (isConfigOverview.value) {
+    return 'Thiết lập trạng thái, mẫu biểu và quy trình theo thứ tự';
+  }
   if (isConfigArea.value) {
     return 'Thiết lập trạng thái, mẫu biểu và quy trình duyệt đơn';
   }
@@ -33,11 +49,11 @@ const breadcrumbs = computed(() => {
     { label: 'Đơn từ', to: { name: 'manager.don-tu.start' } },
   ];
   if (isConfigArea.value) {
-    return [
-      ...base,
-      { label: 'Cấu hình', to: { name: 'manager.don-tu.config' } },
-      { label: currentTitle.value },
-    ];
+    const crumbs = [...base, { label: 'Cấu hình', to: { name: 'manager.don-tu.config' } }];
+    if (!isConfigOverview.value) {
+      crumbs.push({ label: currentTitle.value });
+    }
+    return crumbs;
   }
   if (isMonitorArea.value) {
     return [
@@ -50,9 +66,6 @@ const breadcrumbs = computed(() => {
 });
 
 const hubTabs = computed(() => {
-  if (isConfigArea.value) {
-    return { label: 'Mục cấu hình đơn từ', items: DON_TU_CONFIG_TABS };
-  }
   if (isMonitorArea.value) {
     return { label: 'Mục giám sát đơn từ', items: DON_TU_MONITOR_TABS };
   }
@@ -60,11 +73,21 @@ const hubTabs = computed(() => {
 });
 
 function tabIsActive(tabName) {
-  if (route.name === tabName) {
-    return true;
-  }
-  return DON_TU_CONFIG_TAB_ACTIVE[route.name] === tabName;
+  return route.name === tabName;
 }
+
+const configSummary = useDonTuConfigSummary();
+provide(DON_TU_CONFIG_SUMMARY_KEY, configSummary);
+
+watch(
+  isConfigArea,
+  (active) => {
+    if (active) {
+      configSummary.loadSummary();
+    }
+  },
+  { immediate: true },
+);
 
 const reloadChild = ref(null);
 const reloading = ref(false);
@@ -88,10 +111,15 @@ provide(DON_TU_CONFIG_HUB_KEY, {
 });
 
 async function reload() {
-  if (!reloadChild.value || reloading.value) return;
+  if (reloading.value) return;
   reloading.value = true;
   try {
-    await reloadChild.value();
+    if (isConfigArea.value) {
+      await configSummary.loadSummary();
+    }
+    if (reloadChild.value) {
+      await reloadChild.value();
+    }
   } finally {
     reloading.value = false;
   }
@@ -105,7 +133,7 @@ async function reload() {
       :subtitle="headerSubtitle"
       icon="fileText"
       :breadcrumbs="breadcrumbs"
-      :primary-action="isConfigArea ? headerPrimaryAction : null"
+      :primary-action="isConfigArea && !isConfigOverview ? headerPrimaryAction : null"
     >
       <template v-if="isConfigArea" #actions>
         <button type="button" class="don-tu__header-btn" :disabled="reloading" @click="reload">
@@ -114,6 +142,11 @@ async function reload() {
         </button>
       </template>
     </PageHeader>
+
+    <DonTuConfigSummaryBar
+      v-if="isConfigArea && !isConfigOverview && !isConfigEditor"
+      :auto-load="false"
+    />
 
     <nav
       v-if="hubTabs"

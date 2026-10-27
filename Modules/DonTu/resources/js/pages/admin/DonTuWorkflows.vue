@@ -15,7 +15,6 @@ import {
   fetchWorkflows,
   updateWorkflow,
 } from '../../api/donTuConfigApi.js';
-import DonTuConfigHubCards from '../../components/DonTuConfigHubCards.vue';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -164,8 +163,6 @@ async function confirmDelete() {
   <div v-if="!canConfig" class="dt-config-deny">Bạn không có quyền quản lý quy trình.</div>
 
   <div v-else class="dt-admin-list">
-    <DonTuConfigHubCards />
-
     <div class="dt-admin-list__toolbar">
       <input v-model="query" type="search" class="dt-admin-list__search" placeholder="Tìm theo tên quy trình" aria-label="Tìm quy trình" />
     </div>

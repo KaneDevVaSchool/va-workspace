@@ -4,30 +4,73 @@
   text-align: center;
 }
 
-/* ---- Hub 3 bước (Trạng thái · Mẫu · Quy trình) ---- */
+/* ---- Hub cấu hình (KPI strip + lộ trình — mẫu HRM attendance-leave/config) ---- */
 
-.dt-config-hub {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
+.dt-config-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
 }
 
-.dt-config-hub__card {
+.dt-config-overview__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.dt-kpi-strip {
+  margin-bottom: var(--space-1);
+}
+
+.dt-kpi-strip__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.dt-kpi-strip__title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.dt-kpi-strip__hint {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.dt-kpi-strip__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.dt-kpi-card {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
+  min-height: 3.75rem;
   padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-3));
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
   text-decoration: none;
   color: inherit;
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
-.dt-config-hub__card::before {
+.dt-kpi-card::before {
   content: '';
   position: absolute;
   top: var(--space-2);
@@ -38,19 +81,28 @@
   background: var(--color-border);
 }
 
-.dt-config-hub__card:hover {
+.dt-kpi-card:hover {
   box-shadow: var(--shadow-md);
 }
 
-.dt-config-hub__card--active::before {
-  background: var(--color-primary);
-}
-
-.dt-config-hub__card--active {
+.dt-kpi-card--active {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, var(--color-border)), var(--shadow-sm);
 }
 
-.dt-config-hub__icon {
+.dt-kpi-card--brand::before,
+.dt-kpi-card--active.dt-kpi-card--brand::before {
+  background: var(--color-primary);
+}
+
+.dt-kpi-card--sky::before {
+  background: var(--color-info);
+}
+
+.dt-kpi-card--violet::before {
+  background: color-mix(in srgb, var(--color-primary) 55%, var(--color-info));
+}
+
+.dt-kpi-card__icon {
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -60,53 +112,422 @@
   border-radius: var(--radius-sm);
   background: var(--color-primary-100);
   color: var(--color-primary-700);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, transparent);
 }
 
-.dt-config-hub__body {
+.dt-kpi-card--sky .dt-kpi-card__icon {
+  background: color-mix(in srgb, var(--color-info) 12%, var(--color-surface));
+  color: var(--color-info);
+}
+
+.dt-kpi-card--violet .dt-kpi-card__icon {
+  background: var(--color-surface-muted);
+  color: var(--color-primary-700);
+}
+
+.dt-kpi-card__body {
   flex: 1;
   min-width: 0;
 }
 
-.dt-config-hub__step {
+.dt-kpi-card__label {
   display: block;
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--color-text-muted);
-  line-height: 1.2;
 }
 
-.dt-config-hub__title {
+.dt-kpi-card__value {
   display: block;
+  margin-top: 0.15rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  font-size: 0.875rem;
+  line-height: 1;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.dt-kpi-card__value--empty {
+  color: var(--color-text-muted);
+  opacity: 0.45;
+}
+
+.dt-kpi-card__sub {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.625rem;
+  color: var(--color-text-muted);
+}
+
+.dt-config-roadmap {
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+}
+
+.dt-config-roadmap__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-surface-muted) 90%, var(--color-surface)),
+    var(--color-surface)
+  );
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.dt-config-roadmap__eyebrow {
+  margin: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-primary) 75%, var(--color-text-muted));
+}
+
+.dt-config-roadmap__title {
+  margin: 0.25rem 0 0;
+  font-size: 1rem;
+  font-weight: 700;
   color: var(--color-text);
 }
 
-.dt-config-hub__stat {
+.dt-config-progress {
+  position: relative;
   flex-shrink: 0;
-  text-align: right;
+  width: 5.5rem;
+  height: 5.5rem;
 }
 
-.dt-config-hub__stat-num {
+.dt-config-progress__ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.dt-config-progress__track {
+  stroke: var(--color-surface-muted);
+}
+
+.dt-config-progress__fill {
+  stroke: var(--color-primary);
+  transition: stroke-dashoffset 0.6s ease;
+}
+
+.dt-config-progress__pct {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.dt-config-progress__copy {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.dt-config-progress__label {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.dt-config-progress__sub {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
+.dt-config-roadmap__banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-success-700, var(--color-success));
+  background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-success) 22%, var(--color-border));
+}
+
+.dt-config-steps {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2) var(--space-2) var(--space-3);
+}
+
+.dt-config-step__link {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: inherit;
+  outline: none;
+  transition: background-color 0.15s ease;
+}
+
+.dt-config-step__link:hover {
+  background: var(--color-surface-muted);
+}
+
+.dt-config-step__link--current {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)),
+    color-mix(in srgb, var(--color-primary) 2%, var(--color-surface))
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, var(--color-border));
+}
+
+.dt-config-step__link--done:hover {
+  background: color-mix(in srgb, var(--color-success) 6%, var(--color-surface));
+}
+
+.dt-config-step__rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 2.25rem;
+  flex-shrink: 0;
+  padding-top: var(--space-1);
+}
+
+.dt-config-step__line {
+  width: 1px;
+  flex: 1;
+  min-height: 0.75rem;
+  background: var(--color-border);
+}
+
+.dt-config-step__line--hide {
+  background: transparent;
+}
+
+.dt-config-step__badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border), 0 0 0 2px var(--color-surface);
+}
+
+.dt-config-step__badge--current {
+  color: #fff;
+  background: var(--color-primary);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+.dt-config-step__badge--done {
+  color: #fff;
+  background: var(--color-success);
+}
+
+.dt-config-step__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dt-config-step__link--current .dt-config-step__icon {
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 25%, var(--color-border));
+}
+
+.dt-config-step__body {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
+  padding: var(--space-3) 0;
+}
+
+.dt-config-step__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dt-config-step__label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.dt-config-step__pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+.dt-config-step__pill--current {
+  color: #fff;
+  background: var(--color-primary);
+}
+
+.dt-config-step__pill--done {
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-success) 35%, var(--color-border));
+}
+
+.dt-config-step__stat {
+  display: none;
+  flex-shrink: 0;
+  align-self: center;
+  text-align: right;
+  padding: var(--space-3) 0;
+}
+
+.dt-config-step__stat-num {
   display: block;
   font-size: 1.25rem;
   font-weight: 700;
-  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
+  color: var(--color-text);
 }
 
-.dt-config-hub__stat-label {
+.dt-config-step__stat-num--empty {
+  color: var(--color-text-muted);
+  opacity: 0.45;
+}
+
+.dt-config-step__stat-sub {
   display: block;
-  margin-top: 0.125rem;
+  margin-top: 0.2rem;
   font-size: 0.625rem;
   color: var(--color-text-muted);
-  max-width: 6rem;
+}
+
+.dt-config-step__arrow {
+  display: none;
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--color-text-muted);
+}
+
+.dt-config-step__link:hover .dt-config-step__arrow {
+  color: var(--color-primary);
+}
+
+.dt-config-aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.dt-config-aside__card {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s ease;
+}
+
+.dt-config-aside__card:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, var(--color-border)), var(--shadow-md);
+}
+
+.dt-config-aside__card--primary {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)),
+    var(--color-surface)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, var(--color-border)), var(--shadow-sm);
+}
+
+.dt-config-aside__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.dt-config-aside__icon--muted {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dt-config-aside__title {
+  margin: var(--space-3) 0 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.dt-config-aside__lead {
+  margin: var(--space-2) 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.dt-config-aside__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: var(--space-3);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+@media (min-width: 640px) {
+  .dt-config-step__stat,
+  .dt-config-step__arrow {
+    display: block;
+  }
 }
 
 @media (max-width: 900px) {
-  .dt-config-hub {
+  .dt-kpi-strip__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dt-config-overview__grid {
     grid-template-columns: 1fr;
   }
 }
