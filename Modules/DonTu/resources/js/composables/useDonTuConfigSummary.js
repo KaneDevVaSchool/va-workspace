@@ -11,23 +11,26 @@ export const DON_TU_CONFIG_MODULES = [
     routeName: 'manager.don-tu.statuses',
     icon: 'layers',
     label: 'Trạng thái hồ sơ',
-    tone: 'brand',
+    tone: 'c1',
   },
   {
     key: 'forms',
     routeName: 'manager.don-tu.forms',
     icon: 'clipboardCheck',
     label: 'Mẫu biểu',
-    tone: 'teal',
+    tone: 'c2',
   },
   {
     key: 'workflows',
     routeName: 'manager.don-tu.workflows',
     icon: 'gitBranch',
     label: 'Quy trình',
-    tone: 'sky',
+    tone: 'c3',
   },
 ];
+
+/** Năm màu theme hiển thị trên palette KPI (không pha). */
+export const DON_TU_CONFIG_PALETTE = ['c1', 'c2', 'c3', 'c4', 'c5'];
 
 const viNumber = (n) => new Intl.NumberFormat('vi-VN').format(n);
 

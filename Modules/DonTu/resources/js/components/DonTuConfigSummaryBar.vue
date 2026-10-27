@@ -3,6 +3,7 @@ import { computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DonTuConfigKpiCard from './DonTuConfigKpiCard.vue';
 import {
+  DON_TU_CONFIG_PALETTE,
   donTuModuleDisplayValue,
   donTuModuleSubline,
   isDonTuModuleReady,
@@ -18,10 +19,6 @@ const { loading, summary, modules, readyCount, totalCount, loadSummary } = useDo
 
 const hint = computed(() =>
   totalCount.value > 0 ? `${readyCount.value}/${totalCount.value} đã cấu hình` : undefined,
-);
-
-const progressPct = computed(() =>
-  totalCount.value > 0 ? Math.round((readyCount.value / totalCount.value) * 100) : 0,
 );
 
 const chapterLabel = 'Thiết lập đơn từ';
@@ -44,13 +41,26 @@ defineExpose({ loadSummary, loading, summary });
 
 <template>
   <section
-    class="kpi-strip dt-kpi-strip dt-config-hub-theme"
+    class="dt-kpi-strip dt-config-hub-theme"
     aria-label="Thống kê danh mục cấu hình đơn từ"
     data-tour="kpi-strip"
   >
-    <div class="dt-kpi-strip__aurora" aria-hidden="true" />
-    <div class="dt-kpi-strip__spectrum" aria-hidden="true" />
-    <p class="dt-kpi-strip__watermark" aria-hidden="true">ĐƠN TỪ</p>
+    <svg class="dt-config-wm-defs" aria-hidden="true" focusable="false">
+      <filter id="dt-config-wm-boost" color-interpolation-filters="sRGB">
+        <feColorMatrix type="matrix" values="0 0 0 0 0.604  0 0 0 0 0  0 0 0 0 0.212  0 0 0 20 0" />
+      </filter>
+    </svg>
+    <img
+      src="/images/background/background-logo.png"
+      alt=""
+      class="dt-config-watermark"
+      aria-hidden="true"
+      :style="{ filter: 'url(#dt-config-wm-boost)' }"
+    />
+
+    <div class="dt-kpi-strip__palette" aria-hidden="true">
+      <span v-for="key in DON_TU_CONFIG_PALETTE" :key="key" class="dt-kpi-strip__palette-seg" :class="`dt-kpi-strip__palette-seg--${key}`" />
+    </div>
 
     <header class="dt-kpi-strip__head">
       <div>
@@ -59,10 +69,6 @@ defineExpose({ loadSummary, loading, summary });
       </div>
       <p v-if="hint" class="dt-kpi-strip__hint">{{ hint }}</p>
     </header>
-
-    <div v-if="!loading && totalCount" class="dt-kpi-strip__progress" aria-hidden="true">
-      <div class="dt-kpi-strip__progress-fill" :style="{ width: `${progressPct}%` }" />
-    </div>
 
     <div class="dt-kpi-strip__groups">
       <div>

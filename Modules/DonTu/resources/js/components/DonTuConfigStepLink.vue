@@ -22,7 +22,7 @@ defineProps({
   <li class="dt-roadmap-step-item">
     <router-link
       :to="{ name: mod.routeName }"
-      class="dt-roadmap-step group"
+      class="dt-roadmap-step"
       :class="{
         'dt-roadmap-step--current': isCurrent,
         'dt-roadmap-step--done': isComplete && !isCurrent,
@@ -38,6 +38,7 @@ defineProps({
             'dt-roadmap-step__badge--current': isCurrent,
             'dt-roadmap-step__badge--done': isComplete && !isCurrent,
             'dt-roadmap-step__badge--partial': !isComplete && isDonTuModuleReady(mod.key, counts),
+            [`dt-roadmap-step__badge--${mod.tone}`]: true,
           }"
         >
           <AppIcon v-if="isComplete && !isCurrent" name="check" :size="16" :stroke-width="2.25" />
@@ -52,14 +53,12 @@ defineProps({
         </span>
 
         <span class="dt-roadmap-step__copy">
-          <span class="dt-roadmap-step__title-row">
-            <span class="dt-roadmap-step__label">{{ mod.label }}</span>
-            <span v-if="isCurrent" class="dt-roadmap-step__pill dt-roadmap-step__pill--current">
-              {{ step === 1 ? 'Bắt đầu' : 'Tiếp theo' }}
-            </span>
-            <span v-else-if="isComplete" class="dt-roadmap-step__pill dt-roadmap-step__pill--done">
-              Đã có dữ liệu
-            </span>
+          <span class="dt-roadmap-step__label">{{ mod.label }}</span>
+          <span v-if="isCurrent" class="dt-roadmap-step__status dt-roadmap-step__status--current">
+            {{ step === 1 ? 'Bắt đầu' : 'Tiếp theo' }}
+          </span>
+          <span v-else-if="isComplete" class="dt-roadmap-step__status dt-roadmap-step__status--done">
+            Đã có dữ liệu
           </span>
         </span>
 

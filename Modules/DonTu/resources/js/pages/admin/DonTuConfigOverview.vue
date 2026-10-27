@@ -77,6 +77,13 @@ function stepState(mod) {
 
     <div class="dt-config-overview__grid">
       <section class="dt-config-roadmap" aria-label="Lộ trình cấu hình đơn từ" data-tour="don-tu-config-roadmap">
+        <img
+          src="/images/background/background-logo.png"
+          alt=""
+          class="dt-config-watermark dt-config-watermark--roadmap"
+          aria-hidden="true"
+          :style="{ filter: 'url(#dt-config-wm-boost)' }"
+        />
         <header class="dt-config-roadmap__head">
           <div class="dt-config-roadmap__head-top">
             <div>
