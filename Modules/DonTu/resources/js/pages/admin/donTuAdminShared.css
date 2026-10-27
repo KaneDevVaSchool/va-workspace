@@ -4,159 +4,266 @@
   text-align: center;
 }
 
-/* ---- Hub cấu hình (KPI strip + lộ trình — mẫu HRM attendance-leave/config) ---- */
+/* ---- Hub cấu hình — đồng bộ va-hrm attendance-leave/config + kpi-summary-strip.css ---- */
 
 .dt-config-overview {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   min-height: 0;
 }
 
 .dt-config-overview__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem);
-  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
   align-items: start;
 }
 
-.dt-kpi-strip {
-  margin-bottom: var(--space-1);
+@media (min-width: 1024px) {
+  .dt-config-overview__grid {
+    grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem);
+  }
+}
+
+/* KPI strip */
+.kpi-strip.dt-kpi-strip {
+  position: relative;
+  overflow-x: hidden;
+  margin-bottom: var(--space-4);
+  padding: 0.625rem var(--space-4) 0.75rem;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-surface-muted) 90%, var(--color-surface)),
+    var(--color-surface)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 85%, transparent), var(--shadow-sm);
+}
+
+@media (min-width: 640px) {
+  .kpi-strip.dt-kpi-strip {
+    padding: 0.75rem var(--space-5) var(--space-3);
+  }
+}
+
+.dt-kpi-strip__bg {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.45;
+}
+
+.dt-kpi-strip__bg-outer {
+  position: absolute;
+  top: 0;
+  right: -2rem;
+  height: 5rem;
+  width: min(50%, 18rem);
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+}
+
+.dt-kpi-strip__bg-inner {
+  position: absolute;
+  top: 0.5rem;
+  right: -1rem;
+  height: 4rem;
+  width: min(40%, 14rem);
+  background: color-mix(in srgb, var(--color-primary) 4%, transparent);
 }
 
 .dt-kpi-strip__head {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.dt-kpi-strip__eyebrow {
+  margin: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-primary) 80%, var(--color-text-muted));
 }
 
 .dt-kpi-strip__title {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .dt-kpi-strip__hint {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: 0.625rem;
   font-weight: 600;
-  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.dt-kpi-strip__groups {
+  position: relative;
+}
+
+.dt-kpi-strip__chapter {
+  margin: 0 0 0.375rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
 }
 
 .dt-kpi-strip__grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
+  padding-bottom: 0.125rem;
 }
 
-.dt-kpi-card {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  min-height: 3.75rem;
-  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-3));
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-  text-decoration: none;
-  color: inherit;
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+@media (min-width: 640px) {
+  .dt-kpi-strip__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
-.dt-kpi-card::before {
+.kpi-card__shell-inner {
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+  border-radius: 0.375rem;
+}
+
+.kpi-card__shell-accent {
+  clip-path: polygon(0 0, 100% 0, 55% 100%, 0 100%);
+  border-radius: 0.375rem 0 0 0.375rem;
+}
+
+.kpi-card__shell-outer {
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+  border-radius: 0.5rem;
+}
+
+.kpi-card--brand .kpi-card__shell-inner {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--color-primary) 7%, #fff), #fff 58%);
+}
+
+.kpi-card--brand .kpi-card__shell-accent {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--color-primary) 14%, transparent), transparent);
+}
+
+.kpi-card--sky .kpi-card__shell-inner {
+  background: linear-gradient(145deg, #f0f9ff, #fff 58%);
+}
+
+.kpi-card--sky .kpi-card__shell-accent {
+  background: linear-gradient(120deg, rgba(14, 165, 233, 0.18), transparent);
+}
+
+.kpi-card--violet .kpi-card__shell-inner {
+  background: linear-gradient(145deg, #f5f3ff, #fff 58%);
+}
+
+.kpi-card--violet .kpi-card__shell-accent {
+  background: linear-gradient(120deg, rgba(139, 92, 246, 0.18), transparent);
+}
+
+.kpi-card--static .kpi-card__shell-outer {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-border) 90%, transparent),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.kpi-card--active .kpi-card__shell-outer {
+  box-shadow:
+    inset 0 0 0 2px var(--color-primary),
+    0 6px 18px color-mix(in srgb, var(--color-primary) 16%, transparent);
+}
+
+.kpi-card:focus-visible .kpi-card__shell-outer {
+  box-shadow:
+    inset 0 0 0 2px var(--color-primary),
+    0 0 0 3px color-mix(in srgb, var(--color-primary) 32%, transparent);
+}
+
+.kpi-card__shine::after {
   content: '';
   position: absolute;
-  top: var(--space-2);
-  bottom: var(--space-2);
-  left: var(--space-2);
-  width: 3px;
-  border-radius: 0;
-  background: var(--color-border);
+  inset: 0;
+  background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0.45) 45%, transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
 }
 
-.dt-kpi-card:hover {
-  box-shadow: var(--shadow-md);
-}
-
-.dt-kpi-card--active {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, var(--color-border)), var(--shadow-sm);
-}
-
-.dt-kpi-card--brand::before,
-.dt-kpi-card--active.dt-kpi-card--brand::before {
-  background: var(--color-primary);
-}
-
-.dt-kpi-card--sky::before {
-  background: var(--color-info);
-}
-
-.dt-kpi-card--violet::before {
-  background: color-mix(in srgb, var(--color-primary) 55%, var(--color-info));
-}
-
-.dt-kpi-card__icon {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: var(--radius-sm);
-  background: var(--color-primary-100);
-  color: var(--color-primary-700);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, transparent);
-}
-
-.dt-kpi-card--sky .dt-kpi-card__icon {
-  background: color-mix(in srgb, var(--color-info) 12%, var(--color-surface));
-  color: var(--color-info);
-}
-
-.dt-kpi-card--violet .dt-kpi-card__icon {
-  background: var(--color-surface-muted);
-  color: var(--color-primary-700);
-}
-
-.dt-kpi-card__body {
-  flex: 1;
-  min-width: 0;
+.kpi-card--static:hover .kpi-card__shine::after {
+  transform: translateX(100%);
 }
 
 .dt-kpi-card__label {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 600;
+  margin: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.25;
   color: var(--color-text-muted);
 }
 
 .dt-kpi-card__value {
-  display: block;
-  margin-top: 0.15rem;
-  font-size: 1.25rem;
+  margin: 0.125rem 0 0;
+  font-size: 1.125rem;
   font-weight: 700;
-  line-height: 1;
-  color: var(--color-text);
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
 }
 
-.dt-kpi-card__value--empty {
-  color: var(--color-text-muted);
-  opacity: 0.45;
+.dt-kpi-card__value--brand {
+  color: var(--color-primary);
 }
 
 .dt-kpi-card__sub {
-  display: block;
-  margin-top: 0.2rem;
+  margin: 0;
   font-size: 0.625rem;
+  line-height: 1.35;
   color: var(--color-text-muted);
+}
+
+.dt-kpi-card__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  transition: transform 0.3s ease;
+}
+
+.group:hover .dt-kpi-card__icon {
+  transform: scale(1.05);
+}
+
+.dt-kpi-card__icon--brand {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.dt-kpi-card__icon--sky {
+  color: #0369a1;
+  background: #f0f9ff;
+  box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.35);
+}
+
+.dt-kpi-card__icon--violet {
+  color: #6d28d9;
+  background: #f5f3ff;
+  box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.35);
 }
 
 .dt-config-roadmap {
@@ -167,10 +274,6 @@
 }
 
 .dt-config-roadmap__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3) var(--space-4);
   padding: var(--space-4);
   background: linear-gradient(
     90deg,
@@ -178,6 +281,26 @@
     var(--color-surface)
   );
   box-shadow: 0 1px 0 var(--color-border);
+}
+
+@media (min-width: 640px) {
+  .dt-config-roadmap__head {
+    padding: var(--space-4) var(--space-5);
+  }
+}
+
+.dt-config-roadmap__head-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.dt-config-roadmap__progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
 }
 
 .dt-config-roadmap__eyebrow {
@@ -230,11 +353,6 @@
   color: var(--color-text);
 }
 
-.dt-config-progress__copy {
-  flex: 1;
-  min-width: 10rem;
-}
-
 .dt-config-progress__label {
   margin: 0;
   font-size: 0.875rem;
@@ -261,14 +379,43 @@
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-success) 22%, var(--color-border));
 }
 
-.dt-config-steps {
-  list-style: none;
-  margin: 0;
-  padding: var(--space-2) var(--space-2) var(--space-3);
+.dt-config-roadmap__body {
+  padding: var(--space-2);
 }
 
-.dt-config-step__link {
+@media (min-width: 640px) {
+  .dt-config-roadmap__body {
+    padding: var(--space-2) var(--space-3) var(--space-3);
+  }
+}
+
+.dt-config-roadmap__chapter-label {
+  margin: 0;
+  padding: var(--space-4) var(--space-2) var(--space-1);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+@media (min-width: 640px) {
+  .dt-config-roadmap__chapter-label {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+  }
+}
+
+.dt-config-roadmap__chapter ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dt-roadmap-step {
+  position: relative;
   display: flex;
+  width: 100%;
   align-items: stretch;
   gap: var(--space-3);
   padding: 0 var(--space-2);
@@ -276,169 +423,204 @@
   text-decoration: none;
   color: inherit;
   outline: none;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.dt-config-step__link:hover {
+.dt-roadmap-step:hover {
   background: var(--color-surface-muted);
 }
 
-.dt-config-step__link--current {
+.dt-roadmap-step--current {
   background: linear-gradient(
     90deg,
     color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)),
     color-mix(in srgb, var(--color-primary) 2%, var(--color-surface))
   );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, var(--color-border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 25%, var(--color-border));
 }
 
-.dt-config-step__link--done:hover {
+.dt-roadmap-step--done:hover {
   background: color-mix(in srgb, var(--color-success) 6%, var(--color-surface));
 }
 
-.dt-config-step__rail {
+.dt-roadmap-step:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+.dt-roadmap-step__rail {
   display: flex;
-  flex-direction: column;
-  align-items: center;
   width: 2.25rem;
   flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
   padding-top: var(--space-1);
 }
 
-.dt-config-step__line {
+.dt-roadmap-step__line {
   width: 1px;
   flex: 1;
   min-height: 0.75rem;
   background: var(--color-border);
 }
 
-.dt-config-step__line--hide {
+.dt-roadmap-step__line--off {
   background: transparent;
 }
 
-.dt-config-step__badge {
+.dt-roadmap-step__badge {
+  z-index: 1;
   display: flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--color-text-muted);
   background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border), 0 0 0 2px var(--color-surface);
+  box-shadow: 0 0 0 2px var(--color-surface), inset 0 0 0 1px var(--color-border);
 }
 
-.dt-config-step__badge--current {
+.dt-roadmap-step__badge--current {
   color: #fff;
   background: var(--color-primary);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary) 35%, transparent);
+  box-shadow: 0 0 0 2px var(--color-surface), 0 2px 8px color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 
-.dt-config-step__badge--done {
+.dt-roadmap-step__badge--done {
   color: #fff;
   background: var(--color-success);
+  box-shadow: 0 0 0 2px var(--color-surface);
 }
 
-.dt-config-step__icon {
-  flex-shrink: 0;
+.dt-roadmap-step__badge--partial {
+  color: #047857;
+  background: var(--color-surface);
+  box-shadow: 0 0 0 2px var(--color-surface), inset 0 0 0 1px color-mix(in srgb, var(--color-success) 35%, var(--color-border));
+}
+
+.dt-roadmap-step__main {
   display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-1) var(--space-3) 0;
+}
+
+.dt-roadmap-step__icon {
+  display: inline-flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  align-self: center;
-  width: 2.75rem;
-  height: 2.75rem;
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
   color: var(--color-text);
+  background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 1px var(--color-border);
+  transition: transform 0.3s ease;
 }
 
-.dt-config-step__link--current .dt-config-step__icon {
-  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+.group:hover .dt-roadmap-step__icon {
+  transform: scale(1.03);
+}
+
+.dt-roadmap-step__icon--current {
   color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 25%, var(--color-border));
 }
 
-.dt-config-step__body {
-  flex: 1;
-  min-width: 0;
-  align-self: center;
-  padding: var(--space-3) 0;
+.dt-roadmap-step__icon--done {
+  color: #047857;
+  background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-success) 35%, var(--color-border));
 }
 
-.dt-config-step__row {
+.dt-roadmap-step__title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
 }
 
-.dt-config-step__label {
+.dt-roadmap-step__label {
   font-size: 0.875rem;
   font-weight: 700;
   color: var(--color-text);
 }
 
-.dt-config-step__pill {
+.dt-roadmap-step__pill {
   display: inline-flex;
   align-items: center;
-  padding: 0.15rem 0.5rem;
+  gap: 0.2rem;
+  padding: 0.125rem 0.5rem;
   border-radius: 999px;
   font-size: 0.625rem;
   font-weight: 700;
 }
 
-.dt-config-step__pill--current {
+.dt-roadmap-step__pill--current {
   color: #fff;
   background: var(--color-primary);
 }
 
-.dt-config-step__pill--done {
-  color: var(--color-success);
+.dt-roadmap-step__pill--done {
+  color: #047857;
   background: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-success) 35%, var(--color-border));
 }
 
-.dt-config-step__stat {
+.dt-roadmap-step__stat {
   display: none;
   flex-shrink: 0;
-  align-self: center;
   text-align: right;
-  padding: var(--space-3) 0;
 }
 
-.dt-config-step__stat-num {
+.dt-roadmap-step__stat-num {
   display: block;
   font-size: 1.25rem;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
   color: var(--color-text);
 }
 
-.dt-config-step__stat-num--empty {
+.dt-roadmap-step__stat-num--empty {
   color: var(--color-text-muted);
   opacity: 0.45;
 }
 
-.dt-config-step__stat-sub {
+.dt-roadmap-step__stat-sub {
   display: block;
-  margin-top: 0.2rem;
+  margin-top: 0.25rem;
   font-size: 0.625rem;
+  font-variant-numeric: tabular-nums;
   color: var(--color-text-muted);
 }
 
-.dt-config-step__arrow {
+.dt-roadmap-step__arrow {
   display: none;
   flex-shrink: 0;
-  align-self: center;
   color: var(--color-text-muted);
+  transition: transform 0.2s ease, color 0.2s ease;
 }
 
-.dt-config-step__link:hover .dt-config-step__arrow {
+.group:hover .dt-roadmap-step__arrow {
   color: var(--color-primary);
+  transform: translateX(2px);
+}
+
+@media (min-width: 640px) {
+  .dt-roadmap-step__stat,
+  .dt-roadmap-step__arrow {
+    display: block;
+  }
 }
 
 .dt-config-aside {
@@ -468,9 +650,28 @@
   background: linear-gradient(
     145deg,
     color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)),
-    var(--color-surface)
+    var(--color-surface) 55%
   );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, var(--color-border)), var(--shadow-sm);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 20%, var(--color-border)), var(--shadow-sm);
+}
+
+.dt-config-aside__card--secondary {
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+}
+
+.dt-config-aside__card--secondary:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, var(--color-border)), var(--shadow-md);
+}
+
+.dt-config-aside__orb {
+  pointer-events: none;
+  position: absolute;
+  top: -1.5rem;
+  right: -1.5rem;
+  height: 6rem;
+  width: 6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
 
 .dt-config-aside__icon {
@@ -485,10 +686,10 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, transparent);
 }
 
-.dt-config-aside__icon--muted {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+.dt-config-aside__icon--sky {
+  color: #0369a1;
+  background: #f0f9ff;
+  box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.35);
 }
 
 .dt-config-aside__title {
@@ -515,20 +716,15 @@
   color: var(--color-primary);
 }
 
-@media (min-width: 640px) {
-  .dt-config-step__stat,
-  .dt-config-step__arrow {
-    display: block;
-  }
-}
-
-@media (max-width: 900px) {
-  .dt-kpi-strip__grid {
-    grid-template-columns: 1fr;
+@media (prefers-reduced-motion: reduce) {
+  .kpi-card__shine::after,
+  .dt-config-progress__fill {
+    transition: none;
   }
 
-  .dt-config-overview__grid {
-    grid-template-columns: 1fr;
+  .group:hover .dt-roadmap-step__icon,
+  .group:hover .dt-kpi-card__icon {
+    transform: none;
   }
 }
 

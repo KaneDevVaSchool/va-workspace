@@ -3,7 +3,6 @@ import { computed, provide, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
-import DonTuConfigSummaryBar from '../components/DonTuConfigSummaryBar.vue';
 import { DON_TU_CONFIG_HUB_KEY } from '../composables/useDonTuConfigHub.js';
 import {
   DON_TU_CONFIG_SUMMARY_KEY,
@@ -95,6 +94,8 @@ const primaryAction = ref(null);
 
 const headerPrimaryAction = computed(() => primaryAction.value);
 
+const headerIcon = computed(() => (isConfigOverview.value ? 'settings' : 'fileText'));
+
 provide(DON_TU_CONFIG_HUB_KEY, {
   registerReload(fn) {
     reloadChild.value = fn;
@@ -131,7 +132,7 @@ async function reload() {
     <PageHeader
       :title="currentTitle"
       :subtitle="headerSubtitle"
-      icon="fileText"
+      :icon="headerIcon"
       :breadcrumbs="breadcrumbs"
       :primary-action="isConfigArea && !isConfigOverview ? headerPrimaryAction : null"
     >
@@ -142,11 +143,6 @@ async function reload() {
         </button>
       </template>
     </PageHeader>
-
-    <DonTuConfigSummaryBar
-      v-if="isConfigArea && !isConfigOverview && !isConfigEditor"
-      :auto-load="false"
-    />
 
     <nav
       v-if="hubTabs"
