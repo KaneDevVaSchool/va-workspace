@@ -6,6 +6,7 @@ const props = defineProps({
   code: { type: String, default: '' },
   label: { type: String, default: '' },
   compact: { type: Boolean, default: false },
+  tableChip: { type: Boolean, default: false },
   showCode: { type: Boolean, default: false },
 });
 
@@ -15,7 +16,10 @@ const tone = computed(() => toneOfStatusCode(props.code));
 <template>
   <span
     class="dt-status-badge"
-    :class="[`dt-status-badge--${tone}`, { 'dt-status-badge--compact': compact }]"
+    :class="[
+      `dt-status-badge--${tone}`,
+      { 'dt-status-badge--compact': compact, 'dt-status-badge--table-chip': tableChip },
+    ]"
   >
     <span v-if="showCode && code" class="dt-status-badge__code">{{ code }}</span>
     <span class="dt-status-badge__label">{{ label || code }}</span>
@@ -42,6 +46,20 @@ const tone = computed(() => toneOfStatusCode(props.code));
   flex-direction: row;
   align-items: center;
   gap: var(--space-2);
+}
+
+.dt-status-badge--table-chip {
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 9.5rem;
+  width: 100%;
+  max-width: 14rem;
+  padding: 0.45rem 0.75rem;
+  text-align: center;
+}
+
+.dt-status-badge--table-chip .dt-status-badge__label {
+  line-height: 1.35;
 }
 
 .dt-status-badge__code {

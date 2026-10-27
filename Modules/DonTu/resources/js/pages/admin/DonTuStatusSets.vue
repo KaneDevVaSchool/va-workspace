@@ -614,14 +614,25 @@ async function submitCreate() {
           </header>
 
           <div v-show="viewTab === 'flow'" class="dt-setup__group-body">
-          <p v-if="!(detail.statuses?.length)" class="dt-setup__callout">
-            Bộ này chưa có trạng thái. Mở menu Thêm trên trang để khai báo bước đầu tiên.
-          </p>
+          <div v-if="!(detail.statuses?.length)" class="dt-flow-note dt-flow-note--info" role="note">
+            <span class="dt-flow-note__icon" aria-hidden="true">
+              <AppIcon name="info" :size="14" :stroke-width="2" />
+            </span>
+            <p class="dt-flow-note__text">Bộ này chưa có trạng thái. Mở menu Thêm trên trang để khai báo bước đầu tiên.</p>
+          </div>
           <div v-else class="dt-pipeline-board">
-            <section class="dt-pipeline-section" aria-labelledby="dt-pipeline-main-label">
+            <section class="dt-pipeline-section dt-pipeline-section--canvas" aria-labelledby="dt-pipeline-main-label">
               <header class="dt-pipeline-section__head">
-                <h4 id="dt-pipeline-main-label" class="dt-pipeline-section__title">{{ GROUP_KIND_LABEL.main }}</h4>
-                <p class="dt-pipeline-section__hint">Đi từ trái sang phải — mỗi ô là một trạng thái trên hồ sơ.</p>
+                <div class="dt-pipeline-section__head-row">
+                  <h4 id="dt-pipeline-main-label" class="dt-pipeline-section__title">{{ GROUP_KIND_LABEL.main }}</h4>
+                  <span class="dt-pipeline-section__kicker">Luồng chính</span>
+                </div>
+                <div class="dt-flow-note" role="note">
+                  <span class="dt-flow-note__icon" aria-hidden="true">
+                    <AppIcon name="arrowRight" :size="14" :stroke-width="2" />
+                  </span>
+                  <p class="dt-flow-note__text">Đi từ trái sang phải — mỗi nút là một trạng thái trên hồ sơ; bấm để lọc quy tắc chuyển.</p>
+                </div>
               </header>
               <div ref="pipelineWrap" class="dt-pipeline hide-scrollbar">
                 <ol v-if="mainFlow.length" class="dt-pipeline__track">
@@ -658,8 +669,16 @@ async function submitCreate() {
 
             <section v-if="conditional.length" class="dt-pipeline-section dt-pipeline-section--branch" aria-labelledby="dt-pipeline-cond-label">
               <header class="dt-pipeline-section__head">
-                <h4 id="dt-pipeline-cond-label" class="dt-pipeline-section__title">{{ GROUP_KIND_LABEL.conditional }}</h4>
-                <p class="dt-pipeline-section__hint">Chỉ xảy ra khi cần thêm việc (bổ sung, sửa lại…).</p>
+                <div class="dt-pipeline-section__head-row">
+                  <h4 id="dt-pipeline-cond-label" class="dt-pipeline-section__title">{{ GROUP_KIND_LABEL.conditional }}</h4>
+                  <span class="dt-pipeline-section__kicker dt-pipeline-section__kicker--branch">Nhánh</span>
+                </div>
+                <div class="dt-flow-note dt-flow-note--info" role="note">
+                  <span class="dt-flow-note__icon" aria-hidden="true">
+                    <AppIcon name="gitBranch" :size="14" :stroke-width="2" />
+                  </span>
+                  <p class="dt-flow-note__text">Chỉ xảy ra khi cần thêm việc (bổ sung, sửa lại…).</p>
+                </div>
               </header>
               <ul class="dt-pipeline-branches">
                 <li v-for="st in conditional" :key="st.code">
@@ -679,8 +698,16 @@ async function submitCreate() {
 
             <section v-if="terminal.length" class="dt-pipeline-section dt-pipeline-section--branch" aria-labelledby="dt-pipeline-term-label">
               <header class="dt-pipeline-section__head">
-                <h4 id="dt-pipeline-term-label" class="dt-pipeline-section__title">{{ GROUP_KIND_LABEL.terminal }}</h4>
-                <p class="dt-pipeline-section__hint">Hồ sơ dừng lại ở đây — không đi tiếp trên đường chính.</p>
+                <div class="dt-pipeline-section__head-row">
+                  <h4 id="dt-pipeline-term-label" class="dt-pipeline-section__title">{{ GROUP_KIND_LABEL.terminal }}</h4>
+                  <span class="dt-pipeline-section__kicker dt-pipeline-section__kicker--term">Kết thúc</span>
+                </div>
+                <div class="dt-flow-note dt-flow-note--muted" role="note">
+                  <span class="dt-flow-note__icon" aria-hidden="true">
+                    <AppIcon name="flag" :size="14" :stroke-width="2" />
+                  </span>
+                  <p class="dt-flow-note__text">Hồ sơ dừng lại ở đây — không đi tiếp trên đường chính.</p>
+                </div>
               </header>
               <ul class="dt-pipeline-branches">
                 <li v-for="st in terminal" :key="st.code">
@@ -703,8 +730,8 @@ async function submitCreate() {
           </div>
           </div>
 
-          <div v-show="viewTab === 'rules'" class="dt-setup__group-body">
-          <div class="dt-panel__row">
+          <div v-show="viewTab === 'rules'" class="dt-setup__group-body dt-trans-rules">
+          <div class="dt-trans-rules__toolbar">
             <button v-if="focusCode" type="button" class="dt-link-btn" @click="focusCode = ''">
               Xem tất cả trạng thái
             </button>
@@ -717,7 +744,13 @@ async function submitCreate() {
             />
           </div>
           <div ref="transWrap" class="dt-trans-table__scroll hide-scrollbar">
-            <table class="dt-trans-table">
+            <table class="dt-trans-table dt-trans-table--rules">
+              <colgroup>
+                <col class="dt-trans-col dt-trans-col--status" />
+                <col class="dt-trans-col dt-trans-col--action" />
+                <col class="dt-trans-col dt-trans-col--status" />
+                <col class="dt-trans-col dt-trans-col--actor" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Đang ở</th>
@@ -730,28 +763,38 @@ async function submitCreate() {
                 <tr v-if="!filteredTransitions.length">
                   <td colspan="4" class="dt-status-page__empty">Không thấy dòng nào khớp.</td>
                 </tr>
-                <tr v-for="tr in filteredTransitions" :key="tr.id">
-                  <td>
-                    <DonTuStatusBadge
-                      v-if="tr.from_code !== 'NONE'"
-                      compact
-                      :code="tr.from_code"
-                      :label="statusLabel(tr.from_code)"
-                    />
-                    <span v-else class="dt-trans-none">Lúc chưa có hồ sơ</span>
+                <tr v-for="tr in filteredTransitions" :key="tr.id" class="dt-trans-table__row">
+                  <td class="dt-trans-table__cell dt-trans-table__cell--status">
+                    <div class="dt-trans-table__status">
+                      <DonTuStatusBadge
+                        v-if="tr.from_code !== 'NONE'"
+                        compact
+                        table-chip
+                        :code="tr.from_code"
+                        :label="statusLabel(tr.from_code)"
+                      />
+                      <span v-else class="dt-trans-table__chip dt-trans-table__chip--muted">Lúc chưa có hồ sơ</span>
+                    </div>
                   </td>
-                  <td>
-                    <span class="dt-action-pill">{{ actionLabel(tr.action_key) }}</span>
-                    <span v-if="guardHint(tr.guard_json)" class="dt-guard">{{ guardHint(tr.guard_json) }}</span>
+                  <td class="dt-trans-table__cell dt-trans-table__cell--action">
+                    <div class="dt-trans-table__action">
+                      <span class="dt-action-chip">{{ actionLabel(tr.action_key) }}</span>
+                      <span v-if="guardHint(tr.guard_json)" class="dt-guard">{{ guardHint(tr.guard_json) }}</span>
+                    </div>
                   </td>
-                  <td>
-                    <DonTuStatusBadge
-                      compact
-                      :code="tr.to_code"
-                      :label="statusLabel(tr.to_code)"
-                    />
+                  <td class="dt-trans-table__cell dt-trans-table__cell--status">
+                    <div class="dt-trans-table__status">
+                      <DonTuStatusBadge
+                        compact
+                        table-chip
+                        :code="tr.to_code"
+                        :label="statusLabel(tr.to_code)"
+                      />
+                    </div>
                   </td>
-                  <td class="dt-trans-actor">{{ actorLabel(tr.actor_policy) }}</td>
+                  <td class="dt-trans-table__cell dt-trans-table__cell--actor">
+                    <span class="dt-trans-actor">{{ actorLabel(tr.actor_policy) }}</span>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -1365,26 +1408,113 @@ async function submitCreate() {
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-border) 60%, transparent);
 }
 
-.dt-action-pill {
-  display: inline-block;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
+.dt-trans-rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.dt-trans-rules .dt-trans-table__scroll {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dt-trans-rules__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.dt-trans-table--rules {
+  table-layout: fixed;
+}
+
+.dt-trans-col--status {
+  width: 22%;
+}
+
+.dt-trans-col--action {
+  width: 26%;
+}
+
+.dt-trans-col--actor {
+  width: 30%;
+}
+
+.dt-trans-table__row:hover {
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
+}
+
+.dt-trans-table__cell--status,
+.dt-trans-table__cell--action {
+  vertical-align: top;
+}
+
+.dt-trans-table__status,
+.dt-trans-table__action {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  max-width: 14rem;
+}
+
+.dt-trans-table__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 9.5rem;
+  width: 100%;
+  max-width: 14rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
   font-weight: 500;
-  font-size: 0.75rem;
-  background: var(--color-primary-100);
-  color: var(--color-primary-700);
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.dt-action-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 9.5rem;
+  width: 100%;
+  max-width: 14rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, var(--color-border));
 }
 
 .dt-guard {
   display: block;
-  margin-top: 0.2rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
+  line-height: 1.4;
   color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 80%, transparent);
 }
 
-.dt-trans-none,
 .dt-trans-actor {
+  display: block;
   font-size: 0.8125rem;
+  line-height: 1.45;
   color: var(--color-text);
 }
 
