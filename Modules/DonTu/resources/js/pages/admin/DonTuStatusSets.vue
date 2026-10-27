@@ -85,6 +85,7 @@ const showRail = computed(() => sets.value.length > 0);
 const railCollapsed = ref(false);
 const RAIL_COLLAPSE_KEY = 'don-tu.status-rail-collapsed';
 const viewTab = ref('flow');
+const caseLens = ref('all');
 const barOpen = ref(false);
 const stepDrawerOpen = ref(false);
 
@@ -136,10 +137,49 @@ const FORWARD_ACTIONS = new Set([
 ]);
 const STOP_ACTIONS = new Set(['REJECT', 'CANCEL', 'REQUEST_CHANGES']);
 
-const trackStages = computed(() => [
-  ...mainFlow.value,
-  ...terminal.value.filter((status) => status.terminal_kind !== 'failed'),
-]);
+const trackStages = computed(() => mainFlow.value);
+
+const successEnds = computed(() => terminal.value.filter((status) => status.terminal_kind !== 'failed'));
+
+const cancelEnds = computed(() => terminal.value.filter((status) => status.terminal_kind === 'failed'));
+
+function reachOf(ends) {
+  const transitions = detail.value?.transitions ?? [];
+  const seen = new Set(ends.map((status) => status.code));
+  const queue = [...seen];
+  while (queue.length) {
+    const code = queue.shift();
+    for (const tr of transitions) {
+      if (tr.to_code === code && tr.from_code && tr.from_code !== 'NONE' && !seen.has(tr.from_code)) {
+        seen.add(tr.from_code);
+        queue.push(tr.from_code);
+      }
+    }
+  }
+  return seen;
+}
+
+const successReach = computed(() => reachOf(successEnds.value));
+const cancelReach = computed(() => reachOf(cancelEnds.value));
+const successMoveCount = computed(() => successEnds.value.reduce((sum, end) => sum + movesInto(end.code).length, 0));
+const cancelMoveCount = computed(() => cancelEnds.value.reduce((sum, end) => sum + movesInto(end.code).length, 0));
+
+function movesInto(code) {
+  return (detail.value?.transitions ?? []).filter((tr) => tr.to_code === code);
+}
+
+function endingNodes(mine, statuses, toneWhenHit) {
+  return statuses.map((status) => {
+    const here = mine.filter((tr) => tr.to_code === status.code);
+    return {
+      code: status.code,
+      label: status.label,
+      tone: here.length ? toneWhenHit : 'off',
+      actions: [...new Set(here.map((tr) => actionLabel(tr.action_key)))],
+      from: [...new Set(here.map((tr) => statusLabel(tr.from_code)))],
+    };
+  });
+}
 
 const actorTracks = computed(() => {
   const q = transitionQuery.value.trim().toLowerCase();
@@ -169,19 +209,49 @@ const actorTracks = computed(() => {
           actions: [...new Set(here.map((tr) => actionLabel(tr.action_key)))],
         };
       });
+      const done = endingNodes(mine, successEnds.value, 'go');
+      const stop = endingNodes(mine, cancelEnds.value, 'hold');
+      const lens = caseLens.value;
+      let pathNodes = nodes;
+      if (lens === 'done' || lens === 'stop') {
+        const reach = lens === 'done' ? successReach.value : cancelReach.value;
+        const ends = new Set((lens === 'done' ? successEnds.value : cancelEnds.value).map((status) => status.code));
+        pathNodes = nodes
+          .filter((node) => reach.has(node.code) && !ends.has(node.code))
+          .map((node) => {
+            const here = mine.filter((tr) => tr.from_code === node.code);
+            const hit = here.filter((tr) =>
+              lens === 'done' ? reach.has(tr.to_code) && !STOP_ACTIONS.has(tr.action_key) : ends.has(tr.to_code),
+            );
+            return {
+              ...node,
+              tone: hit.length ? (lens === 'done' ? 'go' : 'hold') : 'off',
+              actions: [...new Set(hit.map((tr) => actionLabel(tr.action_key)))],
+            };
+          })
+          .filter((node) => node.tone !== 'off');
+      }
+      const doneShown = lens === 'stop' ? [] : done;
+      const stopShown = lens === 'done' ? [] : stop;
+      const touch = [...pathNodes, ...doneShown, ...stopShown].filter((node) => node.tone !== 'off').length;
+      if (lens !== 'all' && touch === 0) return null;
       return {
         actor,
         label: actorLabel(actor),
-        touch: nodes.filter((node) => node.tone !== 'off').length,
-        nodes,
+        touch,
+        nodes: pathNodes,
+        done: doneShown,
+        stop: stopShown,
       };
     })
+    .filter(Boolean)
     .filter((row) => {
       if (!q) return true;
-      return [row.label, ...row.nodes.flatMap((node) => [node.label, ...node.actions])]
-        .join(' ')
-        .toLowerCase()
-        .includes(q);
+      const bits = [row.label];
+      for (const node of [...row.nodes, ...row.done, ...row.stop]) {
+        bits.push(node.label, ...node.actions, ...(node.from || []));
+      }
+      return bits.join(' ').toLowerCase().includes(q);
     });
 });
 
@@ -222,6 +292,7 @@ async function loadDetail(id) {
   transitionQuery.value = '';
   focusCode.value = '';
   stepDrawerOpen.value = false;
+  caseLens.value = 'all';
   try {
     detail.value = await fetchStatusSet(id);
   } catch (err) {
@@ -240,46 +311,51 @@ function syncHeaderPrimary() {
     return;
   }
   configHub.setPrimaryAction({
-    label: 'Thêm',
+    label: 'Tạo bộ trạng thái',
     icon: 'plus',
-    items: [
-      { label: 'Tạo bộ trạng thái', onSelect: () => openCreateSet() },
-      {
-        label: 'Thêm trạng thái',
-        description: !detail.value ? 'Chọn hoặc tạo nhóm trước' : undefined,
-        onSelect: () => {
-          if (!detail.value || loadingDetail.value) {
-            showClientToast('error', 'Chọn bộ trạng thái trước khi thêm trạng thái.');
-            return;
-          }
-          openCreate();
-        },
-      },
-    ],
+    onClick: () => openCreateSet(),
   });
 }
 
-watch([canWrite, detail, loadingDetail], syncHeaderPrimary, { immediate: true });
+watch(canWrite, syncHeaderPrimary, { immediate: true });
 
 function closeSetMenu() {
   setMenu.value = null;
 }
 
-function onSetContextMenu(event, set) {
+function openSetMenu(event, set) {
   if (!canWrite.value) return;
+  if (setMenu.value?.set?.id === set.id) {
+    closeSetMenu();
+    return;
+  }
   const pad = 8;
-  const menuW = 168;
-  const menuH = 88;
+  const menuW = 188;
+  const menuH = 132;
+  const rect = event.currentTarget?.getBoundingClientRect?.();
+  const rawX = rect ? rect.right - menuW : event.clientX;
+  const rawY = rect ? rect.bottom + 4 : event.clientY;
   setMenu.value = {
     set,
-    x: Math.min(Math.max(pad, event.clientX), Math.max(pad, window.innerWidth - menuW - pad)),
-    y: Math.min(Math.max(pad, event.clientY), Math.max(pad, window.innerHeight - menuH - pad)),
+    x: Math.min(Math.max(pad, rawX), Math.max(pad, window.innerWidth - menuW - pad)),
+    y: Math.min(Math.max(pad, rawY), Math.max(pad, window.innerHeight - menuH - pad)),
   };
+}
+
+async function addStatusToSet(set) {
+  closeSetMenu();
+  if (!set?.id) return;
+  if (selectedId.value !== set.id || detail.value?.id !== set.id) {
+    selectedId.value = set.id;
+    await loadDetail(set.id);
+  }
+  openCreate();
 }
 
 function onDocPointerDown(event) {
   if (!setMenu.value) return;
   if (setMenuEl.value?.contains(event.target)) return;
+  if (event.target?.closest?.('.dt-set-row__more')) return;
   closeSetMenu();
 }
 
@@ -410,12 +486,29 @@ const linkedCodes = computed(() => {
 });
 
 function stepClass(code) {
-  if (!linkedCodes.value) return {};
-  return {
-    'is-on': code === focusCode.value,
-    'is-link': code !== focusCode.value && linkedCodes.value.has(code),
-    'is-dim': !linkedCodes.value.has(code),
-  };
+  const linked = linkedCodes.value;
+  if (linked) {
+    return {
+      'is-on': code === focusCode.value,
+      'is-link': code !== focusCode.value && linked.has(code),
+      'is-dim': !linked.has(code),
+    };
+  }
+  if (caseLens.value === 'done') {
+    const onPath = successReach.value.has(code);
+    return { 'is-case-done': onPath, 'is-dim': !onPath };
+  }
+  if (caseLens.value === 'stop') {
+    const onPath = cancelReach.value.has(code);
+    return { 'is-case-stop': onPath, 'is-dim': !onPath };
+  }
+  return {};
+}
+
+function setCaseLens(next) {
+  caseLens.value = next;
+  focusCode.value = '';
+  stepDrawerOpen.value = false;
 }
 
 function toggleFocus(code) {
@@ -821,14 +914,14 @@ async function submitCreate() {
           <li v-if="!filteredSets.length" class="dt-set-rail__empty">
             <p>Không có kết quả.</p>
           </li>
-          <li v-for="set in filteredSets" :key="set.id">
+          <li v-for="set in filteredSets" :key="set.id" class="dt-set-row" :class="{ 'dt-set-row--active': selectedId === set.id }">
             <button
               type="button"
               class="dt-set-pick"
               :class="{ 'dt-set-pick--active': selectedId === set.id }"
               :aria-current="selectedId === set.id ? 'true' : undefined"
               @click="selectedId = set.id"
-              @contextmenu.prevent="onSetContextMenu($event, set)"
+              @contextmenu.prevent="openSetMenu($event, set)"
             >
               <span class="dt-set-pick__main">
                 <span class="dt-set-pick__name">{{ friendlySetName(set.name, set.code) }}</span>
@@ -837,6 +930,16 @@ async function submitCreate() {
                 </span>
               </span>
               <span class="dt-set-pick__count">{{ set.status_count }} bước</span>
+            </button>
+            <button
+              v-if="canWrite"
+              type="button"
+              class="dt-set-row__more"
+              aria-label="Thao tác"
+              :aria-expanded="setMenu?.set?.id === set.id"
+              @click.stop="openSetMenu($event, set)"
+            >
+              <AppIcon name="moreVertical" :size="16" :stroke-width="1.75" />
             </button>
           </li>
         </ul>
@@ -908,6 +1011,19 @@ async function submitCreate() {
           <div v-show="viewTab === 'flow'" class="dt-setup__group-body">
           <p v-if="!(detail.statuses?.length)" class="dt-status-page__empty">Chưa có trạng thái.</p>
           <div v-else class="dt-flow-board" @keydown.left.prevent="moveFocus(-1)" @keydown.right.prevent="moveFocus(1)">
+            <div class="dt-case-switch" role="tablist" aria-label="Hướng kết thúc">
+              <button type="button" role="tab" class="dt-case-switch__btn" :class="{ 'is-on': caseLens === 'all' }" :aria-selected="caseLens === 'all'" @click="setCaseLens('all')">
+                Cả hai hướng
+              </button>
+              <button type="button" role="tab" class="dt-case-switch__btn is-done" :class="{ 'is-on': caseLens === 'done' }" :aria-selected="caseLens === 'done'" @click="setCaseLens('done')">
+                Khi thành công
+                <span>{{ successMoveCount }}</span>
+              </button>
+              <button type="button" role="tab" class="dt-case-switch__btn is-stop" :class="{ 'is-on': caseLens === 'stop' }" :aria-selected="caseLens === 'stop'" @click="setCaseLens('stop')">
+                Khi hủy
+                <span>{{ cancelMoveCount }}</span>
+              </button>
+            </div>
             <div v-if="mainFlow.length" class="dt-zz-wrap">
               <button
                 v-if="mainFlow.length > 4"
@@ -971,6 +1087,43 @@ async function submitCreate() {
               </button>
             </div>
 
+            <div v-if="successEnds.length || cancelEnds.length" class="dt-ends" :class="{ 'dt-ends--solo': caseLens !== 'all' }">
+              <section v-if="caseLens !== 'stop'" class="dt-ends__case dt-ends__case--done">
+                <h3>Khi thành công</h3>
+                <p v-if="!successEnds.length" class="dt-ends__empty">Chưa có bước thành công.</p>
+                <article v-for="end in successEnds" :key="end.code" class="dt-ends__card">
+                  <button type="button" class="dt-ends__name" @click="toggleFocus(end.code)">{{ end.label }}</button>
+                  <ul v-if="movesInto(end.code).length" class="dt-end-moves">
+                    <li v-for="tr in movesInto(end.code)" :key="`ok-${tr.id}`">
+                      <button type="button" class="dt-end-move" @click="toggleFocus(tr.from_code === 'NONE' ? end.code : tr.from_code)">
+                        <span class="dt-end-move__who" :class="`is-${tr.actor_policy}`">{{ actorLabel(tr.actor_policy) }}</span>
+                        <span class="dt-end-move__do">{{ actionLabel(tr.action_key) }}</span>
+                        <span class="dt-end-move__from">từ {{ statusLabel(tr.from_code) }}</span>
+                      </button>
+                    </li>
+                  </ul>
+                  <p v-else class="dt-ends__empty">Chưa có lối vào bước này.</p>
+                </article>
+              </section>
+              <section v-if="caseLens !== 'done'" class="dt-ends__case dt-ends__case--fail">
+                <h3>Khi hủy</h3>
+                <p v-if="!cancelEnds.length" class="dt-ends__empty">Chưa có bước hủy.</p>
+                <article v-for="end in cancelEnds" :key="end.code" class="dt-ends__card">
+                  <button type="button" class="dt-ends__name" @click="toggleFocus(end.code)">{{ end.label }}</button>
+                  <ul v-if="movesInto(end.code).length" class="dt-end-moves">
+                    <li v-for="tr in movesInto(end.code)" :key="`no-${tr.id}`">
+                      <button type="button" class="dt-end-move" @click="toggleFocus(tr.from_code === 'NONE' ? end.code : tr.from_code)">
+                        <span class="dt-end-move__who" :class="`is-${tr.actor_policy}`">{{ actorLabel(tr.actor_policy) }}</span>
+                        <span class="dt-end-move__do">{{ actionLabel(tr.action_key) }}</span>
+                        <span class="dt-end-move__from">từ {{ statusLabel(tr.from_code) }}</span>
+                      </button>
+                    </li>
+                  </ul>
+                  <p v-else class="dt-ends__empty">Chưa có lối vào bước này.</p>
+                </article>
+              </section>
+            </div>
+
           </div>
           </div>
 
@@ -985,6 +1138,17 @@ async function submitCreate() {
                 </ul>
               </div>
               <div class="dt-track__tools">
+                <div class="dt-case-switch" role="tablist" aria-label="Hướng kết thúc">
+                  <button type="button" role="tab" class="dt-case-switch__btn" :class="{ 'is-on': caseLens === 'all' }" :aria-selected="caseLens === 'all'" @click="setCaseLens('all')">
+                    Cả hai hướng
+                  </button>
+                  <button type="button" role="tab" class="dt-case-switch__btn is-done" :class="{ 'is-on': caseLens === 'done' }" :aria-selected="caseLens === 'done'" @click="setCaseLens('done')">
+                    Khi thành công
+                  </button>
+                  <button type="button" role="tab" class="dt-case-switch__btn is-stop" :class="{ 'is-on': caseLens === 'stop' }" :aria-selected="caseLens === 'stop'" @click="setCaseLens('stop')">
+                    Khi hủy
+                  </button>
+                </div>
                 <button v-if="focusCode" type="button" class="dt-link-btn" @click="focusCode = ''">
                   Xem mọi bước
                 </button>
@@ -1000,7 +1164,9 @@ async function submitCreate() {
               </div>
             </header>
             <div ref="transWrap" class="dt-track hide-scrollbar">
-              <p v-if="!actorTracks.length" class="dt-status-page__empty">Không có vai nào khớp.</p>
+              <p v-if="!actorTracks.length" class="dt-status-page__empty">
+                {{ caseLens === 'all' ? 'Không có vai nào khớp.' : 'Không có vai nào làm hướng này.' }}
+              </p>
               <article v-for="row in actorTracks" :key="row.actor" class="dt-track__row">
                 <div class="dt-track__who">
                   <span class="dt-track__avatar" aria-hidden="true">
@@ -1026,6 +1192,44 @@ async function submitCreate() {
                     <span class="dt-track__cap">{{ node.label }}</span>
                     <span v-if="node.actions.length" class="dt-track__act">{{ node.actions.join(' · ') }}</span>
                   </button>
+                  <div v-if="caseLens !== 'stop'" class="dt-track__case dt-track__case--done">
+                    <span class="dt-track__case-kicker">Khi thành công</span>
+                    <p v-if="!row.done.length" class="dt-track__case-empty">Chưa có</p>
+                    <button
+                      v-for="node in row.done"
+                      :key="`${row.actor}-done-${node.code}`"
+                      type="button"
+                      class="dt-track__node"
+                      :class="{ 'is-dim': focusCode && focusCode !== node.code, 'is-on': focusCode === node.code }"
+                      @click="toggleFocus(node.code)"
+                    >
+                      <span class="dt-track__dot" :class="`is-${node.tone}`" aria-hidden="true">
+                        <AppIcon v-if="node.tone === 'go'" name="check" :size="14" :stroke-width="2.5" />
+                      </span>
+                      <span class="dt-track__cap">{{ node.label }}</span>
+                      <span v-if="node.actions.length" class="dt-track__act">{{ node.actions.join(' · ') }}</span>
+                      <span v-if="node.from.length" class="dt-track__from">Từ {{ node.from.join(', ') }}</span>
+                    </button>
+                  </div>
+                  <div v-if="caseLens !== 'done'" class="dt-track__case dt-track__case--fail">
+                    <span class="dt-track__case-kicker">Khi hủy</span>
+                    <p v-if="!row.stop.length" class="dt-track__case-empty">Chưa có</p>
+                    <button
+                      v-for="node in row.stop"
+                      :key="`${row.actor}-stop-${node.code}`"
+                      type="button"
+                      class="dt-track__node"
+                      :class="{ 'is-dim': focusCode && focusCode !== node.code, 'is-on': focusCode === node.code }"
+                      @click="toggleFocus(node.code)"
+                    >
+                      <span class="dt-track__dot" :class="`is-${node.tone}`" aria-hidden="true">
+                        <AppIcon v-if="node.tone === 'hold'" name="close" :size="12" :stroke-width="2.5" />
+                      </span>
+                      <span class="dt-track__cap">{{ node.label }}</span>
+                      <span v-if="node.actions.length" class="dt-track__act">{{ node.actions.join(' · ') }}</span>
+                      <span v-if="node.from.length" class="dt-track__from">Từ {{ node.from.join(', ') }}</span>
+                    </button>
+                  </div>
                 </div>
               </article>
             </div>
@@ -1233,7 +1437,7 @@ async function submitCreate() {
                 <div v-else-if="!createSetForm.use_template" class="dt-set-preview__plan">
                   <ol class="dt-set-preview__steps">
                     <li>Tạo bộ với tên và mã đã nhập</li>
-                    <li>Thêm trạng thái từ menu Thêm</li>
+                    <li>Mở bộ vừa tạo rồi thêm trạng thái</li>
                     <li>Gắn bộ vào quy trình duyệt</li>
                   </ol>
                 </div>
@@ -1455,11 +1659,15 @@ async function submitCreate() {
         :style="{ left: `${setMenu.x}px`, top: `${setMenu.y}px` }"
         @contextmenu.prevent
       >
+        <button type="button" role="menuitem" @click="addStatusToSet(setMenu.set)">
+          <AppIcon name="plus" :size="16" :stroke-width="1.75" aria-hidden="true" />
+          Thêm trạng thái
+        </button>
         <button type="button" role="menuitem" @click="openEditSet(setMenu.set)">
           <AppIcon name="pencil" :size="16" :stroke-width="1.75" aria-hidden="true" />
           Sửa
         </button>
-        <button type="button" role="menuitem" @click="askDeleteSet(setMenu.set)">
+        <button type="button" role="menuitem" class="is-danger" @click="askDeleteSet(setMenu.set)">
           <AppIcon name="trash2" :size="16" :stroke-width="1.75" aria-hidden="true" />
           Xóa
         </button>
@@ -1500,10 +1708,14 @@ async function submitCreate() {
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-danger);
+  color: var(--color-text);
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.dt-set-ctx button.is-danger {
+  color: var(--color-danger);
 }
 
 .dt-set-ctx button:hover {
