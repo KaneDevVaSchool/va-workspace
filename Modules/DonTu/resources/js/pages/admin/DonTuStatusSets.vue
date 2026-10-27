@@ -16,6 +16,7 @@ import {
   friendlySetName,
   guardHint,
   humanSetDescription,
+  toneOfStatusCode,
 } from '../../constants/statusTone.js';
 
 const auth = useAuthStore();
@@ -483,7 +484,7 @@ async function submitCreate() {
     <div v-else class="dt-setup__layout" :class="{ 'dt-setup__layout--solo': !showRail }">
       <aside v-if="showRail" class="dt-setup__rail">
         <div class="dt-setup__rail-head">
-          <h3 class="dt-setup__rail-title">Danh sách bộ</h3>
+          <h3 class="dt-setup__rail-title">Chọn bộ trạng thái</h3>
           <button v-if="canWrite" type="button" class="dt-link-btn dt-setup__rail-add" @click="openCreateSet">
             Tạo mới
           </button>
@@ -538,15 +539,15 @@ async function submitCreate() {
           <div class="dt-setup__metrics" aria-label="Thống kê bộ trạng thái">
             <div class="dt-setup__metric">
               <span class="dt-setup__metric-num">{{ detail.statuses?.length ?? 0 }}</span>
-              <span class="dt-setup__metric-label">trạng thái</span>
+              <span class="dt-setup__metric-label">bước</span>
             </div>
             <div class="dt-setup__metric">
               <span class="dt-setup__metric-num">{{ detail.transitions?.length ?? 0 }}</span>
-              <span class="dt-setup__metric-label">quy tắc</span>
+              <span class="dt-setup__metric-label">lần chuyển</span>
             </div>
             <div class="dt-setup__metric">
               <span class="dt-setup__metric-num">{{ detail.workflow_count ?? 0 }}</span>
-              <span class="dt-setup__metric-label">quy trình</span>
+              <span class="dt-setup__metric-label">quy trình dùng</span>
             </div>
           </div>
         </header>
@@ -584,7 +585,10 @@ async function submitCreate() {
             <span class="dt-setup__group-icon" aria-hidden="true">
               <AppIcon name="layers" :size="18" :stroke-width="1.75" />
             </span>
-            <h3 class="dt-setup__group-title">{{ detailTitle }}</h3>
+            <div class="dt-setup__group-head-copy">
+              <h3 class="dt-setup__group-title">Quy trình trạng thái</h3>
+              <p class="dt-setup__group-lead">Hồ sơ đi lần lượt qua các bước; bấm một bước để xem ai được chuyển tiếp.</p>
+            </div>
             <div class="dt-setup__seg" role="tablist" aria-label="Xem thiết lập">
               <button
                 type="button"
@@ -594,7 +598,7 @@ async function submitCreate() {
                 :aria-selected="viewTab === 'flow'"
                 @click="viewTab = 'flow'"
               >
-                Luồng trạng thái
+                Sơ đồ các bước
               </button>
               <button
                 type="button"
@@ -604,7 +608,7 @@ async function submitCreate() {
                 :aria-selected="viewTab === 'rules'"
                 @click="viewTab = 'rules'"
               >
-                Quy tắc chuyển
+                Ai bấm gì
               </button>
             </div>
           </header>
@@ -613,65 +617,89 @@ async function submitCreate() {
           <p v-if="!(detail.statuses?.length)" class="dt-setup__callout">
             Bộ này chưa có trạng thái. Mở menu Thêm trên trang để khai báo bước đầu tiên.
           </p>
-          <div class="dt-lanes">
-            <div class="dt-lane dt-lane--main">
-              <span class="dt-lane__label">{{ GROUP_KIND_LABEL.main }}</span>
-              <div ref="pipelineWrap" class="dt-flow-pipeline hide-scrollbar">
-                <template v-for="(st, idx) in mainFlow" :key="st.code">
+          <div v-else class="dt-pipeline-board">
+            <section class="dt-pipeline-section" aria-labelledby="dt-pipeline-main-label">
+              <header class="dt-pipeline-section__head">
+                <h4 id="dt-pipeline-main-label" class="dt-pipeline-section__title">{{ GROUP_KIND_LABEL.main }}</h4>
+                <p class="dt-pipeline-section__hint">Đi từ trái sang phải — mỗi ô là một trạng thái trên hồ sơ.</p>
+              </header>
+              <div ref="pipelineWrap" class="dt-pipeline hide-scrollbar">
+                <ol v-if="mainFlow.length" class="dt-pipeline__track">
+                  <li class="dt-pipeline__stop dt-pipeline__stop--origin" aria-hidden="true">
+                    <span class="dt-pipeline__node dt-pipeline__node--static">
+                      <span class="dt-pipeline__dot dt-pipeline__dot--origin" />
+                      <span class="dt-pipeline__name">Mới tạo</span>
+                    </span>
+                  </li>
+                  <template v-for="(st, idx) in mainFlow" :key="st.code">
+                    <li class="dt-pipeline__seg" aria-hidden="true">
+                      <span class="dt-pipeline__seg-line" />
+                    </li>
+                    <li class="dt-pipeline__stop">
+                      <button
+                        type="button"
+                        class="dt-pipeline__node"
+                        :class="{
+                          'dt-pipeline__node--on': focusCode === st.code,
+                          [`dt-pipeline__node--${toneOfStatusCode(st.code)}`]: true,
+                        }"
+                        :aria-pressed="focusCode === st.code"
+                        @click="toggleFocus(st.code)"
+                      >
+                        <span class="dt-pipeline__dot">{{ idx + 1 }}</span>
+                        <span class="dt-pipeline__name">{{ st.label }}</span>
+                      </button>
+                    </li>
+                  </template>
+                </ol>
+                <p v-else class="dt-status-page__empty">Chưa có bước trên đường đi chính.</p>
+              </div>
+            </section>
+
+            <section v-if="conditional.length" class="dt-pipeline-section dt-pipeline-section--branch" aria-labelledby="dt-pipeline-cond-label">
+              <header class="dt-pipeline-section__head">
+                <h4 id="dt-pipeline-cond-label" class="dt-pipeline-section__title">{{ GROUP_KIND_LABEL.conditional }}</h4>
+                <p class="dt-pipeline-section__hint">Chỉ xảy ra khi cần thêm việc (bổ sung, sửa lại…).</p>
+              </header>
+              <ul class="dt-pipeline-branches">
+                <li v-for="st in conditional" :key="st.code">
                   <button
                     type="button"
-                    class="dt-status-hit"
-                    :class="{ 'dt-status-hit--on': focusCode === st.code }"
+                    class="dt-pipeline-branch"
+                    :class="{ 'dt-pipeline-branch--on': focusCode === st.code }"
                     :aria-pressed="focusCode === st.code"
                     @click="toggleFocus(st.code)"
                   >
-                    <DonTuStatusBadge compact :code="st.code" :label="st.label" />
+                    <span class="dt-pipeline-branch__mark" aria-hidden="true" />
+                    <span class="dt-pipeline-branch__label">{{ st.label }}</span>
                   </button>
-                  <AppIcon
-                    v-if="idx < mainFlow.length - 1"
-                    name="chevronRight"
-                    class="dt-flow-pipeline__arrow"
-                    :size="16"
-                    :stroke-width="2"
-                  />
-                </template>
-                <p v-if="!mainFlow.length" class="dt-status-page__empty">Chưa có trạng thái trên đường đi chính.</p>
-              </div>
-            </div>
+                </li>
+              </ul>
+            </section>
 
-            <div v-if="conditional.length" class="dt-lane">
-              <span class="dt-lane__label">{{ GROUP_KIND_LABEL.conditional }}</span>
-              <div class="dt-lane__chips">
-                <button
-                  v-for="st in conditional"
-                  :key="st.code"
-                  type="button"
-                  class="dt-status-hit"
-                  :class="{ 'dt-status-hit--on': focusCode === st.code }"
-                  :aria-pressed="focusCode === st.code"
-                  @click="toggleFocus(st.code)"
-                >
-                  <DonTuStatusBadge compact :code="st.code" :label="st.label" />
-                </button>
-              </div>
-            </div>
-
-            <div v-if="terminal.length" class="dt-lane">
-              <span class="dt-lane__label">{{ GROUP_KIND_LABEL.terminal }}</span>
-              <div class="dt-lane__chips">
-                <button
-                  v-for="st in terminal"
-                  :key="st.code"
-                  type="button"
-                  class="dt-status-hit"
-                  :class="{ 'dt-status-hit--on': focusCode === st.code }"
-                  :aria-pressed="focusCode === st.code"
-                  @click="toggleFocus(st.code)"
-                >
-                  <DonTuStatusBadge compact :code="st.code" :label="st.label" />
-                </button>
-              </div>
-            </div>
+            <section v-if="terminal.length" class="dt-pipeline-section dt-pipeline-section--branch" aria-labelledby="dt-pipeline-term-label">
+              <header class="dt-pipeline-section__head">
+                <h4 id="dt-pipeline-term-label" class="dt-pipeline-section__title">{{ GROUP_KIND_LABEL.terminal }}</h4>
+                <p class="dt-pipeline-section__hint">Hồ sơ dừng lại ở đây — không đi tiếp trên đường chính.</p>
+              </header>
+              <ul class="dt-pipeline-branches">
+                <li v-for="st in terminal" :key="st.code">
+                  <button
+                    type="button"
+                    class="dt-pipeline-branch"
+                    :class="[
+                      { 'dt-pipeline-branch--on': focusCode === st.code },
+                      st.terminal_kind === 'failed' ? 'dt-pipeline-branch--fail' : 'dt-pipeline-branch--done',
+                    ]"
+                    :aria-pressed="focusCode === st.code"
+                    @click="toggleFocus(st.code)"
+                  >
+                    <span class="dt-pipeline-branch__mark" aria-hidden="true" />
+                    <span class="dt-pipeline-branch__label">{{ st.label }}</span>
+                  </button>
+                </li>
+              </ul>
+            </section>
           </div>
           </div>
 
@@ -1161,8 +1189,9 @@ async function submitCreate() {
 
 .dt-set-card__name {
   display: block;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 0.875rem;
+  line-height: 1.35;
 }
 
 .dt-set-card__meta {
@@ -1280,7 +1309,7 @@ async function submitCreate() {
 }
 
 .dt-workflow-chip__name {
-  font-weight: 600;
+  font-weight: 500;
   font-size: 0.8125rem;
 }
 
@@ -1294,63 +1323,9 @@ async function submitCreate() {
   gap: 0.15rem;
   margin-left: auto;
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--color-primary);
   text-decoration: none;
-}
-
-.dt-lanes {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-3);
-}
-
-.dt-lane--main {
-  grid-column: 1 / -1;
-}
-
-.dt-lane__label {
-  display: block;
-  margin-bottom: var(--space-2);
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-}
-
-.dt-lane__chips,
-.dt-flow-pipeline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.dt-flow-pipeline {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  cursor: grab;
-}
-
-.dt-flow-pipeline:active {
-  cursor: grabbing;
-}
-
-.dt-flow-pipeline__arrow {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  opacity: 0.7;
-}
-
-.dt-status-hit {
-  border: none;
-  padding: 0;
-  background: transparent;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-}
-
-.dt-status-hit--on {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 55%, transparent);
 }
 
 .dt-trans-table__search {
@@ -1378,7 +1353,8 @@ async function submitCreate() {
 .dt-trans-table th {
   text-align: left;
   padding: 0.4rem 0.65rem;
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 0.75rem;
   color: var(--color-text-muted);
   box-shadow: 0 1px 0 var(--color-border);
 }
@@ -1393,7 +1369,7 @@ async function submitCreate() {
   display: inline-block;
   padding: 0.15rem 0.5rem;
   border-radius: 999px;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 0.75rem;
   background: var(--color-primary-100);
   color: var(--color-primary-700);
@@ -1665,13 +1641,8 @@ async function submitCreate() {
 }
 
 @media (max-width: 900px) {
-  .dt-status-page__body,
-  .dt-lanes {
+  .dt-status-page__body {
     grid-template-columns: 1fr;
-  }
-
-  .dt-lane--main {
-    grid-column: auto;
   }
 }
 </style>

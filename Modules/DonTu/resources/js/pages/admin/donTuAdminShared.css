@@ -1455,11 +1455,9 @@ section.dt-kpi-strip {
 
 .dt-setup__rail-title {
   margin: 0;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text);
 }
 
 .dt-setup__main {
@@ -1498,12 +1496,25 @@ section.dt-kpi-strip {
   color: var(--color-primary-700);
 }
 
+.dt-setup__group-head-copy {
+  flex: 1;
+  min-width: 10rem;
+}
+
 .dt-setup__group-title {
   margin: 0;
-  flex: 1;
-  min-width: 8rem;
   font-size: 0.9375rem;
-  font-weight: 700;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.dt-setup__group-lead {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+  max-width: 36rem;
 }
 
 .dt-setup__group-body {
@@ -1658,7 +1669,7 @@ section.dt-kpi-strip {
 
 .dt-setup__next-label {
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
@@ -1671,9 +1682,276 @@ section.dt-kpi-strip {
   background: var(--color-surface);
   box-shadow: inset 0 0 0 1px var(--color-border);
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--color-primary);
   text-decoration: none;
+}
+
+/* Timeline pipeline — luồng trạng thái dễ đọc */
+
+.dt-pipeline-board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.dt-pipeline-section {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dt-pipeline-section--branch {
+  background: var(--color-surface);
+}
+
+.dt-pipeline-section__head {
+  margin-bottom: var(--space-3);
+}
+
+.dt-pipeline-section__title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.dt-pipeline-section__hint {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.dt-pipeline {
+  overflow-x: auto;
+  cursor: grab;
+  padding: var(--space-1) 0 var(--space-2);
+}
+
+.dt-pipeline:active {
+  cursor: grabbing;
+}
+
+.dt-pipeline__track {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0;
+  min-width: min-content;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dt-pipeline__stop {
+  flex: 0 0 auto;
+  min-width: 5.5rem;
+  max-width: 9rem;
+  list-style: none;
+}
+
+.dt-pipeline__stop--origin {
+  min-width: 4.25rem;
+  max-width: 5rem;
+}
+
+.dt-pipeline__seg {
+  flex: 0 0 1.75rem;
+  align-self: flex-start;
+  margin-top: 0.875rem;
+  list-style: none;
+}
+
+.dt-pipeline__seg-line {
+  display: block;
+  height: 2px;
+  margin-top: 0;
+  background: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  border-radius: 1px;
+}
+
+.dt-pipeline__node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-1);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+  color: var(--color-text);
+  transition: background-color 0.2s ease;
+}
+
+.dt-pipeline__node--static {
+  cursor: default;
+}
+
+.dt-pipeline__node:hover:not(.dt-pipeline__node--static) {
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+}
+
+.dt-pipeline__node--on {
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, var(--color-border));
+}
+
+.dt-pipeline__dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--node-fg, var(--color-primary-700));
+  background: color-mix(in srgb, var(--node-fg, var(--color-primary)) 12%, var(--color-surface));
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--node-fg, var(--color-primary)) 45%, var(--color-border)),
+    0 1px 0 color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.dt-pipeline__dot--origin {
+  width: 0.75rem;
+  height: 0.75rem;
+  box-shadow:
+    inset 0 0 0 2px var(--color-text-muted),
+    0 0 0 3px var(--color-surface);
+  background: var(--color-surface-muted);
+}
+
+.dt-pipeline__node--muted {
+  --node-fg: var(--color-text-muted);
+}
+.dt-pipeline__node--info {
+  --node-fg: var(--color-info);
+}
+.dt-pipeline__node--warning {
+  --node-fg: #c27803;
+}
+.dt-pipeline__node--purple {
+  --node-fg: #7c3aed;
+}
+.dt-pipeline__node--accent {
+  --node-fg: #0d9488;
+}
+.dt-pipeline__node--primary {
+  --node-fg: var(--color-primary);
+}
+.dt-pipeline__node--success {
+  --node-fg: var(--color-success);
+}
+.dt-pipeline__node--danger {
+  --node-fg: var(--color-danger);
+}
+
+.dt-pipeline__name {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  hyphens: auto;
+}
+
+.dt-pipeline-branches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dt-pipeline-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  padding: 0.45rem 0.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.dt-pipeline-branch:hover {
+  background: var(--color-surface);
+}
+
+.dt-pipeline-branch--on {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+}
+
+.dt-pipeline-branch__mark {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--color-info);
+}
+
+.dt-pipeline-branch--done .dt-pipeline-branch__mark {
+  background: var(--color-success);
+}
+
+.dt-pipeline-branch--fail .dt-pipeline-branch__mark {
+  background: var(--color-danger);
+}
+
+.dt-pipeline-branch__label {
+  line-height: 1.35;
+}
+
+@media (max-width: 640px) {
+  .dt-pipeline__track {
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 0;
+  }
+
+  .dt-pipeline__stop,
+  .dt-pipeline__stop--origin {
+    min-width: 0;
+    max-width: none;
+  }
+
+  .dt-pipeline__seg {
+    flex: 0 0 auto;
+    width: 2px;
+    height: 1.25rem;
+    margin: 0 0 0 1.85rem;
+  }
+
+  .dt-pipeline__seg-line {
+    width: 2px;
+    height: 100%;
+    margin: 0;
+  }
+
+  .dt-pipeline__node {
+    flex-direction: row;
+    align-items: center;
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .dt-pipeline__name {
+    font-size: 0.8125rem;
+  }
 }
 
 .dt-setup__next-link:hover {

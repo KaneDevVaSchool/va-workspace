@@ -46,14 +46,14 @@ const tone = computed(() => toneOfStatusCode(props.code));
 
 .dt-status-badge__code {
   font-size: 0.625rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--badge-fg);
 }
 
 .dt-status-badge__label {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .dt-status-badge--muted {
