@@ -163,6 +163,45 @@ class DonTuStatusCatalogService
         return $detail;
     }
 
+    public function updateSet(int $id, array $data): array
+    {
+        $set = DonTuStatusSet::query()->find($id);
+        if ($set === null) {
+            throw ValidationException::withMessages([
+                'status_set_id' => 'Không tìm thấy bộ trạng thái.',
+            ]);
+        }
+
+        $name = trim((string) ($data['name'] ?? ''));
+        if ($name === '') {
+            throw ValidationException::withMessages(['name' => 'Nhập tên nhóm trạng thái.']);
+        }
+
+        $description = isset($data['description']) ? trim((string) $data['description']) : null;
+        if ($description === '') {
+            $description = null;
+        }
+
+        $code = $set->code;
+        if (! $set->is_system && isset($data['code']) && trim((string) $data['code']) !== '') {
+            $code = $this->resolveSetCode((string) $data['code'], $set->id);
+        }
+
+        $set->fill([
+            'name' => $name,
+            'description' => $description,
+            'code' => $code,
+        ]);
+        $set->save();
+
+        $detail = $this->findSet($set->id);
+        if ($detail === null) {
+            throw ValidationException::withMessages(['name' => 'Không lưu được bộ trạng thái.']);
+        }
+
+        return $detail;
+    }
+
     public function destroySet(int $id): void
     {
         $set = DonTuStatusSet::query()->withCount('workflows')->find($id);
@@ -221,7 +260,7 @@ class DonTuStatusCatalogService
         }
     }
 
-    private function resolveSetCode(?string $requested): string
+    private function resolveSetCode(?string $requested, ?int $ignoreId = null): string
     {
         $code = strtoupper(trim((string) $requested));
         if ($code === '') {
@@ -234,7 +273,11 @@ class DonTuStatusCatalogService
             ]);
         }
 
-        if (DonTuStatusSet::query()->where('code', $code)->exists()) {
+        $taken = DonTuStatusSet::query()->where('code', $code);
+        if ($ignoreId !== null) {
+            $taken->where('id', '!=', $ignoreId);
+        }
+        if ($taken->exists()) {
             throw ValidationException::withMessages([
                 'code' => 'Mã bộ trạng thái đã được dùng.',
             ]);

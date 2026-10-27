@@ -72,6 +72,31 @@ class DonTuStatusSetController extends Controller
         return response()->json(['item' => $item]);
     }
 
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'Bạn cần đăng nhập.'], 401);
+        }
+
+        if (! $this->access->canWriteConfig($user)) {
+            return response()->json(['message' => 'Bạn không có quyền sửa bộ trạng thái.'], 403);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:64'],
+            'description' => ['nullable', 'string'],
+        ], [
+            'name.required' => 'Nhập tên nhóm trạng thái.',
+            'code.max' => 'Mã bộ trạng thái tối đa 64 ký tự.',
+        ]);
+
+        $item = $this->catalog->updateSet($id, $validated);
+
+        return response()->json(['item' => $item]);
+    }
+
     public function storeStatus(Request $request, int $id): JsonResponse
     {
         $user = $request->user();

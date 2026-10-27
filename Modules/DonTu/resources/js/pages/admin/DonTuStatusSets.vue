@@ -8,7 +8,7 @@ import { showClientToast } from '@/lib/clientToast';
 import { formatDonTuApiError } from '../../lib/donTuToast.js';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import DonTuStatusBadge from '../../components/DonTuStatusBadge.vue';
-import { createStatus, createStatusSet, deleteStatusSet, fetchStatusSet, fetchStatusSets } from '../../api/donTuConfigApi.js';
+import { createStatus, createStatusSet, deleteStatusSet, fetchStatusSet, fetchStatusSets, updateStatusSet } from '../../api/donTuConfigApi.js';
 import {
   ACTION_LABEL,
   ACTOR_LABEL,
@@ -59,6 +59,11 @@ const setMenuEl = ref(null);
 const deleteOpen = ref(false);
 const deleteTarget = ref(null);
 const deleteSaving = ref(false);
+const editSetOpen = ref(false);
+const editSetSaving = ref(false);
+const editSetForm = ref(emptyEditSetForm());
+const editCodeUnlocked = ref(false);
+const editCodeInput = ref(null);
 
 const pipelineWrap = ref(null);
 const transWrap = ref(null);
@@ -264,7 +269,7 @@ function onSetContextMenu(event, set) {
   if (!canWrite.value) return;
   const pad = 8;
   const menuW = 168;
-  const menuH = 44;
+  const menuH = 88;
   setMenu.value = {
     set,
     x: Math.min(Math.max(pad, event.clientX), Math.max(pad, window.innerWidth - menuW - pad)),
@@ -466,6 +471,16 @@ function emptySetForm() {
   };
 }
 
+function emptyEditSetForm() {
+  return {
+    id: null,
+    name: '',
+    code: '',
+    description: '',
+    is_system: false,
+  };
+}
+
 function emptyStatusForm() {
   return {
     label: '',
@@ -546,6 +561,78 @@ function openCreateSet() {
   templatePreview.value = null;
   templatePreviewLoading.value = false;
   createSetOpen.value = true;
+}
+
+function openEditSet(set) {
+  closeSetMenu();
+  if (!set?.id) return;
+  editSetForm.value = {
+    id: set.id,
+    name: set.name || '',
+    code: set.code || '',
+    description: set.description || '',
+    is_system: !!set.is_system,
+  };
+  editCodeUnlocked.value = false;
+  editSetOpen.value = true;
+}
+
+async function toggleEditCodeLock() {
+  if (editSetForm.value.is_system) return;
+  if (!editCodeUnlocked.value) {
+    editCodeUnlocked.value = true;
+    await nextTick();
+    editCodeInput.value?.focus();
+    editCodeInput.value?.select();
+    return;
+  }
+  const code = editSetForm.value.code.trim().toUpperCase();
+  editSetForm.value.code = code || editSetForm.value.code;
+  editCodeUnlocked.value = false;
+}
+
+function onEditCodeInput(event) {
+  editSetForm.value.code = event.target.value.toUpperCase();
+}
+
+async function submitEditSet() {
+  if (!editSetForm.value.id) return;
+  if (!editSetForm.value.name.trim()) {
+    showClientToast('error', 'Nhập tên nhóm trạng thái.');
+    return;
+  }
+  const code = editSetForm.value.code.trim().toUpperCase();
+  if (!editSetForm.value.is_system) {
+    if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(code)) {
+      showClientToast('error', 'Mã bộ trạng thái chỉ gồm chữ, số và dấu gạch dưới.');
+      return;
+    }
+    if (sets.value.some((set) => set.id !== editSetForm.value.id && String(set.code || '').toUpperCase() === code)) {
+      showClientToast('error', 'Mã bộ trạng thái đã được dùng.');
+      return;
+    }
+  }
+  editSetSaving.value = true;
+  try {
+    const payload = {
+      name: editSetForm.value.name.trim(),
+      description: editSetForm.value.description.trim() || null,
+    };
+    if (!editSetForm.value.is_system) payload.code = code;
+    const item = await updateStatusSet(editSetForm.value.id, payload);
+    editSetOpen.value = false;
+    await loadSets();
+    if (selectedId.value === item.id) {
+      detail.value = item;
+    } else {
+      selectedId.value = item.id;
+    }
+    showClientToast('success', 'Đã lưu bộ trạng thái.');
+  } catch (err) {
+    showClientToast('error', formatDonTuApiError(err, 'Không lưu được bộ trạng thái.'));
+  } finally {
+    editSetSaving.value = false;
+  }
 }
 
 async function toggleCodeLock() {
@@ -773,6 +860,10 @@ async function submitCreate() {
             >
               <AppIcon :name="barOpen ? 'chevronDown' : 'chevronRight'" :size="16" :stroke-width="2" aria-hidden="true" />
               <span class="dt-setup__hero-title">{{ detailTitle }}</span>
+            </button>
+            <button v-if="canWrite" type="button" class="dt-setup__edit" @click="openEditSet(detail)">
+              <AppIcon name="pencil" :size="15" :stroke-width="1.75" aria-hidden="true" />
+              Sửa
             </button>
             <div class="dt-setup__seg dt-setup__seg--view" role="tablist" aria-label="Xem thiết lập">
               <button
@@ -1270,6 +1361,92 @@ async function submitCreate() {
     </Teleport>
 
     <Teleport to="body">
+      <div v-if="editSetOpen" class="dt-modal-backdrop" @click.self="editSetOpen = false">
+        <div
+          class="dt-modal dt-modal--fill"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dt-set-edit-title"
+          @keydown.escape="editSetOpen = false"
+        >
+          <header class="dt-modal__head dt-modal__head--rich">
+            <span class="dt-modal__mark" aria-hidden="true">
+              <AppIcon name="pencil" :size="22" :stroke-width="1.75" />
+            </span>
+            <div class="dt-modal__head-copy">
+              <p class="dt-modal__head-kicker">Bộ trạng thái</p>
+              <h2 id="dt-set-edit-title">Sửa bộ trạng thái</h2>
+            </div>
+            <button type="button" class="dt-modal__close" aria-label="Đóng" @click="editSetOpen = false">
+              <AppIcon name="close" :size="18" />
+            </button>
+          </header>
+          <div class="dt-modal__body hide-scrollbar">
+            <section class="dt-form-section" aria-labelledby="dt-set-edit-section">
+              <header class="dt-form-section__head">
+                <span class="dt-form-section__step" aria-hidden="true">1</span>
+                <h3 id="dt-set-edit-section" class="dt-form-section__title">Thông tin bộ</h3>
+              </header>
+              <div class="dt-form-section__grid">
+                <label class="dt-field">
+                  <span>Tên bộ trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
+                  <input
+                    v-model="editSetForm.name"
+                    type="text"
+                    required
+                    autocomplete="off"
+                    placeholder="Ví dụ: Quy trình nghỉ việc"
+                  />
+                </label>
+                <label class="dt-field">
+                  <span>Mã bộ trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
+                  <span class="dt-code-lock" :class="{ 'dt-code-lock--open': editCodeUnlocked }">
+                    <input
+                      ref="editCodeInput"
+                      :value="editSetForm.code"
+                      type="text"
+                      required
+                      maxlength="64"
+                      spellcheck="false"
+                      autocomplete="off"
+                      :readonly="editSetForm.is_system || !editCodeUnlocked"
+                      placeholder="BMTT03"
+                      @input="onEditCodeInput"
+                    />
+                    <button
+                      v-if="!editSetForm.is_system"
+                      type="button"
+                      class="dt-code-lock__btn"
+                      :aria-label="editCodeUnlocked ? 'Khóa mã' : 'Mở khóa để sửa mã'"
+                      :aria-pressed="editCodeUnlocked"
+                      @click="toggleEditCodeLock"
+                    >
+                      <AppIcon :name="editCodeUnlocked ? 'unlock' : 'lock'" :size="16" :stroke-width="1.75" />
+                    </button>
+                  </span>
+                </label>
+                <label class="dt-field dt-field--span2">
+                  <span>Mô tả</span>
+                  <textarea
+                    v-model="editSetForm.description"
+                    rows="3"
+                    placeholder="Ghi loại đơn hoặc phòng ban sẽ dùng bộ này"
+                  />
+                </label>
+              </div>
+            </section>
+          </div>
+          <footer class="dt-modal__foot">
+            <button type="button" class="dt-btn-ghost" @click="editSetOpen = false">Huỷ</button>
+            <button type="button" class="dt-btn-primary" :disabled="editSetSaving" @click="submitEditSet">
+              {{ editSetSaving ? 'Đang lưu…' : 'Lưu' }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
       <div
         v-if="setMenu"
         ref="setMenuEl"
@@ -1278,6 +1455,10 @@ async function submitCreate() {
         :style="{ left: `${setMenu.x}px`, top: `${setMenu.y}px` }"
         @contextmenu.prevent
       >
+        <button type="button" role="menuitem" @click="openEditSet(setMenu.set)">
+          <AppIcon name="pencil" :size="16" :stroke-width="1.75" aria-hidden="true" />
+          Sửa
+        </button>
         <button type="button" role="menuitem" @click="askDeleteSet(setMenu.set)">
           <AppIcon name="trash2" :size="16" :stroke-width="1.75" aria-hidden="true" />
           Xóa

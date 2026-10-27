@@ -18,6 +18,11 @@ export async function createStatus(setId, payload) {
   return data.item;
 }
 
+export async function updateStatusSet(id, payload) {
+  const { data } = await window.axios.patch(`/api/don-tu/status-sets/${id}`, payload);
+  return data.item;
+}
+
 export async function deleteStatusSet(id) {
   await window.axios.delete(`/api/don-tu/status-sets/${id}`);
 }

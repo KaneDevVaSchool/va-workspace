@@ -11,6 +11,9 @@ Route::prefix('don-tu')->name('don_tu.')->group(function () {
     Route::get('status-sets/{id}', [DonTuStatusSetController::class, 'show'])
         ->whereNumber('id')
         ->name('status_sets.show');
+    Route::patch('status-sets/{id}', [DonTuStatusSetController::class, 'update'])
+        ->whereNumber('id')
+        ->name('status_sets.update');
     Route::post('status-sets/{id}/statuses', [DonTuStatusSetController::class, 'storeStatus'])
         ->whereNumber('id')
         ->name('status_sets.statuses.store');
