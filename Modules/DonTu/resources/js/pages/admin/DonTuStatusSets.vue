@@ -61,6 +61,7 @@ const deleteTarget = ref(null);
 const deleteSaving = ref(false);
 const editSetOpen = ref(false);
 const editSetSaving = ref(false);
+const editStatusesLoading = ref(false);
 const editSetForm = ref(emptyEditSetForm());
 const editCodeUnlocked = ref(false);
 const editCodeInput = ref(null);
@@ -571,7 +572,20 @@ function emptyEditSetForm() {
     code: '',
     description: '',
     is_system: false,
+    statuses: [],
   };
+}
+
+function mapEditStatuses(statuses) {
+  return (statuses ?? [])
+    .slice()
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((status) => ({
+      id: status.id,
+      label: status.label || '',
+      group_kind: status.group_kind || 'main',
+      terminal_kind: status.terminal_kind === 'failed' ? 'failed' : 'success',
+    }));
 }
 
 function emptyStatusForm() {
@@ -656,18 +670,55 @@ function openCreateSet() {
   createSetOpen.value = true;
 }
 
-function openEditSet(set) {
+async function openEditSet(set) {
   closeSetMenu();
   if (!set?.id) return;
+  const cached = detail.value?.id === set.id ? detail.value : null;
   editSetForm.value = {
     id: set.id,
-    name: set.name || '',
-    code: set.code || '',
-    description: set.description || '',
-    is_system: !!set.is_system,
+    name: (cached?.name ?? set.name) || '',
+    code: (cached?.code ?? set.code) || '',
+    description: (cached?.description ?? set.description) || '',
+    is_system: !!(cached?.is_system ?? set.is_system),
+    statuses: cached ? mapEditStatuses(cached.statuses) : [],
   };
   editCodeUnlocked.value = false;
   editSetOpen.value = true;
+  if (cached) return;
+  editStatusesLoading.value = true;
+  try {
+    const item = await fetchStatusSet(set.id);
+    if (!editSetOpen.value || editSetForm.value.id !== set.id) return;
+    editSetForm.value = {
+      id: item.id,
+      name: item.name || '',
+      code: item.code || '',
+      description: item.description || '',
+      is_system: !!item.is_system,
+      statuses: mapEditStatuses(item.statuses),
+    };
+  } catch (err) {
+    showClientToast('error', formatDonTuApiError(err, 'Không tải được trạng thái của bộ.'));
+    editSetOpen.value = false;
+  } finally {
+    editStatusesLoading.value = false;
+  }
+}
+
+function onEditStatusGroup(status) {
+  if (status.group_kind === 'terminal' && status.terminal_kind !== 'success' && status.terminal_kind !== 'failed') {
+    status.terminal_kind = 'success';
+  }
+}
+
+function moveEditStatus(index, delta) {
+  const next = index + delta;
+  const list = editSetForm.value.statuses;
+  if (next < 0 || next >= list.length) return;
+  const copy = list.slice();
+  const [row] = copy.splice(index, 1);
+  copy.splice(next, 0, row);
+  editSetForm.value.statuses = copy;
 }
 
 async function toggleEditCodeLock() {
@@ -695,6 +746,10 @@ async function submitEditSet() {
     return;
   }
   const code = editSetForm.value.code.trim().toUpperCase();
+  if (editSetForm.value.statuses.some((status) => !status.label.trim())) {
+    showClientToast('error', 'Nhập tên cho từng trạng thái.');
+    return;
+  }
   if (!editSetForm.value.is_system) {
     if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(code)) {
       showClientToast('error', 'Mã bộ trạng thái chỉ gồm chữ, số và dấu gạch dưới.');
@@ -710,6 +765,13 @@ async function submitEditSet() {
     const payload = {
       name: editSetForm.value.name.trim(),
       description: editSetForm.value.description.trim() || null,
+      statuses: editSetForm.value.statuses.map((status, index) => ({
+        id: status.id,
+        label: status.label.trim(),
+        group_kind: status.group_kind,
+        terminal_kind: status.group_kind === 'terminal' ? status.terminal_kind : null,
+        sort_order: index + 1,
+      })),
     };
     if (!editSetForm.value.is_system) payload.code = code;
     const item = await updateStatusSet(editSetForm.value.id, payload);
@@ -963,10 +1025,6 @@ async function submitCreate() {
             >
               <AppIcon :name="barOpen ? 'chevronDown' : 'chevronRight'" :size="16" :stroke-width="2" aria-hidden="true" />
               <span class="dt-setup__hero-title">{{ detailTitle }}</span>
-            </button>
-            <button v-if="canWrite" type="button" class="dt-setup__edit" @click="openEditSet(detail)">
-              <AppIcon name="pencil" :size="15" :stroke-width="1.75" aria-hidden="true" />
-              Sửa
             </button>
             <div class="dt-setup__seg dt-setup__seg--view" role="tablist" aria-label="Xem thiết lập">
               <button
@@ -1585,7 +1643,8 @@ async function submitCreate() {
               <AppIcon name="close" :size="18" />
             </button>
           </header>
-          <div class="dt-modal__body hide-scrollbar">
+          <div class="dt-modal__body dt-set-create">
+            <div class="dt-set-create__fields hide-scrollbar">
             <section class="dt-form-section" aria-labelledby="dt-set-edit-section">
               <header class="dt-form-section__head">
                 <span class="dt-form-section__step" aria-hidden="true">1</span>
@@ -1639,10 +1698,62 @@ async function submitCreate() {
                 </label>
               </div>
             </section>
+            </div>
+            <aside class="dt-status-editor" aria-labelledby="dt-set-edit-statuses">
+              <header class="dt-status-editor__head">
+                <h3 id="dt-set-edit-statuses">Trạng thái trong bộ</h3>
+                <span>{{ editSetForm.statuses.length }} bước</span>
+              </header>
+              <p v-if="editStatusesLoading" class="dt-status-editor__empty">Đang tải trạng thái…</p>
+              <p v-else-if="!editSetForm.statuses.length" class="dt-status-editor__empty">Bộ này chưa có trạng thái.</p>
+              <ol v-else class="dt-status-editor__list hide-scrollbar">
+                <li v-for="(status, idx) in editSetForm.statuses" :key="status.id" class="dt-status-editor__row">
+                  <span class="dt-status-editor__ord">{{ String(idx + 1).padStart(2, '0') }}</span>
+                  <div class="dt-status-editor__fields">
+                    <label class="dt-field">
+                      <span>Tên trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
+                      <input v-model="status.label" type="text" required autocomplete="off" />
+                    </label>
+                    <label class="dt-field">
+                      <span>Chỗ trên đường đi</span>
+                      <select v-model="status.group_kind" @change="onEditStatusGroup(status)">
+                        <option v-for="(label, key) in GROUP_KIND_LABEL" :key="key" :value="key">{{ label }}</option>
+                      </select>
+                    </label>
+                    <label v-if="status.group_kind === 'terminal'" class="dt-field dt-field--span2">
+                      <span>Kết quả cuối</span>
+                      <select v-model="status.terminal_kind">
+                        <option value="success">Xong việc</option>
+                        <option value="failed">Không xong</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="dt-status-editor__move">
+                    <button
+                      type="button"
+                      class="is-up"
+                      aria-label="Đưa lên"
+                      :disabled="idx === 0"
+                      @click="moveEditStatus(idx, -1)"
+                    >
+                      <AppIcon name="chevronDown" :size="16" :stroke-width="2" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Đưa xuống"
+                      :disabled="idx === editSetForm.statuses.length - 1"
+                      @click="moveEditStatus(idx, 1)"
+                    >
+                      <AppIcon name="chevronDown" :size="16" :stroke-width="2" />
+                    </button>
+                  </div>
+                </li>
+              </ol>
+            </aside>
           </div>
           <footer class="dt-modal__foot">
             <button type="button" class="dt-btn-ghost" @click="editSetOpen = false">Huỷ</button>
-            <button type="button" class="dt-btn-primary" :disabled="editSetSaving" @click="submitEditSet">
+            <button type="button" class="dt-btn-primary" :disabled="editSetSaving || editStatusesLoading" @click="submitEditSet">
               {{ editSetSaving ? 'Đang lưu…' : 'Lưu' }}
             </button>
           </footer>
@@ -2462,14 +2573,139 @@ async function submitCreate() {
   background: var(--color-danger);
 }
 
+.dt-status-editor {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dt-status-editor__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.dt-status-editor__head h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.dt-status-editor__head span,
+.dt-status-editor__empty {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.dt-status-editor__empty {
+  margin-top: var(--space-4);
+}
+
+.dt-status-editor__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dt-status-editor__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: start;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dt-status-editor__ord {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  margin-top: 1.55rem;
+  border-radius: 999px;
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.dt-status-editor__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(8.5rem, 0.8fr);
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.dt-status-editor__fields .dt-field--span2 {
+  grid-column: 1 / -1;
+}
+
+.dt-status-editor__move {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 1.45rem;
+}
+
+.dt-status-editor__move button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dt-status-editor__move button.is-up :deep(.app-icon) {
+  transform: rotate(180deg);
+}
+
+.dt-status-editor__move button:hover:not(:disabled) {
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+}
+
+.dt-status-editor__move button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 @media (max-width: 800px) {
   .dt-modal.dt-modal--fill .dt-modal__body.dt-set-create {
     grid-template-columns: minmax(0, 1fr);
     overflow: auto;
   }
 
-  .dt-set-preview {
+  .dt-set-preview,
+  .dt-status-editor {
     min-height: 18rem;
+  }
+
+  .dt-status-editor__fields {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .dt-form-section__grid {

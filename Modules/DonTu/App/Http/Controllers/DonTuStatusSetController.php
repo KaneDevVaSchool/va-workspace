@@ -87,9 +87,19 @@ class DonTuStatusSetController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:64'],
             'description' => ['nullable', 'string'],
+            'statuses' => ['nullable', 'array'],
+            'statuses.*.id' => ['required', 'integer'],
+            'statuses.*.label' => ['required', 'string', 'max:255'],
+            'statuses.*.group_kind' => ['required', 'in:main,conditional,terminal'],
+            'statuses.*.terminal_kind' => ['nullable', 'in:success,failed'],
+            'statuses.*.sort_order' => ['required', 'integer', 'min:0'],
         ], [
             'name.required' => 'Nhập tên nhóm trạng thái.',
             'code.max' => 'Mã bộ trạng thái tối đa 64 ký tự.',
+            'statuses.*.label.required' => 'Nhập tên trạng thái.',
+            'statuses.*.group_kind.required' => 'Chọn chỗ của trạng thái trên đường đi.',
+            'statuses.*.group_kind.in' => 'Chỗ của trạng thái không hợp lệ.',
+            'statuses.*.terminal_kind.in' => 'Chọn kết quả khi hồ sơ kết thúc.',
         ]);
 
         $item = $this->catalog->updateSet($id, $validated);

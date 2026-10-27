@@ -187,12 +187,18 @@ class DonTuStatusCatalogService
             $code = $this->resolveSetCode((string) $data['code'], $set->id);
         }
 
-        $set->fill([
-            'name' => $name,
-            'description' => $description,
-            'code' => $code,
-        ]);
-        $set->save();
+        DB::transaction(function () use ($set, $name, $description, $code, $data) {
+            $set->fill([
+                'name' => $name,
+                'description' => $description,
+                'code' => $code,
+            ]);
+            $set->save();
+
+            if (array_key_exists('statuses', $data) && is_array($data['statuses'])) {
+                $this->syncStatuses($set, $data['statuses']);
+            }
+        });
 
         $detail = $this->findSet($set->id);
         if ($detail === null) {
@@ -224,6 +230,46 @@ class DonTuStatusCatalogService
         }
 
         $set->delete();
+    }
+
+    private function syncStatuses(DonTuStatusSet $set, array $rows): void
+    {
+        $existing = $set->statuses()->get()->keyBy('id');
+
+        foreach ($rows as $index => $row) {
+            $status = $existing->get((int) ($row['id'] ?? 0));
+            if ($status === null) {
+                throw ValidationException::withMessages([
+                    "statuses.$index.id" => 'Trạng thái không thuộc bộ này.',
+                ]);
+            }
+
+            $label = trim((string) ($row['label'] ?? ''));
+            if ($label === '') {
+                throw ValidationException::withMessages([
+                    "statuses.$index.label" => 'Nhập tên trạng thái.',
+                ]);
+            }
+
+            $group = (string) ($row['group_kind'] ?? '');
+            $terminal = null;
+            if ($group === 'terminal') {
+                $terminal = (string) ($row['terminal_kind'] ?? '');
+                if (! in_array($terminal, ['success', 'failed'], true)) {
+                    throw ValidationException::withMessages([
+                        "statuses.$index.terminal_kind" => 'Chọn kết quả khi hồ sơ kết thúc.',
+                    ]);
+                }
+            }
+
+            $status->fill([
+                'label' => $label,
+                'group_kind' => $group,
+                'terminal_kind' => $terminal,
+                'sort_order' => (int) ($row['sort_order'] ?? $status->sort_order),
+            ]);
+            $status->save();
+        }
     }
 
     private function cloneStatusesAndTransitions(int $fromSetId, int $toSetId): void
