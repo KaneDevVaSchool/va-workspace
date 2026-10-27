@@ -7,6 +7,7 @@ import { showClientToast } from '@/lib/clientToast';
 import { formatTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import SocialAnimatedSticker from '@modules/Social/resources/js/components/SocialAnimatedSticker.vue';
+import ChatLinkPreviewEmbed from '@modules/Social/resources/js/components/ChatLinkPreviewEmbed.vue';
 import ChatPicker from './ChatPicker.vue';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
 import { useChatStore } from '../store/chatStore';
@@ -514,6 +515,10 @@ function menuItems(message) {
               <SocialAnimatedSticker :id="row.message.sticker_id" :emoji="row.message.message || ''" />
             </span>
             <span v-else-if="row.message.message" class="chat-bubble__text">{{ row.message.message }}</span>
+            <ChatLinkPreviewEmbed
+              v-if="!row.message.recalled_at && row.message.message_type === 'text' && row.message.message"
+              :text="row.message.message"
+            />
             <div v-if="!row.message.recalled_at && imageFiles(row.message).length" class="chat-images">
               <a
                 v-for="file in imageFiles(row.message)"

@@ -611,7 +611,7 @@ async function submitCreate() {
 
           <div v-show="viewTab === 'flow'" class="dt-setup__group-body">
           <p v-if="!(detail.statuses?.length)" class="dt-setup__callout">
-            Bộ này chưa có trạng thái. Mở menu <strong>Thêm</strong> trên trang để khai báo bước đầu tiên.
+            Bộ này chưa có trạng thái. Mở menu Thêm trên trang để khai báo bước đầu tiên.
           </p>
           <div class="dt-lanes">
             <div class="dt-lane dt-lane--main">
@@ -778,7 +778,13 @@ async function submitCreate() {
                 <div class="dt-form-section__grid">
                   <label class="dt-field">
                     <span>Tên bộ trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
-                    <input v-model="createSetForm.name" type="text" required autocomplete="off" />
+                    <input
+                      v-model="createSetForm.name"
+                      type="text"
+                      required
+                      autocomplete="off"
+                      placeholder="Ví dụ: Đơn xin nghỉ phép"
+                    />
                   </label>
                   <label class="dt-field">
                     <span>Mã bộ trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
@@ -792,6 +798,7 @@ async function submitCreate() {
                         spellcheck="false"
                         autocomplete="off"
                         :readonly="!codeUnlocked"
+                        placeholder="BMTT03"
                         @input="onCodeInput"
                       />
                       <button
@@ -807,7 +814,11 @@ async function submitCreate() {
                   </label>
                   <label class="dt-field dt-field--span2">
                     <span>Mô tả</span>
-                    <textarea v-model="createSetForm.description" rows="3" />
+                    <textarea
+                      v-model="createSetForm.description"
+                      rows="3"
+                      placeholder="Ghi loại đơn hoặc phòng ban sẽ dùng bộ này"
+                    />
                   </label>
                 </div>
               </section>

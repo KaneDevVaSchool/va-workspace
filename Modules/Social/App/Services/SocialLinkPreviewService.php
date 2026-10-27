@@ -2,6 +2,8 @@
 
 namespace Modules\Social\App\Services;
 
+use App\Services\SpaOpenGraphResolver;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Modules\Social\App\Models\SocialLinkPreview;
@@ -13,6 +15,10 @@ class SocialLinkPreviewService
     private const MAX_LINKS_PER_POST = 5;
 
     private const HTTP_TIMEOUT_SECONDS = 3;
+
+    public function __construct(
+        private readonly SpaOpenGraphResolver $openGraph,
+    ) {}
 
     /**
      * @return list<array{url: string, provider: string}>
@@ -72,11 +78,15 @@ class SocialLinkPreviewService
             return SocialLinkPreview::PROVIDER_TIKTOK;
         }
 
+        if ($this->isWorkspaceHost($host)) {
+            return SocialLinkPreview::PROVIDER_WORKSPACE;
+        }
+
         return null;
     }
 
     /**
-     * @return array{provider: string, external_id: ?string, title: ?string, thumbnail_url: ?string, embed_url: ?string, is_live: bool}|null
+     * @return array{provider: string, external_id: ?string, title: ?string, description: ?string, site_name: ?string, thumbnail_url: ?string, embed_url: ?string, is_live: bool}|null
      */
     public function resolveOne(string $url): ?array
     {
@@ -87,6 +97,7 @@ class SocialLinkPreviewService
                 SocialLinkPreview::PROVIDER_YOUTUBE => $this->resolveYoutube($url),
                 SocialLinkPreview::PROVIDER_FACEBOOK => $this->resolveFacebook($url),
                 SocialLinkPreview::PROVIDER_TIKTOK => $this->resolveTiktok($url),
+                SocialLinkPreview::PROVIDER_WORKSPACE => $this->resolveWorkspace($url),
                 default => null,
             };
         } catch (Throwable $e) {
@@ -139,6 +150,8 @@ class SocialLinkPreviewService
                 'provider' => $resolved['provider'],
                 'external_id' => $resolved['external_id'],
                 'title' => $resolved['title'],
+                'description' => $resolved['description'] ?? null,
+                'site_name' => $resolved['site_name'] ?? null,
                 'thumbnail_url' => $resolved['thumbnail_url'],
                 'embed_url' => $resolved['embed_url'],
                 'is_live' => $resolved['is_live'],
@@ -297,6 +310,64 @@ class SocialLinkPreviewService
             'embed_url' => is_string($videoId) && $videoId !== ''
                 ? "https://www.tiktok.com/embed/v2/{$videoId}"
                 : null,
+            'is_live' => false,
+        ];
+    }
+
+    private function isWorkspaceHost(string $host): bool
+    {
+        $host = strtolower($host);
+        $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+        if (is_string($appHost) && strtolower($appHost) === $host) {
+            return true;
+        }
+
+        $extra = config('app.workspace_preview_hosts', []);
+        if (! is_array($extra)) {
+            return false;
+        }
+
+        foreach ($extra as $allowed) {
+            if (is_string($allowed) && strtolower($allowed) === $host) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array{provider: string, external_id: null, title: string, description: string, site_name: string, thumbnail_url: ?string, embed_url: null, is_live: false}|null
+     */
+    private function resolveWorkspace(string $url): ?array
+    {
+        $normalized = $this->normalizePreviewUrl($url);
+        $parts = parse_url($normalized);
+        if (! is_array($parts)) {
+            return null;
+        }
+
+        $path = (string) ($parts['path'] ?? '/');
+        if ($path === '') {
+            $path = '/';
+        }
+
+        $query = [];
+        if (! empty($parts['query']) && is_string($parts['query'])) {
+            parse_str($parts['query'], $query);
+        }
+
+        $meta = $this->openGraph->resolve(Request::create($path, 'GET', $query));
+        $host = parse_url($normalized, PHP_URL_HOST);
+
+        return [
+            'provider' => SocialLinkPreview::PROVIDER_WORKSPACE,
+            'external_id' => null,
+            'title' => (string) ($meta['title'] ?? 'VA Workspace'),
+            'description' => (string) ($meta['description'] ?? ''),
+            'site_name' => is_string($host) && $host !== '' ? $host : 'VA Workspace',
+            'thumbnail_url' => isset($meta['image']) && is_string($meta['image']) ? $meta['image'] : null,
+            'embed_url' => null,
             'is_live' => false,
         ];
     }

@@ -13,6 +13,7 @@ import { MentionNode } from '../lib/tiptapMention.js';
 import { StickerNode } from '../lib/tiptapSticker.js';
 import SocialMentionPicker from './SocialMentionPicker.vue';
 import SocialHashtagPicker from './SocialHashtagPicker.vue';
+import { fetchLinkPreview, isPreviewableLink, normalizeUrl } from '../lib/linkPreviewUtils.js';
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -39,7 +40,6 @@ const hashtagIndex = ref(0);
 let hashtagTimer = null;
 let editor = null;
 
-const LINK_PREVIEW_HOST_PATTERN = /(youtube\.com|youtu\.be|facebook\.com|fb\.watch|tiktok\.com)/i;
 const linkPreviews = new Map();
 const dismissedLinkPreviews = new Set();
 let linkPreviewTimer = null;
@@ -53,8 +53,8 @@ function detectLinkPreviews(html) {
   clearTimeout(linkPreviewTimer);
   linkPreviewTimer = setTimeout(async () => {
     const urls = Array.from(html.matchAll(/https?:\/\/[^\s<>"]+/gi))
-      .map((m) => m[0].replace(/[.,;:!?)'"]+$/, ''))
-      .filter((url) => LINK_PREVIEW_HOST_PATTERN.test(url));
+      .map((m) => normalizeUrl(m[0]))
+      .filter((url) => isPreviewableLink(url));
     const urlSet = new Set(urls);
 
     for (const url of new Set([...linkPreviews.keys()])) {
@@ -71,12 +71,8 @@ function detectLinkPreviews(html) {
     }
 
     for (const url of newUrls) {
-      try {
-        const { data } = await window.axios.post('/api/social/link-preview', { url });
-        if (data.preview) linkPreviews.set(url, { ...data.preview, url });
-      } catch {
-        // Bỏ qua — không chặn việc soạn bài nếu preview lỗi/timeout.
-      }
+      const preview = await fetchLinkPreview(url);
+      if (preview) linkPreviews.set(url, preview);
     }
     emitLinkPreviews();
   }, 500);

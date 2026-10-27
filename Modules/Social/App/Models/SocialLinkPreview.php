@@ -27,12 +27,16 @@ class SocialLinkPreview extends Model
 
     public const PROVIDER_TIKTOK = 'tiktok';
 
+    public const PROVIDER_WORKSPACE = 'workspace';
+
     protected $fillable = [
         'post_id',
         'url',
         'provider',
         'external_id',
         'title',
+        'description',
+        'site_name',
         'thumbnail_url',
         'embed_url',
         'is_live',
