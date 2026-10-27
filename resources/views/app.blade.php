@@ -4,12 +4,11 @@
     <meta charset="utf-8">
     @php
         // UTF-8 có dấu; không dùng em dash (—) — parser preview Zalo hay chỉ lấy og:image, bỏ title/mô tả.
-        $ogTitle = 'VA Workspace - Hệ thống quản lý nội bộ VA Schools';
-        $ogDescription = 'Hệ thống quản lý nội bộ VA Schools. Quản lý công việc, nhân sự, tài sản và quy trình trên một nền tảng.';
-        $ogCoverV = (string) config('app.og_cover_version', '1');
-        $ogImage = asset('images/og-cover.jpg').'?v='.rawurlencode($ogCoverV);
-        $path = request()->getPathInfo();
-        $ogPageUrl = rtrim((string) config('app.url'), '/').($path === '/' ? '/' : $path);
+        $ogMeta = app(\App\Services\SpaOpenGraphResolver::class)->resolve(request());
+        $ogTitle = $ogMeta['title'];
+        $ogDescription = $ogMeta['description'];
+        $ogImage = $ogMeta['image'] ?? asset('images/og-cover.jpg');
+        $ogPageUrl = $ogMeta['url'];
     @endphp
     {{-- Open Graph đặt sớm trong <head> — bot Zalo/FB đọc meta trước khi cần JS --}}
     <meta property="og:type" content="website">

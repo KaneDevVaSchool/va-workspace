@@ -1,5 +1,5 @@
 // VA Workspace — service worker
-// v13: shell paths + deep link chat PWA.
+// v14: push payload gọn (VA Workspace + nội dung), preview link OG theo URL.
 //
 // Chiến lược:
 // - App shell (navigate): network-first, cache theo URL + bản fallback "/".
@@ -9,7 +9,7 @@
 //   âm thầm lấy bản mới cho lần sau.
 // - API (/api/...): network-only — không cache dữ liệu nhạy cảm.
 
-const CACHE_VERSION = 'v13';
+const CACHE_VERSION = 'v14';
 const SHELL_CACHE = `va-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `va-assets-${CACHE_VERSION}`;
 const IMAGE_CACHE = `va-images-${CACHE_VERSION}`;
@@ -259,6 +259,26 @@ function sanitizeEmployeeShellTarget(raw) {
   }
 }
 
+const PUSH_BRAND = 'VA Workspace';
+
+function buildPushOptions(data) {
+  const tag = data.tag || 'va-workspace';
+  const options = {
+    body: data.body || '',
+    icon: data.icon || '/images/pwa/icon-192.png',
+    badge: '/images/pwa/apple-touch-icon.png',
+    tag,
+    renotify: Boolean(data.tag),
+    timestamp: typeof data.timestamp === 'number' ? data.timestamp : Date.now(),
+    vibrate: [72, 36, 72],
+    data: { url: sanitizeEmployeeShellTarget(data.url || EMPLOYEE_SHELL_DEFAULT) },
+  };
+  if (data.image) {
+    options.image = data.image;
+  }
+  return options;
+}
+
 self.addEventListener('push', (event) => {
   let data = {};
   try {
@@ -267,14 +287,8 @@ self.addEventListener('push', (event) => {
     data = { body: event.data ? event.data.text() : '' };
   }
 
-  const title = data.title || 'VA Workspace';
-  const options = {
-    body: data.body || '',
-    icon: data.icon || '/images/pwa/icon-192.png',
-    badge: '/images/favicon.png',
-    tag: data.tag || 'va-workspace',
-    data: { url: sanitizeEmployeeShellTarget(data.url || EMPLOYEE_SHELL_DEFAULT) },
-  };
+  const title = data.title || PUSH_BRAND;
+  const options = buildPushOptions(data);
 
   event.waitUntil(self.registration.showNotification(title, options));
 });

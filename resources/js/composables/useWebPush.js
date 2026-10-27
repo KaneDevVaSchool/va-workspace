@@ -239,19 +239,28 @@ export async function showSystemNotification({
   body = '',
   tag = 'va-workspace',
   url = '/',
+  icon = '/images/pwa/icon-192.png',
+  image = null,
 } = {}) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
     return false;
   }
   try {
     const registration = await getPushRegistration();
-    await registration.showNotification(title, {
+    const options = {
       body,
-      icon: '/images/pwa/icon-192.png',
-      badge: '/images/favicon.png',
+      icon,
+      badge: '/images/pwa/apple-touch-icon.png',
       tag,
+      renotify: Boolean(tag),
+      timestamp: Date.now(),
+      vibrate: [72, 36, 72],
       data: { url },
-    });
+    };
+    if (image) {
+      options.image = image;
+    }
+    await registration.showNotification(title, options);
     return true;
   } catch {
     return false;

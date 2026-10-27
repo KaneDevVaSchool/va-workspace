@@ -340,6 +340,19 @@ class ChatService
                 'created_at' => now(),
             ])->save();
 
+            $this->notifications->sendWebPush(
+                $recipient,
+                $actor,
+                NotificationService::TYPE_CHAT_MESSAGE,
+                $title,
+                $body,
+                '/dashboard/me/chat?chat='.$conversationId,
+                [
+                    'push_icon' => is_string($avatar) ? $avatar : null,
+                    'push_tag' => 'va-chat-'.$conversationId,
+                ],
+            );
+
             return;
         }
 

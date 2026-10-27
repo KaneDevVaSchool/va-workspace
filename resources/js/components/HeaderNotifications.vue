@@ -22,6 +22,7 @@ const {
   lastError,
   enablePush,
   disablePush,
+  showSystemNotification,
 } = useWebPush();
 
 const items = ref([]);
@@ -54,10 +55,15 @@ async function loadUnread() {
     const next = data.unread_count ?? 0;
     if (next > lastUnread && lastUnread > 0 && document.hidden && Notification.permission === 'granted') {
       try {
-        new Notification('VA Workspace', {
-          body: next === 1 ? 'Bạn có 1 thông báo mới.' : `Bạn có ${next} thông báo chưa đọc.`,
-          icon: '/images/favicon.png',
-          tag: 'va-inbox',
+        const { data: listData } = await window.axios.get('/api/notifications', { params: { per_page: 1 } });
+        const latest = listData.notifications?.[0];
+        const line = latest?.push_line || latest?.body || latest?.title;
+        await showSystemNotification({
+          title: 'VA Workspace',
+          body: line || (next === 1 ? 'Bạn có 1 thông báo mới.' : `Bạn có ${next} thông báo chưa đọc.`),
+          tag: latest?.id ? `va-n-${latest.id}` : 'va-inbox',
+          url: latest?.url || '/',
+          icon: latest?.actor?.avatar_url || '/images/pwa/icon-192.png',
         });
       } catch {
         // Trình duyệt có thể chặn Notification khi không có user gesture.

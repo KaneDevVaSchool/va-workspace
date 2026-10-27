@@ -76,6 +76,7 @@ class NotificationService
         private readonly UserNotificationRepositoryInterface $notifications,
         private readonly UserRepositoryInterface $users,
         private readonly WebPushService $webPush,
+        private readonly WebPushPayloadBuilder $pushPayloadBuilder,
     ) {}
 
     /**
@@ -160,7 +161,9 @@ class NotificationService
     ): UserNotification {
         $pushIcon = is_string($data['push_icon'] ?? null) ? $data['push_icon'] : null;
         $pushTag = is_string($data['push_tag'] ?? null) ? $data['push_tag'] : null;
-        unset($data['push_icon'], $data['push_tag']);
+        $pushImage = is_string($data['push_image'] ?? null) ? $data['push_image'] : null;
+        $pushBody = is_string($data['push_body'] ?? null) ? $data['push_body'] : null;
+        unset($data['push_icon'], $data['push_tag'], $data['push_image'], $data['push_body']);
 
         $notification = $this->notifications->create([
             'user_id' => $recipient->id,
@@ -172,27 +175,109 @@ class NotificationService
             'data' => $data,
         ]);
 
+        $pushExtra = $pushBody !== null && trim($pushBody) !== '' ? ['push_body' => trim($pushBody)] : [];
+
+        $this->dispatchWebPush(
+            $recipient->id,
+            $type,
+            $actor,
+            $title,
+            $body,
+            $url,
+            $pushIcon,
+            $pushTag,
+            $pushImage,
+            $notification->id,
+            $pushExtra,
+        );
+
+        return $notification;
+    }
+
+    /**
+     * Gửi lại web push (vd. gộp tin nhắn chat) mà không tạo bản ghi chuông mới.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function sendWebPush(
+        User $recipient,
+        ?User $actor,
+        string $type,
+        string $title,
+        ?string $body,
+        ?string $url,
+        array $data = [],
+    ): void {
+        $pushIcon = is_string($data['push_icon'] ?? null) ? $data['push_icon'] : null;
+        $pushTag = is_string($data['push_tag'] ?? null) ? $data['push_tag'] : null;
+        $pushImage = is_string($data['push_image'] ?? null) ? $data['push_image'] : null;
+        $pushBody = is_string($data['push_body'] ?? null) ? $data['push_body'] : null;
+
+        $extra = $pushBody !== null && $pushBody !== '' ? ['push_body' => $pushBody] : [];
+
+        $this->dispatchWebPush(
+            (int) $recipient->id,
+            $type,
+            $actor,
+            $title,
+            $body,
+            $url,
+            $pushIcon,
+            $pushTag,
+            $pushImage,
+            null,
+            $extra,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $extraPushData
+     */
+    private function dispatchWebPush(
+        int $userId,
+        string $type,
+        ?User $actor,
+        string $title,
+        ?string $body,
+        ?string $url,
+        ?string $pushIcon,
+        ?string $pushTag,
+        ?string $pushImage,
+        ?int $notificationId,
+        array $extraPushData = [],
+    ): void {
+        $formatted = $this->pushPayloadBuilder->build(
+            $type,
+            $actor,
+            $title,
+            $body,
+            $extraPushData,
+        );
+
         $pushPayload = [
-            'title' => $title,
-            'body' => $body ?? '',
-            'url' => $url ?? '/social',
-            'tag' => $pushTag ?? ('va-n-'.$notification->id),
+            'title' => $formatted['title'],
+            'body' => $formatted['body'],
+            'url' => $url ?? '/dashboard/me/feed',
+            'tag' => $pushTag ?? ('va-n-'.($notificationId ?? uniqid('', true))),
+            'timestamp' => time() * 1000,
         ];
+
         if ($pushIcon !== null && $pushIcon !== '') {
             $pushPayload['icon'] = $pushIcon;
         }
+        if ($pushImage !== null && $pushImage !== '') {
+            $pushPayload['image'] = $pushImage;
+        }
 
         try {
-            $this->webPush->sendToUser($recipient->id, $pushPayload);
+            $this->webPush->sendToUser($userId, $pushPayload);
         } catch (Throwable $e) {
             Log::warning('Web push failed.', [
-                'notification_id' => $notification->id,
-                'user_id' => $recipient->id,
+                'notification_id' => $notificationId,
+                'user_id' => $userId,
                 'error' => $e->getMessage(),
             ]);
         }
-
-        return $notification;
     }
 
     public function paginate(User $user, int $perPage = 20): LengthAwarePaginator
@@ -224,11 +309,19 @@ class NotificationService
     {
         $actor = $notification->actor;
 
+        $pushLine = $this->pushPayloadBuilder->build(
+            (string) $notification->type,
+            $actor,
+            (string) $notification->title,
+            $notification->body,
+        )['body'];
+
         return [
             'id' => $notification->id,
             'type' => $notification->type,
             'title' => $notification->title,
             'body' => $notification->body,
+            'push_line' => $pushLine,
             'url' => $notification->url,
             'data' => $notification->data ?? [],
             'read_at' => $notification->read_at?->toIso8601String(),
