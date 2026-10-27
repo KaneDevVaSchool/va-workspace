@@ -16,18 +16,27 @@ import {
 
 const route = useRoute();
 
+const isConfigHub = computed(() => route.name === 'manager.don-tu.config');
 const isStatusConfigPage = computed(() => route.name === 'manager.don-tu.statuses');
 const isConfigEditor = computed(
   () => route.name === 'manager.don-tu.form' || route.name === 'manager.don-tu.workflow',
 );
 
+const showConfigBack = computed(() => isConfigArea.value && !isConfigHub.value);
+
 const currentTitle = computed(() => {
+  if (isConfigHub.value) {
+    return 'Cấu hình đơn từ';
+  }
   if (isStatusConfigPage.value) {
     return 'Thiết lập trạng thái';
   }
   return route.meta.screenTitle || 'Đơn từ';
 });
 const headerSubtitle = computed(() => {
+  if (isConfigHub.value) {
+    return 'Bộ trạng thái và trạng thái hồ sơ đơn';
+  }
   if (isStatusConfigPage.value) {
     return 'Quản lý bộ trạng thái và các bước trên hồ sơ đơn';
   }
@@ -48,7 +57,11 @@ const breadcrumbs = computed(() => {
     { label: 'Đơn từ', to: { name: 'manager.don-tu.start' } },
   ];
   if (isConfigArea.value) {
-    return [...base, { label: 'Cấu hình', to: { name: 'manager.don-tu.config' } }, { label: currentTitle.value }];
+    const crumbs = [...base, { label: 'Cấu hình', to: { name: 'manager.don-tu.config' } }];
+    if (!isConfigHub.value) {
+      crumbs.push({ label: currentTitle.value });
+    }
+    return crumbs;
   }
   if (isMonitorArea.value) {
     return [
@@ -137,6 +150,14 @@ async function reload() {
       :primary-action="isConfigArea ? headerPrimaryAction : null"
     >
       <template v-if="isConfigArea" #actions>
+        <router-link
+          v-if="showConfigBack"
+          :to="{ name: 'manager.don-tu.config' }"
+          class="don-tu__header-btn don-tu__header-btn--link"
+        >
+          <AppIcon name="chevronLeft" :size="16" />
+          Về cấu hình
+        </router-link>
         <button type="button" class="don-tu__header-btn" :disabled="reloading" @click="reload">
           <AppIcon name="refresh" :size="16" :class="{ 'don-tu__spin': reloading }" />
           Làm mới
@@ -198,6 +219,11 @@ async function reload() {
 
 .don-tu__header-btn:hover:not(:disabled) {
   background: var(--color-surface-muted);
+}
+
+.don-tu__header-btn--link {
+  text-decoration: none;
+  color: var(--color-text);
 }
 
 .don-tu__header-btn:disabled {

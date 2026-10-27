@@ -2,7 +2,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useDonTuConfigHub } from '../../composables/useDonTuConfigHub.js';
 import AppIcon from '@/components/AppIcon.vue';
-import DonTuStatusContentHeader from '../../components/DonTuStatusContentHeader.vue';
 import { useDragScroll } from '@/composables/useDragScroll.js';
 import { showClientToast } from '@/lib/clientToast';
 import { formatDonTuApiError } from '../../lib/donTuToast.js';
@@ -72,10 +71,6 @@ const filteredSets = computed(() => {
 
 const showRail = computed(() => sets.value.length > 0);
 const viewTab = ref('flow');
-
-const totalStatusCount = computed(() =>
-  sets.value.reduce((sum, set) => sum + (set.status_count ?? 0), 0),
-);
 
 const mainFlow = computed(() =>
   (detail.value?.statuses ?? []).filter((s) => s.group_kind === 'main').sort((a, b) => a.sort_order - b.sort_order),
@@ -471,12 +466,6 @@ async function submitCreate() {
   </div>
 
   <div v-else class="dt-setup">
-    <DonTuStatusContentHeader
-      :set-count="sets.length"
-      :status-count="totalStatusCount"
-      :loading="loadingList"
-    />
-
     <div v-if="!loadingList && !sets.length" class="dt-status-page__empty-panel">
       <AppIcon name="layers" :size="32" :stroke-width="1.75" />
       <h2 class="dt-status-page__empty-title">Chưa có bộ trạng thái</h2>
