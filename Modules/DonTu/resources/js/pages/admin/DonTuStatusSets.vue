@@ -589,7 +589,7 @@ async function submitCreate() {
               <h3 class="dt-setup__group-title">Quy trình trạng thái</h3>
               <p class="dt-setup__group-lead">Hồ sơ đi lần lượt qua các bước; bấm một bước để xem ai được chuyển tiếp.</p>
             </div>
-            <div class="dt-setup__seg" role="tablist" aria-label="Xem thiết lập">
+            <div class="dt-setup__seg dt-setup__seg--view" role="tablist" aria-label="Xem thiết lập">
               <button
                 type="button"
                 role="tab"
@@ -598,6 +598,7 @@ async function submitCreate() {
                 :aria-selected="viewTab === 'flow'"
                 @click="viewTab = 'flow'"
               >
+                <AppIcon name="gitBranch" :size="15" :stroke-width="1.75" aria-hidden="true" />
                 Sơ đồ các bước
               </button>
               <button
@@ -608,6 +609,7 @@ async function submitCreate() {
                 :aria-selected="viewTab === 'rules'"
                 @click="viewTab = 'rules'"
               >
+                <AppIcon name="users" :size="15" :stroke-width="1.75" aria-hidden="true" />
                 Ai bấm gì
               </button>
             </div>
@@ -793,7 +795,9 @@ async function submitCreate() {
                     </div>
                   </td>
                   <td class="dt-trans-table__cell dt-trans-table__cell--actor">
-                    <span class="dt-trans-actor">{{ actorLabel(tr.actor_policy) }}</span>
+                    <span class="dt-trans-actor" :class="`dt-trans-actor--${tr.actor_policy}`">
+                      {{ actorLabel(tr.actor_policy) }}
+                    </span>
                   </td>
                 </tr>
               </tbody>
@@ -1395,17 +1399,53 @@ async function submitCreate() {
 
 .dt-trans-table th {
   text-align: left;
-  padding: 0.4rem 0.65rem;
-  font-weight: 500;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  box-shadow: 0 1px 0 var(--color-border);
+  padding: 0.55rem 0.75rem;
+  font-weight: 600;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 65%, var(--color-text-muted));
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface-muted));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-primary) 18%, var(--color-border));
+}
+
+.dt-trans-table--rules th:first-child {
+  border-radius: var(--radius-sm) 0 0 0;
+}
+
+.dt-trans-table--rules th:last-child {
+  border-radius: 0 var(--radius-sm) 0 0;
 }
 
 .dt-trans-table td {
-  padding: 0.45rem 0.65rem;
+  padding: 0.65rem 0.75rem;
   vertical-align: middle;
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-border) 60%, transparent);
+}
+
+.dt-trans-table--rules .dt-trans-table__cell--action {
+  position: relative;
+}
+
+.dt-trans-table--rules .dt-trans-table__cell--action::before,
+.dt-trans-table--rules .dt-trans-table__cell--action::after {
+  position: absolute;
+  top: 50%;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--color-primary) 55%, var(--color-text-muted));
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.dt-trans-table--rules .dt-trans-table__cell--action::before {
+  content: '→';
+  left: -0.35rem;
+}
+
+.dt-trans-table--rules .dt-trans-table__cell--action::after {
+  content: '→';
+  right: -0.35rem;
 }
 
 .dt-trans-rules {
@@ -1417,8 +1457,10 @@ async function submitCreate() {
 .dt-trans-rules .dt-trans-table__scroll {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  background: color-mix(in srgb, var(--color-primary) 3%, var(--color-surface));
+  box-shadow:
+    var(--shadow-sm),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 14%, var(--color-border));
 }
 
 .dt-trans-rules__toolbar {
@@ -1445,7 +1487,15 @@ async function submitCreate() {
 }
 
 .dt-trans-table__row:hover {
-  background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface));
+}
+
+.dt-trans-table--rules .dt-trans-table__row:nth-child(even) {
+  background: color-mix(in srgb, var(--color-primary) 3%, var(--color-surface));
+}
+
+.dt-trans-table--rules .dt-trans-table__row:nth-child(even):hover {
+  background: color-mix(in srgb, var(--color-primary) 9%, var(--color-surface));
 }
 
 .dt-trans-table__cell--status,
@@ -1473,12 +1523,12 @@ async function submitCreate() {
   padding: 0.45rem 0.75rem;
   border-radius: var(--radius-sm);
   font-size: 0.8125rem;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.35;
   text-align: center;
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-text-muted) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-text-muted) 12%, var(--color-surface));
+  color: var(--color-text);
 }
 
 .dt-action-chip {
@@ -1489,15 +1539,15 @@ async function submitCreate() {
   min-width: 9.5rem;
   width: 100%;
   max-width: 14rem;
-  padding: 0.45rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--radius-sm);
   font-size: 0.8125rem;
-  font-weight: 500;
+  font-weight: 700;
   line-height: 1.35;
   text-align: center;
-  color: var(--color-text);
-  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, var(--color-border));
+  color: var(--color-primary-700);
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
 }
 
 .dt-guard {
@@ -1512,10 +1562,33 @@ async function submitCreate() {
 }
 
 .dt-trans-actor {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius-sm);
   font-size: 0.8125rem;
-  line-height: 1.45;
-  color: var(--color-text);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--actor-fg, var(--color-text));
+  background: color-mix(in srgb, var(--actor-fg, var(--color-text-muted)) 16%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--actor-fg, var(--color-border)) 38%, var(--color-border));
+}
+
+.dt-trans-actor--requester {
+  --actor-fg: var(--color-info);
+}
+
+.dt-trans-actor--assignee {
+  --actor-fg: #c27803;
+}
+
+.dt-trans-actor--closure_actor {
+  --actor-fg: var(--color-success);
+}
+
+.dt-trans-actor--admin {
+  --actor-fg: var(--color-primary);
 }
 
 .dt-status-page__loading,

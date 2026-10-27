@@ -329,8 +329,18 @@ final class SpaOpenGraphResolver
      */
     private function sanitizePack(array $pack): array
     {
-        $pack['title'] = $this->sanitizeOgText((string) ($pack['title'] ?? ''));
-        $pack['description'] = $this->sanitizeOgText((string) ($pack['description'] ?? ''));
+        $pack['title'] = mb_strimwidth(
+            $this->sanitizeOgText((string) ($pack['title'] ?? '')),
+            0,
+            100,
+            '…'
+        );
+        $pack['description'] = mb_strimwidth(
+            $this->sanitizeOgText((string) ($pack['description'] ?? '')),
+            0,
+            160,
+            '…'
+        );
 
         return $pack;
     }

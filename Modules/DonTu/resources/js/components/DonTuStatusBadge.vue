@@ -36,8 +36,8 @@ const tone = computed(() => toneOfStatusCode(props.code));
   border-radius: var(--radius-sm);
   font-size: 0.8125rem;
   line-height: 1.25;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--badge-fg) 22%, transparent);
-  background: color-mix(in srgb, var(--badge-fg) 10%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--badge-fg) 38%, transparent);
+  background: color-mix(in srgb, var(--badge-fg) 18%, var(--color-surface));
   color: var(--color-text);
   --badge-fg: var(--color-info);
 }
@@ -71,7 +71,12 @@ const tone = computed(() => toneOfStatusCode(props.code));
 }
 
 .dt-status-badge__label {
-  font-weight: 500;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--badge-fg) 72%, var(--color-text));
+}
+
+.dt-status-badge--table-chip .dt-status-badge__label {
+  font-weight: 600;
 }
 
 .dt-status-badge--muted {
