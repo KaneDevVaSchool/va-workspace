@@ -7,7 +7,7 @@ import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import DonTuConfigHubCards from '../../components/DonTuConfigHubCards.vue';
 import DonTuStatusBadge from '../../components/DonTuStatusBadge.vue';
-import { fetchStatusSet, fetchStatusSets } from '../../api/donTuConfigApi.js';
+import { createStatus, fetchStatusSet, fetchStatusSets } from '../../api/donTuConfigApi.js';
 import {
   ACTION_LABEL,
   ACTOR_LABEL,
@@ -35,6 +35,9 @@ const loadingList = ref(false);
 const loadingDetail = ref(false);
 const transitionQuery = ref('');
 const focusCode = ref('');
+const createOpen = ref(false);
+const createSaving = ref(false);
+const createForm = ref(emptyStatusForm());
 
 const pipelineWrap = ref(null);
 const transWrap = ref(null);
@@ -92,6 +95,10 @@ const filteredTransitions = computed(() => {
 
 const detailTitle = computed(() => friendlySetName(detail.value?.name, detail.value?.code));
 const detailDescription = computed(() => humanSetDescription(detail.value?.description));
+const fromOptions = computed(() => [
+  { code: 'NONE', label: 'Lúc chưa có hồ sơ' },
+  ...(detail.value?.statuses ?? []).map((st) => ({ code: st.code, label: st.label })),
+]);
 
 async function loadSets() {
   loadingList.value = true;
@@ -166,6 +173,60 @@ async function copyCode(code) {
 function goWorkflow(id) {
   router.push({ name: 'manager.don-tu.workflow', params: { id } });
 }
+
+function emptyStatusForm() {
+  return {
+    label: '',
+    group_kind: 'main',
+    terminal_kind: 'success',
+    from_code: '',
+    action_key: 'APPROVE',
+    actor_policy: 'assignee',
+  };
+}
+
+function openCreate() {
+  createForm.value = emptyStatusForm();
+  createOpen.value = true;
+}
+
+function errorText(err, fallback) {
+  const errors = err.response?.data?.errors;
+  if (errors) {
+    const first = Object.values(errors)[0];
+    if (Array.isArray(first) && first[0]) return first[0];
+  }
+  return err.response?.data?.message || fallback;
+}
+
+async function submitCreate() {
+  if (!selectedId.value) return;
+  if (!createForm.value.label.trim()) {
+    showClientToast('Nhập tên trạng thái.', 'error');
+    return;
+  }
+  if (!createForm.value.from_code) {
+    showClientToast('Chọn trạng thái phía trước.', 'error');
+    return;
+  }
+  createSaving.value = true;
+  try {
+    const item = await createStatus(selectedId.value, {
+      ...createForm.value,
+      label: createForm.value.label.trim(),
+      terminal_kind: createForm.value.group_kind === 'terminal' ? createForm.value.terminal_kind : null,
+    });
+    detail.value = item;
+    const row = sets.value.find((s) => s.id === selectedId.value);
+    if (row) row.status_count = item.statuses?.length ?? row.status_count;
+    createOpen.value = false;
+    showClientToast('Đã thêm trạng thái.', 'success');
+  } catch (err) {
+    showClientToast(errorText(err, 'Không thêm được trạng thái.'), 'error');
+  } finally {
+    createSaving.value = false;
+  }
+}
 </script>
 
 <template>
@@ -220,6 +281,10 @@ function goWorkflow(id) {
             <p v-if="detailDescription" class="dt-status-page__detail-desc">{{ detailDescription }}</p>
           </div>
           <div class="dt-status-page__stats">
+            <button type="button" class="dt-admin-list__primary" @click="openCreate">
+              <AppIcon name="plus" :size="16" :stroke-width="2" />
+              Thêm trạng thái
+            </button>
             <span>{{ detail.statuses?.length ?? 0 }} trạng thái</span>
             <span>{{ detail.transitions?.length ?? 0 }} cách đổi</span>
             <span>{{ detail.workflow_count ?? 0 }} quy trình</span>
@@ -372,6 +437,63 @@ function goWorkflow(id) {
         </section>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div v-if="createOpen" class="dt-modal-backdrop" @click.self="createOpen = false">
+        <div class="dt-modal" role="dialog" aria-labelledby="dt-status-create-title">
+          <header class="dt-modal__head">
+            <h2 id="dt-status-create-title">Thêm trạng thái</h2>
+            <button type="button" class="dt-modal__close" aria-label="Đóng" @click="createOpen = false">
+              <AppIcon name="x" :size="18" />
+            </button>
+          </header>
+          <div class="dt-modal__body dt-modal__grid">
+            <label class="dt-field">
+              <span>Tên trạng thái<span class="dt-req" aria-hidden="true">*</span></span>
+              <input v-model="createForm.label" type="text" required placeholder="Ví dụ: Chờ ký" />
+            </label>
+            <label class="dt-field">
+              <span>Nằm ở đâu<span class="dt-req" aria-hidden="true">*</span></span>
+              <select v-model="createForm.group_kind" required>
+                <option v-for="(label, key) in GROUP_KIND_LABEL" :key="key" :value="key">{{ label }}</option>
+              </select>
+            </label>
+            <label v-if="createForm.group_kind === 'terminal'" class="dt-field">
+              <span>Kết quả<span class="dt-req" aria-hidden="true">*</span></span>
+              <select v-model="createForm.terminal_kind" required>
+                <option value="success">Xong việc</option>
+                <option value="failed">Không xong</option>
+              </select>
+            </label>
+            <label class="dt-field">
+              <span>Đi từ trạng thái nào<span class="dt-req" aria-hidden="true">*</span></span>
+              <select v-model="createForm.from_code" required>
+                <option disabled value="">Chọn trạng thái phía trước</option>
+                <option v-for="opt in fromOptions" :key="opt.code" :value="opt.code">{{ opt.label }}</option>
+              </select>
+            </label>
+            <label class="dt-field">
+              <span>Việc làm<span class="dt-req" aria-hidden="true">*</span></span>
+              <select v-model="createForm.action_key" required>
+                <option v-for="(label, key) in ACTION_LABEL" :key="key" :value="key">{{ label }}</option>
+              </select>
+            </label>
+            <label class="dt-field">
+              <span>Ai được bấm<span class="dt-req" aria-hidden="true">*</span></span>
+              <select v-model="createForm.actor_policy" required>
+                <option v-for="(label, key) in ACTOR_LABEL" :key="key" :value="key">{{ label }}</option>
+              </select>
+            </label>
+          </div>
+          <footer class="dt-modal__foot">
+            <button type="button" class="dt-btn-ghost" @click="createOpen = false">Huỷ</button>
+            <button type="button" class="dt-btn-primary" :disabled="createSaving" @click="submitCreate">
+              {{ createSaving ? 'Đang lưu…' : 'Thêm trạng thái' }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 

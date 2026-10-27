@@ -45,4 +45,35 @@ class DonTuStatusSetController extends Controller
 
         return response()->json(['item' => $item]);
     }
+
+    public function storeStatus(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'Bạn cần đăng nhập.'], 401);
+        }
+
+        if (! $this->access->canWriteConfig($user)) {
+            return response()->json(['message' => 'Bạn không có quyền thêm trạng thái.'], 403);
+        }
+
+        $validated = $request->validate([
+            'label' => ['required', 'string', 'max:255'],
+            'group_kind' => ['required', 'in:main,conditional,terminal'],
+            'terminal_kind' => ['nullable', 'in:success,failed'],
+            'from_code' => ['required', 'string', 'max:64'],
+            'action_key' => ['required', 'in:SAVE_DRAFT,SUBMIT,ACCEPT,APPROVE,REJECT,CANCEL,CLOSE,REQUEST_CHANGES,SUPPLEMENT,CONFIRM_PAYMENT'],
+            'actor_policy' => ['required', 'in:requester,assignee,closure_actor,admin'],
+        ], [
+            'label.required' => 'Nhập tên trạng thái.',
+            'group_kind.required' => 'Chọn chỗ của trạng thái trên đường đi.',
+            'from_code.required' => 'Chọn trạng thái phía trước.',
+            'action_key.required' => 'Chọn việc làm.',
+            'actor_policy.required' => 'Chọn người được bấm.',
+        ]);
+
+        $item = $this->catalog->addStatus($id, $validated);
+
+        return response()->json(['item' => $item], 201);
+    }
 }

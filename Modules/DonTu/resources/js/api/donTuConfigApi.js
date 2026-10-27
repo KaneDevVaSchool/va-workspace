@@ -8,6 +8,11 @@ export async function fetchStatusSet(id) {
   return data.item;
 }
 
+export async function createStatus(setId, payload) {
+  const { data } = await window.axios.post(`/api/don-tu/status-sets/${setId}/statuses`, payload);
+  return data.item;
+}
+
 export async function fetchFormTemplates() {
   const { data } = await window.axios.get('/api/don-tu/form-templates');
   return data.items ?? [];
