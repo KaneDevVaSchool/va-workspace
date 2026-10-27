@@ -18,6 +18,10 @@ export async function createStatus(setId, payload) {
   return data.item;
 }
 
+export async function deleteStatusSet(id) {
+  await window.axios.delete(`/api/don-tu/status-sets/${id}`);
+}
+
 export async function fetchFormTemplates() {
   const { data } = await window.axios.get('/api/don-tu/form-templates');
   return data.items ?? [];

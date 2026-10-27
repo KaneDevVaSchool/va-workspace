@@ -102,4 +102,20 @@ class DonTuStatusSetController extends Controller
 
         return response()->json(['item' => $item], 201);
     }
+
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'Bạn cần đăng nhập.'], 401);
+        }
+
+        if (! $this->access->canWriteConfig($user)) {
+            return response()->json(['message' => 'Bạn không có quyền xóa bộ trạng thái.'], 403);
+        }
+
+        $this->catalog->destroySet($id);
+
+        return response()->json(['message' => 'Đã xóa bộ trạng thái.']);
+    }
 }

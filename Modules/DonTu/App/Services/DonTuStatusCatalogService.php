@@ -163,6 +163,30 @@ class DonTuStatusCatalogService
         return $detail;
     }
 
+    public function destroySet(int $id): void
+    {
+        $set = DonTuStatusSet::query()->withCount('workflows')->find($id);
+        if ($set === null) {
+            throw ValidationException::withMessages([
+                'status_set_id' => 'Không tìm thấy bộ trạng thái.',
+            ]);
+        }
+
+        if ($set->is_system) {
+            throw ValidationException::withMessages([
+                'status_set_id' => 'Bộ trạng thái hệ thống không xóa được.',
+            ]);
+        }
+
+        if ((int) $set->workflows_count > 0) {
+            throw ValidationException::withMessages([
+                'status_set_id' => 'Bộ đang được quy trình dùng. Gỡ quy trình trước khi xóa.',
+            ]);
+        }
+
+        $set->delete();
+    }
+
     private function cloneStatusesAndTransitions(int $fromSetId, int $toSetId): void
     {
         $source = DonTuStatusSet::query()

@@ -2,12 +2,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useDonTuConfigHub } from '../../composables/useDonTuConfigHub.js';
 import AppIcon from '@/components/AppIcon.vue';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { useDragScroll } from '@/composables/useDragScroll.js';
 import { showClientToast } from '@/lib/clientToast';
 import { formatDonTuApiError } from '../../lib/donTuToast.js';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import DonTuStatusBadge from '../../components/DonTuStatusBadge.vue';
-import { createStatus, createStatusSet, fetchStatusSet, fetchStatusSets } from '../../api/donTuConfigApi.js';
+import { createStatus, createStatusSet, deleteStatusSet, fetchStatusSet, fetchStatusSets } from '../../api/donTuConfigApi.js';
 import {
   ACTION_LABEL,
   ACTOR_LABEL,
@@ -53,6 +54,11 @@ const templatePreview = ref(null);
 const templatePreviewLoading = ref(false);
 const previewCache = new Map();
 let previewToken = 0;
+const setMenu = ref(null);
+const setMenuEl = ref(null);
+const deleteOpen = ref(false);
+const deleteTarget = ref(null);
+const deleteSaving = ref(false);
 
 const pipelineWrap = ref(null);
 const transWrap = ref(null);
@@ -74,6 +80,7 @@ const showRail = computed(() => sets.value.length > 0);
 const railCollapsed = ref(false);
 const RAIL_COLLAPSE_KEY = 'don-tu.status-rail-collapsed';
 const viewTab = ref('flow');
+const barOpen = ref(false);
 const stepDrawerOpen = ref(false);
 
 const mainFlow = computed(() =>
@@ -172,7 +179,13 @@ const actorTracks = computed(() => {
         .includes(q);
     });
 });
-const detailDescription = computed(() => humanSetDescription(detail.value?.description));
+
+const detailTitle = computed(() => friendlySetName(detail.value?.name, detail.value?.code));
+const detailSummary = computed(() => {
+  const text = humanSetDescription(detail.value?.description);
+  if (!text) return '';
+  return text.replace(/^(?:[A-ZĐ]{1,6}\.?\d+(?:\/[A-ZĐ]{1,6}\.?\d+)*\s*)+[—–-]\s*/i, '').trim();
+});
 const fromOptions = computed(() => [
   { code: 'NONE', label: 'Lúc chưa có hồ sơ' },
   ...(detail.value?.statuses ?? []).map((st) => ({ code: st.code, label: st.label })),
@@ -243,7 +256,68 @@ function syncHeaderPrimary() {
 
 watch([canWrite, detail, loadingDetail], syncHeaderPrimary, { immediate: true });
 
+function closeSetMenu() {
+  setMenu.value = null;
+}
+
+function onSetContextMenu(event, set) {
+  if (!canWrite.value) return;
+  const pad = 8;
+  const menuW = 168;
+  const menuH = 44;
+  setMenu.value = {
+    set,
+    x: Math.min(Math.max(pad, event.clientX), Math.max(pad, window.innerWidth - menuW - pad)),
+    y: Math.min(Math.max(pad, event.clientY), Math.max(pad, window.innerHeight - menuH - pad)),
+  };
+}
+
+function onDocPointerDown(event) {
+  if (!setMenu.value) return;
+  if (setMenuEl.value?.contains(event.target)) return;
+  closeSetMenu();
+}
+
+function onDocKeydown(event) {
+  if (event.key === 'Escape') closeSetMenu();
+}
+
+function askDeleteSet(set) {
+  closeSetMenu();
+  if (set.is_system) {
+    showClientToast('error', 'Bộ trạng thái hệ thống không xóa được.');
+    return;
+  }
+  if ((set.workflow_count ?? 0) > 0) {
+    showClientToast('error', 'Bộ đang được quy trình dùng. Gỡ quy trình trước khi xóa.');
+    return;
+  }
+  deleteTarget.value = set;
+  deleteOpen.value = true;
+}
+
+async function confirmDeleteSet() {
+  const item = deleteTarget.value;
+  if (!item || deleteSaving.value) return;
+  deleteSaving.value = true;
+  try {
+    await deleteStatusSet(item.id);
+    previewCache.delete(item.id);
+    showClientToast('success', 'Đã xóa bộ trạng thái.');
+    deleteOpen.value = false;
+    deleteTarget.value = null;
+    await loadSets();
+  } catch (err) {
+    showClientToast('error', formatDonTuApiError(err, 'Không xóa được bộ trạng thái.'));
+  } finally {
+    deleteSaving.value = false;
+  }
+}
+
 onMounted(async () => {
+  document.addEventListener('pointerdown', onDocPointerDown);
+  document.addEventListener('keydown', onDocKeydown);
+  window.addEventListener('scroll', closeSetMenu, true);
   try {
     railCollapsed.value = localStorage.getItem(RAIL_COLLAPSE_KEY) === '1';
   } catch {
@@ -257,6 +331,9 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocPointerDown);
+  document.removeEventListener('keydown', onDocKeydown);
+  window.removeEventListener('scroll', closeSetMenu, true);
   configHub?.unregisterReload();
   configHub?.clearPrimaryAction();
 });
@@ -289,6 +366,21 @@ function statusLabel(code) {
   if (!code || code === 'NONE') return 'Lúc chưa có hồ sơ';
   return detail.value?.statuses?.find((s) => s.code === code)?.label || code;
 }
+
+const drawerTone = computed(() => {
+  const status = focusStatus.value;
+  if (!status) return 'main';
+  if (status.group_kind === 'terminal') return status.terminal_kind === 'failed' ? 'fail' : 'done';
+  if (status.group_kind === 'conditional') return 'need';
+  return 'main';
+});
+
+const drawerPlace = computed(() => {
+  const list = orderedSteps.value;
+  const index = list.findIndex((status) => status.code === focusCode.value);
+  if (index < 0) return '';
+  return `${index + 1}/${list.length}`;
+});
 
 const focusStatus = computed(
   () => detail.value?.statuses?.find((status) => status.code === focusCode.value) ?? null,
@@ -353,15 +445,6 @@ function moveFocus(delta) {
   const nextIndex = index < 0 ? (delta > 0 ? 0 : list.length - 1) : index + delta;
   const next = list[(nextIndex + list.length) % list.length];
   focusCode.value = next.code;
-}
-
-async function copyCode(code) {
-  try {
-    await navigator.clipboard.writeText(code);
-    showClientToast('success', 'Đã sao chép mã.');
-  } catch {
-    showClientToast('error', 'Không sao chép được.');
-  }
 }
 
 function nextBmttCode(list) {
@@ -658,6 +741,7 @@ async function submitCreate() {
               :class="{ 'dt-set-pick--active': selectedId === set.id }"
               :aria-current="selectedId === set.id ? 'true' : undefined"
               @click="selectedId = set.id"
+              @contextmenu.prevent="onSetContextMenu($event, set)"
             >
               <span class="dt-set-pick__main">
                 <span class="dt-set-pick__name">{{ friendlySetName(set.name, set.code) }}</span>
@@ -680,26 +764,16 @@ async function submitCreate() {
       <div v-else-if="detail" class="dt-setup__main">
         <section class="dt-setup__group">
           <header class="dt-setup__bar">
-            <h2 class="dt-setup__hero-title">{{ detailTitle }}</h2>
-            <p v-if="detailDescription" class="dt-setup__hero-desc">{{ detailDescription }}</p>
             <button
-              v-if="detail.code"
               type="button"
-              class="dt-link-btn dt-setup__bar-copy"
-              @click="copyCode(detail.code)"
+              class="dt-setup__bar-toggle"
+              :aria-expanded="barOpen"
+              :aria-label="barOpen ? 'Thu gọn tóm tắt bộ' : 'Mở tóm tắt bộ'"
+              @click="barOpen = !barOpen"
             >
-              Sao chép mã nội bộ
+              <AppIcon :name="barOpen ? 'chevronDown' : 'chevronRight'" :size="16" :stroke-width="2" aria-hidden="true" />
+              <span class="dt-setup__hero-title">{{ detailTitle }}</span>
             </button>
-            <div class="dt-setup__metrics" aria-label="Thống kê bộ trạng thái">
-              <span class="dt-setup__metric">
-                <span class="dt-setup__metric-num">{{ detail.statuses?.length ?? 0 }}</span>
-                bước
-              </span>
-              <span class="dt-setup__metric">
-                <span class="dt-setup__metric-num">{{ detail.transitions?.length ?? 0 }}</span>
-                lần chuyển
-              </span>
-            </div>
             <div class="dt-setup__seg dt-setup__seg--view" role="tablist" aria-label="Xem thiết lập">
               <button
                 type="button"
@@ -725,6 +799,20 @@ async function submitCreate() {
               </button>
             </div>
           </header>
+          <div v-show="barOpen" class="dt-setup__bar-more">
+            <p class="dt-setup__metrics" aria-label="Thống kê bộ trạng thái">
+              <span class="dt-setup__metric">
+                <span class="dt-setup__metric-num">{{ detail.statuses?.length ?? 0 }}</span>
+                bước
+              </span>
+              <span class="dt-setup__metric-dot" aria-hidden="true" />
+              <span class="dt-setup__metric">
+                <span class="dt-setup__metric-num">{{ detail.transitions?.length ?? 0 }}</span>
+                lần chuyển
+              </span>
+            </p>
+            <p v-if="detailSummary" class="dt-setup__bar-summary">{{ detailSummary }}</p>
+          </div>
 
           <div v-show="viewTab === 'flow'" class="dt-setup__group-body">
           <p v-if="!(detail.statuses?.length)" class="dt-status-page__empty">Chưa có trạng thái.</p>
@@ -859,98 +947,62 @@ async function submitCreate() {
       <div v-if="stepDrawerOpen && focusStatus" class="dt-drawer-backdrop" @click.self="closeStepDrawer">
         <aside
           class="dt-drawer"
+          :class="`dt-drawer--${drawerTone}`"
           role="dialog"
           aria-modal="true"
           aria-labelledby="dt-step-drawer-title"
           @keydown.escape="closeStepDrawer"
         >
+          <div class="dt-drawer__palette" aria-hidden="true">
+            <span /><span /><span /><span />
+          </div>
           <header class="dt-drawer__head">
+            <span class="dt-drawer__mark" aria-hidden="true">{{ drawerPlace }}</span>
             <div class="dt-drawer__head-copy">
-              <p class="dt-step-card__kicker">{{ GROUP_KIND_LABEL[focusStatus.group_kind] || 'Trạng thái' }}</p>
-              <h4 id="dt-step-drawer-title" class="dt-step-card__title">{{ focusStatus.label }}</h4>
-              <p v-if="statusStepLine(focusStatus.code)" class="dt-step-card__sub">
-                {{ statusStepLine(focusStatus.code) }}
-              </p>
+              <p class="dt-drawer__kicker">{{ GROUP_KIND_LABEL[focusStatus.group_kind] || 'Trạng thái' }}</p>
+              <h4 id="dt-step-drawer-title" class="dt-drawer__title">{{ focusStatus.label }}</h4>
             </div>
             <button type="button" class="dt-modal__close" aria-label="Đóng" @click="closeStepDrawer">
               <AppIcon name="close" :size="18" />
             </button>
           </header>
+          <div class="dt-drawer__nav">
+            <button type="button" class="dt-drawer__nav-btn" @click="moveFocus(-1)">
+              <AppIcon name="chevronLeft" :size="16" :stroke-width="2" aria-hidden="true" />
+              Bước trước
+            </button>
+            <button type="button" class="dt-drawer__nav-btn" @click="moveFocus(1)">
+              Bước sau
+              <AppIcon name="chevronRight" :size="16" :stroke-width="2" aria-hidden="true" />
+            </button>
+          </div>
           <div class="dt-drawer__body hide-scrollbar">
-            <div class="dt-step-card__actions">
-              <button type="button" class="dt-link-btn" @click="openRules">Xem người phụ trách</button>
-              <button type="button" class="dt-link-btn" @click="closeStepDrawer">Bỏ chọn</button>
-            </div>
-            <div class="dt-step-card__cols">
-              <section>
+            <section class="dt-lane dt-lane--in">
+              <header class="dt-lane__head">
                 <h5>Đi vào</h5>
-                <ul>
-                  <li v-if="!focusInbound.length" class="dt-step-card__empty">Không có lối vào</li>
-                  <li v-for="tr in focusInbound" :key="`in-${tr.id}`">
-                    <span class="dt-step-card__from">{{ statusLabel(tr.from_code) }}</span>
-                    <span class="dt-step-card__meta">{{ actionLabel(tr.action_key) }} · {{ actorLabel(tr.actor_policy) }}</span>
-                    <span v-if="guardHint(tr.guard_json)" class="dt-step-card__guard">{{ guardHint(tr.guard_json) }}</span>
-                  </li>
-                </ul>
-              </section>
-              <section>
+                <span class="dt-lane__count">{{ focusInbound.length }}</span>
+              </header>
+              <p v-if="!focusInbound.length" class="dt-lane__empty">Không có lối vào</p>
+              <article v-for="tr in focusInbound" :key="`in-${tr.id}`" class="dt-move dt-move--in">
+                <span class="dt-move__where">Từ {{ statusLabel(tr.from_code) }}</span>
+                <span class="dt-move__action">{{ actionLabel(tr.action_key) }}</span>
+                <span class="dt-move__who" :class="`is-${tr.actor_policy}`">{{ actorLabel(tr.actor_policy) }}</span>
+                <span v-if="guardHint(tr.guard_json)" class="dt-move__guard">{{ guardHint(tr.guard_json) }}</span>
+              </article>
+            </section>
+            <section class="dt-lane dt-lane--out">
+              <header class="dt-lane__head">
                 <h5>Đi ra</h5>
-                <ul>
-                  <li v-if="!focusOutbound.length" class="dt-step-card__empty">Không có lối ra</li>
-                  <li v-for="tr in focusOutbound" :key="`out-${tr.id}`">
-                    <span class="dt-step-card__from">{{ statusLabel(tr.to_code) }}</span>
-                    <span class="dt-step-card__meta">{{ actionLabel(tr.action_key) }} · {{ actorLabel(tr.actor_policy) }}</span>
-                    <span v-if="guardHint(tr.guard_json)" class="dt-step-card__guard">{{ guardHint(tr.guard_json) }}</span>
-                  </li>
-                </ul>
-              </section>
-            </div>
-            <div v-if="conditional.length || terminal.length" class="dt-zz-side dt-zz-side--drawer">
-              <section v-if="conditional.length" aria-label="Khi cần thêm việc">
-                <h4 class="dt-zz-side__title">{{ GROUP_KIND_LABEL.conditional }}</h4>
-                <ul class="dt-zz-side__list">
-                  <li v-for="st in conditional" :key="st.code">
-                    <button
-                      type="button"
-                      class="dt-zz-pill"
-                      :class="stepClass(st.code)"
-                      :aria-pressed="focusCode === st.code"
-                      @click="toggleFocus(st.code)"
-                    >
-                      <span class="dt-zz-pill__node dt-zz-pill__node--need" aria-hidden="true" />
-                      <span class="dt-zz-pill__text">
-                        <span class="dt-zz-pill__title">{{ st.label }}</span>
-                        <span v-if="statusStepLine(st.code)" class="dt-zz-pill__sub">{{ statusStepLine(st.code) }}</span>
-                      </span>
-                    </button>
-                  </li>
-                </ul>
-              </section>
-              <section v-if="terminal.length" aria-label="Kết thúc">
-                <h4 class="dt-zz-side__title">{{ GROUP_KIND_LABEL.terminal }}</h4>
-                <ul class="dt-zz-side__list">
-                  <li v-for="st in terminal" :key="st.code">
-                    <button
-                      type="button"
-                      class="dt-zz-pill"
-                      :class="stepClass(st.code)"
-                      :aria-pressed="focusCode === st.code"
-                      @click="toggleFocus(st.code)"
-                    >
-                      <span
-                        class="dt-zz-pill__node"
-                        :class="st.terminal_kind === 'failed' ? 'dt-zz-pill__node--fail' : 'dt-zz-pill__node--done'"
-                        aria-hidden="true"
-                      />
-                      <span class="dt-zz-pill__text">
-                        <span class="dt-zz-pill__title">{{ st.label }}</span>
-                        <span v-if="statusStepLine(st.code)" class="dt-zz-pill__sub">{{ statusStepLine(st.code) }}</span>
-                      </span>
-                    </button>
-                  </li>
-                </ul>
-              </section>
-            </div>
+                <span class="dt-lane__count">{{ focusOutbound.length }}</span>
+              </header>
+              <p v-if="!focusOutbound.length" class="dt-lane__empty">Không có lối ra</p>
+              <article v-for="tr in focusOutbound" :key="`out-${tr.id}`" class="dt-move dt-move--out">
+                <span class="dt-move__where">Sang {{ statusLabel(tr.to_code) }}</span>
+                <span class="dt-move__action">{{ actionLabel(tr.action_key) }}</span>
+                <span class="dt-move__who" :class="`is-${tr.actor_policy}`">{{ actorLabel(tr.actor_policy) }}</span>
+                <span v-if="guardHint(tr.guard_json)" class="dt-move__guard">{{ guardHint(tr.guard_json) }}</span>
+              </article>
+            </section>
           </div>
         </aside>
       </div>
@@ -1216,11 +1268,66 @@ async function submitCreate() {
         </div>
       </div>
     </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="setMenu"
+        ref="setMenuEl"
+        class="dt-set-ctx"
+        role="menu"
+        :style="{ left: `${setMenu.x}px`, top: `${setMenu.y}px` }"
+        @contextmenu.prevent
+      >
+        <button type="button" role="menuitem" @click="askDeleteSet(setMenu.set)">
+          <AppIcon name="trash2" :size="16" :stroke-width="1.75" aria-hidden="true" />
+          Xóa
+        </button>
+      </div>
+    </Teleport>
+
+    <ConfirmDialog
+      v-model:open="deleteOpen"
+      title="Xóa bộ trạng thái?"
+      :description="deleteTarget ? `Xóa vĩnh viễn «${friendlySetName(deleteTarget.name, deleteTarget.code)}» và các bước trong bộ?` : ''"
+      confirm-label="Xóa"
+      danger
+      :loading="deleteSaving"
+      @confirm="confirmDeleteSet"
+    />
   </div>
 </template>
 
 <style scoped>
 @import './donTuAdminShared.css';
+
+.dt-set-ctx {
+  position: fixed;
+  z-index: 400;
+  min-width: 9.5rem;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.dt-set-ctx button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-danger);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dt-set-ctx button:hover {
+  background: var(--color-surface-muted);
+}
 
 .dt-config-deny {
   display: flex;
