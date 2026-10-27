@@ -595,35 +595,27 @@ async function submitCreate() {
       </div>
 
       <div v-else-if="detail" class="dt-setup__main">
-        <header class="dt-setup__hero">
-          <div class="dt-setup__hero-main">
+        <section class="dt-setup__group">
+          <header class="dt-setup__bar">
             <h2 class="dt-setup__hero-title">{{ detailTitle }}</h2>
             <p v-if="detailDescription" class="dt-setup__hero-desc">{{ detailDescription }}</p>
-            <p v-if="detail.code" class="dt-setup__hero-meta">
-              <button type="button" class="dt-link-btn" @click="copyCode(detail.code)">
-                Sao chép mã nội bộ
-              </button>
-            </p>
-          </div>
-          <div class="dt-setup__metrics" aria-label="Thống kê bộ trạng thái">
-            <div class="dt-setup__metric">
-              <span class="dt-setup__metric-num">{{ detail.statuses?.length ?? 0 }}</span>
-              <span class="dt-setup__metric-label">bước</span>
-            </div>
-            <div class="dt-setup__metric">
-              <span class="dt-setup__metric-num">{{ detail.transitions?.length ?? 0 }}</span>
-              <span class="dt-setup__metric-label">lần chuyển</span>
-            </div>
-          </div>
-        </header>
-
-        <section class="dt-setup__group">
-          <header class="dt-setup__group-head">
-            <span class="dt-setup__group-icon" aria-hidden="true">
-              <AppIcon name="layers" :size="18" :stroke-width="1.75" />
-            </span>
-            <div class="dt-setup__group-head-copy">
-              <h3 class="dt-setup__group-title">Quy trình trạng thái</h3>
+            <button
+              v-if="detail.code"
+              type="button"
+              class="dt-link-btn dt-setup__bar-copy"
+              @click="copyCode(detail.code)"
+            >
+              Sao chép mã nội bộ
+            </button>
+            <div class="dt-setup__metrics" aria-label="Thống kê bộ trạng thái">
+              <span class="dt-setup__metric">
+                <span class="dt-setup__metric-num">{{ detail.statuses?.length ?? 0 }}</span>
+                bước
+              </span>
+              <span class="dt-setup__metric">
+                <span class="dt-setup__metric-num">{{ detail.transitions?.length ?? 0 }}</span>
+                lần chuyển
+              </span>
             </div>
             <div class="dt-setup__seg dt-setup__seg--view" role="tablist" aria-label="Xem thiết lập">
               <button

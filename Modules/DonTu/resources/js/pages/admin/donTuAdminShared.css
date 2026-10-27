@@ -1810,6 +1810,7 @@ section.dt-kpi-strip {
 
 .dt-setup__seg--view {
   flex-shrink: 0;
+  margin-left: auto;
   padding: 0.28rem;
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface-muted));
@@ -1856,6 +1857,25 @@ section.dt-kpi-strip {
     inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
 }
 
+.dt-setup__bar {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-3) + 3px + var(--space-2));
+  background: var(--color-surface-muted);
+  box-shadow: 0 1px 0 var(--color-border);
+  overflow-x: auto;
+}
+
+.dt-setup__bar-copy {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}
+
 .dt-setup__hero {
   position: relative;
   display: flex;
@@ -1896,16 +1916,22 @@ section.dt-kpi-strip {
 
 .dt-setup__hero-title {
   margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 500;
+  flex-shrink: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .dt-setup__hero-desc {
-  margin: var(--space-2) 0 0;
-  font-size: 0.8125rem;
+  margin: 0;
+  min-width: 0;
+  flex: 1 1 8rem;
+  font-size: 0.75rem;
   color: var(--color-text-muted);
-  line-height: 1.5;
-  max-width: 40rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dt-setup__hero-meta {
@@ -1930,27 +1956,26 @@ section.dt-kpi-strip {
 
 .dt-setup__metrics {
   display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
+  flex-shrink: 0;
+  align-items: center;
   gap: var(--space-2);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .dt-setup__metric {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 4.5rem;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
 }
 
 .dt-setup__metric-num {
-  font-size: 1.0625rem;
-  font-weight: 500;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: var(--color-text);
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .dt-setup__metric-label {
