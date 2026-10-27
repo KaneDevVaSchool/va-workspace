@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useDonTuConfigHub } from '../../composables/useDonTuConfigHub.js';
 import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import { useDragScroll } from '@/composables/useDragScroll.js';
@@ -18,6 +19,7 @@ import {
 
 const auth = useAuthStore();
 const router = useRouter();
+const configHub = useDonTuConfigHub();
 
 const canConfig = computed(
   () =>
@@ -143,11 +145,44 @@ async function loadDetail(id) {
 
 watch(selectedId, (id) => loadDetail(id));
 
+function syncHeaderPrimary() {
+  if (!configHub || !canWrite.value) {
+    configHub?.clearPrimaryAction();
+    return;
+  }
+  configHub.setPrimaryAction({
+    label: 'Thêm',
+    icon: 'plus',
+    items: [
+      { label: 'Tạo nhóm trạng thái', onSelect: () => openCreateSet() },
+      {
+        label: 'Thêm trạng thái',
+        description: !detail.value ? 'Chọn hoặc tạo nhóm trước' : undefined,
+        onSelect: () => {
+          if (!detail.value || loadingDetail.value) {
+            showClientToast('Chọn nhóm trạng thái trước khi thêm trạng thái.', 'error');
+            return;
+          }
+          openCreate();
+        },
+      },
+    ],
+  });
+}
+
+watch([canWrite, detail, loadingDetail], syncHeaderPrimary, { immediate: true });
+
 onMounted(async () => {
+  configHub?.registerReload(reloadPage);
   if (!canConfig.value) {
     return;
   }
   await loadSets();
+});
+
+onBeforeUnmount(() => {
+  configHub?.unregisterReload();
+  configHub?.clearPrimaryAction();
 });
 
 async function reloadPage() {
@@ -291,40 +326,14 @@ async function submitCreate() {
   <div v-else class="dt-setup">
     <DonTuConfigHubCards />
 
-    <header class="dt-setup__head">
-      <div class="dt-setup__head-copy">
-        <h2 class="dt-setup__head-title">Bước 1 · Trạng thái hồ sơ</h2>
-        <p class="dt-setup__head-desc">
-          Khai báo nhóm trạng thái và quy tắc chuyển trước khi soạn mẫu biểu và quy trình duyệt.
-        </p>
-      </div>
-      <div v-if="canWrite" class="dt-setup__head-actions">
-        <button type="button" class="dt-setup__ghost-btn" @click="reloadPage">
-          <AppIcon name="refresh" :size="15" :stroke-width="2" />
-          Làm mới
-        </button>
-        <button type="button" class="dt-admin-list__primary" @click="openCreateSet">
-          <AppIcon name="plus" :size="16" :stroke-width="2" />
-          Tạo nhóm
-        </button>
-        <button
-          type="button"
-          class="dt-status-page__secondary-btn"
-          :disabled="!detail || loadingDetail"
-          @click="openCreate"
-        >
-          <AppIcon name="plus" :size="16" :stroke-width="2" />
-          Thêm trạng thái
-        </button>
-      </div>
-    </header>
+    <p class="dt-setup__intro">
+      Khai báo nhóm trạng thái và quy tắc chuyển trước khi soạn mẫu biểu và quy trình duyệt. Bấm dấu
+      <strong>+</strong> cạnh tiêu đề trang để tạo nhóm hoặc thêm trạng thái.
+    </p>
 
     <div v-if="!loadingList && !sets.length" class="dt-status-page__empty-panel">
-      <p>Chưa có nhóm trạng thái. Tạo nhóm để bắt đầu thiết lập.</p>
-      <button v-if="canWrite" type="button" class="dt-admin-list__primary" @click="openCreateSet">
-        <AppIcon name="plus" :size="16" :stroke-width="2" />
-        Tạo nhóm trạng thái
-      </button>
+      <AppIcon name="layers" :size="28" :stroke-width="1.75" />
+      <p>Chưa có nhóm trạng thái. Dùng dấu <strong>+</strong> trên thanh tiêu đề để tạo nhóm đầu tiên.</p>
     </div>
 
     <div v-else class="dt-setup__layout" :class="{ 'dt-setup__layout--solo': !showRail }">
@@ -410,7 +419,7 @@ async function submitCreate() {
           </div>
         </section>
 
-        <section class="dt-setup__group dt-setup__group--tint">
+        <section class="dt-setup__group">
           <header class="dt-setup__group-head">
             <span class="dt-setup__group-icon" aria-hidden="true">
               <AppIcon name="layers" :size="18" :stroke-width="1.75" />
@@ -696,50 +705,24 @@ async function submitCreate() {
   margin-bottom: var(--space-3);
 }
 
-.dt-status-page__secondary-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0.5rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
-  border-radius: var(--radius-sm);
-  background: linear-gradient(
-    180deg,
-    var(--color-surface),
-    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface))
-  );
-  color: var(--color-primary);
-  font-weight: 600;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.dt-status-page__secondary-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
 .dt-status-page__empty-panel {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4);
+  padding: var(--space-6) var(--space-4);
   border-radius: var(--radius-md);
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)) 0%,
-    var(--color-surface) 50%,
-    color-mix(in srgb, var(--color-info) 7%, var(--color-surface)) 100%
-  );
-  box-shadow: var(--shadow-sm);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  text-align: center;
+  color: var(--color-text-muted);
 }
 
 .dt-status-page__empty-panel p {
   margin: 0;
-  flex: 1;
-  min-width: 12rem;
-  color: var(--color-text-muted);
+  max-width: 28rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .dt-status-page__body {
@@ -761,11 +744,7 @@ async function submitCreate() {
   border-radius: var(--radius-sm);
   font: inherit;
   font-size: 0.8125rem;
-  background: linear-gradient(
-    180deg,
-    var(--color-surface),
-    color-mix(in srgb, var(--color-primary) 4%, var(--color-surface))
-  );
+  background: var(--color-surface);
 }
 
 .dt-status-page__set-search::placeholder,
@@ -794,13 +773,8 @@ async function submitCreate() {
   padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-2) + 3px + var(--space-2));
   border: none;
   border-radius: var(--radius-md);
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)),
-    var(--color-surface) 55%,
-    color-mix(in srgb, var(--color-info) 6%, var(--color-surface))
-  );
-  box-shadow: var(--shadow-sm);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
   cursor: pointer;
   font: inherit;
   color: var(--color-text);
@@ -822,11 +796,8 @@ async function submitCreate() {
 }
 
 .dt-set-card--active {
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)),
-    color-mix(in srgb, var(--color-info) 8%, var(--color-surface))
-  );
+  background: var(--color-primary-100);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
 }
 
 .dt-set-card__name {
@@ -849,11 +820,7 @@ async function submitCreate() {
   border-radius: var(--radius-sm);
   font-size: 0.6875rem;
   font-weight: 600;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-info) 16%, var(--color-surface)),
-    color-mix(in srgb, var(--color-info) 6%, var(--color-surface))
-  );
+  background: var(--color-info-tint-bg);
   color: var(--color-info);
 }
 
@@ -907,13 +874,8 @@ async function submitCreate() {
   margin-bottom: var(--space-3);
   padding: var(--space-3);
   border-radius: var(--radius-md);
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)) 0%,
-    var(--color-surface) 46%,
-    color-mix(in srgb, var(--color-info) 7%, var(--color-surface)) 100%
-  );
-  box-shadow: var(--shadow-sm);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .dt-panel__row {
@@ -951,11 +913,8 @@ async function submitCreate() {
   padding: 0.35rem 0.65rem;
   border: none;
   border-radius: var(--radius-sm);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)),
-    color-mix(in srgb, var(--color-info) 6%, var(--color-surface))
-  );
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
   cursor: pointer;
   font: inherit;
   white-space: nowrap;
@@ -1077,12 +1036,8 @@ async function submitCreate() {
   border-radius: 999px;
   font-weight: 600;
   font-size: 0.75rem;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-primary) 16%, var(--color-surface)),
-    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface))
-  );
-  color: var(--color-primary);
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
 }
 
 .dt-guard {

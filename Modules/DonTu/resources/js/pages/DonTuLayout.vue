@@ -1,8 +1,9 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, provide, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
 import AppIcon from '@/components/AppIcon.vue';
+import { DON_TU_CONFIG_HUB_KEY } from '../composables/useDonTuConfigHub.js';
 import {
   DON_TU_CONFIG_ROUTE_NAMES,
   DON_TU_CONFIG_TAB_ACTIVE,
@@ -64,6 +65,37 @@ function tabIsActive(tabName) {
   }
   return DON_TU_CONFIG_TAB_ACTIVE[route.name] === tabName;
 }
+
+const reloadChild = ref(null);
+const reloading = ref(false);
+const primaryAction = ref(null);
+
+const headerPrimaryAction = computed(() => primaryAction.value);
+
+provide(DON_TU_CONFIG_HUB_KEY, {
+  registerReload(fn) {
+    reloadChild.value = fn;
+  },
+  unregisterReload() {
+    reloadChild.value = null;
+  },
+  setPrimaryAction(action) {
+    primaryAction.value = action;
+  },
+  clearPrimaryAction() {
+    primaryAction.value = null;
+  },
+});
+
+async function reload() {
+  if (!reloadChild.value || reloading.value) return;
+  reloading.value = true;
+  try {
+    await reloadChild.value();
+  } finally {
+    reloading.value = false;
+  }
+}
 </script>
 
 <template>
@@ -73,12 +105,19 @@ function tabIsActive(tabName) {
       :subtitle="headerSubtitle"
       icon="fileText"
       :breadcrumbs="breadcrumbs"
-    />
+      :primary-action="isConfigArea ? headerPrimaryAction : null"
+    >
+      <template v-if="isConfigArea" #actions>
+        <button type="button" class="don-tu__header-btn" :disabled="reloading" @click="reload">
+          <AppIcon name="refresh" :size="16" :class="{ 'don-tu__spin': reloading }" />
+          Làm mới
+        </button>
+      </template>
+    </PageHeader>
 
     <nav
       v-if="hubTabs"
       class="don-tu__hub-tabs hide-scrollbar"
-      :class="{ 'don-tu__hub-tabs--config': isConfigArea, 'don-tu__hub-tabs--monitor': isMonitorArea }"
       :aria-label="hubTabs.label"
     >
       <router-link
@@ -110,12 +149,53 @@ function tabIsActive(tabName) {
   overflow: hidden;
 }
 
+.don-tu__header-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2rem;
+  padding: 0 0.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+  cursor: pointer;
+}
+
+.don-tu__header-btn:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.don-tu__header-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.don-tu__spin {
+  animation: don-tu-spin 0.8s linear infinite;
+}
+
+@keyframes don-tu-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .don-tu__hub-tabs {
+  position: relative;
+  z-index: 8;
   flex-shrink: 0;
   display: flex;
-  gap: var(--space-1);
-  margin-bottom: var(--space-4);
-  padding-bottom: var(--space-2);
+  align-items: stretch;
+  gap: var(--space-4);
+  min-height: 2.5rem;
+  margin-bottom: var(--space-3);
+  padding: 0 var(--space-1);
   overflow-x: auto;
   box-shadow: 0 1px 0 var(--color-border);
 }
@@ -125,42 +205,42 @@ function tabIsActive(tabName) {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.875rem;
-  font-weight: 500;
+  padding: var(--space-3) var(--space-1);
+  border: none;
+  background: transparent;
   color: var(--color-text-muted);
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
+  font-weight: 600;
   text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 0 transparent;
 }
 
 .don-tu__hub-tab:hover {
   color: var(--color-text);
-  background: var(--color-surface-muted);
 }
 
 .don-tu__hub-tab--active {
-  color: var(--color-text);
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-}
-
-.don-tu__hub-tabs--config .don-tu__hub-tab--active {
   color: var(--color-primary);
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, var(--color-border)),
-    inset 0 2px 0 var(--color-primary);
-}
-
-.don-tu__hub-tabs--monitor .don-tu__hub-tab--active {
-  color: #0d9488;
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, #0d9488 35%, var(--color-border)),
-    inset 0 2px 0 #0d9488;
+  box-shadow: 0 2px 0 var(--color-primary);
 }
 
 .don-tu__main {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+@media (max-width: 768px) {
+  .don-tu {
+    padding: var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .don-tu__spin {
+    animation: none;
+  }
 }
 </style>

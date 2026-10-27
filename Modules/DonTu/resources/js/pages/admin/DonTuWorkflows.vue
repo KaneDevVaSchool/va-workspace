@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useDonTuConfigHub } from '../../composables/useDonTuConfigHub.js';
 import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -18,6 +19,7 @@ import DonTuConfigHubCards from '../../components/DonTuConfigHubCards.vue';
 
 const auth = useAuthStore();
 const router = useRouter();
+const configHub = useDonTuConfigHub();
 
 const canConfig = computed(
   () => auth.can('don_tu.manage_department') || auth.can('don_tu.*'),
@@ -77,12 +79,22 @@ function handleDocumentKeydown(event) {
 onMounted(() => {
   document.addEventListener('click', handleDocumentClick);
   document.addEventListener('keydown', handleDocumentKeydown);
-  if (canConfig.value) load();
+  configHub?.registerReload(load);
+  if (canConfig.value) {
+    configHub?.setPrimaryAction({
+      label: 'Thêm quy trình',
+      icon: 'plus',
+      onClick: openCreate,
+    });
+    load();
+  }
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleDocumentClick);
   document.removeEventListener('keydown', handleDocumentKeydown);
+  configHub?.unregisterReload();
+  configHub?.clearPrimaryAction();
 });
 
 function openCreate() {
@@ -156,10 +168,6 @@ async function confirmDelete() {
 
     <div class="dt-admin-list__toolbar">
       <input v-model="query" type="search" class="dt-admin-list__search" placeholder="Tìm theo tên quy trình" aria-label="Tìm quy trình" />
-      <button type="button" class="dt-admin-list__primary" @click="openCreate">
-        <AppIcon name="plus" :size="16" />
-        Thêm quy trình
-      </button>
     </div>
 
     <div class="dt-admin-table-wrap hide-scrollbar">
@@ -179,7 +187,7 @@ async function confirmDelete() {
             <td colspan="6">Đang tải…</td>
           </tr>
           <tr v-else-if="!filtered.length">
-            <td colspan="6">Chưa có quy trình.</td>
+            <td colspan="6">Chưa có quy trình. Bấm dấu + cạnh tiêu đề trang để thêm.</td>
           </tr>
           <tr
             v-for="item in filtered"
