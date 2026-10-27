@@ -16,8 +16,6 @@ import {
   friendlySetName,
   guardHint,
   humanSetDescription,
-  setPickerBlurb,
-  setPickerGlyph,
   toneOfStatusCode,
 } from '../../constants/statusTone.js';
 
@@ -479,75 +477,43 @@ async function submitCreate() {
     </div>
 
     <div v-else class="dt-setup__layout" :class="{ 'dt-setup__layout--solo': !showRail }">
-      <aside v-if="showRail" class="dt-set-rail dt-config-hub-theme">
-        <div class="dt-set-rail__palette" aria-hidden="true">
-          <span class="dt-set-rail__palette-seg dt-set-rail__palette-seg--c1" />
-          <span class="dt-set-rail__palette-seg dt-set-rail__palette-seg--c2" />
-          <span class="dt-set-rail__palette-seg dt-set-rail__palette-seg--c3" />
-          <span class="dt-set-rail__palette-seg dt-set-rail__palette-seg--c4" />
-        </div>
-
-        <header class="dt-set-rail__head">
-          <span class="dt-set-rail__head-icon" aria-hidden="true">
-            <AppIcon name="layers" :size="20" :stroke-width="1.75" />
-          </span>
-          <div class="dt-set-rail__head-copy">
-            <h3 class="dt-set-rail__title">Bộ trạng thái</h3>
-            <p class="dt-set-rail__lead">Chọn một bộ để xem sơ đồ bước và quy tắc chuyển trạng thái.</p>
-          </div>
-        </header>
-
-        <div class="dt-set-rail__toolbar">
-          <label class="dt-set-rail__search">
-            <AppIcon name="search" :size="16" :stroke-width="1.75" aria-hidden="true" />
-            <input
-              v-model="setQuery"
-              type="search"
-              placeholder="Tìm theo tên…"
-              aria-label="Tìm bộ trạng thái"
-            />
-          </label>
-          <button
-            v-if="canWrite"
-            type="button"
-            class="dt-set-rail__add"
-            aria-label="Tạo bộ trạng thái mới"
-            @click="openCreateSet"
-          >
-            <AppIcon name="plus" :size="18" :stroke-width="2" aria-hidden="true" />
+      <aside v-if="showRail" class="dt-set-rail">
+        <div class="dt-set-rail__top">
+          <h3 class="dt-set-rail__title">Bộ trạng thái</h3>
+          <button v-if="canWrite" type="button" class="dt-link-btn dt-set-rail__create" @click="openCreateSet">
+            Tạo mới
           </button>
         </div>
 
+        <label class="dt-set-rail__search">
+          <AppIcon name="search" :size="16" :stroke-width="1.75" aria-hidden="true" />
+          <input
+            v-model="setQuery"
+            type="search"
+            placeholder="Tìm…"
+            aria-label="Tìm bộ trạng thái"
+          />
+        </label>
+
         <ul v-if="!loadingList" class="dt-set-rail__list hide-scrollbar">
           <li v-if="!filteredSets.length" class="dt-set-rail__empty">
-            <p>Không tìm thấy bộ nào phù hợp.</p>
+            <p>Không có kết quả.</p>
           </li>
-          <li v-for="(set, index) in filteredSets" :key="set.id">
+          <li v-for="set in filteredSets" :key="set.id">
             <button
               type="button"
               class="dt-set-pick"
-              :class="[
-                `dt-set-pick--tone-${index % 5}`,
-                { 'dt-set-pick--active': selectedId === set.id },
-              ]"
+              :class="{ 'dt-set-pick--active': selectedId === set.id }"
               :aria-current="selectedId === set.id ? 'true' : undefined"
               @click="selectedId = set.id"
             >
-              <span class="dt-set-pick__glyph" aria-hidden="true">{{ setPickerGlyph(set.name, set.code) }}</span>
-              <span class="dt-set-pick__body">
-                <span class="dt-set-pick__title">{{ friendlySetName(set.name, set.code) }}</span>
-                <span class="dt-set-pick__blurb">{{ setPickerBlurb(set) }}</span>
-                <span class="dt-set-pick__foot">
-                  <span class="dt-set-pick__chip">{{ set.status_count }} bước</span>
-                  <span v-if="friendlySetCodeLabel(set.code)" class="dt-set-pick__chip dt-set-pick__chip--soft">
-                    {{ friendlySetCodeLabel(set.code) }}
-                  </span>
-                  <span v-if="set.is_system" class="dt-set-pick__chip dt-set-pick__chip--system">Mẫu có sẵn</span>
+              <span class="dt-set-pick__main">
+                <span class="dt-set-pick__name">{{ friendlySetName(set.name, set.code) }}</span>
+                <span v-if="friendlySetCodeLabel(set.code)" class="dt-set-pick__sub">
+                  {{ friendlySetCodeLabel(set.code) }}
                 </span>
               </span>
-              <span v-if="selectedId === set.id" class="dt-set-pick__mark" aria-hidden="true">
-                <AppIcon name="check" :size="16" :stroke-width="2.25" />
-              </span>
+              <span class="dt-set-pick__count">{{ set.status_count }} bước</span>
             </button>
           </li>
         </ul>
@@ -561,23 +527,13 @@ async function submitCreate() {
       <div v-else-if="detail" class="dt-setup__main">
         <header class="dt-setup__hero">
           <div class="dt-setup__hero-main">
-            <p class="dt-setup__hero-eyebrow">Bộ đang xem</p>
             <h2 class="dt-setup__hero-title">{{ detailTitle }}</h2>
             <p v-if="detailDescription" class="dt-setup__hero-desc">{{ detailDescription }}</p>
-            <div class="dt-setup__hero-meta">
-              <span v-if="friendlySetCodeLabel(detail.code)" class="dt-setup__code-pill">
-                {{ friendlySetCodeLabel(detail.code) }}
-              </span>
-              <button
-                v-if="detail.code"
-                type="button"
-                class="dt-link-btn"
-                @click="copyCode(detail.code)"
-              >
+            <p v-if="detail.code" class="dt-setup__hero-meta">
+              <button type="button" class="dt-link-btn" @click="copyCode(detail.code)">
                 Sao chép mã nội bộ
               </button>
-              <span v-if="detail.is_system" class="dt-set-card__tag">Mẫu có sẵn</span>
-            </div>
+            </p>
           </div>
           <div class="dt-setup__metrics" aria-label="Thống kê bộ trạng thái">
             <div class="dt-setup__metric">

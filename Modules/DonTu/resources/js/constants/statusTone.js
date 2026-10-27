@@ -73,27 +73,6 @@ export function friendlySetCodeLabel(code) {
   return raw;
 }
 
-/** Một dòng mô tả ngắn trên thẻ chọn bộ. */
-export function setPickerBlurb(set) {
-  const desc = humanSetDescription(set?.description);
-  if (desc) {
-    const short = desc.length > 72 ? `${desc.slice(0, 69).trim()}…` : desc;
-    return short;
-  }
-  if (set?.is_system) {
-    return 'Mẫu sẵn có — dùng trực tiếp hoặc sao chép làm nền.';
-  }
-  return 'Bộ do đơn vị tự khai báo.';
-}
-
-/** Chữ cái đầu cho huy hiệu thẻ bộ. */
-export function setPickerGlyph(name, code) {
-  const label = friendlySetName(name, code).trim();
-  if (!label) return 'B';
-  const first = [...label][0];
-  return first ? first.toUpperCase() : 'B';
-}
-
 /** Ẩn mô tả dành cho người làm kỹ thuật. */
 export function humanSetDescription(text) {
   const value = (text || '').trim();
