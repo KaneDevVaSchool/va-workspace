@@ -98,6 +98,14 @@ final class SpaOpenGraphResolver
      */
     public function resolve(Request $request): array
     {
+        return $this->sanitizePack($this->resolveRaw($request));
+    }
+
+    /**
+     * @return array{title: string, description: string, image: ?string, url: string}
+     */
+    private function resolveRaw(Request $request): array
+    {
         $path = $this->normalizePath($request->getPathInfo());
         $pageUrl = rtrim((string) config('app.url'), '/').($path === '/' ? '/' : $path);
         $query = $request->query();
@@ -311,5 +319,27 @@ final class SpaOpenGraphResolver
         $id = (int) $raw;
 
         return $id > 0 ? $id : null;
+    }
+
+    /**
+     * Zalo hay bỏ title/mô tả khi gặp dấu · hoặc em dash — chuẩn hóa ASCII.
+     *
+     * @param  array{title: string, description: string, image: ?string, url: string}  $pack
+     * @return array{title: string, description: string, image: ?string, url: string}
+     */
+    private function sanitizePack(array $pack): array
+    {
+        $pack['title'] = $this->sanitizeOgText((string) ($pack['title'] ?? ''));
+        $pack['description'] = $this->sanitizeOgText((string) ($pack['description'] ?? ''));
+
+        return $pack;
+    }
+
+    private function sanitizeOgText(string $text): string
+    {
+        $text = str_replace(['·', '—', '–'], ' - ', $text);
+        $text = preg_replace('/\s+/u', ' ', trim($text)) ?? trim($text);
+
+        return mb_strimwidth($text, 0, 500, '…');
     }
 }

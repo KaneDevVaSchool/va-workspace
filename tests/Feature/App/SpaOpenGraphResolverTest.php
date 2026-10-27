@@ -41,6 +41,7 @@ class SpaOpenGraphResolverTest extends TestCase
         $meta = app(SpaOpenGraphResolver::class)->resolve(Request::create('/share', 'GET'));
 
         $this->assertStringContainsString('Giới thiệu', $meta['title']);
+        $this->assertStringNotContainsString('·', $meta['title']);
         $this->assertStringContainsString('PWA', $meta['description']);
         $this->assertNotEmpty($meta['image']);
     }

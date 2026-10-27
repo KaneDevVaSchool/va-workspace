@@ -1,5 +1,7 @@
 <?php
 
+use App\Services\SpaOpenGraphResolver;
+use App\Support\LinkPreviewBot;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,11 +18,24 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-$spaView = static fn () => response()
-    ->view('app')
-    ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
-    ->header('Pragma', 'no-cache')
-    ->header('Expires', '0');
+$spaView = static function () {
+    $request = request();
+
+    if (LinkPreviewBot::matchesRequest($request)) {
+        $meta = app(SpaOpenGraphResolver::class)->resolve($request);
+
+        return response()
+            ->view('link-preview', ['meta' => $meta])
+            ->header('Content-Type', 'text/html; charset=UTF-8')
+            ->header('Cache-Control', 'public, max-age=300');
+    }
+
+    return response()
+        ->view('app')
+        ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        ->header('Pragma', 'no-cache')
+        ->header('Expires', '0');
+};
 
 Route::get('/', $spaView);
 

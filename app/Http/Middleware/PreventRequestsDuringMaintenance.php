@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\LinkPreviewBot;
 use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance as Middleware;
 
 class PreventRequestsDuringMaintenance extends Middleware
@@ -15,42 +16,12 @@ class PreventRequestsDuringMaintenance extends Middleware
         //
     ];
 
-    /** @var list<string> */
-    private const LINK_PREVIEW_USER_AGENT_MARKERS = [
-        'facebookexternalhit',
-        'facebot',
-        'twitterbot',
-        'linkedinbot',
-        'slackbot',
-        'whatsapp',
-        'telegrambot',
-        'discordbot',
-        'zalo',
-    ];
-
     protected function inExceptArray($request): bool
     {
-        if ($request->isMethod('GET') && $request->is('/') && $this->isLinkPreviewBot($request)) {
+        if ($request->isMethod('GET') && LinkPreviewBot::matchesRequest($request)) {
             return true;
         }
 
         return parent::inExceptArray($request);
-    }
-
-    private function isLinkPreviewBot($request): bool
-    {
-        $ua = strtolower((string) $request->userAgent());
-
-        if ($ua === '') {
-            return false;
-        }
-
-        foreach (self::LINK_PREVIEW_USER_AGENT_MARKERS as $marker) {
-            if (str_contains($ua, $marker)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }
