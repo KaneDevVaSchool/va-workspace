@@ -4,6 +4,110 @@
   text-align: center;
 }
 
+.dt-config-hub {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.dt-config-hub__card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-2) + 3px + var(--space-3));
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--color-primary) 9%, var(--color-surface)) 0%,
+    var(--color-surface) 48%,
+    color-mix(in srgb, var(--color-info) 8%, var(--color-surface)) 100%
+  );
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s ease;
+}
+
+.dt-config-hub__card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+}
+
+.dt-config-hub__card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.dt-config-hub__card--active::before {
+  background: var(--color-primary);
+}
+
+.dt-config-hub__card--active {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+}
+
+.dt-config-hub__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--color-primary) 22%, var(--color-surface)),
+    color-mix(in srgb, var(--color-info) 12%, var(--color-surface))
+  );
+  color: var(--color-primary);
+}
+
+.dt-config-hub__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.dt-config-hub__title {
+  display: block;
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.dt-config-hub__stat {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.dt-config-hub__stat-num {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1;
+}
+
+.dt-config-hub__stat-label {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.625rem;
+  color: var(--color-text-muted);
+  max-width: 6rem;
+}
+
+@media (max-width: 900px) {
+  .dt-config-hub {
+    grid-template-columns: 1fr;
+  }
+}
+
 .dt-admin-list__toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -18,8 +122,17 @@
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  background: linear-gradient(
+    180deg,
+    var(--color-surface),
+    color-mix(in srgb, var(--color-primary) 4%, var(--color-surface))
+  );
   font: inherit;
+}
+
+.dt-admin-list__search::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.8;
 }
 
 .dt-admin-list__primary {
@@ -29,7 +142,12 @@
   padding: 0.5rem 1rem;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--color-primary);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #fff 24%, var(--color-primary)) 0%,
+    var(--color-primary) 52%,
+    var(--color-primary-800) 100%
+  );
   color: #fff;
   font-weight: 600;
   font-size: 0.875rem;
@@ -39,7 +157,11 @@
 .dt-admin-table-wrap {
   overflow-x: auto;
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary) 5%, var(--color-surface)),
+    var(--color-surface) 2.75rem
+  );
   box-shadow: var(--shadow-sm);
 }
 
@@ -99,18 +221,30 @@
 }
 
 .dt-pill--success {
-  background: color-mix(in srgb, var(--color-success) 14%, var(--color-surface));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-success) 18%, var(--color-surface)),
+    color-mix(in srgb, var(--color-success) 8%, var(--color-surface))
+  );
   color: var(--color-success);
 }
 
 .dt-pill--muted {
-  background: var(--color-surface-muted);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-text-muted) 12%, var(--color-surface)),
+    color-mix(in srgb, var(--color-text-muted) 5%, var(--color-surface))
+  );
   color: var(--color-text-muted);
 }
 
 .dt-pill--warning {
-  background: color-mix(in srgb, #c27803 14%, var(--color-surface));
-  color: #c27803;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-warning) 20%, var(--color-surface)),
+    color-mix(in srgb, var(--color-warning) 8%, var(--color-surface))
+  );
+  color: var(--color-warning-tint-fg);
 }
 
 .dt-row-menu-btn {
@@ -172,7 +306,12 @@
   max-height: calc(100vh - 2.5rem);
   overflow: hidden;
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-primary) 7%, var(--color-surface)) 0%,
+    var(--color-surface) 36%,
+    color-mix(in srgb, var(--color-info) 7%, var(--color-surface)) 100%
+  );
   box-shadow: var(--shadow-lg);
 }
 
@@ -221,6 +360,12 @@
   grid-column: 1 / -1;
 }
 
+.dt-req {
+  color: var(--color-danger);
+  font-weight: 700;
+  margin-left: 0.15rem;
+}
+
 .dt-field input,
 .dt-field select,
 .dt-field textarea {
@@ -228,7 +373,17 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   font: inherit;
-  background: var(--color-surface);
+  background: linear-gradient(
+    180deg,
+    var(--color-surface),
+    color-mix(in srgb, var(--color-primary) 4%, var(--color-surface))
+  );
+}
+
+.dt-field input::placeholder,
+.dt-field textarea::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.8;
 }
 
 .dt-modal__foot {
@@ -244,7 +399,11 @@
   padding: 0.45rem 0.85rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  background: linear-gradient(
+    180deg,
+    var(--color-surface),
+    color-mix(in srgb, var(--color-text-muted) 6%, var(--color-surface))
+  );
   cursor: pointer;
   font: inherit;
 }
@@ -253,7 +412,12 @@
   padding: 0.45rem 1rem;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--color-primary);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #fff 24%, var(--color-primary)) 0%,
+    var(--color-primary) 52%,
+    var(--color-primary-800) 100%
+  );
   color: #fff;
   font-weight: 600;
   cursor: pointer;

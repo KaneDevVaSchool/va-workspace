@@ -29,4 +29,9 @@ class DonTuStatusSet extends Model
     {
         return $this->hasMany(DonTuTransition::class, 'status_set_id');
     }
+
+    public function workflows(): HasMany
+    {
+        return $this->hasMany(DonTuWorkflow::class, 'status_set_id');
+    }
 }

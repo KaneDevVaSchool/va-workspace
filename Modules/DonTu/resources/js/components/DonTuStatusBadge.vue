@@ -6,6 +6,7 @@ const props = defineProps({
   code: { type: String, default: '' },
   label: { type: String, default: '' },
   compact: { type: Boolean, default: false },
+  showCode: { type: Boolean, default: false },
 });
 
 const tone = computed(() => toneOfStatusCode(props.code));
@@ -16,7 +17,7 @@ const tone = computed(() => toneOfStatusCode(props.code));
     class="dt-status-badge"
     :class="[`dt-status-badge--${tone}`, { 'dt-status-badge--compact': compact }]"
   >
-    <span v-if="code" class="dt-status-badge__code">{{ code }}</span>
+    <span v-if="showCode && code" class="dt-status-badge__code">{{ code }}</span>
     <span class="dt-status-badge__label">{{ label || code }}</span>
   </span>
 </template>

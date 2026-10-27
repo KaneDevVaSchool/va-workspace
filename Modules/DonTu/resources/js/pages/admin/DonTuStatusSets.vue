@@ -1,13 +1,24 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
+import { useDragScroll } from '@/composables/useDragScroll.js';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
+import DonTuConfigHubCards from '../../components/DonTuConfigHubCards.vue';
 import DonTuStatusBadge from '../../components/DonTuStatusBadge.vue';
 import { fetchStatusSet, fetchStatusSets } from '../../api/donTuConfigApi.js';
-import { ACTION_LABEL, ACTOR_LABEL, GROUP_KIND_LABEL } from '../../constants/statusTone.js';
+import {
+  ACTION_LABEL,
+  ACTOR_LABEL,
+  GROUP_KIND_LABEL,
+  friendlySetName,
+  guardHint,
+  humanSetDescription,
+} from '../../constants/statusTone.js';
 
 const auth = useAuthStore();
+const router = useRouter();
 
 const canConfig = computed(
   () =>
@@ -17,10 +28,31 @@ const canConfig = computed(
 );
 
 const sets = ref([]);
+const setQuery = ref('');
 const selectedId = ref(null);
 const detail = ref(null);
 const loadingList = ref(false);
 const loadingDetail = ref(false);
+const transitionQuery = ref('');
+const focusCode = ref('');
+
+const pipelineWrap = ref(null);
+const transWrap = ref(null);
+useDragScroll(pipelineWrap, { axis: 'x' });
+useDragScroll(transWrap, { axis: 'x' });
+
+const filteredSets = computed(() => {
+  const q = setQuery.value.trim().toLowerCase();
+  if (!q) return sets.value;
+  return sets.value.filter(
+    (s) =>
+      friendlySetName(s.name, s.code).toLowerCase().includes(q) ||
+      (s.name || '').toLowerCase().includes(q) ||
+      (s.code || '').toLowerCase().includes(q),
+  );
+});
+
+const showSetList = computed(() => sets.value.length > 1);
 
 const mainFlow = computed(() =>
   (detail.value?.statuses ?? []).filter((s) => s.group_kind === 'main').sort((a, b) => a.sort_order - b.sort_order),
@@ -36,6 +68,31 @@ const terminal = computed(() =>
     .sort((a, b) => a.sort_order - b.sort_order),
 );
 
+const filteredTransitions = computed(() => {
+  const q = transitionQuery.value.trim().toLowerCase();
+  let list = detail.value?.transitions ?? [];
+  if (focusCode.value) {
+    const code = focusCode.value;
+    list = list.filter((tr) => tr.from_code === code || tr.to_code === code);
+  }
+  if (!q) return list;
+  return list.filter((tr) => {
+    const haystack = [
+      statusLabel(tr.from_code),
+      statusLabel(tr.to_code),
+      actionLabel(tr.action_key),
+      actorLabel(tr.actor_policy),
+      guardHint(tr.guard_json),
+    ]
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(q);
+  });
+});
+
+const detailTitle = computed(() => friendlySetName(detail.value?.name, detail.value?.code));
+const detailDescription = computed(() => humanSetDescription(detail.value?.description));
+
 async function loadSets() {
   loadingList.value = true;
   try {
@@ -43,8 +100,11 @@ async function loadSets() {
     if (!selectedId.value && sets.value.length) {
       selectedId.value = sets.value[0].id;
     }
+    if (selectedId.value && !sets.value.some((s) => s.id === selectedId.value)) {
+      selectedId.value = sets.value[0]?.id ?? null;
+    }
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không tải được bộ trạng thái.', 'error');
+    showClientToast(err.response?.data?.message || 'Không tải được danh sách trạng thái.', 'error');
   } finally {
     loadingList.value = false;
   }
@@ -56,10 +116,12 @@ async function loadDetail(id) {
     return;
   }
   loadingDetail.value = true;
+  transitionQuery.value = '';
+  focusCode.value = '';
   try {
     detail.value = await fetchStatusSet(id);
   } catch (err) {
-    showClientToast(err.response?.data?.message || 'Không tải chi tiết bộ trạng thái.', 'error');
+    showClientToast(err.response?.data?.message || 'Không tải được chi tiết trạng thái.', 'error');
     detail.value = null;
   } finally {
     loadingDetail.value = false;
@@ -82,46 +144,65 @@ function actionLabel(key) {
 function actorLabel(key) {
   return ACTOR_LABEL[key] || key;
 }
+
+function statusLabel(code) {
+  if (!code || code === 'NONE') return 'Lúc chưa có hồ sơ';
+  return detail.value?.statuses?.find((s) => s.code === code)?.label || code;
+}
+
+function toggleFocus(code) {
+  focusCode.value = focusCode.value === code ? '' : code;
+}
+
+async function copyCode(code) {
+  try {
+    await navigator.clipboard.writeText(code);
+    showClientToast('Đã sao chép mã.', 'success');
+  } catch {
+    showClientToast('Không sao chép được.', 'error');
+  }
+}
+
+function goWorkflow(id) {
+  router.push({ name: 'manager.don-tu.workflow', params: { id } });
+}
 </script>
 
 <template>
   <div v-if="!canConfig" class="dt-config-deny">
     <AppIcon name="lock" :size="28" :stroke-width="1.75" />
-    <p>Bạn cần quyền cấu hình đơn từ phòng ban để xem bộ trạng thái.</p>
+    <p>Bạn cần quyền cấu hình đơn từ của phòng để xem trang này.</p>
   </div>
 
   <div v-else class="dt-status-page">
-    <header class="dt-status-page__hero">
-      <div class="dt-status-page__hero-text">
-        <p class="dt-status-page__kicker">Master data · Matrix V3</p>
-        <h2 class="dt-status-page__hero-title">Bộ trạng thái vĩ mô</h2>
-        <p class="dt-status-page__hero-desc">
-          Mỗi quy trình gắn một bộ trạng thái. Hồ sơ hiển thị nhãn tiếng Việt; engine chuyển trạng thái theo ma trận bên dưới.
-        </p>
-      </div>
-      <div class="dt-status-page__hero-stat" aria-hidden="true">
-        <span class="dt-status-page__stat-num">{{ detail?.statuses?.length ?? '—' }}</span>
-        <span class="dt-status-page__stat-label">trạng thái</span>
-      </div>
-    </header>
+    <DonTuConfigHubCards />
 
-    <div class="dt-status-page__body">
-      <aside class="dt-status-page__sets">
-        <h3 class="dt-status-page__aside-title">Danh mục bộ</h3>
+    <div class="dt-status-page__body" :class="{ 'dt-status-page__body--solo': !showSetList }">
+      <aside v-if="showSetList" class="dt-status-page__sets">
+        <input
+          v-model="setQuery"
+          type="search"
+          class="dt-status-page__set-search"
+          placeholder="Tìm tên bộ trạng thái"
+          aria-label="Tìm bộ trạng thái"
+        />
         <ul v-if="!loadingList" class="dt-status-page__set-list">
-          <li v-for="set in sets" :key="set.id">
+          <li v-if="!filteredSets.length">
+            <p class="dt-status-page__empty">Không thấy bộ nào.</p>
+          </li>
+          <li v-for="set in filteredSets" :key="set.id">
             <button
               type="button"
               class="dt-set-card"
               :class="{ 'dt-set-card--active': selectedId === set.id }"
               @click="selectedId = set.id"
             >
-              <span class="dt-set-card__name">{{ set.name }}</span>
+              <span class="dt-set-card__name">{{ friendlySetName(set.name, set.code) }}</span>
               <span class="dt-set-card__meta">
-                <code>{{ set.code }}</code>
-                · {{ set.status_count }} trạng thái
+                {{ set.status_count }} trạng thái
+                <template v-if="set.workflow_count"> · {{ set.workflow_count }} quy trình</template>
               </span>
-              <span v-if="set.is_system" class="dt-set-card__tag">Hệ thống</span>
+              <span v-if="set.is_system" class="dt-set-card__tag">Có sẵn</span>
             </button>
           </li>
         </ul>
@@ -129,88 +210,165 @@ function actorLabel(key) {
       </aside>
 
       <div v-if="loadingDetail" class="dt-status-page__loading dt-status-page__main">
-        Đang tải chi tiết…
+        Đang tải…
       </div>
 
       <div v-else-if="detail" class="dt-status-page__main">
-        <section class="dt-flow-card">
-          <h3 class="dt-flow-card__title">Luồng chính</h3>
-          <div class="dt-flow-pipeline hide-scrollbar">
-            <template v-for="(st, idx) in mainFlow" :key="st.code">
-              <DonTuStatusBadge :code="st.code" :label="st.label" />
-              <AppIcon
-                v-if="idx < mainFlow.length - 1"
-                name="chevronRight"
-                class="dt-flow-pipeline__arrow"
-                :size="18"
-                :stroke-width="2"
-              />
-            </template>
+        <div class="dt-status-page__detail-head">
+          <div class="dt-status-page__detail-copy">
+            <h2 class="dt-status-page__detail-title">{{ detailTitle }}</h2>
+            <p v-if="detailDescription" class="dt-status-page__detail-desc">{{ detailDescription }}</p>
           </div>
-        </section>
-
-        <div v-if="conditional.length" class="dt-status-page__row">
-          <section class="dt-mini-card dt-mini-card--conditional">
-            <h3 class="dt-mini-card__title">{{ GROUP_KIND_LABEL.conditional }}</h3>
-            <div class="dt-mini-card__chips">
-              <DonTuStatusBadge
-                v-for="st in conditional"
-                :key="st.code"
-                compact
-                :code="st.code"
-                :label="st.label"
-              />
-            </div>
-          </section>
+          <div class="dt-status-page__stats">
+            <span>{{ detail.statuses?.length ?? 0 }} trạng thái</span>
+            <span>{{ detail.transitions?.length ?? 0 }} cách đổi</span>
+            <span>{{ detail.workflow_count ?? 0 }} quy trình</span>
+            <span v-if="detail.is_system" class="dt-set-card__tag">Có sẵn</span>
+            <button type="button" class="dt-link-btn" @click="copyCode(detail.code)">Sao chép mã</button>
+          </div>
         </div>
 
-        <section v-if="terminal.length" class="dt-mini-card dt-mini-card--terminal">
-          <h3 class="dt-mini-card__title">{{ GROUP_KIND_LABEL.terminal }}</h3>
-          <div class="dt-mini-card__chips">
-            <DonTuStatusBadge
-              v-for="st in terminal"
-              :key="st.code"
-              compact
-              :code="st.code"
-              :label="st.label"
-            />
+        <section v-if="detail.workflows?.length" class="dt-panel dt-workflow-strip">
+          <div class="dt-panel__row">
+            <h3 class="dt-panel__title">Quy trình đang dùng</h3>
+            <router-link :to="{ name: 'manager.don-tu.workflows' }" class="dt-workflow-strip__link">
+              Mở danh sách
+              <AppIcon name="chevronRight" :size="16" :stroke-width="2" />
+            </router-link>
+          </div>
+          <ul class="dt-workflow-strip__list hide-scrollbar">
+            <li v-for="wf in detail.workflows" :key="wf.id">
+              <button type="button" class="dt-workflow-chip" @click="goWorkflow(wf.id)">
+                <span class="dt-workflow-chip__name">{{ wf.name }}</span>
+                <span
+                  class="dt-pill dt-pill--compact"
+                  :class="wf.is_active ? 'dt-pill--success' : 'dt-pill--muted'"
+                >
+                  {{ wf.is_active ? 'Đang dùng' : 'Đang tắt' }}
+                </span>
+              </button>
+            </li>
+          </ul>
+        </section>
+
+        <section class="dt-panel">
+          <h3 class="dt-panel__title">Hồ sơ đi qua các trạng thái này</h3>
+          <div class="dt-lanes">
+            <div class="dt-lane dt-lane--main">
+              <span class="dt-lane__label">{{ GROUP_KIND_LABEL.main }}</span>
+              <div ref="pipelineWrap" class="dt-flow-pipeline hide-scrollbar">
+                <template v-for="(st, idx) in mainFlow" :key="st.code">
+                  <button
+                    type="button"
+                    class="dt-status-hit"
+                    :class="{ 'dt-status-hit--on': focusCode === st.code }"
+                    :aria-pressed="focusCode === st.code"
+                    @click="toggleFocus(st.code)"
+                  >
+                    <DonTuStatusBadge compact :code="st.code" :label="st.label" />
+                  </button>
+                  <AppIcon
+                    v-if="idx < mainFlow.length - 1"
+                    name="chevronRight"
+                    class="dt-flow-pipeline__arrow"
+                    :size="16"
+                    :stroke-width="2"
+                  />
+                </template>
+                <p v-if="!mainFlow.length" class="dt-status-page__empty">Chưa có trạng thái trên đường đi chính.</p>
+              </div>
+            </div>
+
+            <div v-if="conditional.length" class="dt-lane">
+              <span class="dt-lane__label">{{ GROUP_KIND_LABEL.conditional }}</span>
+              <div class="dt-lane__chips">
+                <button
+                  v-for="st in conditional"
+                  :key="st.code"
+                  type="button"
+                  class="dt-status-hit"
+                  :class="{ 'dt-status-hit--on': focusCode === st.code }"
+                  :aria-pressed="focusCode === st.code"
+                  @click="toggleFocus(st.code)"
+                >
+                  <DonTuStatusBadge compact :code="st.code" :label="st.label" />
+                </button>
+              </div>
+            </div>
+
+            <div v-if="terminal.length" class="dt-lane">
+              <span class="dt-lane__label">{{ GROUP_KIND_LABEL.terminal }}</span>
+              <div class="dt-lane__chips">
+                <button
+                  v-for="st in terminal"
+                  :key="st.code"
+                  type="button"
+                  class="dt-status-hit"
+                  :class="{ 'dt-status-hit--on': focusCode === st.code }"
+                  :aria-pressed="focusCode === st.code"
+                  @click="toggleFocus(st.code)"
+                >
+                  <DonTuStatusBadge compact :code="st.code" :label="st.label" />
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 
-        <section class="dt-trans-table-wrap hide-scrollbar">
-          <h3 class="dt-flow-card__title">Ma trận chuyển trạng thái</h3>
-          <table class="dt-trans-table">
-            <thead>
-              <tr>
-                <th>Từ</th>
-                <th>Hành động</th>
-                <th>Đến</th>
-                <th>Ai thực hiện</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="tr in detail.transitions" :key="tr.id">
-                <td>
-                  <DonTuStatusBadge
-                    v-if="tr.from_code !== 'NONE'"
-                    compact
-                    :code="tr.from_code"
-                    :label="detail.statuses.find((s) => s.code === tr.from_code)?.label"
-                  />
-                  <span v-else class="dt-trans-none">— (chưa có hồ sơ)</span>
-                </td>
-                <td><span class="dt-action-pill">{{ actionLabel(tr.action_key) }}</span></td>
-                <td>
-                  <DonTuStatusBadge
-                    compact
-                    :code="tr.to_code"
-                    :label="detail.statuses.find((s) => s.code === tr.to_code)?.label"
-                  />
-                </td>
-                <td class="dt-trans-actor">{{ actorLabel(tr.actor_policy) }}</td>
-              </tr>
-            </tbody>
-          </table>
+        <section class="dt-panel">
+          <div class="dt-panel__row">
+            <h3 class="dt-panel__title">Ai được bấm gì</h3>
+            <button v-if="focusCode" type="button" class="dt-link-btn" @click="focusCode = ''">
+              Xem tất cả
+            </button>
+            <input
+              v-model="transitionQuery"
+              type="search"
+              class="dt-trans-table__search"
+              placeholder="Tìm người, việc làm hoặc trạng thái"
+              aria-label="Tìm cách đổi trạng thái"
+            />
+          </div>
+          <div ref="transWrap" class="dt-trans-table__scroll hide-scrollbar">
+            <table class="dt-trans-table">
+              <thead>
+                <tr>
+                  <th>Đang ở</th>
+                  <th>Việc làm</th>
+                  <th>Chuyển sang</th>
+                  <th>Ai được bấm</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!filteredTransitions.length">
+                  <td colspan="4" class="dt-status-page__empty">Không thấy dòng nào khớp.</td>
+                </tr>
+                <tr v-for="tr in filteredTransitions" :key="tr.id">
+                  <td>
+                    <DonTuStatusBadge
+                      v-if="tr.from_code !== 'NONE'"
+                      compact
+                      :code="tr.from_code"
+                      :label="statusLabel(tr.from_code)"
+                    />
+                    <span v-else class="dt-trans-none">Lúc chưa có hồ sơ</span>
+                  </td>
+                  <td>
+                    <span class="dt-action-pill">{{ actionLabel(tr.action_key) }}</span>
+                    <span v-if="guardHint(tr.guard_json)" class="dt-guard">{{ guardHint(tr.guard_json) }}</span>
+                  </td>
+                  <td>
+                    <DonTuStatusBadge
+                      compact
+                      :code="tr.to_code"
+                      :label="statusLabel(tr.to_code)"
+                    />
+                  </td>
+                  <td class="dt-trans-actor">{{ actorLabel(tr.actor_policy) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
     </div>
@@ -218,94 +376,52 @@ function actorLabel(key) {
 </template>
 
 <style scoped>
+@import './donTuAdminShared.css';
+
 .dt-config-deny {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-8);
+  padding: var(--space-6);
   color: var(--color-text-muted);
   text-align: center;
 }
 
-.dt-status-page__hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  margin-bottom: var(--space-5);
-  padding: var(--space-5);
-  border-radius: var(--radius-md);
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)) 0%,
-    var(--color-surface-muted) 100%
-  );
-  box-shadow: var(--shadow-sm);
-}
-
-.dt-status-page__kicker {
-  margin: 0 0 var(--space-1);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-primary);
-}
-
-.dt-status-page__hero-title {
-  margin: 0 0 var(--space-2);
-  font-size: 1.375rem;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.dt-status-page__hero-desc {
-  margin: 0;
-  max-width: 40rem;
-  font-size: 0.9375rem;
-  line-height: 1.5;
-  color: var(--color-text-muted);
-}
-
-.dt-status-page__hero-stat {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: 5.5rem;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-}
-
-.dt-status-page__stat-num {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  line-height: 1;
-}
-
-.dt-status-page__stat-label {
-  margin-top: var(--space-1);
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
 .dt-status-page__body {
   display: grid;
-  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
-  gap: var(--space-5);
-  min-height: 0;
+  grid-template-columns: minmax(13rem, 16rem) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
 }
 
-.dt-status-page__aside-title {
-  margin: 0 0 var(--space-3);
+.dt-status-page__body--solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dt-status-page__set-search,
+.dt-trans-table__search {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
   font-size: 0.8125rem;
-  font-weight: 600;
+  background: linear-gradient(
+    180deg,
+    var(--color-surface),
+    color-mix(in srgb, var(--color-primary) 4%, var(--color-surface))
+  );
+}
+
+.dt-status-page__set-search::placeholder,
+.dt-trans-table__search::placeholder {
   color: var(--color-text-muted);
+  opacity: 0.8;
+}
+
+.dt-status-page__set-search {
+  margin-bottom: var(--space-2);
 }
 
 .dt-status-page__set-list {
@@ -321,10 +437,15 @@ function actorLabel(key) {
   position: relative;
   width: 100%;
   text-align: left;
-  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-2) + 3px + var(--space-2));
+  padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-2) + 3px + var(--space-2));
   border: none;
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)),
+    var(--color-surface) 55%,
+    color-mix(in srgb, var(--color-info) 6%, var(--color-surface))
+  );
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   font: inherit;
@@ -347,7 +468,11 @@ function actorLabel(key) {
 }
 
 .dt-set-card--active {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)),
+    color-mix(in srgb, var(--color-info) 8%, var(--color-surface))
+  );
 }
 
 .dt-set-card__name {
@@ -358,47 +483,184 @@ function actorLabel(key) {
 
 .dt-set-card__meta {
   display: block;
-  margin-top: var(--space-1);
+  margin-top: 0.125rem;
   font-size: 0.75rem;
   color: var(--color-text-muted);
 }
 
-.dt-set-card__meta code {
-  font-size: 0.6875rem;
-}
-
 .dt-set-card__tag {
   display: inline-block;
-  margin-top: var(--space-2);
-  padding: 0.125rem 0.5rem;
+  margin-top: var(--space-1);
+  padding: 0.1rem 0.45rem;
   border-radius: var(--radius-sm);
   font-size: 0.6875rem;
   font-weight: 600;
-  background: color-mix(in srgb, var(--color-info) 12%, var(--color-surface));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-info) 16%, var(--color-surface)),
+    color-mix(in srgb, var(--color-info) 6%, var(--color-surface))
+  );
   color: var(--color-info);
 }
 
-.dt-flow-card {
-  margin-bottom: var(--space-4);
-  padding: var(--space-4);
+.dt-status-page__detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.dt-status-page__detail-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.dt-status-page__detail-desc {
+  margin: var(--space-1) 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.dt-status-page__stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.dt-status-page__stats .dt-set-card__tag {
+  margin-top: 0;
+}
+
+.dt-link-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dt-panel {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)) 0%,
+    var(--color-surface) 46%,
+    color-mix(in srgb, var(--color-info) 7%, var(--color-surface)) 100%
+  );
   box-shadow: var(--shadow-sm);
 }
 
-.dt-flow-card__title {
-  margin: 0 0 var(--space-3);
+.dt-panel__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.dt-panel__title {
+  margin: 0;
   font-size: 0.9375rem;
   font-weight: 600;
 }
 
-.dt-flow-pipeline {
+.dt-panel > .dt-panel__title {
+  margin-bottom: var(--space-2);
+}
+
+.dt-workflow-strip__list {
   display: flex;
   flex-wrap: nowrap;
-  align-items: center;
   gap: var(--space-2);
   overflow-x: auto;
-  padding-bottom: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dt-workflow-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.35rem 0.65rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)),
+    color-mix(in srgb, var(--color-info) 6%, var(--color-surface))
+  );
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.dt-workflow-chip__name {
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.dt-pill--compact {
+  font-size: 0.625rem;
+}
+
+.dt-workflow-strip__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-left: auto;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.dt-lanes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.dt-lane--main {
+  grid-column: 1 / -1;
+}
+
+.dt-lane__label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.dt-lane__chips,
+.dt-flow-pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dt-flow-pipeline {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  cursor: grab;
+}
+
+.dt-flow-pipeline:active {
+  cursor: grabbing;
 }
 
 .dt-flow-pipeline__arrow {
@@ -407,52 +669,32 @@ function actorLabel(key) {
   opacity: 0.7;
 }
 
-.dt-mini-card {
-  position: relative;
-  margin-bottom: var(--space-4);
-  padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-2) + 3px + var(--space-3));
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+.dt-status-hit {
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
 }
 
-.dt-mini-card::before {
-  content: '';
-  position: absolute;
-  top: var(--space-2);
-  bottom: var(--space-2);
-  left: var(--space-2);
-  width: 3px;
-  border-radius: 0;
-  background: var(--color-info);
+.dt-status-hit--on {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 55%, transparent);
 }
 
-.dt-mini-card--conditional::before {
-  background: #7c3aed;
+.dt-trans-table__search {
+  flex: 1;
+  min-width: 12rem;
+  max-width: 22rem;
+  margin-left: auto;
 }
 
-.dt-mini-card--terminal::before {
-  background: var(--color-success);
-}
-
-.dt-mini-card__title {
-  margin: 0 0 var(--space-3);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-}
-
-.dt-mini-card__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.dt-trans-table-wrap {
+.dt-trans-table__scroll {
   overflow-x: auto;
-  padding: var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
+  cursor: grab;
+}
+
+.dt-trans-table__scroll:active {
+  cursor: grabbing;
 }
 
 .dt-trans-table {
@@ -463,46 +705,60 @@ function actorLabel(key) {
 
 .dt-trans-table th {
   text-align: left;
-  padding: 0.5rem 0.75rem;
+  padding: 0.4rem 0.65rem;
   font-weight: 600;
   color: var(--color-text-muted);
   box-shadow: 0 1px 0 var(--color-border);
 }
 
 .dt-trans-table td {
-  padding: 0.65rem 0.75rem;
+  padding: 0.45rem 0.65rem;
   vertical-align: middle;
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-border) 60%, transparent);
 }
 
 .dt-action-pill {
   display: inline-block;
-  padding: 0.2rem 0.55rem;
+  padding: 0.15rem 0.5rem;
   border-radius: 999px;
   font-weight: 600;
   font-size: 0.75rem;
-  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary) 16%, var(--color-surface)),
+    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface))
+  );
   color: var(--color-primary);
 }
 
-.dt-trans-none {
+.dt-guard {
+  display: block;
+  margin-top: 0.2rem;
   font-size: 0.75rem;
   color: var(--color-text-muted);
-  font-style: italic;
 }
 
+.dt-trans-none,
 .dt-trans-actor {
-  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  color: var(--color-text);
 }
 
-.dt-status-page__loading {
+.dt-status-page__loading,
+.dt-status-page__empty {
+  margin: 0;
   color: var(--color-text-muted);
   font-size: 0.875rem;
 }
 
 @media (max-width: 900px) {
-  .dt-status-page__body {
+  .dt-status-page__body,
+  .dt-lanes {
     grid-template-columns: 1fr;
+  }
+
+  .dt-lane--main {
+    grid-column: auto;
   }
 }
 </style>

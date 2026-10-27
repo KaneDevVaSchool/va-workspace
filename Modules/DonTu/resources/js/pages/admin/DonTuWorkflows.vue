@@ -1,11 +1,12 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { formatDateTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
+import { friendlySetName } from '../../constants/statusTone.js';
 import {
   createWorkflow,
   deleteWorkflow,
@@ -13,6 +14,7 @@ import {
   fetchWorkflows,
   updateWorkflow,
 } from '../../api/donTuConfigApi.js';
+import DonTuConfigHubCards from '../../components/DonTuConfigHubCards.vue';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -32,6 +34,7 @@ const createForm = ref({ name: '', status_set_id: '', description: '' });
 
 const deleteTarget = ref(null);
 const deleteOpen = ref(false);
+const actionMenuId = ref(null);
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase();
@@ -54,8 +57,32 @@ async function load() {
   }
 }
 
+function toggleActionMenu(id, event) {
+  event.stopPropagation();
+  actionMenuId.value = actionMenuId.value === id ? null : id;
+}
+
+function handleDocumentClick(event) {
+  if (!actionMenuId.value) return;
+  if (event.target.closest?.('.dt-row-menu') || event.target.closest?.('.dt-row-menu-btn')) return;
+  actionMenuId.value = null;
+}
+
+function handleDocumentKeydown(event) {
+  if (event.key === 'Escape' && actionMenuId.value) {
+    actionMenuId.value = null;
+  }
+}
+
 onMounted(() => {
+  document.addEventListener('click', handleDocumentClick);
+  document.addEventListener('keydown', handleDocumentKeydown);
   if (canConfig.value) load();
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocumentClick);
+  document.removeEventListener('keydown', handleDocumentKeydown);
 });
 
 function openCreate() {
@@ -70,7 +97,7 @@ function openCreate() {
 
 async function submitCreate() {
   if (!createForm.value.name.trim() || !createForm.value.status_set_id) {
-    showClientToast('Nhập tên và chọn bộ trạng thái.', 'error');
+    showClientToast('Nhập tên và chọn trạng thái hồ sơ.', 'error');
     return;
   }
   createSaving.value = true;
@@ -101,8 +128,8 @@ async function toggleActive(item, event) {
   }
 }
 
-function askDelete(item, event) {
-  event.stopPropagation();
+function askDelete(item) {
+  actionMenuId.value = null;
   deleteTarget.value = item;
   deleteOpen.value = true;
 }
@@ -125,8 +152,10 @@ async function confirmDelete() {
   <div v-if="!canConfig" class="dt-config-deny">Bạn không có quyền quản lý quy trình.</div>
 
   <div v-else class="dt-admin-list">
+    <DonTuConfigHubCards />
+
     <div class="dt-admin-list__toolbar">
-      <input v-model="query" type="search" class="dt-admin-list__search" placeholder="Tìm quy trình…" />
+      <input v-model="query" type="search" class="dt-admin-list__search" placeholder="Tìm theo tên quy trình" aria-label="Tìm quy trình" />
       <button type="button" class="dt-admin-list__primary" @click="openCreate">
         <AppIcon name="plus" :size="16" />
         Thêm quy trình
@@ -138,7 +167,7 @@ async function confirmDelete() {
         <thead>
           <tr>
             <th>Quy trình</th>
-            <th>Bộ trạng thái</th>
+            <th>Trạng thái hồ sơ</th>
             <th>Bước</th>
             <th>Hoạt động</th>
             <th>Cập nhật</th>
@@ -160,30 +189,48 @@ async function confirmDelete() {
           >
             <td>
               <span class="dt-admin-table__title">{{ item.name }}</span>
-              <code class="dt-admin-table__code">{{ item.code }}</code>
             </td>
-            <td>{{ item.status_set_name || item.status_set_code }}</td>
+            <td>{{ friendlySetName(item.status_set_name, item.status_set_code) }}</td>
             <td>{{ item.step_count }}</td>
             <td>
-              <button
-                type="button"
-                class="dt-toggle"
-                :class="{ 'dt-toggle--on': item.is_active }"
-                @click="toggleActive(item, $event)"
+              <span
+                class="dt-pill"
+                :class="item.is_active ? 'dt-pill--success' : 'dt-pill--muted'"
               >
                 {{ item.is_active ? 'Đang bật' : 'Đang tắt' }}
-              </button>
+              </span>
             </td>
             <td>{{ formatDateTime(item.updated_at) }}</td>
-            <td @click.stop>
+            <td class="dt-admin-table__actions-col" @click.stop>
               <button
-                v-if="!item.is_active"
                 type="button"
-                class="dt-row-menu__danger dt-link-btn"
-                @click="askDelete(item, $event)"
+                class="dt-row-menu-btn"
+                aria-label="Thao tác"
+                @click="toggleActionMenu(item.id, $event)"
               >
-                Xóa
+                <AppIcon name="moreVertical" :size="18" :stroke-width="2" />
               </button>
+              <div v-if="actionMenuId === item.id" class="dt-row-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  @click="
+                    actionMenuId = null;
+                    toggleActive(item, $event);
+                  "
+                >
+                  {{ item.is_active ? 'Tắt quy trình' : 'Bật quy trình' }}
+                </button>
+                <button
+                  v-if="!item.is_active"
+                  type="button"
+                  role="menuitem"
+                  class="dt-row-menu__danger"
+                  @click="askDelete(item)"
+                >
+                  Xóa
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -200,28 +247,28 @@ async function confirmDelete() {
             </button>
           </header>
           <div class="dt-modal__body dt-modal__grid">
-            <label class="dt-field dt-field--span2">
-              <span>Tên quy trình</span>
-              <input v-model="createForm.name" type="text" />
+            <label class="dt-field">
+              <span>Tên quy trình<span class="dt-req" aria-hidden="true">*</span></span>
+              <input v-model="createForm.name" type="text" required placeholder="Ví dụ: Duyệt đơn nghỉ phép" />
             </label>
-            <label class="dt-field dt-field--span2">
-              <span>Bộ trạng thái</span>
-              <select v-model="createForm.status_set_id">
-                <option disabled value="">Chọn bộ…</option>
+            <label class="dt-field">
+              <span>Trạng thái hồ sơ<span class="dt-req" aria-hidden="true">*</span></span>
+              <select v-model="createForm.status_set_id" required>
+                <option disabled value="">Chọn nhóm trạng thái</option>
                 <option v-for="set in statusSets" :key="set.id" :value="set.id">
-                  {{ set.name }}
+                  {{ friendlySetName(set.name, set.code) }}
                 </option>
               </select>
             </label>
             <label class="dt-field dt-field--span2">
-              <span>Mô tả</span>
-              <textarea v-model="createForm.description" rows="2" />
+              <span>Ghi chú</span>
+              <textarea v-model="createForm.description" rows="2" placeholder="Ghi ngắn quy trình này dùng khi nào" />
             </label>
           </div>
           <footer class="dt-modal__foot">
             <button type="button" class="dt-btn-ghost" @click="createOpen = false">Huỷ</button>
             <button type="button" class="dt-btn-primary" :disabled="createSaving" @click="submitCreate">
-              Tạo và cấu hình
+              {{ createSaving ? 'Đang lưu…' : 'Tạo và soạn quy trình' }}
             </button>
           </footer>
         </div>

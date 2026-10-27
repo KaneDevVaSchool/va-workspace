@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -13,6 +13,7 @@ import {
   duplicateFormTemplate,
   fetchFormTemplates,
 } from '../../api/donTuConfigApi.js';
+import DonTuConfigHubCards from '../../components/DonTuConfigHubCards.vue';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -45,7 +46,7 @@ const filtered = computed(() => {
 
 const STATUS_LABEL = { draft: 'Nháp', active: 'Đang dùng', archived: 'Lưu trữ' };
 const STATUS_TONE = { draft: 'muted', active: 'success', archived: 'muted' };
-const SCOPE_LABEL = { internal: 'Nội bộ', external: 'Phụ huynh', both: 'Cả hai' };
+const SCOPE_LABEL = { internal: 'Cán bộ', external: 'Phụ huynh', both: 'Cán bộ và phụ huynh' };
 
 async function load() {
   loading.value = true;
@@ -58,8 +59,31 @@ async function load() {
   }
 }
 
+function handleDocumentClick(event) {
+  if (!actionMenuId.value) return;
+  const menus = document.querySelectorAll('.dt-row-menu');
+  for (const menu of menus) {
+    if (menu.contains(event.target)) return;
+  }
+  if (event.target.closest?.('.dt-row-menu-btn')) return;
+  actionMenuId.value = null;
+}
+
+function handleDocumentKeydown(event) {
+  if (event.key === 'Escape' && actionMenuId.value) {
+    actionMenuId.value = null;
+  }
+}
+
 onMounted(() => {
+  document.addEventListener('click', handleDocumentClick);
+  document.addEventListener('keydown', handleDocumentKeydown);
   if (canConfig.value) load();
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocumentClick);
+  document.removeEventListener('keydown', handleDocumentKeydown);
 });
 
 function openCreate() {
@@ -137,8 +161,10 @@ async function confirmDelete() {
   <div v-if="!canConfig" class="dt-config-deny">Bạn không có quyền quản lý mẫu biểu.</div>
 
   <div v-else class="dt-admin-list">
+    <DonTuConfigHubCards />
+
     <div class="dt-admin-list__toolbar">
-      <input v-model="query" type="search" class="dt-admin-list__search" placeholder="Tìm tên hoặc mã…" />
+      <input v-model="query" type="search" class="dt-admin-list__search" placeholder="Tìm theo tên mẫu" aria-label="Tìm mẫu biểu" />
       <button type="button" class="dt-admin-list__primary" @click="openCreate">
         <AppIcon name="plus" :size="16" :stroke-width="2" />
         Thêm mẫu biểu
@@ -150,7 +176,7 @@ async function confirmDelete() {
         <thead>
           <tr>
             <th>Mẫu biểu</th>
-            <th>Phạm vi</th>
+            <th>Ai được dùng</th>
             <th>Trạng thái</th>
             <th>Trường</th>
             <th>Cập nhật</th>
@@ -172,7 +198,6 @@ async function confirmDelete() {
           >
             <td>
               <span class="dt-admin-table__title">{{ item.name }}</span>
-              <code class="dt-admin-table__code">{{ item.code }}</code>
             </td>
             <td>{{ SCOPE_LABEL[item.scope] || item.scope }}</td>
             <td>
@@ -190,7 +215,7 @@ async function confirmDelete() {
                 type="button"
                 class="dt-row-menu-btn"
                 aria-label="Thao tác"
-                @click="toggleActionMenu(item.id)"
+                @click.stop="toggleActionMenu(item.id)"
               >
                 <AppIcon name="moreVertical" :size="18" :stroke-width="2" />
               </button>
@@ -230,27 +255,27 @@ async function confirmDelete() {
             </button>
           </header>
           <div class="dt-modal__body dt-modal__grid">
-            <label class="dt-field dt-field--span2">
-              <span>Tên mẫu</span>
-              <input v-model="createForm.name" type="text" autocomplete="off" />
+            <label class="dt-field">
+              <span>Tên mẫu<span class="dt-req" aria-hidden="true">*</span></span>
+              <input v-model="createForm.name" type="text" required autocomplete="off" placeholder="Ví dụ: Đơn xin nghỉ phép" />
             </label>
             <label class="dt-field">
-              <span>Phạm vi</span>
-              <select v-model="createForm.scope">
-                <option value="internal">Nội bộ</option>
+              <span>Ai được dùng<span class="dt-req" aria-hidden="true">*</span></span>
+              <select v-model="createForm.scope" required>
+                <option value="internal">Cán bộ trong trường</option>
                 <option value="external">Phụ huynh</option>
-                <option value="both">Cả hai</option>
+                <option value="both">Cả cán bộ và phụ huynh</option>
               </select>
             </label>
             <label class="dt-field dt-field--span2">
-              <span>Mô tả</span>
-              <textarea v-model="createForm.description" rows="2" />
+              <span>Ghi chú</span>
+              <textarea v-model="createForm.description" rows="2" placeholder="Ghi ngắn mẫu này dùng khi nào" />
             </label>
           </div>
           <footer class="dt-modal__foot">
             <button type="button" class="dt-btn-ghost" @click="createOpen = false">Huỷ</button>
             <button type="button" class="dt-btn-primary" :disabled="createSaving" @click="submitCreate">
-              {{ createSaving ? 'Đang lưu…' : 'Tạo và cấu hình' }}
+              {{ createSaving ? 'Đang lưu…' : 'Tạo và soạn mẫu' }}
             </button>
           </footer>
         </div>

@@ -9,8 +9,8 @@ import { fetchFormTemplate, updateFormTemplate } from '../../api/donTuConfigApi.
 const FIELD_TYPES = [
   { value: 'text', label: 'Văn bản ngắn' },
   { value: 'textarea', label: 'Văn bản dài' },
-  { value: 'checkbox', label: 'Checkbox' },
-  { value: 'radio', label: 'Radio' },
+  { value: 'checkbox', label: 'Ô tích' },
+  { value: 'radio', label: 'Chọn một' },
   { value: 'select', label: 'Danh sách chọn' },
   { value: 'date', label: 'Ngày' },
   { value: 'file', label: 'Tệp đính kèm' },
@@ -92,7 +92,7 @@ async function saveFields() {
       schema_json: { fields: fields.value },
     });
     fields.value = [...(item.value.schema_json?.fields || [])];
-    showClientToast('Đã lưu trường biểu mẫu.', 'success');
+    showClientToast('Đã lưu các ô trên phiếu.', 'success');
   } catch (err) {
     showClientToast(err.response?.data?.message || 'Không lưu được trường.', 'error');
   } finally {
@@ -128,7 +128,7 @@ function openFieldDialog(index = -1) {
 function applyField() {
   const key = fieldForm.value.key.trim();
   if (!key) {
-    showClientToast('Nhập mã trường.', 'error');
+    showClientToast('Nhập mã ô.', 'error');
     return;
   }
   const payload = {
@@ -184,7 +184,7 @@ function typeLabel(t) {
         Thông tin
       </button>
       <button type="button" :class="{ 'dt-editor__tab--on': tab === 'fields' }" @click="tab = 'fields'">
-        Trường ({{ fields.length }})
+        Ô trên phiếu ({{ fields.length }})
       </button>
       <button type="button" :class="{ 'dt-editor__tab--on': tab === 'print' }" @click="tab = 'print'">
         In ấn
@@ -193,41 +193,40 @@ function typeLabel(t) {
 
     <section v-show="tab === 'info'" class="dt-editor__panel">
       <div class="dt-modal__grid">
-        <label class="dt-field dt-field--span2">
-          <span>Tên mẫu</span>
-          <input v-model="info.name" type="text" />
+        <label class="dt-field">
+          <span>Tên mẫu<span class="dt-req" aria-hidden="true">*</span></span>
+          <input v-model="info.name" type="text" required placeholder="Ví dụ: Đơn xin nghỉ phép" />
         </label>
         <label class="dt-field">
-          <span>Phạm vi</span>
-          <select v-model="info.scope">
-            <option value="internal">Nội bộ</option>
+          <span>Ai được dùng<span class="dt-req" aria-hidden="true">*</span></span>
+          <select v-model="info.scope" required>
+            <option value="internal">Cán bộ trong trường</option>
             <option value="external">Phụ huynh</option>
-            <option value="both">Cả hai</option>
+            <option value="both">Cả cán bộ và phụ huynh</option>
           </select>
         </label>
         <label class="dt-field">
-          <span>Trạng thái</span>
-          <select v-model="info.status">
+          <span>Tình trạng<span class="dt-req" aria-hidden="true">*</span></span>
+          <select v-model="info.status" required>
             <option value="draft">Nháp</option>
             <option value="active">Đang dùng</option>
-            <option value="archived">Lưu trữ</option>
+            <option value="archived">Cất lưu trữ</option>
           </select>
         </label>
         <label class="dt-field dt-field--span2">
-          <span>Mô tả</span>
-          <textarea v-model="info.description" rows="3" />
+          <span>Ghi chú</span>
+          <textarea v-model="info.description" rows="3" placeholder="Ghi ngắn mẫu này dùng khi nào" />
         </label>
       </div>
-      <p class="dt-editor__meta">Mã: <code>{{ item.code }}</code> · Phiên bản {{ item.version }}</p>
+      <p class="dt-editor__meta">Đã lưu lần {{ item.version }}</p>
       <button type="button" class="dt-btn-primary" :disabled="saving" @click="saveInfo">Lưu thông tin</button>
     </section>
 
     <section v-show="tab === 'fields'" class="dt-editor__panel">
       <div class="dt-editor__panel-head">
-        <p>Kéo thứ tự bằng nút lên/xuống. Mã trường không trùng trong một mẫu.</p>
         <button type="button" class="dt-admin-list__primary" @click="openFieldDialog(-1)">
           <AppIcon name="plus" :size="16" />
-          Thêm trường
+          Thêm ô
         </button>
       </div>
       <ul v-if="fields.length" class="dt-field-list">
@@ -246,35 +245,35 @@ function typeLabel(t) {
           </div>
         </li>
       </ul>
-      <p v-else class="dt-config-deny">Chưa có trường nào.</p>
-      <button type="button" class="dt-btn-primary" :disabled="saving" @click="saveFields">Lưu trường</button>
+      <p v-else class="dt-config-deny">Chưa có ô nào trên phiếu.</p>
+      <button type="button" class="dt-btn-primary" :disabled="saving" @click="saveFields">Lưu các ô</button>
     </section>
 
     <section v-show="tab === 'print'" class="dt-editor__panel dt-editor__panel--muted">
-      <p>Xem trước in A4 (logo, header, watermark) sẽ bổ sung ở giai đoạn P3 — F-TPL-05.</p>
+      <p>Phần in chưa mở.</p>
     </section>
 
     <Teleport to="body">
       <div v-if="fieldDialog" class="dt-modal-backdrop" @click.self="fieldDialog = false">
         <div class="dt-modal" role="dialog">
           <header class="dt-modal__head">
-            <h2>{{ fieldEditIndex >= 0 ? 'Sửa trường' : 'Thêm trường' }}</h2>
+            <h2>{{ fieldEditIndex >= 0 ? 'Sửa ô trên phiếu' : 'Thêm ô trên phiếu' }}</h2>
             <button type="button" class="dt-modal__close" aria-label="Đóng" @click="fieldDialog = false">
               <AppIcon name="x" :size="18" />
             </button>
           </header>
           <div class="dt-modal__body dt-modal__grid">
             <label class="dt-field">
-              <span>Mã trường</span>
-              <input v-model="fieldForm.key" type="text" placeholder="vi_du_truong" />
+              <span>Mã ô<span class="dt-req" aria-hidden="true">*</span></span>
+              <input v-model="fieldForm.key" type="text" required placeholder="Ví dụ: ly_do_nghi" />
             </label>
             <label class="dt-field">
-              <span>Nhãn hiển thị</span>
-              <input v-model="fieldForm.label" type="text" />
+              <span>Tên hiển thị<span class="dt-req" aria-hidden="true">*</span></span>
+              <input v-model="fieldForm.label" type="text" required placeholder="Ví dụ: Lý do nghỉ" />
             </label>
             <label class="dt-field">
-              <span>Kiểu</span>
-              <select v-model="fieldForm.type">
+              <span>Kiểu ô<span class="dt-req" aria-hidden="true">*</span></span>
+              <select v-model="fieldForm.type" required>
                 <option v-for="opt in FIELD_TYPES" :key="opt.value" :value="opt.value">
                   {{ opt.label }}
                 </option>
@@ -282,18 +281,18 @@ function typeLabel(t) {
             </label>
             <label class="dt-field dt-field--check">
               <input v-model="fieldForm.required" type="checkbox" />
-              <span>Bắt buộc</span>
+              <span>Bắt buộc khi nộp</span>
             </label>
             <label
               v-if="['select', 'radio'].includes(fieldForm.type)"
               class="dt-field dt-field--span2"
             >
-              <span>Tùy chọn (mỗi dòng một giá trị)</span>
-              <textarea v-model="fieldForm.options" rows="3" />
+              <span>Các lựa chọn<span class="dt-req" aria-hidden="true">*</span></span>
+              <textarea v-model="fieldForm.options" rows="3" required placeholder="Mỗi dòng một lựa chọn" />
             </label>
             <label v-if="fieldForm.type === 'signature'" class="dt-field dt-field--span2">
-              <span>Câu cam kết</span>
-              <textarea v-model="fieldForm.commitment_text" rows="2" />
+              <span>Câu cam kết<span class="dt-req" aria-hidden="true">*</span></span>
+              <textarea v-model="fieldForm.commitment_text" rows="2" required placeholder="Ví dụ: Tôi cam kết thông tin trên là đúng" />
             </label>
           </div>
           <footer class="dt-modal__foot">
@@ -334,9 +333,14 @@ function typeLabel(t) {
 }
 
 .dt-editor__panel {
-  padding: var(--space-5);
+  padding: var(--space-4);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)) 0%,
+    var(--color-surface) 46%,
+    color-mix(in srgb, var(--color-info) 7%, var(--color-surface)) 100%
+  );
   box-shadow: var(--shadow-sm);
 }
 
@@ -372,7 +376,11 @@ function typeLabel(t) {
   gap: var(--space-3);
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary) 5%, var(--color-surface)),
+    color-mix(in srgb, var(--color-info) 5%, var(--color-surface))
+  );
   margin-bottom: var(--space-2);
 }
 

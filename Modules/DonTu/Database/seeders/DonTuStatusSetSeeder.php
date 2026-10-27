@@ -16,8 +16,8 @@ class DonTuStatusSetSeeder extends Seeder
         $now = now();
         $setId = DB::table('don_tu_status_sets')->insertGetId([
             'code' => 'STATUS_SET_DEFAULT',
-            'name' => 'Vòng đời hồ sơ mặc định (Matrix V3)',
-            'description' => 'Bộ trạng thái chuẩn cho đơn nội bộ — seed P0.',
+            'name' => 'Trạng thái hồ sơ mặc định',
+            'description' => 'Các trạng thái một hồ sơ có thể đi qua.',
             'is_system' => true,
             'created_at' => $now,
             'updated_at' => $now,

@@ -64,7 +64,17 @@ const stepForm = ref({
 });
 
 const workflowId = computed(() => Number(route.params.id));
-const statusCodes = computed(() => item.value?.status_codes ?? []);
+const statusOptions = computed(() => {
+  const list = item.value?.statuses;
+  if (Array.isArray(list) && list.length) {
+    return list;
+  }
+  return (item.value?.status_codes ?? []).map((code) => ({ code, label: code }));
+});
+
+function statusLabel(code) {
+  return statusOptions.value.find((s) => s.code === code)?.label || code;
+}
 
 async function load() {
   if (!workflowId.value) return;
@@ -134,7 +144,7 @@ async function saveForms() {
       })),
     });
     workflowForms.value = item.value.forms || [];
-    showClientToast('Đã lưu phiếu gắn quy trình.', 'success');
+    showClientToast('Đã lưu phiếu của quy trình.', 'success');
   } catch (err) {
     showClientToast(err.response?.data?.message || 'Không lưu phiếu.', 'error');
   } finally {
@@ -211,7 +221,7 @@ async function saveSteps() {
   try {
     item.value = await updateWorkflow(workflowId.value, { steps: steps.value });
     steps.value = item.value.steps || [];
-    showClientToast('Đã lưu ma trận bước duyệt.', 'success');
+    showClientToast('Đã lưu các bước duyệt.', 'success');
   } catch (err) {
     showClientToast(err.response?.data?.message || 'Không lưu bước.', 'error');
   } finally {
@@ -241,11 +251,6 @@ function stepTypeLabel(t) {
   <div v-else-if="loading" class="dt-config-deny">Đang tải…</div>
 
   <div v-else-if="item" class="dt-editor">
-    <div class="dt-wf-head">
-      <DonTuStatusBadge code="PENDING_HANDLING" label="Preview luồng" compact />
-      <p class="dt-wf-head__code">Mã quy trình: <code>{{ item.code }}</code></p>
-    </div>
-
     <nav class="dt-editor__tabs">
       <button type="button" :class="{ 'dt-editor__tab--on': tab === 'meta' }" @click="tab = 'meta'">
         Thông tin
@@ -260,29 +265,29 @@ function stepTypeLabel(t) {
 
     <section v-show="tab === 'meta'" class="dt-editor__panel">
       <div class="dt-modal__grid">
-        <label class="dt-field dt-field--span2">
-          <span>Tên quy trình</span>
-          <input v-model="meta.name" type="text" />
+        <label class="dt-field">
+          <span>Tên quy trình<span class="dt-req" aria-hidden="true">*</span></span>
+          <input v-model="meta.name" type="text" required placeholder="Ví dụ: Duyệt đơn nghỉ phép" />
         </label>
         <label class="dt-field">
-          <span>Người được nộp</span>
-          <select v-model="meta.initiator_policy">
-            <option value="staff">Cán bộ nội bộ</option>
+          <span>Ai được nộp<span class="dt-req" aria-hidden="true">*</span></span>
+          <select v-model="meta.initiator_policy" required>
+            <option value="staff">Cán bộ trong trường</option>
             <option value="parent">Phụ huynh</option>
-            <option value="both">Cả hai</option>
+            <option value="both">Cả cán bộ và phụ huynh</option>
           </select>
         </label>
         <label class="dt-field dt-field--check">
           <input v-model="meta.is_active" type="checkbox" />
-          <span>Quy trình đang bật (hiện trên cổng nộp đơn)</span>
+          <span>Đang cho nộp đơn</span>
         </label>
         <label class="dt-field dt-field--span2">
-          <span>Mô tả</span>
-          <textarea v-model="meta.description" rows="2" />
+          <span>Ghi chú</span>
+          <textarea v-model="meta.description" rows="2" placeholder="Ghi ngắn quy trình này dùng khi nào" />
         </label>
         <label class="dt-field dt-field--check">
           <input v-model="meta.is_financial" type="checkbox" />
-          <span>Có bước chi trả / kế toán</span>
+          <span>Có bước chi tiền</span>
         </label>
       </div>
       <button type="button" class="dt-btn-primary" :disabled="saving" @click="saveMeta">Lưu thông tin</button>
@@ -292,18 +297,19 @@ function stepTypeLabel(t) {
       <button type="button" class="dt-admin-list__primary" @click="addFormRow">Thêm phiếu</button>
       <div v-for="(row, idx) in workflowForms" :key="idx" class="dt-wf-form-row">
         <label class="dt-field">
-          <span>form_key</span>
-          <input v-model="row.form_key" type="text" />
+          <span>Mã phiếu<span class="dt-req" aria-hidden="true">*</span></span>
+          <input v-model="row.form_key" type="text" required placeholder="Ví dụ: phieu_chinh" />
         </label>
         <label class="dt-field dt-field--grow">
-          <span>Mẫu biểu</span>
-          <select v-model="row.form_template_id">
+          <span>Mẫu biểu<span class="dt-req" aria-hidden="true">*</span></span>
+          <select v-model="row.form_template_id" required>
+            <option disabled value="">Chọn mẫu biểu</option>
             <option v-for="f in formCatalog" :key="f.id" :value="f.id">{{ f.name }}</option>
           </select>
         </label>
         <label class="dt-field dt-field--check">
           <input v-model="row.is_start" type="checkbox" />
-          <span>Phiếu khởi tạo</span>
+          <span>Phiếu điền đầu tiên</span>
         </label>
       </div>
       <button type="button" class="dt-btn-primary" :disabled="saving" @click="saveForms">Lưu phiếu</button>
@@ -311,7 +317,6 @@ function stepTypeLabel(t) {
 
     <section v-show="tab === 'steps'" class="dt-editor__panel">
       <div class="dt-editor__panel-head">
-        <p>Mỗi bước gắn <code>status_group_code</code> trong bộ trạng thái của quy trình.</p>
         <button type="button" class="dt-admin-list__primary" @click="openStepDialog(-1)">Thêm bước</button>
       </div>
       <ol v-if="steps.length" class="dt-step-list">
@@ -320,7 +325,7 @@ function stepTypeLabel(t) {
           <div class="dt-step-card__body">
             <strong>{{ st.name }}</strong>
             <span class="dt-pill dt-pill--muted">{{ stepTypeLabel(st.step_type) }}</span>
-            <DonTuStatusBadge compact :code="st.status_group_code" :label="st.status_group_code" />
+            <DonTuStatusBadge compact :code="st.status_group_code" :label="statusLabel(st.status_group_code)" />
           </div>
           <div class="dt-field-row__actions">
             <button type="button" @click="moveStep(idx, -1)">↑</button>
@@ -343,35 +348,35 @@ function stepTypeLabel(t) {
             </button>
           </header>
           <div class="dt-modal__body dt-modal__grid">
-            <label class="dt-field dt-field--span2">
-              <span>Tên bước</span>
-              <input v-model="stepForm.name" type="text" />
+            <label class="dt-field">
+              <span>Tên bước<span class="dt-req" aria-hidden="true">*</span></span>
+              <input v-model="stepForm.name" type="text" required placeholder="Ví dụ: Trưởng phòng duyệt" />
             </label>
             <label class="dt-field">
-              <span>Loại bước</span>
-              <select v-model="stepForm.step_type">
+              <span>Việc cần làm<span class="dt-req" aria-hidden="true">*</span></span>
+              <select v-model="stepForm.step_type" required>
                 <option v-for="opt in STEP_TYPES" :key="opt.value" :value="opt.value">
                   {{ opt.label }}
                 </option>
               </select>
             </label>
             <label class="dt-field">
-              <span>Nhóm trạng thái</span>
-              <select v-model="stepForm.status_group_code">
-                <option v-for="code in statusCodes" :key="code" :value="code">{{ code }}</option>
+              <span>Trạng thái hồ sơ<span class="dt-req" aria-hidden="true">*</span></span>
+              <select v-model="stepForm.status_group_code" required>
+                <option v-for="st in statusOptions" :key="st.code" :value="st.code">{{ st.label }}</option>
               </select>
             </label>
             <label class="dt-field">
-              <span>Vai trò xử lý</span>
-              <input v-model="stepForm.assignee_role" type="text" />
+              <span>Người xử lý<span class="dt-req" aria-hidden="true">*</span></span>
+              <input v-model="stepForm.assignee_role" type="text" required placeholder="Ví dụ: trưởng phòng" />
             </label>
             <label class="dt-field">
-              <span>SLA (giờ)</span>
-              <input v-model="stepForm.sla_hours" type="number" min="0" />
+              <span>Hạn xử lý (giờ)</span>
+              <input v-model="stepForm.sla_hours" type="number" min="0" placeholder="Ví dụ: 24" />
             </label>
-            <label class="dt-field dt-field--span2">
-              <span>Phiếu áp dụng (form_key, cách nhau dấu phẩy)</span>
-              <input v-model="stepForm.target_form_keys" type="text" placeholder="form_1" />
+            <label class="dt-field">
+              <span>Phiếu dùng ở bước này</span>
+              <input v-model="stepForm.target_form_keys" type="text" placeholder="Ví dụ: phieu_chinh" />
             </label>
             <label class="dt-field dt-field--check">
               <input v-model="stepForm.allow_reject" type="checkbox" />
@@ -407,31 +412,18 @@ function stepTypeLabel(t) {
   width: min(52rem, calc(100vw - 2.5rem));
 }
 
-.dt-wf-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-info) 8%, var(--color-surface));
-}
-
-.dt-wf-head__code {
-  margin: 0;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-}
-
 .dt-wf-form-row {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
   align-items: flex-end;
-  margin: var(--space-4) 0;
+  margin: var(--space-3) 0;
   padding: var(--space-3);
-  background: var(--color-surface-muted);
+  background: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)),
+    color-mix(in srgb, var(--color-info) 6%, var(--color-surface))
+  );
   border-radius: var(--radius-sm);
 }
 
@@ -453,7 +445,11 @@ function stepTypeLabel(t) {
   margin-bottom: var(--space-2);
   padding: var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+  background: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)),
+    color-mix(in srgb, var(--color-info) 6%, var(--color-surface))
+  );
 }
 
 .dt-step-card__order {
@@ -465,7 +461,11 @@ function stepTypeLabel(t) {
   border-radius: 999px;
   font-weight: 700;
   font-size: 0.8125rem;
-  background: var(--color-primary);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #fff 22%, var(--color-primary)),
+    var(--color-primary-800)
+  );
   color: #fff;
 }
 
@@ -502,9 +502,14 @@ function stepTypeLabel(t) {
 }
 
 .dt-editor__panel {
-  padding: var(--space-5);
+  padding: var(--space-4);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)) 0%,
+    var(--color-surface) 46%,
+    color-mix(in srgb, var(--color-info) 7%, var(--color-surface)) 100%
+  );
   box-shadow: var(--shadow-sm);
 }
 

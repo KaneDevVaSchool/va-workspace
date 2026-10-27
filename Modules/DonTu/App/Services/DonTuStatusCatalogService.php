@@ -10,7 +10,7 @@ class DonTuStatusCatalogService
     public function listSets(): Collection
     {
         return DonTuStatusSet::query()
-            ->withCount('statuses')
+            ->withCount(['statuses', 'workflows'])
             ->orderByDesc('is_system')
             ->orderBy('name')
             ->get()
@@ -20,7 +20,12 @@ class DonTuStatusCatalogService
     public function findSet(int $id): ?array
     {
         $set = DonTuStatusSet::query()
-            ->with(['statuses', 'transitions'])
+            ->withCount('workflows')
+            ->with([
+                'statuses',
+                'transitions',
+                'workflows' => fn ($q) => $q->select('id', 'status_set_id', 'code', 'name', 'is_active')->orderBy('name'),
+            ])
             ->find($id);
 
         if ($set === null) {
@@ -53,6 +58,7 @@ class DonTuStatusCatalogService
             'description' => $set->description,
             'is_system' => $set->is_system,
             'status_count' => $set->statuses_count ?? $set->statuses()->count(),
+            'workflow_count' => $set->workflows_count ?? $set->workflows()->count(),
         ];
     }
 
@@ -75,6 +81,12 @@ class DonTuStatusCatalogService
                 'action_key' => $t->action_key,
                 'actor_policy' => $t->actor_policy,
                 'guard_json' => $t->guard_json,
+            ])->values()->all(),
+            'workflows' => $set->workflows->map(fn ($w) => [
+                'id' => $w->id,
+                'code' => $w->code,
+                'name' => $w->name,
+                'is_active' => $w->is_active,
             ])->values()->all(),
         ];
     }

@@ -97,6 +97,13 @@ class DonTuWorkflowService
                 'allow_request_changes' => $s->allow_request_changes,
                 'blocks_cancel' => $s->blocks_cancel,
             ])->values()->all(),
+            'statuses' => $workflow->statusSet?->statuses
+                ?->map(fn ($s) => [
+                    'code' => $s->code,
+                    'label' => $s->label,
+                ])
+                ->values()
+                ->all() ?? [],
             'status_codes' => $workflow->statusSet?->statuses
                 ?->pluck('code')
                 ->values()
@@ -108,7 +115,7 @@ class DonTuWorkflowService
     {
         $setId = (int) ($data['status_set_id'] ?? 0);
         if (! DonTuStatusSet::query()->whereKey($setId)->exists()) {
-            throw ValidationException::withMessages(['status_set_id' => 'Bộ trạng thái không hợp lệ.']);
+            throw ValidationException::withMessages(['status_set_id' => 'Nhóm trạng thái hồ sơ không hợp lệ.']);
         }
 
         $code = $this->normalizeCode($data['code'] ?? $data['name'] ?? 'QT');
@@ -172,7 +179,7 @@ class DonTuWorkflowService
             }
             $key = $row['form_key'] ?? '';
             if ($key === '') {
-                throw ValidationException::withMessages(['forms' => 'Thiếu form_key.']);
+                throw ValidationException::withMessages(['forms' => 'Thiếu mã phiếu.']);
             }
             $normalized[] = [
                 'form_template_id' => $templateId,
@@ -205,12 +212,12 @@ class DonTuWorkflowService
             $order++;
             $stepType = $row['step_type'] ?? 'approve';
             if (! in_array($stepType, self::STEP_TYPES, true)) {
-                throw ValidationException::withMessages(['steps' => "Loại bước không hỗ trợ: {$stepType}"]);
+                throw ValidationException::withMessages(['steps' => 'Việc cần làm ở bước này không đúng.']);
             }
             $group = $row['status_group_code'] ?? '';
             if ($group !== '' && $codes !== [] && ! in_array($group, $codes, true)) {
                 throw ValidationException::withMessages([
-                    'steps' => "Mã trạng thái «{$group}» không thuộc bộ của quy trình.",
+                    'steps' => 'Trạng thái của bước không thuộc nhóm đang dùng.',
                 ]);
             }
 
