@@ -95,6 +95,22 @@ function sortConversations(list) {
   });
 }
 
+let outboxFlushing = false;
+
+function outboxMatchesMessage(item, message, conversationId) {
+  if (!item || item.status !== 'sending' || item.conversationId !== conversationId || !message) return false;
+  const senderId = message.sender?.id;
+  if (item.senderId && senderId && Number(item.senderId) !== Number(senderId)) return false;
+  const created = new Date(message.created_at).getTime();
+  if (!Number.isNaN(created) && item.startedAt && created < item.startedAt - 2000) return false;
+  if (item.kind === 'sticker') {
+    return message.message_type === 'sticker' && message.sticker_id === item.stickerId;
+  }
+  const text = (message.message || '').trim();
+  if (item.text) return text === item.text;
+  return (message.attachments ?? []).length > 0 && item.fileCount > 0;
+}
+
 export const useChatStore = defineStore('chat', {
   state: () => ({
     conversations: [],
@@ -104,6 +120,7 @@ export const useChatStore = defineStore('chat', {
     panelOpen: false,
     activeView: 'list',
     unreadTotal: 0,
+    outbox: [],
     loadingConversations: false,
     loadingMessages: false,
     subscribedChannels: new Set(),
@@ -181,6 +198,9 @@ export const useChatStore = defineStore('chat', {
         conversation.unread_count = 0;
       }
       this.recomputeUnreadTotal();
+      this.outbox
+        .filter((item) => item.conversationId === conversationId && item.status !== 'sending')
+        .forEach((item) => this.removeOutbox(item.localId));
     },
 
     async disbandGroup(conversationId) {
@@ -372,6 +392,60 @@ export const useChatStore = defineStore('chat', {
       return message;
     },
 
+    enqueueOutbox(item) {
+      this.outbox = [...this.outbox, { ...item, status: 'queued' }];
+      void this.flushOutbox();
+    },
+
+    patchOutbox(localId, patch) {
+      this.outbox = this.outbox.map((item) => (item.localId === localId ? { ...item, ...patch } : item));
+    },
+
+    removeOutbox(localId) {
+      const item = this.outbox.find((row) => row.localId === localId);
+      for (const url of item?.previews ?? []) {
+        if (url) URL.revokeObjectURL(url);
+      }
+      this.outbox = this.outbox.filter((row) => row.localId !== localId);
+    },
+
+    retryOutbox(localId) {
+      const item = this.outbox.find((row) => row.localId === localId);
+      if (!item || item.status !== 'failed') return;
+      this.patchOutbox(localId, { status: 'queued', error: '' });
+      void this.flushOutbox();
+    },
+
+    settleOutbox(conversationId, message) {
+      const item = this.outbox.find((row) => outboxMatchesMessage(row, message, conversationId));
+      if (item) this.removeOutbox(item.localId);
+    },
+
+    async flushOutbox() {
+      if (outboxFlushing) return;
+      outboxFlushing = true;
+      try {
+        for (;;) {
+          const item = this.outbox.find((row) => row.status === 'queued');
+          if (!item) break;
+          this.patchOutbox(item.localId, { status: 'sending' });
+          try {
+            await this.sendMessage(item.conversationId, item.payload);
+            this.removeOutbox(item.localId);
+          } catch (error) {
+            const still = this.outbox.some((row) => row.localId === item.localId);
+            if (!still) continue;
+            const message = error?.response?.data?.message || 'Không gửi được tin nhắn.';
+            this.patchOutbox(item.localId, { status: 'failed', error: message });
+            showClientToast('error', message);
+          }
+        }
+      } finally {
+        outboxFlushing = false;
+        if (this.outbox.some((row) => row.status === 'queued')) void this.flushOutbox();
+      }
+    },
+
     async editMessage(conversationId, messageId, text) {
       const message = await apiEditMessage(conversationId, messageId, text);
       this.replaceMessage(conversationId, message);
@@ -391,12 +465,16 @@ export const useChatStore = defineStore('chat', {
 
     appendMessage(conversationId, message) {
       const existing = this.messagesByConversation[conversationId] ?? [];
-      if (existing.some((m) => m.id === message.id)) return;
+      if (existing.some((m) => m.id === message.id)) {
+        this.settleOutbox(conversationId, message);
+        return;
+      }
       this.messagesByConversation = {
         ...this.messagesByConversation,
         [conversationId]: [...existing, message],
       };
       this.syncLastMessage(conversationId, message, true);
+      this.settleOutbox(conversationId, message);
     },
 
     replaceMessage(conversationId, message) {

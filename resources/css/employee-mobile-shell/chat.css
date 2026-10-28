@@ -228,7 +228,8 @@
   .chat-draft-files-enter-active,
   .chat-draft-files-leave-active,
   .chat-view,
-  .chat-list {
+  .chat-list,
+  .chat-skeleton__bubble {
     animation: none;
     transition: none;
   }

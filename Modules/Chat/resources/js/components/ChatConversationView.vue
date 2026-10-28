@@ -32,8 +32,6 @@ import { useChatStore } from '../store/chatStore';
 const store = useChatStore();
 const auth = useAuthStore();
 
-/** Tạm tắt ghi âm — bật lại khi có UI/flow ổn định trên mobile. */
-const VOICE_RECORDING_ENABLED = false;
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -44,10 +42,6 @@ const cameraInput = ref(null);
 const photoInput = ref(null);
 const lightbox = ref(null);
 const sending = ref(false);
-/** Xem trước tin đang gửi (bubble pending trước khi API trả về). */
-const pendingOutgoing = ref(null);
-/** Mốc bắt đầu gửi — ẩn pending khi tin thật đã vào list (thường qua WebSocket trước HTTP). */
-const outgoingStartedAt = ref(0);
 const listRef = ref(null);
 const inputRef = ref(null);
 const pickerOpen = ref(false);
@@ -65,7 +59,6 @@ const searchOpen = ref(false);
 const searchQuery = ref('');
 const searchHits = ref([]);
 const readersFor = ref(null);
-const recording = ref(false);
 const mentionIds = ref([]);
 const reactionPicker = ref(null);
 /** PWA: không gắn cảm xúc trên menu; đè giữ bong bóng thì thanh mới hiện đè lên tin. */
@@ -83,9 +76,7 @@ const mentionActive = ref(0);
 const mentionDismissed = ref(false);
 let typingSentAt = 0;
 let typingStopTimer = null;
-let voiceRecorder = null;
-let voiceChunks = [];
-let voiceStarted = 0;
+let localOutboxSeq = 0;
 
 const otherUser = computed(() => store.activeConversation?.other_user ?? null);
 const peerMetaLine = computed(() => formatPeerMeta(otherUser.value));
@@ -140,39 +131,15 @@ const typingLabel = computed(() => {
   return `${names[0]} và ${names.length - 1} người đang nhập…`;
 });
 let viewingTimer = null;
-const canSend = computed(() => !sending.value && (draft.value.trim() !== '' || (!editing.value && files.value.length > 0)));
-
-function messageMatchesPending(message, pending) {
-  if (!message || !pending || !isMine(message)) return false;
-  if (pending.kind === 'sticker') {
-    return message.message_type === 'sticker' && message.sticker_id === pending.stickerId;
-  }
-  if (pending.kind === 'message') {
-    const text = (message.message || '').trim();
-    if (pending.text && message.message_type === 'text') {
-      return text === pending.text.trim();
-    }
-  }
-  return false;
-}
-
-function pendingSupersededByLastMessage(pending) {
-  const last = store.activeMessages.at(-1);
-  if (!last || !isMine(last)) return false;
-  const created = new Date(last.created_at).getTime();
-  if (Number.isNaN(created) || outgoingStartedAt.value <= 0) return false;
-  if (created < outgoingStartedAt.value - 2000) return false;
-  if (messageMatchesPending(last, pending)) return true;
-  if (pending.kind === 'message' && !pending.text && pending.fileCount > 0) return true;
-  return false;
-}
-
-const showPendingOutgoing = computed(() => {
-  const pending = pendingOutgoing.value;
-  if (!pending || pending.kind === 'edit') return false;
-  if (pending.kind !== 'message' && pending.kind !== 'sticker') return false;
-  return !pendingSupersededByLastMessage(pending);
+const canSend = computed(() => {
+  if (sending.value) return false;
+  if (editing.value) return draft.value.trim() !== '';
+  return draft.value.trim() !== '' || files.value.length > 0;
 });
+const activeOutbox = computed(() => (
+  store.outbox.filter((item) => item.conversationId === store.activeConversationId)
+));
+const unseenBelow = ref(0);
 
 const headerMenu = ref(null);
 const confirmCopy = computed(() => {
@@ -364,12 +331,18 @@ watch(
     noteFreshBubbles(prepended);
     if (editing.value || prepended) return;
     if (switched || previous == null) {
+      unseenBelow.value = 0;
       scrollToBottom(false);
       return;
     }
-    if (stickToBottom.value && nextCount > previousCount) {
+    if (nextCount > previousCount && stickToBottom.value) {
+      unseenBelow.value = 0;
       const gap = listRef.value ? distanceFromBottom(listRef.value) : 0;
       scrollToBottom(gap > 0 && gap < 520);
+      return;
+    }
+    if (nextCount > previousCount) {
+      unseenBelow.value += nextCount - previousCount;
     }
   },
 );
@@ -379,9 +352,18 @@ watch(typingLabel, (label) => {
   scrollToBottom(true);
 });
 
-watch(showPendingOutgoing, (visible) => {
-  if (visible) scrollToBottom(true);
-});
+watch(
+  () => activeOutbox.value.length,
+  (length, previous) => {
+    if (length > (previous ?? 0) && stickToBottom.value) scrollToBottom(true);
+  },
+);
+
+function jumpToLatest() {
+  unseenBelow.value = 0;
+  stickToBottom.value = true;
+  scrollToBottom(true);
+}
 
 watch(
   () => store.activeConversationId,
@@ -393,6 +375,7 @@ watch(
     }
     draft.value = '';
     clearDraftFiles();
+    unseenBelow.value = 0;
     lightbox.value = null;
     replyTo.value = null;
     editing.value = null;
@@ -415,6 +398,7 @@ function onScroll() {
   const el = listRef.value;
   if (el && !programmaticScroll) {
     stickToBottom.value = distanceFromBottom(el) < 96;
+    if (stickToBottom.value) unseenBelow.value = 0;
   }
   if (el && el.scrollTop < 40) loadOlder();
 }
@@ -832,52 +816,6 @@ function openSearch() {
   searchQuery.value = '';
 }
 
-async function startVoice(event) {
-  event.preventDefault();
-  if (recording.value || sending.value || editing.value) return;
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
-    voiceRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-    voiceChunks = [];
-    voiceRecorder.ondataavailable = (item) => {
-      if (item.data?.size) voiceChunks.push(item.data);
-    };
-    voiceRecorder.onstop = () => finishVoice();
-    voiceStarted = Date.now();
-    voiceRecorder.start();
-    recording.value = true;
-  } catch {
-    showClientToast('error', 'Không dùng được micro trên thiết bị này.');
-  }
-}
-
-function stopVoice() {
-  if (!voiceRecorder || voiceRecorder.state === 'inactive') return;
-  voiceRecorder.stream?.getTracks().forEach((track) => track.stop());
-  voiceRecorder.stop();
-  recording.value = false;
-}
-
-async function finishVoice() {
-  const duration = Math.round((Date.now() - voiceStarted) / 1000);
-  if (duration < 1 || voiceChunks.length === 0) return;
-  const type = voiceRecorder?.mimeType || 'audio/webm';
-  const file = new File(voiceChunks, 'thoai.webm', { type });
-  sending.value = true;
-  try {
-    await store.sendMessage(store.activeConversationId, {
-      message_type: 'voice',
-      voice_duration: Math.min(180, Math.max(1, duration)),
-      files: [file],
-    });
-  } catch (error) {
-    showClientToast('error', error?.response?.data?.message || 'Không gửi được tin nhắn thoại.');
-  } finally {
-    sending.value = false;
-  }
-}
-
 async function castVote(message, option) {
   await store.votePoll(store.activeConversationId, message.id, option.id).catch((error) => {
     showClientToast('error', error?.response?.data?.message || 'Không gửi được phiếu.');
@@ -1026,121 +964,88 @@ function openImage(file) {
   lightbox.value = { url: file.url, name: file.name || 'Ảnh' };
 }
 
-let stickerSendSeq = 0;
-
-function sendSticker(sticker) {
-  if (editing.value) return;
+function queueOutgoing({ kind, text = '', outgoingFiles = [], previews = [], replyId = null, mentionIdsForSend = [], stickerId = null }) {
   const conversationId = store.activeConversationId;
   if (!conversationId) return;
-
-  const seq = ++stickerSendSeq;
-  outgoingStartedAt.value = Date.now();
-  pendingOutgoing.value = { kind: 'sticker', emoji: sticker.emoji, stickerId: sticker.id };
-
-  void store
-    .sendMessage(conversationId, {
-      message: sticker.emoji,
-      message_type: 'sticker',
-      sticker_id: sticker.id,
-      reply_to_id: replyTo.value?.id ?? null,
-    })
-    .then(() => {
-      replyTo.value = null;
-      nextTick(() => scrollToBottom(true));
-    })
-    .catch((error) => {
-      showClientToast('error', error?.response?.data?.message ?? 'Không gửi được sticker.');
-    })
-    .finally(() => {
-      if (stickerSendSeq === seq) {
-        pendingOutgoing.value = null;
-      }
-    });
+  localOutboxSeq += 1;
+  const payload = {
+    message: text,
+    reply_to_id: replyId,
+  };
+  if (kind === 'sticker') {
+    payload.message_type = 'sticker';
+    payload.sticker_id = stickerId;
+  }
+  if (mentionIdsForSend.length > 0) payload.mention_ids = mentionIdsForSend;
+  if (outgoingFiles.length > 0) payload.files = outgoingFiles;
+  store.enqueueOutbox({
+    localId: `out-${Date.now()}-${localOutboxSeq}`,
+    conversationId,
+    senderId: auth.user?.id ?? null,
+    kind,
+    text,
+    fileCount: outgoingFiles.length,
+    stickerId,
+    previews,
+    startedAt: Date.now(),
+    payload,
+  });
+  stickToBottom.value = true;
+  unseenBelow.value = 0;
+  nextTick(() => scrollToBottom(true));
 }
 
-function composerUntouched() {
-  return draft.value.trim() === '' && files.value.length === 0 && !replyTo.value;
+function sendSticker(sticker) {
+  if (editing.value || sending.value) return;
+  const conversationId = store.activeConversationId;
+  if (!conversationId) return;
+  const replyId = replyTo.value?.id ?? null;
+  replyTo.value = null;
+  queueOutgoing({
+    kind: 'sticker',
+    text: sticker.emoji,
+    replyId,
+    stickerId: sticker.id,
+  });
 }
 
-async function send() {
+function send() {
   const text = draft.value.trim();
-  if (sending.value) return;
+  if (sending.value || !store.activeConversationId) return;
   if (text === '' && (editing.value || files.value.length === 0)) return;
 
   if (editing.value) {
-    pendingOutgoing.value = { kind: 'edit' };
     sending.value = true;
-    try {
-      await store.editMessage(store.activeConversationId, editing.value.id, text);
-      editing.value = null;
-      draft.value = '';
-    } catch (error) {
-      showClientToast('error', error?.response?.data?.message ?? 'Không gửi được tin nhắn.');
-    } finally {
-      sending.value = false;
-      pendingOutgoing.value = null;
-    }
+    store.editMessage(store.activeConversationId, editing.value.id, text)
+      .then(() => {
+        editing.value = null;
+        draft.value = '';
+      })
+      .catch((error) => {
+        showClientToast('error', error?.response?.data?.message ?? 'Không gửi được tin nhắn.');
+      })
+      .finally(() => {
+        sending.value = false;
+      });
     return;
   }
 
-  const outgoing = files.value.map((item) => item.file);
-  const sentPreviews = files.value.map((item) => item.previewUrl).filter(Boolean);
-  const snapshot = {
-    draft: draft.value,
-    files: files.value.slice(),
-    mentions: mentionIds.value.slice(),
-    reply: replyTo.value,
-  };
+  const outgoingFiles = files.value.map((item) => item.file);
+  const previews = files.value.map((item) => item.previewUrl).filter(Boolean);
   const mentionIdsForSend = mentionIds.value.filter((id) => text.includes(memberName(id)));
   const replyId = replyTo.value?.id ?? null;
-
-  outgoingStartedAt.value = Date.now();
-  pendingOutgoing.value = {
-    kind: 'message',
-    text,
-    fileCount: outgoing.length,
-    hasImages: outgoing.some((file) => file.type.startsWith('image/')),
-    previews: sentPreviews,
-  };
   draft.value = '';
   files.value = [];
   mentionIds.value = [];
   replyTo.value = null;
-  sending.value = true;
-  stickToBottom.value = true;
-  nextTick(() => scrollToBottom(true));
-
-  let delivered = false;
-  try {
-    await store.sendMessage(store.activeConversationId, {
-      message: text,
-      reply_to_id: replyId,
-      files: outgoing,
-      mention_ids: mentionIdsForSend,
-    });
-    delivered = true;
-  } catch (error) {
-    showClientToast('error', error?.response?.data?.message ?? 'Không gửi được tin nhắn.');
-    pendingOutgoing.value = null;
-    if (composerUntouched()) {
-      draft.value = snapshot.draft;
-      files.value = snapshot.files;
-      mentionIds.value = snapshot.mentions;
-      replyTo.value = snapshot.reply;
-    } else {
-      for (const item of snapshot.files) {
-        if (!files.value.includes(item)) revokePreview(item);
-      }
-    }
-  } finally {
-    sending.value = false;
-    pendingOutgoing.value = null;
-    if (delivered) {
-      nextTick(() => {
-        for (const url of sentPreviews) URL.revokeObjectURL(url);
-      });
-    }
-  }
+  queueOutgoing({
+    kind: 'message',
+    text,
+    outgoingFiles,
+    previews,
+    replyId,
+    mentionIdsForSend,
+  });
 }
 
 async function confirmAction() {
@@ -1444,9 +1349,18 @@ function menuItems(message) {
       </div>
     </form>
 
-    <div ref="listRef" class="chat-view__messages" @scroll="onScroll">
-      <p v-if="store.loadingMessages && store.activeMessages.length === 0" class="chat-view__empty">Đang tải tin nhắn…</p>
-      <p v-else-if="store.activeMessages.length === 0" class="chat-view__empty">
+    <div ref="listRef" class="chat-view__messages" :aria-busy="store.loadingMessages && store.activeMessages.length === 0" @scroll="onScroll">
+      <div
+        v-if="store.loadingMessages && store.activeMessages.length === 0"
+        class="chat-skeleton"
+        aria-label="Đang tải tin nhắn"
+      >
+        <span class="chat-skeleton__row"><span class="chat-skeleton__bubble" /></span>
+        <span class="chat-skeleton__row chat-skeleton__row--mine"><span class="chat-skeleton__bubble chat-skeleton__bubble--short" /></span>
+        <span class="chat-skeleton__row"><span class="chat-skeleton__bubble chat-skeleton__bubble--long" /></span>
+        <span class="chat-skeleton__row chat-skeleton__row--mine"><span class="chat-skeleton__bubble" /></span>
+      </div>
+      <p v-else-if="store.activeMessages.length === 0 && activeOutbox.length === 0" class="chat-view__empty">
         Chưa có tin nhắn. Hãy gửi lời chào, emoji hoặc sticker.
       </p>
       <template v-for="row in timeline" :key="row.kind === 'day' ? row.id : row.message.id">
@@ -1636,62 +1550,49 @@ function menuItems(message) {
         </div>
       </template>
 
-      <Transition name="chat-pending">
       <div
-        v-if="showPendingOutgoing"
+        v-for="item in activeOutbox"
+        :key="item.localId"
         class="chat-bubble-row chat-bubble-row--mine chat-bubble-row--pending"
-        aria-live="polite"
       >
         <div class="chat-message-col">
-        <div
-          class="chat-bubble chat-bubble--mine chat-bubble--pending"
-          :class="{ 'chat-bubble--sticker': pendingOutgoing.kind === 'sticker' }"
-        >
-          <span
-            v-if="pendingOutgoing.kind === 'sticker' && pendingOutgoing.stickerId"
-            class="chat-sticker"
-          >
-            <SocialAnimatedSticker
-              :id="pendingOutgoing.stickerId"
-              :emoji="pendingOutgoing.emoji || ''"
-            />
-          </span>
-          <span v-else-if="pendingOutgoing.text" class="chat-bubble__text">{{ pendingOutgoing.text }}</span>
           <div
-            v-if="pendingOutgoing.previews?.length"
-            class="chat-images"
-            :class="{ 'chat-images--single': pendingOutgoing.previews.length === 1 }"
+            class="chat-bubble chat-bubble--mine"
+            :class="{
+              'chat-bubble--pending': item.status !== 'failed',
+              'chat-bubble--failed': item.status === 'failed',
+              'chat-bubble--sticker': item.kind === 'sticker',
+            }"
           >
-            <span v-for="url in pendingOutgoing.previews" :key="url" class="chat-images__link">
-              <img :src="url" alt="Ảnh đang gửi" />
+            <span v-if="item.kind === 'sticker' && item.stickerId" class="chat-sticker">
+              <SocialAnimatedSticker :id="item.stickerId" :emoji="item.text || ''" />
+            </span>
+            <span v-else-if="item.text" class="chat-bubble__text">{{ item.text }}</span>
+            <div
+              v-if="item.previews?.length"
+              class="chat-images"
+              :class="{ 'chat-images--single': item.previews.length === 1 }"
+            >
+              <span v-for="url in item.previews" :key="url" class="chat-images__link">
+                <img :src="url" alt="Ảnh đang gửi" />
+              </span>
+            </div>
+            <span v-else-if="item.fileCount > 0" class="chat-bubble__pending-files">
+              {{ item.fileCount > 1 ? `${item.fileCount} tệp đính kèm` : 'Tệp đính kèm' }}
+            </span>
+            <span class="chat-bubble__meta">
+              <span v-if="item.status === 'failed'" class="chat-bubble__failed">
+                <button type="button" @click="store.retryOutbox(item.localId)">Gửi lại</button>
+                <button type="button" @click="store.removeOutbox(item.localId)">Xoá</button>
+              </span>
+              <span v-else class="chat-bubble__sending">
+                <span class="chat-typing chat-typing--meta" aria-hidden="true"><span /><span /><span /></span>
+                Đang gửi
+              </span>
             </span>
           </div>
-          <span
-            v-if="pendingOutgoing.kind === 'message' && pendingOutgoing.fileCount > 0 && !pendingOutgoing.previews?.length"
-            class="chat-bubble__pending-files"
-          >
-            {{
-              pendingOutgoing.fileCount > 1
-                ? `${pendingOutgoing.fileCount} tệp đính kèm`
-                : pendingOutgoing.hasImages
-                  ? 'Ảnh'
-                  : 'Tệp đính kèm'
-            }}
-          </span>
-          <span class="chat-bubble__meta">
-            <span class="chat-bubble__sending">
-              <span class="chat-typing chat-typing--meta" aria-hidden="true"><span /><span /><span /></span>
-              Đang gửi
-            </span>
-          </span>
-        </div>
-        <ChatLinkPreviewEmbed
-          v-if="pendingOutgoing.kind === 'message' && pendingOutgoing.text"
-          :text="pendingOutgoing.text"
-        />
         </div>
       </div>
-      </Transition>
 
       <Transition name="chat-typing-row">
         <div v-if="peerTyping" key="typing-row" class="chat-bubble-row chat-bubble-row--typing" aria-live="polite">
@@ -1703,6 +1604,14 @@ function menuItems(message) {
     </div>
 
     <div class="chat-dock" :class="{ 'chat-dock--picker': pickerOpen }">
+    <button
+      v-if="unseenBelow > 0"
+      type="button"
+      class="chat-jump"
+      @click="jumpToLatest"
+    >
+      {{ unseenBelow === 1 ? 'Tin mới' : `${unseenBelow} tin mới` }}
+    </button>
     <div
       v-if="mentionOpen"
       id="chat-mention-list"
@@ -1808,19 +1717,6 @@ function menuItems(message) {
           @click="pollOpen = true"
         >
           <AppIcon name="listChecks" :size="17" :stroke-width="1.75" />
-        </button>
-        <button
-          v-if="VOICE_RECORDING_ENABLED"
-          type="button"
-          class="chat-view__tool"
-          :class="{ 'chat-view__tool--on': recording }"
-          :disabled="Boolean(editing)"
-          aria-label="Giữ để ghi âm"
-          @pointerdown="startVoice"
-          @pointerup="stopVoice"
-          @pointerleave="recording && stopVoice()"
-        >
-          <AppIcon name="mic" :size="17" :stroke-width="1.75" />
         </button>
       </div>
       <input
@@ -2353,10 +2249,6 @@ function menuItems(message) {
   user-select: none;
 }
 
-.chat-bubble-row--pending {
-  pointer-events: none;
-}
-
 .chat-bubble--pending {
   opacity: 0.92;
   transition: opacity 220ms ease;
@@ -2368,6 +2260,79 @@ function menuItems(message) {
   gap: 0.25rem;
   font-style: italic;
   color: var(--color-primary);
+}
+
+.chat-bubble--failed {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
+}
+
+.chat-bubble__failed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.chat-bubble__failed button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--color-danger);
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-jump {
+  align-self: center;
+  margin: 0.35rem auto 0;
+  padding: 0.3rem 0.75rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-tertiary-900) 12%, transparent);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.4rem 0;
+}
+
+.chat-skeleton__row {
+  display: flex;
+}
+
+.chat-skeleton__row--mine {
+  justify-content: flex-end;
+}
+
+.chat-skeleton__bubble {
+  width: 46%;
+  height: 2.4rem;
+  border-radius: 14px;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-muted) 0%,
+    color-mix(in srgb, var(--color-primary) 10%, var(--color-surface-muted)) 50%,
+    var(--color-surface-muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: chat-shimmer 1.4s ease-in-out infinite;
+}
+
+.chat-skeleton__bubble--short {
+  width: 28%;
+}
+
+.chat-skeleton__bubble--long {
+  width: 62%;
 }
 
 .chat-bubble__pending-files {
