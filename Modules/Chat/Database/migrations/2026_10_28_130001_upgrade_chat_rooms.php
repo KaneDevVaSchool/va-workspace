@@ -7,6 +7,17 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    private function prefixedTable(string $table): string
+    {
+        return Schema::getConnection()->getTablePrefix().$table;
+    }
+
+    private function alterMessagesEnum(string $enumList): void
+    {
+        $table = $this->prefixedTable('messages');
+        DB::statement("ALTER TABLE `{$table}` MODIFY message_type ENUM({$enumList}) NOT NULL DEFAULT 'text'");
+    }
+
     public function up(): void
     {
         if (! Schema::hasTable('messages')) {
@@ -43,27 +54,25 @@ return new class extends Migration
             });
         }
 
-        Schema::table('messages', function (Blueprint $table) {
+        $addedExpiresAt = false;
+
+        Schema::table('messages', function (Blueprint $table) use (&$addedExpiresAt) {
             if (! Schema::hasColumn('messages', 'expires_at')) {
                 $table->timestamp('expires_at')->nullable()->after('recalled_at');
+                $addedExpiresAt = true;
             }
             if (! Schema::hasColumn('messages', 'voice_duration')) {
                 $table->unsignedSmallInteger('voice_duration')->nullable()->after('expires_at');
             }
         });
 
-        if (Schema::hasColumn('messages', 'expires_at')) {
-            $indexes = collect(DB::select('SHOW INDEX FROM messages'))
-                ->pluck('Key_name')
-                ->unique();
-            if (! $indexes->contains('messages_expires_at_index')) {
-                Schema::table('messages', function (Blueprint $table) {
-                    $table->index('expires_at');
-                });
-            }
+        if ($addedExpiresAt) {
+            Schema::table('messages', function (Blueprint $table) {
+                $table->index('expires_at');
+            });
         }
 
-        DB::statement("ALTER TABLE messages MODIFY message_type ENUM('text','image','file','system','voice','poll') NOT NULL DEFAULT 'text'");
+        $this->alterMessagesEnum("'text','image','file','system','voice','poll'");
 
         Schema::table('users', function (Blueprint $table) {
             if (! Schema::hasColumn('users', 'last_seen_at')) {
@@ -153,7 +162,7 @@ return new class extends Migration
         }
 
         if (Schema::hasTable('messages') && Schema::hasColumn('messages', 'message_type')) {
-            DB::statement("ALTER TABLE messages MODIFY message_type ENUM('text','image','file','system') NOT NULL DEFAULT 'text'");
+            $this->alterMessagesEnum("'text','image','file','system'");
         }
 
         if (Schema::hasTable('messages')) {
