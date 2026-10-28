@@ -148,6 +148,12 @@ export function listMedia(conversationId) {
     .then((r) => r.data.files);
 }
 
+export function reactToMessage(conversationId, messageId, emoji) {
+  return window.axios
+    .post(`/api/chat/conversations/${conversationId}/messages/${messageId}/reactions`, { emoji })
+    .then((r) => r.data.message);
+}
+
 export function votePoll(conversationId, messageId, optionId) {
   return window.axios
     .post(`/api/chat/conversations/${conversationId}/messages/${messageId}/vote`, { option_id: optionId })

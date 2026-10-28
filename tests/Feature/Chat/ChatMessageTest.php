@@ -322,6 +322,74 @@ class ChatMessageTest extends TestCase
         Storage::disk('public')->assertMissing($path);
     }
 
+    public function test_a_member_can_toggle_and_replace_a_reaction(): void
+    {
+        $sender = $this->makeUser('Mai');
+        $recipient = $this->makeUser('Bình');
+        $outsider = $this->makeUser('Cường');
+        $conversationId = $this->openConversation($sender, $recipient);
+        $messageId = $this->send($sender, $conversationId, 'Xin chào');
+
+        $this->actingAs($outsider)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages/{$messageId}/reactions", [
+                'emoji' => '👍',
+            ])
+            ->assertStatus(403);
+
+        $this->actingAs($recipient)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages/{$messageId}/reactions", [
+                'emoji' => 'nope',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('emoji');
+
+        $this->actingAs($recipient)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages/{$messageId}/reactions", [
+                'emoji' => '👍',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message.reactions.0.emoji', '👍')
+            ->assertJsonPath('message.reactions.0.count', 1)
+            ->assertJsonPath('message.reactions.0.user_ids.0', $recipient->id);
+
+        $this->actingAs($recipient)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages/{$messageId}/reactions", [
+                'emoji' => '❤️',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message.reactions.0.emoji', '❤️')
+            ->assertJsonPath('message.reactions.0.count', 1);
+
+        $this->assertDatabaseHas('message_reactions', [
+            'message_id' => $messageId,
+            'user_id' => $recipient->id,
+            'emoji' => '❤️',
+        ]);
+
+        $this->actingAs($recipient)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages/{$messageId}/reactions", [
+                'emoji' => '❤️',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message.reactions', []);
+
+        $this->assertDatabaseMissing('message_reactions', [
+            'message_id' => $messageId,
+            'user_id' => $recipient->id,
+        ]);
+
+        $this->actingAs($sender)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages/{$messageId}/recall")
+            ->assertOk();
+
+        $this->actingAs($recipient)
+            ->postJson("/api/chat/conversations/{$conversationId}/messages/{$messageId}/reactions", [
+                'emoji' => '👍',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('emoji');
+    }
+
     private function send(User $sender, int $conversationId, string $message): int
     {
         return $this->actingAs($sender)

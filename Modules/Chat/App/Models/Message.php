@@ -93,6 +93,11 @@ class Message extends Model
         return $this->hasMany(MessageMention::class, 'message_id');
     }
 
+    public function reactions(): HasMany
+    {
+        return $this->hasMany(MessageReaction::class, 'message_id');
+    }
+
     public function poll(): HasOne
     {
         return $this->hasOne(ChatPoll::class, 'message_id');

@@ -5,6 +5,7 @@ namespace Modules\Social\App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Modules\Social\App\Http\Requests\SetSocialReactionRequest;
 use Modules\Social\App\Services\SocialStoryService;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -35,6 +36,13 @@ class SocialStoryController extends Controller
         $this->stories->markViewed($request->user(), $storyId);
 
         return response()->json(['ok' => true]);
+    }
+
+    public function setReaction(SetSocialReactionRequest $request, int $storyId): JsonResponse
+    {
+        return response()->json(
+            $this->stories->setReaction($request->user(), $storyId, $request->validated()['type']),
+        );
     }
 
     public function viewers(Request $request, int $storyId): JsonResponse

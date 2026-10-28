@@ -154,6 +154,7 @@ class MessageRepository implements MessageRepositoryInterface
             'reads.user',
             'poll.options.votes',
             'mentions.user',
+            'reactions.user',
         ];
     }
 

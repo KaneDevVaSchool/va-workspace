@@ -8,6 +8,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Modules\Chat\App\Models\Conversation;
+use Modules\Social\App\Events\StoryRingsUpdated;
+use Modules\Social\App\Models\SocialPostLike;
 use Modules\Social\App\Models\SocialStory;
 use Modules\Social\App\Models\SocialStoryView;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -27,12 +29,13 @@ class SocialStoryService
             ->orderBy('created_at')
             ->get();
 
-        $viewedIds = SocialStoryView::query()
+        $viewRows = SocialStoryView::query()
             ->where('viewer_id', $actor->id)
             ->whereIn('story_id', $stories->pluck('id'))
-            ->pluck('story_id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
+            ->get()
+            ->keyBy('story_id');
+
+        $viewedIds = $viewRows->keys()->map(fn ($id) => (int) $id)->all();
 
         $grouped = $stories->groupBy('user_id');
         $mineStories = $grouped->get($actor->id, collect());
@@ -47,7 +50,10 @@ class SocialStoryService
             if (! $user || ! $user->isActive()) {
                 continue;
             }
-            $presented = $items->map(fn (SocialStory $story) => $this->present($story, $viewedIds))->values()->all();
+            $presented = $items
+                ->map(fn (SocialStory $story) => $this->present($story, $viewedIds, null, $viewRows->get($story->id)?->reaction_type))
+                ->values()
+                ->all();
             $ringsByUserId[(int) $userId] = [
                 'user' => $this->presentUser($user),
                 'has_stories' => true,
@@ -128,6 +134,8 @@ class SocialStoryService
             'expires_at' => now()->addDay(),
         ]);
 
+        $this->notifyStoryRingsRefresh($actor);
+
         return $this->present($story, [], ['count' => 0, 'preview' => []]);
     }
 
@@ -182,6 +190,36 @@ class SocialStoryService
         );
     }
 
+    /**
+     * @return array{my_reaction: string|null}
+     */
+    public function setReaction(User $actor, int $storyId, string $type): array
+    {
+        $story = $this->activeStory($storyId);
+        if ((int) $story->user_id === (int) $actor->id) {
+            throw new AccessDeniedHttpException('Không thể cảm xúc story của chính mình.');
+        }
+
+        if (! in_array($type, SocialPostLike::REACTION_TYPES, true)) {
+            throw ValidationException::withMessages(['type' => ['Loại cảm xúc không hợp lệ.']]);
+        }
+
+        $view = SocialStoryView::query()->firstOrCreate(
+            ['story_id' => $story->id, 'viewer_id' => $actor->id],
+            ['viewed_at' => now()],
+        );
+
+        if ($view->reaction_type === $type) {
+            $view->update(['reaction_type' => null]);
+
+            return ['my_reaction' => null];
+        }
+
+        $view->update(['reaction_type' => $type]);
+
+        return ['my_reaction' => $type];
+    }
+
     public function destroy(User $actor, int $storyId): void
     {
         $story = SocialStory::query()->find($storyId);
@@ -192,8 +230,14 @@ class SocialStoryService
             throw new AccessDeniedHttpException('Chỉ xoá được story của mình.');
         }
 
+        $authorId = (int) $story->user_id;
         Storage::disk($story->disk ?: 'local')->delete($story->media_path);
         $story->delete();
+
+        $author = User::query()->find($authorId);
+        if ($author) {
+            $this->notifyStoryRingsRefresh($author);
+        }
     }
 
     public function media(User $actor, int $storyId): StreamedResponse
@@ -222,8 +266,12 @@ class SocialStoryService
      * @param  array{count: int, preview: list<array<string, mixed>>}|null  $viewInsight
      * @return array<string, mixed>
      */
-    private function present(SocialStory $story, array $viewedIds, ?array $viewInsight = null): array
-    {
+    private function present(
+        SocialStory $story,
+        array $viewedIds,
+        ?array $viewInsight = null,
+        ?string $myReaction = null,
+    ): array {
         $payload = [
             'id' => $story->id,
             'media_kind' => $story->media_kind,
@@ -231,6 +279,7 @@ class SocialStoryService
             'created_at' => $story->created_at?->toIso8601String(),
             'expires_at' => $story->expires_at?->toIso8601String(),
             'viewed' => in_array((int) $story->id, $viewedIds, true) || false,
+            'my_reaction' => $myReaction,
         ];
 
         if ($viewInsight !== null) {
@@ -358,5 +407,19 @@ class SocialStoryService
         unset($ring['contact_rank']);
 
         return $ring;
+    }
+
+    private function notifyStoryRingsRefresh(User $author): void
+    {
+        $recipientIds = $this->privateChatContacts($author)['users']
+            ->pluck('id')
+            ->push($author->id)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        foreach ($recipientIds as $userId) {
+            StoryRingsUpdated::dispatch($userId, (int) $author->id);
+        }
     }
 }

@@ -17,6 +17,7 @@ import {
   setDisappear as apiSetDisappear,
   transferOwner as apiTransferOwner,
   updateGroupAvatar as apiUpdateGroupAvatar,
+  reactToMessage as apiReactToMessage,
   votePoll as apiVotePoll,
   fetchUnreadCount,
   hideMessage as apiHideMessage,
@@ -29,6 +30,31 @@ import {
   sendMessage as apiSendMessage,
   touchViewing,
 } from '../api/chatApi';
+
+function withLocalReaction(message, emoji, userId) {
+  const rows = (message.reactions || []).map((row) => ({
+    emoji: row.emoji,
+    user_ids: [...(row.user_ids || [])],
+    users: [...(row.users || [])],
+  }));
+  const had = rows.some((row) => row.emoji === emoji && row.user_ids.includes(userId));
+  for (const row of rows) {
+    if (!row.user_ids.includes(userId)) continue;
+    row.user_ids = row.user_ids.filter((id) => id !== userId);
+    row.users = row.users.filter((user) => user.id !== userId);
+  }
+  if (!had) {
+    const target = rows.find((row) => row.emoji === emoji);
+    if (target) target.user_ids.push(userId);
+    else rows.push({ emoji, user_ids: [userId], users: [] });
+  }
+  return {
+    ...message,
+    reactions: rows
+      .filter((row) => row.user_ids.length > 0)
+      .map((row) => ({ ...row, count: row.user_ids.length })),
+  };
+}
 
 export function chatPreview(message) {
   if (message?.recalled_at) return 'Tin nhắn đã được thu hồi';
@@ -231,6 +257,23 @@ export const useChatStore = defineStore('chat', {
       const message = await apiVotePoll(conversationId, messageId, optionId);
       this.replaceMessage(conversationId, message);
       return message;
+    },
+
+    async reactToMessage(conversationId, messageId, emoji) {
+      const existing = this.messagesByConversation[conversationId] ?? [];
+      const current = existing.find((message) => message.id === messageId) ?? null;
+      const userId = useAuthStore().user?.id;
+      if (current && userId) {
+        this.replaceMessage(conversationId, withLocalReaction(current, emoji, userId));
+      }
+      try {
+        const message = await apiReactToMessage(conversationId, messageId, emoji);
+        this.replaceMessage(conversationId, message);
+        return message;
+      } catch (error) {
+        if (current) this.replaceMessage(conversationId, current);
+        throw error;
+      }
     },
 
     beatPresence() {

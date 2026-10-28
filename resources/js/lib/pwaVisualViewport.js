@@ -13,8 +13,89 @@ export const PWA_VV_WIDTH = '--pwa-vv-width';
 
 export const PWA_VV_KEYBOARD_CLASS = 'pwa-vv-keyboard';
 
+/** Giữ shell full màn khi hộp thư viện ảnh / tệp của hệ điều hành đang mở. */
+export const PWA_NATIVE_PICKER_CLASS = 'pwa-native-picker';
+
 /** @type {number} px — co khung khi layout cao hơn visual viewport (keyboard / zoom UI). */
 const KEYBOARD_INSET_THRESHOLD = 48;
+
+let nativePickerActive = false;
+let nativePickerSawLeave = false;
+let nativePickerSawShrink = false;
+let nativePickerCloseTimer = 0;
+let nativePickerHoldTimer = 0;
+
+function viewportSettled() {
+  const vv = window.visualViewport;
+  if (!vv) return true;
+  const inset = window.innerHeight - vv.height - Math.max(0, vv.offsetTop);
+  return inset < KEYBOARD_INSET_THRESHOLD && Math.round(vv.offsetTop) < 8;
+}
+
+function setNativePickerClass(active) {
+  document.documentElement.classList.toggle(PWA_NATIVE_PICKER_CLASS, active);
+}
+
+function holdNativePickerFrame() {
+  clearPwaVisualViewport();
+  setKeyboardFrame(false);
+}
+
+/**
+ * Gọi đồng bộ trong lần chạm "thêm ảnh / tệp", trước input.click().
+ * Thư viện ảnh thu visual viewport; nếu coi đó là bàn phím thì khung chat bị đẩy xuống
+ * và picker nằm giữa phía trên màn hình.
+ */
+export function beginNativeFilePicker() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  nativePickerActive = true;
+  nativePickerSawLeave = false;
+  nativePickerSawShrink = false;
+  window.clearTimeout(nativePickerCloseTimer);
+  window.clearTimeout(nativePickerHoldTimer);
+  setNativePickerClass(true);
+  holdNativePickerFrame();
+  window.scrollTo(0, 0);
+  nativePickerHoldTimer = window.setTimeout(() => {
+    if (!nativePickerActive || nativePickerSawShrink || !viewportSettled()) return;
+    endNativeFilePicker();
+  }, 1800);
+}
+
+export function endNativeFilePicker() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const holding = nativePickerActive || document.documentElement.classList.contains(PWA_NATIVE_PICKER_CLASS);
+  nativePickerActive = false;
+  nativePickerSawLeave = false;
+  nativePickerSawShrink = false;
+  window.clearTimeout(nativePickerCloseTimer);
+  window.clearTimeout(nativePickerHoldTimer);
+  if (!holding) return;
+  holdNativePickerFrame();
+  nativePickerHoldTimer = window.setTimeout(() => {
+    if (nativePickerActive) return;
+    setNativePickerClass(false);
+    syncPwaVisualViewport();
+  }, 640);
+}
+
+function noteNativePickerLeave() {
+  if (nativePickerActive) nativePickerSawLeave = true;
+}
+
+function noteNativePickerResize() {
+  if (!nativePickerActive) return;
+  if (!viewportSettled()) {
+    nativePickerSawShrink = true;
+    window.clearTimeout(nativePickerCloseTimer);
+    return;
+  }
+  if (!nativePickerSawLeave && !nativePickerSawShrink) return;
+  window.clearTimeout(nativePickerCloseTimer);
+  nativePickerCloseTimer = window.setTimeout(() => {
+    if (nativePickerActive && viewportSettled()) endNativeFilePicker();
+  }, 220);
+}
 
 const CHAT_COMPOSER_INPUT_SELECTOR = 'textarea.chat-view__input';
 
@@ -48,6 +129,13 @@ function setKeyboardFrame(active) {
 
 export function syncPwaVisualViewport() {
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
+  if (
+    nativePickerActive
+    || document.documentElement.classList.contains(PWA_NATIVE_PICKER_CLASS)
+  ) {
+    holdNativePickerFrame();
+    return;
+  }
   if (!shouldSyncVisualViewportKeyboard()) {
     clearPwaVisualViewport();
     setKeyboardFrame(false);
@@ -119,7 +207,10 @@ export function bootstrapPwaVisualViewport() {
   bound = true;
 
   const schedule = () => {
-    requestAnimationFrame(syncPwaVisualViewport);
+    requestAnimationFrame(() => {
+      noteNativePickerResize();
+      syncPwaVisualViewport();
+    });
   };
 
   syncPwaVisualViewport();
@@ -127,9 +218,17 @@ export function bootstrapPwaVisualViewport() {
   window.visualViewport?.addEventListener('scroll', schedule, { passive: true });
   window.addEventListener('resize', schedule, { passive: true });
   window.addEventListener('orientationchange', schedule, { passive: true });
+  window.addEventListener('blur', noteNativePickerLeave);
+  window.addEventListener('focus', () => {
+    noteNativePickerResize();
+    schedule();
+  });
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      schedule();
+    if (document.visibilityState === 'hidden') {
+      noteNativePickerLeave();
+      return;
     }
+    noteNativePickerResize();
+    schedule();
   });
 }

@@ -3,6 +3,10 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { formatRelativeTime } from '@/lib/formatTime';
+import { isPwaStandalone } from '@/lib/pwaStandalone';
+import SocialReactionPicker from './SocialReactionPicker.vue';
+import { useReactionAction } from '../lib/useReactionAction.js';
+import { useSocialStoryRealtime } from '../lib/useSocialStoryRealtime.js';
 
 const emit = defineEmits(['posted', 'open-profile']);
 
@@ -18,6 +22,9 @@ const viewersList = ref([]);
 const viewersCount = ref(0);
 const viewerPreview = ref([]);
 let timer = null;
+
+const storyImmersive = computed(() => isPwaStandalone());
+const { playFeedback, nextGen, isLatest } = useReactionAction();
 
 const activePack = computed(() => viewer.value);
 const activeStory = computed(() => activePack.value?.stories?.[index.value] ?? null);
@@ -70,19 +77,84 @@ watch(activeStory, (story) => {
   if (!story.viewed && activePack.value?.user && !isOwnStory.value) {
     window.axios.post(`/api/social/stories/${story.id}/view`).catch(() => {});
     story.viewed = true;
+    syncRingSeenState();
   }
 });
 
 onBeforeUnmount(() => window.clearInterval(timer));
 
 load();
+useSocialStoryRealtime(() => load({ preserveViewer: true }));
 
-async function load() {
+async function load(options = {}) {
+  const preserveViewerId = options.preserveViewer ? viewer.value?.user?.id : null;
   try {
     const response = await window.axios.get('/api/social/stories');
     rings.value = response.data;
+    if (preserveViewerId && rings.value) {
+      const pack = findRingPack(preserveViewerId);
+      if (pack?.stories?.length) {
+        viewer.value = pack;
+        index.value = Math.min(index.value, pack.stories.length - 1);
+      }
+    }
   } catch {
-    rings.value = null;
+    if (!preserveViewerId) {
+      rings.value = null;
+    }
+  }
+}
+
+function findRingPack(userId) {
+  if (!rings.value || userId == null) return null;
+  if (rings.value.mine?.user?.id === userId) return rings.value.mine;
+  return rings.value.rings?.find((ring) => ring.user?.id === userId) ?? null;
+}
+
+function syncRingSeenState() {
+  const pack = activePack.value;
+  if (!pack?.user?.id || !rings.value) return;
+
+  const userId = pack.user.id;
+  const stories = pack.stories || [];
+  const unseen = stories.some((story) => !story.viewed);
+
+  const merge = (ring) => {
+    if (ring?.user?.id !== userId) return ring;
+    return {
+      ...ring,
+      stories,
+      unseen,
+      has_stories: stories.length > 0,
+    };
+  };
+
+  if (rings.value.mine?.user?.id === userId) {
+    rings.value.mine = merge(rings.value.mine);
+  } else if (Array.isArray(rings.value.rings)) {
+    rings.value.rings = rings.value.rings.map(merge);
+  }
+}
+
+async function onStoryReaction(type, event) {
+  const story = activeStory.value;
+  if (!story || isOwnStory.value) return;
+
+  const previous = story.my_reaction ?? null;
+  const removing = previous === type;
+  story.my_reaction = removing ? null : type;
+  playFeedback(type, event, removing);
+
+  const generation = nextGen();
+  try {
+    const { data } = await window.axios.post(`/api/social/stories/${story.id}/reactions`, { type });
+    if (isLatest(generation)) {
+      story.my_reaction = data.my_reaction ?? null;
+    }
+  } catch {
+    if (isLatest(generation)) {
+      story.my_reaction = previous;
+    }
   }
 }
 
@@ -128,7 +200,7 @@ function closeViewer() {
   viewersOpen.value = false;
   viewersList.value = [];
   window.clearInterval(timer);
-  load();
+  load({ preserveViewer: false });
 }
 
 function storyTimeLabel(iso) {
@@ -301,6 +373,7 @@ defineExpose({ reload: load });
       <div
         v-if="viewer && activeStory"
         class="story-view"
+        :class="{ 'story-view--immersive': storyImmersive }"
         role="dialog"
         aria-modal="true"
         :aria-label="`Story của ${viewer.user.name}`"
@@ -361,6 +434,17 @@ defineExpose({ reload: load });
 
             <button type="button" class="story-view__nav story-view__nav--prev" aria-label="Story trước" @click="previous" />
             <button type="button" class="story-view__nav story-view__nav--next" aria-label="Story sau" @click="next" />
+
+            <div
+              v-if="!isOwnStory && !viewersOpen"
+              class="story-view__react-row"
+            >
+              <SocialReactionPicker
+                :my-reaction="activeStory.my_reaction"
+                compact
+                @pick="onStoryReaction"
+              />
+            </div>
 
             <button
               v-if="isOwnStory"
@@ -496,15 +580,31 @@ defineExpose({ reload: load });
   );
 }
 
-.story-rail__ring--seen,
+.story-rail__ring--seen {
+  padding: 3px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-text-muted) 55%, var(--color-border)) 0%,
+    color-mix(in srgb, var(--color-border) 92%, var(--color-surface)) 100%
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
 .story-rail__ring--empty {
   padding: 2px;
   background: var(--color-border);
 }
 
 .story-rail__ring--idle {
-  padding: 2px;
-  background: color-mix(in srgb, var(--color-border) 88%, var(--color-surface-muted));
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.story-rail__ring--idle .story-rail__avatar {
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--color-border) 82%, var(--color-surface-muted)),
+    0 0 0 1px color-mix(in srgb, var(--color-border) 45%, transparent);
 }
 
 .story-rail__avatar {
@@ -591,6 +691,27 @@ defineExpose({ reload: load });
   align-items: center;
   width: min(22.5rem, 100%);
   max-height: calc(100vh - 1.5rem);
+}
+
+.story-view--immersive {
+  padding: 0;
+  background: #050508;
+  backdrop-filter: none;
+}
+
+.story-view--immersive .story-view__shell {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+}
+
+.story-view--immersive .story-view__frame {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  aspect-ratio: auto;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .story-view__frame {
@@ -820,6 +941,28 @@ defineExpose({ reload: load });
   flex-shrink: 0;
   transform: rotate(180deg);
   opacity: 0.9;
+}
+
+.story-view__react-row {
+  position: absolute;
+  left: 50%;
+  bottom: max(0.85rem, env(safe-area-inset-bottom));
+  z-index: 5;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  max-width: calc(100% - 1.5rem);
+}
+
+.story-view--immersive .story-view__react-row {
+  bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.story-view__react-row :deep(.reaction-picker__trigger) {
+  color: #fff;
+  background: color-mix(in srgb, #fff 14%, transparent);
+  border: 1px solid color-mix(in srgb, #fff 22%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 .story-viewers {

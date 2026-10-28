@@ -8,6 +8,7 @@ import {
   burstEmployeeMobileViewport,
   syncEmployeeMobileViewport,
 } from '@/composables/useEmployeeMobileViewport';
+import { beginNativeFilePicker, endNativeFilePicker } from '@/lib/pwaVisualViewport';
 import { warmStickerAssets } from '@modules/Social/resources/js/lib/socialStickers.js';
 import { formatRelativeTime, formatTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
@@ -18,6 +19,7 @@ import ChatAvatar from './ChatAvatar.vue';
 import ChatMemberDialog from './ChatMemberDialog.vue';
 import ChatPicker from './ChatPicker.vue';
 import ChatPollDialog from './ChatPollDialog.vue';
+import { CHAT_REACTIONS, reactionLabel } from '../lib/chatReactions';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
 import { ChatFileError, prepareChatFile } from '../lib/prepareChatFile';
 import { useChatStore } from '../store/chatStore';
@@ -60,6 +62,9 @@ const searchHits = ref([]);
 const readersFor = ref(null);
 const recording = ref(false);
 const mentionIds = ref([]);
+const draftCaret = ref(0);
+const mentionActive = ref(0);
+const mentionDismissed = ref(false);
 let typingSentAt = 0;
 let typingStopTimer = null;
 let voiceRecorder = null;
@@ -76,18 +81,30 @@ const headerTitle = computed(() => {
 const isOwner = computed(() => Boolean(store.activeConversation?.is_owner));
 const groupAvatarUrl = computed(() => (isGroup.value ? store.activeConversation?.avatar_url : null) ?? null);
 const pinnedMessage = computed(() => store.activeConversation?.pinned_message ?? null);
-const mentionQuery = computed(() => {
-  if (!isGroup.value) return null;
-  const match = draft.value.match(/(?:^|\s)@([^\n@]*)$/);
-  return match ? match[1] : null;
+const mentionMatch = computed(() => {
+  if (!isGroup.value || editing.value) return null;
+  const caret = Math.min(draftCaret.value, draft.value.length);
+  const before = draft.value.slice(0, caret);
+  const match = before.match(/(^|\s)@([^\n@]*)$/);
+  if (!match) return null;
+  const query = match[2];
+  return { query, start: caret - query.length - 1, end: caret };
 });
 const mentionHits = computed(() => {
-  if (mentionQuery.value === null) return [];
-  const query = mentionQuery.value.toLowerCase();
+  if (!mentionMatch.value) return [];
+  const query = mentionMatch.value.query.toLowerCase();
   return (store.activeConversation?.members || [])
-    .filter((user) => user.id !== auth.user?.id && user.name.toLowerCase().includes(query))
-    .slice(0, 6);
+    .filter((user) => user.id !== auth.user?.id && (user.name || '').toLowerCase().includes(query))
+    .slice(0, 8);
 });
+const mentionOpen = computed(() => !mentionDismissed.value && mentionHits.value.length > 0);
+watch(
+  () => mentionMatch.value?.query ?? null,
+  () => {
+    mentionActive.value = 0;
+    mentionDismissed.value = false;
+  },
+);
 const memberLine = computed(() => {
   const count = store.activeConversation?.member_count
     || store.activeConversation?.members?.length
@@ -323,6 +340,7 @@ function showRead(message) {
 }
 
 function pingTyping() {
+  syncCaret();
   const id = store.activeConversationId;
   if (!id || editing.value) return;
   if (draft.value.trim() === '') {
@@ -347,6 +365,19 @@ function stopTyping() {
   }
   typingSentAt = 0;
   sendTyping(id, false).catch(() => {});
+}
+
+function syncCaret() {
+  const input = inputRef.value;
+  draftCaret.value = input?.selectionStart ?? draft.value.length;
+}
+
+function openNativePicker(input) {
+  if (!(input instanceof HTMLInputElement) || editing.value) return;
+  beginNativeFilePicker();
+  input.click();
+  const field = inputRef.value;
+  if (field && document.activeElement === field) field.blur();
 }
 
 function coarsePointer() {
@@ -452,8 +483,9 @@ function openMenu(message, event) {
     return;
   }
   const rect = button.getBoundingClientRect();
-  const width = 168;
-  const menuHeight = 168;
+  const canReactTo = canReact(message);
+  const width = canReactTo ? 264 : 168;
+  const menuHeight = canReactTo ? 248 : 168;
   const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
   const below = rect.bottom + 6;
   const top = below + menuHeight > window.innerHeight ? Math.max(8, rect.top - menuHeight - 6) : below;
@@ -503,9 +535,38 @@ function memberName(id) {
 }
 
 function pickMention(user) {
-  const next = draft.value.replace(/(^|\s)@[^\n@]*$/, `$1@${user.name} `);
-  draft.value = next;
+  const hit = mentionMatch.value;
+  if (!hit) return;
+  const before = draft.value.slice(0, hit.start);
+  const after = draft.value.slice(hit.end);
+  const insert = `@${user.name} `;
+  draft.value = `${before}${insert}${after}`;
   if (!mentionIds.value.includes(user.id)) mentionIds.value = [...mentionIds.value, user.id];
+  const cursor = before.length + insert.length;
+  mentionDismissed.value = true;
+  nextTick(() => {
+    const input = inputRef.value;
+    input?.focus();
+    input?.setSelectionRange(cursor, cursor);
+    draftCaret.value = cursor;
+  });
+}
+
+function insertMentionTrigger() {
+  const input = inputRef.value;
+  const caret = input?.selectionStart ?? draft.value.length;
+  const before = draft.value.slice(0, caret);
+  const after = draft.value.slice(input?.selectionEnd ?? caret);
+  const needsSpace = before.length > 0 && !/\s$/.test(before);
+  const insert = `${needsSpace ? ' ' : ''}@`;
+  draft.value = `${before}${insert}${after}`;
+  mentionDismissed.value = false;
+  const cursor = before.length + insert.length;
+  nextTick(() => {
+    input?.focus();
+    input?.setSelectionRange(cursor, cursor);
+    draftCaret.value = cursor;
+  });
 }
 
 function groupReadOthersCount() {
@@ -764,6 +825,7 @@ function clearDraftFiles() {
 }
 
 async function onFilesChosen(event) {
+  endNativeFilePicker();
   const chosen = Array.from(event.target.files ?? []);
   event.target.value = '';
   if (editing.value || chosen.length === 0) return;
@@ -931,9 +993,97 @@ async function confirmAction() {
 }
 
 function onKeydown(event) {
+  if (mentionOpen.value && mentionHits.value.length > 0) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      mentionActive.value = (mentionActive.value + 1) % mentionHits.value.length;
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      mentionActive.value = (mentionActive.value - 1 + mentionHits.value.length) % mentionHits.value.length;
+      return;
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      const user = mentionHits.value[mentionActive.value];
+      if (user) pickMention(user);
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      mentionDismissed.value = true;
+      return;
+    }
+  }
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault();
     send();
+  }
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function messageParts(text) {
+  const source = text || '';
+  const names = (store.activeConversation?.members || [])
+    .map((user) => user.name)
+    .filter((name) => typeof name === 'string' && name.trim() !== '')
+    .sort((a, b) => b.length - a.length);
+  if (names.length === 0) return [{ mention: false, text: source }];
+  const pattern = new RegExp(`@(?:${names.map(escapeRegExp).join('|')})`, 'g');
+  const parts = [];
+  let cursor = 0;
+  for (const match of source.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    if (index > cursor) parts.push({ mention: false, text: source.slice(cursor, index) });
+    parts.push({ mention: true, text: match[0] });
+    cursor = index + match[0].length;
+  }
+  if (cursor < source.length) parts.push({ mention: false, text: source.slice(cursor) });
+  return parts.length ? parts : [{ mention: false, text: source }];
+}
+
+function reactionRows(message) {
+  const mineId = auth.user?.id;
+  const order = new Map(CHAT_REACTIONS.map((item, index) => [item.emoji, index]));
+  return (message?.reactions || [])
+    .filter((row) => row?.emoji && row.count > 0)
+    .slice()
+    .sort((a, b) => (order.get(a.emoji) ?? 99) - (order.get(b.emoji) ?? 99))
+    .map((row) => {
+      const mine = (row.user_ids || []).includes(mineId);
+      const names = (row.users || []).map((user) => user.name).filter(Boolean);
+      const who = names.length ? names.join(', ') : `${row.count} người`;
+      const label = reactionLabel(row.emoji);
+      return {
+        emoji: row.emoji,
+        count: row.count,
+        mine,
+        aria: mine ? `${label}, ${who}. Bỏ cảm xúc` : `${label}, ${who}. Thả cảm xúc`,
+      };
+    });
+}
+
+function myReaction(message) {
+  const mineId = auth.user?.id;
+  return (message?.reactions || []).find((row) => (row.user_ids || []).includes(mineId))?.emoji || '';
+}
+
+function canReact(message) {
+  return Boolean(message) && !message.recalled_at && message.message_type !== 'system';
+}
+
+async function toggleReaction(message, emoji) {
+  if (!canReact(message) || !store.activeConversationId) return;
+  menu.value = null;
+  try {
+    await store.reactToMessage(store.activeConversationId, message.id, emoji);
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message ?? 'Không thả được cảm xúc.');
   }
 }
 
@@ -1156,7 +1306,12 @@ function menuItems(message) {
               <span>{{ row.message.voice_duration || 1 }} giây</span>
               <audio :src="row.message.attachments?.[0]?.url" controls preload="none" />
             </div>
-            <span v-else-if="row.message.message" class="chat-bubble__text">{{ row.message.message }}</span>
+            <span v-else-if="row.message.message" class="chat-bubble__text">
+              <template v-for="(part, partIndex) in messageParts(row.message.message)" :key="partIndex">
+                <span v-if="part.mention" class="chat-mention">{{ part.text }}</span>
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </span>
             <div
               v-if="!row.message.recalled_at && imageFiles(row.message).length"
               class="chat-images"
@@ -1198,6 +1353,21 @@ function menuItems(message) {
               </button>
               <span v-else-if="showRead(row.message)">Đã xem</span>
             </span>
+          </div>
+          <div v-if="reactionRows(row.message).length" class="chat-reactions">
+            <button
+              v-for="chip in reactionRows(row.message)"
+              :key="chip.emoji"
+              type="button"
+              class="chat-reactions__chip"
+              :class="{ 'chat-reactions__chip--mine': chip.mine }"
+              :aria-label="chip.aria"
+              :aria-pressed="chip.mine"
+              @click="toggleReaction(row.message, chip.emoji)"
+            >
+              <span class="chat-reactions__emoji" aria-hidden="true">{{ chip.emoji }}</span>
+              <span class="chat-reactions__count">{{ chip.count }}</span>
+            </button>
           </div>
           <ChatLinkPreviewEmbed
             v-if="!row.message.recalled_at && row.message.message_type === 'text' && row.message.message"
@@ -1285,6 +1455,28 @@ function menuItems(message) {
     </div>
 
     <div class="chat-dock" :class="{ 'chat-dock--picker': pickerOpen }">
+    <div
+      v-if="mentionOpen"
+      id="chat-mention-list"
+      class="chat-mentions hide-scrollbar"
+      role="listbox"
+      aria-label="Nhắc thành viên"
+    >
+      <button
+        v-for="(user, index) in mentionHits"
+        :id="`chat-mention-${user.id}`"
+        :key="user.id"
+        type="button"
+        class="chat-mentions__item"
+        :class="{ 'chat-mentions__item--on': index === mentionActive }"
+        role="option"
+        :aria-selected="index === mentionActive"
+        @mousedown.prevent="pickMention(user)"
+      >
+        <ChatAvatar :src="user.avatar_url" :name="user.name" size="1.75rem" />
+        <span class="chat-mentions__name">{{ user.name }}</span>
+      </button>
+    </div>
     <Transition name="chat-compose-banner">
       <div v-if="replyTo || editing" class="chat-compose-banner">
       <AppIcon :name="editing ? 'pencil' : 'reply'" :size="14" :stroke-width="1.75" />
@@ -1317,7 +1509,7 @@ function menuItems(message) {
           class="chat-view__tool"
           :disabled="Boolean(editing)"
           aria-label="Chụp ảnh"
-          @click="cameraInput?.click()"
+          @click="openNativePicker(cameraInput)"
         >
           <AppIcon name="camera" :size="17" :stroke-width="1.75" />
         </button>
@@ -1326,7 +1518,7 @@ function menuItems(message) {
           class="chat-view__tool"
           :disabled="Boolean(editing)"
           aria-label="Gửi ảnh"
-          @click="photoInput?.click()"
+          @click="openNativePicker(photoInput)"
         >
           <AppIcon name="image" :size="17" :stroke-width="1.75" />
         </button>
@@ -1335,7 +1527,7 @@ function menuItems(message) {
           class="chat-view__tool"
           :disabled="Boolean(editing)"
           aria-label="Đính kèm tệp"
-          @click="fileInput?.click()"
+          @click="openNativePicker(fileInput)"
         >
           <AppIcon name="paperclip" :size="17" :stroke-width="1.75" />
         </button>
@@ -1378,6 +1570,16 @@ function menuItems(message) {
           type="button"
           class="chat-view__tool"
           :disabled="Boolean(editing)"
+          aria-label="Nhắc thành viên"
+          @click="insertMentionTrigger"
+        >
+          <span class="chat-view__at" aria-hidden="true">@</span>
+        </button>
+        <button
+          v-if="isGroup"
+          type="button"
+          class="chat-view__tool"
+          :disabled="Boolean(editing)"
           aria-label="Tạo bình chọn"
           @click="pollOpen = true"
         >
@@ -1412,11 +1614,6 @@ function menuItems(message) {
           </button>
         </span>
       </div>
-      <div v-if="mentionHits.length" class="chat-mentions">
-        <button v-for="user in mentionHits" :key="user.id" type="button" @click="pickMention(user)">
-          {{ user.name }}
-        </button>
-      </div>
       <div class="chat-view__input-shell">
         <button
           type="button"
@@ -1433,11 +1630,19 @@ function menuItems(message) {
           class="chat-view__input"
           rows="1"
           enterkeyhint="send"
+          role="combobox"
+          aria-autocomplete="list"
+          :aria-activedescendant="mentionOpen ? `chat-mention-${mentionHits[mentionActive]?.id}` : undefined"
+          :aria-expanded="mentionOpen"
+          aria-controls="chat-mention-list"
           :placeholder="editing ? 'Sửa nội dung…' : 'Nhập tin nhắn…'"
           :aria-label="editing ? 'Sửa tin nhắn' : `Nhập tin nhắn gửi ${headerTitle}`"
           @focus="onInputFocus"
           @blur="onInputBlur"
           @input="pingTyping"
+          @click="syncCaret"
+          @keyup="syncCaret"
+          @select="syncCaret"
           @keydown="onKeydown"
         />
         <button
@@ -1520,9 +1725,29 @@ function menuItems(message) {
       <div
         v-if="menu"
         class="chat-menu"
+        :class="{ 'chat-menu--react': canReact(menu.message) }"
         role="menu"
         :style="{ top: `${menu.top}px`, left: `${menu.left}px` }"
       >
+        <div
+          v-if="canReact(menu.message)"
+          class="chat-menu__react"
+          role="group"
+          aria-label="Thả cảm xúc"
+        >
+          <button
+            v-for="item in CHAT_REACTIONS"
+            :key="item.emoji"
+            type="button"
+            class="chat-menu__emoji"
+            :class="{ 'chat-menu__emoji--on': myReaction(menu.message) === item.emoji }"
+            :aria-label="myReaction(menu.message) === item.emoji ? `Bỏ ${item.label}` : `Thả ${item.label}`"
+            :aria-pressed="myReaction(menu.message) === item.emoji"
+            @click="toggleReaction(menu.message, item.emoji)"
+          >
+            {{ item.emoji }}
+          </button>
+        </div>
         <button
           v-for="item in menuItems(menu.message)"
           :key="item.key"
@@ -1897,6 +2122,56 @@ function menuItems(message) {
   word-break: break-word;
 }
 
+.chat-mention {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.chat-bubble--mine .chat-mention {
+  color: var(--color-tertiary-800);
+}
+
+.chat-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: -0.1rem;
+}
+
+.chat-bubble-row--mine .chat-reactions {
+  justify-content: flex-end;
+}
+
+.chat-reactions__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.05rem 0.4rem 0.05rem 0.28rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.chat-reactions__chip--mine {
+  background: var(--color-primary-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
+}
+
+.chat-reactions__emoji {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.chat-reactions__count {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .chat-bubble__recalled {
   display: inline-flex;
   align-items: center;
@@ -2013,10 +2288,13 @@ function menuItems(message) {
 }
 
 .chat-dock {
+  position: relative;
+  z-index: 2;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: visible;
   background: var(--color-surface);
   box-shadow: 0 -4px 18px color-mix(in srgb, var(--color-tertiary-900) 6%, transparent);
 }
@@ -2067,6 +2345,12 @@ function menuItems(message) {
 .chat-view__tool:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.chat-view__at {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .chat-view__file-input {
@@ -2344,6 +2628,34 @@ function menuItems(message) {
   width: 14rem;
 }
 
+.chat-menu--react {
+  width: 16.5rem;
+}
+
+.chat-menu__react {
+  display: flex;
+  gap: 0.1rem;
+  padding: 0.15rem 0.1rem 0.35rem;
+  margin-bottom: 0.2rem;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.chat-menu__emoji {
+  flex: 1 1 0;
+  height: 2rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chat-menu__emoji--on,
+.chat-menu__emoji:hover {
+  background: var(--color-primary-surface);
+}
+
 .chat-pin,
 .chat-search {
   display: flex;
@@ -2377,9 +2689,51 @@ function menuItems(message) {
 }
 
 .chat-mentions {
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: calc(100% + 0.35rem);
+  z-index: 5;
   display: flex;
   flex-direction: column;
-  margin-bottom: 0.35rem;
+  max-height: min(16rem, 42dvh);
+  overflow: auto;
+  padding: 0.3rem;
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    0 12px 32px color-mix(in srgb, var(--color-tertiary-900) 16%, transparent);
+}
+
+.chat-mentions__item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.3rem 0.45rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.chat-mentions__item--on,
+.chat-mentions__item:hover {
+  background: var(--color-primary-surface);
+}
+
+.chat-mentions__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
 }
 
 .chat-poll-card {
@@ -2577,7 +2931,6 @@ function menuItems(message) {
 
 .chat-voice,
 .chat-read,
-.chat-mentions button,
 .chat-search button {
   border: 0;
   background: transparent;

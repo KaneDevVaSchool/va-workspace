@@ -31,6 +31,7 @@ Route::middleware('auth')->prefix('chat')->name('chat.')->group(function () {
     Route::patch('/conversations/{conversationId}/messages/{messageId}', [ChatMessageController::class, 'update'])->name('messages.update');
     Route::post('/conversations/{conversationId}/messages/{messageId}/recall', [ChatMessageController::class, 'recall'])->name('messages.recall');
     Route::post('/conversations/{conversationId}/messages/{messageId}/vote', [ChatMessageController::class, 'vote'])->name('messages.vote');
+    Route::post('/conversations/{conversationId}/messages/{messageId}/reactions', [ChatMessageController::class, 'react'])->name('messages.react');
     Route::delete('/conversations/{conversationId}/messages/{messageId}', [ChatMessageController::class, 'destroy'])->name('messages.destroy');
     Route::get('/unread-count', [ChatConversationController::class, 'unreadCount'])->name('unread-count');
     Route::get('/users/search', [ChatConversationController::class, 'searchUsers'])->name('users.search');

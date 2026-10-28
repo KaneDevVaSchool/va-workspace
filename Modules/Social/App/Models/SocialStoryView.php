@@ -14,6 +14,7 @@ class SocialStoryView extends Model
         'story_id',
         'viewer_id',
         'viewed_at',
+        'reaction_type',
     ];
 
     protected $casts = [

@@ -16,6 +16,7 @@ use Modules\Chat\App\Models\ConversationMember;
 use Modules\Chat\App\Models\Message;
 use Modules\Chat\App\Models\MessageAttachment;
 use Modules\Chat\App\Models\MessageMention;
+use Modules\Chat\App\Models\MessageReaction;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -314,6 +315,48 @@ trait HandlesChatFeatures
         return ['message' => $presented];
     }
 
+    public function reactToMessage(User $actor, int $conversationId, int $messageId, string $emoji): array
+    {
+        $this->requireMembership($actor, $conversationId);
+        $canonical = MessageReaction::canonical($emoji);
+        if ($canonical === null) {
+            throw ValidationException::withMessages([
+                'emoji' => ['Cảm xúc không được hỗ trợ.'],
+            ]);
+        }
+
+        $message = $this->messages->findForConversation($conversationId, $messageId);
+        if (! $message || $message->isRecalled() || $message->message_type === Message::TYPE_SYSTEM) {
+            throw ValidationException::withMessages([
+                'emoji' => ['Không thả cảm xúc cho tin nhắn này.'],
+            ]);
+        }
+
+        $existing = MessageReaction::query()
+            ->where('message_id', $message->id)
+            ->where('user_id', $actor->id)
+            ->first();
+
+        if ($existing && $existing->emoji === $canonical) {
+            $existing->delete();
+        } elseif ($existing) {
+            $existing->emoji = $canonical;
+            $existing->save();
+        } else {
+            MessageReaction::query()->create([
+                'message_id' => $message->id,
+                'user_id' => $actor->id,
+                'emoji' => $canonical,
+            ]);
+        }
+
+        $fresh = $this->messages->findForConversation($conversationId, $messageId) ?? $message;
+        $presented = $this->present($fresh);
+        MessageUpdated::dispatch($conversationId, $presented);
+
+        return ['message' => $presented];
+    }
+
     public function touchPresence(User $actor): void
     {
         DB::table('users')->where('id', $actor->id)->update(['last_seen_at' => now()]);
@@ -418,7 +461,41 @@ trait HandlesChatFeatures
             'expires_at' => $message->expires_at?->toIso8601String(),
             'reads' => $message->isRecalled() ? [] : $reads,
             'poll' => $message->isRecalled() ? null : $this->presentPoll($message),
+            'reactions' => $message->isRecalled() ? [] : $this->presentReactions($message),
         ];
+    }
+
+    /**
+     * @return list<array{emoji: string, count: int, user_ids: list<int>, users: list<array{id: int, name: string|null}>}>
+     */
+    protected function presentReactions(Message $message): array
+    {
+        if (! $message->relationLoaded('reactions')) {
+            return [];
+        }
+
+        $order = array_flip(MessageReaction::EMOJIS);
+
+        return $message->reactions
+            ->groupBy('emoji')
+            ->map(function ($rows, $emoji) {
+                $users = $rows
+                    ->map(fn (MessageReaction $row) => [
+                        'id' => (int) $row->user_id,
+                        'name' => $row->user?->name,
+                    ])
+                    ->values();
+
+                return [
+                    'emoji' => (string) $emoji,
+                    'count' => $users->count(),
+                    'user_ids' => $users->pluck('id')->all(),
+                    'users' => $users->take(12)->all(),
+                ];
+            })
+            ->sortBy(fn (array $row) => $order[$row['emoji']] ?? 99)
+            ->values()
+            ->all();
     }
 
     /**
