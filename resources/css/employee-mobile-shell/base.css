@@ -440,7 +440,26 @@ html.pwa-standalone {
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   padding: var(--space-3) var(--space-3);
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
+}
+
+@keyframes employee-page-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.employee-shell__content > :not(.employee-shell__pull) {
+  animation: employee-page-in 180ms ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .employee-shell__content > :not(.employee-shell__pull) {
+    animation: none;
+  }
 }
 
 .employee-shell__content--attendance {

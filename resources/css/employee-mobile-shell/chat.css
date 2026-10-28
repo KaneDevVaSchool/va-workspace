@@ -98,17 +98,24 @@
   transform: translateY(3px);
 }
 
-.chat-pending-enter-active,
-.chat-pending-leave-active {
+.chat-pending-enter-active {
   transition:
-    opacity 220ms ease,
-    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 180ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.chat-pending-enter-from,
+.chat-pending-leave-active {
+  transition: opacity 80ms ease;
+}
+
+.chat-pending-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
 .chat-pending-leave-to {
   opacity: 0;
-  transform: translateY(8px) scale(0.98);
+  transform: none;
 }
 
 .chat-typing-row-enter-active,
@@ -191,4 +198,38 @@
 
 .employee-shell__content--chat-thread .chat-dock--picker .chat-picker--sticker {
   max-height: min(20rem, 44dvh);
+}
+
+@keyframes chat-screen-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-bubble-row--animate,
+  .chat-item,
+  .chat-item--fresh,
+  .chat-person,
+  .chat-typing span,
+  .chat-pending-enter-active,
+  .chat-pending-leave-active,
+  .chat-picker-enter-active,
+  .chat-picker-leave-active,
+  .chat-compose-banner-enter-active,
+  .chat-compose-banner-leave-active,
+  .chat-typing-row-enter-active,
+  .chat-typing-row-leave-active,
+  .chat-status-enter-active,
+  .chat-status-leave-active,
+  .chat-draft-files-enter-active,
+  .chat-draft-files-leave-active,
+  .chat-view,
+  .chat-list {
+    animation: none;
+    transition: none;
+  }
 }

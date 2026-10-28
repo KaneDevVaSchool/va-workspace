@@ -239,6 +239,7 @@ const visibleConversations = computed(() => {
   min-height: 0;
   height: 100%;
   overflow: hidden;
+  animation: chat-screen-in 180ms ease both;
 }
 
 .chat-list--shell .chat-list__items {
@@ -328,7 +329,6 @@ const visibleConversations = computed(() => {
   padding: 0.6rem var(--space-3);
   cursor: pointer;
   font-family: inherit;
-  animation: chat-list-item-in 260ms ease both;
   transition: background 120ms ease;
 }
 
@@ -396,8 +396,7 @@ const visibleConversations = computed(() => {
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-border) 85%, transparent);
   cursor: pointer;
   font-family: inherit;
-  animation: chat-list-item-in 320ms ease both;
-  transition: background 140ms ease, transform 140ms ease;
+  transition: background 140ms ease;
 }
 
 .chat-item:active {
@@ -428,7 +427,7 @@ const visibleConversations = computed(() => {
 }
 
 .chat-item--fresh {
-  animation: chat-item-fresh 2.4s ease, chat-list-item-in 320ms ease both;
+  animation: chat-item-fresh 2.4s ease;
 }
 
 @keyframes chat-item-fresh {

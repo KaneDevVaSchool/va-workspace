@@ -267,33 +267,120 @@ function dayLabel(iso) {
   return date.toLocaleDateString('vi-VN', { day: 'numeric', month: 'long' });
 }
 
-function scrollToBottom() {
+const stickToBottom = ref(true);
+const freshBubbleIds = ref(new Set());
+let knownBubbleIds = new Set();
+let bubbleMotionOn = false;
+let programmaticScroll = false;
+let programmaticScrollTimer = 0;
+
+function distanceFromBottom(el) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight;
+}
+
+function motionReduced() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function scrollToBottom(smooth = false) {
   nextTick(() => {
-    if (listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight;
+    const el = listRef.value;
+    if (!el) return;
+    const top = el.scrollHeight;
+    if (smooth !== true || motionReduced()) {
+      el.scrollTop = top;
+      stickToBottom.value = true;
+      return;
+    }
+    programmaticScroll = true;
+    window.clearTimeout(programmaticScrollTimer);
+    el.scrollTo({ top, behavior: 'smooth' });
+    programmaticScrollTimer = window.setTimeout(() => {
+      programmaticScroll = false;
+      stickToBottom.value = distanceFromBottom(el) < 120;
+    }, 380);
   });
 }
 
-onMounted(scrollToBottom);
+function resetBubbleMotion() {
+  bubbleMotionOn = false;
+  knownBubbleIds = new Set();
+  freshBubbleIds.value = new Set();
+}
+
+function noteFreshBubbles(markOnly = false) {
+  const ids = store.activeMessages.map((message) => message.id);
+  if (!bubbleMotionOn) {
+    if (store.loadingMessages && ids.length === 0) return;
+    knownBubbleIds = new Set(ids);
+    freshBubbleIds.value = new Set();
+    bubbleMotionOn = true;
+    return;
+  }
+  const present = new Set(ids);
+  const fresh = new Set();
+  let changed = false;
+  for (const id of freshBubbleIds.value) {
+    if (present.has(id)) fresh.add(id);
+    else changed = true;
+  }
+  for (const id of ids) {
+    if (knownBubbleIds.has(id)) continue;
+    knownBubbleIds.add(id);
+    changed = true;
+    if (!markOnly) fresh.add(id);
+  }
+  if (changed) freshBubbleIds.value = fresh;
+}
+
+onMounted(() => {
+  noteFreshBubbles();
+  scrollToBottom(false);
+});
 onBeforeUnmount(() => {
+  window.clearTimeout(programmaticScrollTimer);
   stopTyping();
   clearInterval(viewingTimer);
   clearDraftFiles();
 });
 
 watch(
-  () => store.activeMessages.length,
-  () => {
-    if (!editing.value) scrollToBottom();
+  () => `${store.activeConversationId}|${store.activeMessages.map((message) => message.id).join(',')}`,
+  (current, previous) => {
+    const conversationId = current.split('|')[0];
+    const previousId = previous?.split('|')[0];
+    const switched = conversationId !== previousId;
+    const nextCount = store.activeMessages.length;
+    const previousIds = previous?.split('|')[1]?.split(',').filter(Boolean) ?? [];
+    const previousCount = previousIds.length;
+    const currentIds = store.activeMessages.map((message) => String(message.id));
+    const prepended = previousIds.length > 0
+      && currentIds.length > previousIds.length
+      && currentIds[currentIds.length - 1] === previousIds[previousIds.length - 1];
+    if (switched) {
+      stickToBottom.value = true;
+      resetBubbleMotion();
+    }
+    noteFreshBubbles(prepended);
+    if (editing.value || prepended) return;
+    if (switched || previous == null) {
+      scrollToBottom(false);
+      return;
+    }
+    if (stickToBottom.value && nextCount > previousCount) {
+      const gap = listRef.value ? distanceFromBottom(listRef.value) : 0;
+      scrollToBottom(gap > 0 && gap < 520);
+    }
   },
 );
 
 watch(typingLabel, (label) => {
-  if (!label) return;
-  window.requestAnimationFrame(() => scrollToBottom());
+  if (!label || !stickToBottom.value) return;
+  scrollToBottom(true);
 });
 
-watch(sending, (active) => {
-  if (active && pendingOutgoing.value) scrollToBottom();
+watch(showPendingOutgoing, (visible) => {
+  if (visible) scrollToBottom(true);
 });
 
 watch(
@@ -325,7 +412,11 @@ watch(draft, () => pingTyping());
 
 function onScroll() {
   reactionPicker.value = null;
-  if (listRef.value && listRef.value.scrollTop < 40) loadOlder();
+  const el = listRef.value;
+  if (el && !programmaticScroll) {
+    stickToBottom.value = distanceFromBottom(el) < 96;
+  }
+  if (el && el.scrollTop < 40) loadOlder();
 }
 
 async function loadOlder() {
@@ -470,11 +561,10 @@ function scheduleViewportForKeyboard() {
 
 function onInputFocus() {
   pickerOpen.value = false;
+  stickToBottom.value = true;
   scheduleViewportForKeyboard();
-  nextTick(() => {
-    scrollToBottom();
-    window.requestAnimationFrame(scrollToBottom);
-  });
+  nextTick(() => scrollToBottom(false));
+  window.requestAnimationFrame(() => scrollToBottom(false));
 }
 
 function syncViewportUnlessNativePicker() {
@@ -956,7 +1046,7 @@ function sendSticker(sticker) {
     })
     .then(() => {
       replyTo.value = null;
-      nextTick(scrollToBottom);
+      nextTick(() => scrollToBottom(true));
     })
     .catch((error) => {
       showClientToast('error', error?.response?.data?.message ?? 'Không gửi được sticker.');
@@ -1017,7 +1107,8 @@ async function send() {
   mentionIds.value = [];
   replyTo.value = null;
   sending.value = true;
-  nextTick(scrollToBottom);
+  stickToBottom.value = true;
+  nextTick(() => scrollToBottom(true));
 
   let delivered = false;
   try {
@@ -1364,8 +1455,11 @@ function menuItems(message) {
         <div
           v-else
           :id="`chat-msg-${row.message.id}`"
-          class="chat-bubble-row chat-bubble-row--animate"
-          :class="{ 'chat-bubble-row--mine': isMine(row.message) }"
+          class="chat-bubble-row"
+          :class="{
+            'chat-bubble-row--mine': isMine(row.message),
+            'chat-bubble-row--animate': freshBubbleIds.has(row.message.id),
+          }"
         >
           <span v-if="isGroup && !isMine(row.message)" class="chat-bubble-row__avatar">
             <ChatAvatar
@@ -2024,6 +2118,7 @@ function menuItems(message) {
   height: 100%;
   overflow: hidden;
   touch-action: manipulation;
+  animation: chat-screen-in 180ms ease both;
   background:
     radial-gradient(
       ellipse 120% 80% at 50% -20%,
@@ -2167,6 +2262,7 @@ function menuItems(message) {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  overflow-anchor: none;
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
