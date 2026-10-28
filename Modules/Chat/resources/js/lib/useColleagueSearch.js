@@ -17,6 +17,8 @@ export function useColleagueSearch({ exclude = () => false } = {}) {
   const searching = ref(false);
   const loadingMore = ref(false);
   const hasMore = ref(false);
+  /** Máy chủ lỗi — để giao diện báo lỗi thật, không nói nhầm là "không tìm thấy". */
+  const failed = ref(false);
 
   let timer = null;
   let term = '';
@@ -30,6 +32,7 @@ export function useColleagueSearch({ exclude = () => false } = {}) {
     received = 0;
     results.value = [];
     hasMore.value = false;
+    failed.value = false;
     searching.value = false;
     loadingMore.value = false;
   }
@@ -51,6 +54,7 @@ export function useColleagueSearch({ exclude = () => false } = {}) {
       if (mine !== ticket) return;
       received += page.users.length;
       hasMore.value = page.hasMore;
+      failed.value = false;
       if (isFirst) results.value = [];
       const before = results.value.length;
       append(page.users);
@@ -61,6 +65,7 @@ export function useColleagueSearch({ exclude = () => false } = {}) {
     } catch {
       if (mine !== ticket) return;
       hasMore.value = false;
+      failed.value = true;
       if (isFirst) results.value = [];
     } finally {
       if (mine === ticket) {
@@ -81,6 +86,7 @@ export function useColleagueSearch({ exclude = () => false } = {}) {
     ticket += 1;
     searching.value = true;
     loadingMore.value = false;
+    failed.value = false;
     timer = window.setTimeout(() => {
       term = trimmed;
       received = 0;
@@ -101,5 +107,5 @@ export function useColleagueSearch({ exclude = () => false } = {}) {
 
   onBeforeUnmount(() => window.clearTimeout(timer));
 
-  return { results, searching, loadingMore, hasMore, setQuery, loadMore, onScroll, reset };
+  return { results, searching, loadingMore, hasMore, failed, setQuery, loadMore, onScroll, reset };
 }

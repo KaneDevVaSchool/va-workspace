@@ -446,12 +446,13 @@ class ChatService
             ->update(['read_at' => now()]);
     }
 
-    private function upsertChatNotification(User $recipient, User $actor, int $conversationId, string $title, string $body, mixed $avatar): void
+    private function upsertChatNotification(User $recipient, User $actor, int $conversationId, string $title, string $body, mixed $avatar, string $pushBody): void
     {
         $data = [
             'conversation_id' => $conversationId,
             'push_icon' => is_string($avatar) ? $avatar : null,
             'push_tag' => 'va-chat-'.$conversationId,
+            'push_body' => $pushBody,
         ];
 
         $existing = UserNotification::query()
@@ -483,6 +484,7 @@ class ChatService
                 [
                     'push_icon' => is_string($avatar) ? $avatar : null,
                     'push_tag' => 'va-chat-'.$conversationId,
+                    'push_body' => $pushBody,
                 ],
             );
 
@@ -526,6 +528,37 @@ class ChatService
         return $text;
     }
 
+    /**
+     * Nội dung push điện thoại: dòng 1 = ai gửi (+ nhóm), dòng 2 = tin nhắn.
+     */
+    private function pushBody(User $actor, Conversation $conversation, Message $message, bool $mentioned): string
+    {
+        $header = $mentioned ? "{$actor->name} nhắc bạn" : (string) $actor->name;
+        $groupTitle = trim((string) $conversation->title);
+        if ($conversation->type === Conversation::TYPE_GROUP && $groupTitle !== '') {
+            $header .= ' · '.$groupTitle;
+        }
+
+        return $header."\n".$this->pushExcerpt($message);
+    }
+
+    /** Một dòng, có emoji cho tin không phải chữ (sticker, thoại, ảnh, tệp, bình chọn). */
+    private function pushExcerpt(Message $message): string
+    {
+        $emoji = match (true) {
+            $this->isSticker($message) => '🙂',
+            $message->message_type === Message::TYPE_VOICE => '🎙️',
+            $message->message_type === Message::TYPE_POLL => '📊',
+            trim($message->message) === '' && $message->attachments->isNotEmpty() => $message->attachments->every(fn ($file) => $file->type === 'image') ? '📷' : '📎',
+            default => '',
+        };
+
+        $excerpt = $this->notificationExcerpt($message);
+        $excerpt = preg_replace('/\s+/u', ' ', $excerpt) ?? $excerpt;
+
+        return $emoji !== '' ? "{$emoji} {$excerpt}" : $excerpt;
+    }
+
     private function notifyOthers(User $actor, int $conversationId, array $presented, Message $message, array $mentionIds = []): void
     {
         $conversation = $this->requireConversation($conversationId);
@@ -563,6 +596,7 @@ class ChatService
                 $title,
                 $this->notificationExcerpt($message),
                 $actor->avatar_url,
+                $this->pushBody($actor, $conversation, $message, $mentioned),
             );
         }
     }

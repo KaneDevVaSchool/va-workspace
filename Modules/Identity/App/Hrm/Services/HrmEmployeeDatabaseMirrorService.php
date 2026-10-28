@@ -11,6 +11,7 @@ use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Support\UserAvatarUrl;
+use Throwable;
 
 /**
  * Tạo/cập nhật bản ghi users workspace từ MySQL VA-HRM (SSOT) — không gọi HTTP.
@@ -196,7 +197,17 @@ class HrmEmployeeDatabaseMirrorService
      */
     private function presentSearchRow(array $employee, ?int $excludeUserId): ?array
     {
-        $user = $this->mirrorOne($employee);
+        // Một hồ sơ HRM lỗi (trùng email/uuid, dữ liệu lạ…) chỉ làm người đó vắng mặt, không làm trống cả kết quả tìm.
+        try {
+            $user = $this->mirrorOne($employee);
+        } catch (Throwable $e) {
+            Log::warning('hrm.colleague_search.mirror_failed', [
+                'employee_uuid' => $employee['uuid'] ?? null,
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
         if ($user === null || $user->status !== 'active') {
             return null;
         }

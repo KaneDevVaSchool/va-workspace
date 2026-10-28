@@ -8,7 +8,7 @@ import { useChatStore } from '../store/chatStore';
 const store = useChatStore();
 const query = ref('');
 const focused = ref(false);
-const { results, searching, loadingMore, setQuery, onScroll, reset } = useColleagueSearch();
+const { results, searching, loadingMore, failed, setQuery, onScroll, reset } = useColleagueSearch();
 
 watch(query, setQuery);
 
@@ -50,6 +50,9 @@ function initial(name) {
     <Transition name="chat-picker">
       <div v-if="query.trim() !== ''" class="chat-search__results hide-scrollbar" @scroll.passive="onScroll">
         <p v-if="searching" class="chat-search__empty">Đang tìm…</p>
+        <p v-else-if="failed && results.length === 0" class="chat-search__empty">
+          Chưa tải được danh sách đồng nghiệp. Bạn thử lại sau ít phút.
+        </p>
         <p v-else-if="results.length === 0" class="chat-search__empty">Không tìm thấy ai phù hợp.</p>
         <button
           v-for="(user, index) in results"

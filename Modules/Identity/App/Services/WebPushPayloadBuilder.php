@@ -30,7 +30,7 @@ final class WebPushPayloadBuilder
         if ($override !== '') {
             return [
                 'title' => self::BRAND_TITLE,
-                'body' => $this->trimBody($override),
+                'body' => $this->trimLines($override),
             ];
         }
 
@@ -77,7 +77,9 @@ final class WebPushPayloadBuilder
     }
 
     /**
-     * Dòng hiện trên điện thoại. Chat: tiêu đề là nội dung tin (OS đã hiện tên app).
+     * Dòng hiện trên điện thoại. Chat: tiêu đề cố định "1 lời nhắn từ VA",
+     * nội dung tin ("Tên: nội dung") nằm ở body để iOS hiện đủ nhiều dòng
+     * (đặt vào title và để body rỗng thì bị cắt 1 dòng + iOS chèn "from <app>").
      *
      * @param  array{title: string, body: string}  $formatted
      * @return array{title: string, body: string}
@@ -85,11 +87,9 @@ final class WebPushPayloadBuilder
     public function forPhone(string $type, array $formatted): array
     {
         if ($type === NotificationService::TYPE_CHAT_MESSAGE) {
-            $line = trim($formatted['body']);
-
             return [
-                'title' => $line !== '' ? $line : self::CHAT_PHONE_TITLE,
-                'body' => '',
+                'title' => self::CHAT_PHONE_TITLE,
+                'body' => trim($formatted['body']),
             ];
         }
 
@@ -165,6 +165,24 @@ final class WebPushPayloadBuilder
         }
 
         return $t;
+    }
+
+    /** Như trimBody nhưng giữ xuống dòng (push_body tự dựng nhiều dòng). */
+    private function trimLines(string $text): string
+    {
+        $lines = [];
+        foreach (preg_split('/\R/u', $text) ?: [] as $raw) {
+            $line = preg_replace('/\s+/u', ' ', trim($raw)) ?? trim($raw);
+            if ($line !== '') {
+                $lines[] = $line;
+            }
+        }
+
+        if ($lines === []) {
+            return 'Có thông báo mới';
+        }
+
+        return mb_strimwidth(implode("\n", $lines), 0, self::BODY_MAX, '…');
     }
 
     private function trimBody(string $line): string

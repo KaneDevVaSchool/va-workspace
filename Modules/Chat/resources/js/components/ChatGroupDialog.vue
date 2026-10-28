@@ -19,7 +19,7 @@ const query = ref('');
 const selected = ref([]);
 const saving = ref(false);
 const error = ref('');
-const { results, searching, loadingMore, setQuery, onScroll, reset } = useColleagueSearch({
+const { results, searching, loadingMore, failed, setQuery, onScroll, reset } = useColleagueSearch({
   exclude: (user) => user.id === auth.user?.id || selected.value.some((item) => item.id === user.id),
 });
 
@@ -161,6 +161,9 @@ function initial(name) {
             <div class="chat-group__list hide-scrollbar" @scroll.passive="onScroll">
               <p v-if="query.trim() === ''" class="chat-group__empty">Nhập tên để tìm đồng nghiệp.</p>
               <p v-else-if="searching" class="chat-group__empty">Đang tìm…</p>
+              <p v-else-if="failed && results.length === 0" class="chat-group__empty">
+                Chưa tải được danh sách đồng nghiệp. Bạn thử lại sau ít phút.
+              </p>
               <p v-else-if="results.length === 0" class="chat-group__empty">Không tìm thấy ai phù hợp.</p>
               <button
                 v-for="user in results"

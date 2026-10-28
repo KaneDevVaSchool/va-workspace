@@ -11,7 +11,7 @@ const emit = defineEmits(['create-group']);
 
 const store = useChatStore();
 const peerQuery = ref('');
-const { results, searching, loadingMore, setQuery, onScroll, reset } = useColleagueSearch();
+const { results, searching, loadingMore, failed, setQuery, onScroll, reset } = useColleagueSearch();
 
 watch(peerQuery, (value) => {
   listQuery.value = value.trim();
@@ -77,6 +77,9 @@ function onCreateGroup() {
         @scroll.passive="onScroll"
       >
         <p v-if="searching" class="employee-chat-toolbar__empty">Đang tìm…</p>
+        <p v-else-if="failed && results.length === 0" class="employee-chat-toolbar__empty">
+          Chưa tải được danh sách đồng nghiệp. Bạn thử lại sau ít phút.
+        </p>
         <p v-else-if="results.length === 0" class="employee-chat-toolbar__empty">
           Không tìm thấy đồng nghiệp — danh sách hội thoại vẫn được lọc theo từ khoá.
         </p>
