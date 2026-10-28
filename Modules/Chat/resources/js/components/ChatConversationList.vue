@@ -1,11 +1,11 @@
 <script setup>
-import { computed, inject, ref } from 'vue';
+import { computed, inject, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { formatRelativeTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
+import { useColleagueSearch } from '../lib/useColleagueSearch';
 import ChatGroupDialog from './ChatGroupDialog.vue';
-import ChatUserSearch from './ChatUserSearch.vue';
 import { useChatStore } from '../store/chatStore';
 
 const store = useChatStore();
@@ -17,6 +17,26 @@ const listQueryLocal = ref('');
 const groupOpen = shellGroupOpen ?? groupOpenLocal;
 const listQuery = shellListQuery ?? listQueryLocal;
 const useShellToolbar = Boolean(shellListQuery);
+
+// Một ô tìm duy nhất (header PWA hoặc ô trong khung desktop): từ khoá vừa lọc hội thoại,
+// vừa hiện đồng nghiệp khớp ngay trên danh sách hội thoại.
+const {
+  results: colleagues,
+  searching: colleaguesSearching,
+  loadingMore: colleaguesLoadingMore,
+  hasMore: colleaguesHasMore,
+  failed: colleaguesFailed,
+  setQuery: searchColleagues,
+  loadMore: loadMoreColleagues,
+} = useColleagueSearch();
+const showColleagues = computed(() => listQuery.value.trim() !== '');
+
+watch(listQuery, searchColleagues, { immediate: true });
+
+async function openColleague(user) {
+  listQuery.value = '';
+  await store.openWithUser(user.id);
+}
 
 function initial(name) {
   return name?.trim().charAt(0).toUpperCase() || '?';
@@ -72,25 +92,71 @@ const visibleConversations = computed(() => {
 
 <template>
   <div class="chat-list" :class="{ 'chat-list--shell': useShellToolbar }">
-    <template v-if="!useShellToolbar">
-      <div class="chat-list__toolbar">
-        <label class="chat-list__find">
-          <AppIcon name="search" :size="14" :stroke-width="1.75" />
-          <input v-model="listQuery" type="search" placeholder="Tìm hội thoại" aria-label="Tìm hội thoại" />
-        </label>
-        <button type="button" class="chat-list__group-btn" aria-label="Tạo nhóm" @click="groupOpen = true">
-          <AppIcon name="userPlus" :size="18" :stroke-width="1.75" />
-        </button>
-      </div>
-      <ChatUserSearch />
-    </template>
+    <div v-if="!useShellToolbar" class="chat-list__toolbar">
+      <label class="chat-list__find">
+        <AppIcon name="search" :size="14" :stroke-width="1.75" />
+        <input
+          v-model="listQuery"
+          type="search"
+          placeholder="Tìm hội thoại, đồng nghiệp…"
+          autocomplete="off"
+          aria-label="Tìm hội thoại hoặc đồng nghiệp"
+        />
+      </label>
+      <button type="button" class="chat-list__group-btn" aria-label="Tạo nhóm" @click="groupOpen = true">
+        <AppIcon name="userPlus" :size="18" :stroke-width="1.75" />
+      </button>
+    </div>
 
     <div class="chat-list__items">
+      <section v-if="showColleagues" class="chat-people" aria-label="Đồng nghiệp">
+        <p class="chat-list__section">Đồng nghiệp</p>
+        <p v-if="colleaguesSearching" class="chat-list__empty chat-list__empty--inline">Đang tìm…</p>
+        <p v-else-if="colleaguesFailed && colleagues.length === 0" class="chat-list__empty chat-list__empty--inline">
+          Chưa tải được danh sách đồng nghiệp. Bạn thử lại sau ít phút.
+        </p>
+        <p v-else-if="colleagues.length === 0" class="chat-list__empty chat-list__empty--inline">
+          Không có đồng nghiệp nào khớp với từ khoá.
+        </p>
+        <button
+          v-for="(user, index) in colleagues"
+          v-else
+          :key="user.id"
+          type="button"
+          class="chat-person"
+          :style="{ animationDelay: `${Math.min(index, 12) * 30}ms` }"
+          @click="openColleague(user)"
+        >
+          <img
+            v-if="user.avatar_url"
+            class="chat-item__avatar"
+            :src="user.avatar_url"
+            :alt="`Ảnh đại diện của ${user.name}`"
+          />
+          <span v-else class="chat-item__avatar chat-item__avatar--placeholder">{{ initial(user.name) }}</span>
+          <span class="chat-item__body">
+            <span class="chat-item__name">{{ user.name }}</span>
+            <span v-if="formatPeerMeta(user)" class="chat-item__meta">{{ formatPeerMeta(user) }}</span>
+          </span>
+          <AppIcon class="chat-person__icon" name="messageCircle" :size="16" :stroke-width="1.75" />
+        </button>
+        <button
+          v-if="colleaguesHasMore"
+          type="button"
+          class="chat-people__more"
+          :disabled="colleaguesLoadingMore"
+          @click="loadMoreColleagues"
+        >
+          {{ colleaguesLoadingMore ? 'Đang tải…' : 'Xem thêm đồng nghiệp' }}
+        </button>
+      </section>
+      <p v-if="showColleagues && visibleConversations.length > 0" class="chat-list__section">Hội thoại</p>
+
       <p v-if="store.loadingConversations" class="chat-list__empty chat-list__empty--loading">
         <span class="chat-list__shimmer" aria-hidden="true" />
         Đang tải hội thoại…
       </p>
-      <p v-else-if="store.conversations.length === 0" class="chat-list__empty">
+      <p v-else-if="store.conversations.length === 0 && !showColleagues" class="chat-list__empty">
         Chưa có cuộc trò chuyện nào. Tìm đồng nghiệp hoặc tạo nhóm để bắt đầu.
       </p>
       <button
@@ -236,6 +302,63 @@ const visibleConversations = computed(() => {
   text-align: center;
   color: var(--color-text-muted);
   font-size: 0.875rem;
+}
+
+.chat-list__empty--inline {
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.8125rem;
+}
+
+.chat-list__section {
+  margin: 0;
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.chat-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0.6rem var(--space-3);
+  cursor: pointer;
+  font-family: inherit;
+  animation: chat-list-item-in 260ms ease both;
+  transition: background 120ms ease;
+}
+
+.chat-person:hover {
+  background: var(--color-primary-surface);
+}
+
+.chat-person__icon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.chat-people__more {
+  display: block;
+  width: calc(100% - 2 * var(--space-3));
+  margin: var(--space-1) var(--space-3) var(--space-2);
+  padding: 0.55rem var(--space-3);
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-people__more:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .chat-list__empty--loading {
