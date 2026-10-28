@@ -198,8 +198,8 @@
  * large viewport để khung chat không bị đẩy xuống và picker không nằm giữa phía trên.
  */
 @media (max-width: 768px) {
-  html.pwa-native-picker .employee-shell--browser:not(.emp-shell-preview__shell),
-  html.pwa-native-picker .employee-shell--pwa:not(.emp-shell-preview__shell) {
+  html.pwa-native-picker:not(.pwa-vv-keyboard) .employee-shell--browser:not(.emp-shell-preview__shell),
+  html.pwa-native-picker:not(.pwa-vv-keyboard) .employee-shell--pwa:not(.emp-shell-preview__shell) {
     top: 0 !important;
     left: 0 !important;
     right: 0 !important;

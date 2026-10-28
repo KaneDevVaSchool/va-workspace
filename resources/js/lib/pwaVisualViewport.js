@@ -19,6 +19,8 @@ export const PWA_NATIVE_PICKER_CLASS = 'pwa-native-picker';
 /** @type {number} px — co khung khi layout cao hơn visual viewport (keyboard / zoom UI). */
 const KEYBOARD_INSET_THRESHOLD = 48;
 
+const CHAT_COMPOSER_INPUT_SELECTOR = 'textarea.chat-view__input';
+
 let nativePickerActive = false;
 let nativePickerSawLeave = false;
 let nativePickerSawShrink = false;
@@ -36,9 +38,116 @@ function setNativePickerClass(active) {
   document.documentElement.classList.toggle(PWA_NATIVE_PICKER_CLASS, active);
 }
 
+function isEmployeeMobileShell() {
+  if (typeof document === 'undefined') return false;
+  const root = document.documentElement;
+  return (
+    root.classList.contains('employee-mobile-pwa')
+    || root.classList.contains('employee-mobile-browser')
+  );
+}
+
+function shouldSyncVisualViewportKeyboard() {
+  return isPwaStandalone() || isEmployeeMobileShell();
+}
+
+const VV_PROPS = [PWA_VV_HEIGHT, PWA_VV_OFFSET_TOP, PWA_VV_OFFSET_LEFT, PWA_VV_WIDTH];
+
+export function clearPwaVisualViewport() {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  for (const prop of VV_PROPS) {
+    root.style.removeProperty(prop);
+  }
+}
+
+function setKeyboardFrame(active) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.classList.toggle(PWA_VV_KEYBOARD_CLASS, active);
+}
+
+function composerInputFocused() {
+  return document.activeElement?.matches?.(CHAT_COMPOSER_INPUT_SELECTOR) ?? false;
+}
+
+function keyboardInsetPx(vv) {
+  if (!vv) return 0;
+  return window.innerHeight - vv.height - Math.max(0, vv.offsetTop);
+}
+
+function isVisualViewportKeyboardOpen(vv, composerFocused = composerInputFocused()) {
+  if (!vv) return false;
+  const inset = keyboardInsetPx(vv);
+  return inset >= KEYBOARD_INSET_THRESHOLD || (composerFocused && inset >= 20);
+}
+
+function applyVisualViewportKeyboardFrame(vv, composerFocused = composerInputFocused()) {
+  const root = document.documentElement;
+  setKeyboardFrame(true);
+
+  if (
+    isIosDevice()
+    && (vv.offsetTop > 0 || composerFocused)
+    && !isNativePickerHolding()
+  ) {
+    window.scrollTo(0, 0);
+  }
+
+  const height = Math.max(0, Math.round(vv.height));
+  const offsetTop = Math.max(0, Math.round(vv.offsetTop));
+  const offsetLeft = Math.max(0, Math.round(vv.offsetLeft));
+  const width = Math.max(0, Math.round(vv.width));
+
+  if (height > 0) {
+    root.style.setProperty(PWA_VV_HEIGHT, `${height}px`);
+  } else {
+    root.style.removeProperty(PWA_VV_HEIGHT);
+  }
+
+  root.style.setProperty(PWA_VV_OFFSET_TOP, `${offsetTop}px`);
+  root.style.setProperty(PWA_VV_OFFSET_LEFT, `${offsetLeft}px`);
+
+  if (width > 0) {
+    root.style.setProperty(PWA_VV_WIDTH, `${width}px`);
+  } else {
+    root.style.removeProperty(PWA_VV_WIDTH);
+  }
+
+  syncEmployeeShellHeight();
+}
+
 function holdNativePickerFrame() {
   clearPwaVisualViewport();
   setKeyboardFrame(false);
+  syncEmployeeShellHeight();
+}
+
+function syncNativePickerVisualViewport() {
+  if (!shouldSyncVisualViewportKeyboard()) {
+    holdNativePickerFrame();
+    return;
+  }
+
+  const vv = window.visualViewport;
+  if (!vv) {
+    holdNativePickerFrame();
+    return;
+  }
+
+  if (isVisualViewportKeyboardOpen(vv)) {
+    applyVisualViewportKeyboardFrame(vv);
+    return;
+  }
+
+  holdNativePickerFrame();
+}
+
+function isNativePickerHolding() {
+  if (typeof document === 'undefined') return nativePickerActive;
+  return (
+    nativePickerActive
+    || document.documentElement.classList.contains(PWA_NATIVE_PICKER_CLASS)
+  );
 }
 
 /**
@@ -54,8 +163,10 @@ export function beginNativeFilePicker() {
   window.clearTimeout(nativePickerCloseTimer);
   window.clearTimeout(nativePickerHoldTimer);
   setNativePickerClass(true);
-  holdNativePickerFrame();
-  window.scrollTo(0, 0);
+  syncNativePickerVisualViewport();
+  if (viewportSettled()) {
+    window.scrollTo(0, 0);
+  }
   nativePickerHoldTimer = window.setTimeout(() => {
     if (!nativePickerActive || nativePickerSawShrink || !viewportSettled()) return;
     endNativeFilePicker();
@@ -104,43 +215,10 @@ function noteNativePickerResize() {
   scheduleNativePickerEndAfterSettle();
 }
 
-const CHAT_COMPOSER_INPUT_SELECTOR = 'textarea.chat-view__input';
-
-function isEmployeeMobileShell() {
-  if (typeof document === 'undefined') return false;
-  const root = document.documentElement;
-  return (
-    root.classList.contains('employee-mobile-pwa')
-    || root.classList.contains('employee-mobile-browser')
-  );
-}
-
-function shouldSyncVisualViewportKeyboard() {
-  return isPwaStandalone() || isEmployeeMobileShell();
-}
-
-const VV_PROPS = [PWA_VV_HEIGHT, PWA_VV_OFFSET_TOP, PWA_VV_OFFSET_LEFT, PWA_VV_WIDTH];
-
-export function clearPwaVisualViewport() {
-  if (typeof document === 'undefined') return;
-  const root = document.documentElement;
-  for (const prop of VV_PROPS) {
-    root.style.removeProperty(prop);
-  }
-}
-
-function setKeyboardFrame(active) {
-  if (typeof document === 'undefined') return;
-  document.documentElement.classList.toggle(PWA_VV_KEYBOARD_CLASS, active);
-}
-
 export function syncPwaVisualViewport() {
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
-  if (
-    nativePickerActive
-    || document.documentElement.classList.contains(PWA_NATIVE_PICKER_CLASS)
-  ) {
-    holdNativePickerFrame();
+  if (isNativePickerHolding()) {
+    syncNativePickerVisualViewport();
     return;
   }
   if (!shouldSyncVisualViewportKeyboard()) {
@@ -150,7 +228,6 @@ export function syncPwaVisualViewport() {
   }
 
   const vv = window.visualViewport;
-  const root = document.documentElement;
 
   if (!vv) {
     clearPwaVisualViewport();
@@ -158,49 +235,14 @@ export function syncPwaVisualViewport() {
     return;
   }
 
-  const layoutHeight = window.innerHeight;
-  const height = Math.max(0, Math.round(vv.height));
-  const offsetTop = Math.max(0, Math.round(vv.offsetTop));
-  const offsetLeft = Math.max(0, Math.round(vv.offsetLeft));
-  const width = Math.max(0, Math.round(vv.width));
-  const keyboardInset = layoutHeight - height - offsetTop;
-  const composerFocused =
-    typeof document !== 'undefined'
-    && document.activeElement?.matches?.(CHAT_COMPOSER_INPUT_SELECTOR);
-  const keyboardOpen =
-    keyboardInset >= KEYBOARD_INSET_THRESHOLD
-    || (composerFocused && keyboardInset >= 20);
-
-  if (!keyboardOpen) {
+  if (!isVisualViewportKeyboardOpen(vv)) {
     clearPwaVisualViewport();
     setKeyboardFrame(false);
     syncEmployeeShellHeight();
     return;
   }
 
-  setKeyboardFrame(true);
-
-  if (isIosDevice() && (offsetTop > 0 || composerFocused)) {
-    window.scrollTo(0, 0);
-  }
-
-  if (height > 0) {
-    root.style.setProperty(PWA_VV_HEIGHT, `${height}px`);
-  } else {
-    root.style.removeProperty(PWA_VV_HEIGHT);
-  }
-
-  root.style.setProperty(PWA_VV_OFFSET_TOP, `${offsetTop}px`);
-  root.style.setProperty(PWA_VV_OFFSET_LEFT, `${offsetLeft}px`);
-
-  if (width > 0) {
-    root.style.setProperty(PWA_VV_WIDTH, `${width}px`);
-  } else {
-    root.style.removeProperty(PWA_VV_WIDTH);
-  }
-
-  // Gỡ --employee-shell-height (iOS PWA innerHeight) để #app không cao hơn vùng bàn phím.
-  syncEmployeeShellHeight();
+  applyVisualViewportKeyboardFrame(vv);
 }
 
 let bound = false;

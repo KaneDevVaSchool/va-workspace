@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { formatRelativeTime } from '@/lib/formatTime';
@@ -7,6 +7,8 @@ import { isPwaStandalone } from '@/lib/pwaStandalone';
 import SocialReactionPicker from './SocialReactionPicker.vue';
 import { useReactionAction } from '../lib/useReactionAction.js';
 import { useSocialStoryRealtime } from '../lib/useSocialStoryRealtime.js';
+
+const STORY_IMAGE_MS = 5000;
 
 const emit = defineEmits(['posted', 'open-profile']);
 
@@ -21,7 +23,14 @@ const viewersLoading = ref(false);
 const viewersList = ref([]);
 const viewersCount = ref(0);
 const viewerPreview = ref([]);
-let timer = null;
+const storyPaused = ref(false);
+const activeVideoRef = ref(null);
+let progressRaf = null;
+let videoProgressRaf = null;
+let ringsRefreshTimer = null;
+let imageProgressStartedAt = 0;
+let imageProgressElapsedBeforePause = 0;
+const preloadedUrls = new Set();
 
 const storyImmersive = computed(() => isPwaStandalone());
 const { playFeedback, nextGen, isLatest } = useReactionAction();
@@ -51,10 +60,103 @@ function mineThumbUrl(pack) {
   return pack.user?.avatar_url || null;
 }
 
+function stopProgressLoop() {
+  if (progressRaf != null) {
+    window.cancelAnimationFrame(progressRaf);
+    progressRaf = null;
+  }
+}
+
+function syncVideoPlayback() {
+  const video = activeVideoRef.value;
+  if (!video) return;
+  if (storyPaused.value || viewersOpen.value) {
+    video.pause();
+    return;
+  }
+  const play = video.play();
+  if (play?.catch) play.catch(() => {});
+}
+
+function runImageProgressFrame(now) {
+  if (!activeStory.value || activeStory.value.media_kind !== 'image') return;
+  if (storyPaused.value || viewersOpen.value) {
+    progressRaf = null;
+    return;
+  }
+  const elapsed = imageProgressElapsedBeforePause + (now - imageProgressStartedAt);
+  progress.value = Math.min(100, (elapsed / STORY_IMAGE_MS) * 100);
+  if (progress.value >= 100) {
+    stopProgressLoop();
+    next();
+    return;
+  }
+  progressRaf = window.requestAnimationFrame(runImageProgressFrame);
+}
+
+function startImageProgress() {
+  stopProgressLoop();
+  imageProgressElapsedBeforePause = 0;
+  imageProgressStartedAt = performance.now();
+  progressRaf = window.requestAnimationFrame(runImageProgressFrame);
+}
+
+function pauseStoryPlayback() {
+  if (storyPaused.value || viewersOpen.value) return;
+  storyPaused.value = true;
+  if (activeStory.value?.media_kind === 'image') {
+    imageProgressElapsedBeforePause += performance.now() - imageProgressStartedAt;
+    stopProgressLoop();
+  }
+  syncVideoPlayback();
+}
+
+function resumeStoryPlayback() {
+  if (!storyPaused.value) return;
+  storyPaused.value = false;
+  if (activeStory.value?.media_kind === 'image') {
+    imageProgressStartedAt = performance.now();
+    progressRaf = window.requestAnimationFrame(runImageProgressFrame);
+  }
+  syncVideoPlayback();
+}
+
+function preloadStoryMedia(story) {
+  if (!story?.media_url || preloadedUrls.has(story.media_url)) return;
+  preloadedUrls.add(story.media_url);
+  if (story.media_kind === 'image') {
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = story.media_url;
+    return;
+  }
+  const link = document.createElement('link');
+  link.rel = 'preload';
+  link.as = 'video';
+  link.href = story.media_url;
+  document.head.appendChild(link);
+}
+
+function preloadAdjacentStories() {
+  const stories = activePack.value?.stories || [];
+  const i = index.value;
+  [stories[i + 1], stories[i + 2], stories[i - 1]].forEach((story) => {
+    if (story) preloadStoryMedia(story);
+  });
+  const list = storyPacks();
+  const currentId = activePack.value?.user?.id;
+  const at = list.findIndex((item) => item.user?.id === currentId);
+  if (at >= 0 && i >= stories.length - 2) {
+    const nextPack = list[at + 1];
+    const first = nextPack?.stories?.[0];
+    if (first) preloadStoryMedia(first);
+  }
+}
+
 watch(activeStory, (story) => {
   progress.value = 0;
-  viewersOpen.value = false;
-  window.clearInterval(timer);
+  storyPaused.value = false;
+  stopProgressLoop();
   if (!story) return;
 
   if (isOwnStory.value) {
@@ -66,14 +168,13 @@ watch(activeStory, (story) => {
     viewerPreview.value = [];
   }
 
+  preloadStoryMedia(story);
+  preloadAdjacentStories();
+
   if (story.media_kind === 'image') {
-    const started = Date.now();
-    timer = window.setInterval(() => {
-      if (viewersOpen.value) return;
-      progress.value = Math.min(100, ((Date.now() - started) / 5000) * 100);
-      if (progress.value >= 100) next();
-    }, 80);
+    startImageProgress();
   }
+
   if (!story.viewed && activePack.value?.user && !isOwnStory.value) {
     window.axios.post(`/api/social/stories/${story.id}/view`).catch(() => {});
     story.viewed = true;
@@ -81,10 +182,58 @@ watch(activeStory, (story) => {
   }
 });
 
-onBeforeUnmount(() => window.clearInterval(timer));
+function resumeImageProgressIfNeeded() {
+  if (
+    viewersOpen.value ||
+    storyPaused.value ||
+    activeStory.value?.media_kind !== 'image' ||
+    progress.value >= 100 ||
+    progressRaf != null
+  ) {
+    return;
+  }
+  imageProgressStartedAt = performance.now();
+  progressRaf = window.requestAnimationFrame(runImageProgressFrame);
+}
+
+watch(viewersOpen, (open) => {
+  if (open && activeStory.value?.media_kind === 'image' && progressRaf != null) {
+    imageProgressElapsedBeforePause += performance.now() - imageProgressStartedAt;
+    stopProgressLoop();
+  }
+  syncVideoPlayback();
+  if (!open) resumeImageProgressIfNeeded();
+});
+
+watch(storyPaused, () => {
+  syncVideoPlayback();
+  if (!storyPaused.value) resumeImageProgressIfNeeded();
+});
+
+watch(activeVideoRef, () => syncVideoPlayback());
+
+onBeforeUnmount(() => {
+  stopProgressLoop();
+  if (ringsRefreshTimer) window.clearTimeout(ringsRefreshTimer);
+  if (videoProgressRaf != null) window.cancelAnimationFrame(videoProgressRaf);
+});
+
+function scheduleRingsRefresh(preserveViewer = false) {
+  if (ringsRefreshTimer) window.clearTimeout(ringsRefreshTimer);
+  ringsRefreshTimer = window.setTimeout(() => {
+    ringsRefreshTimer = null;
+    load({ preserveViewer });
+  }, 350);
+}
 
 load();
-useSocialStoryRealtime(() => load({ preserveViewer: true }));
+useSocialStoryRealtime(() => scheduleRingsRefresh(Boolean(viewer.value)));
+
+const storyViewRoot = ref(null);
+watch(viewer, (open) => {
+  if (!open) return;
+  nextTick(() => storyViewRoot.value?.focus?.());
+});
 
 async function load(options = {}) {
   const preserveViewerId = options.preserveViewer ? viewer.value?.user?.id : null;
@@ -187,6 +336,7 @@ function openPack(pack) {
   viewer.value = pack;
   const firstUnseen = (pack.stories || []).findIndex((story) => !story.viewed);
   index.value = firstUnseen >= 0 ? firstUnseen : 0;
+  storyPaused.value = false;
 }
 
 function ringLabel(ring) {
@@ -199,8 +349,21 @@ function closeViewer() {
   viewer.value = null;
   viewersOpen.value = false;
   viewersList.value = [];
-  window.clearInterval(timer);
-  load({ preserveViewer: false });
+  storyPaused.value = false;
+  stopProgressLoop();
+  activeVideoRef.value = null;
+}
+
+function onViewerKeydown(event) {
+  if (!viewer.value) return;
+  if (event.key === 'Escape') {
+    if (viewersOpen.value) closeViewersSheet();
+    else closeViewer();
+    return;
+  }
+  if (viewersOpen.value) return;
+  if (event.key === 'ArrowRight') next();
+  if (event.key === 'ArrowLeft') previous();
 }
 
 function storyTimeLabel(iso) {
@@ -277,9 +440,18 @@ function previous() {
 }
 
 function onVideoTimeUpdate(event) {
-  if (viewersOpen.value) return;
+  if (viewersOpen.value || storyPaused.value) return;
+  if (videoProgressRaf != null) return;
   const el = event.target;
-  progress.value = (el.currentTime / Math.max(el.duration || 1, 0.1)) * 100;
+  videoProgressRaf = window.requestAnimationFrame(() => {
+    videoProgressRaf = null;
+    if (!el || el !== activeVideoRef.value) return;
+    progress.value = (el.currentTime / Math.max(el.duration || 1, 0.1)) * 100;
+  });
+}
+
+function bindVideoRef(el) {
+  activeVideoRef.value = el;
 }
 
 async function onFile(event) {
@@ -373,24 +545,48 @@ defineExpose({ reload: load });
       <div
         v-if="viewer && activeStory"
         class="story-view"
-        :class="{ 'story-view--immersive': storyImmersive }"
+        :class="{ 'story-view--immersive': storyImmersive, 'story-view--paused': storyPaused }"
         role="dialog"
         aria-modal="true"
         :aria-label="`Story của ${viewer.user.name}`"
+        ref="storyViewRoot"
+        tabindex="-1"
         @mousedown.self="closeViewer"
+        @keydown="onViewerKeydown"
       >
         <div class="story-view__shell">
-          <div class="story-view__frame">
+          <div
+            class="story-view__frame"
+            @pointerdown="pauseStoryPlayback"
+            @pointerup="resumeStoryPlayback"
+            @pointercancel="resumeStoryPlayback"
+            @pointerleave="resumeStoryPlayback"
+          >
             <div class="story-view__media">
-              <img v-if="activeStory.media_kind === 'image'" :src="activeStory.media_url" alt="" />
-              <video
-                v-else
-                :src="activeStory.media_url"
-                autoplay
-                playsinline
-                @ended="next"
-                @timeupdate="onVideoTimeUpdate"
-              />
+              <Transition name="story-media">
+                <img
+                  v-if="activeStory.media_kind === 'image'"
+                  :key="`img-${activeStory.id}`"
+                  :src="activeStory.media_url"
+                  alt=""
+                  decoding="async"
+                  fetchpriority="high"
+                />
+                <video
+                  v-else
+                  :key="`vid-${activeStory.id}`"
+                  :ref="bindVideoRef"
+                  :src="activeStory.media_url"
+                  autoplay
+                  playsinline
+                  preload="auto"
+                  @ended="next"
+                  @timeupdate="onVideoTimeUpdate"
+                />
+              </Transition>
+            </div>
+            <div v-if="storyPaused && !viewersOpen" class="story-view__pause-hint" aria-hidden="true">
+              <AppIcon name="pauseCircle" :size="36" :stroke-width="1.75" />
             </div>
 
             <div class="story-view__shade story-view__shade--top" aria-hidden="true" />
@@ -404,12 +600,17 @@ defineExpose({ reload: load });
               >
                 <span
                   class="story-view__bar-fill"
-                  :style="{ width: barIndex < index ? '100%' : barIndex === index ? `${progress}%` : '0%' }"
+                  :class="{ 'story-view__bar-fill--live': barIndex === index }"
+                  :style="{
+                    transform: `scaleX(${
+                      barIndex < index ? 1 : barIndex === index ? progress / 100 : 0
+                    })`,
+                  }"
                 />
               </span>
             </div>
 
-            <header class="story-view__head">
+            <header class="story-view__head" @pointerdown.stop>
               <span class="story-view__avatar">
                 <img v-if="viewer.user.avatar_url" :src="viewer.user.avatar_url" alt="" />
                 <span v-else>{{ initial(viewer.user.name) }}</span>
@@ -432,12 +633,25 @@ defineExpose({ reload: load });
               </button>
             </header>
 
-            <button type="button" class="story-view__nav story-view__nav--prev" aria-label="Story trước" @click="previous" />
-            <button type="button" class="story-view__nav story-view__nav--next" aria-label="Story sau" @click="next" />
+            <button
+              type="button"
+              class="story-view__nav story-view__nav--prev"
+              aria-label="Story trước"
+              @pointerdown.stop
+              @click.stop="previous"
+            />
+            <button
+              type="button"
+              class="story-view__nav story-view__nav--next"
+              aria-label="Story sau"
+              @pointerdown.stop
+              @click.stop="next"
+            />
 
             <div
               v-if="!isOwnStory && !viewersOpen"
               class="story-view__react-row"
+              @pointerdown.stop
             >
               <SocialReactionPicker
                 :my-reaction="activeStory.my_reaction"
@@ -451,6 +665,7 @@ defineExpose({ reload: load });
               type="button"
               class="story-view__views"
               :aria-label="viewersCountLabel(viewersCount)"
+              @pointerdown.stop
               @click.stop="openViewersSheet"
             >
               <span v-if="viewerPreview.length" class="story-view__views-stack" aria-hidden="true">
@@ -682,8 +897,7 @@ defineExpose({ reload: load });
   place-items: center;
   padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
     max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
-  background: color-mix(in srgb, #0a0a0c 88%, transparent);
-  backdrop-filter: blur(10px);
+  background: #0a0a0cf2;
 }
 
 .story-view__shell {
@@ -734,6 +948,7 @@ defineExpose({ reload: load });
   position: absolute;
   inset: 0;
   background: #0d0d12;
+  overflow: hidden;
 }
 
 .story-view__media img,
@@ -784,10 +999,48 @@ defineExpose({ reload: load });
 
 .story-view__bar-fill {
   display: block;
+  width: 100%;
   height: 100%;
   border-radius: inherit;
   background: #fff;
   box-shadow: 0 0 8px color-mix(in srgb, #fff 45%, transparent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  backface-visibility: hidden;
+}
+
+.story-view__bar-fill--live {
+  will-change: transform;
+}
+
+.story-media-enter-active {
+  transition: opacity 0.12s ease;
+}
+
+.story-media-leave-active {
+  transition: opacity 0.08s ease;
+  position: absolute;
+  inset: 0;
+}
+
+.story-media-enter-from,
+.story-media-leave-to {
+  opacity: 0;
+}
+
+.story-view__pause-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: #fff;
+  background: color-mix(in srgb, #000 22%, transparent);
+}
+
+.story-view--paused .story-view__bar-fill--live {
+  will-change: auto;
 }
 
 .story-view__head {
