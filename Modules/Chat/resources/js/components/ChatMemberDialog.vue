@@ -154,7 +154,10 @@ async function onAvatarChosen(event) {
             <button
               type="button"
               class="chat-room__brand-img-btn"
-              :class="{ 'chat-room__brand-img-btn--owner': isOwner }"
+              :class="{
+                'chat-room__brand-img-btn--owner': isOwner,
+                'chat-room__brand-img-btn--busy': avatarSaving,
+              }"
               :disabled="!isOwner || avatarSaving || saving"
               :aria-label="isOwner ? 'Chọn ảnh đại diện nhóm' : `Ảnh nhóm ${groupTitle}`"
               @click="pickAvatar"
@@ -166,14 +169,15 @@ async function onAvatarChosen(event) {
                 :alt="`Ảnh nhóm ${groupTitle}`"
               />
               <span v-else class="chat-room__brand-img chat-room__brand-img--ph">
-                <AppIcon name="users" :size="22" :stroke-width="1.75" />
+                <AppIcon name="users" :size="32" :stroke-width="1.5" />
               </span>
               <span v-if="isOwner" class="chat-room__brand-camera" aria-hidden="true">
-                <AppIcon name="camera" :size="14" :stroke-width="1.75" />
+                <AppIcon name="camera" :size="15" :stroke-width="1.75" />
               </span>
             </button>
             <span class="chat-room__brand-copy">
               <span class="chat-room__brand-name">{{ groupTitle }}</span>
+              <span class="chat-room__brand-meta">{{ members.length }} thành viên</span>
               <button
                 v-if="isOwner"
                 type="button"
@@ -304,16 +308,19 @@ async function onAvatarChosen(event) {
 .chat-room__brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.85rem;
-  padding-bottom: 0.85rem;
-  box-shadow: inset 0 -1px 0 var(--color-border);
+  gap: 1.1rem;
+  margin-bottom: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--color-primary-50), var(--color-surface) 70%);
+  box-shadow: inset 0 0 0 1px var(--color-primary-100);
 }
 .chat-room__brand-img-btn {
   position: relative;
   flex-shrink: 0;
   padding: 0;
   border: none;
+  border-radius: 999px;
   background: transparent;
   cursor: default;
 }
@@ -322,64 +329,90 @@ async function onAvatarChosen(event) {
   cursor: pointer;
 }
 
-.chat-room__brand-img-btn--owner:hover .chat-room__brand-img,
-.chat-room__brand-img-btn--owner:hover .chat-room__brand-img--ph {
-  filter: brightness(0.96);
+.chat-room__brand-img-btn--owner:hover .chat-room__brand-img {
+  filter: brightness(0.94);
+}
+
+.chat-room__brand-img-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 5px;
 }
 
 .chat-room__brand-img-btn:disabled {
   cursor: default;
 }
 
+.chat-room__brand-img-btn--busy .chat-room__brand-img {
+  opacity: 0.55;
+}
+
 .chat-room__brand-img {
-  width: 3.25rem;
-  height: 3.25rem;
+  width: 5rem;
+  height: 5rem;
   border-radius: 999px;
   object-fit: cover;
   display: block;
+  box-shadow:
+    0 0 0 3px var(--color-surface),
+    0 0 0 5px var(--color-primary-200),
+    var(--shadow-md);
+  transition: filter 0.15s ease, opacity 0.15s ease;
 }
 
 .chat-room__brand-camera {
   position: absolute;
-  right: -0.1rem;
-  bottom: -0.1rem;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.35rem;
-  height: 1.35rem;
+  width: 1.75rem;
+  height: 1.75rem;
   border-radius: 999px;
   background: var(--color-primary);
   color: var(--color-on-primary);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 0 0 3px var(--color-surface), var(--shadow-sm);
 }
 .chat-room__brand-img--ph {
   display: grid;
   place-items: center;
-  background: var(--color-primary-surface, var(--color-border));
+  background: linear-gradient(135deg, var(--color-primary-100), var(--color-primary-200));
   color: var(--color-primary);
 }
 .chat-room__brand-copy {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   min-width: 0;
 }
 .chat-room__brand-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 1.125rem;
   font-weight: 700;
+  color: var(--color-text);
+}
+.chat-room__brand-meta {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, var(--color-text));
 }
 .chat-room__brand-action {
   align-self: flex-start;
+  margin-top: 0.4rem;
+  padding: 0.35rem 0.85rem;
   border: 0;
-  padding: 0;
-  background: transparent;
+  border-radius: 999px;
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-primary-200);
   color: var(--color-primary);
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+.chat-room__brand-action:hover:not(:disabled) {
+  background: var(--color-primary-50);
 }
 .chat-room__brand-action:disabled {
   opacity: 0.5;
@@ -441,5 +474,10 @@ async function onAvatarChosen(event) {
 .chat-room__text { font-size: 0.78rem; color: var(--color-primary); }
 @media (max-width: 720px) {
   .chat-room__grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .chat-room__brand { gap: 0.9rem; padding: 0.85rem; }
+  .chat-room__brand-img { width: 4.25rem; height: 4.25rem; }
+  .chat-room__brand-camera { width: 1.5rem; height: 1.5rem; }
 }
 </style>
