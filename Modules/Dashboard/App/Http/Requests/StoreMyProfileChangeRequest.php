@@ -16,7 +16,7 @@ class StoreMyProfileChangeRequest extends FormRequest
     {
         return [
             'changes' => ['required', 'array', 'min:1'],
-            'changes.*' => ['nullable', 'string', 'max:500'],
+            'changes.*' => ['nullable', 'string', 'max:2000'],
             'note' => ['nullable', 'string', 'max:2000'],
         ];
     }

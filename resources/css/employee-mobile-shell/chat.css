@@ -160,8 +160,19 @@
   max-height: 0;
 }
 
+.employee-shell__content--chat-thread {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
 .employee-shell__content--chat-thread .employee-chat {
   margin-bottom: 0;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .employee-shell__content--chat-thread .chat-dock {

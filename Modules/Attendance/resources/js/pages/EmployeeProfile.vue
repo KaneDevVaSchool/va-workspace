@@ -214,8 +214,23 @@ const editableFieldGroups = computed(() => {
   const fields = profile.value?.editable_fields ?? [];
   const personalKeys = new Set(['full_name', 'gender', 'birthdate']);
   const contactKeys = new Set(['phone', 'personal_email', 'company_email']);
-  const workKeys = new Set(['workplace', 'attendance_code']);
-  const orgKeys = new Set(['manager_name']);
+  const workKeys = new Set([
+    'workplace',
+    'attendance_code',
+    'job_title',
+    'personnel_type',
+    'level_name',
+    'hired_at',
+    'actual_start_date',
+  ]);
+  const orgKeys = new Set([
+    'manager_name',
+    'department_name',
+    'division_name',
+    'org_unit_name',
+    'profile_department_name',
+    'org_unit_path',
+  ]);
   const groups = [
     { id: 'personal', title: 'Thông tin cá nhân', keys: personalKeys },
     { id: 'contact', title: 'Liên hệ', keys: contactKeys },
@@ -507,6 +522,7 @@ onBeforeUnmount(() => {
           aria-label="Đổi ảnh đại diện"
           @click="openAvatarPicker"
         >
+          <span class="emp-profile__avatar-ring emp-profile__avatar-ring--hub" aria-hidden="true" />
           <img
             v-if="hasAvatarPhoto"
             class="emp-profile__avatar-img"
@@ -514,7 +530,7 @@ onBeforeUnmount(() => {
             alt=""
             @error="avatarBroken = true"
           />
-          <span v-else class="emp-profile__avatar-fallback">{{ avatarInitial }}</span>
+          <span v-else class="emp-profile__avatar-fallback emp-profile__avatar-fallback--hub">{{ avatarInitial }}</span>
           <span class="emp-profile__avatar-edit emp-profile__avatar-edit--hub" aria-hidden="true">
             <AppIcon v-if="!avatarUploading" name="camera" :size="14" :stroke-width="2" />
             <span v-else class="emp-profile__avatar-spinner" />
@@ -528,15 +544,8 @@ onBeforeUnmount(() => {
           @change="onAvatarSelected"
         />
         <div class="emp-profile__hub-copy">
-          <button
-            type="button"
-            class="emp-profile__hub-photo-link"
-            :disabled="avatarUploading"
-            @click="openAvatarPicker"
-          >
-            {{ avatarUploading ? 'Đang tải ảnh…' : 'Cập nhật ảnh đại diện' }}
-          </button>
-          <p class="emp-profile__hub-lead">Thông tin dưới đây đồng bộ từ HRM.</p>
+          <p class="emp-profile__hub-name">{{ displayName }}</p>
+          <p v-if="subtitle" class="emp-profile__hub-sub">{{ subtitle }}</p>
         </div>
       </div>
       <div v-if="subtitleChips.length" class="emp-profile__chips">
@@ -561,9 +570,6 @@ onBeforeUnmount(() => {
         <AppIcon name="pencil" :size="18" />
         <span>Yêu cầu chỉnh sửa hồ sơ</span>
       </button>
-      <p class="emp-profile__actions-hint">
-        Gửi thay đổi lên HC-NS — gồm quản lý trực tiếp nếu đang hiển thị sai.
-      </p>
     </div>
 
     <div v-if="hrmMissing" class="emp-profile__notice">
@@ -686,8 +692,7 @@ onBeforeUnmount(() => {
             <div class="emp-profile-dialog__handle" aria-hidden="true" />
             <header class="emp-profile-dialog__head">
               <div class="emp-profile-dialog__head-text">
-                <span class="emp-profile-dialog__eyebrow">Hồ sơ HRM</span>
-                <h2 id="emp-profile-change-title">Yêu cầu chỉnh sửa</h2>
+                <h2 id="emp-profile-change-title">Yêu cầu chỉnh sửa hồ sơ</h2>
               </div>
               <button
                 type="button"
@@ -699,10 +704,6 @@ onBeforeUnmount(() => {
               </button>
             </header>
             <div class="emp-profile-dialog__body hide-scrollbar">
-              <p class="emp-profile-dialog__lead">
-                Chỉ điền các trường cần thay đổi (kể cả quản lý trực tiếp nếu đang sai).
-                Phòng HC-NS sẽ duyệt và cập nhật trên HRM.
-              </p>
               <form class="emp-profile-dialog__form" @submit.prevent="submitChangeRequest">
                 <section
                   v-for="group in editableFieldGroups"
@@ -719,10 +720,7 @@ onBeforeUnmount(() => {
                       {{ field.label }}
                     </label>
                     <p class="emp-profile-dialog__current">
-                      <span class="emp-profile-dialog__current-key">Hiện tại</span>
-                      <span class="emp-profile-dialog__current-val">
-                        {{ formatFieldValueForDisplay(field) }}
-                      </span>
+                      {{ formatFieldValueForDisplay(field) }}
                     </p>
                     <select
                       v-if="field.type === 'select'"
@@ -730,7 +728,7 @@ onBeforeUnmount(() => {
                       v-model="changeDraft[field.key]"
                       class="emp-profile-dialog__input emp-profile-dialog__select"
                     >
-                      <option value="">— Chọn giá trị mới —</option>
+                      <option value="">—</option>
                       <option
                         v-for="opt in field.options ?? []"
                         :key="opt.value"
@@ -745,7 +743,7 @@ onBeforeUnmount(() => {
                       v-model="changeDraft[field.key]"
                       :type="field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : field.type === 'tel' ? 'tel' : 'text'"
                       class="emp-profile-dialog__input"
-                      :placeholder="field.placeholder || 'Giá trị mới'"
+                      :placeholder="field.placeholder || ''"
                       autocomplete="off"
                     />
                   </div>
@@ -758,7 +756,7 @@ onBeforeUnmount(() => {
                     class="emp-profile-dialog__textarea"
                     rows="3"
                     maxlength="2000"
-                    placeholder="Tuỳ chọn — lý do hoặc chi tiết bổ sung"
+                    placeholder=""
                   />
                 </div>
               </form>

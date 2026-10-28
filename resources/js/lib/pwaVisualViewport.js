@@ -78,6 +78,9 @@ export function syncPwaVisualViewport() {
   } else {
     root.style.removeProperty(PWA_VV_WIDTH);
   }
+
+  // Gỡ --employee-shell-height (iOS PWA innerHeight) để #app không cao hơn vùng bàn phím.
+  syncEmployeeShellHeight();
 }
 
 let bound = false;

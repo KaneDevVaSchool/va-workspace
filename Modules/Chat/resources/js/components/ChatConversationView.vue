@@ -4,6 +4,7 @@ import { sendTyping, touchViewing } from '../api/chatApi';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { showClientToast } from '@/lib/clientToast';
+import { syncEmployeeMobileViewport } from '@/composables/useEmployeeMobileViewport';
 import { formatRelativeTime, formatTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import SocialAnimatedSticker from '@modules/Social/resources/js/components/SocialAnimatedSticker.vue';
@@ -83,16 +84,10 @@ const mentionHits = computed(() => {
     .slice(0, 6);
 });
 const memberLine = computed(() => {
-  const members = store.activeConversation?.members ?? [];
-  const count = store.activeConversation?.member_count || members.length;
-  const names = members
-    .filter((member) => member.id !== auth.user?.id)
-    .map((member) => member.name)
-    .filter(Boolean);
-  const countLabel = count ? `${count} thành viên` : 'Nhóm';
-  if (names.length === 0) return countLabel;
-  const shown = names.slice(0, 3).join(', ');
-  return names.length > 3 ? `${countLabel} · ${shown}…` : `${countLabel} · ${shown}`;
+  const count = store.activeConversation?.member_count
+    || store.activeConversation?.members?.length
+    || 0;
+  return count ? `${count} thành viên` : 'Nhóm';
 });
 const typingUsers = computed(() => {
   const slot = store.typingByConversation[store.activeConversationId];
@@ -162,6 +157,13 @@ const confirmCopy = computed(() => {
       title: 'Giải tán nhóm',
       description: 'Nhóm và toàn bộ tin nhắn sẽ mất với mọi thành viên. Thao tác không hoàn tác được.',
       confirmLabel: 'Giải tán',
+    };
+  }
+  if (confirmKind.value === 'leave') {
+    return {
+      title: 'Rời nhóm',
+      description: 'Bạn sẽ không còn nhận tin nhắn từ nhóm này.',
+      confirmLabel: 'Rời nhóm',
     };
   }
   return {
@@ -348,8 +350,23 @@ function togglePicker(panel) {
   pickerOpen.value = true;
 }
 
+function scheduleViewportForKeyboard() {
+  syncEmployeeMobileViewport();
+  window.setTimeout(syncEmployeeMobileViewport, 80);
+  window.setTimeout(syncEmployeeMobileViewport, 280);
+}
+
 function onInputFocus() {
   pickerOpen.value = false;
+  scheduleViewportForKeyboard();
+  nextTick(() => {
+    scrollToBottom();
+    window.requestAnimationFrame(scrollToBottom);
+  });
+}
+
+function onInputBlur() {
+  window.setTimeout(syncEmployeeMobileViewport, 120);
 }
 
 function startReply(message) {
@@ -458,12 +475,18 @@ function pickMention(user) {
   if (!mentionIds.value.includes(user.id)) mentionIds.value = [...mentionIds.value, user.id];
 }
 
+function groupReadOthersCount() {
+  return Math.max(0, (store.activeConversation?.member_count || 1) - 1);
+}
+
+function canShowReadReceipts(message) {
+  return isGroup.value && isMine(message) && !message.recalled_at && groupReadOthersCount() > 0;
+}
+
 function readLabel(message) {
-  if (!isGroup.value || !isMine(message) || message.recalled_at) return '';
+  if (!canShowReadReceipts(message)) return '';
   const count = message.reads?.length || 0;
-  if (!count) return '';
-  const others = Math.max(1, (store.activeConversation?.member_count || 1) - 1);
-  return `Đã xem ${count}/${others}`;
+  return `Đã xem ${count}/${groupReadOthersCount()}`;
 }
 
 function showReaders(message) {
@@ -482,6 +505,18 @@ const readerRows = computed(() => {
       avatar_url: reader.avatar_url ?? member?.avatar_url ?? null,
     };
   });
+});
+
+const readerPendingRows = computed(() => {
+  if (!readersFor.value) return [];
+  const readIds = new Set((readersFor.value.reads || []).map((reader) => reader.id));
+  return (store.activeConversation?.members || [])
+    .filter((member) => member.id !== auth.user?.id && !readIds.has(member.id))
+    .map((member) => ({
+      id: member.id,
+      name: member.name || 'Đồng nghiệp',
+      avatar_url: member.avatar_url ?? null,
+    }));
 });
 
 async function pinThis(message) {
@@ -535,6 +570,11 @@ async function chooseDisappear(seconds) {
 function openMembers() {
   headerMenu.value = null;
   membersOpen.value = true;
+}
+
+function askLeaveGroup() {
+  headerMenu.value = null;
+  confirmKind.value = 'leave';
 }
 
 function openAlbum() {
@@ -604,6 +644,25 @@ async function castVote(message, option) {
   await store.votePoll(store.activeConversationId, message.id, option.id).catch((error) => {
     showClientToast('error', error?.response?.data?.message || 'Không gửi được phiếu.');
   });
+}
+
+function pollTotalVotes(poll) {
+  return (poll?.options ?? []).reduce((sum, opt) => sum + (opt.votes ?? 0), 0);
+}
+
+function pollOptionPercent(option, poll) {
+  const total = pollTotalVotes(poll);
+  if (total <= 0) return 0;
+  return Math.round(((option.votes ?? 0) / total) * 100);
+}
+
+function pollVotesLabel(count) {
+  if (count === 1) return '1 phiếu';
+  return `${count} phiếu`;
+}
+
+function pollOptionSelected(option) {
+  return (option.voter_ids || []).map(Number).includes(Number(auth.user?.id));
 }
 
 function onDocumentPointerDown(event) {
@@ -785,15 +844,18 @@ async function send() {
 
 async function confirmAction() {
   if (confirming.value) return;
-  if (confirmKind.value === 'clear' || confirmKind.value === 'disband') {
+  if (confirmKind.value === 'clear' || confirmKind.value === 'disband' || confirmKind.value === 'leave') {
     confirming.value = true;
     const kind = confirmKind.value;
     const conversationId = store.activeConversationId;
     try {
       if (kind === 'clear') {
         await store.clearHistory(conversationId);
-      } else {
+      } else if (kind === 'disband') {
         await store.disbandGroup(conversationId);
+      } else {
+        await store.removeMember(conversationId, auth.user?.id);
+        store.backToList();
       }
       confirmKind.value = null;
       confirmMessage.value = null;
@@ -848,6 +910,9 @@ function menuItems(message) {
   }
   if (mine && !recalled) {
     items.push({ key: 'pin', label: 'Ghim tin', icon: 'pin', run: () => pinThis(message) });
+    if (isGroup.value && groupReadOthersCount() > 0) {
+      items.push({ key: 'reads', label: 'Xem đã đọc', icon: 'users', run: () => showReaders(message) });
+    }
     items.push({ key: 'recall', label: 'Thu hồi', icon: 'rotateCw', run: () => askRecall(message) });
   }
   items.push({ key: 'delete', label: 'Xoá', icon: 'trash', run: () => askDelete(message) });
@@ -861,15 +926,23 @@ function menuItems(message) {
       <button type="button" class="chat-view__icon-btn" aria-label="Quay lại danh sách" @click="store.backToList()">
         <AppIcon name="chevronLeft" :size="18" :stroke-width="1.75" />
       </button>
-      <img
-        v-if="isGroup && groupAvatarUrl"
-        class="chat-view__avatar"
-        :src="groupAvatarUrl"
-        :alt="`Ảnh nhóm ${headerTitle}`"
-      />
-      <span v-else-if="isGroup" class="chat-view__avatar chat-view__avatar--group" aria-hidden="true">
-        <AppIcon name="users" :size="16" :stroke-width="1.75" />
-      </span>
+      <button
+        v-if="isGroup"
+        type="button"
+        class="chat-view__avatar-btn"
+        :aria-label="isOwner ? 'Ảnh nhóm và thành viên' : 'Xem thành viên nhóm'"
+        @click="openMembers"
+      >
+        <img
+          v-if="groupAvatarUrl"
+          class="chat-view__avatar"
+          :src="groupAvatarUrl"
+          :alt="`Ảnh nhóm ${headerTitle}`"
+        />
+        <span v-else class="chat-view__avatar chat-view__avatar--group" aria-hidden="true">
+          <AppIcon name="users" :size="16" :stroke-width="1.75" />
+        </span>
+      </button>
       <img
         v-else-if="otherUser?.avatar_url"
         class="chat-view__avatar"
@@ -984,18 +1057,45 @@ function menuItems(message) {
               <SocialAnimatedSticker :id="row.message.sticker_id" :emoji="row.message.message || ''" />
             </span>
             <div v-else-if="row.message.message_type === 'poll' && row.message.poll" class="chat-poll-card">
+              <div class="chat-poll-card__head">
+                <span class="chat-poll-card__badge">
+                  <AppIcon name="listChecks" :size="12" :stroke-width="2" />
+                  Bình chọn
+                </span>
+                <span v-if="pollTotalVotes(row.message.poll) > 0" class="chat-poll-card__total">
+                  {{ pollVotesLabel(pollTotalVotes(row.message.poll)) }}
+                </span>
+              </div>
               <p class="chat-poll-card__q">{{ row.message.poll.question }}</p>
-              <button
-                v-for="option in row.message.poll.options"
-                :key="option.id"
-                type="button"
-                class="chat-poll-card__opt"
-                :class="{ 'chat-poll-card__opt--on': (option.voter_ids || []).map(Number).includes(Number(auth.user?.id)) }"
-                @click="castVote(row.message, option)"
-              >
-                <span>{{ option.label }}</span>
-                <span>{{ option.votes }}</span>
-              </button>
+              <div class="chat-poll-card__opts">
+                <button
+                  v-for="option in row.message.poll.options"
+                  :key="option.id"
+                  type="button"
+                  class="chat-poll-card__opt"
+                  :class="{ 'chat-poll-card__opt--on': pollOptionSelected(option) }"
+                  @click="castVote(row.message, option)"
+                >
+                  <span
+                    class="chat-poll-card__fill"
+                    :style="{ width: `${pollOptionPercent(option, row.message.poll)}%` }"
+                  />
+                  <span class="chat-poll-card__row">
+                    <span
+                      class="chat-poll-card__mark"
+                      :class="{ 'chat-poll-card__mark--on': pollOptionSelected(option) }"
+                      aria-hidden="true"
+                    >
+                      <AppIcon v-if="pollOptionSelected(option)" name="check" :size="10" />
+                    </span>
+                    <span class="chat-poll-card__label">{{ option.label }}</span>
+                    <span class="chat-poll-card__stat">
+                      <span class="chat-poll-card__percent">{{ pollOptionPercent(option, row.message.poll) }}%</span>
+                      <span v-if="option.votes > 0" class="chat-poll-card__votes">{{ pollVotesLabel(option.votes) }}</span>
+                    </span>
+                  </span>
+                </button>
+              </div>
             </div>
             <div
               v-else-if="row.message.message_type === 'voice'"
@@ -1285,6 +1385,7 @@ function menuItems(message) {
           :placeholder="editing ? 'Sửa nội dung…' : 'Nhập tin nhắn…'"
           :aria-label="editing ? 'Sửa tin nhắn' : `Nhập tin nhắn gửi ${headerTitle}`"
           @focus="onInputFocus"
+          @blur="onInputBlur"
           @input="pingTyping"
           @keydown="onKeydown"
         />
@@ -1358,7 +1459,7 @@ function menuItems(message) {
           <AppIcon name="users" :size="15" :stroke-width="1.75" />
           Giải tán nhóm
         </button>
-        <button v-else-if="isGroup" type="button" class="chat-menu__item" role="menuitem" @click="openMembers">
+        <button v-else-if="isGroup" type="button" class="chat-menu__item" role="menuitem" @click="askLeaveGroup">
           Rời nhóm
         </button>
       </div>
@@ -1402,19 +1503,37 @@ function menuItems(message) {
               <AppIcon name="close" :size="16" />
             </button>
           </div>
-          <ul v-if="readerRows.length" class="chat-readers__list hide-scrollbar">
-            <li v-for="reader in readerRows" :key="reader.id" class="chat-readers__row">
-              <img
-                v-if="reader.avatar_url"
-                class="chat-readers__avatar"
-                :src="reader.avatar_url"
-                :alt="`Ảnh đại diện của ${reader.name}`"
-              />
-              <span v-else class="chat-readers__avatar chat-readers__avatar--ph">{{ initial(reader.name) }}</span>
-              <span class="chat-readers__name">{{ reader.name }}</span>
-            </li>
-          </ul>
-          <p v-else class="chat-readers__empty">Chưa có ai xem tin này.</p>
+          <div class="chat-readers__body hide-scrollbar">
+            <p class="chat-readers__section">Đã xem ({{ readerRows.length }})</p>
+            <ul v-if="readerRows.length" class="chat-readers__list">
+              <li v-for="reader in readerRows" :key="reader.id" class="chat-readers__row">
+                <img
+                  v-if="reader.avatar_url"
+                  class="chat-readers__avatar"
+                  :src="reader.avatar_url"
+                  :alt="`Ảnh đại diện của ${reader.name}`"
+                />
+                <span v-else class="chat-readers__avatar chat-readers__avatar--ph">{{ initial(reader.name) }}</span>
+                <span class="chat-readers__name">{{ reader.name }}</span>
+              </li>
+            </ul>
+            <p v-else class="chat-readers__empty">Chưa có ai xem tin này.</p>
+            <p v-if="readerPendingRows.length" class="chat-readers__section chat-readers__section--pending">
+              Chưa xem ({{ readerPendingRows.length }})
+            </p>
+            <ul v-if="readerPendingRows.length" class="chat-readers__list">
+              <li v-for="reader in readerPendingRows" :key="`pending-${reader.id}`" class="chat-readers__row chat-readers__row--pending">
+                <img
+                  v-if="reader.avatar_url"
+                  class="chat-readers__avatar"
+                  :src="reader.avatar_url"
+                  :alt="`Ảnh đại diện của ${reader.name}`"
+                />
+                <span v-else class="chat-readers__avatar chat-readers__avatar--ph">{{ initial(reader.name) }}</span>
+                <span class="chat-readers__name">{{ reader.name }}</span>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -1514,12 +1633,28 @@ function menuItems(message) {
   color: var(--color-primary);
 }
 
+.chat-view__avatar-btn {
+  display: flex;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--radius-full);
+}
+
+.chat-view__avatar-btn:focus-visible {
+  outline: 2px solid var(--color-on-primary);
+  outline-offset: 2px;
+}
+
 .chat-view__avatar {
   width: 2rem;
   height: 2rem;
   border-radius: var(--radius-full);
   object-fit: cover;
   flex-shrink: 0;
+  display: block;
 }
 
 .chat-view__avatar--placeholder,
@@ -2192,11 +2327,196 @@ function menuItems(message) {
 .chat-poll-card {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  min-width: 11rem;
+  gap: 0.45rem;
+  min-width: min(100%, 16rem);
+  max-width: 20rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 14%, var(--color-border));
 }
 
-.chat-poll-card__opt,
+.chat-bubble--mine .chat-poll-card {
+  background: color-mix(in srgb, var(--color-on-primary) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-on-primary) 22%, transparent);
+}
+
+.chat-poll-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.chat-poll-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+.chat-bubble--mine .chat-poll-card__badge {
+  color: inherit;
+  opacity: 0.92;
+}
+
+.chat-poll-card__total {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.chat-bubble--mine .chat-poll-card__total {
+  color: inherit;
+  opacity: 0.78;
+}
+
+.chat-poll-card__q {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--color-text);
+}
+
+.chat-bubble--mine .chat-poll-card__q {
+  color: inherit;
+}
+
+.chat-poll-card__opts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.chat-poll-card__opt {
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.chat-bubble--mine .chat-poll-card__opt {
+  background: color-mix(in srgb, var(--color-on-primary) 10%, transparent);
+  color: inherit;
+}
+
+.chat-poll-card__opt:hover {
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface-muted));
+}
+
+.chat-bubble--mine .chat-poll-card__opt:hover {
+  background: color-mix(in srgb, var(--color-on-primary) 18%, transparent);
+}
+
+.chat-poll-card__opt--on {
+  background: var(--color-primary-surface);
+}
+
+.chat-bubble--mine .chat-poll-card__opt--on {
+  background: color-mix(in srgb, var(--color-on-primary) 22%, transparent);
+}
+
+.chat-poll-card__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface-muted));
+  transition: width 0.35s ease;
+  pointer-events: none;
+}
+
+.chat-bubble--mine .chat-poll-card__fill {
+  background: color-mix(in srgb, var(--color-on-primary) 16%, transparent);
+}
+
+.chat-poll-card__opt--on .chat-poll-card__fill {
+  background: color-mix(in srgb, var(--color-primary) 22%, var(--color-surface));
+}
+
+.chat-poll-card__row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.45rem;
+}
+
+.chat-poll-card__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.85rem;
+  height: 0.85rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-border) 55%, var(--color-surface));
+}
+
+.chat-poll-card__mark--on {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.chat-bubble--mine .chat-poll-card__mark--on {
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+.chat-poll-card__label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.chat-poll-card__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  gap: 0.05rem;
+  min-width: 2.5rem;
+}
+
+.chat-poll-card__percent {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.chat-bubble--mine .chat-poll-card__percent {
+  color: inherit;
+}
+
+.chat-poll-card__votes {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.chat-bubble--mine .chat-poll-card__votes {
+  color: inherit;
+  opacity: 0.75;
+}
+
 .chat-voice,
 .chat-read,
 .chat-mentions button,
@@ -2207,15 +2527,10 @@ function menuItems(message) {
   cursor: pointer;
 }
 
-.chat-poll-card__opt,
 .chat-voice {
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
-}
-
-.chat-poll-card__opt--on {
-  color: var(--color-primary);
 }
 
 .chat-readers {
@@ -2271,13 +2586,35 @@ function menuItems(message) {
   cursor: pointer;
 }
 
-.chat-readers__list {
+.chat-readers__body {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.chat-readers__section {
+  margin: var(--space-2) 0 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.chat-readers__section--pending {
+  margin-top: var(--space-3);
+}
+
+.chat-readers__list {
   margin: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: 0;
   list-style: none;
-  overflow: auto;
+}
+
+.chat-readers__row--pending .chat-readers__name {
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 .chat-readers__row {

@@ -70,17 +70,25 @@ const searchModel = computed({
             <button
                 v-else
                 type="button"
-                class="employee-shell__brand-mark"
+                class="employee-shell__brand-mark employee-shell__brand-mark--avatar"
                 aria-label="Mở hồ sơ cá nhân"
                 @click="emit('open-profile')"
             >
                 <img
-                    src="/images/pwa/icon-192.png"
+                    v-if="hasAvatarPhoto"
+                    class="employee-shell__brand-logo employee-shell__brand-logo--avatar"
+                    :src="avatarUrl"
                     alt=""
-                    class="employee-shell__brand-logo employee-shell__brand-logo--pwa"
                     width="40"
                     height="40"
+                    @error="emit('avatar-error')"
                 />
+                <span
+                    v-else
+                    class="employee-shell__brand-initial"
+                    aria-hidden="true"
+                    >{{ avatarInitial }}</span
+                >
             </button>
             <div class="employee-shell__greeting">
                 <template v-if="isHome">

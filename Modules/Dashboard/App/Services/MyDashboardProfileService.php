@@ -30,11 +30,17 @@ class MyDashboardProfileService
         ],
         'workplace' => ['label' => 'Nơi làm việc', 'type' => 'text'],
         'attendance_code' => ['label' => 'Mã chấm công', 'type' => 'text'],
-        'manager_name' => [
-            'label' => 'Quản lý trực tiếp',
-            'type' => 'text',
-            'placeholder' => 'Họ tên và mã NS, ví dụ: Nguyễn Văn A (VA010067)',
-        ],
+        'manager_name' => ['label' => 'Quản lý trực tiếp', 'type' => 'text'],
+        'job_title' => ['label' => 'Chức danh', 'type' => 'text'],
+        'department_name' => ['label' => 'Phòng ban', 'type' => 'text'],
+        'division_name' => ['label' => 'Bộ phận', 'type' => 'text'],
+        'org_unit_name' => ['label' => 'Đơn vị', 'type' => 'text'],
+        'profile_department_name' => ['label' => 'Phòng ban (hồ sơ)', 'type' => 'text'],
+        'org_unit_path' => ['label' => 'Đường dẫn đơn vị', 'type' => 'text'],
+        'personnel_type' => ['label' => 'Loại nhân sự', 'type' => 'text'],
+        'level_name' => ['label' => 'Cấp bậc', 'type' => 'text'],
+        'hired_at' => ['label' => 'Ngày vào làm', 'type' => 'date'],
+        'actual_start_date' => ['label' => 'Ngày bắt đầu thực tế', 'type' => 'date'],
     ];
 
     public function __construct(
@@ -105,6 +111,11 @@ class MyDashboardProfileService
             if ($key === 'gender') {
                 $requestedValue = $this->normalizeGenderValue($requestedValue) ?? $requestedValue;
                 $currentStr = $this->normalizeGenderValue($currentStr) ?? $currentStr;
+            }
+
+            if (in_array($key, ['birthdate', 'hired_at', 'actual_start_date'], true)) {
+                $requestedValue = $this->normalizeDateValue($requestedValue) ?? $requestedValue;
+                $currentStr = $this->normalizeDateValue($currentStr) ?? $currentStr;
             }
 
             if ($requestedValue === $currentStr) {
@@ -200,6 +211,24 @@ class MyDashboardProfileService
         }
 
         return $key;
+    }
+
+    private function normalizeDateValue(?string $value): ?string
+    {
+        if (! filled($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $trimmed) === 1) {
+            return substr($trimmed, 0, 10);
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($trimmed)->format('Y-m-d');
+        } catch (\Throwable) {
+            return $trimmed;
+        }
     }
 
     /** @return list<array<string, mixed>> */

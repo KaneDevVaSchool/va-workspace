@@ -151,15 +151,27 @@ async function onAvatarChosen(event) {
         </div>
         <div class="chat-room__body hide-scrollbar">
           <div class="chat-room__brand">
-            <img
-              v-if="groupAvatarUrl"
-              class="chat-room__brand-img"
-              :src="groupAvatarUrl"
-              :alt="`Ảnh nhóm ${groupTitle}`"
-            />
-            <span v-else class="chat-room__brand-img chat-room__brand-img--ph">
-              <AppIcon name="users" :size="22" :stroke-width="1.75" />
-            </span>
+            <button
+              type="button"
+              class="chat-room__brand-img-btn"
+              :class="{ 'chat-room__brand-img-btn--owner': isOwner }"
+              :disabled="!isOwner || avatarSaving || saving"
+              :aria-label="isOwner ? 'Chọn ảnh đại diện nhóm' : `Ảnh nhóm ${groupTitle}`"
+              @click="pickAvatar"
+            >
+              <img
+                v-if="groupAvatarUrl"
+                class="chat-room__brand-img"
+                :src="groupAvatarUrl"
+                :alt="`Ảnh nhóm ${groupTitle}`"
+              />
+              <span v-else class="chat-room__brand-img chat-room__brand-img--ph">
+                <AppIcon name="users" :size="22" :stroke-width="1.75" />
+              </span>
+              <span v-if="isOwner" class="chat-room__brand-camera" aria-hidden="true">
+                <AppIcon name="camera" :size="14" :stroke-width="1.75" />
+              </span>
+            </button>
             <span class="chat-room__brand-copy">
               <span class="chat-room__brand-name">{{ groupTitle }}</span>
               <button
@@ -297,12 +309,49 @@ async function onAvatarChosen(event) {
   padding-bottom: 0.85rem;
   box-shadow: inset 0 -1px 0 var(--color-border);
 }
+.chat-room__brand-img-btn {
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: default;
+}
+
+.chat-room__brand-img-btn--owner {
+  cursor: pointer;
+}
+
+.chat-room__brand-img-btn--owner:hover .chat-room__brand-img,
+.chat-room__brand-img-btn--owner:hover .chat-room__brand-img--ph {
+  filter: brightness(0.96);
+}
+
+.chat-room__brand-img-btn:disabled {
+  cursor: default;
+}
+
 .chat-room__brand-img {
   width: 3.25rem;
   height: 3.25rem;
   border-radius: 999px;
   object-fit: cover;
-  flex-shrink: 0;
+  display: block;
+}
+
+.chat-room__brand-camera {
+  position: absolute;
+  right: -0.1rem;
+  bottom: -0.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: var(--shadow-sm);
 }
 .chat-room__brand-img--ph {
   display: grid;

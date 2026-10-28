@@ -29,6 +29,11 @@ trait HandlesChatFeatures
     {
         $conversation = $this->requireOwnedGroup($actor, $conversationId);
 
+        if (! $conversation->created_by) {
+            $conversation->update(['created_by' => $actor->id]);
+            $conversation->refresh();
+        }
+
         if ($conversation->avatar_path) {
             Storage::disk('public')->delete($conversation->avatar_path);
         }
@@ -434,9 +439,11 @@ trait HandlesChatFeatures
             }
         }
 
+        $ownerId = $this->groupOwnerUserId($conversation);
+
         return [
-            'created_by' => $conversation->created_by,
-            'is_owner' => $conversation->type === Conversation::TYPE_GROUP && (int) $conversation->created_by === (int) $actor->id,
+            'created_by' => $ownerId ?? $conversation->created_by,
+            'is_owner' => $conversation->type === Conversation::TYPE_GROUP && $ownerId !== null && $ownerId === (int) $actor->id,
             'pinned_at' => $mine?->pinned_at?->toIso8601String(),
             'muted_until' => $mine?->muted_until?->toIso8601String(),
             'is_muted' => $mine?->muted_until !== null && $mine->muted_until->isFuture(),
@@ -496,11 +503,27 @@ trait HandlesChatFeatures
     private function requireOwnedGroup(User $actor, int $conversationId): Conversation
     {
         $conversation = $this->requireGroup($actor, $conversationId);
-        if ((int) $conversation->created_by !== (int) $actor->id) {
+        $ownerId = $this->groupOwnerUserId($conversation);
+        if ($ownerId === null || $ownerId !== (int) $actor->id) {
             throw new AccessDeniedHttpException('Chỉ chủ nhóm mới làm được việc này.');
         }
 
         return $conversation;
+    }
+
+    private function groupOwnerUserId(Conversation $conversation): ?int
+    {
+        if ($conversation->created_by) {
+            return (int) $conversation->created_by;
+        }
+
+        $conversation->loadMissing('members');
+        $fallback = $conversation->members
+            ->sortBy(fn (ConversationMember $member) => [$member->joined_at?->getTimestamp() ?? PHP_INT_MAX, $member->id])
+            ->first()
+            ?->user_id;
+
+        return $fallback ? (int) $fallback : null;
     }
 
     private function refreshMemberInboxes(int $conversationId): void
