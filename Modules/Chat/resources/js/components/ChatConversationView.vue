@@ -393,18 +393,36 @@ function coarsePointer() {
   return window.matchMedia('(pointer: coarse)').matches;
 }
 
-function onNativeAttachTouchStart() {
-  if (editing.value) return;
-  beginNativeFilePicker();
+function attachInput(kind) {
+  if (kind === 'camera') return cameraInput.value;
+  if (kind === 'photo') return photoInput.value;
+  return fileInput.value;
 }
 
-/** Chạm thẳng lên `<input type="file">` (overlay) — không gọi input.click() thêm lần nữa. */
-function onAttachInputActivate() {
+/** Dialog chọn tệp trên máy bàn chặn đến khi đóng; trên điện thoại thì trả về ngay. */
+let attachPickerSettled = false;
+
+/**
+ * Mở hộp chọn từ đúng cú click của nút.
+ * Không ghim shell trước input.click() — đổi layout lúc đó làm trình duyệt huỷ hộp thoại.
+ * Máy bàn: click() chặn đến khi chọn xong, change/cancel đã chạy, không ghim lại.
+ * Điện thoại: click() trả về ngay, ghim shell trước khi thư viện ảnh co viewport.
+ */
+function openAttachPicker(kind) {
   if (editing.value) return;
+  const input = attachInput(kind);
+  if (!(input instanceof HTMLInputElement)) return;
+  input.value = '';
+  attachPickerSettled = false;
+  const started = performance.now();
+  input.click();
+  // Hộp thoại máy bàn chặn trong click() — change/cancel đã xử lý, hoặc người dùng đã đóng.
+  if (attachPickerSettled || performance.now() - started > 300) return;
   beginNativeFilePicker();
 }
 
 function onAttachCancel() {
+  attachPickerSettled = true;
   endNativeFilePicker();
 }
 
@@ -875,10 +893,13 @@ function clearDraftFiles() {
 }
 
 async function onFilesChosen(event) {
+  attachPickerSettled = true;
+  const input = event.target;
+  const chosen = input instanceof HTMLInputElement ? Array.from(input.files ?? []) : [];
+  if (input instanceof HTMLInputElement) input.value = '';
   endNativeFilePicker();
-  const chosen = Array.from(event.target.files ?? []);
-  event.target.value = '';
   if (editing.value || chosen.length === 0) return;
+
   const next = [...files.value];
   for (const raw of chosen) {
     if (next.length >= MAX_FILES) {
@@ -889,7 +910,10 @@ async function onFilesChosen(event) {
     try {
       file = await prepareChatFile(raw);
     } catch (error) {
-      showClientToast('error', error instanceof ChatFileError ? error.message : 'Ảnh này không gửi được. Hãy chọn JPG hoặc PNG.');
+      showClientToast(
+        'error',
+        error instanceof ChatFileError ? error.message : 'Ảnh này không gửi được. Hãy chọn JPG hoặc PNG.',
+      );
       continue;
     }
     if (file.size > MAX_FILE_BYTES) {
@@ -1603,66 +1627,33 @@ function menuItems(message) {
 
     <div class="chat-view__composer">
       <div class="chat-view__tools hide-scrollbar">
-        <label
-          class="chat-view__tool chat-view__tool--attach"
-          :class="{ 'chat-view__tool--disabled': editing }"
+        <button
+          type="button"
+          class="chat-view__tool"
+          :disabled="Boolean(editing)"
           aria-label="Chụp ảnh"
+          @click="openAttachPicker('camera')"
         >
-          <input
-            ref="cameraInput"
-            class="chat-view__file-overlay"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            :disabled="Boolean(editing)"
-            @pointerdown="onAttachInputActivate"
-            @touchstart.passive="onNativeAttachTouchStart"
-            @click="onAttachInputActivate"
-            @cancel="onAttachCancel"
-            @change="onFilesChosen"
-          />
-          <AppIcon name="camera" :size="17" :stroke-width="1.75" aria-hidden="true" />
-        </label>
-        <label
-          class="chat-view__tool chat-view__tool--attach"
-          :class="{ 'chat-view__tool--disabled': editing }"
+          <AppIcon name="camera" :size="17" :stroke-width="1.75" />
+        </button>
+        <button
+          type="button"
+          class="chat-view__tool"
+          :disabled="Boolean(editing)"
           aria-label="Gửi ảnh"
+          @click="openAttachPicker('photo')"
         >
-          <input
-            ref="photoInput"
-            class="chat-view__file-overlay"
-            type="file"
-            accept="image/*"
-            multiple
-            :disabled="Boolean(editing)"
-            @pointerdown="onAttachInputActivate"
-            @touchstart.passive="onNativeAttachTouchStart"
-            @click="onAttachInputActivate"
-            @cancel="onAttachCancel"
-            @change="onFilesChosen"
-          />
-          <AppIcon name="image" :size="17" :stroke-width="1.75" aria-hidden="true" />
-        </label>
-        <label
-          class="chat-view__tool chat-view__tool--attach"
-          :class="{ 'chat-view__tool--disabled': editing }"
+          <AppIcon name="image" :size="17" :stroke-width="1.75" />
+        </button>
+        <button
+          type="button"
+          class="chat-view__tool"
+          :disabled="Boolean(editing)"
           aria-label="Đính kèm tệp"
+          @click="openAttachPicker('file')"
         >
-          <input
-            ref="fileInput"
-            class="chat-view__file-overlay"
-            type="file"
-            multiple
-            accept=".pdf,.doc,.docx,.xlsx,.xls,.ppt,.pptx,.txt,.csv,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,application/zip"
-            :disabled="Boolean(editing)"
-            @pointerdown="onAttachInputActivate"
-            @touchstart.passive="onNativeAttachTouchStart"
-            @click="onAttachInputActivate"
-            @cancel="onAttachCancel"
-            @change="onFilesChosen"
-          />
-          <AppIcon name="paperclip" :size="17" :stroke-width="1.75" aria-hidden="true" />
-        </label>
+          <AppIcon name="paperclip" :size="17" :stroke-width="1.75" />
+        </button>
         <button
           type="button"
           class="chat-view__tool"
@@ -1707,6 +1698,39 @@ function menuItems(message) {
           <AppIcon name="mic" :size="17" :stroke-width="1.75" />
         </button>
       </div>
+      <input
+        ref="cameraInput"
+        class="chat-view__file-input"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        tabindex="-1"
+        aria-hidden="true"
+        @cancel="onAttachCancel"
+        @change="onFilesChosen"
+      />
+      <input
+        ref="photoInput"
+        class="chat-view__file-input"
+        type="file"
+        accept="image/*"
+        multiple
+        tabindex="-1"
+        aria-hidden="true"
+        @cancel="onAttachCancel"
+        @change="onFilesChosen"
+      />
+      <input
+        ref="fileInput"
+        class="chat-view__file-input"
+        type="file"
+        multiple
+        accept=".pdf,.doc,.docx,.xlsx,.xls,.ppt,.pptx,.txt,.csv,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,application/zip"
+        tabindex="-1"
+        aria-hidden="true"
+        @cancel="onAttachCancel"
+        @change="onFilesChosen"
+      />
       <div v-if="files.length" class="chat-pending">
         <span
           v-for="(item, index) in files"
@@ -2437,6 +2461,7 @@ function menuItems(message) {
 }
 
 .chat-view__composer {
+  position: relative;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -2490,32 +2515,17 @@ function menuItems(message) {
   line-height: 1;
 }
 
-.chat-view__tool--attach {
-  position: relative;
+.chat-view__file-input {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
   margin: 0;
   padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-}
-
-.chat-view__tool--disabled {
-  opacity: 0.4;
-  pointer-events: none;
-  cursor: not-allowed;
-}
-
-.chat-view__file-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
+  overflow: hidden;
   opacity: 0;
-  cursor: pointer;
-  font-size: 16px;
+  border: 0;
 }
 
 .chat-pending {

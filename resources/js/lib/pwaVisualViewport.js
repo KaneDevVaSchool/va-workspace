@@ -188,9 +188,10 @@ function isNativePickerHolding() {
 }
 
 /**
- * Gọi đồng bộ trong lần chạm "thêm ảnh / tệp", trước input.click().
+ * Gọi đồng bộ ngay sau input.click() trong cùng cú bấm của nút.
  * Thư viện ảnh thu visual viewport; nếu coi đó là bàn phím thì khung chat bị đẩy xuống
- * và picker nằm giữa phía trên màn hình.
+ * và picker nằm giữa phía trên màn hình. Không gọi trên pointerdown của input file —
+ * đổi layout trước khi hộp thoại mở làm trình duyệt huỷ lần chọn.
  */
 export function beginNativeFilePicker() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
