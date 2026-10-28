@@ -21,13 +21,28 @@ const KEYBOARD_INSET_THRESHOLD = 48;
 
 const CHAT_COMPOSER_INPUT_SELECTOR = 'textarea.chat-view__input';
 
+const SHELL_PIN_SELECTOR =
+  '.employee-shell--pwa:not(.emp-shell-preview__shell), .employee-shell--browser:not(.emp-shell-preview__shell)';
+const SHELL_PIN_PROPS = [
+  'position',
+  'inset',
+  'top',
+  'left',
+  'right',
+  'bottom',
+  'width',
+  'height',
+  'max-height',
+  'max-width',
+  'transform',
+  'margin',
+];
+
 let nativePickerActive = false;
 let nativePickerSawLeave = false;
 let nativePickerSawShrink = false;
 let nativePickerCloseTimer = 0;
-let nativePickerHoldTimer = 0;
-/** @type {{ height: number, offsetTop: number, offsetLeft: number, width: number } | null} */
-let nativePickerFrozenVv = null;
+let nativePickerReleaseTimer = 0;
 
 function viewportSettled() {
   const vv = window.visualViewport;
@@ -126,37 +141,42 @@ function applyVisualViewportKeyboardFrame(vv, composerFocused = composerInputFoc
   writeVisualViewportFrame(snapshotVisualViewport(vv));
 }
 
-function holdNativePickerFrame() {
-  clearPwaVisualViewport();
-  setKeyboardFrame(false);
-  syncEmployeeShellHeight();
+function shellPinTarget() {
+  return document.querySelector(SHELL_PIN_SELECTOR);
 }
 
-function syncNativePickerVisualViewport() {
-  if (!shouldSyncVisualViewportKeyboard()) {
-    holdNativePickerFrame();
-    return;
+/** Giữ đúng ô shell đang nhìn thấy — không đọc visualViewport (iOS báo full ngay khi blur). */
+function pinShellNow() {
+  const shell = shellPinTarget();
+  if (!shell || shell.dataset.vaShellPin === '1') return;
+  const rect = shell.getBoundingClientRect();
+  const top = Math.max(0, Math.round(rect.top));
+  const left = Math.max(0, Math.round(rect.left));
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
+  shell.dataset.vaShellPin = '1';
+  const set = (prop, value) => shell.style.setProperty(prop, value, 'important');
+  set('position', 'fixed');
+  set('inset', 'auto');
+  set('top', `${top}px`);
+  set('left', `${left}px`);
+  set('right', 'auto');
+  set('bottom', 'auto');
+  set('width', `${width}px`);
+  set('height', `${height}px`);
+  set('max-height', `${height}px`);
+  set('max-width', `${width}px`);
+  set('transform', 'none');
+  set('margin', '0');
+}
+
+function unpinShell() {
+  const shell = shellPinTarget();
+  if (!shell) return;
+  delete shell.dataset.vaShellPin;
+  for (const prop of SHELL_PIN_PROPS) {
+    shell.style.removeProperty(prop);
   }
-
-  const vv = window.visualViewport;
-
-  // iOS báo viewport full ngay khi blur dù bàn phím còn — giữ khung lúc chạm icon ảnh.
-  if (nativePickerFrozenVv && !nativePickerSawShrink) {
-    writeVisualViewportFrame(nativePickerFrozenVv);
-    return;
-  }
-
-  if (!vv) {
-    holdNativePickerFrame();
-    return;
-  }
-
-  if (isVisualViewportKeyboardOpen(vv)) {
-    applyVisualViewportKeyboardFrame(vv);
-    return;
-  }
-
-  holdNativePickerFrame();
 }
 
 function isNativePickerHolding() {
@@ -174,45 +194,34 @@ function isNativePickerHolding() {
  */
 export function beginNativeFilePicker() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (nativePickerActive) return;
   nativePickerActive = true;
   nativePickerSawLeave = false;
   nativePickerSawShrink = false;
   window.clearTimeout(nativePickerCloseTimer);
-  window.clearTimeout(nativePickerHoldTimer);
+  window.clearTimeout(nativePickerReleaseTimer);
+  nativePickerReleaseTimer = 0;
+  pinShellNow();
   setNativePickerClass(true);
-  const vv = window.visualViewport;
-  if (vv && isVisualViewportKeyboardOpen(vv)) {
-    nativePickerFrozenVv = snapshotVisualViewport(vv);
-  } else {
-    nativePickerFrozenVv = null;
-  }
-  syncNativePickerVisualViewport();
-  if (viewportSettled() && !nativePickerFrozenVv) {
-    window.scrollTo(0, 0);
-  }
-  nativePickerHoldTimer = window.setTimeout(() => {
-    if (!nativePickerActive || nativePickerSawShrink || !viewportSettled()) return;
-    endNativeFilePicker();
-  }, 1800);
 }
 
 export function endNativeFilePicker() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   const holding = nativePickerActive || document.documentElement.classList.contains(PWA_NATIVE_PICKER_CLASS);
+  if (!holding) return;
   nativePickerActive = false;
   nativePickerSawLeave = false;
   nativePickerSawShrink = false;
-  nativePickerFrozenVv = null;
   window.clearTimeout(nativePickerCloseTimer);
-  window.clearTimeout(nativePickerHoldTimer);
-  if (!holding) return;
-  holdNativePickerFrame();
-  nativePickerHoldTimer = window.setTimeout(() => {
+  if (nativePickerReleaseTimer) return;
+  nativePickerReleaseTimer = window.setTimeout(() => {
+    nativePickerReleaseTimer = 0;
     if (nativePickerActive) return;
+    unpinShell();
     setNativePickerClass(false);
     syncPwaVisualViewport();
     window.dispatchEvent(new CustomEvent('va-native-file-picker-end'));
-  }, 640);
+  }, 280);
 }
 
 function noteNativePickerLeave() {
@@ -242,10 +251,7 @@ function noteNativePickerResize() {
 
 export function syncPwaVisualViewport() {
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
-  if (isNativePickerHolding()) {
-    syncNativePickerVisualViewport();
-    return;
-  }
+  if (isNativePickerHolding()) return;
   if (!shouldSyncVisualViewportKeyboard()) {
     clearPwaVisualViewport();
     setKeyboardFrame(false);

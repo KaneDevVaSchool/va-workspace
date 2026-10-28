@@ -91,6 +91,7 @@ function shouldApplyIosPwaShellHeightPx() {
  */
 export function syncEmployeeShellHeight() {
   if (typeof document === 'undefined') return;
+  if (document.documentElement.classList.contains('pwa-native-picker')) return;
   const root = document.documentElement;
 
   if (shouldApplyIosPwaShellHeightPx()) {

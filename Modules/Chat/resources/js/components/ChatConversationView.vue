@@ -404,6 +404,10 @@ function onAttachInputActivate() {
   beginNativeFilePicker();
 }
 
+function onAttachCancel() {
+  endNativeFilePicker();
+}
+
 function refocusComposerAfterAttach() {
   nextTick(() => {
     inputRef.value?.focus();
@@ -874,11 +878,7 @@ async function onFilesChosen(event) {
   endNativeFilePicker();
   const chosen = Array.from(event.target.files ?? []);
   event.target.value = '';
-  if (editing.value) return;
-  if (chosen.length === 0) {
-    refocusComposerAfterAttach();
-    return;
-  }
+  if (editing.value || chosen.length === 0) return;
   const next = [...files.value];
   for (const raw of chosen) {
     if (next.length >= MAX_FILES) {
@@ -900,7 +900,6 @@ async function onFilesChosen(event) {
     next.push({ file, previewUrl });
   }
   files.value = next;
-  refocusComposerAfterAttach();
 }
 
 function removeFile(index) {
@@ -1616,8 +1615,10 @@ function menuItems(message) {
             accept="image/*"
             capture="environment"
             :disabled="Boolean(editing)"
+            @pointerdown="onAttachInputActivate"
             @touchstart.passive="onNativeAttachTouchStart"
             @click="onAttachInputActivate"
+            @cancel="onAttachCancel"
             @change="onFilesChosen"
           />
           <AppIcon name="camera" :size="17" :stroke-width="1.75" aria-hidden="true" />
@@ -1634,8 +1635,10 @@ function menuItems(message) {
             accept="image/*"
             multiple
             :disabled="Boolean(editing)"
+            @pointerdown="onAttachInputActivate"
             @touchstart.passive="onNativeAttachTouchStart"
             @click="onAttachInputActivate"
+            @cancel="onAttachCancel"
             @change="onFilesChosen"
           />
           <AppIcon name="image" :size="17" :stroke-width="1.75" aria-hidden="true" />
@@ -1652,8 +1655,10 @@ function menuItems(message) {
             multiple
             accept=".pdf,.doc,.docx,.xlsx,.xls,.ppt,.pptx,.txt,.csv,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,application/zip"
             :disabled="Boolean(editing)"
+            @pointerdown="onAttachInputActivate"
             @touchstart.passive="onNativeAttachTouchStart"
             @click="onAttachInputActivate"
+            @cancel="onAttachCancel"
             @change="onFilesChosen"
           />
           <AppIcon name="paperclip" :size="17" :stroke-width="1.75" aria-hidden="true" />
