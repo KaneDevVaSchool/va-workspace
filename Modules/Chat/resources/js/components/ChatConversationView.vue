@@ -52,8 +52,6 @@ const listRef = ref(null);
 const inputRef = ref(null);
 const pickerOpen = ref(false);
 const pickerPanel = ref('emoji');
-/** PWA: menu đính kèm trong app — tránh gọi file picker OS ngay khi bàn phím đang mở. */
-const attachSheetOpen = ref(false);
 const replyTo = ref(null);
 const editing = ref(null);
 const menu = ref(null);
@@ -312,7 +310,6 @@ watch(
     replyTo.value = null;
     editing.value = null;
     pickerOpen.value = false;
-    attachSheetOpen.value = false;
     menu.value = null;
     headerMenu.value = null;
     clearInterval(viewingTimer);
@@ -396,51 +393,22 @@ function coarsePointer() {
   return window.matchMedia('(pointer: coarse)').matches;
 }
 
-function composerHasFocus() {
-  const input = inputRef.value;
-  return Boolean(input && document.activeElement === input);
-}
-
-/** Menu đính kèm trong dock thay vì action sheet OS — giữ bàn phím khi chỉ mở menu. */
-function attachSheetEligible() {
-  return holdToReact.value && composerHasFocus();
-}
-
-function onAttachKeepFocus(event) {
-  if (!attachSheetEligible() || editing.value) return;
-  if (event?.cancelable) event.preventDefault();
-}
-
 function onNativeAttachTouchStart() {
-  if (editing.value || attachSheetEligible()) return;
-  beginNativeFilePicker();
-}
-
-function openNativePicker(input) {
-  if (!(input instanceof HTMLInputElement) || editing.value) return;
-  beginNativeFilePicker();
-  input.click();
-  const field = inputRef.value;
-  if (field && document.activeElement === field && !coarsePointer()) {
-    field.blur();
-  }
-}
-
-function onAttachToolClick(input) {
   if (editing.value) return;
-  if (attachSheetEligible()) {
-    pickerOpen.value = false;
-    attachSheetOpen.value = !attachSheetOpen.value;
-    nextTick(() => inputRef.value?.focus());
-    return;
-  }
-  attachSheetOpen.value = false;
-  openNativePicker(input);
+  beginNativeFilePicker();
 }
 
-function pickAttachSource(input) {
-  attachSheetOpen.value = false;
-  openNativePicker(input);
+/** Chạm thẳng lên `<input type="file">` (overlay) — không gọi input.click() thêm lần nữa. */
+function onAttachInputActivate() {
+  if (editing.value) return;
+  beginNativeFilePicker();
+}
+
+function refocusComposerAfterAttach() {
+  nextTick(() => {
+    inputRef.value?.focus();
+    scheduleViewportForKeyboard();
+  });
 }
 
 function insertEmoji(emoji) {
@@ -465,7 +433,6 @@ function togglePicker(panel) {
     pickerOpen.value = false;
     return;
   }
-  attachSheetOpen.value = false;
   inputRef.value?.blur();
   pickerPanel.value = panel;
   pickerOpen.value = true;
@@ -481,7 +448,6 @@ function scheduleViewportForKeyboard() {
 
 function onInputFocus() {
   pickerOpen.value = false;
-  attachSheetOpen.value = false;
   scheduleViewportForKeyboard();
   nextTick(() => {
     scrollToBottom();
@@ -848,15 +814,21 @@ function onDocumentKeydown(event) {
   closeMenu();
 }
 
+function onNativeFilePickerEnd() {
+  refocusComposerAfterAttach();
+}
+
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown);
   document.addEventListener('keydown', onDocumentKeydown);
+  window.addEventListener('va-native-file-picker-end', onNativeFilePickerEnd);
 });
 
 onBeforeUnmount(() => {
   cancelReactionHold();
   document.removeEventListener('pointerdown', onDocumentPointerDown);
   document.removeEventListener('keydown', onDocumentKeydown);
+  window.removeEventListener('va-native-file-picker-end', onNativeFilePickerEnd);
 });
 
 function quoteText(message) {
@@ -902,7 +874,11 @@ async function onFilesChosen(event) {
   endNativeFilePicker();
   const chosen = Array.from(event.target.files ?? []);
   event.target.value = '';
-  if (editing.value || chosen.length === 0) return;
+  if (editing.value) return;
+  if (chosen.length === 0) {
+    refocusComposerAfterAttach();
+    return;
+  }
   const next = [...files.value];
   for (const raw of chosen) {
     if (next.length >= MAX_FILES) {
@@ -924,6 +900,7 @@ async function onFilesChosen(event) {
     next.push({ file, previewUrl });
   }
   files.value = next;
+  refocusComposerAfterAttach();
 }
 
 function removeFile(index) {
@@ -1577,7 +1554,7 @@ function menuItems(message) {
       </Transition>
     </div>
 
-    <div class="chat-dock" :class="{ 'chat-dock--picker': pickerOpen || attachSheetOpen }">
+    <div class="chat-dock" :class="{ 'chat-dock--picker': pickerOpen }">
     <div
       v-if="mentionOpen"
       id="chat-mention-list"
@@ -1625,114 +1602,62 @@ function menuItems(message) {
       />
     </Transition>
 
-    <Transition name="chat-picker">
-      <div
-        v-if="attachSheetOpen"
-        class="chat-attach-sheet"
-        role="menu"
-        aria-label="Đính kèm"
-      >
-        <button
-          type="button"
-          class="chat-attach-sheet__item"
-          role="menuitem"
-          @click="pickAttachSource(photoInput)"
-        >
-          <AppIcon name="image" :size="20" :stroke-width="1.75" />
-          <span>Thư viện ảnh</span>
-        </button>
-        <button
-          type="button"
-          class="chat-attach-sheet__item"
-          role="menuitem"
-          @click="pickAttachSource(cameraInput)"
-        >
-          <AppIcon name="camera" :size="20" :stroke-width="1.75" />
-          <span>Chụp ảnh</span>
-        </button>
-        <button
-          type="button"
-          class="chat-attach-sheet__item"
-          role="menuitem"
-          @click="pickAttachSource(fileInput)"
-        >
-          <AppIcon name="folder" :size="20" :stroke-width="1.75" />
-          <span>Chọn tệp</span>
-        </button>
-      </div>
-    </Transition>
-
     <div class="chat-view__composer">
       <div class="chat-view__tools hide-scrollbar">
-        <button
-          type="button"
-          class="chat-view__tool"
-          :class="{ 'chat-view__tool--on': attachSheetOpen }"
-          :disabled="Boolean(editing)"
+        <label
+          class="chat-view__tool chat-view__tool--attach"
+          :class="{ 'chat-view__tool--disabled': editing }"
           aria-label="Chụp ảnh"
-          aria-haspopup="menu"
-          :aria-expanded="attachSheetOpen"
-          @mousedown="onAttachKeepFocus"
-          @pointerdown="onAttachKeepFocus"
-          @touchstart.passive="onNativeAttachTouchStart"
-          @click="onAttachToolClick(cameraInput)"
         >
-          <AppIcon name="camera" :size="17" :stroke-width="1.75" />
-        </button>
-        <button
-          type="button"
-          class="chat-view__tool"
-          :class="{ 'chat-view__tool--on': attachSheetOpen }"
-          :disabled="Boolean(editing)"
+          <input
+            ref="cameraInput"
+            class="chat-view__file-overlay"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            :disabled="Boolean(editing)"
+            @touchstart.passive="onNativeAttachTouchStart"
+            @click="onAttachInputActivate"
+            @change="onFilesChosen"
+          />
+          <AppIcon name="camera" :size="17" :stroke-width="1.75" aria-hidden="true" />
+        </label>
+        <label
+          class="chat-view__tool chat-view__tool--attach"
+          :class="{ 'chat-view__tool--disabled': editing }"
           aria-label="Gửi ảnh"
-          aria-haspopup="menu"
-          :aria-expanded="attachSheetOpen"
-          @mousedown="onAttachKeepFocus"
-          @pointerdown="onAttachKeepFocus"
-          @touchstart.passive="onNativeAttachTouchStart"
-          @click="onAttachToolClick(photoInput)"
         >
-          <AppIcon name="image" :size="17" :stroke-width="1.75" />
-        </button>
-        <button
-          type="button"
-          class="chat-view__tool"
-          :class="{ 'chat-view__tool--on': attachSheetOpen }"
-          :disabled="Boolean(editing)"
+          <input
+            ref="photoInput"
+            class="chat-view__file-overlay"
+            type="file"
+            accept="image/*"
+            multiple
+            :disabled="Boolean(editing)"
+            @touchstart.passive="onNativeAttachTouchStart"
+            @click="onAttachInputActivate"
+            @change="onFilesChosen"
+          />
+          <AppIcon name="image" :size="17" :stroke-width="1.75" aria-hidden="true" />
+        </label>
+        <label
+          class="chat-view__tool chat-view__tool--attach"
+          :class="{ 'chat-view__tool--disabled': editing }"
           aria-label="Đính kèm tệp"
-          aria-haspopup="menu"
-          :aria-expanded="attachSheetOpen"
-          @mousedown="onAttachKeepFocus"
-          @pointerdown="onAttachKeepFocus"
-          @touchstart.passive="onNativeAttachTouchStart"
-          @click="onAttachToolClick(fileInput)"
         >
-          <AppIcon name="paperclip" :size="17" :stroke-width="1.75" />
-        </button>
-        <input
-          ref="cameraInput"
-          class="chat-view__file-input"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          @change="onFilesChosen"
-        />
-        <input
-          ref="photoInput"
-          class="chat-view__file-input"
-          type="file"
-          accept="image/*"
-          multiple
-          @change="onFilesChosen"
-        />
-        <input
-          ref="fileInput"
-          class="chat-view__file-input"
-          type="file"
-          multiple
-          accept=".pdf,.doc,.docx,.xlsx,.xls,.ppt,.pptx,.txt,.csv,.zip,image/*"
-          @change="onFilesChosen"
-        />
+          <input
+            ref="fileInput"
+            class="chat-view__file-overlay"
+            type="file"
+            multiple
+            accept=".pdf,.doc,.docx,.xlsx,.xls,.ppt,.pptx,.txt,.csv,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,application/zip"
+            :disabled="Boolean(editing)"
+            @touchstart.passive="onNativeAttachTouchStart"
+            @click="onAttachInputActivate"
+            @change="onFilesChosen"
+          />
+          <AppIcon name="paperclip" :size="17" :stroke-width="1.75" aria-hidden="true" />
+        </label>
         <button
           type="button"
           class="chat-view__tool"
@@ -2560,8 +2485,32 @@ function menuItems(message) {
   line-height: 1;
 }
 
-.chat-view__file-input {
-  display: none;
+.chat-view__tool--attach {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.chat-view__tool--disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.chat-view__file-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px;
 }
 
 .chat-pending {
@@ -2780,31 +2729,6 @@ function menuItems(message) {
   animation: none;
 }
 
-.chat-attach-sheet {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-1) var(--space-2) var(--space-2);
-  border-top: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  background: var(--color-surface);
-}
-
-.chat-attach-sheet__item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  width: 100%;
-  padding: 0.7rem 0.65rem;
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  font-size: 0.9375rem;
-  text-align: left;
-  touch-action: manipulation;
-}
-
-.chat-attach-sheet__item:active {
-  background: var(--color-bg);
-}
 </style>
 
 <style>

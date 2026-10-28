@@ -211,6 +211,7 @@ export function endNativeFilePicker() {
     if (nativePickerActive) return;
     setNativePickerClass(false);
     syncPwaVisualViewport();
+    window.dispatchEvent(new CustomEvent('va-native-file-picker-end'));
   }, 640);
 }
 
