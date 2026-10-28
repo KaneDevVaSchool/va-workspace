@@ -5,6 +5,7 @@ namespace Modules\Identity\App\Hrm\Services;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
 use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Models\Department;
@@ -98,50 +99,119 @@ class HrmEmployeeDatabaseMirrorService
      */
     public function mappedSearch(string $needle, int $limit, ?int $excludeUserId = null): array
     {
-        $needle = mb_strtolower(trim($needle));
-        $rows = $this->activeEmployees()
-            ->filter(function (array $employee) use ($needle): bool {
-                if ($needle === '') {
-                    return true;
-                }
-
-                $haystack = mb_strtolower(implode(' ', array_filter([
-                    $employee['full_name'] ?? '',
-                    $employee['company_email'] ?? '',
-                    $employee['personal_email'] ?? '',
-                    $employee['code'] ?? '',
-                ])));
-
-                return str_contains($haystack, $needle);
-            })
-            ->sortBy(fn (array $employee) => mb_strtolower((string) ($employee['full_name'] ?? '')))
-            ->values();
-
         $presented = [];
-        foreach ($rows as $employee) {
-            $user = $this->mirrorOne($employee);
-            if ($user === null || $user->status !== 'active') {
-                continue;
-            }
-            if ($excludeUserId !== null && (int) $user->id === $excludeUserId) {
+        foreach ($this->searchRows($needle) as $employee) {
+            $row = $this->presentSearchRow($employee, $excludeUserId);
+            if ($row === null) {
                 continue;
             }
 
-            $presented[] = [
-                'id' => $user->id,
-                'name' => filled($employee['full_name'] ?? null) ? (string) $employee['full_name'] : $user->name,
-                'avatar_url' => filled($employee['avatar_url'] ?? null) ? (string) $employee['avatar_url'] : $user->avatar_url,
-                'department' => filled($employee['department_name'] ?? null) ? (string) $employee['department_name'] : null,
-                'job_title_name' => filled($employee['job_title'] ?? null) ? (string) $employee['job_title'] : null,
-                'company_name' => filled($employee['company_name'] ?? null) ? (string) $employee['company_name'] : null,
-            ];
-
+            $presented[] = $row;
             if (count($presented) >= $limit) {
                 break;
             }
         }
 
         return $presented;
+    }
+
+    /**
+     * Một trang kết quả tìm đồng nghiệp (cuộn tải thêm). Cắt trang trên danh sách HRM trước
+     * khi mirror để chỉ ghi users cho đúng trang đang xem — trang có chính người tìm ít hơn 1 dòng.
+     *
+     * @return array{users: list<array{id: int, name: string, avatar_url: ?string, department: ?string, job_title_name: ?string, company_name: ?string}>, has_more: bool}
+     */
+    public function mappedSearchPage(string $needle, int $limit, int $offset = 0, ?int $excludeUserId = null): array
+    {
+        $rows = $this->searchRows($needle);
+
+        $users = $rows->slice($offset, $limit)
+            ->map(fn (array $employee) => $this->presentSearchRow($employee, $excludeUserId))
+            ->filter()
+            ->values()
+            ->all();
+
+        return [
+            'users' => $users,
+            'has_more' => $rows->count() > $offset + $limit,
+        ];
+    }
+
+    /**
+     * Không phân biệt dấu/hoa thường, mọi từ gõ vào đều phải khớp (không cần đúng thứ tự):
+     * "khoa nguyen" ra "Nguyễn Khoa". Người khớp theo tên đứng trước người chỉ khớp
+     * email / mã nhân viên / phòng ban.
+     *
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    private function searchRows(string $needle): \Illuminate\Support\Collection
+    {
+        $tokens = preg_split('/\s+/', self::foldForSearch($needle), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return $this->activeEmployees()
+            ->filter(fn (array $employee) => $this->email($employee) !== null)
+            ->map(function (array $employee) use ($tokens): ?array {
+                $name = self::foldForSearch((string) ($employee['full_name'] ?? ''));
+                if (self::containsAll($name, $tokens)) {
+                    return ['employee' => $employee, 'rank' => 0, 'name' => $name];
+                }
+
+                $haystack = $name.' '.self::foldForSearch(implode(' ', array_filter([
+                    $employee['company_email'] ?? '',
+                    $employee['personal_email'] ?? '',
+                    $employee['code'] ?? '',
+                    $employee['department_name'] ?? '',
+                ])));
+
+                return self::containsAll($haystack, $tokens)
+                    ? ['employee' => $employee, 'rank' => 1, 'name' => $name]
+                    : null;
+            })
+            ->filter()
+            ->sortBy([['rank', 'asc'], ['name', 'asc']])
+            ->pluck('employee')
+            ->values();
+    }
+
+    /** @param list<string> $tokens */
+    private static function containsAll(string $haystack, array $tokens): bool
+    {
+        foreach ($tokens as $token) {
+            if (! str_contains($haystack, $token)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static function foldForSearch(string $value): string
+    {
+        return Str::lower(Str::ascii(trim($value)));
+    }
+
+    /**
+     * @param  array<string, mixed>  $employee
+     * @return array{id: int, name: string, avatar_url: ?string, department: ?string, job_title_name: ?string, company_name: ?string}|null
+     */
+    private function presentSearchRow(array $employee, ?int $excludeUserId): ?array
+    {
+        $user = $this->mirrorOne($employee);
+        if ($user === null || $user->status !== 'active') {
+            return null;
+        }
+        if ($excludeUserId !== null && (int) $user->id === $excludeUserId) {
+            return null;
+        }
+
+        return [
+            'id' => $user->id,
+            'name' => filled($employee['full_name'] ?? null) ? (string) $employee['full_name'] : $user->name,
+            'avatar_url' => filled($employee['avatar_url'] ?? null) ? (string) $employee['avatar_url'] : $user->avatar_url,
+            'department' => filled($employee['department_name'] ?? null) ? (string) $employee['department_name'] : null,
+            'job_title_name' => filled($employee['job_title'] ?? null) ? (string) $employee['job_title'] : null,
+            'company_name' => filled($employee['company_name'] ?? null) ? (string) $employee['company_name'] : null,
+        ];
     }
 
     /**

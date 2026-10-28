@@ -133,10 +133,10 @@ class UserRepository implements UserRepositoryInterface
             ->keyBy('department_id');
     }
 
-    public function searchActiveByName(string $query, int $limit = 8, ?int $excludeUserId = null): \Illuminate\Support\Collection
+    public function searchActiveByName(string $query, int $limit = 8, ?int $excludeUserId = null, int $offset = 0): \Illuminate\Support\Collection
     {
         if (HrmEmployeeDirectory::isConfigured()) {
-            return collect(app(HrmEmployeeDatabaseMirrorService::class)->mappedSearch($query, $limit, $excludeUserId))
+            return collect(app(HrmEmployeeDatabaseMirrorService::class)->mappedSearchPage($query, $limit, $offset, $excludeUserId)['users'])
                 ->map(fn (array $row) => User::query()->find($row['id']))
                 ->filter();
         }
@@ -145,11 +145,12 @@ class UserRepository implements UserRepositoryInterface
             ->with(['department.company', 'company'])
             ->where('status', 'active')
             ->orderBy('name')
+            ->orderBy('id')
+            ->offset($offset)
             ->limit($limit);
 
-        $needle = trim($query);
-        if ($needle !== '') {
-            $escaped = addcslashes($needle, '%_\\');
+        foreach (preg_split('/\s+/', trim($query), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $token) {
+            $escaped = addcslashes($token, '%_\\');
             $builder->where('name', 'like', '%'.$escaped.'%');
         }
 

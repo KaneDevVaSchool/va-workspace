@@ -112,11 +112,12 @@ class ChatConversationController extends Controller
     public function searchUsers(Request $request): JsonResponse
     {
         $query = trim((string) $request->query('q', ''));
+        $offset = max(0, (int) $request->query('offset', 0));
         $actor = $request->user();
 
-        return response()->json([
-            'users' => $this->colleagueSearch->search($query, 8, $actor->id),
-        ]);
+        return response()->json(
+            $this->colleagueSearch->searchPage($query, 20, $offset, $actor->id)
+        );
     }
 
     public function presence(Request $request): JsonResponse

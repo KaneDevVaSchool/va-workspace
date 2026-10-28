@@ -1,8 +1,8 @@
 <script setup>
 import { ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
-import { searchUsers } from '../api/chatApi';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
+import { useColleagueSearch } from '../lib/useColleagueSearch';
 import { useChatStore } from '../store/chatStore';
 
 const listQuery = defineModel('listQuery', { type: String, default: '' });
@@ -11,36 +11,17 @@ const emit = defineEmits(['create-group']);
 
 const store = useChatStore();
 const peerQuery = ref('');
-const results = ref([]);
-const searching = ref(false);
-let debounceTimer = null;
+const { results, searching, loadingMore, setQuery, onScroll, reset } = useColleagueSearch();
 
 watch(peerQuery, (value) => {
-  clearTimeout(debounceTimer);
-  const trimmed = value.trim();
-  listQuery.value = trimmed;
-  if (trimmed === '') {
-    results.value = [];
-    return;
-  }
-  debounceTimer = window.setTimeout(() => runSearch(trimmed), 250);
+  listQuery.value = value.trim();
+  setQuery(value);
 });
-
-async function runSearch(value) {
-  searching.value = true;
-  try {
-    results.value = await searchUsers(value);
-  } catch {
-    results.value = [];
-  } finally {
-    searching.value = false;
-  }
-}
 
 async function pick(user) {
   peerQuery.value = '';
   listQuery.value = '';
-  results.value = [];
+  reset();
   await store.openWithUser(user.id);
 }
 
@@ -93,6 +74,7 @@ function onCreateGroup() {
         class="employee-chat-toolbar__drop hide-scrollbar"
         role="listbox"
         aria-label="Kết quả tìm đồng nghiệp"
+        @scroll.passive="onScroll"
       >
         <p v-if="searching" class="employee-chat-toolbar__empty">Đang tìm…</p>
         <p v-else-if="results.length === 0" class="employee-chat-toolbar__empty">
@@ -125,6 +107,7 @@ function onCreateGroup() {
           </span>
           <AppIcon name="messageCircle" :size="16" :stroke-width="1.75" />
         </button>
+        <p v-if="loadingMore" class="employee-chat-toolbar__empty">Đang tải thêm…</p>
       </div>
     </Transition>
   </div>
@@ -181,7 +164,7 @@ function onCreateGroup() {
   left: 0;
   right: 0;
   top: calc(100% + 0.35rem);
-  max-height: 14rem;
+  max-height: min(24rem, 55vh);
   overflow-y: auto;
   padding: 0.25rem;
   border-radius: var(--radius-lg);

@@ -76,11 +76,12 @@ interface UserRepositoryInterface
     public function departmentDirectorsByDepartmentIds(array $departmentIds): \Illuminate\Support\Collection;
 
     /**
-     * Tìm user đang hoạt động theo tên — gõ @mention trên bảng tin.
+     * Tìm user đang hoạt động theo tên — gõ @mention trên bảng tin, tìm người trong Chat
+     * (`$offset` để cuộn tải thêm).
      *
      * @return \Illuminate\Support\Collection<int, User>
      */
-    public function searchActiveByName(string $query, int $limit = 8, ?int $excludeUserId = null): \Illuminate\Support\Collection;
+    public function searchActiveByName(string $query, int $limit = 8, ?int $excludeUserId = null, int $offset = 0): \Illuminate\Support\Collection;
 
     /**
      * User đang hoạt động theo danh sách id (mention / thông báo).

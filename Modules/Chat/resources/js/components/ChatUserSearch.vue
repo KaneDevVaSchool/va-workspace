@@ -1,39 +1,20 @@
 <script setup>
 import { ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
-import { searchUsers } from '../api/chatApi';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
+import { useColleagueSearch } from '../lib/useColleagueSearch';
 import { useChatStore } from '../store/chatStore';
 
 const store = useChatStore();
 const query = ref('');
-const results = ref([]);
-const searching = ref(false);
 const focused = ref(false);
-let debounceTimer = null;
+const { results, searching, loadingMore, setQuery, onScroll, reset } = useColleagueSearch();
 
-watch(query, (value) => {
-  clearTimeout(debounceTimer);
-  const trimmed = value.trim();
-  if (trimmed === '') {
-    results.value = [];
-    return;
-  }
-  debounceTimer = window.setTimeout(() => runSearch(trimmed), 250);
-});
-
-async function runSearch(value) {
-  searching.value = true;
-  try {
-    results.value = await searchUsers(value);
-  } finally {
-    searching.value = false;
-  }
-}
+watch(query, setQuery);
 
 async function pick(user) {
   query.value = '';
-  results.value = [];
+  reset();
   await store.openWithUser(user.id);
 }
 
@@ -67,7 +48,7 @@ function initial(name) {
     </div>
 
     <Transition name="chat-picker">
-      <div v-if="query.trim() !== ''" class="chat-search__results">
+      <div v-if="query.trim() !== ''" class="chat-search__results hide-scrollbar" @scroll.passive="onScroll">
         <p v-if="searching" class="chat-search__empty">Đang tìm…</p>
         <p v-else-if="results.length === 0" class="chat-search__empty">Không tìm thấy ai phù hợp.</p>
         <button
@@ -92,6 +73,7 @@ function initial(name) {
           </span>
           <AppIcon class="chat-search__chevron" name="chevronRight" :size="16" :stroke-width="1.75" />
         </button>
+        <p v-if="loadingMore" class="chat-search__empty">Đang tải thêm…</p>
       </div>
     </Transition>
   </div>
@@ -153,7 +135,7 @@ function initial(name) {
 }
 
 .chat-search__results {
-  max-height: 15rem;
+  max-height: min(24rem, 55vh);
   overflow-y: auto;
   margin-top: var(--space-2);
   padding: 0.25rem;

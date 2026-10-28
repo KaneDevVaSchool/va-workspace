@@ -3,9 +3,9 @@ import { computed, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { showClientToast } from '@/lib/clientToast';
-import { searchUsers } from '../api/chatApi';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
 import { ChatFileError, prepareChatFile } from '../lib/prepareChatFile';
+import { useColleagueSearch } from '../lib/useColleagueSearch';
 import { useChatStore } from '../store/chatStore';
 
 const props = defineProps({
@@ -16,13 +16,14 @@ const emit = defineEmits(['close']);
 const store = useChatStore();
 const auth = useAuthStore();
 const query = ref('');
-const results = ref([]);
 const selected = ref([]);
 const saving = ref(false);
 const avatarSaving = ref(false);
 const error = ref('');
 const avatarInput = ref(null);
-let timer = null;
+const { results, loadingMore, hasMore, setQuery, loadMore, reset } = useColleagueSearch({
+  exclude: (user) => takenIds.value.has(user.id) || selected.value.some((item) => item.id === user.id),
+});
 
 const conversation = computed(() => store.activeConversation);
 const isOwner = computed(() => Boolean(conversation.value?.is_owner));
@@ -33,30 +34,24 @@ const groupTitle = computed(() => conversation.value?.title || 'Nhóm');
 watch(() => props.open, (value) => {
   if (!value) return;
   query.value = '';
-  results.value = [];
+  reset();
   selected.value = [];
   error.value = '';
 });
 
 watch(query, (value) => {
-  window.clearTimeout(timer);
-  const trimmed = value.trim();
-  if (!isOwner.value || trimmed === '') {
-    results.value = [];
+  if (!isOwner.value) {
+    reset();
     return;
   }
-  timer = window.setTimeout(() => runSearch(trimmed), 250);
+  setQuery(value);
 });
 
 const takenIds = computed(() => new Set(members.value.map((user) => user.id)));
 
-async function runSearch(value) {
-  try {
-    const users = await searchUsers(value);
-    results.value = users.filter((user) => !takenIds.value.has(user.id) && !selected.value.some((item) => item.id === user.id));
-  } catch {
-    results.value = [];
-  }
+function select(user) {
+  selected.value = [...selected.value, user];
+  results.value = results.value.filter((item) => item.id !== user.id);
 }
 
 function close() {
@@ -71,7 +66,7 @@ async function addSelected() {
   try {
     await store.addMembers(conversation.value.id, selected.value.map((user) => user.id));
     selected.value = [];
-    results.value = [];
+    reset();
     query.value = '';
   } catch (err) {
     error.value = err?.response?.data?.message || err?.response?.data?.errors?.user_ids?.[0] || 'Không thêm được thành viên.';
@@ -208,10 +203,13 @@ async function onAvatarChosen(event) {
                 :key="user.id"
                 type="button"
                 class="chat-room__person"
-                @click="selected = [...selected, user]; results = results.filter((item) => item.id !== user.id)"
+                @click="select(user)"
               >
                 <span>{{ user.name }}</span>
                 <AppIcon name="plus" :size="14" />
+              </button>
+              <button v-if="hasMore" type="button" class="chat-room__text" :disabled="loadingMore" @click="loadMore">
+                {{ loadingMore ? 'Đang tải…' : 'Xem thêm' }}
               </button>
               <button v-if="selected.length" type="button" class="chat-room__submit" :disabled="saving" @click="addSelected">
                 Thêm {{ selected.length }} người

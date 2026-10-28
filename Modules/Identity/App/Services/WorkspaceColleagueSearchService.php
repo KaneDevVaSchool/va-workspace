@@ -30,15 +30,40 @@ class WorkspaceColleagueSearchService
         }
 
         return $this->users->searchActiveByName($query, $limit, $excludeUserId)
-            ->map(fn (User $user) => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'avatar_url' => $user->avatar_url,
-                'department' => $user->department?->name,
-                'job_title_name' => $this->hrmDepartments->hrmJobTitleFor($user),
-                'company_name' => $user->resolveCompanyName(),
-            ])
+            ->map(fn (User $user) => $this->present($user))
             ->values()
             ->all();
+    }
+
+    /**
+     * Một trang kết quả (cuộn tải thêm) — Chat phải tìm được toàn bộ đồng nghiệp, không dừng ở vài người đầu.
+     *
+     * @return array{users: list<array{id: int, name: string, avatar_url: ?string, department: ?string, job_title_name: ?string, company_name: ?string}>, has_more: bool}
+     */
+    public function searchPage(string $query, int $limit = 20, int $offset = 0, ?int $excludeUserId = null): array
+    {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            return $this->mirror->mappedSearchPage($query, $limit, $offset, $excludeUserId);
+        }
+
+        $users = $this->users->searchActiveByName($query, $limit + 1, $excludeUserId, $offset);
+
+        return [
+            'users' => $users->take($limit)->map(fn (User $user) => $this->present($user))->values()->all(),
+            'has_more' => $users->count() > $limit,
+        ];
+    }
+
+    /** @return array{id: int, name: string, avatar_url: ?string, department: ?string, job_title_name: ?string, company_name: ?string} */
+    private function present(User $user): array
+    {
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'avatar_url' => $user->avatar_url,
+            'department' => $user->department?->name,
+            'job_title_name' => $this->hrmDepartments->hrmJobTitleFor($user),
+            'company_name' => $user->resolveCompanyName(),
+        ];
     }
 }

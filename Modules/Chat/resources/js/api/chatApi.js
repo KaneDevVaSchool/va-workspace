@@ -158,6 +158,13 @@ export function fetchUnreadCount() {
   return window.axios.get('/api/chat/unread-count').then((r) => r.data.unread_total ?? 0);
 }
 
+/** Một trang kết quả tìm đồng nghiệp; `offset` là số người đã nhận từ máy chủ ở các trang trước. */
+export function searchUsersPage(query, offset = 0) {
+  return window.axios
+    .get('/api/chat/users/search', { params: { q: query, offset } })
+    .then((r) => ({ users: r.data.users ?? [], hasMore: Boolean(r.data.has_more) }));
+}
+
 export function searchUsers(query) {
-  return window.axios.get('/api/chat/users/search', { params: { q: query } }).then((r) => r.data.users);
+  return searchUsersPage(query).then((page) => page.users);
 }

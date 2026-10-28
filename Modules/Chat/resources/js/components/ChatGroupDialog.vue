@@ -2,8 +2,8 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
-import { searchUsers } from '../api/chatApi';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
+import { useColleagueSearch } from '../lib/useColleagueSearch';
 import { useChatStore } from '../store/chatStore';
 
 const props = defineProps({
@@ -16,12 +16,12 @@ const store = useChatStore();
 const auth = useAuthStore();
 const title = ref('');
 const query = ref('');
-const results = ref([]);
 const selected = ref([]);
-const searching = ref(false);
 const saving = ref(false);
 const error = ref('');
-let debounceTimer = null;
+const { results, searching, loadingMore, setQuery, onScroll, reset } = useColleagueSearch({
+  exclude: (user) => user.id === auth.user?.id || selected.value.some((item) => item.id === user.id),
+});
 
 const canSubmit = computed(
   () => !saving.value && title.value.trim() !== '' && selected.value.length > 0,
@@ -33,25 +33,16 @@ watch(
     if (!value) return;
     title.value = '';
     query.value = '';
-    results.value = [];
+    reset();
     selected.value = [];
     error.value = '';
     window.addEventListener('keydown', onKeydown);
   },
 );
 
-watch(query, (value) => {
-  clearTimeout(debounceTimer);
-  const trimmed = value.trim();
-  if (trimmed === '') {
-    results.value = [];
-    return;
-  }
-  debounceTimer = window.setTimeout(() => runSearch(trimmed), 250);
-});
+watch(query, setQuery);
 
 onBeforeUnmount(() => {
-  clearTimeout(debounceTimer);
   window.removeEventListener('keydown', onKeydown);
 });
 
@@ -63,19 +54,6 @@ function close() {
 
 function onKeydown(event) {
   if (event.key === 'Escape') close();
-}
-
-async function runSearch(value) {
-  searching.value = true;
-  try {
-    const users = await searchUsers(value);
-    const taken = new Set(selected.value.map((user) => user.id));
-    results.value = users.filter((user) => user.id !== auth.user?.id && !taken.has(user.id));
-  } catch {
-    results.value = [];
-  } finally {
-    searching.value = false;
-  }
 }
 
 function addUser(user) {
@@ -180,7 +158,7 @@ function initial(name) {
               </span>
             </label>
 
-            <div class="chat-group__list hide-scrollbar">
+            <div class="chat-group__list hide-scrollbar" @scroll.passive="onScroll">
               <p v-if="query.trim() === ''" class="chat-group__empty">Nhập tên để tìm đồng nghiệp.</p>
               <p v-else-if="searching" class="chat-group__empty">Đang tìm…</p>
               <p v-else-if="results.length === 0" class="chat-group__empty">Không tìm thấy ai phù hợp.</p>
@@ -204,6 +182,7 @@ function initial(name) {
                 </span>
                 <AppIcon name="plus" :size="16" :stroke-width="1.75" />
               </button>
+              <p v-if="loadingMore" class="chat-group__empty">Đang tải thêm…</p>
             </div>
           </form>
           <p v-if="error" class="chat-group__error" role="alert">{{ error }}</p>
