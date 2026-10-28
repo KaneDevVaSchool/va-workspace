@@ -23,6 +23,7 @@ class SocialPostRepository implements SocialPostRepositoryInterface
                 'wallUser.department',
                 'group',
                 'departmentVisibilities.department',
+                'companyVisibilities.company',
                 'hashtags',
                 'linkPreviews',
                 'poll.options' => fn ($query) => $query
@@ -41,10 +42,10 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         return $query;
     }
 
-    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?int $viewerDepartmentId = null, ?string $hashtag = null, ?string $search = null): LengthAwarePaginator
+    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?int $viewerDepartmentId = null, ?string $hashtag = null, ?string $search = null, ?int $viewerCompanyId = null): LengthAwarePaginator
     {
         $query = $this->baseQuery($userId);
-        $this->constrainVisibleFeed($query, $departmentId, $wallUserId, $groupId, $viewerDepartmentId);
+        $this->constrainVisibleFeed($query, $departmentId, $wallUserId, $groupId, $viewerDepartmentId, $viewerCompanyId);
 
         // Bài đang chờ duyệt/bị từ chối chỉ hiện cho chính tác giả ở scope 'mine'.
         if ($userId !== null && $scope === 'mine') {
@@ -69,10 +70,11 @@ class SocialPostRepository implements SocialPostRepositoryInterface
             ->paginate($perPage, ['*'], 'page', $page);
     }
 
-    public function constrainVisibleFeed($query, ?int $departmentId, ?int $wallUserId, ?int $groupId, ?int $viewerDepartmentId): void
+    public function constrainVisibleFeed($query, ?int $departmentId, ?int $wallUserId, ?int $groupId, ?int $viewerDepartmentId, ?int $viewerCompanyId = null): void
     {
         $this->applyWall($query, $departmentId, $wallUserId, $groupId);
         $this->applyDepartmentVisibility($query, $departmentId, $wallUserId, $groupId, $viewerDepartmentId);
+        $this->applyCompanyVisibility($query, $departmentId, $wallUserId, $groupId, $viewerCompanyId);
     }
 
     public function profileStats(int $userId): array
@@ -95,6 +97,7 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         ?string $search = null,
         ?int $viewerId = null,
         ?int $viewerDepartmentId = null,
+        ?int $viewerCompanyId = null,
     ): LengthAwarePaginator {
         $query = $this->baseQuery($viewerId)
             ->where('is_pinned', true)
@@ -103,6 +106,7 @@ class SocialPostRepository implements SocialPostRepositoryInterface
 
         $this->applyWall($query, $departmentId, $wallUserId);
         $this->applyDepartmentVisibility($query, $departmentId, $wallUserId, null, $viewerDepartmentId);
+        $this->applyCompanyVisibility($query, $departmentId, $wallUserId, null, $viewerCompanyId);
         $this->applyPinnedSearch($query, $search);
 
         return $query
@@ -210,10 +214,50 @@ class SocialPostRepository implements SocialPostRepositoryInterface
         });
     }
 
+    /**
+     * Chỉ áp dụng cho bảng tin chung: ẩn bài theo company_visibility_mode (pháp nhân HRM).
+     */
+    private function applyCompanyVisibility($query, ?int $departmentId, ?int $wallUserId, ?int $groupId, ?int $viewerCompanyId): void
+    {
+        if ($departmentId !== null || $wallUserId !== null || $groupId !== null) {
+            return;
+        }
+
+        $query->where(function ($outer) use ($viewerCompanyId) {
+            $outer->where('company_visibility_mode', SocialPost::COMPANY_VISIBILITY_ALL)
+                ->orWhereNull('company_visibility_mode')
+                ->orWhere(function ($exclude) use ($viewerCompanyId) {
+                    $exclude->where('company_visibility_mode', SocialPost::COMPANY_VISIBILITY_EXCLUDE);
+
+                    if ($viewerCompanyId === null) {
+                        return;
+                    }
+
+                    $exclude->whereDoesntHave('companyVisibilities', fn ($v) => $v->where('company_id', $viewerCompanyId));
+                });
+
+            if ($viewerCompanyId === null) {
+                return;
+            }
+
+            $outer->orWhere(function ($include) use ($viewerCompanyId) {
+                $include->where('company_visibility_mode', SocialPost::COMPANY_VISIBILITY_INCLUDE)
+                    ->whereHas('companyVisibilities', fn ($v) => $v->where('company_id', $viewerCompanyId));
+            });
+        });
+    }
+
     public function syncDepartmentVisibility(SocialPost $post, array $departmentIds): void
     {
         $post->departmentVisibilities()->createMany(
             collect($departmentIds)->map(fn (int $id) => ['department_id' => $id])->all()
+        );
+    }
+
+    public function syncCompanyVisibility(SocialPost $post, array $companyIds): void
+    {
+        $post->companyVisibilities()->createMany(
+            collect($companyIds)->map(fn (int $id) => ['company_id' => $id])->all()
         );
     }
 

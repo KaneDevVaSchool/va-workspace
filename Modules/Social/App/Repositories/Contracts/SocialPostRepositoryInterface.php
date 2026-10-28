@@ -14,11 +14,12 @@ interface SocialPostRepositoryInterface
      * @param  int|null  $wallUserId  null trừ khi tường cá nhân
      * @param  int|null  $groupId  null trừ khi tường nhóm
      * @param  int|null  $viewerDepartmentId  phòng ban của viewer, để lọc bài giới hạn hiển thị theo phòng ban trên bảng tin chung
+     * @param  int|null  $viewerCompanyId  pháp nhân của viewer (HRM), lọc bài giới hạn theo pháp nhân trên bảng tin chung
      */
-    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?int $viewerDepartmentId = null, ?string $hashtag = null, ?string $search = null): LengthAwarePaginator;
+    public function paginate(int $perPage, int $page, string $scope = 'all', ?int $userId = null, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?int $viewerDepartmentId = null, ?string $hashtag = null, ?string $search = null, ?int $viewerCompanyId = null): LengthAwarePaginator;
 
     /** Giới hạn bài viết theo tường / phòng ban / nhóm và quyền xem trên bảng tin chung. */
-    public function constrainVisibleFeed($query, ?int $departmentId, ?int $wallUserId, ?int $groupId, ?int $viewerDepartmentId): void;
+    public function constrainVisibleFeed($query, ?int $departmentId, ?int $wallUserId, ?int $groupId, ?int $viewerDepartmentId, ?int $viewerCompanyId = null): void;
 
     /** @return array{posts_count: int, reactions_received: int, comments_count: int} */
     public function profileStats(int $userId): array;
@@ -36,6 +37,7 @@ interface SocialPostRepositoryInterface
         ?string $search = null,
         ?int $viewerId = null,
         ?int $viewerDepartmentId = null,
+        ?int $viewerCompanyId = null,
     ): LengthAwarePaginator;
 
     public function find(int $id, ?int $viewerId = null): ?SocialPost;
@@ -54,6 +56,9 @@ interface SocialPostRepositoryInterface
 
     /** Ghi các phòng ban được chọn (include/exclude) cho bài đăng bảng tin chung. */
     public function syncDepartmentVisibility(SocialPost $post, array $departmentIds): void;
+
+    /** Ghi các pháp nhân được chọn (include/exclude) cho bài đăng bảng tin chung. */
+    public function syncCompanyVisibility(SocialPost $post, array $companyIds): void;
 
     public function update(SocialPost $post, array $data): SocialPost;
 

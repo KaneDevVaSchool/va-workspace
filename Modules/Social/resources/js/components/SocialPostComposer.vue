@@ -44,10 +44,22 @@ const postScope = ref(props.defaultScope);
 const pollDialogOpen = ref(false);
 const deptVisibilityOpen = ref(false);
 const deptVisibilityMode = ref('all');
+const deptVisibilityAudience = ref('company');
+const deptVisibilityCompanyIds = ref([]);
 const deptVisibilityIds = ref([]);
 const deptVisibilityLabel = computed(() => {
-  if (deptVisibilityMode.value === 'include') return `Chỉ ${deptVisibilityIds.value.length} phòng ban`;
-  if (deptVisibilityMode.value === 'exclude') return `Trừ ${deptVisibilityIds.value.length} phòng ban`;
+  if (deptVisibilityMode.value === 'include') {
+    if (deptVisibilityAudience.value === 'company') {
+      return `Chỉ ${deptVisibilityCompanyIds.value.length} pháp nhân`;
+    }
+    return `Chỉ ${deptVisibilityIds.value.length} phòng ban`;
+  }
+  if (deptVisibilityMode.value === 'exclude') {
+    if (deptVisibilityAudience.value === 'company') {
+      return `Trừ ${deptVisibilityCompanyIds.value.length} pháp nhân`;
+    }
+    return `Trừ ${deptVisibilityIds.value.length} phòng ban`;
+  }
   return 'Ai được thấy?';
 });
 const canBeAnonymous = computed(() => postScope.value === 'company' && !asSystemAnnouncement.value);
@@ -141,6 +153,8 @@ function removeLinkPreview(url) {
 function resetDeptVisibility() {
   deptVisibilityOpen.value = false;
   deptVisibilityMode.value = 'all';
+  deptVisibilityAudience.value = 'company';
+  deptVisibilityCompanyIds.value = [];
   deptVisibilityIds.value = [];
 }
 
@@ -231,8 +245,13 @@ async function submit() {
       form.append('group_id', String(props.groupId));
     }
     if (postScope.value === 'company' && deptVisibilityMode.value !== 'all') {
-      form.append('department_visibility_mode', deptVisibilityMode.value);
-      deptVisibilityIds.value.forEach((id) => form.append('department_visibility_ids[]', String(id)));
+      if (deptVisibilityAudience.value === 'company') {
+        form.append('company_visibility_mode', deptVisibilityMode.value);
+        deptVisibilityCompanyIds.value.forEach((id) => form.append('company_visibility_ids[]', String(id)));
+      } else {
+        form.append('department_visibility_mode', deptVisibilityMode.value);
+        deptVisibilityIds.value.forEach((id) => form.append('department_visibility_ids[]', String(id)));
+      }
     }
     files.value.forEach((file) => form.append('attachments[]', file));
     gifAttachments.value.forEach((gif) => form.append('gif_attachments[]', gif.token));
@@ -471,9 +490,13 @@ defineExpose({ expand });
           <SocialDepartmentVisibilityPicker
             :open="deptVisibilityOpen"
             :mode="deptVisibilityMode"
+            :audience-kind="deptVisibilityAudience"
+            :company-ids="deptVisibilityCompanyIds"
             :department-ids="deptVisibilityIds"
             @close="deptVisibilityOpen = false"
             @update:mode="deptVisibilityMode = $event"
+            @update:audience-kind="deptVisibilityAudience = $event"
+            @update:company-ids="deptVisibilityCompanyIds = $event"
             @update:department-ids="deptVisibilityIds = $event"
           />
         </div>

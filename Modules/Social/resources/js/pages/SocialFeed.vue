@@ -637,7 +637,10 @@ onMounted(async () => {
                     >
                         Tường {{ wallUserName }}
                     </button>
-                    <SocialColleagueSearch @select="openColleagueWall" />
+                    <SocialColleagueSearch
+                        class="social-page__colleague-search"
+                        @select="openColleagueWall"
+                    />
                     <div v-if="!viewingOtherWall" class="social-page__filter">
                         <button
                             type="button"
@@ -1429,6 +1432,10 @@ onMounted(async () => {
         flex: 1 1 auto;
         width: auto;
         max-width: 22rem;
+    }
+
+    .social-page__colleague-search {
+        display: none;
     }
 }
 

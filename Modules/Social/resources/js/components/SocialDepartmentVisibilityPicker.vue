@@ -6,27 +6,65 @@ import { showClientToast } from '@/lib/clientToast';
 const props = defineProps({
   open: { type: Boolean, default: false },
   mode: { type: String, default: 'all' }, // 'all' | 'include' | 'exclude'
+  audienceKind: { type: String, default: 'company' }, // 'company' | 'department'
+  companyIds: { type: Array, default: () => [] },
   departmentIds: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(['close', 'update:mode', 'update:department-ids']);
+const emit = defineEmits([
+  'close',
+  'update:mode',
+  'update:audience-kind',
+  'update:company-ids',
+  'update:department-ids',
+]);
 
-const MODES = [
-  { value: 'all', label: 'Tất cả phòng ban', detail: 'Mọi phòng ban đều thấy bài viết.', icon: 'globe' },
-  { value: 'include', label: 'Chỉ vài phòng ban', detail: 'Chỉ phòng ban được chọn mới thấy.', icon: 'building' },
-  { value: 'exclude', label: 'Trừ vài phòng ban', detail: 'Ẩn bài với phòng ban được chọn.', icon: 'eyeOff' },
+const AUDIENCE_KINDS = [
+  { value: 'company', label: 'Theo pháp nhân', detail: 'Nhân sự thuộc pháp nhân HRM được chọn.' },
+  { value: 'department', label: 'Theo phòng ban', detail: 'Tùy chỉnh chi tiết từng phòng ban.' },
 ];
 
+const MODE_COPY = {
+  company: {
+    all: { label: 'Tất cả pháp nhân', detail: 'Mọi nhân sự trên workspace đều thấy bài viết.', icon: 'globe' },
+    include: { label: 'Chỉ vài pháp nhân', detail: 'Chỉ nhân sự thuộc pháp nhân được chọn mới thấy.', icon: 'building' },
+    exclude: { label: 'Trừ vài pháp nhân', detail: 'Ẩn bài với nhân sự thuộc pháp nhân được chọn.', icon: 'eyeOff' },
+  },
+  department: {
+    all: { label: 'Tất cả phòng ban', detail: 'Mọi phòng ban đều thấy bài viết.', icon: 'globe' },
+    include: { label: 'Chỉ vài phòng ban', detail: 'Chỉ phòng ban được chọn mới thấy.', icon: 'building' },
+    exclude: { label: 'Trừ vài phòng ban', detail: 'Ẩn bài với phòng ban được chọn.', icon: 'eyeOff' },
+  },
+};
+
+const modes = computed(() => {
+  const copy = MODE_COPY[draftAudienceKind.value] ?? MODE_COPY.company;
+  return ['all', 'include', 'exclude'].map((value) => ({ value, ...copy[value] }));
+});
+
+const companies = ref([]);
 const departments = ref([]);
-const loading = ref(false);
-const loaded = ref(false);
+const loadingCompanies = ref(false);
+const loadingDepartments = ref(false);
+const loadedCompanies = ref(false);
+const loadedDepartments = ref(false);
 const search = ref('');
 const draftMode = ref('all');
-const draftIds = ref([]);
+const draftAudienceKind = ref('company');
+const draftCompanyIds = ref([]);
+const draftDepartmentIds = ref([]);
 let previousBodyOverflow = '';
 
-const needsDepartments = computed(() => draftMode.value !== 'all');
-const selectedCount = computed(() => draftIds.value.length);
+const needsSelection = computed(() => draftMode.value !== 'all');
+const loading = computed(() => (
+  draftAudienceKind.value === 'company' ? loadingCompanies.value : loadingDepartments.value
+));
+const selectedCount = computed(() => (
+  draftAudienceKind.value === 'company' ? draftCompanyIds.value.length : draftDepartmentIds.value.length
+));
+const catalogLength = computed(() => (
+  draftAudienceKind.value === 'company' ? companies.value.length : departments.value.length
+));
 
 function deptMeta(department) {
   const hrm = String(department?.hrm_code ?? '').trim();
@@ -66,51 +104,107 @@ const departmentGroups = computed(() => {
   return [...groups.entries()].map(([label, items]) => ({ label, items }));
 });
 
+const filteredCompanies = computed(() => {
+  const needle = search.value.trim().toLowerCase();
+  if (!needle) return companies.value;
+  return companies.value.filter((company) => {
+    const haystack = [company.name, company.code].filter(Boolean).join(' ').toLowerCase();
+    return haystack.includes(needle);
+  });
+});
+
 const summaryText = computed(() => {
+  const unit = draftAudienceKind.value === 'company' ? 'pháp nhân' : 'phòng ban';
   if (draftMode.value === 'include') {
     return selectedCount.value > 0
-      ? `Chỉ ${selectedCount.value} phòng ban được chọn thấy bài viết.`
-      : 'Chọn phòng ban được thấy bài viết.';
+      ? `Chỉ ${selectedCount.value} ${unit} được chọn thấy bài viết.`
+      : `Chọn ${unit} được thấy bài viết.`;
   }
   if (draftMode.value === 'exclude') {
     return selectedCount.value > 0
-      ? `Ẩn bài với ${selectedCount.value} phòng ban được chọn.`
-      : 'Chọn phòng ban sẽ không thấy bài viết.';
+      ? `Ẩn bài với ${selectedCount.value} ${unit} được chọn.`
+      : `Chọn ${unit} sẽ không thấy bài viết.`;
   }
-  return 'Mọi phòng ban đều thấy bài viết này.';
+  return draftAudienceKind.value === 'company'
+    ? 'Mọi pháp nhân đều thấy bài viết này.'
+    : 'Mọi phòng ban đều thấy bài viết này.';
 });
 
+async function loadCompanies() {
+  if (loadedCompanies.value) return;
+  loadingCompanies.value = true;
+  try {
+    const { data } = await window.axios.get('/api/social/companies');
+    companies.value = Array.isArray(data?.companies) ? data.companies : [];
+    loadedCompanies.value = true;
+  } catch {
+    showClientToast('error', 'Không tải được danh sách pháp nhân HRM.');
+  } finally {
+    loadingCompanies.value = false;
+  }
+}
+
 async function loadDepartments() {
-  if (loaded.value) return;
-  loading.value = true;
+  if (loadedDepartments.value) return;
+  loadingDepartments.value = true;
   try {
     const { data } = await window.axios.get('/api/social/departments');
     departments.value = Array.isArray(data?.departments) ? data.departments : [];
-    loaded.value = departments.value.length > 0;
+    loadedDepartments.value = true;
   } catch {
     showClientToast('error', 'Không tải được danh sách phòng ban HRM.');
   } finally {
-    loading.value = false;
+    loadingDepartments.value = false;
   }
+}
+
+function ensureCatalogLoaded() {
+  if (draftAudienceKind.value === 'company') {
+    loadCompanies();
+    return;
+  }
+  loadDepartments();
+}
+
+function setAudienceKind(nextKind) {
+  if (draftAudienceKind.value === nextKind) return;
+  draftAudienceKind.value = nextKind;
+  draftMode.value = 'all';
+  draftCompanyIds.value = [];
+  draftDepartmentIds.value = [];
+  search.value = '';
+  ensureCatalogLoaded();
 }
 
 function setMode(nextMode) {
   draftMode.value = nextMode;
   if (nextMode === 'all') {
-    draftIds.value = [];
+    draftCompanyIds.value = [];
+    draftDepartmentIds.value = [];
     search.value = '';
   }
 }
 
-function isChecked(id) {
-  return draftIds.value.some((existing) => Number(existing) === Number(id));
+function isCompanyChecked(id) {
+  return draftCompanyIds.value.some((existing) => Number(existing) === Number(id));
+}
+
+function toggleCompany(id) {
+  const numericId = Number(id);
+  draftCompanyIds.value = isCompanyChecked(numericId)
+    ? draftCompanyIds.value.filter((existing) => Number(existing) !== numericId)
+    : [...draftCompanyIds.value, numericId];
+}
+
+function isDepartmentChecked(id) {
+  return draftDepartmentIds.value.some((existing) => Number(existing) === Number(id));
 }
 
 function toggleDepartment(id) {
   const numericId = Number(id);
-  draftIds.value = isChecked(numericId)
-    ? draftIds.value.filter((existing) => Number(existing) !== numericId)
-    : [...draftIds.value, numericId];
+  draftDepartmentIds.value = isDepartmentChecked(numericId)
+    ? draftDepartmentIds.value.filter((existing) => Number(existing) !== numericId)
+    : [...draftDepartmentIds.value, numericId];
 }
 
 function close() {
@@ -118,12 +212,30 @@ function close() {
 }
 
 function apply() {
-  if (needsDepartments.value && draftIds.value.length === 0) {
-    showClientToast('error', 'Chọn ít nhất 1 phòng ban.');
-    return;
+  if (needsSelection.value) {
+    if (draftAudienceKind.value === 'company' && draftCompanyIds.value.length === 0) {
+      showClientToast('error', 'Chọn ít nhất 1 pháp nhân.');
+      return;
+    }
+    if (draftAudienceKind.value === 'department' && draftDepartmentIds.value.length === 0) {
+      showClientToast('error', 'Chọn ít nhất 1 phòng ban.');
+      return;
+    }
   }
+  emit('update:audience-kind', draftAudienceKind.value);
   emit('update:mode', draftMode.value);
-  emit('update:department-ids', draftMode.value === 'all' ? [] : draftIds.value.map((id) => Number(id)));
+  emit(
+    'update:company-ids',
+    draftMode.value === 'all' || draftAudienceKind.value !== 'company'
+      ? []
+      : draftCompanyIds.value.map((id) => Number(id)),
+  );
+  emit(
+    'update:department-ids',
+    draftMode.value === 'all' || draftAudienceKind.value !== 'department'
+      ? []
+      : draftDepartmentIds.value.map((id) => Number(id)),
+  );
   emit('close');
 }
 
@@ -146,9 +258,11 @@ watch(
   (isOpen) => {
     if (isOpen) {
       draftMode.value = props.mode;
-      draftIds.value = props.departmentIds.map((id) => Number(id));
+      draftAudienceKind.value = props.audienceKind === 'department' ? 'department' : 'company';
+      draftCompanyIds.value = props.companyIds.map((id) => Number(id));
+      draftDepartmentIds.value = props.departmentIds.map((id) => Number(id));
       search.value = '';
-      loadDepartments();
+      ensureCatalogLoaded();
       document.addEventListener('keydown', onKeydown);
       setBodyLock(true);
       return;
@@ -176,7 +290,7 @@ onBeforeUnmount(() => {
       >
         <div
           class="dept-picker__panel"
-          :class="{ 'dept-picker__panel--pick': needsDepartments }"
+          :class="{ 'dept-picker__panel--pick': needsSelection }"
           role="dialog"
           aria-modal="true"
           aria-labelledby="dept-picker-title"
@@ -195,9 +309,25 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="dept-picker__body hide-scrollbar">
-            <div class="dept-picker__modes" role="radiogroup" aria-label="Cách chọn phòng ban">
+            <div class="dept-picker__audience" role="radiogroup" aria-label="Cách phân phối bài viết">
               <button
-                v-for="item in MODES"
+                v-for="item in AUDIENCE_KINDS"
+                :key="item.value"
+                type="button"
+                class="dept-picker__audience-btn"
+                :class="{ 'dept-picker__audience-btn--on': draftAudienceKind === item.value }"
+                role="radio"
+                :aria-checked="draftAudienceKind === item.value ? 'true' : 'false'"
+                @click="setAudienceKind(item.value)"
+              >
+                <span class="dept-picker__audience-label">{{ item.label }}</span>
+                <span class="dept-picker__audience-detail">{{ item.detail }}</span>
+              </button>
+            </div>
+
+            <div class="dept-picker__modes" role="radiogroup" aria-label="Phạm vi hiển thị">
+              <button
+                v-for="item in modes"
                 :key="item.value"
                 type="button"
                 class="dept-picker__mode"
@@ -216,56 +346,88 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
-            <div v-if="needsDepartments" class="dept-picker__depts">
+            <div v-if="needsSelection" class="dept-picker__depts">
               <div class="dept-picker__toolbar">
                 <input
                   v-model="search"
                   type="search"
                   class="dept-picker__search"
-                  placeholder="Tìm theo tên, mã HRM hoặc công ty"
-                  aria-label="Tìm phòng ban"
+                  :placeholder="draftAudienceKind === 'company'
+                    ? 'Tìm theo tên hoặc mã pháp nhân'
+                    : 'Tìm theo tên, mã HRM hoặc pháp nhân'"
+                  :aria-label="draftAudienceKind === 'company' ? 'Tìm pháp nhân' : 'Tìm phòng ban'"
                   autocomplete="off"
                 />
                 <p class="dept-picker__count">
-                  {{ selectedCount }} / {{ departments.length }}
+                  {{ selectedCount }} / {{ catalogLength }}
                 </p>
               </div>
 
               <div class="dept-picker__list hide-scrollbar">
-                <p v-if="loading" class="dept-picker__empty">Đang tải phòng ban HRM...</p>
-                <p v-else-if="departments.length === 0" class="dept-picker__empty">
-                  Chưa có phòng ban HRM.
-                </p>
-                <p v-else-if="filteredDepartments.length === 0" class="dept-picker__empty">
-                  Không tìm thấy phòng ban phù hợp.
-                </p>
-                <template v-else>
-                <section
-                  v-for="group in departmentGroups"
-                  :key="group.label"
-                  class="dept-picker__group"
-                >
-                  <h3 v-if="showCompanyHeadings" class="dept-picker__group-title">{{ group.label }}</h3>
-                  <div class="dept-picker__grid">
+                <template v-if="draftAudienceKind === 'company'">
+                  <p v-if="loading" class="dept-picker__empty">Đang tải pháp nhân HRM...</p>
+                  <p v-else-if="companies.length === 0" class="dept-picker__empty">
+                    Chưa có pháp nhân HRM.
+                  </p>
+                  <p v-else-if="filteredCompanies.length === 0" class="dept-picker__empty">
+                    Không tìm thấy pháp nhân phù hợp.
+                  </p>
+                  <div v-else class="dept-picker__grid">
                     <label
-                      v-for="dept in group.items"
-                      :key="dept.id"
+                      v-for="company in filteredCompanies"
+                      :key="company.id"
                       class="dept-picker__row"
-                      :class="{ 'dept-picker__row--on': isChecked(dept.id) }"
+                      :class="{ 'dept-picker__row--on': isCompanyChecked(company.id) }"
                     >
                       <input
                         type="checkbox"
                         class="dept-picker__checkbox"
-                        :checked="isChecked(dept.id)"
-                        @change="toggleDepartment(dept.id)"
+                        :checked="isCompanyChecked(company.id)"
+                        @change="toggleCompany(company.id)"
                       />
                       <span class="dept-picker__row-copy">
-                        <span class="dept-picker__row-name">{{ dept.name }}</span>
-                        <span v-if="deptMeta(dept)" class="dept-picker__row-meta">{{ deptMeta(dept) }}</span>
+                        <span class="dept-picker__row-name">{{ company.name }}</span>
+                        <span v-if="company.code" class="dept-picker__row-meta">{{ company.code }}</span>
                       </span>
                     </label>
                   </div>
-                </section>
+                </template>
+                <template v-else>
+                  <p v-if="loading" class="dept-picker__empty">Đang tải phòng ban HRM...</p>
+                  <p v-else-if="departments.length === 0" class="dept-picker__empty">
+                    Chưa có phòng ban HRM.
+                  </p>
+                  <p v-else-if="filteredDepartments.length === 0" class="dept-picker__empty">
+                    Không tìm thấy phòng ban phù hợp.
+                  </p>
+                  <template v-else>
+                    <section
+                      v-for="group in departmentGroups"
+                      :key="group.label"
+                      class="dept-picker__group"
+                    >
+                      <h3 v-if="showCompanyHeadings" class="dept-picker__group-title">{{ group.label }}</h3>
+                      <div class="dept-picker__grid">
+                        <label
+                          v-for="dept in group.items"
+                          :key="dept.id"
+                          class="dept-picker__row"
+                          :class="{ 'dept-picker__row--on': isDepartmentChecked(dept.id) }"
+                        >
+                          <input
+                            type="checkbox"
+                            class="dept-picker__checkbox"
+                            :checked="isDepartmentChecked(dept.id)"
+                            @change="toggleDepartment(dept.id)"
+                          />
+                          <span class="dept-picker__row-copy">
+                            <span class="dept-picker__row-name">{{ dept.name }}</span>
+                            <span v-if="deptMeta(dept)" class="dept-picker__row-meta">{{ deptMeta(dept) }}</span>
+                          </span>
+                        </label>
+                      </div>
+                    </section>
+                  </template>
                 </template>
               </div>
             </div>
@@ -387,6 +549,54 @@ onBeforeUnmount(() => {
   gap: var(--space-3);
   padding: var(--space-4);
   overflow: hidden;
+}
+
+.dept-picker__audience {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.dept-picker__audience-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.dept-picker__audience-btn--on {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.dept-picker__audience-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.dept-picker__audience-detail {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.dept-picker__audience-btn--on .dept-picker__audience-detail {
+  color: color-mix(in srgb, var(--color-primary) 72%, var(--color-text));
 }
 
 .dept-picker__modes {
@@ -678,6 +888,7 @@ onBeforeUnmount(() => {
     height: calc(100dvh - 1.5rem);
   }
 
+  .dept-picker__audience,
   .dept-picker__modes,
   .dept-picker__grid {
     grid-template-columns: minmax(0, 1fr);

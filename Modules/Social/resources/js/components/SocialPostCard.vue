@@ -141,14 +141,23 @@ const postedOnOtherWall = computed(() => (
   && props.post.wall_user
   && props.post.wall_user.id !== props.post.author?.id
 ));
-const deptVisibilityText = computed(() => {
+const audienceVisibilityText = computed(() => {
+  const companyMode = props.post.company_visibility_mode;
+  const companies = props.post.company_visibility ?? [];
+  if (companyMode === 'include' && companies.length > 0) {
+    return `Chỉ nhân sự ${companies.map((c) => c.name).join(', ')} thấy bài này`;
+  }
+  if (companyMode === 'exclude' && companies.length > 0) {
+    return `Mọi pháp nhân thấy, trừ ${companies.map((c) => c.name).join(', ')}`;
+  }
+
   const mode = props.post.department_visibility_mode;
   const list = props.post.department_visibility ?? [];
-  if (mode === 'include') {
-    return list.length > 0 ? `Chỉ ${list.map((d) => d.name).join(', ')} thấy bài này` : null;
+  if (mode === 'include' && list.length > 0) {
+    return `Chỉ ${list.map((d) => d.name).join(', ')} thấy bài này`;
   }
-  if (mode === 'exclude') {
-    return list.length > 0 ? `Mọi phòng ban thấy, trừ ${list.map((d) => d.name).join(', ')}` : null;
+  if (mode === 'exclude' && list.length > 0) {
+    return `Mọi phòng ban thấy, trừ ${list.map((d) => d.name).join(', ')}`;
   }
   return null;
 });
@@ -465,9 +474,9 @@ onBeforeUnmount(() => {
         <div v-if="post.author?.department" class="post-card__meta">
           {{ post.author.department }}
         </div>
-        <div v-if="deptVisibilityText" class="post-card__meta post-card__meta--visibility">
+        <div v-if="audienceVisibilityText" class="post-card__meta post-card__meta--visibility">
           <span class="post-card__dot" aria-hidden="true"></span>
-          <span class="post-card__visibility-text">{{ deptVisibilityText }}</span>
+          <span class="post-card__visibility-text">{{ audienceVisibilityText }}</span>
         </div>
       </div>
 

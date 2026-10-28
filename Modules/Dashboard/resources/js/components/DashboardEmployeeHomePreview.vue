@@ -11,7 +11,7 @@ defineProps({
 </script>
 
 <template>
-  <DashboardEmployeeShellPreview active-route="dashboard.me" home>
+  <DashboardEmployeeShellPreview active-route="dashboard.me" page-title="Trang chủ">
     <div class="employee-home">
           <div class="employee-home__stat-row employee-home__stat-row--single">
             <div class="stat-card stat-card--attendance">

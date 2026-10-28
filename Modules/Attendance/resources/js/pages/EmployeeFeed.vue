@@ -6,14 +6,12 @@
 import {
   computed,
   inject,
-  nextTick,
   onBeforeUnmount,
   onMounted,
   ref,
   watch,
 } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
-import SocialColleagueSearch from '@modules/Social/resources/js/components/SocialColleagueSearch.vue';
 import SocialHashtagPanel from '@modules/Social/resources/js/components/SocialHashtagPanel.vue';
 import SocialPinnedPanel from '@modules/Social/resources/js/components/SocialPinnedPanel.vue';
 import SocialPostCard from '@modules/Social/resources/js/components/SocialPostCard.vue';
@@ -63,8 +61,6 @@ const {
 const pinnedSystem = ref(null);
 const pinnedCompany = ref(null);
 const hashtagPanel = ref(null);
-const colleagueSheetOpen = ref(false);
-const colleagueSearchRef = ref(null);
 const loadMoreSentinel = ref(null);
 let unregisterRefresh;
 let loadMoreObserver;
@@ -77,10 +73,6 @@ const wallSegments = computed(() => {
   items.push({ id: 'personal', label: 'Tường của tôi' });
   return items;
 });
-
-function closeSheets() {
-  colleagueSheetOpen.value = false;
-}
 
 function userInitial(name) {
   return name?.trim().charAt(0).toUpperCase() || '?';
@@ -98,12 +90,6 @@ function userCompany(user) {
   const name = user?.company_name;
   return typeof name === 'string' ? name.trim() : '';
 }
-
-watch(colleagueSheetOpen, (open) => {
-  if (open) {
-    nextTick(() => colleagueSearchRef.value?.focus());
-  }
-});
 
 function onPinnedSelect(post) {
   scrollToPost(post);
@@ -225,15 +211,6 @@ onBeforeUnmount(() => {
 
         </template>
       </section>
-
-      <button
-        type="button"
-        class="emp-feed__colleague-link"
-        @click="colleagueSheetOpen = true"
-      >
-        <AppIcon name="users" :size="16" :stroke-width="1.8" aria-hidden="true" />
-        Tìm đồng nghiệp
-      </button>
     </div>
 
     <SocialStoryRail @open-profile="openColleagueWall" />
@@ -361,38 +338,6 @@ onBeforeUnmount(() => {
       </p>
     </div>
 
-    <Teleport to="body">
-      <Transition name="emp-feed-sheet">
-        <div
-          v-if="colleagueSheetOpen"
-          class="emp-feed-sheet"
-          role="presentation"
-          @mousedown.self="closeSheets"
-        >
-          <div
-            class="emp-feed-sheet__panel emp-feed-sheet__panel--colleague"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Tìm đồng nghiệp"
-          >
-            <header class="emp-feed-sheet__head">
-              <div class="emp-feed-sheet__head-copy">
-                <h2 class="emp-feed-sheet__title">Tìm đồng nghiệp</h2>
-                <p class="emp-feed-sheet__subtitle">Chọn người để xem tường cá nhân</p>
-              </div>
-              <button type="button" class="emp-feed-sheet__close" aria-label="Đóng" @click="closeSheets">
-                <AppIcon name="close" :size="20" />
-              </button>
-            </header>
-            <SocialColleagueSearch
-              ref="colleagueSearchRef"
-              layout="panel"
-              @select="(id) => { openColleagueWall(id); closeSheets(); }"
-            />
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
   </div>
 </template>
 
@@ -402,7 +347,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: var(--space-3);
   margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-1)) 0;
-  padding-bottom: var(--space-2);
+  padding-bottom: var(--space-5);
 }
 
 .emp-feed__top {
@@ -564,22 +509,6 @@ onBeforeUnmount(() => {
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
-}
-
-.emp-feed__colleague-link {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  align-self: flex-start;
-  margin: 0 var(--space-1);
-  padding: 0;
-  border: none;
-  background: transparent;
-  font: inherit;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--color-primary);
-  cursor: pointer;
 }
 
 .emp-feed__segmented {
@@ -1205,135 +1134,5 @@ onBeforeUnmount(() => {
 
 .emp-feed__sk-line--short {
   width: 42%;
-}
-</style>
-
-<style>
-.emp-feed-sheet {
-  position: fixed;
-  inset: 0;
-  z-index: 120;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  background: rgba(9, 36, 78, 0.35);
-  backdrop-filter: blur(4px);
-}
-
-.emp-feed-sheet__panel {
-  width: 100%;
-  max-width: 32rem;
-  max-height: min(70vh, 28rem);
-  overflow: auto;
-  padding: var(--space-4);
-  padding-bottom: var(--space-4);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  background: var(--color-surface);
-  box-shadow: 0 -8px 32px rgba(9, 36, 78, 0.12);
-}
-
-.emp-feed-sheet__panel--colleague {
-  display: flex;
-  flex-direction: column;
-  max-height: min(82vh, 36rem);
-  overflow: hidden;
-}
-
-.emp-feed-sheet__panel--colleague .emp-feed-sheet__head {
-  flex-shrink: 0;
-}
-
-.emp-feed-sheet__panel--colleague :deep(.colleague-search) {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.emp-feed-sheet__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-
-.emp-feed-sheet__head-copy {
-  min-width: 0;
-}
-
-.emp-feed-sheet__title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.emp-feed-sheet__subtitle {
-  margin: 0.2rem 0 0;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-}
-
-.emp-feed-sheet__close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border: none;
-  border-radius: var(--radius-full);
-  background: var(--color-surface-muted);
-  cursor: pointer;
-}
-
-.emp-feed-sheet__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.emp-feed-sheet__option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: var(--space-3) var(--space-2);
-  border: none;
-  border-bottom: 1px solid var(--color-border-subtle);
-  background: transparent;
-  font: inherit;
-  font-size: 0.9375rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.emp-feed-sheet__option--active {
-  color: var(--color-tertiary);
-  font-weight: 600;
-}
-
-.emp-feed-sheet__hint {
-  margin: var(--space-3) 0 0;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
-.emp-feed-sheet-enter-active,
-.emp-feed-sheet-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.emp-feed-sheet-enter-active .emp-feed-sheet__panel,
-.emp-feed-sheet-leave-active .emp-feed-sheet__panel {
-  transition: transform 0.25s ease;
-}
-
-.emp-feed-sheet-enter-from,
-.emp-feed-sheet-leave-to {
-  opacity: 0;
-}
-
-.emp-feed-sheet-enter-from .emp-feed-sheet__panel,
-.emp-feed-sheet-leave-to .emp-feed-sheet__panel {
-  transform: translateY(100%);
 }
 </style>

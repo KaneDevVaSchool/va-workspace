@@ -5,6 +5,7 @@ import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { syncEmployeeMobileViewport } from '@/composables/useEmployeeMobileViewport';
+import { warmStickerAssets } from '@modules/Social/resources/js/lib/socialStickers.js';
 import { formatRelativeTime, formatTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import SocialAnimatedSticker from '@modules/Social/resources/js/components/SocialAnimatedSticker.vue';
@@ -348,6 +349,9 @@ function togglePicker(panel) {
   inputRef.value?.blur();
   pickerPanel.value = panel;
   pickerOpen.value = true;
+  if (panel === 'sticker') {
+    warmStickerAssets();
+  }
 }
 
 function scheduleViewportForKeyboard() {
@@ -767,26 +771,36 @@ function openImage(file) {
   lightbox.value = { url: file.url, name: file.name || 'Ảnh' };
 }
 
-async function sendSticker(sticker) {
-  if (sending.value || editing.value) return;
+let stickerSendSeq = 0;
+
+function sendSticker(sticker) {
+  if (editing.value) return;
+  const conversationId = store.activeConversationId;
+  if (!conversationId) return;
+
+  const seq = ++stickerSendSeq;
   outgoingStartedAt.value = Date.now();
   pendingOutgoing.value = { kind: 'sticker', emoji: sticker.emoji, stickerId: sticker.id };
-  sending.value = true;
-  try {
-    await store.sendMessage(store.activeConversationId, {
+
+  void store
+    .sendMessage(conversationId, {
       message: sticker.emoji,
       message_type: 'sticker',
       sticker_id: sticker.id,
       reply_to_id: replyTo.value?.id ?? null,
+    })
+    .then(() => {
+      replyTo.value = null;
+      nextTick(scrollToBottom);
+    })
+    .catch((error) => {
+      showClientToast('error', error?.response?.data?.message ?? 'Không gửi được sticker.');
+    })
+    .finally(() => {
+      if (stickerSendSeq === seq) {
+        pendingOutgoing.value = null;
+      }
     });
-    replyTo.value = null;
-    pickerOpen.value = false;
-  } catch (error) {
-    showClientToast('error', error?.response?.data?.message ?? 'Không gửi được sticker.');
-  } finally {
-    sending.value = false;
-    pendingOutgoing.value = null;
-  }
 }
 
 async function send() {

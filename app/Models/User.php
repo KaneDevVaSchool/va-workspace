@@ -105,6 +105,14 @@ class User extends Authenticatable
         return filled($name) ? (string) $name : null;
     }
 
+    /** Id pháp nhân (HRM) — ưu tiên gán trực tiếp, fallback qua phòng ban. */
+    public function resolveCompanyId(): ?int
+    {
+        $id = $this->company_id ?? $this->department?->company_id;
+
+        return $id !== null ? (int) $id : null;
+    }
+
     /** Chức vụ kiêm nhiệm đồng bộ từ VA-HRM (AssignmentResource.is_primary=false). */
     public function concurrentPositions(): HasMany
     {

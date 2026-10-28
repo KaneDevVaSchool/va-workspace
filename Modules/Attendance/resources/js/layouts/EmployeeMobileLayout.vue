@@ -184,7 +184,7 @@ const avatarInitial = computed(() => {
   return name.trim().charAt(0).toUpperCase() || '?';
 });
 
-const isHomeHeader = computed(() => route.name === 'dashboard.me');
+const isHomeRoute = computed(() => route.name === 'dashboard.me');
 const isFeedRoute = computed(() => route.name === 'employee.feed');
 
 const headerSearchQuery = computed({
@@ -211,7 +211,10 @@ const historyRequestsSubView = computed(() => {
 });
 
 const pageHeaderTitle = computed(() => {
-  if (isHomeHeader.value) return '';
+  if (isHomeRoute.value) {
+    const tab = EMPLOYEE_MOBILE_TABS.find((t) => t.name === 'dashboard.me');
+    return tab?.label ?? 'Trang chủ';
+  }
   if (historyRequestsSubView.value) {
     const item = EMPLOYEE_HISTORY_UTILITIES.find((u) => u.id === historyRequestsSubView.value);
     return item?.label ?? 'Lịch sử';
@@ -320,7 +323,6 @@ function goBackFromSubpage() {
   >
     <EmployeeMobileHeader
       v-if="!hideHeaderForChatThread"
-      :is-home="isHomeHeader"
       :is-profile="isProfileRoute"
       :brand-back="brandBack"
       :greeting="greeting"
@@ -331,7 +333,8 @@ function goBackFromSubpage() {
       :today-label="todayLabel"
       :page-title="pageHeaderTitle"
       :is-attendance-route="isAttendanceRoute"
-      :show-search="isHomeHeader || isFeedRoute"
+      :hide-page-meta="isHomeRoute"
+      :show-search="isHomeRoute || isFeedRoute"
       :search-placeholder="headerSearchPlaceholder"
       v-model:search-query="headerSearchQuery"
       :header-refreshing="headerRefreshing"

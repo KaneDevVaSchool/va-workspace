@@ -50,6 +50,13 @@ const headerTitle = computed(() => {
     if (props.home) return "";
     return props.pageTitle.trim() || displayName.value || "Nhân sự";
 });
+
+const showHeaderSearch = computed(
+    () =>
+        props.home
+        || props.activeRoute === "dashboard.me"
+        || props.activeRoute === "employee.feed",
+);
 </script>
 
 <template>
@@ -115,6 +122,7 @@ const headerTitle = computed(() => {
                             <div
                                 v-if="
                                     pageTitle &&
+                                    activeRoute !== 'dashboard.me' &&
                                     (departmentName || jobTitleName)
                                 "
                                 class="employee-shell__meta"
@@ -161,7 +169,7 @@ const headerTitle = computed(() => {
                 </div>
 
                 <label
-                    v-if="home"
+                    v-if="showHeaderSearch"
                     class="employee-shell__search employee-shell__search--elevated"
                 >
                     <span

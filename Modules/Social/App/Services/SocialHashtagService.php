@@ -108,23 +108,28 @@ class SocialHashtagService
         $limit = min(max($limit, 1), 30);
         $needle = self::normalize(ltrim(trim((string) $search), '#'));
 
+        $viewer->loadMissing('department');
+        $viewerCompanyId = $viewer->resolveCompanyId();
+
         $builder = SocialHashtag::query()
-            ->whereHas('posts', function ($postQuery) use ($viewer, $departmentId, $wallUserId, $groupId) {
+            ->whereHas('posts', function ($postQuery) use ($viewer, $departmentId, $wallUserId, $groupId, $viewerCompanyId) {
                 $this->posts->constrainVisibleFeed(
                     $postQuery,
                     $departmentId,
                     $wallUserId,
                     $groupId,
                     $viewer->department_id,
+                    $viewerCompanyId,
                 );
             })
-            ->withCount(['posts as usage_count' => function ($postQuery) use ($viewer, $departmentId, $wallUserId, $groupId) {
+            ->withCount(['posts as usage_count' => function ($postQuery) use ($viewer, $departmentId, $wallUserId, $groupId, $viewerCompanyId) {
                 $this->posts->constrainVisibleFeed(
                     $postQuery,
                     $departmentId,
                     $wallUserId,
                     $groupId,
                     $viewer->department_id,
+                    $viewerCompanyId,
                 );
             }]);
 
@@ -164,23 +169,28 @@ class SocialHashtagService
     ): array {
         $limit = min(max($limit, 1), 30);
 
+        $viewer->loadMissing('department');
+        $viewerCompanyId = $viewer->resolveCompanyId();
+
         return SocialHashtag::query()
-            ->whereHas('posts', function ($postQuery) use ($viewer, $departmentId, $wallUserId, $groupId) {
+            ->whereHas('posts', function ($postQuery) use ($viewer, $departmentId, $wallUserId, $groupId, $viewerCompanyId) {
                 $this->posts->constrainVisibleFeed(
                     $postQuery,
                     $departmentId,
                     $wallUserId,
                     $groupId,
                     $viewer->department_id,
+                    $viewerCompanyId,
                 );
             })
-            ->withCount(['posts as usage_count' => function ($postQuery) use ($viewer, $departmentId, $wallUserId, $groupId) {
+            ->withCount(['posts as usage_count' => function ($postQuery) use ($viewer, $departmentId, $wallUserId, $groupId, $viewerCompanyId) {
                 $this->posts->constrainVisibleFeed(
                     $postQuery,
                     $departmentId,
                     $wallUserId,
                     $groupId,
                     $viewer->department_id,
+                    $viewerCompanyId,
                 );
             }])
             ->orderByDesc('usage_count')

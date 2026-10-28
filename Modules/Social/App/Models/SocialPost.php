@@ -16,6 +16,7 @@ use Modules\Identity\App\Models\Department;
  * @property int $user_id
  * @property int|null $department_id
  * @property string $department_visibility_mode
+ * @property string $company_visibility_mode
  * @property int|null $wall_user_id
  * @property int|null $group_id
  * @property string|null $content
@@ -45,6 +46,12 @@ class SocialPost extends Model
 
     public const DEPARTMENT_VISIBILITY_EXCLUDE = 'exclude';
 
+    public const COMPANY_VISIBILITY_ALL = 'all';
+
+    public const COMPANY_VISIBILITY_INCLUDE = 'include';
+
+    public const COMPANY_VISIBILITY_EXCLUDE = 'exclude';
+
     public const REVIEW_PENDING = 'pending';
 
     public const REVIEW_APPROVED = 'approved';
@@ -55,6 +62,7 @@ class SocialPost extends Model
         'user_id',
         'department_id',
         'department_visibility_mode',
+        'company_visibility_mode',
         'wall_user_id',
         'group_id',
         'content',
@@ -95,6 +103,11 @@ class SocialPost extends Model
     public function departmentVisibilities(): HasMany
     {
         return $this->hasMany(SocialPostDepartmentVisibility::class, 'post_id');
+    }
+
+    public function companyVisibilities(): HasMany
+    {
+        return $this->hasMany(SocialPostCompanyVisibility::class, 'post_id');
     }
 
     public function wallUser(): BelongsTo

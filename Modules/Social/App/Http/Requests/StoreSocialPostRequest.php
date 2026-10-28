@@ -24,6 +24,9 @@ class StoreSocialPostRequest extends FormRequest
             'department_visibility_mode' => ['sometimes', 'in:all,include,exclude'],
             'department_visibility_ids' => ['required_if:department_visibility_mode,include,exclude', 'array', 'max:200'],
             'department_visibility_ids.*' => ['integer', 'exists:departments,id'],
+            'company_visibility_mode' => ['sometimes', 'in:all,include,exclude'],
+            'company_visibility_ids' => ['required_if:company_visibility_mode,include,exclude', 'array', 'max:50'],
+            'company_visibility_ids.*' => ['integer', 'exists:companies,id'],
             'attachments' => ['nullable', 'array', 'max:10'],
             'attachments.*' => [
                 'file', 'max:10240',
@@ -85,6 +88,7 @@ class StoreSocialPostRequest extends FormRequest
             'poll.options.*.max' => 'Mỗi phương án không được vượt quá 200 ký tự.',
             'poll.ends_at.after' => 'Hạn bình chọn phải ở tương lai.',
             'department_visibility_ids.required_if' => 'Chọn ít nhất 1 phòng ban.',
+            'company_visibility_ids.required_if' => 'Chọn ít nhất 1 pháp nhân.',
             'is_anonymous.boolean' => 'Giá trị ẩn danh không hợp lệ.',
             'anonymous_name.max' => 'Tên ẩn danh không được vượt quá 100 ký tự.',
         ];

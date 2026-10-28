@@ -15,6 +15,7 @@ use Modules\Social\App\Models\SocialGroupMember;
 use Modules\Social\App\Models\SocialHashtag;
 use Modules\Social\App\Models\SocialLinkPreview;
 use Modules\Social\App\Models\SocialPost;
+use Modules\Social\App\Models\SocialPostCompanyVisibility;
 use Modules\Social\App\Models\SocialPostDepartmentVisibility;
 use Modules\Social\App\Models\SocialPostLike;
 use Modules\Social\App\Repositories\Contracts\SocialGroupRepositoryInterface;
@@ -64,7 +65,20 @@ class SocialPostService
     public function listFeed(User $viewer, int $perPage, int $page, string $scope = self::FEED_SCOPE_ALL, ?int $departmentId = null, ?int $wallUserId = null, ?int $groupId = null, ?string $hashtag = null, ?string $search = null): array
     {
         $scope = $this->normalizeFeedScope($scope);
-        $paginator = $this->posts->paginate($perPage, $page, $scope, $viewer->id, $departmentId, $wallUserId, $groupId, $viewer->department_id, $hashtag, $search);
+        $viewer->loadMissing('department');
+        $paginator = $this->posts->paginate(
+            $perPage,
+            $page,
+            $scope,
+            $viewer->id,
+            $departmentId,
+            $wallUserId,
+            $groupId,
+            $viewer->department_id,
+            $hashtag,
+            $search,
+            $viewer->resolveCompanyId(),
+        );
 
         return [
             'posts' => collect($paginator->items())
@@ -183,7 +197,18 @@ class SocialPostService
         ?string $search = null,
     ): array {
         $scope = $this->normalizePinScope($scope);
-        $paginator = $this->posts->paginatePinned($perPage, $page, $scope, $departmentId, $wallUserId, $search, $viewer->id, $viewer->department_id);
+        $viewer->loadMissing('department');
+        $paginator = $this->posts->paginatePinned(
+            $perPage,
+            $page,
+            $scope,
+            $departmentId,
+            $wallUserId,
+            $search,
+            $viewer->id,
+            $viewer->department_id,
+            $viewer->resolveCompanyId(),
+        );
 
         return [
             'posts' => collect($paginator->items())
@@ -258,7 +283,13 @@ class SocialPostService
             ]);
         }
 
-        $visibility = $this->resolveDepartmentVisibility($data, $destination['post_scope']);
+        $deptVisibility = $this->resolveDepartmentVisibility($data, $destination['post_scope']);
+        $companyVisibility = $this->resolveCompanyVisibility($data, $destination['post_scope']);
+        if ($companyVisibility['mode'] !== SocialPost::COMPANY_VISIBILITY_ALL) {
+            $deptVisibility = ['mode' => self::DEPT_VISIBILITY_ALL, 'department_ids' => []];
+        } elseif ($deptVisibility['mode'] !== self::DEPT_VISIBILITY_ALL) {
+            $companyVisibility = ['mode' => SocialPost::COMPANY_VISIBILITY_ALL, 'company_ids' => []];
+        }
         $isAnonymous = ! $asSystem
             && $destination['post_scope'] === self::POST_SCOPE_COMPANY
             && (bool) ($data['is_anonymous'] ?? false);
@@ -273,13 +304,14 @@ class SocialPostService
             ? SocialPost::REVIEW_PENDING
             : SocialPost::REVIEW_APPROVED;
 
-        $post = DB::transaction(function () use ($author, $data, $files, $gifAttachments, $asSystem, $destination, $visibility, $isAnonymous, $anonymousName, $reviewStatus) {
+        $post = DB::transaction(function () use ($author, $data, $files, $gifAttachments, $asSystem, $destination, $deptVisibility, $companyVisibility, $isAnonymous, $anonymousName, $reviewStatus) {
             $payload = [
                 'user_id' => $author->id,
                 'department_id' => $destination['department_id'],
                 'wall_user_id' => $destination['wall_user_id'],
                 'group_id' => $destination['group_id'],
-                'department_visibility_mode' => $visibility['mode'],
+                'department_visibility_mode' => $deptVisibility['mode'],
+                'company_visibility_mode' => $companyVisibility['mode'],
                 'content' => isset($data['content']) ? $this->sanitizeContent($data['content']) : null,
                 'is_anonymous' => $isAnonymous,
                 'anonymous_name' => $anonymousName,
@@ -295,8 +327,13 @@ class SocialPostService
 
             $post = $this->posts->create($payload);
 
-            if ($visibility['department_ids'] !== []) {
-                $this->posts->syncDepartmentVisibility($post, $visibility['department_ids']);
+            if ($deptVisibility['department_ids'] !== []) {
+                $this->posts->syncDepartmentVisibility($post, $deptVisibility['department_ids']);
+                $post = $this->posts->find($post->id) ?? $post;
+            }
+
+            if ($companyVisibility['company_ids'] !== []) {
+                $this->posts->syncCompanyVisibility($post, $companyVisibility['company_ids']);
                 $post = $this->posts->find($post->id) ?? $post;
             }
 
@@ -553,6 +590,38 @@ class SocialPostService
         return ['mode' => $mode, 'department_ids' => $departmentIds];
     }
 
+    /**
+     * Giới hạn theo pháp nhân HRM. Chỉ áp dụng bài bảng tin chung.
+     *
+     * @return array{mode: string, company_ids: int[]}
+     */
+    private function resolveCompanyVisibility(array $data, string $postScope): array
+    {
+        if ($postScope !== self::POST_SCOPE_COMPANY) {
+            return ['mode' => SocialPost::COMPANY_VISIBILITY_ALL, 'company_ids' => []];
+        }
+
+        $mode = $data['company_visibility_mode'] ?? SocialPost::COMPANY_VISIBILITY_ALL;
+        if (! in_array($mode, [SocialPost::COMPANY_VISIBILITY_INCLUDE, SocialPost::COMPANY_VISIBILITY_EXCLUDE], true)) {
+            return ['mode' => SocialPost::COMPANY_VISIBILITY_ALL, 'company_ids' => []];
+        }
+
+        $companyIds = collect($data['company_visibility_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($companyIds === []) {
+            throw ValidationException::withMessages([
+                'company_visibility_ids' => ['Chọn ít nhất 1 pháp nhân.'],
+            ]);
+        }
+
+        return ['mode' => $mode, 'company_ids' => $companyIds];
+    }
+
     private function presentPostScope(SocialPost $post): string
     {
         if ($post->group_id !== null) {
@@ -710,6 +779,8 @@ class SocialPostService
             'department' => $post->department?->name,
             'department_visibility_mode' => $post->department_visibility_mode ?? self::DEPT_VISIBILITY_ALL,
             'department_visibility' => $this->presentDepartmentVisibility($post),
+            'company_visibility_mode' => $post->company_visibility_mode ?? SocialPost::COMPANY_VISIBILITY_ALL,
+            'company_visibility' => $this->presentCompanyVisibility($post),
             'wall_user' => $post->wall_user_id !== null ? $this->presentUser($post->wallUser) : null,
             'group' => $post->group_id !== null ? [
                 'id' => $post->group->id,
@@ -788,6 +859,23 @@ class SocialPostService
             ->map(fn (SocialPostDepartmentVisibility $v) => [
                 'id' => $v->department->id,
                 'name' => $v->department->name,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /** @return array{id: int, name: string, code: string|null}[]|null */
+    private function presentCompanyVisibility(SocialPost $post): ?array
+    {
+        if (($post->company_visibility_mode ?? SocialPost::COMPANY_VISIBILITY_ALL) === SocialPost::COMPANY_VISIBILITY_ALL) {
+            return null;
+        }
+
+        return $post->companyVisibilities
+            ->map(fn (SocialPostCompanyVisibility $v) => [
+                'id' => $v->company->id,
+                'name' => $v->company->name,
+                'code' => $v->company->code,
             ])
             ->values()
             ->all();

@@ -2,9 +2,9 @@
 import { computed, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { EMOJI_GROUPS } from '@modules/Project/resources/js/constants/emojiGroups.js';
-import SocialAnimatedSticker from '@modules/Social/resources/js/components/SocialAnimatedSticker.vue';
 import { STICKER_PACKS } from '@modules/Social/resources/js/constants/stickers.js';
 import { prefetchStickerIds, warmStickerAssets } from '@modules/Social/resources/js/lib/socialStickers.js';
+import { vaStickerById } from '@modules/Social/resources/js/lib/vaStickers.js';
 
 const props = defineProps({
   panel: { type: String, default: 'emoji' },
@@ -22,22 +22,40 @@ function setPanel(panel) {
   emit('update:panel', panel);
 }
 
+function vaSticker(sticker) {
+  return vaStickerById(sticker.id);
+}
+
+const PREFETCH_CHUNK = 20;
+
+function prefetchPackStickerJson(ids) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return;
+  warmStickerAssets();
+  let index = 0;
+  const step = () => {
+    const slice = unique.slice(index, index + PREFETCH_CHUNK);
+    index += PREFETCH_CHUNK;
+    if (slice.length === 0) return;
+    void prefetchStickerIds(slice).finally(() => {
+      if (index < unique.length) {
+        if (typeof requestIdleCallback === 'function') {
+          requestIdleCallback(step, { timeout: 1200 });
+        } else {
+          window.setTimeout(step, 16);
+        }
+      }
+    });
+  };
+  step();
+}
+
 watch(
   () => [props.panel, activePack.value],
   ([panel, packKey]) => {
     if (panel !== 'sticker') return;
-    warmStickerAssets();
     const pack = STICKER_PACKS.find((item) => item.key === packKey);
-    const allIds = (pack?.stickers ?? []).map((sticker) => sticker.id);
-    prefetchStickerIds(allIds.slice(0, 28));
-    const rest = allIds.slice(28);
-    if (rest.length === 0) return;
-    const prefetchRest = () => prefetchStickerIds(rest);
-    if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(prefetchRest, { timeout: 2500 });
-    } else {
-      window.setTimeout(prefetchRest, 500);
-    }
+    prefetchPackStickerJson((pack?.stickers ?? []).map((sticker) => sticker.id));
   },
   { immediate: true },
 );
@@ -101,16 +119,10 @@ watch(
         :aria-label="pack.label"
         @click="activePack = pack.key"
       >
-        <SocialAnimatedSticker
-          v-if="pack.iconSrc && pack.stickers?.[0]"
-          class="chat-picker__pack-sticker"
-          :id="pack.stickers[0].id"
-          :emoji="pack.stickers[0].emoji"
-        />
         <img
-          v-else-if="pack.iconSrc"
+          v-if="pack.stickers?.[0] && vaSticker(pack.stickers[0])"
           class="chat-picker__pack-img"
-          :src="pack.iconSrc"
+          :src="vaSticker(pack.stickers[0]).src"
           alt=""
         />
         <template v-else>{{ pack.icon }}</template>
@@ -138,7 +150,13 @@ watch(
         :aria-label="`Gửi sticker ${sticker.emoji}`"
         @click="emit('pick-sticker', sticker)"
       >
-        <SocialAnimatedSticker :id="sticker.id" :emoji="sticker.emoji" hover-play />
+        <img
+          v-if="vaSticker(sticker)"
+          class="chat-picker__sticker-img"
+          :src="vaSticker(sticker).src"
+          alt=""
+        />
+        <span v-else class="chat-picker__sticker-emoji">{{ sticker.emoji }}</span>
       </button>
     </div>
   </div>
@@ -229,7 +247,6 @@ watch(
   border-radius: var(--radius-md);
 }
 
-.chat-picker--sticker .chat-picker__pack-sticker :deep(.social-sticker),
 .chat-picker--sticker .chat-picker__pack-img {
   width: 1.5rem;
   height: 1.5rem;
@@ -239,23 +256,6 @@ watch(
   width: 1.35rem;
   height: 1.35rem;
   object-fit: contain;
-}
-
-.chat-picker__pack-sticker {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.35rem;
-  height: 1.35rem;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.chat-picker__pack-sticker :deep(.social-sticker) {
-  width: 1.35rem;
-  height: 1.35rem;
-  max-width: 100%;
-  max-height: 100%;
 }
 
 .chat-picker__grid {
@@ -311,11 +311,19 @@ watch(
     transform 0.14s ease;
 }
 
-.chat-picker__sticker :deep(.social-sticker) {
-  width: 3.65rem;
-  height: 3.65rem;
+.chat-picker__sticker-emoji {
+  font-size: 2.65rem;
+  line-height: 1;
+  transform-origin: center center;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.chat-picker__sticker-img {
+  width: 3.25rem;
+  height: 3.25rem;
   max-width: 100%;
   max-height: 100%;
+  object-fit: contain;
   transform-origin: center center;
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -331,8 +339,10 @@ watch(
     background: var(--color-surface-muted);
   }
 
-  .chat-picker__sticker:hover :deep(.social-sticker),
-  .chat-picker__sticker:focus-visible :deep(.social-sticker) {
+  .chat-picker__sticker:hover .chat-picker__sticker-emoji,
+  .chat-picker__sticker:focus-visible .chat-picker__sticker-emoji,
+  .chat-picker__sticker:hover .chat-picker__sticker-img,
+  .chat-picker__sticker:focus-visible .chat-picker__sticker-img {
     transform: scale(1.12);
   }
 }
@@ -346,9 +356,13 @@ watch(
     height: 4.25rem;
   }
 
-  .chat-picker__sticker :deep(.social-sticker) {
-    width: 3.35rem;
-    height: 3.35rem;
+  .chat-picker__sticker-emoji {
+    font-size: 2.45rem;
+  }
+
+  .chat-picker__sticker-img {
+    width: 3rem;
+    height: 3rem;
   }
 }
 

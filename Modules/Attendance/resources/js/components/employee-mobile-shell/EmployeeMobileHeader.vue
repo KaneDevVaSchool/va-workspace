@@ -21,6 +21,8 @@ const props = defineProps({
     todayLabel: { type: String, default: "" },
     pageTitle: { type: String, default: "" },
     isAttendanceRoute: { type: Boolean, default: false },
+    /** Ẩn dòng phòng ban/chức danh dưới tiêu đề trang (vd. Trang chủ). */
+    hidePageMeta: { type: Boolean, default: false },
     showSearch: { type: Boolean, default: false },
     searchPlaceholder: { type: String, default: "Tìm tiện ích nhanh..." },
     searchQuery: { type: String, default: "" },
@@ -146,7 +148,7 @@ const searchModel = computed({
                         {{ pageTitle || displayName || "Nhân sự" }}
                     </h1>
                     <div
-                        v-if="pageTitle && !isAttendanceRoute"
+                        v-if="pageTitle && !isAttendanceRoute && !hidePageMeta"
                         class="employee-shell__meta employee-shell__meta--reserve"
                     >
                         <span

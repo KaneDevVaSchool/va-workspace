@@ -637,7 +637,7 @@ html.pwa-standalone {
   width: 100%;
   box-sizing: border-box;
   margin: 0;
-  padding: var(--space-3) var(--space-2) 0;
+  padding: var(--space-2) var(--space-3) var(--space-3);
   background: transparent;
   box-shadow: none;
 }

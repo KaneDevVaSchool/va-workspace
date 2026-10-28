@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Models\Department;
 use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\Identity\App\Services\ActivityLogService;
@@ -207,6 +208,30 @@ class SocialPostController extends Controller
                 'hrm_code' => $department->external_code,
                 'company_code' => $department->company?->code,
                 'company_name' => $department->company?->name,
+                'company_id' => $department->company_id,
+            ])->values(),
+        ]);
+    }
+
+    /**
+     * Pháp nhân đồng bộ từ HRM — chọn ai được thấy bài trên bảng tin chung.
+     */
+    public function companies(): JsonResponse
+    {
+        if (HrmDepartmentSyncService::isConfigured()) {
+            $this->hrmDepartments->syncDepartmentsFromHrm();
+        }
+
+        $rows = Company::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'code', 'name']);
+
+        return response()->json([
+            'companies' => $rows->map(fn (Company $company) => [
+                'id' => $company->id,
+                'code' => $company->code,
+                'name' => $company->name,
             ])->values(),
         ]);
     }
