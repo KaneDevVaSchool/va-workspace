@@ -968,48 +968,79 @@ function sendSticker(sticker) {
     });
 }
 
+function composerUntouched() {
+  return draft.value.trim() === '' && files.value.length === 0 && !replyTo.value;
+}
+
 async function send() {
   const text = draft.value.trim();
   if (sending.value) return;
   if (text === '' && (editing.value || files.value.length === 0)) return;
-  const outgoing = files.value.map((item) => item.file);
-  const sentPreviews = files.value.map((item) => item.previewUrl).filter(Boolean);
-  if (!editing.value) {
-    outgoingStartedAt.value = Date.now();
-  }
+
   if (editing.value) {
     pendingOutgoing.value = { kind: 'edit' };
-  } else {
-    pendingOutgoing.value = {
-      kind: 'message',
-      text,
-      fileCount: outgoing.length,
-      hasImages: outgoing.some((file) => file.type.startsWith('image/')),
-      previews: sentPreviews,
-    };
-  }
-  sending.value = true;
-  let delivered = false;
-  try {
-    if (editing.value) {
+    sending.value = true;
+    try {
       await store.editMessage(store.activeConversationId, editing.value.id, text);
       editing.value = null;
       draft.value = '';
-      return;
+    } catch (error) {
+      showClientToast('error', error?.response?.data?.message ?? 'Không gửi được tin nhắn.');
+    } finally {
+      sending.value = false;
+      pendingOutgoing.value = null;
     }
+    return;
+  }
+
+  const outgoing = files.value.map((item) => item.file);
+  const sentPreviews = files.value.map((item) => item.previewUrl).filter(Boolean);
+  const snapshot = {
+    draft: draft.value,
+    files: files.value.slice(),
+    mentions: mentionIds.value.slice(),
+    reply: replyTo.value,
+  };
+  const mentionIdsForSend = mentionIds.value.filter((id) => text.includes(memberName(id)));
+  const replyId = replyTo.value?.id ?? null;
+
+  outgoingStartedAt.value = Date.now();
+  pendingOutgoing.value = {
+    kind: 'message',
+    text,
+    fileCount: outgoing.length,
+    hasImages: outgoing.some((file) => file.type.startsWith('image/')),
+    previews: sentPreviews,
+  };
+  draft.value = '';
+  files.value = [];
+  mentionIds.value = [];
+  replyTo.value = null;
+  sending.value = true;
+  nextTick(scrollToBottom);
+
+  let delivered = false;
+  try {
     await store.sendMessage(store.activeConversationId, {
       message: text,
-      reply_to_id: replyTo.value?.id ?? null,
+      reply_to_id: replyId,
       files: outgoing,
-      mention_ids: mentionIds.value.filter((id) => text.includes(memberName(id))),
+      mention_ids: mentionIdsForSend,
     });
     delivered = true;
-    draft.value = '';
-    mentionIds.value = [];
-    files.value = [];
-    replyTo.value = null;
   } catch (error) {
     showClientToast('error', error?.response?.data?.message ?? 'Không gửi được tin nhắn.');
+    pendingOutgoing.value = null;
+    if (composerUntouched()) {
+      draft.value = snapshot.draft;
+      files.value = snapshot.files;
+      mentionIds.value = snapshot.mentions;
+      replyTo.value = snapshot.reply;
+    } else {
+      for (const item of snapshot.files) {
+        if (!files.value.includes(item)) revokePreview(item);
+      }
+    }
   } finally {
     sending.value = false;
     pendingOutgoing.value = null;
@@ -1731,6 +1762,7 @@ function menuItems(message) {
         @cancel="onAttachCancel"
         @change="onFilesChosen"
       />
+      <Transition name="chat-draft-files">
       <div v-if="files.length" class="chat-pending">
         <span
           v-for="(item, index) in files"
@@ -1746,6 +1778,7 @@ function menuItems(message) {
           </button>
         </span>
       </div>
+      </Transition>
       <div class="chat-view__input-shell">
         <button
           type="button"
@@ -1780,13 +1813,13 @@ function menuItems(message) {
         <button
           type="button"
           class="chat-view__send"
-          :class="{ 'chat-view__send--busy': sending, 'chat-view__send--ready': canSend && !sending }"
+          :class="{ 'chat-view__send--busy': sending && editing, 'chat-view__send--ready': canSend && !sending }"
           :disabled="!canSend"
-          :aria-label="sending ? 'Đang gửi tin nhắn' : 'Gửi tin nhắn'"
-          :aria-busy="sending"
+          :aria-label="sending && editing ? 'Đang gửi tin nhắn' : 'Gửi tin nhắn'"
+          :aria-busy="sending && Boolean(editing)"
           @click="send"
         >
-          <AppIcon v-if="sending" name="refresh" :size="18" :stroke-width="1.75" class="chat-view__send-spin" />
+          <AppIcon v-if="sending && editing" name="refresh" :size="18" :stroke-width="1.75" class="chat-view__send-spin" />
           <AppIcon v-else :name="editing ? 'check' : 'send'" :size="18" :stroke-width="1.75" />
         </button>
       </div>
@@ -2526,6 +2559,27 @@ function menuItems(message) {
   overflow: hidden;
   opacity: 0;
   border: 0;
+}
+
+.chat-draft-files-enter-active,
+.chat-draft-files-leave-active {
+  overflow: hidden;
+  transition:
+    opacity 160ms ease,
+    transform 180ms ease,
+    max-height 180ms ease;
+}
+
+.chat-draft-files-enter-from,
+.chat-draft-files-leave-to {
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(8px);
+}
+
+.chat-draft-files-enter-to,
+.chat-draft-files-leave-from {
+  max-height: 8rem;
 }
 
 .chat-pending {
