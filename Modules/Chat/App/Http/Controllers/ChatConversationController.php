@@ -146,6 +146,24 @@ class ChatConversationController extends Controller
         ]);
     }
 
+    public function updateTitle(Request $request, int $conversationId): JsonResponse
+    {
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:80'],
+        ], [
+            'title.required' => 'Vui lòng nhập tên nhóm.',
+            'title.max' => 'Tên nhóm tối đa 80 ký tự.',
+        ]);
+
+        return response()->json([
+            'conversation' => $this->service->updateGroupTitle(
+                $request->user(),
+                $conversationId,
+                (string) $validated['title'],
+            ),
+        ]);
+    }
+
     public function addMembers(Request $request, int $conversationId): JsonResponse
     {
         $ids = array_map('intval', (array) $request->input('user_ids', []));

@@ -389,23 +389,40 @@ function syncCaret() {
   draftCaret.value = input?.selectionStart ?? draft.value.length;
 }
 
-function onNativeAttachPointerDown() {
+function coarsePointer() {
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
+function onNativeAttachTouchStart() {
   if (editing.value) return;
   beginNativeFilePicker();
 }
 
-function openNativePicker(input) {
+function triggerNativeFileInput(input) {
   if (!(input instanceof HTMLInputElement) || editing.value) return;
   beginNativeFilePicker();
   input.click();
-  const field = inputRef.value;
-  if (field && document.activeElement === field && !coarsePointer()) {
-    field.blur();
-  }
 }
 
-function coarsePointer() {
-  return window.matchMedia('(pointer: coarse)').matches;
+function onNativeAttachPointerDown(input, event) {
+  if (editing.value) return;
+  beginNativeFilePicker();
+  if (!coarsePointer()) return;
+  if (event?.cancelable) event.preventDefault();
+  triggerNativeFileInput(input);
+}
+
+function onNativeAttachClick(input) {
+  if (coarsePointer()) return;
+  openNativePicker(input);
+}
+
+function openNativePicker(input) {
+  triggerNativeFileInput(input);
+  const field = inputRef.value;
+  if (field && document.activeElement === field) {
+    field.blur();
+  }
 }
 
 function insertEmoji(emoji) {
@@ -1595,9 +1612,9 @@ function menuItems(message) {
           class="chat-view__tool"
           :disabled="Boolean(editing)"
           aria-label="Chụp ảnh"
-          @touchstart.passive="onNativeAttachPointerDown"
-          @pointerdown="onNativeAttachPointerDown"
-          @click="openNativePicker(cameraInput)"
+          @touchstart.passive="onNativeAttachTouchStart"
+          @pointerdown="onNativeAttachPointerDown(cameraInput, $event)"
+          @click="onNativeAttachClick(cameraInput)"
         >
           <AppIcon name="camera" :size="17" :stroke-width="1.75" />
         </button>
@@ -1606,9 +1623,9 @@ function menuItems(message) {
           class="chat-view__tool"
           :disabled="Boolean(editing)"
           aria-label="Gửi ảnh"
-          @touchstart.passive="onNativeAttachPointerDown"
-          @pointerdown="onNativeAttachPointerDown"
-          @click="openNativePicker(photoInput)"
+          @touchstart.passive="onNativeAttachTouchStart"
+          @pointerdown="onNativeAttachPointerDown(photoInput, $event)"
+          @click="onNativeAttachClick(photoInput)"
         >
           <AppIcon name="image" :size="17" :stroke-width="1.75" />
         </button>
@@ -1617,9 +1634,9 @@ function menuItems(message) {
           class="chat-view__tool"
           :disabled="Boolean(editing)"
           aria-label="Đính kèm tệp"
-          @touchstart.passive="onNativeAttachPointerDown"
-          @pointerdown="onNativeAttachPointerDown"
-          @click="openNativePicker(fileInput)"
+          @touchstart.passive="onNativeAttachTouchStart"
+          @pointerdown="onNativeAttachPointerDown(fileInput, $event)"
+          @click="onNativeAttachClick(fileInput)"
         >
           <AppIcon name="paperclip" :size="17" :stroke-width="1.75" />
         </button>

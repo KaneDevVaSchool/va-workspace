@@ -193,6 +193,62 @@ class ChatConversationTest extends TestCase
         $this->assertSame([], $list);
     }
 
+    public function test_group_owner_can_rename_the_group(): void
+    {
+        $owner = $this->makeUser('Mai');
+        $other = $this->makeUser('Bình');
+
+        $conversationId = $this->actingAs($owner)
+            ->postJson('/api/chat/conversations/groups', [
+                'title' => 'Nhóm cũ',
+                'user_ids' => [$other->id],
+            ])
+            ->json('conversation.id');
+
+        $response = $this->actingAs($owner)
+            ->patchJson("/api/chat/conversations/{$conversationId}/title", [
+                'title' => 'Nhóm mới',
+            ])
+            ->assertOk();
+
+        $this->assertSame('Nhóm mới', $response->json('conversation.title'));
+        $this->assertDatabaseHas('conversations', [
+            'id' => $conversationId,
+            'title' => 'Nhóm mới',
+        ]);
+
+        $list = $this->actingAs($other)
+            ->getJson('/api/chat/conversations')
+            ->assertOk()
+            ->json('conversations');
+
+        $this->assertSame('Nhóm mới', $list[0]['title']);
+    }
+
+    public function test_non_owner_cannot_rename_the_group(): void
+    {
+        $owner = $this->makeUser('Mai');
+        $other = $this->makeUser('Bình');
+
+        $conversationId = $this->actingAs($owner)
+            ->postJson('/api/chat/conversations/groups', [
+                'title' => 'Nhóm chủ',
+                'user_ids' => [$other->id],
+            ])
+            ->json('conversation.id');
+
+        $this->actingAs($other)
+            ->patchJson("/api/chat/conversations/{$conversationId}/title", [
+                'title' => 'Đổi trái phép',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('conversations', [
+            'id' => $conversationId,
+            'title' => 'Nhóm chủ',
+        ]);
+    }
+
     public function test_only_the_group_owner_can_disband(): void
     {
         $owner = $this->makeUser('Mai');

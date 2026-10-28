@@ -48,6 +48,26 @@ trait HandlesChatFeatures
         return $this->presentConversation($this->requireConversation($conversationId), $actor);
     }
 
+    public function updateGroupTitle(User $actor, int $conversationId, string $title): array
+    {
+        $conversation = $this->requireOwnedGroup($actor, $conversationId);
+
+        $title = trim($title);
+        if ($title === '') {
+            throw ValidationException::withMessages([
+                'title' => ['Vui lòng nhập tên nhóm.'],
+            ]);
+        }
+
+        if ((string) $conversation->title !== $title) {
+            $conversation->update(['title' => $title]);
+            $this->postNotice($actor, $conversationId, $actor->name.' đã đổi tên nhóm thành «'.$title.'»');
+            $this->refreshMemberInboxes($conversationId);
+        }
+
+        return $this->presentConversation($this->requireConversation($conversationId), $actor);
+    }
+
     /**
      * @param  list<int>  $userIds
      */

@@ -17,6 +17,7 @@ import {
   setDisappear as apiSetDisappear,
   transferOwner as apiTransferOwner,
   updateGroupAvatar as apiUpdateGroupAvatar,
+  updateGroupTitle as apiUpdateGroupTitle,
   reactToMessage as apiReactToMessage,
   votePoll as apiVotePoll,
   fetchUnreadCount,
@@ -202,6 +203,12 @@ export const useChatStore = defineStore('chat', {
 
     async updateGroupAvatar(conversationId, file) {
       const conversation = await apiUpdateGroupAvatar(conversationId, file);
+      this.replaceConversation(conversation);
+      return conversation;
+    },
+
+    async updateGroupTitle(conversationId, title) {
+      const conversation = await apiUpdateGroupTitle(conversationId, title);
       this.replaceConversation(conversation);
       return conversation;
     },

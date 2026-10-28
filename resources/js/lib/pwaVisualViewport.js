@@ -26,6 +26,8 @@ let nativePickerSawLeave = false;
 let nativePickerSawShrink = false;
 let nativePickerCloseTimer = 0;
 let nativePickerHoldTimer = 0;
+/** @type {{ height: number, offsetTop: number, offsetLeft: number, width: number } | null} */
+let nativePickerFrozenVv = null;
 
 function viewportSettled() {
   const vv = window.visualViewport;
@@ -81,22 +83,9 @@ function isVisualViewportKeyboardOpen(vv, composerFocused = composerInputFocused
   return inset >= KEYBOARD_INSET_THRESHOLD || (composerFocused && inset >= 20);
 }
 
-function applyVisualViewportKeyboardFrame(vv, composerFocused = composerInputFocused()) {
+function writeVisualViewportFrame({ height, offsetTop, offsetLeft, width }) {
   const root = document.documentElement;
   setKeyboardFrame(true);
-
-  if (
-    isIosDevice()
-    && (vv.offsetTop > 0 || composerFocused)
-    && !isNativePickerHolding()
-  ) {
-    window.scrollTo(0, 0);
-  }
-
-  const height = Math.max(0, Math.round(vv.height));
-  const offsetTop = Math.max(0, Math.round(vv.offsetTop));
-  const offsetLeft = Math.max(0, Math.round(vv.offsetLeft));
-  const width = Math.max(0, Math.round(vv.width));
 
   if (height > 0) {
     root.style.setProperty(PWA_VV_HEIGHT, `${height}px`);
@@ -116,6 +105,27 @@ function applyVisualViewportKeyboardFrame(vv, composerFocused = composerInputFoc
   syncEmployeeShellHeight();
 }
 
+function snapshotVisualViewport(vv) {
+  return {
+    height: Math.max(0, Math.round(vv.height)),
+    offsetTop: Math.max(0, Math.round(vv.offsetTop)),
+    offsetLeft: Math.max(0, Math.round(vv.offsetLeft)),
+    width: Math.max(0, Math.round(vv.width)),
+  };
+}
+
+function applyVisualViewportKeyboardFrame(vv, composerFocused = composerInputFocused()) {
+  if (
+    isIosDevice()
+    && (vv.offsetTop > 0 || composerFocused)
+    && !isNativePickerHolding()
+  ) {
+    window.scrollTo(0, 0);
+  }
+
+  writeVisualViewportFrame(snapshotVisualViewport(vv));
+}
+
 function holdNativePickerFrame() {
   clearPwaVisualViewport();
   setKeyboardFrame(false);
@@ -129,6 +139,13 @@ function syncNativePickerVisualViewport() {
   }
 
   const vv = window.visualViewport;
+
+  // iOS báo viewport full ngay khi blur dù bàn phím còn — giữ khung lúc chạm icon ảnh.
+  if (nativePickerFrozenVv && !nativePickerSawShrink) {
+    writeVisualViewportFrame(nativePickerFrozenVv);
+    return;
+  }
+
   if (!vv) {
     holdNativePickerFrame();
     return;
@@ -163,8 +180,14 @@ export function beginNativeFilePicker() {
   window.clearTimeout(nativePickerCloseTimer);
   window.clearTimeout(nativePickerHoldTimer);
   setNativePickerClass(true);
+  const vv = window.visualViewport;
+  if (vv && isVisualViewportKeyboardOpen(vv)) {
+    nativePickerFrozenVv = snapshotVisualViewport(vv);
+  } else {
+    nativePickerFrozenVv = null;
+  }
   syncNativePickerVisualViewport();
-  if (viewportSettled()) {
+  if (viewportSettled() && !nativePickerFrozenVv) {
     window.scrollTo(0, 0);
   }
   nativePickerHoldTimer = window.setTimeout(() => {
@@ -179,6 +202,7 @@ export function endNativeFilePicker() {
   nativePickerActive = false;
   nativePickerSawLeave = false;
   nativePickerSawShrink = false;
+  nativePickerFrozenVv = null;
   window.clearTimeout(nativePickerCloseTimer);
   window.clearTimeout(nativePickerHoldTimer);
   if (!holding) return;

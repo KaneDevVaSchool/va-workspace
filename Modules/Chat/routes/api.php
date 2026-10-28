@@ -10,6 +10,7 @@ Route::middleware('auth')->prefix('chat')->name('chat.')->group(function () {
     Route::post('/conversations', [ChatConversationController::class, 'store'])->name('conversations.store');
     Route::post('/conversations/groups', [ChatConversationController::class, 'storeGroup'])->name('conversations.groups.store');
     Route::post('/conversations/{conversationId}/avatar', [ChatConversationController::class, 'updateAvatar'])->name('conversations.avatar');
+    Route::patch('/conversations/{conversationId}/title', [ChatConversationController::class, 'updateTitle'])->name('conversations.title');
     Route::post('/presence', [ChatConversationController::class, 'presence'])->name('presence');
     Route::get('/attachments/{attachmentId}', [ChatAttachmentController::class, 'show'])->name('attachments.show');
     Route::post('/conversations/{conversationId}/members', [ChatConversationController::class, 'addMembers'])->name('conversations.members.store');

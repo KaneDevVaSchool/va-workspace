@@ -94,6 +94,12 @@ export function updateGroupAvatar(conversationId, file) {
     .then((r) => r.data.conversation);
 }
 
+export function updateGroupTitle(conversationId, title) {
+  return window.axios
+    .patch(`/api/chat/conversations/${conversationId}/title`, { title })
+    .then((r) => r.data.conversation);
+}
+
 export function addMembers(conversationId, userIds) {
   return window.axios
     .post(`/api/chat/conversations/${conversationId}/members`, { user_ids: userIds })

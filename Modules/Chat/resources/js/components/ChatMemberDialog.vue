@@ -24,6 +24,8 @@ const query = ref('');
 const selected = ref([]);
 const saving = ref(false);
 const avatarSaving = ref(false);
+const titleDraft = ref('');
+const titleSaving = ref(false);
 const error = ref('');
 const avatarInput = ref(null);
 /** Chỉ dùng ở màn hình hẹp, nơi hai khối được xếp thành hai tab. */
@@ -41,6 +43,11 @@ const takenIds = computed(() => new Set(members.value.map((user) => user.id)));
 const stackMembers = computed(() => members.value.slice(0, STACK_LIMIT));
 const slotsLeft = computed(() => MAX_MEMBERS - members.value.length - selected.value.length);
 const canAdd = computed(() => !saving.value && selected.value.length > 0);
+const canSaveTitle = computed(() => {
+  if (titleSaving.value || saving.value) return false;
+  const next = titleDraft.value.trim();
+  return next !== '' && next !== (conversation.value?.title || '').trim();
+});
 
 watch(() => props.open, (value) => {
   if (!value) {
@@ -52,8 +59,18 @@ watch(() => props.open, (value) => {
   selected.value = [];
   error.value = '';
   tab.value = 'members';
+  titleDraft.value = conversation.value?.title || '';
   window.addEventListener('keydown', onKeydown);
 });
+
+watch(
+  () => conversation.value?.title,
+  (value) => {
+    if (props.open && !titleSaving.value) {
+      titleDraft.value = value || '';
+    }
+  },
+);
 
 watch(query, (value) => {
   if (!isOwner.value) {
@@ -171,6 +188,22 @@ async function onAvatarChosen(event) {
     avatarSaving.value = false;
   }
 }
+
+async function saveTitle() {
+  if (!canSaveTitle.value || !conversation.value?.id) return;
+  titleSaving.value = true;
+  error.value = '';
+  try {
+    await store.updateGroupTitle(conversation.value.id, titleDraft.value.trim());
+    showClientToast('success', 'Đã cập nhật tên nhóm.');
+  } catch (err) {
+    error.value = err?.response?.data?.message
+      || err?.response?.data?.errors?.title?.[0]
+      || 'Không cập nhật được tên nhóm.';
+  } finally {
+    titleSaving.value = false;
+  }
+}
 </script>
 
 <template>
@@ -211,7 +244,29 @@ async function onAvatarChosen(event) {
               </span>
             </button>
             <span class="chat-room__brand-copy">
-              <span class="chat-room__brand-name">{{ groupTitle }}</span>
+              <span v-if="!isOwner" class="chat-room__brand-name">{{ groupTitle }}</span>
+              <label v-else class="chat-room__title-field">
+                <span class="chat-room__title-label">Tên nhóm</span>
+                <span class="chat-room__title-row">
+                  <input
+                    v-model="titleDraft"
+                    class="chat-room__title-input"
+                    type="text"
+                    maxlength="80"
+                    autocomplete="off"
+                    :disabled="titleSaving || saving"
+                    @keydown.enter.prevent="saveTitle"
+                  />
+                  <button
+                    type="button"
+                    class="chat-room__title-save"
+                    :disabled="!canSaveTitle"
+                    @click="saveTitle"
+                  >
+                    {{ titleSaving ? 'Đang lưu…' : 'Lưu' }}
+                  </button>
+                </span>
+              </label>
               <span class="chat-room__brand-meta">
                 <span class="chat-room__stack" aria-hidden="true">
                   <ChatAvatar
@@ -557,6 +612,67 @@ async function onAvatarChosen(event) {
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--color-text);
+}
+
+.chat-room__title-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.chat-room__title-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.chat-room__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.chat-room__title-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.chat-room__title-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.chat-room__title-input:disabled {
+  opacity: 0.65;
+}
+
+.chat-room__title-save {
+  flex-shrink: 0;
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-on-primary);
+  cursor: pointer;
+}
+
+.chat-room__title-save:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .chat-room__brand-meta {
