@@ -33,6 +33,8 @@ const lightbox = ref(null);
 const sending = ref(false);
 /** Xem trước tin đang gửi (bubble pending trước khi API trả về). */
 const pendingOutgoing = ref(null);
+/** Mốc bắt đầu gửi — ẩn pending khi tin thật đã vào list (thường qua WebSocket trước HTTP). */
+const outgoingStartedAt = ref(0);
 const listRef = ref(null);
 const inputRef = ref(null);
 const pickerOpen = ref(false);
@@ -105,6 +107,38 @@ const typingLabel = computed(() => {
 });
 let viewingTimer = null;
 const canSend = computed(() => !sending.value && (draft.value.trim() !== '' || (!editing.value && files.value.length > 0)));
+
+function messageMatchesPending(message, pending) {
+  if (!message || !pending || !isMine(message)) return false;
+  if (pending.kind === 'sticker') {
+    return message.message_type === 'sticker' && message.sticker_id === pending.stickerId;
+  }
+  if (pending.kind === 'message') {
+    const text = (message.message || '').trim();
+    if (pending.text && message.message_type === 'text') {
+      return text === pending.text.trim();
+    }
+  }
+  return false;
+}
+
+function pendingSupersededByLastMessage(pending) {
+  const last = store.activeMessages.at(-1);
+  if (!last || !isMine(last)) return false;
+  const created = new Date(last.created_at).getTime();
+  if (Number.isNaN(created) || outgoingStartedAt.value <= 0) return false;
+  if (created < outgoingStartedAt.value - 2000) return false;
+  if (messageMatchesPending(last, pending)) return true;
+  if (pending.kind === 'message' && !pending.text && pending.fileCount > 0) return true;
+  return false;
+}
+
+const showPendingOutgoing = computed(() => {
+  const pending = pendingOutgoing.value;
+  if (!pending || pending.kind === 'edit') return false;
+  if (pending.kind !== 'message' && pending.kind !== 'sticker') return false;
+  return !pendingSupersededByLastMessage(pending);
+});
 
 const headerMenu = ref(null);
 const confirmCopy = computed(() => {
@@ -661,6 +695,7 @@ function openImage(file) {
 
 async function sendSticker(sticker) {
   if (sending.value || editing.value) return;
+  outgoingStartedAt.value = Date.now();
   pendingOutgoing.value = { kind: 'sticker', emoji: sticker.emoji, stickerId: sticker.id };
   sending.value = true;
   try {
@@ -686,6 +721,9 @@ async function send() {
   if (text === '' && (editing.value || files.value.length === 0)) return;
   const outgoing = files.value.map((item) => item.file);
   const sentPreviews = files.value.map((item) => item.previewUrl).filter(Boolean);
+  if (!editing.value) {
+    outgoingStartedAt.value = Date.now();
+  }
   if (editing.value) {
     pendingOutgoing.value = { kind: 'edit' };
   } else {
@@ -1010,7 +1048,7 @@ function menuItems(message) {
 
       <Transition name="chat-pending">
       <div
-        v-if="pendingOutgoing?.kind === 'message' || pendingOutgoing?.kind === 'sticker'"
+        v-if="showPendingOutgoing"
         class="chat-bubble-row chat-bubble-row--mine chat-bubble-row--pending"
         aria-live="polite"
       >
@@ -1074,7 +1112,7 @@ function menuItems(message) {
       </Transition>
     </div>
 
-    <div class="chat-dock">
+    <div class="chat-dock" :class="{ 'chat-dock--picker': pickerOpen }">
     <Transition name="chat-compose-banner">
       <div v-if="replyTo || editing" class="chat-compose-banner">
       <AppIcon :name="editing ? 'pencil' : 'reply'" :size="14" :stroke-width="1.75" />

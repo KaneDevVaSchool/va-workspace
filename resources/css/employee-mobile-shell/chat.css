@@ -160,6 +160,18 @@
   max-height: 0;
 }
 
+.employee-shell__content--chat-thread .employee-chat {
+  margin-bottom: 0;
+}
+
+.employee-shell__content--chat-thread .chat-dock {
+  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom, 0px));
+}
+
 .employee-shell__content--chat-thread .chat-view__composer {
-  padding-bottom: max(var(--space-3), 0.625rem);
+  padding-bottom: var(--space-2);
+}
+
+.employee-shell__content--chat-thread .chat-dock--picker .chat-picker {
+  max-height: min(12rem, 30dvh);
 }

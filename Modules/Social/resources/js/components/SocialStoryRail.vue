@@ -16,6 +16,22 @@ let timer = null;
 const activePack = computed(() => viewer.value);
 const activeStory = computed(() => activePack.value?.stories?.[index.value] ?? null);
 
+const minePack = computed(() => rings.value?.mine ?? null);
+const mineHasStories = computed(() => {
+  const mine = minePack.value;
+  return Boolean(mine?.has_stories || (mine?.stories?.length ?? 0) > 0);
+});
+
+function mineThumbUrl(pack) {
+  if (!pack) return null;
+  const stories = pack.stories || [];
+  for (let i = stories.length - 1; i >= 0; i -= 1) {
+    const story = stories[i];
+    if (story.media_kind === 'image' && story.media_url) return story.media_url;
+  }
+  return pack.user?.avatar_url || null;
+}
+
 watch(activeStory, (story) => {
   progress.value = 0;
   window.clearInterval(timer);
@@ -57,6 +73,10 @@ function openMine() {
     return;
   }
   openPack(mine);
+}
+
+function openAddStory() {
+  fileInput.value?.click();
 }
 
 function storyPacks() {
@@ -157,13 +177,19 @@ defineExpose({ reload: load });
       <button type="button" class="story-rail__item" @click="openMine">
         <span
           class="story-rail__ring"
-          :class="{ 'story-rail__ring--mine': !rings.mine.has_stories && !rings.mine.stories.length }"
+          :class="{
+            'story-rail__ring--fresh': mineHasStories && rings.mine.unseen,
+            'story-rail__ring--seen': mineHasStories && !rings.mine.unseen,
+            'story-rail__ring--empty': !mineHasStories,
+          }"
         >
-          <img v-if="rings.mine.user.avatar_url" :src="rings.mine.user.avatar_url" alt="" />
-          <span v-else>{{ initial(rings.mine.user.name) }}</span>
-          <span v-if="!rings.mine.has_stories && !rings.mine.stories.length" class="story-rail__plus" aria-hidden="true">
-            <AppIcon name="plus" :size="12" :stroke-width="2.4" />
+          <span class="story-rail__avatar">
+            <img v-if="mineThumbUrl(rings.mine)" :src="mineThumbUrl(rings.mine)" alt="" />
+            <span v-else class="story-rail__initial">{{ initial(rings.mine.user.name) }}</span>
           </span>
+        </span>
+        <span class="story-rail__plus" aria-label="Thêm story" @click.stop="openAddStory">
+          <AppIcon name="plus" :size="13" :stroke-width="2.5" />
         </span>
         <span class="story-rail__name">Story của bạn</span>
       </button>
@@ -178,12 +204,15 @@ defineExpose({ reload: load });
         <span
           class="story-rail__ring"
           :class="{
+            'story-rail__ring--fresh': ring.has_stories && ring.unseen,
             'story-rail__ring--seen': ring.has_stories && !ring.unseen,
             'story-rail__ring--idle': !ring.has_stories,
           }"
         >
-          <img v-if="ring.user.avatar_url" :src="ring.user.avatar_url" alt="" />
-          <span v-else>{{ initial(ring.user.name) }}</span>
+          <span class="story-rail__avatar">
+            <img v-if="mineThumbUrl(ring) || ring.user.avatar_url" :src="mineThumbUrl(ring) || ring.user.avatar_url" alt="" />
+            <span v-else class="story-rail__initial">{{ initial(ring.user.name) }}</span>
+          </span>
         </span>
         <span class="story-rail__name">{{ ring.user.name }}</span>
       </button>
@@ -253,67 +282,130 @@ defineExpose({ reload: load });
 .story-rail {
   margin: 0 0 0.75rem;
 }
+
 .story-rail__scroller {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.65rem;
   overflow-x: auto;
-  padding: 0.15rem 0.1rem 0.35rem;
+  padding: 0.2rem 0.15rem 0.4rem;
 }
+
 .story-rail__item {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
-  width: 4.6rem;
+  gap: 0.4rem;
+  width: 4.75rem;
   flex: 0 0 auto;
   border: 0;
   background: transparent;
   color: var(--color-text);
   cursor: pointer;
+  padding: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
+
 .story-rail__ring {
-  position: relative;
   display: grid;
   place-items: center;
-  width: 4.1rem;
-  height: 4.1rem;
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 999px;
+  padding: 3px;
+  background: linear-gradient(
+    145deg,
+    var(--color-tertiary-500) 0%,
+    var(--color-primary) 52%,
+    var(--color-tertiary-600) 100%
+  );
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.story-rail__ring--fresh {
+  padding: 3px;
+  background: linear-gradient(
+    145deg,
+    var(--color-tertiary-500) 0%,
+    var(--color-primary) 52%,
+    var(--color-tertiary-600) 100%
+  );
+}
+
+.story-rail__ring--seen,
+.story-rail__ring--empty {
+  padding: 2px;
+  background: var(--color-border);
+}
+
+.story-rail__ring--idle {
+  padding: 2px;
+  background: color-mix(in srgb, var(--color-border) 88%, var(--color-surface-muted));
+}
+
+.story-rail__avatar {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
   border-radius: 999px;
   overflow: hidden;
   background: var(--color-surface);
-  box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-primary);
-  font-weight: 650;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 65%, transparent);
 }
-.story-rail__ring--seen,
-.story-rail__ring--mine,
-.story-rail__ring--idle {
-  box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-border);
-}
-.story-rail__ring--idle {
-  opacity: 0.92;
-}
-.story-rail__ring img {
+
+.story-rail__avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
-.story-rail__plus {
-  position: absolute;
-  right: 0;
-  bottom: 0;
+
+.story-rail__initial {
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-tertiary-700);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-tertiary-100) 85%, var(--color-surface)) 0%,
+    color-mix(in srgb, var(--color-primary-surface) 70%, var(--color-surface)) 100%
+  );
+  width: 100%;
+  height: 100%;
   display: grid;
   place-items: center;
-  width: 1.15rem;
-  height: 1.15rem;
+}
+
+.story-rail__plus {
+  position: absolute;
+  top: 2.55rem;
+  right: 0.05rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 1.45rem;
+  height: 1.45rem;
   border-radius: 999px;
+  border: 2.5px solid var(--color-surface);
   background: var(--color-primary);
   color: var(--color-on-primary, #fff);
+  box-shadow:
+    0 2px 8px color-mix(in srgb, var(--color-primary) 38%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
+  pointer-events: auto;
 }
+
 .story-rail__name {
-  max-width: 4.6rem;
+  max-width: 4.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.72rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.25;
   color: var(--color-text-muted, var(--color-text));
 }
 .story-rail__file {

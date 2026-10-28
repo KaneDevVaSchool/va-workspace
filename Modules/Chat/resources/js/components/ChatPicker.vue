@@ -1,9 +1,10 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { EMOJI_GROUPS } from '@modules/Project/resources/js/constants/emojiGroups.js';
 import SocialAnimatedSticker from '@modules/Social/resources/js/components/SocialAnimatedSticker.vue';
 import { STICKER_PACKS } from '@modules/Social/resources/js/constants/stickers.js';
+import { prefetchStickerIds, warmStickerAssets } from '@modules/Social/resources/js/lib/socialStickers.js';
 
 const props = defineProps({
   panel: { type: String, default: 'emoji' },
@@ -20,6 +21,26 @@ const stickers = computed(() => STICKER_PACKS.find((pack) => pack.key === active
 function setPanel(panel) {
   emit('update:panel', panel);
 }
+
+watch(
+  () => [props.panel, activePack.value],
+  ([panel, packKey]) => {
+    if (panel !== 'sticker') return;
+    warmStickerAssets();
+    const pack = STICKER_PACKS.find((item) => item.key === packKey);
+    const allIds = (pack?.stickers ?? []).map((sticker) => sticker.id);
+    prefetchStickerIds(allIds.slice(0, 28));
+    const rest = allIds.slice(28);
+    if (rest.length === 0) return;
+    const prefetchRest = () => prefetchStickerIds(rest);
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(prefetchRest, { timeout: 2500 });
+    } else {
+      window.setTimeout(prefetchRest, 500);
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -72,7 +93,18 @@ function setPanel(panel) {
         :aria-label="pack.label"
         @click="activePack = pack.key"
       >
-        <img v-if="pack.iconSrc" class="chat-picker__pack-img" :src="pack.iconSrc" alt="" />
+        <SocialAnimatedSticker
+          v-if="pack.iconSrc && pack.stickers?.[0]"
+          class="chat-picker__pack-sticker"
+          :id="pack.stickers[0].id"
+          :emoji="pack.stickers[0].emoji"
+        />
+        <img
+          v-else-if="pack.iconSrc"
+          class="chat-picker__pack-img"
+          :src="pack.iconSrc"
+          alt=""
+        />
         <template v-else>{{ pack.icon }}</template>
       </button>
     </div>
@@ -108,9 +140,9 @@ function setPanel(panel) {
 .chat-picker {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  max-height: min(13.5rem, 36dvh);
+  max-height: min(13.5rem, 32dvh);
   margin: var(--space-2) var(--space-3) 0;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
@@ -183,6 +215,23 @@ function setPanel(panel) {
   width: 1.35rem;
   height: 1.35rem;
   object-fit: contain;
+}
+
+.chat-picker__pack-sticker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.chat-picker__pack-sticker :deep(.social-sticker) {
+  width: 1.35rem;
+  height: 1.35rem;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .chat-picker__grid {

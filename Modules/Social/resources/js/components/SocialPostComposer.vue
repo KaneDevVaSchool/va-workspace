@@ -555,15 +555,21 @@ defineExpose({ expand });
   border-radius: var(--radius-full);
   object-fit: cover;
   flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 80%, transparent);
 }
 
 .composer__avatar--placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-tertiary-100) 85%, var(--color-surface)) 0%,
+    color-mix(in srgb, var(--color-primary-surface) 75%, var(--color-surface)) 100%
+  );
+  color: var(--color-tertiary-700);
   font-weight: 700;
+  font-size: 1rem;
 }
 
 .composer__prompt {

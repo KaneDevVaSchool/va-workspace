@@ -53,6 +53,28 @@ function fetchLottieJson(id) {
   return jsonCache.get(id);
 }
 
+/** Tải trước JSON Lottie (bỏ qua VA sticker tĩnh). */
+export function prefetchStickerJson(id) {
+  if (vaStickerById(id) || !isValidStickerId(id)) return Promise.resolve();
+  return fetchLottieJson(id).catch(() => {});
+}
+
+export function prefetchStickerIds(ids) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return Promise.resolve();
+  return Promise.all(unique.map((id) => prefetchStickerJson(id)));
+}
+
+/** Gọi khi mở panel sticker để giảm trễ lần play đầu. */
+export function warmStickerAssets() {
+  return loadLottie().catch(() => {});
+}
+
+function useHoverPlaySticker(hoverPlay) {
+  if (!hoverPlay) return false;
+  return !(window.matchMedia?.('(pointer: coarse)')?.matches ?? false);
+}
+
 /**
  * Gắn animation Lottie vào một element. Trả về hàm huỷ.
  * `hoverPlay`: chỉ chạy khi hover (dùng trong picker).
@@ -158,7 +180,7 @@ export function mountStickerAnimation(el, id, { hoverPlay = false } = {}) {
     }
   }
 
-  if (hoverPlay) {
+  if (useHoverPlaySticker(hoverPlay)) {
     const hoverTarget = el.closest('button, [role="button"]') || el;
     let lastPointer = 'mouse';
     function onPointerDown(event) {
