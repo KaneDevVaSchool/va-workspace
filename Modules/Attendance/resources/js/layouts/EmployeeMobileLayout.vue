@@ -26,9 +26,11 @@ import AppIcon from '@/components/AppIcon.vue';
 import { useChatStore } from '@modules/Chat/resources/js/store/chatStore';
 import EmployeeChatHeaderToolbar from '@modules/Chat/resources/js/components/EmployeeChatHeaderToolbar.vue';
 import { useChatRealtime } from '@/composables/useChatRealtime';
+import { setAppBadgeCount } from '@/lib/appBadge';
 import EmployeeMobileHeader from '../components/employee-mobile-shell/EmployeeMobileHeader.vue';
 import EmployeeMobileTabbar from '../components/employee-mobile-shell/EmployeeMobileTabbar.vue';
 import EmployeeMobileInstallBanner from '../components/employee-mobile-shell/EmployeeMobileInstallBanner.vue';
+import EmployeeMobileOfflineStrip from '../components/employee-mobile-shell/EmployeeMobileOfflineStrip.vue';
 import EmployeeMobileWorkspaceIntro from '../components/employee-mobile-shell/EmployeeMobileWorkspaceIntro.vue';
 import EmployeeMobileBirthdayGreeting from '../components/employee-mobile-shell/EmployeeMobileBirthdayGreeting.vue';
 import { useEmployeeBirthdayGreeting } from '../composables/useEmployeeBirthdayGreeting.js';
@@ -139,7 +141,7 @@ const pullIndicatorStyle = computed(() => ({
   height: `${Math.max(0, pullY.value)}px`,
   opacity: pullY.value > 4 ? Math.min(1, pullY.value / 56) : 0,
 }));
-const { canInstall, promptInstall, dismiss } = usePwaInstall();
+const { canInstall, showIosGuide, promptInstall, dismiss } = usePwaInstall();
 const { shellMode, isMobilePwa } = useEmployeeMobileShell();
 const tabbarComponentRef = ref(null);
 const tabbarNavEl = computed(() => tabbarComponentRef.value?.navEl ?? null);
@@ -223,8 +225,11 @@ const pageHeaderTitle = computed(() => {
   return typeof title === 'string' ? title.trim() : '';
 });
 
+/** Trang con không nằm trong thanh tab: PWA không có nút Back của trình duyệt nên cần nút quay lại ở header. */
+const SUBPAGE_ROUTE_NAMES = new Set(['employee.profile', 'employee.contacts', 'employee.utilities']);
+
 const brandBack = computed(
-  () => isProfileRoute.value || Boolean(historyRequestsSubView.value),
+  () => SUBPAGE_ROUTE_NAMES.has(route.name) || Boolean(historyRequestsSubView.value),
 );
 
 const isChatRoute = computed(() => route.name === 'employee.chat');
@@ -244,6 +249,9 @@ const chatUnreadLabel = computed(() => {
   return chatStore.unreadTotal > 99 ? '99+' : String(chatStore.unreadTotal);
 });
 
+// Số tin chưa đọc hiện trên icon app ở màn hình chính (shell mobile không có chuông thông báo như desktop).
+watch(() => chatStore.unreadTotal, (count) => setAppBadgeCount(count), { immediate: true });
+
 const chatHeaderAria = computed(() =>
   chatStore.unreadTotal > 0
     ? `Trò chuyện, ${chatStore.unreadTotal} tin nhắn chưa đọc`
@@ -261,6 +269,16 @@ onMounted(() => {
 watch(isMobilePwa, () => {
   syncEmployeeMobileViewport();
 });
+
+// Vùng nội dung giữ nguyên (không remount) giữa các trang nên vị trí cuộn của trang trước bị mang sang
+// trang sau. Đổi trang → về đầu; (cùng path chỉ đổi query thì giữ nguyên vị trí).
+watch(
+  () => route.path,
+  () => {
+    contentRef.value?.scrollTo({ top: 0, behavior: 'auto' });
+  },
+  { flush: 'post' },
+);
 
 watch(
   () => route.name,
@@ -297,7 +315,9 @@ function goBackFromSubpage() {
     router.replace({ name: 'employee.requests' });
     return;
   }
-  if (window.history.length > 1) {
+  // `history.length` đếm cả các trang ngoài app (hoặc rỗng khi mở từ thông báo/shortcut) nên không tin được;
+  // vue-router lưu trang trước đó trong history.state.back — null nghĩa là đây là trang đầu của phiên.
+  if (window.history.state?.back) {
     router.back();
     return;
   }
@@ -358,15 +378,22 @@ function goBackFromSubpage() {
       </template>
     </EmployeeMobileHeader>
 
+    <EmployeeMobileOfflineStrip />
+
     <EmployeeMobileInstallBanner
       v-if="canInstall"
       @install="promptInstall"
       @dismiss="dismiss"
     />
+    <EmployeeMobileInstallBanner
+      v-else-if="showIosGuide"
+      ios
+      @dismiss="dismiss"
+    />
 
     <main
       ref="contentRef"
-      class="employee-shell__content employee-shell__content--unified"
+      class="employee-shell__content employee-shell__content--unified hide-scrollbar"
       :class="{
         'employee-shell__content--chat': isChatRoute,
         'employee-shell__content--chat-thread': hideHeaderForChatThread,

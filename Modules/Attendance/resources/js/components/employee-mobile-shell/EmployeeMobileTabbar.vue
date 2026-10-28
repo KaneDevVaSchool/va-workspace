@@ -9,7 +9,7 @@ import AppIcon from '@/components/AppIcon.vue';
 const props = defineProps({
   tabs: { type: Array, required: true },
   activeName: { type: String, default: '' },
-  /** Đổi khi chuyển trang trong shell — kích hoạt lại animation nổi lên của bar. */
+  /** Đổi khi chuyển trang trong shell — đồng bộ lại vạch chỉ báo tab đang chọn. */
   shellPageKey: { type: String, default: '' },
   isMobilePwa: { type: Boolean, default: false },
   /** Xem thử tĩnh (desktop cấu hình) — không router-link. */
@@ -75,13 +75,13 @@ watch(
   () => scheduleIndicatorSync(),
 );
 
+// Chuyển trang chỉ đồng bộ lại vị trí vạch chỉ báo. Trước đây thanh tab còn "nổi lên" 400ms ở MỖI lần
+// đổi trang (cộng thêm hiệu ứng hiện nội dung) — rối mắt và tốn paint; giờ chỉ chạy một lần khi mở app.
 watch(
   () => props.shellPageKey,
   (next, prev) => {
     if (!next || next === prev) return;
-    if (prev) {
-      replayBarEnter('route');
-    }
+    scheduleIndicatorSync();
   },
 );
 

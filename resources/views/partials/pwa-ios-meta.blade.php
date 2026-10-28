@@ -8,7 +8,6 @@
     $iosPwa = config('pwa_ios');
     $iosTitle = $iosPwa['apple_web_app_title'] ?? 'VA Workspace';
     $iosStatusBar = $iosPwa['status_bar_style'] ?? 'default';
-    $iosOrientation = $iosPwa['orientation'] ?? 'portrait';
     $employeeMeShell = (bool) preg_match('#^/dashboard/me(/|$)#', request()->getPathInfo());
     $pwaThemeColor = $employeeMeShell
         ? ($iosPwa['employee_theme_color'] ?? '#1750b5')
@@ -21,8 +20,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="{{ $iosStatusBar }}">
 <meta name="apple-mobile-web-app-title" content="{{ $iosTitle }}">
-<meta name="apple-mobile-web-app-orientation" content="{{ $iosOrientation }}">
-<meta name="theme-color" content="{{ $pwaThemeColor }}" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="{{ $pwaThemeColor }}">
 <link rel="icon" href="/images/favicon.png?v={{ $pwaIconV }}" type="image/png" sizes="32x32">
 @foreach ($iosPwa['touch_icons'] ?? [] as $icon)

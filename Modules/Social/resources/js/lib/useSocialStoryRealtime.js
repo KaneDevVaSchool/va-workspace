@@ -28,7 +28,8 @@ export function useSocialStoryRealtime(onRefresh) {
   }
 
   function subscribe(userId) {
-    if (!window.Echo || !userId) return;
+    // Kiểm tra userId TRƯỚC: chạm vào window.Echo là khởi tạo (và mở websocket) lần đầu.
+    if (!userId || !window.Echo) return;
     const nextChannel = `App.Models.User.${userId}`;
     if (channelName === nextChannel) return;
     if (channelName) {

@@ -26,9 +26,21 @@ import {
 } from "./lib/pwaStandalone";
 import { syncEmployeeSafeAreaInsets } from "./lib/employeeSafeArea";
 import { syncEmployeeDeviceOsClass } from "./lib/employeeDeviceOs";
+import { onAppResume } from "./lib/appResume";
+import { useAuthStore } from "@modules/Identity/resources/js/stores/auth.js";
 
 const route = useRoute();
+const auth = useAuthStore();
 const { isEmployeeMobile } = useEmployeeMobileView();
+
+// Đang dùng bản lưu cũ của tài khoản (mở app lúc offline / server chưa trả lời):
+// có mạng lại hoặc quay lại app thì lấy dữ liệu thật để quyền và menu không bị lỗi thời.
+const stopResumeRefresh = onAppResume(() => {
+    if (auth.offlineSnapshot) {
+        auth.fetchMe({ force: true }).catch(() => {});
+    }
+});
+onBeforeUnmount(stopResumeRefresh);
 
 function syncPwaShellSurface() {
     const root = document.documentElement;

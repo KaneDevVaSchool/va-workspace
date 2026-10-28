@@ -25,6 +25,7 @@ const {
   auth,
   loading,
   loadingMore,
+  loadError,
   searchQuery,
   peopleResults,
   peopleOpen,
@@ -41,6 +42,7 @@ const {
   visiblePosts,
   canLoadMore,
   firstUnpinnedIndex,
+  loadFeed,
   loadMore,
   onTabChange,
   openColleagueWall,
@@ -154,6 +156,8 @@ onBeforeUnmount(() => {
           <img
             v-if="user.avatar_url"
             class="emp-feed__people-avatar"
+            loading="lazy"
+            decoding="async"
             :src="user.avatar_url"
             alt=""
           />
@@ -303,7 +307,19 @@ onBeforeUnmount(() => {
         </div>
       </template>
 
-      <div v-if="visiblePosts.length === 0" class="emp-feed__empty">
+      <div
+        v-if="loadError && visiblePosts.length === 0"
+        class="emp-feed__empty emp-feed__empty--error"
+        role="alert"
+      >
+        <span class="emp-feed__empty-icon" aria-hidden="true">
+          <AppIcon name="info" :size="28" />
+        </span>
+        <p>{{ loadError }}</p>
+        <button type="button" class="emp-feed__retry" @click="loadFeed(1)">Thử lại</button>
+      </div>
+
+      <div v-else-if="visiblePosts.length === 0" class="emp-feed__empty">
         <span class="emp-feed__empty-icon" aria-hidden="true">
           <AppIcon name="megaphone" :size="28" />
         </span>
@@ -1089,6 +1105,19 @@ onBeforeUnmount(() => {
   font-size: 0.875rem;
   color: var(--color-text-muted);
   max-width: 18rem;
+}
+
+.emp-feed__retry {
+  min-height: 2.75rem;
+  padding: 0.5rem var(--space-4);
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .emp-feed__sentinel {

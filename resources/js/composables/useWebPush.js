@@ -1,4 +1,27 @@
 import { computed, onMounted, ref } from 'vue';
+import { isIosDevice } from '../lib/employeeDeviceOs';
+import { isPwaStandalone } from '../lib/pwaStandalone';
+import { onBeforeLogout, onSessionCleanup } from '../lib/sessionCleanup';
+
+const OPTOUT_KEY = 'va-push-optout';
+const SW_READY_TIMEOUT_MS = 10_000;
+
+function readOptOut() {
+  try {
+    return localStorage.getItem(OPTOUT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeOptOut(value) {
+  try {
+    if (value) localStorage.setItem(OPTOUT_KEY, '1');
+    else localStorage.removeItem(OPTOUT_KEY);
+  } catch {
+    // localStorage bị chặn — chỉ mất việc nhớ lựa chọn, không ảnh hưởng đăng ký
+  }
+}
 
 const permission = ref(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
 const pushReady = ref(false);
@@ -7,6 +30,8 @@ const vapidChecked = ref(false);
 const enabling = ref(false);
 const publicKey = ref(null);
 const lastError = ref('');
+/** Người dùng đã chủ động tắt thông báo đẩy trên trình duyệt này — không tự đăng ký lại, không nhắc lại. */
+const optedOut = ref(readOptOut());
 
 const isBraveBrowser = computed(() => {
   if (typeof navigator === 'undefined') return false;
@@ -21,8 +46,26 @@ const pushSupported = computed(
     && typeof Notification !== 'undefined',
 );
 
+/** iPhone/iPad chỉ có Web Push khi đã thêm app vào Màn hình chính — trong tab Safari không có PushManager. */
+const iosNeedsInstall = computed(
+  () => isIosDevice() && !isPwaStandalone() && !pushSupported.value,
+);
+
 function delay(ms) {
   return new Promise((resolve) => { window.setTimeout(resolve, ms); });
+}
+
+/** `serviceWorker.ready` không bao giờ settle nếu SW không kích hoạt được — đặt hạn để nút không quay mãi. */
+function waitForServiceWorkerReady() {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise((_, reject) => {
+      window.setTimeout(
+        () => reject(new Error('Service worker chưa sẵn sàng. Tải lại trang rồi bật lại.')),
+        SW_READY_TIMEOUT_MS,
+      );
+    }),
+  ]);
 }
 
 function normalizeVapidKey(value) {
@@ -124,7 +167,7 @@ async function getPushRegistration() {
       updateViaCache: 'none',
     });
   }
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await waitForServiceWorkerReady();
   if (!registration.active) {
     throw new Error('Service worker không kích hoạt được. Tải lại trang rồi bật lại.');
   }
@@ -165,25 +208,98 @@ async function subscribeToPush(registration, keyBytes) {
       throw first;
     }
     await delay(700);
-    const ready = await navigator.serviceWorker.ready;
+    const ready = await waitForServiceWorkerReady();
     return subscribeOnce(ready, keyBytes);
   }
 }
 
+/**
+ * Đồng bộ subscription của trình duyệt lên server mỗi lần mở app.
+ * Quyền thông báo đã cấp mà subscription biến mất (endpoint hết hạn / trình duyệt xoay khoá /
+ * VAPID đổi) thì tự đăng ký lại — trừ khi người dùng đã chủ động tắt.
+ * Trả 'failed' khi cần thử lại lần mở sau (chưa đăng nhập, mất mạng…).
+ */
 async function syncExistingSubscription() {
-  if (!pushSupported.value || permission.value !== 'granted' || !publicKey.value) {
-    return;
+  if (!pushSupported.value || permission.value !== 'granted' || !publicKey.value || optedOut.value) {
+    return 'none';
   }
   try {
     const registration = await getPushRegistration();
+    const keyBytes = urlBase64ToUint8Array(publicKey.value);
     const existing = await registration.pushManager.getSubscription();
-    if (!existing) return;
-    await persistSubscription(existing);
+    const subscription = existing && keyBytesMatch(existing, keyBytes)
+      ? existing
+      : await subscribeToPush(registration, keyBytes);
+    await persistSubscription(subscription);
     pushReady.value = true;
+    return 'synced';
   } catch {
     pushReady.value = false;
+    return 'failed';
   }
 }
+
+let initPromise = null;
+let resyncListenerAttached = false;
+
+/**
+ * Khởi tạo một lần cho cả trang. Trước đây mỗi component dùng useWebPush() tự chạy lại
+ * (PwaPushPrompt + HeaderNotifications cùng lúc → hai POST /subscribe đua nhau và một cái
+ * có thể 500, làm công tắc hiển thị tắt dù máy đã đăng ký).
+ */
+function ensureInit() {
+  if (initPromise) return initPromise;
+
+  if (!resyncListenerAttached && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    resyncListenerAttached = true;
+    // Trình duyệt đổi/hết hạn endpoint: SW báo để đăng ký lại ngay (SW không có CSRF để tự gọi API).
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data?.type !== 'PUSH_RESYNC') return;
+      initPromise = null;
+      ensureInit();
+    });
+  }
+
+  initPromise = (async () => {
+    await loadVapid();
+    await getPushRegistration().catch(() => {});
+    return syncExistingSubscription();
+  })()
+    .catch(() => 'failed')
+    .then((status) => {
+      // Lần này chưa xong (vd. chưa đăng nhập) → cho lần mount sau thử lại.
+      if (status === 'failed') initPromise = null;
+      return status;
+    });
+
+  return initPromise;
+}
+
+/** Xoá subscription của trình duyệt này trên server và trong trình duyệt. */
+async function removeCurrentSubscription() {
+  if (!pushSupported.value || !('serviceWorker' in navigator)) return;
+  const registration = await navigator.serviceWorker.getRegistration('/');
+  const existing = registration ? await registration.pushManager.getSubscription() : null;
+  if (!existing) return;
+  try {
+    await window.axios.delete('/api/notifications/push/subscribe', {
+      data: { endpoint: existing.endpoint },
+    });
+  } catch {
+    // vẫn hủy đăng ký local
+  }
+  await existing.unsubscribe().catch(() => {});
+}
+
+function resetWebPushState() {
+  pushReady.value = false;
+  initPromise = null;
+}
+
+// Đăng xuất: huỷ push của máy này TRƯỚC khi mất phiên (tránh máy dùng chung vẫn nhận tin của người trước),
+// rồi để lần đăng nhập sau khởi tạo lại từ đầu. Không đặt opt-out — đây không phải lựa chọn của người dùng.
+onBeforeLogout(removeCurrentSubscription);
+onSessionCleanup(resetWebPushState);
 
 export async function enablePush() {
   lastError.value = '';
@@ -223,6 +339,8 @@ export async function enablePush() {
     const subscription = await subscribeToPush(registration, keyBytes);
     await persistSubscription(subscription);
     pushReady.value = true;
+    optedOut.value = false;
+    writeOptOut(false);
     return true;
   } catch (error) {
     pushReady.value = false;
@@ -271,23 +389,11 @@ export async function disablePush() {
   lastError.value = '';
   enabling.value = true;
   try {
-    if (pushSupported.value && 'serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.getRegistration('/');
-      const existing = registration
-        ? await registration.pushManager.getSubscription()
-        : null;
-      if (existing) {
-        try {
-          await window.axios.delete('/api/notifications/push/subscribe', {
-            data: { endpoint: existing.endpoint },
-          });
-        } catch {
-          // vẫn hủy đăng ký local
-        }
-        await existing.unsubscribe().catch(() => {});
-      }
-    }
+    await removeCurrentSubscription();
     pushReady.value = false;
+    // Nhớ lựa chọn: lần mở sau không tự đăng ký lại và không hiện lại lời mời bật.
+    optedOut.value = true;
+    writeOptOut(true);
     return true;
   } catch (error) {
     lastError.value = errorMessage(error);
@@ -306,15 +412,15 @@ export function useWebPush() {
       vapidChecked.value = true;
       return;
     }
-    await loadVapid();
-    await getPushRegistration().catch(() => {});
-    await syncExistingSubscription();
+    await ensureInit();
   });
 
   return {
     permission,
     pushReady,
     pushSupported,
+    iosNeedsInstall,
+    optedOut,
     configured,
     vapidChecked,
     enabling,

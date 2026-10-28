@@ -3,15 +3,19 @@ import AppIcon from '@/components/AppIcon.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useEmployeeMobileView } from '@/composables/useEmployeeMobileView';
-import { onMounted, ref } from 'vue';
+import { defineAsyncComponent, h, onMounted, ref } from 'vue';
 import DashboardMeContent from '../components/DashboardMeContent.vue';
+import DashboardSkeleton from '../components/DashboardSkeleton.vue';
 import { useDashboardQuickUtilities } from '../composables/useDashboardQuickUtilities';
 import { unwrapOverview } from '../utils/dashboardPayload';
-import { defineAsyncComponent } from 'vue';
 
-const EmployeeHome = defineAsyncComponent(() =>
-  import('@modules/Attendance/resources/js/pages/EmployeeHome.vue'),
-);
+// Trang chủ mobile tải thêm một chunk riêng: hiện khung xương thay vì trống trơn trong lúc chờ
+// (chỉ sau 120ms, tải nhanh thì không nhấp nháy).
+const EmployeeHome = defineAsyncComponent({
+  loader: () => import('@modules/Attendance/resources/js/pages/EmployeeHome.vue'),
+  loadingComponent: () => h(DashboardSkeleton, { height: '16rem' }),
+  delay: 120,
+});
 
 const { isEmployeeMobile } = useEmployeeMobileView();
 

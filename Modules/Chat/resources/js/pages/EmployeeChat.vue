@@ -80,6 +80,36 @@ watch(
   { immediate: true },
 );
 
+// Mở một hội thoại thì thêm một mục lịch sử (`?thread=1`) để nút Back của hệ thống (Android Back, vuốt
+// iOS) đóng hội thoại về danh sách thay vì rời cả trang Chat — PWA không có nút Back của trình duyệt.
+let threadEntryPushed = false;
+
+watch(
+  () => store.activeView,
+  (view) => {
+    if (view === 'conversation' && !threadEntryPushed) {
+      threadEntryPushed = true;
+      router
+        .push({ name: 'employee.chat', query: { ...route.query, thread: '1' } })
+        .catch(() => {});
+    } else if (view === 'list' && threadEntryPushed) {
+      // Đóng bằng nút trong app: gỡ mục lịch sử đã thêm.
+      threadEntryPushed = false;
+      if (route.query.thread) router.back();
+    }
+  },
+);
+
+watch(
+  () => route.query.thread,
+  (thread) => {
+    // Người dùng bấm Back của hệ thống: mục lịch sử bị gỡ → đóng hội thoại.
+    if (thread || !threadEntryPushed) return;
+    threadEntryPushed = false;
+    if (store.activeView === 'conversation') store.backToList();
+  },
+);
+
 onMounted(async () => {
   store.panelOpen = true;
   const hasDeepLink = Boolean(route.query.user || route.query.chat);
@@ -98,6 +128,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unregisterRefresh?.();
+  // Rời trang Chat: không được gọi router.back() từ watcher khi đóng hội thoại bên dưới.
+  threadEntryPushed = false;
   store.backToList();
   store.panelOpen = false;
 });

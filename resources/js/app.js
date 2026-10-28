@@ -47,6 +47,17 @@ app.use(router);
 
 app.mount('#app');
 
+// Bấm thông báo đẩy khi app đang mở: service worker gửi đích tới trang để điều hướng trong
+// SPA (không reload — giữ nháp chat/form đang gõ). Chỉ nhận đường dẫn cùng origin.
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    const url = event.data?.type === 'NAVIGATE' ? event.data.url : null;
+    if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//')) return;
+    router.push(url).catch(() => {});
+  });
+  navigator.serviceWorker.startMessages?.();
+}
+
 const finishAppBoot = () => requestAnimationFrame(() => dismissAppBoot());
 
 router.isReady().finally(finishAppBoot);

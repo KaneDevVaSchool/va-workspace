@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="VA Workspace">
-<title>Mất kết nối — VA Workspace</title>
+<title>Mất kết nối - VA Workspace</title>
 <style>
   :root {
     color-scheme: light;
@@ -67,6 +67,7 @@
     appearance: none;
     border: none;
     border-radius: 0.75rem;
+    min-height: 2.75rem;
     padding: 0.75rem 1.5rem;
     background: var(--color-primary-900);
     color: #fff;
@@ -77,6 +78,13 @@
   }
   button:active {
     opacity: 0.85;
+  }
+  button:focus-visible {
+    outline: 2px solid var(--color-primary-900);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
   }
 </style>
 </head>
@@ -93,7 +101,15 @@
     </div>
     <h1>Không có kết nối mạng</h1>
     <p>Trang này chưa được lưu sẵn để xem offline. Kiểm tra lại kết nối rồi thử tải lại.</p>
-    <button onclick="window.location.reload()">Tải lại</button>
+    <button type="button" id="retry">Tải lại</button>
   </div>
+  <script>
+    (function () {
+      function reload() { window.location.reload(); }
+      document.getElementById('retry').addEventListener('click', reload);
+      // Có mạng trở lại thì tự tải lại, người dùng không phải bấm.
+      window.addEventListener('online', reload);
+    })();
+  </script>
 </body>
 </html>

@@ -59,7 +59,7 @@ html.pwa-standalone {
   }
 
   .employee-tabbar__label {
-    font-size: 0.5625rem;
+    font-size: 0.625rem;
   }
 }
 
@@ -541,6 +541,34 @@ html.pwa-standalone {
   box-shadow: var(--shadow-sm);
 }
 
+/* Thanh báo mất mạng / dùng dữ liệu đã lưu: chấm màu + chữ, không badge. */
+.offline-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.offline-strip__dot {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-warning);
+}
+
+.offline-strip__text {
+  min-width: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--color-text);
+}
+
 .install-banner__icon {
   flex-shrink: 0;
   display: grid;
@@ -567,7 +595,7 @@ html.pwa-standalone {
 }
 
 .install-banner__hint {
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -698,7 +726,7 @@ html.pwa-standalone {
   top: 50%;
   left: 0;
   z-index: 0;
-  height: 2.625rem;
+  height: 2.75rem;
   margin: 0;
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--color-tertiary-surface) 55%, transparent);
@@ -725,7 +753,7 @@ html.pwa-standalone {
   justify-content: center;
   gap: 2px;
   min-width: 0;
-  min-height: 2.625rem;
+  min-height: 2.75rem;
   padding: 0.2rem 2px;
   border-radius: var(--radius-lg);
   color: var(--color-text-muted);
@@ -800,7 +828,7 @@ html.pwa-standalone {
 
 .employee-tabbar__label {
   max-width: 100%;
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   line-height: 1.35;
   white-space: nowrap;
@@ -841,4 +869,46 @@ html.pwa-standalone {
   .employee-tabbar__icon {
     transition-duration: 0.01ms;
   }
+}
+
+/* ── Vùng chạm tối thiểu 44px & trợ năng ─────────────────────────────────────
+ * Giữ nguyên kích thước hiển thị, chỉ nới vùng bấm bằng pseudo-element trong suốt
+ * (nút 32px → 44px, nút đóng 22px → 44px) để khỏi làm header phình to.
+ */
+.employee-shell {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.employee-shell__brand-mark,
+.employee-shell__avatar-btn,
+.install-banner__action,
+.install-banner__close {
+  position: relative;
+}
+
+.employee-shell__icon-btn::after,
+.employee-shell__avatar-btn::after,
+.install-banner__action::after {
+  content: '';
+  position: absolute;
+  inset: -0.375rem;
+}
+
+.employee-shell__brand-mark::after {
+  content: '';
+  position: absolute;
+  inset: -0.25rem;
+}
+
+.install-banner__close::after {
+  content: '';
+  position: absolute;
+  inset: -0.625rem;
+}
+
+/* Gợi ý cài trên iPhone dài hơn một dòng: cho xuống dòng thay vì cắt bằng dấu … */
+.install-banner__hint--wrap {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }

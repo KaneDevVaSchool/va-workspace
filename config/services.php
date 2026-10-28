@@ -104,6 +104,26 @@ return [
         'public_key' => env('VAPID_PUBLIC_KEY'),
         'private_key' => env('VAPID_PRIVATE_KEY'),
         'subject' => env('VAPID_SUBJECT', 'mailto:'.env('MAIL_FROM_ADDRESS', 'workspace@vaschools.edu.vn')),
+
+        /*
+        | Endpoint đăng ký push phải thuộc dịch vụ push của trình duyệt — server sẽ POST tới URL này,
+        | nên không nhận host tuỳ ý (chống SSRF). Mục bắt đầu bằng "." khớp mọi subdomain.
+        | Thêm host ở đây nếu có trình duyệt dùng dịch vụ push khác.
+        */
+        'allowed_hosts' => [
+            'fcm.googleapis.com',
+            'android.googleapis.com',
+            'updates.push.services.mozilla.com',
+            '.push.services.mozilla.com',
+            '.push.apple.com',
+            '.notify.windows.com',
+        ],
+
+        /*
+        | true: đẩy việc gửi push vào queue (cần queue worker chạy: `php artisan queue:work`),
+        | request gửi tin/thông báo không phải chờ push service. false: gửi ngay trong request.
+        */
+        'queue' => (bool) env('WEBPUSH_QUEUE', false),
     ],
 
     /*

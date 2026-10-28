@@ -39,15 +39,9 @@ $spaView = static function () {
 
 Route::get('/', $spaView);
 
-Route::get('/offline.html', function () {
-    $path = public_path('offline.html');
-    abort_unless(is_file($path), 404);
-
-    return response((string) file_get_contents($path), 200, [
-        'Content-Type' => 'text/html; charset=UTF-8',
-        'Cache-Control' => 'public, max-age=3600',
-    ]);
-});
+// /offline.html, /sw.js, /manifest.json là file tĩnh trong public/ — web server phục vụ trực tiếp
+// (Nginx/Apache chỉ đẩy sang Laravel khi file không tồn tại), nên KHÔNG đăng ký route ở đây.
+// Header cache của chúng đặt ở cấu hình web server: deploy/workspace.vaschools.edu.vn.conf.
 
 Route::get('/pdfjs-worker.mjs', function () {
     $path = public_path('vendor/pdfjs/pdf.worker.min.mjs');
@@ -60,60 +54,6 @@ Route::get('/pdfjs-worker.mjs', function () {
         'Content-Type' => 'text/javascript; charset=UTF-8',
         'Cache-Control' => 'public, max-age=86400',
     ]);
-});
-
-Route::get('/sw.js', function () {
-    $path = public_path('sw.js');
-    abort_unless(is_file($path), 404);
-
-    return response((string) file_get_contents($path), 200, [
-        'Content-Type' => 'application/javascript; charset=UTF-8',
-        'Service-Worker-Allowed' => '/',
-        'Cache-Control' => 'no-cache, no-store, must-revalidate',
-    ]);
-});
-
-Route::get('/manifest.json', function () {
-    $path = public_path('manifest.json');
-    abort_unless(is_file($path), 404);
-
-    $version = (string) config('app.pwa_icon_version', '1');
-    $appendIconVersion = static function (string $src) use ($version): string {
-        if ($src === '' || str_contains($src, '?')) {
-            return $src;
-        }
-
-        return $src.'?v='.rawurlencode($version);
-    };
-
-    /** @var array<string, mixed> $manifest */
-    $manifest = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
-
-    if (! empty($manifest['icons']) && is_array($manifest['icons'])) {
-        foreach ($manifest['icons'] as $i => $icon) {
-            if (is_array($icon) && isset($icon['src']) && is_string($icon['src'])) {
-                $manifest['icons'][$i]['src'] = $appendIconVersion($icon['src']);
-            }
-        }
-    }
-
-    if (! empty($manifest['shortcuts']) && is_array($manifest['shortcuts'])) {
-        foreach ($manifest['shortcuts'] as $si => $shortcut) {
-            if (! is_array($shortcut) || empty($shortcut['icons']) || ! is_array($shortcut['icons'])) {
-                continue;
-            }
-            foreach ($shortcut['icons'] as $ii => $icon) {
-                if (is_array($icon) && isset($icon['src']) && is_string($icon['src'])) {
-                    $manifest['shortcuts'][$si]['icons'][$ii]['src'] = $appendIconVersion($icon['src']);
-                }
-            }
-        }
-    }
-
-    return response()->json($manifest, 200, [
-        'Content-Type' => 'application/manifest+json; charset=UTF-8',
-        'Cache-Control' => 'no-cache, no-store, must-revalidate',
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 });
 
 /*

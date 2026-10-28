@@ -6,11 +6,12 @@
 // trên máy và báo đang đồng bộ lại.
 //
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import jsQR from 'jsqr';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { useRoute, useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import { showClientToast } from '@/lib/clientToast';
+import { onAppResume } from '@/lib/appResume';
+import { useOnlineStatus } from '@/composables/useOnlineStatus';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AttendanceGlyph from '../components/AttendanceGlyph.vue';
 import {
@@ -49,14 +50,42 @@ const HEADINGS = {
   code: 'Nhập mã',
 };
 
+// Câu hướng dẫn khi không lấy được vị trí / mở được camera (tiếng Việt phổ thông, nói rõ phải làm gì).
+const GEO_MESSAGES = {
+  denied: {
+    short: 'Chưa cho phép định vị',
+    long: 'Chưa cho phép định vị. Hãy bật quyền vị trí cho ứng dụng trong Cài đặt của máy, rồi bấm Thử lại.',
+  },
+  unavailable: {
+    short: 'Chưa xác định được vị trí',
+    long: 'Chưa xác định được vị trí. Hãy bật định vị (GPS) của máy hoặc ra nơi thoáng, rồi bấm Thử lại.',
+  },
+  timeout: {
+    short: 'Lấy vị trí quá lâu',
+    long: 'Lấy vị trí quá lâu. Bấm Thử lại, hoặc ra nơi thoáng để bắt tín hiệu tốt hơn.',
+  },
+  unsupported: {
+    short: 'Thiết bị không hỗ trợ định vị',
+    long: 'Thiết bị này không hỗ trợ định vị nên không chấm bằng GPS được.',
+  },
+};
+
+const CAMERA_HELP = {
+  denied: 'Chưa cho phép dùng camera. Hãy bật quyền camera cho ứng dụng trong Cài đặt của máy, rồi bấm Thử lại.',
+  busy: 'Camera đang được ứng dụng khác sử dụng. Đóng ứng dụng đó rồi bấm Thử lại.',
+  unavailable: 'Máy này không có camera dùng được.',
+};
+
 const auth = useAuthStore();
+const route = useRoute();
+const router = useRouter();
+const { online } = useOnlineStatus();
 const now = ref(new Date());
 const bodyRef = ref(null);
 const videoRef = ref(null);
 const qrVideoRef = ref(null);
 const qrCanvasRef = ref(null);
 const mapElRef = ref(null);
-const stack = ref(['home']);
 const punching = ref(false);
 const syncState = ref('idle');
 const syncIssueMessage = ref('');
@@ -99,11 +128,25 @@ let geoMarker = null;
 let geoRing = null;
 let wifiTimer = 0;
 let syncRetryTimer = 0;
+let stopResume = null;
+// Leaflet + jsQR chỉ tải khi vào màn GPS / QR, không đẩy vào bundle của trang chấm công.
+let L = null;
+let jsQR = null;
+let geoMapLoading = false;
 
 const registerPageRefresh = inject('employeePageRefreshRegister', null);
 let unregisterPageRefresh;
 
-const screen = computed(() => stack.value[stack.value.length - 1] || 'home');
+// Màn con (GPS, QR, mã…) lưu trong query `?step=` của router để nút Back của hệ thống (Android Back,
+// vuốt cạnh trên iOS) đóng màn con thay vì thoát cả trang chấm công. PWA không có nút Back của trình duyệt.
+const STEP_SCREENS = new Set(['face', 'gps', 'wifi', 'qr', 'code']);
+let stepEntries = 0;
+
+const screen = computed(() => {
+  const step = typeof route.query.step === 'string' ? route.query.step : '';
+  if (step === 'success' && lastResult.value) return 'success';
+  return STEP_SCREENS.has(step) ? step : 'home';
+});
 const showHead = computed(() => !['home', 'success'].includes(screen.value));
 const headTitle = computed(() => HEADINGS[screen.value] || 'Chấm công');
 
@@ -163,8 +206,14 @@ const geoBanner = computed(() => {
   if (geoState.value === 'pending') {
     return { tone: 'ok', text: 'Đang kiểm tra vị trí thiết bị…' };
   }
+  const failure = GEO_MESSAGES[geoState.value];
+  if (failure) {
+    return { tone: 'info', text: `${failure.short} — vẫn chấm được bằng nút, WiFi hoặc mã` };
+  }
   return { tone: 'info', text: 'Chưa bật định vị — vẫn chấm được bằng nút, WiFi hoặc mã' };
 });
+const geoCanRetry = computed(() => Boolean(GEO_MESSAGES[geoState.value]) && geoState.value !== 'unsupported');
+const geoLongMessage = computed(() => GEO_MESSAGES[geoState.value]?.long || 'Cần quyền vị trí để chấm bằng GPS.');
 const weatherGlyph = computed(() => {
   const code = weather.value?.code;
   if (code == null || code === 0) return 'sun';
@@ -174,8 +223,12 @@ const weatherGlyph = computed(() => {
 const faceCaption = computed(() => {
   if (cameraState.value === 'live') return 'Đưa mặt vào khung hình và giữ nguyên';
   if (cameraState.value === 'connecting') return 'Đang mở camera…';
+  if (CAMERA_HELP[cameraState.value]) return 'Không mở được camera';
   return 'Đưa mặt vào khung khi camera Hanet sẵn sàng';
 });
+const faceHelpText = computed(() => CAMERA_HELP[cameraState.value] || '');
+const faceCanRetry = computed(() => ['denied', 'busy'].includes(cameraState.value));
+const qrCanRetry = computed(() => ['denied', 'busy'].includes(qrState.value));
 const faceStatus = computed(() => {
   if (cameraState.value === 'live') return 'Đang xem trước camera';
   if (cameraState.value === 'connecting') return 'Đang kết nối camera Hanet...';
@@ -185,7 +238,8 @@ const qrCaption = computed(() => {
   if (qrState.value === 'found') return 'Đã nhận diện mã QR, đang ghi nhận...';
   if (qrState.value === 'live') return 'Đưa mã QR vào giữa khung hình';
   if (qrState.value === 'connecting') return 'Đang mở camera…';
-  if (qrState.value === 'denied') return 'Chưa cấp quyền camera — nhập mã thủ công bên dưới';
+  if (qrState.value === 'denied') return 'Chưa cấp quyền camera — nhập mã thủ công bên dưới, hoặc cho phép camera rồi bấm Thử lại';
+  if (qrState.value === 'busy') return 'Camera đang được ứng dụng khác dùng — nhập mã thủ công bên dưới, hoặc đóng ứng dụng đó rồi bấm Thử lại';
   if (qrState.value === 'unavailable') return 'Thiết bị không hỗ trợ camera — nhập mã thủ công bên dưới';
   return 'Đưa mã QR tại điểm chấm công vào khung hình';
 });
@@ -197,7 +251,7 @@ const screenSubtitle = computed(() => {
   if (screen.value === 'code') return 'Dành cho trường hợp đặc biệt';
   return '';
 });
-const qrFallback = computed(() => ['denied', 'unavailable'].includes(qrState.value));
+const qrFallback = computed(() => ['denied', 'busy', 'unavailable'].includes(qrState.value));
 const wifiCaption = computed(() => (
   wifiState.value === 'connected' ? 'Đã kết nối WiFi công ty' : 'Đang kiểm tra kết nối…'
 ));
@@ -223,6 +277,10 @@ const resultGlyph = computed(() => {
   return METHODS.find((item) => item.id === id)?.glyph || 'check';
 });
 
+watch(() => route.query.step, (step) => {
+  if (!step) stepEntries = 0;
+});
+
 watch(codeValue, () => {
   codeError.value = '';
 });
@@ -236,11 +294,15 @@ watch(screen, (value, prev) => {
   else if (prev === 'face') stopCamera();
   if (value === 'qr') startQrCamera();
   else if (prev === 'qr') stopQrCamera();
-  if (value === 'gps') nextTick(() => initGeoMap());
-  else if (prev === 'gps') destroyGeoMap();
+  if (value === 'gps') {
+    nextTick(() => initGeoMap());
+    // Chỉ xin quyền vị trí khi người dùng thật sự mở màn GPS (trước đây hỏi ngay lúc mở trang chấm công).
+    if (geoState.value === 'idle') requestLocation();
+  } else if (prev === 'gps') destroyGeoMap();
   if (value === 'wifi') startWifiCheck();
   else if (prev === 'wifi') stopWifiCheck();
-}, { flush: 'post' });
+// immediate: tải lại trang khi đang ở `?step=gps` (hoặc mở thẳng link) vẫn phải khởi tạo bản đồ/camera của màn đó.
+}, { flush: 'post', immediate: true });
 
 watch(coords, (value) => {
   if (value) updateGeoMap(value);
@@ -256,12 +318,20 @@ onMounted(() => {
     }
   }, 45000);
   void hydrateTodayFromHrm();
-  requestLocation();
+  requestLocationIfAlreadyAllowed();
+  stopResume = onAppResume(() => {
+    // Có mạng lại / quay lại app: đẩy ngay lần chấm đang chờ lên HRM thay vì đợi nhịp 45 giây.
+    if (syncState.value === 'pending' && hasAnyPunch(readEmployeeAttendanceToday())) {
+      void hydrateTodayFromHrm();
+    }
+  });
+  document.addEventListener('visibilitychange', onVisibilityChange);
   if (typeof registerPageRefresh === 'function') {
     unregisterPageRefresh = registerPageRefresh(async () => {
       await hydrateTodayFromHrm();
       now.value = new Date();
-      if (geoState.value !== 'pending') await requestLocation();
+      // Làm mới vị trí chỉ khi đã được cấp quyền — kéo để làm mới không được bật hộp thoại xin quyền.
+      if (geoState.value === 'granted') await requestLocation();
     });
   }
 });
@@ -274,7 +344,20 @@ onBeforeUnmount(() => {
   destroyGeoMap();
   stopWifiCheck();
   unregisterPageRefresh?.();
+  stopResume?.();
+  document.removeEventListener('visibilitychange', onVisibilityChange);
 });
+
+// App xuống nền: tắt camera ngay (riêng tư + tiết kiệm pin); quay lại thì mở lại đúng màn đang xem.
+function onVisibilityChange() {
+  if (document.hidden) {
+    if (screen.value === 'face') stopCamera();
+    if (screen.value === 'qr') stopQrCamera();
+    return;
+  }
+  if (screen.value === 'face') startCamera();
+  if (screen.value === 'qr') startQrCamera();
+}
 
 function formatHm(date) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
@@ -291,18 +374,35 @@ function scrollTop() {
   });
 }
 
+function queryWithStep(step) {
+  const query = { ...route.query };
+  if (step) query.step = step;
+  else delete query.step;
+  return { query };
+}
+
 function push(next) {
-  stack.value = [...stack.value, next];
+  stepEntries += 1;
+  router.push(queryWithStep(next)).catch(() => {});
   scrollTop();
 }
 
 function back() {
-  stack.value = stack.value.length > 1 ? stack.value.slice(0, -1) : ['home'];
+  if (stepEntries > 0) {
+    router.back();
+  } else if (route.query.step) {
+    router.replace(queryWithStep(null)).catch(() => {});
+  }
   scrollTop();
 }
 
 function goHome() {
-  stack.value = ['home'];
+  if (stepEntries > 0) {
+    // Quay về đúng mục lịch sử của trang chủ chấm công thay vì chồng thêm mục mới.
+    router.go(-stepEntries);
+  } else if (route.query.step) {
+    router.replace(queryWithStep(null)).catch(() => {});
+  }
   scrollTop();
 }
 
@@ -469,7 +569,13 @@ async function commitPunch(methodId) {
     dateLabel: formatLongDate(fresh),
     synced,
   };
-  stack.value = ['home', 'success'];
+  if (route.query.step) {
+    // Thay mục của màn con (GPS/QR…) bằng màn kết quả: Back từ kết quả về thẳng trang chủ.
+    router.replace(queryWithStep('success')).catch(() => {});
+  } else {
+    stepEntries += 1;
+    router.push(queryWithStep('success')).catch(() => {});
+  }
   scrollTop();
   if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(12);
 }
@@ -519,7 +625,10 @@ async function retrySyncNow() {
 async function punchGps() {
   if (geoState.value !== 'granted') {
     const ok = await requestLocation();
-    if (!ok) return;
+    if (!ok) {
+      showClientToast('warning', geoLongMessage.value);
+      return;
+    }
   }
   askPunch('gps');
 }
@@ -577,13 +686,30 @@ function requestLocation() {
         loadWeather(position.coords.latitude, position.coords.longitude);
         resolve(true);
       },
-      () => {
-        geoState.value = 'denied';
+      (error) => {
+        // 1 = từ chối quyền, 2 = không xác định được vị trí, 3 = quá thời gian
+        geoState.value = error?.code === 1 ? 'denied' : error?.code === 3 ? 'timeout' : 'unavailable';
         resolve(false);
       },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 },
     );
   });
+}
+
+/**
+ * Mở trang chấm công không được bật hộp thoại xin quyền khi người dùng chưa hề chọn GPS
+ * (iOS còn hỏi lại mỗi lần mở app). Chỉ lấy vị trí ngầm khi quyền đã được cấp từ trước.
+ */
+async function requestLocationIfAlreadyAllowed() {
+  // Đã có yêu cầu vị trí (vd. mở thẳng màn GPS) thì không hỏi thêm lần nữa.
+  if (geoState.value !== 'idle') return geoState.value === 'granted';
+  try {
+    const status = await navigator.permissions?.query?.({ name: 'geolocation' });
+    if (status && status.state !== 'granted') return false;
+  } catch {
+    // Trình duyệt không hỗ trợ Permissions API cho vị trí — dùng cách cũ.
+  }
+  return requestLocation();
 }
 
 async function loadWeather(latitude, longitude) {
@@ -602,14 +728,32 @@ async function loadWeather(latitude, longitude) {
   }
 }
 
-function initGeoMap() {
-  if (geoMap || !mapElRef.value) return;
+async function initGeoMap() {
+  if (geoMap || geoMapLoading || !mapElRef.value) return;
+  geoMapLoading = true;
+  try {
+    if (!L) {
+      const [leaflet] = await Promise.all([
+        import('leaflet'),
+        import('leaflet/dist/leaflet.css'),
+      ]);
+      L = leaflet.default;
+    }
+  } catch {
+    // Mất mạng lúc tải bản đồ: màn GPS vẫn dùng được, chỉ không có hình bản đồ.
+    return;
+  } finally {
+    geoMapLoading = false;
+  }
+  // Người dùng có thể đã rời màn GPS trong lúc tải.
+  if (geoMap || screen.value !== 'gps' || !mapElRef.value) return;
   const fallback = { lat: 21.0278, lon: 105.8342 };
   const point = coords.value || fallback;
   geoMap = L.map(mapElRef.value, {
     attributionControl: false,
     zoomControl: false,
-    dragging: true,
+    // Trên cảm ứng, kéo bằng một ngón làm kẹt thao tác cuộn trang; bản đồ chỉ để xem vị trí.
+    dragging: !L.Browser.touch,
     scrollWheelZoom: false,
   }).setView([point.lat, point.lon], coords.value ? 17 : 13);
 
@@ -690,9 +834,16 @@ async function startCamera() {
     if (token !== cameraToken || !videoRef.value) return;
     videoRef.value.srcObject = stream;
     await videoRef.value.play().catch(() => {});
-  } catch {
-    if (token === cameraToken) cameraState.value = 'denied';
+  } catch (error) {
+    if (token === cameraToken) cameraState.value = classifyCameraError(error);
   }
+}
+
+function classifyCameraError(error) {
+  const name = error?.name;
+  if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError') return 'denied';
+  if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') return 'busy';
+  return 'unavailable';
 }
 
 function stopCamera() {
@@ -710,6 +861,7 @@ async function startQrCamera() {
   }
   qrState.value = 'connecting';
   try {
+    if (!jsQR) jsQR = (await import('jsqr')).default;
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: { facingMode: { ideal: 'environment' } },
@@ -726,23 +878,37 @@ async function startQrCamera() {
     if (token !== qrCameraToken) return;
     qrState.value = 'live';
     scanQrFrame(token);
-  } catch {
-    if (token === qrCameraToken) qrState.value = 'denied';
+  } catch (error) {
+    if (token === qrCameraToken) qrState.value = classifyCameraError(error);
   }
 }
 
+// Quét QR ở độ phân giải thấp (≤480px) và ~8 khung/giây: đọc nguyên khung hình camera ở mỗi frame vẽ
+// (jsQR chạy trên CPU) làm máy nóng, giật và hao pin mà mã QR chiếm khung vẫn đọc được.
+const QR_SCAN_MAX_SIDE = 480;
+const QR_SCAN_INTERVAL_MS = 120;
+let qrLastScanAt = 0;
+
 function scanQrFrame(token) {
-  qrScanFrame = requestAnimationFrame(() => {
+  qrScanFrame = requestAnimationFrame((timestamp) => {
     if (token !== qrCameraToken || qrState.value !== 'live') return;
+    if (timestamp - qrLastScanAt < QR_SCAN_INTERVAL_MS) {
+      scanQrFrame(token);
+      return;
+    }
+    qrLastScanAt = timestamp;
     const video = qrVideoRef.value;
     const canvas = qrCanvasRef.value;
-    if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
-      const width = video.videoWidth;
-      const height = video.videoHeight;
-      if (width && height) {
+    if (jsQR && video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
+      const sourceWidth = video.videoWidth;
+      const sourceHeight = video.videoHeight;
+      if (sourceWidth && sourceHeight) {
+        const ratio = Math.min(1, QR_SCAN_MAX_SIDE / Math.max(sourceWidth, sourceHeight));
+        const width = Math.max(1, Math.round(sourceWidth * ratio));
+        const height = Math.max(1, Math.round(sourceHeight * ratio));
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(video, 0, 0, width, height);
         const frame = ctx.getImageData(0, 0, width, height);
         const result = jsQR(frame.data, width, height, { inversionAttempts: 'dontInvert' });
@@ -952,13 +1118,18 @@ function stopQrCamera() {
             <span class="att-dot" :class="{ 'att-dot--wait': cameraState !== 'live' }"></span>
             {{ faceStatus }}
           </p>
+          <p v-if="faceHelpText" class="att-note" role="alert">{{ faceHelpText }}</p>
+          <button v-if="faceCanRetry" type="button" class="att-retry" @click="startCamera">Thử lại</button>
         </section>
 
         <section v-else-if="screen === 'gps'" class="att-stack">
           <div class="att-map">
             <div ref="mapElRef" class="att-map__canvas"></div>
             <span class="att-map__bubble">{{ placeLabel }}</span>
-            <span v-if="geoState === 'pending'" class="att-map__loading">
+            <span v-if="!online" class="att-map__loading">
+              <span>Đang không có mạng — bản đồ chưa tải được</span>
+            </span>
+            <span v-else-if="geoState === 'pending'" class="att-map__loading">
               <svg class="att-spin" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="14 42" stroke-linecap="round" />
               </svg>
@@ -980,9 +1151,10 @@ function stopQrCamera() {
             <span>
               {{ geoState === 'granted'
                 ? 'Đã lấy vị trí thiết bị. Vùng cho phép sẽ được đối chiếu khi nối máy chấm công.'
-                : 'Cần quyền vị trí để chấm bằng GPS.' }}
+                : geoLongMessage }}
             </span>
           </p>
+          <button v-if="geoCanRetry" type="button" class="att-retry" @click="requestLocation">Thử lại</button>
         </section>
 
         <section v-else-if="screen === 'wifi'" class="att-stack att-wifi">
@@ -1035,6 +1207,7 @@ function stopQrCamera() {
             </span>
           </div>
           <p class="att-lead">{{ qrCaption }}</p>
+          <button v-if="qrCanRetry" type="button" class="att-retry" @click="startQrCamera">Thử lại</button>
 
           <label v-if="qrFallback" class="att-code">
             <span>Mã QR (nhập thủ công)</span>
@@ -1496,6 +1669,17 @@ function stopQrCamera() {
   font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
+}
+
+.att-sync-retry {
+  position: relative;
+}
+
+/* Nút nhỏ trên hero: nới vùng chạm lên 44px mà không đổi kích thước hiển thị. */
+.att-sync-retry::after {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
 }
 
 .att-sync-retry:focus-visible {
@@ -2072,6 +2256,20 @@ function stopQrCamera() {
   color: var(--color-text);
   font-size: 0.8125rem;
   text-align: center;
+}
+
+.att-retry {
+  align-self: center;
+  min-height: 2.75rem;
+  padding: 0.5rem var(--space-5);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary-700);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .att-face__status {

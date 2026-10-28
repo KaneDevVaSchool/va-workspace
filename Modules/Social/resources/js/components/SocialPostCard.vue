@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { REACTIONS, reactionByType } from '../constants/reactions.js';
@@ -14,7 +14,7 @@ import SocialHistoryDialog from './SocialHistoryDialog.vue';
 import SocialImageGrid from './SocialImageGrid.vue';
 import SocialLinkPreviewCard from './SocialLinkPreviewCard.vue';
 import SocialPollBlock from './SocialPollBlock.vue';
-import SocialPostEditor from './SocialPostEditor.vue';
+import { whenRefReady } from '../lib/whenRefReady';
 import SocialReactionBursts from './SocialReactionBursts.vue';
 import SocialReactionList from './SocialReactionList.vue';
 import SocialReactionPicker from './SocialReactionPicker.vue';
@@ -42,6 +42,8 @@ const savingEdit = ref(false);
 const draftContent = ref('');
 const dismissedLinkPreviews = ref([]);
 const editorEmpty = ref(true);
+// TipTap + ProseMirror (~100KB gzip) chỉ tải khi thật sự mở khung soạn.
+const SocialPostEditor = defineAsyncComponent(() => import('./SocialPostEditor.vue'));
 const editorRef = ref(null);
 const showHistory = ref(false);
 const historyLoading = ref(false);
@@ -269,7 +271,7 @@ async function startEdit() {
   editorEmpty.value = !draftContent.value;
   editing.value = true;
   await nextTick();
-  editorRef.value?.focus();
+  (await whenRefReady(editorRef))?.focus();
 }
 
 function cancelEdit() {
@@ -447,6 +449,8 @@ onBeforeUnmount(() => {
           <img
             v-if="post.author.avatar_url"
             class="post-card__avatar"
+            loading="lazy"
+            decoding="async"
             :src="post.author.avatar_url"
             :alt="`Ảnh đại diện của ${post.author.name}`"
           />

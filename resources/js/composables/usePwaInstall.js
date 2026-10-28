@@ -4,6 +4,7 @@
 // 1 lần sớm trong vòng đời trang, trước khi component nào kịp mount.
 //
 import { computed, ref } from 'vue';
+import { isIosDevice } from '@/lib/employeeDeviceOs';
 import { isPwaStandalone, PWA_DISPLAY_MODE_MEDIA } from '@/lib/pwaStandalone';
 
 const DISMISSED_KEY = 'va-pwa-install-dismissed-at';
@@ -11,6 +12,8 @@ const DISMISS_SNOOZE_DAYS = 14;
 
 const deferredPrompt = ref(null);
 const installed = ref(false);
+/** Tăng mỗi lần ghi dấu "để sau" — localStorage không reactive nên computed cần tín hiệu này để tính lại. */
+const snoozeTick = ref(0);
 
 installed.value = isPwaStandalone();
 
@@ -51,10 +54,29 @@ function wasDismissedRecently() {
   }
 }
 
+function snooze() {
+  try {
+    localStorage.setItem(DISMISSED_KEY, String(Date.now()));
+  } catch {
+    // localStorage có thể bị chặn — bỏ qua, banner vẫn ẩn trong phiên này.
+  }
+  snoozeTick.value += 1;
+}
+
 export function usePwaInstall() {
-  const canInstall = computed(
-    () => Boolean(deferredPrompt.value) && !installed.value && !wasDismissedRecently(),
-  );
+  const canInstall = computed(() => {
+    // eslint-disable-next-line no-unused-expressions
+    snoozeTick.value;
+    return Boolean(deferredPrompt.value) && !installed.value && !wasDismissedRecently();
+  });
+
+  // iPhone/iPad không có beforeinstallprompt: người dùng phải tự bấm Chia sẻ → Thêm vào Màn hình chính,
+  // nên cần hướng dẫn bằng chữ. Chỉ hiện khi chưa cài và chưa bấm "để sau".
+  const showIosGuide = computed(() => {
+    // eslint-disable-next-line no-unused-expressions
+    snoozeTick.value;
+    return isIosDevice() && !installed.value && !wasDismissedRecently();
+  });
 
   async function promptInstall() {
     const prompt = deferredPrompt.value;
@@ -62,17 +84,15 @@ export function usePwaInstall() {
     prompt.prompt();
     const { outcome } = await prompt.userChoice;
     deferredPrompt.value = null;
+    // Người dùng từ chối hộp thoại của trình duyệt: đừng mời lại ngay ở lần mở app kế tiếp.
+    if (outcome !== 'accepted') snooze();
     return outcome === 'accepted';
   }
 
   function dismiss() {
-    try {
-      localStorage.setItem(DISMISSED_KEY, String(Date.now()));
-    } catch {
-      // localStorage có thể bị chặn — bỏ qua, banner vẫn ẩn trong phiên này.
-    }
+    snooze();
     deferredPrompt.value = null;
   }
 
-  return { canInstall, installed, promptInstall, dismiss };
+  return { canInstall, showIosGuide, installed, promptInstall, dismiss };
 }

@@ -1,11 +1,11 @@
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { MAX_ATTACHMENT_SIZE_BYTES, MAX_COMMENT_ATTACHMENTS } from '../constants/attachments.js';
 import SocialEmojiPicker from './SocialEmojiPicker.vue';
-import SocialPostEditor from './SocialPostEditor.vue';
+import { whenRefReady } from '../lib/whenRefReady';
 import SocialUploadCards from './SocialUploadCards.vue';
 
 const props = defineProps({
@@ -30,6 +30,8 @@ const pickerOpen = ref(false);
 const pickerPanel = ref('emoji');
 const expanded = ref(props.autoExpand || Boolean(props.mentionedUser));
 const fileInput = ref(null);
+// TipTap + ProseMirror (~100KB gzip) chỉ tải khi thật sự mở khung soạn.
+const SocialPostEditor = defineAsyncComponent(() => import('./SocialPostEditor.vue'));
 const editorRef = ref(null);
 const pickerWrap = ref(null);
 
@@ -45,10 +47,12 @@ onMounted(async () => {
 
 async function prepareEditor() {
   await nextTick();
+  const editor = await whenRefReady(editorRef);
+  if (!editor) return;
   if (props.mentionedUser) {
-    editorRef.value?.insertMention(props.mentionedUser, { replaceQuery: false, suffix: ': ' });
+    editor.insertMention(props.mentionedUser, { replaceQuery: false, suffix: ': ' });
   }
-  editorRef.value?.focus();
+  editor.focus();
 }
 
 async function expand() {
@@ -159,7 +163,7 @@ async function submit() {
       expanded.value = false;
     } else if (props.mentionedUser) {
       await nextTick();
-      editorRef.value?.insertMention(props.mentionedUser, { replaceQuery: false, suffix: ': ' });
+      (await whenRefReady(editorRef))?.insertMention(props.mentionedUser, { replaceQuery: false, suffix: ': ' });
     }
   } catch (error) {
     const message =

@@ -20,8 +20,11 @@ const trackedWorkers = new WeakSet();
 
 function listenControllerChange() {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  // Lần cài SW đầu tiên, clients.claim() cũng bắn controllerchange (từ "chưa có
+  // controller" sang SW mới) — đó không phải cập nhật, không được reload trang.
+  const hadController = Boolean(navigator.serviceWorker.controller);
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloaded) return;
+    if (!hadController || reloaded) return;
     reloaded = true;
     clearUpdatePrompt();
     window.location.reload();

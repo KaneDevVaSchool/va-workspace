@@ -9,6 +9,13 @@ import { searchUsers } from '@modules/Chat/resources/js/api/chatApi';
 
 const FEED_ROUTE = 'employee.feed';
 
+/** Vùng cuộn thật của shell mobile là `.employee-shell__content`, không phải window (window.scrollTo không làm gì). */
+function scrollFeedToTop() {
+  const scroller = document.querySelector('.employee-shell__content');
+  const target = scroller ?? window;
+  target.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 export function useEmployeeSocialFeed() {
   const auth = useAuthStore();
   const route = useRoute();
@@ -17,6 +24,8 @@ export function useEmployeeSocialFeed() {
   const posts = ref([]);
   const loading = ref(false);
   const loadingMore = ref(false);
+  /** Lỗi tải trang đầu khi chưa có bài nào để hiện — để hiện nút "Thử lại" thay vì trạng thái "chưa có bài". */
+  const loadError = ref('');
   const page = ref(1);
   const lastPage = ref(1);
   const searchQuery = inject('employeeFeedSearch', ref(''));
@@ -87,8 +96,12 @@ export function useEmployeeSocialFeed() {
 
   async function loadFeed(targetPage = 1) {
     const isFirstPage = targetPage === 1;
-    if (isFirstPage) loading.value = true;
-    else loadingMore.value = true;
+    if (isFirstPage) {
+      loading.value = true;
+      loadError.value = '';
+    } else {
+      loadingMore.value = true;
+    }
 
     try {
       const params = {
@@ -111,7 +124,11 @@ export function useEmployeeSocialFeed() {
       lastPage.value = data.last_page;
       hashtagTotal.value = data.total ?? 0;
     } catch {
-      showClientToast('error', 'Không thể tải bảng tin.');
+      if (isFirstPage && posts.value.length === 0) {
+        loadError.value = 'Không tải được bảng tin. Kiểm tra mạng rồi thử lại.';
+      } else {
+        showClientToast('error', 'Không thể tải bảng tin.');
+      }
     } finally {
       loading.value = false;
       loadingMore.value = false;
@@ -171,7 +188,7 @@ export function useEmployeeSocialFeed() {
     await loadWallProfile(userId);
     if (options.syncQuery !== false) replaceWallQuery(userId);
     if (!switching) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollFeedToTop();
     }
   }
 
@@ -318,7 +335,7 @@ export function useEmployeeSocialFeed() {
     delete query.post;
     delete query.comment;
     router.replace({ name: FEED_ROUTE, query });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollFeedToTop();
   }
 
   function onOpenHashtag(name) {
@@ -406,6 +423,7 @@ export function useEmployeeSocialFeed() {
     posts,
     loading,
     loadingMore,
+    loadError,
     page,
     lastPage,
     searchQuery,

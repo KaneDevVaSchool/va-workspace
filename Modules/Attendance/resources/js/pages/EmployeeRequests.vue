@@ -261,13 +261,38 @@ async function loadRequests() {
   }
 }
 
+// Mở chi tiết thì thêm một mục lịch sử (`?sheet=1`) để nút Back của hệ thống đóng bảng chi tiết
+// thay vì rời cả trang — PWA không có nút Back của trình duyệt.
+let sheetEntryPushed = false;
+
 function openDetail(request) {
   selected.value = request;
+  if (sheetEntryPushed) return;
+  sheetEntryPushed = true;
+  router
+    .push({ name: 'employee.requests', query: { ...route.query, sheet: '1' } })
+    .catch(() => {});
 }
 
 function closeDetail() {
   selected.value = null;
+  if (!sheetEntryPushed) return;
+  sheetEntryPushed = false;
+  // Đóng bằng nút trong app: gỡ mục lịch sử đã thêm.
+  if (route.query.sheet) router.back();
 }
+
+watch(() => route.query.sheet, (sheet) => {
+  // Người dùng bấm Back của hệ thống: mục lịch sử bị gỡ → đóng bảng chi tiết.
+  if (sheet || !sheetEntryPushed) return;
+  sheetEntryPushed = false;
+  selected.value = null;
+});
+
+onBeforeUnmount(() => {
+  // Rời trang: không được gọi router.back() từ closeDetail nữa.
+  sheetEntryPushed = false;
+});
 
 async function refreshPage() {
   refreshHubAttendanceCount();
@@ -403,7 +428,7 @@ onBeforeUnmount(() => {
 
     <Teleport to="body">
       <div v-if="selected" class="sheet-overlay" @click.self="closeDetail">
-        <div class="sheet" role="dialog" aria-modal="true" :aria-label="selected.kind">
+        <div class="sheet hide-scrollbar" role="dialog" aria-modal="true" :aria-label="selected.kind">
           <div class="sheet__handle" aria-hidden="true"></div>
 
           <div class="sheet__header">

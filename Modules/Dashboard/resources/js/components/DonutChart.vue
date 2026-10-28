@@ -1,6 +1,6 @@
 <script setup>
-import ApexCharts from 'apexcharts';
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { loadApexCharts } from '../lib/loadApexCharts';
 
 const props = defineProps({
   labels: { type: Array, required: true }, // [{ value, label, color }]
@@ -14,6 +14,9 @@ const emit = defineEmits(['select']);
 
 const el = ref(null);
 let chart = null;
+// Mỗi lần vẽ có một số thứ tự: nếu trong lúc chờ tải thư viện lại có lần vẽ mới (hoặc component đã gỡ)
+// thì lần cũ bỏ dở, tránh tạo hai biểu đồ chồng lên nhau.
+let renderToken = 0;
 
 const hasData = () => (props.series ?? []).some((v) => v > 0);
 
@@ -53,7 +56,8 @@ function buildOptions() {
   };
 }
 
-function render() {
+async function render() {
+  const token = ++renderToken;
   if (!el.value) return;
   if (chart) {
     chart.destroy();
@@ -61,12 +65,23 @@ function render() {
   }
   if (!hasData()) return;
 
+  let ApexCharts;
+  try {
+    ApexCharts = await loadApexCharts();
+  } catch {
+    return; // mất mạng khi tải thư viện: để trống, lần cập nhật dữ liệu sau sẽ thử lại
+  }
+  if (token !== renderToken || !el.value) return;
+
   chart = new ApexCharts(el.value, { ...buildOptions(), series: props.series ?? [] });
   chart.render();
 }
 
 onMounted(() => nextTick(render));
-onBeforeUnmount(() => chart?.destroy());
+onBeforeUnmount(() => {
+  renderToken += 1;
+  chart?.destroy();
+});
 watch(() => [props.series, props.labels, props.selected], () => nextTick(render), { deep: true });
 </script>
 
@@ -80,6 +95,7 @@ watch(() => [props.series, props.labels, props.selected], () => nextTick(render)
 <style scoped>
 .donut-chart {
   width: 100%;
+  min-height: v-bind('height + "px"');
 }
 
 .donut-chart__empty {

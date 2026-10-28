@@ -265,3 +265,24 @@ svg {
   outline: 2px solid var(--color-sidebar-focus);
   outline-offset: 2px;
 }
+
+/* ---------- Trợ năng toàn cục ---------- */
+
+/* Người dùng bật "Giảm chuyển động" trong hệ điều hành: rút ngắn mọi hiệu ứng trang trí. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Viền focus cho bàn phím/trình đọc: `:where()` có độ ưu tiên bằng 0 nên mọi style focus riêng của
+   component (nếu có) vẫn thắng — chỉ lấp chỗ các nút chưa định nghĩa gì. */
+:where(button, a[href], [role='button'], [role='switch'], [role='tab'], summary):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}

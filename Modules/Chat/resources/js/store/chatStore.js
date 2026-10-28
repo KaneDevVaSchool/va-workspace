@@ -311,6 +311,11 @@ export const useChatStore = defineStore('chat', {
       if (this.activeConversationId === conversationId) {
         this.backToList();
       }
+      // Bị xoá khỏi nhóm / rời nhóm: rời kênh để không nhận tiếp tin của hội thoại này.
+      if (this.subscribedChannels.has(conversationId)) {
+        window.Echo?.leave(`chat.conversation.${conversationId}`);
+        this.subscribedChannels.delete(conversationId);
+      }
       this.conversations = this.conversations.filter((item) => item.id !== conversationId);
       const messages = { ...this.messagesByConversation };
       delete messages[conversationId];
@@ -383,6 +388,47 @@ export const useChatStore = defineStore('chat', {
         this.hasMoreByConversation = { ...this.hasMoreByConversation, [conversationId]: hasMore };
       } finally {
         this.loadingMessages = false;
+      }
+    },
+
+    /**
+     * Lấy trang tin mới nhất và ghép vào danh sách đang có (giữ phần cũ đã cuộn lên tải trước đó),
+     * để tin sửa/thu hồi trong lúc mất kết nối cũng được cập nhật.
+     */
+    async refreshLatestMessages(conversationId) {
+      const { messages } = await listMessages(conversationId, null);
+      const latest = messages.slice().reverse();
+      const latestIds = new Set(latest.map((message) => message.id));
+      const oldestLatestId = Number(latest[0]?.id ?? 0);
+      const existing = this.messagesByConversation[conversationId] ?? [];
+      const older = existing.filter(
+        (message) => !latestIds.has(message.id) && Number(message.id) < oldestLatestId,
+      );
+      this.messagesByConversation = {
+        ...this.messagesByConversation,
+        [conversationId]: [...older, ...latest],
+      };
+    },
+
+    /**
+     * App vừa quay lại (hết ẩn nền / có mạng lại): websocket có thể đã đứt và Reverb không phát lại
+     * tin đã lỡ → đồng bộ danh sách hội thoại, số chưa đọc, tin của hội thoại đang mở và hàng chờ gửi.
+     */
+    async refreshAfterResume() {
+      const auth = useAuthStore();
+      if (!auth.user?.id) return;
+
+      void this.flushOutbox();
+      this.beatPresence();
+
+      try {
+        await this.fetchConversations();
+      } catch {
+        return;
+      }
+
+      if (this.activeView === 'conversation' && this.activeConversationId) {
+        await this.refreshLatestMessages(this.activeConversationId).catch(() => {});
       }
     },
 
@@ -619,7 +665,8 @@ export const useChatStore = defineStore('chat', {
     subscribeInbox() {
       const auth = useAuthStore();
       const userId = auth.user?.id;
-      if (!window.Echo || !userId || this.inboxSubscribed) return;
+      // Kiểm tra userId TRƯỚC: chạm vào window.Echo là khởi tạo (và mở websocket) lần đầu.
+      if (!userId || this.inboxSubscribed || !window.Echo) return;
 
       window.Echo.private(`chat.inbox.${userId}`)
         .listen('.inbox.updated', (payload) => {

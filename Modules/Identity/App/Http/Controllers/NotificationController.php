@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Identity\App\Http\Requests\SubscribePushRequest;
+use Modules\Identity\App\Http\Requests\UnsubscribePushRequest;
 use Modules\Identity\App\Services\NotificationService;
 use Modules\Identity\App\Services\WebPushService;
 
@@ -89,14 +90,9 @@ class NotificationController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    public function unsubscribe(Request $request): JsonResponse
+    public function unsubscribe(UnsubscribePushRequest $request): JsonResponse
     {
-        $endpoint = (string) $request->input('endpoint', '');
-        if ($endpoint === '') {
-            return response()->json(['message' => 'Thiếu endpoint.'], 422);
-        }
-
-        $this->webPush->unsubscribe($request->user()->id, $endpoint);
+        $this->webPush->unsubscribe($request->user()->id, $request->validated()['endpoint']);
 
         return response()->json(['ok' => true]);
     }

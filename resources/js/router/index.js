@@ -100,6 +100,14 @@ function isStaleChunkError(error) {
 // Laravel fallback trả HTML → MIME text/html. Tải lại full page một lần.
 router.onError((error, to) => {
     if (typeof window === 'undefined' || !isStaleChunkError(error)) return;
+    // Mất mạng: chunk của trang chưa từng mở không có trong cache. Reload chỉ vô ích
+    // (và không báo gì cho người dùng) — nói rõ nguyên nhân thay vì im lặng.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        showClientToast('warning', 'Trang này cần kết nối mạng để mở lần đầu. Kiểm tra lại mạng rồi thử lại.', {
+            duration: 7000,
+        });
+        return;
+    }
     const target = to?.fullPath || `${window.location.pathname}${window.location.search}${window.location.hash}`;
     try {
         if (sessionStorage.getItem(STALE_CHUNK_RELOAD_KEY) === target) return;
@@ -140,6 +148,11 @@ router.beforeEach(async (to) => {
         await fetchMeForGuard(auth, to);
     } catch {
         // Mạng / server lỗi / timeout — không chặn isReady (PWA boot) vô hạn.
+        // Timeout của guard xảy ra khi request /api/me còn treo (store chưa kịp tự khôi phục):
+        // vào app bằng bản lưu gần nhất thay vì bị đẩy ra /login lúc mạng chập chờn.
+        if (!auth.user) {
+            auth.restoreSnapshot();
+        }
     }
 
     if (to.meta.requiresAuth && !auth.isAuthenticated) {

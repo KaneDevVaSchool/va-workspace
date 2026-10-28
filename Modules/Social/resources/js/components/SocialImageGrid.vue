@@ -72,7 +72,7 @@ watch(
           "
           @click="onTileClick(index, extraCount > 0 && index === visibleImages.length - 1)"
         >
-          <img :src="image.url" :alt="image.name || 'Ảnh đính kèm'" class="image-grid__image" />
+          <img :src="image.url" :alt="image.name || 'Ảnh đính kèm'" class="image-grid__image" loading="lazy" decoding="async" />
           <span
             v-if="extraCount > 0 && index === visibleImages.length - 1"
             class="image-grid__more"

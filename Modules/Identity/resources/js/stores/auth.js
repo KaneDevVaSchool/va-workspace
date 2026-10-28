@@ -1,5 +1,47 @@
 import { defineStore } from 'pinia';
 import { ensureCsrfCookie } from '@/bootstrap';
+import { isTransientClientNetworkError } from '@/lib/networkError';
+import { runBeforeLogout, runSessionCleanup } from '@/lib/sessionCleanup';
+
+// Bản lưu /api/me lần gần nhất để mở app khi mất mạng / server lỗi tạm thời, thay vì
+// bị đẩy ra /login. Xoá khi đăng xuất hoặc khi server báo hết phiên (401).
+const ME_SNAPSHOT_KEY = 'va-me-snapshot-v1';
+const ME_SNAPSHOT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
+function readMeSnapshot() {
+  try {
+    const raw = localStorage.getItem(ME_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.user?.id || !Number.isFinite(parsed.savedAt)) return null;
+    if (Date.now() - parsed.savedAt > ME_SNAPSHOT_MAX_AGE_MS) return null;
+    return parsed.user;
+  } catch {
+    return null;
+  }
+}
+
+function writeMeSnapshot(user) {
+  try {
+    localStorage.setItem(ME_SNAPSHOT_KEY, JSON.stringify({ user, savedAt: Date.now() }));
+  } catch {
+    // localStorage đầy/bị chặn — chỉ mất khả năng mở offline, không ảnh hưởng đăng nhập
+  }
+}
+
+function clearMeSnapshot() {
+  try {
+    localStorage.removeItem(ME_SNAPSHOT_KEY);
+  } catch {
+    // bỏ qua
+  }
+}
+
+/** Lỗi không phải do phiên: mất mạng, timeout, server 5xx. */
+function isRecoverableMeError(error) {
+  const status = error?.response?.status;
+  return isTransientClientNetworkError(error) || !status || status >= 500;
+}
 
 function userCanViewAs(user) {
   if (!user) {
@@ -20,6 +62,8 @@ export const useAuthStore = defineStore('auth', {
     user: null,
     isLoading: false,
     isReady: false,
+    /** true khi `user` lấy từ bản lưu cũ (đang offline / server chưa trả lời), chưa phải dữ liệu mới. */
+    offlineSnapshot: false,
   }),
 
   getters: {
@@ -164,6 +208,18 @@ export const useAuthStore = defineStore('auth', {
     resetSession() {
       this.user = null;
       this.isReady = false;
+      this.offlineSnapshot = false;
+      clearMeSnapshot();
+    },
+
+    /** Nạp user từ bản lưu gần nhất (khi chưa lấy được /api/me). Trả true nếu có bản dùng được. */
+    restoreSnapshot() {
+      const snapshot = readMeSnapshot();
+      if (!snapshot) return false;
+      this.user = snapshot;
+      this.offlineSnapshot = true;
+      this.isReady = true;
+      return true;
     },
 
     setUserFromApi(payload) {
@@ -172,6 +228,8 @@ export const useAuthStore = defineStore('auth', {
       }
       this.user = payload.user;
       this.isReady = true;
+      this.offlineSnapshot = false;
+      writeMeSnapshot(payload.user);
     },
 
     async fetchMe({ force = false } = {}) {
@@ -184,12 +242,24 @@ export const useAuthStore = defineStore('auth', {
         await ensureCsrfCookie();
         const { data } = await window.axios.get('/api/me');
         this.user = data;
+        this.offlineSnapshot = false;
+        writeMeSnapshot(data);
       } catch (error) {
-        this.user = null;
         if (error?.response?.status === 401) {
+          // Hết phiên thật: dọn dữ liệu của người dùng cũ (chỉ khi từng có phiên, tránh chạy mỗi lần khách mở trang).
+          const hadSession = this.user !== null || readMeSnapshot() !== null;
+          this.user = null;
+          this.offlineSnapshot = false;
+          clearMeSnapshot();
+          if (hadSession) void runSessionCleanup();
           this.isReady = true;
           return;
         }
+        // Mất mạng / server lỗi tạm: vào app bằng bản lưu gần nhất thay vì bị đẩy ra /login.
+        if (isRecoverableMeError(error) && this.restoreSnapshot()) {
+          return;
+        }
+        this.user = null;
         throw error;
       } finally {
         this.isLoading = false;
@@ -198,9 +268,13 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout() {
+      // Huỷ push của máy này TRƯỚC khi đăng xuất (cần phiên để gọi API) — máy dùng chung
+      // không được tiếp tục nhận thông báo của người vừa thoát.
+      await runBeforeLogout();
       await ensureCsrfCookie();
       await window.axios.post('/logout');
       this.resetSession();
+      await runSessionCleanup();
     },
 
     async viewAs(roleCode) {

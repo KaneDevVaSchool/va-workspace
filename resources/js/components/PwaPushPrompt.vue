@@ -12,9 +12,23 @@ import AppIcon from './AppIcon.vue';
 
 const auth = useAuthStore();
 
-const SESSION_DISMISS_KEY = 'va-pwa-push-prompt-dismissed';
+// "Để sau" nhớ lâu (như banner cài đặt) — trước đây chỉ nhớ trong phiên nên mỗi lần mở app
+// lại hiện lời mời che toàn màn hình.
+const DISMISSED_KEY = 'va-pwa-push-prompt-dismissed-at';
+const DISMISS_SNOOZE_DAYS = 14;
+
+function wasDismissedRecently() {
+  try {
+    const dismissedAt = Number(localStorage.getItem(DISMISSED_KEY));
+    if (!Number.isFinite(dismissedAt) || dismissedAt <= 0) return false;
+    return (Date.now() - dismissedAt) / (1000 * 60 * 60 * 24) < DISMISS_SNOOZE_DAYS;
+  } catch {
+    return false;
+  }
+}
 
 const open = ref(false);
+const snoozed = ref(wasDismissedRecently());
 
 const {
   permission,
@@ -24,6 +38,7 @@ const {
   vapidChecked,
   enabling,
   lastError,
+  optedOut,
   enablePush,
   showSystemNotification,
 } = useWebPush();
@@ -33,11 +48,8 @@ const canOffer = computed(() => {
   if (!isPwaStandalone()) return false;
   if (!pushSupported.value || !vapidChecked.value || !configured.value) return false;
   if (pushReady.value || permission.value === 'denied') return false;
-  try {
-    return sessionStorage.getItem(SESSION_DISMISS_KEY) !== '1';
-  } catch {
-    return true;
-  }
+  // Đã tắt thủ công trong chuông thông báo thì không mời lại.
+  return !snoozed.value && !optedOut.value;
 });
 
 function tryOpen() {
@@ -58,10 +70,11 @@ watch(canOffer, (ok) => {
 
 function dismissForSession() {
   try {
-    sessionStorage.setItem(SESSION_DISMISS_KEY, '1');
+    localStorage.setItem(DISMISSED_KEY, String(Date.now()));
   } catch {
-    // localStorage/sessionStorage có thể bị chặn
+    // localStorage có thể bị chặn — vẫn ẩn lời mời trong phiên này
   }
+  snoozed.value = true;
   open.value = false;
 }
 
@@ -268,6 +281,12 @@ async function onEnable() {
 .pwa-push-sheet-enter-from .pwa-push-prompt__sheet,
 .pwa-push-sheet-leave-to .pwa-push-prompt__sheet {
   transform: translateY(100%);
+}
+
+/* Màn không có tabbar (vd. khung chat) — không chừa khoảng trống phía dưới. */
+:global(html.employee-mobile-pwa:not(:has(.employee-tabbar--shell))) .pwa-push-prompt,
+:global(html.employee-mobile-browser:not(:has(.employee-tabbar--shell))) .pwa-push-prompt {
+  padding-bottom: var(--space-4);
 }
 
 @media (min-width: 769px) {

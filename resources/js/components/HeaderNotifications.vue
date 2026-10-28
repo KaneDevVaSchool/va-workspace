@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { formatRelativeTime } from '../lib/formatTime';
 import { showClientToast } from '../lib/clientToast';
+import { setAppBadgeCount } from '../lib/appBadge';
 import { useHeaderPopover } from '../composables/useHeaderPopover';
 import { useWebPush } from '../composables/useWebPush';
 import AppIcon from './AppIcon.vue';
@@ -16,6 +17,7 @@ const {
   permission,
   pushReady,
   pushSupported,
+  iosNeedsInstall,
   configured,
   vapidChecked,
   enabling,
@@ -30,6 +32,10 @@ const unreadCount = ref(0);
 const loading = ref(false);
 let pollTimer = null;
 let lastUnread = 0;
+/** Đã có số chưa đọc đầu tiên làm mốc so sánh (lần tải đầu không được coi là "thông báo mới"). */
+let hasUnreadBaseline = false;
+
+watch(unreadCount, (count) => setAppBadgeCount(count));
 
 const badgeLabel = computed(() => {
   if (unreadCount.value <= 0) return '';
@@ -43,6 +49,7 @@ const canTogglePush = computed(() => {
 });
 
 const pushHint = computed(() => {
+  if (iosNeedsInstall?.value) return 'Thêm VA Workspace vào Màn hình chính để nhận thông báo đẩy.';
   if (!pushSupported?.value) return '';
   if (permission?.value === 'denied') return 'Trình duyệt đang chặn thông báo đẩy.';
   if (vapidChecked?.value && !configured?.value) return 'Máy chủ chưa cấu hình thông báo đẩy.';
@@ -53,7 +60,17 @@ async function loadUnread() {
   try {
     const { data } = await window.axios.get('/api/notifications/unread-count');
     const next = data.unread_count ?? 0;
-    if (next > lastUnread && lastUnread > 0 && document.hidden && Notification.permission === 'granted') {
+    // Chỉ báo cục bộ khi chưa có push từ server — có push rồi thì báo thêm sẽ hiện đôi (tag khác nhau).
+    // `Notification` không tồn tại trên iOS Safari ngoài PWA: phải kiểm tra, nếu không sẽ ném lỗi
+    // và bỏ qua luôn bước cập nhật số chưa đọc bên dưới.
+    if (
+      hasUnreadBaseline
+      && next > lastUnread
+      && document.hidden
+      && !pushReady.value
+      && typeof Notification !== 'undefined'
+      && Notification.permission === 'granted'
+    ) {
       try {
         const latest = data.latest_unread;
         const isChat = latest?.type === 'chat_message';
@@ -71,6 +88,7 @@ async function loadUnread() {
     }
     lastUnread = next;
     unreadCount.value = next;
+    hasUnreadBaseline = true;
   } catch {
     // im lặng — chuông không được làm hỏng header
   }
@@ -83,6 +101,7 @@ async function loadList() {
     items.value = data.notifications ?? [];
     unreadCount.value = data.unread_count ?? 0;
     lastUnread = unreadCount.value;
+    hasUnreadBaseline = true;
   } catch {
     showClientToast('error', 'Không tải được thông báo.');
   } finally {
@@ -164,9 +183,15 @@ function stopPoll() {
   }
 }
 
+// PWA standalone trên iOS không bắn `focus` đáng tin khi quay lại app; `visibilitychange` thì có.
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') loadUnread();
+}
+
 onMounted(() => {
   document.addEventListener('mousedown', handleDocumentClick);
   document.addEventListener('keydown', handleDocumentKeydown);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
   window.addEventListener('focus', loadUnread);
   loadUnread();
   startPoll();
@@ -175,6 +200,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', handleDocumentClick);
   document.removeEventListener('keydown', handleDocumentKeydown);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
   window.removeEventListener('focus', loadUnread);
   stopPoll();
 });

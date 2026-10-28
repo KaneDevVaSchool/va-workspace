@@ -3,7 +3,8 @@
     "type": "module",
     "scripts": {
         "dev": "node ./node_modules/vite/bin/vite.js",
-        "build": "node ./node_modules/vite/bin/vite.js build"
+        "build": "node ./node_modules/vite/bin/vite.js build",
+        "test:sw": "node tests/sw_harness.cjs public/sw.js"
     },
     "devDependencies": {
         "@vitejs/plugin-vue": "^5.0.0",

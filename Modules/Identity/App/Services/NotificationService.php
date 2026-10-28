@@ -160,10 +160,7 @@ class NotificationService
         ?string $url,
         array $data,
     ): UserNotification {
-        $pushIcon = is_string($data['push_icon'] ?? null) ? $data['push_icon'] : null;
-        $pushTag = is_string($data['push_tag'] ?? null) ? $data['push_tag'] : null;
-        $pushImage = is_string($data['push_image'] ?? null) ? $data['push_image'] : null;
-        $pushBody = is_string($data['push_body'] ?? null) ? $data['push_body'] : null;
+        [$pushIcon, $pushTag, $pushImage, $pushBody] = $this->pushMeta($data);
         unset($data['push_icon'], $data['push_tag'], $data['push_image'], $data['push_body']);
 
         $notification = $this->notifications->create([
@@ -209,10 +206,7 @@ class NotificationService
         ?string $url,
         array $data = [],
     ): void {
-        $pushIcon = is_string($data['push_icon'] ?? null) ? $data['push_icon'] : null;
-        $pushTag = is_string($data['push_tag'] ?? null) ? $data['push_tag'] : null;
-        $pushImage = is_string($data['push_image'] ?? null) ? $data['push_image'] : null;
-        $pushBody = is_string($data['push_body'] ?? null) ? $data['push_body'] : null;
+        [$pushIcon, $pushTag, $pushImage, $pushBody] = $this->pushMeta($data);
 
         $extra = $pushBody !== null && $pushBody !== '' ? ['push_body' => $pushBody] : [];
 
@@ -229,6 +223,19 @@ class NotificationService
             null,
             $extra,
         );
+    }
+
+    /**
+     * Tách các khoá `push_*` (chỉ dành cho web push) khỏi dữ liệu thông báo.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{0: ?string, 1: ?string, 2: ?string, 3: ?string} [icon, tag, image, body]
+     */
+    private function pushMeta(array $data): array
+    {
+        $pick = static fn (string $key): ?string => is_string($data[$key] ?? null) ? $data[$key] : null;
+
+        return [$pick('push_icon'), $pick('push_tag'), $pick('push_image'), $pick('push_body')];
     }
 
     /**
@@ -274,7 +281,7 @@ class NotificationService
         }
 
         try {
-            $this->webPush->sendToUser($userId, $pushPayload);
+            $this->webPush->dispatchToUser($userId, $pushPayload);
         } catch (Throwable $e) {
             Log::warning('Web push failed.', [
                 'notification_id' => $notificationId,

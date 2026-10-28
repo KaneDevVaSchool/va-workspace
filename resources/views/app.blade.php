@@ -104,6 +104,33 @@
             window.setTimeout(function () {
                 var el = document.getElementById('app-boot');
                 if (!el || el.classList.contains('welcome--hide')) return;
+
+                // Bundle chưa chạy được (mất mạng / tải lỗi): đừng gỡ splash để lại trang trắng,
+                // hiện thông báo + nút tải lại. Nếu app mount muộn, dismissAppBoot sẽ gỡ cả khối này.
+                var mount = document.getElementById('app');
+                if (mount && mount.childElementCount === 0) {
+                    if (el.querySelector('[data-boot-failure]')) return;
+                    var box = document.createElement('div');
+                    box.setAttribute('data-boot-failure', '');
+                    box.setAttribute('role', 'alert');
+                    box.className = 'app-boot-failure';
+                    var msg = document.createElement('p');
+                    msg.className = 'app-boot-failure__text';
+                    msg.textContent = navigator.onLine === false
+                        ? 'Không có kết nối mạng. Kiểm tra lại mạng rồi tải lại ứng dụng.'
+                        : 'Ứng dụng tải chậm hoặc không tải được. Bạn thử tải lại nhé.';
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'app-boot-failure__btn';
+                    btn.textContent = 'Tải lại';
+                    btn.addEventListener('click', function () { window.location.reload(); });
+                    box.appendChild(msg);
+                    box.appendChild(btn);
+                    el.appendChild(box);
+                    window.addEventListener('online', function () { window.location.reload(); }, { once: true });
+                    return;
+                }
+
                 document.body.classList.remove('app-boot-active');
                 el.classList.add('welcome--hide');
                 window.setTimeout(function () { el.remove(); }, 480);
@@ -143,6 +170,44 @@
             height: var(--employee-shell-height, 100%);
             max-height: var(--employee-shell-height, 100%);
             background-color: #eef4f6;
+        }
+
+        /*
+         * Khối báo lỗi khi bundle không tải được (hiện sau 12s, xem script phía trên). Ưu tiên token theme;
+         * giá trị sau dấu phẩy chỉ là dự phòng vì chính lúc này theme.css có thể chưa tải được.
+         */
+        .app-boot-failure {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 99999;
+            box-sizing: border-box;
+            padding: 1.25rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+            border-radius: 1rem 1rem 0 0;
+            background: var(--color-surface, #ffffff);
+            color: var(--color-text, #1f2430);
+            font-family: var(--font-family-base, 'Be Vietnam Pro', sans-serif);
+            text-align: center;
+            box-shadow: var(--shadow-lg, 0 -4px 24px rgba(0, 0, 0, 0.12));
+        }
+
+        .app-boot-failure__text {
+            margin: 0 0 1rem;
+            font-size: 0.9375rem;
+            line-height: 1.5;
+        }
+
+        .app-boot-failure__btn {
+            min-height: 2.75rem;
+            padding: 0.75rem 1.5rem;
+            border: 0;
+            border-radius: 0.75rem;
+            background: var(--color-primary-900, #9a0036);
+            color: var(--color-on-primary, #ffffff);
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
         }
     </style>
     @vite(['resources/css/app.css', 'resources/css/pwa-standalone.css', 'resources/js/app.js'])

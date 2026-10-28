@@ -76,6 +76,8 @@ function onRemove(event) {
         :src="preview.thumbnail_url"
         alt=""
         class="link-preview__thumb-img link-preview__thumb-img--cover"
+        loading="lazy"
+        decoding="async"
       />
       <div v-else class="link-preview__article-fallback" aria-hidden="true">
         <img src="/images/pwa/icon-192.png" alt="" class="link-preview__article-logo" />
@@ -128,6 +130,8 @@ function onRemove(event) {
           :src="preview.thumbnail_url"
           alt=""
           class="link-preview__thumb-img"
+          loading="lazy"
+          decoding="async"
         />
         <span v-else class="link-preview__thumb-fallback" aria-hidden="true">
           <AppIcon name="video" :size="32" />

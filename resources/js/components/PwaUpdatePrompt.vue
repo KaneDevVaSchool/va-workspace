@@ -33,12 +33,18 @@ const { updateAvailable, applyUpdate } = usePwaUpdate();
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   border-radius: var(--radius-full);
   background: var(--color-text);
-  color: #fff;
+  color: var(--color-bg);
   box-shadow: var(--shadow-lg);
   max-width: calc(100vw - 2rem);
+}
+
+/* Màn không có tabbar (vd. khung chat) — không chừa khoảng trống phía dưới. */
+:global(html.employee-mobile-pwa:not(:has(.employee-tabbar--shell))) .pwa-update-bar,
+:global(html.employee-mobile-browser:not(:has(.employee-tabbar--shell))) .pwa-update-bar {
+  bottom: var(--space-4);
 }
 
 .pwa-update-bar__text {
@@ -51,7 +57,8 @@ const { updateAvailable, applyUpdate } = usePwaUpdate();
   appearance: none;
   border: none;
   border-radius: var(--radius-full);
-  padding: 0.5rem 1rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 1.25rem;
   background: var(--color-primary);
   color: var(--color-on-primary);
   font-family: inherit;

@@ -15,6 +15,28 @@ export function usePullToRefresh(scrollRef, onRefresh, options = {}) {
   let startY = 0;
   let tracking = false;
   let el = null;
+  let rafId = 0;
+  let pendingPull = 0;
+
+  // Gộp cập nhật theo frame: touchmove bắn nhanh hơn tốc độ vẽ, mỗi lần đổi pullY là một lần
+  // layout lại (chiều cao khối "kéo để làm mới" đẩy cả nội dung bên dưới).
+  function setPull(value) {
+    pendingPull = value;
+    if (rafId) return;
+    rafId = requestAnimationFrame(() => {
+      rafId = 0;
+      pullY.value = pendingPull;
+    });
+  }
+
+  function setPullNow(value) {
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    pendingPull = value;
+    pullY.value = value;
+  }
 
   function canStartPull() {
     if (refreshing.value) return false;
@@ -27,6 +49,9 @@ export function usePullToRefresh(scrollRef, onRefresh, options = {}) {
     if (!canStartPull()) return;
     startY = event.touches[0]?.clientY ?? 0;
     tracking = true;
+    // Listener không-passive chỉ tồn tại trong lúc kéo; cuộn bình thường vẫn dùng đường passive
+    // nên trình duyệt không phải chờ JS trước mỗi lần cuộn.
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
   }
 
   function onTouchMove(event) {
@@ -34,35 +59,39 @@ export function usePullToRefresh(scrollRef, onRefresh, options = {}) {
     const y = event.touches[0]?.clientY ?? 0;
     const delta = y - startY;
     if (delta <= 0) {
-      pullY.value = 0;
+      setPull(0);
       return;
     }
     if (el && el.scrollTop > 0) {
       tracking = false;
-      pullY.value = 0;
+      el.removeEventListener('touchmove', onTouchMove);
+      setPullNow(0);
       return;
     }
     const damped = Math.min(MAX_PULL, delta * 0.45);
-    pullY.value = damped;
+    setPull(damped);
     if (damped > 8) {
       event.preventDefault();
     }
   }
 
   async function onTouchEnd() {
+    el?.removeEventListener('touchmove', onTouchMove);
     if (!tracking) return;
     tracking = false;
-    if (pullY.value >= threshold && typeof onRefresh === 'function') {
+    // Giá trị kéo cuối cùng có thể còn đang chờ frame tiếp theo.
+    const finalPull = pendingPull;
+    if (finalPull >= threshold && typeof onRefresh === 'function') {
       refreshing.value = true;
-      pullY.value = threshold * 0.65;
+      setPullNow(threshold * 0.65);
       try {
         await onRefresh();
       } finally {
         refreshing.value = false;
-        pullY.value = 0;
+        setPullNow(0);
       }
     } else {
-      pullY.value = 0;
+      setPullNow(0);
     }
   }
 
@@ -71,7 +100,6 @@ export function usePullToRefresh(scrollRef, onRefresh, options = {}) {
     el = target;
     if (!el) return;
     el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: false });
     el.addEventListener('touchend', onTouchEnd);
     el.addEventListener('touchcancel', onTouchEnd);
   }
@@ -82,6 +110,10 @@ export function usePullToRefresh(scrollRef, onRefresh, options = {}) {
     el.removeEventListener('touchmove', onTouchMove);
     el.removeEventListener('touchend', onTouchEnd);
     el.removeEventListener('touchcancel', onTouchEnd);
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
     el = null;
   }
 

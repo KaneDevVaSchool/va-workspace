@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref } from 'vue';
+import { computed, defineAsyncComponent, nextTick, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
@@ -8,7 +8,6 @@ import SocialDepartmentVisibilityPicker from './SocialDepartmentVisibilityPicker
 import SocialEmojiPicker from './SocialEmojiPicker.vue';
 import SocialLinkPreviewCard from './SocialLinkPreviewCard.vue';
 import SocialPollDialog from './SocialPollDialog.vue';
-import SocialPostEditor from './SocialPostEditor.vue';
 import SocialUploadCards from './SocialUploadCards.vue';
 
 const props = defineProps({
@@ -33,6 +32,8 @@ const gifAttachments = ref([]);
 const submitting = ref(false);
 const expanded = ref(false);
 const fileInput = ref(null);
+// TipTap + ProseMirror (~100KB gzip) chỉ tải khi thật sự mở khung soạn.
+const SocialPostEditor = defineAsyncComponent(() => import('./SocialPostEditor.vue'));
 const editorRef = ref(null);
 const pickerOpen = ref(false);
 const pickerPanel = ref('emoji');
