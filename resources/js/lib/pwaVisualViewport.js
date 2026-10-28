@@ -2,6 +2,7 @@
 // Co khung AppShell theo visualViewport CHỈ khi bàn phím mở (PWA UI / BottomSheet:
 // tránh double inset — shell full màn + footer giữ safe-bottom một lần).
 //
+import { isIosDevice } from './employeeDeviceOs';
 import { syncEmployeeShellHeight } from './employeeMobileViewport';
 import { isPwaStandalone } from './pwaStandalone';
 
@@ -13,7 +14,22 @@ export const PWA_VV_WIDTH = '--pwa-vv-width';
 export const PWA_VV_KEYBOARD_CLASS = 'pwa-vv-keyboard';
 
 /** @type {number} px — co khung khi layout cao hơn visual viewport (keyboard / zoom UI). */
-const KEYBOARD_INSET_THRESHOLD = 72;
+const KEYBOARD_INSET_THRESHOLD = 48;
+
+const CHAT_COMPOSER_INPUT_SELECTOR = 'textarea.chat-view__input';
+
+function isEmployeeMobileShell() {
+  if (typeof document === 'undefined') return false;
+  const root = document.documentElement;
+  return (
+    root.classList.contains('employee-mobile-pwa')
+    || root.classList.contains('employee-mobile-browser')
+  );
+}
+
+function shouldSyncVisualViewportKeyboard() {
+  return isPwaStandalone() || isEmployeeMobileShell();
+}
 
 const VV_PROPS = [PWA_VV_HEIGHT, PWA_VV_OFFSET_TOP, PWA_VV_OFFSET_LEFT, PWA_VV_WIDTH];
 
@@ -32,7 +48,7 @@ function setKeyboardFrame(active) {
 
 export function syncPwaVisualViewport() {
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
-  if (!isPwaStandalone()) {
+  if (!shouldSyncVisualViewportKeyboard()) {
     clearPwaVisualViewport();
     setKeyboardFrame(false);
     return;
@@ -53,7 +69,12 @@ export function syncPwaVisualViewport() {
   const offsetLeft = Math.max(0, Math.round(vv.offsetLeft));
   const width = Math.max(0, Math.round(vv.width));
   const keyboardInset = layoutHeight - height - offsetTop;
-  const keyboardOpen = keyboardInset >= KEYBOARD_INSET_THRESHOLD;
+  const composerFocused =
+    typeof document !== 'undefined'
+    && document.activeElement?.matches?.(CHAT_COMPOSER_INPUT_SELECTOR);
+  const keyboardOpen =
+    keyboardInset >= KEYBOARD_INSET_THRESHOLD
+    || (composerFocused && keyboardInset >= 20);
 
   if (!keyboardOpen) {
     clearPwaVisualViewport();
@@ -63,6 +84,10 @@ export function syncPwaVisualViewport() {
   }
 
   setKeyboardFrame(true);
+
+  if (isIosDevice() && (offsetTop > 0 || composerFocused)) {
+    window.scrollTo(0, 0);
+  }
 
   if (height > 0) {
     root.style.setProperty(PWA_VV_HEIGHT, `${height}px`);
@@ -86,7 +111,7 @@ export function syncPwaVisualViewport() {
 let bound = false;
 
 export function bootstrapPwaVisualViewport() {
-  if (typeof window === 'undefined' || !isPwaStandalone()) return;
+  if (typeof window === 'undefined') return;
   if (bound) {
     syncPwaVisualViewport();
     return;

@@ -4,7 +4,10 @@ import { sendTyping, touchViewing } from '../api/chatApi';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { showClientToast } from '@/lib/clientToast';
-import { syncEmployeeMobileViewport } from '@/composables/useEmployeeMobileViewport';
+import {
+  burstEmployeeMobileViewport,
+  syncEmployeeMobileViewport,
+} from '@/composables/useEmployeeMobileViewport';
 import { warmStickerAssets } from '@modules/Social/resources/js/lib/socialStickers.js';
 import { formatRelativeTime, formatTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
@@ -356,8 +359,7 @@ function togglePicker(panel) {
 
 function scheduleViewportForKeyboard() {
   syncEmployeeMobileViewport();
-  window.setTimeout(syncEmployeeMobileViewport, 80);
-  window.setTimeout(syncEmployeeMobileViewport, 280);
+  burstEmployeeMobileViewport(780);
 }
 
 function onInputFocus() {
@@ -371,6 +373,7 @@ function onInputFocus() {
 
 function onInputBlur() {
   window.setTimeout(syncEmployeeMobileViewport, 120);
+  window.setTimeout(syncEmployeeMobileViewport, 360);
 }
 
 function startReply(message) {

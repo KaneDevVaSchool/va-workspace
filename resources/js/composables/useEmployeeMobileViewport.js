@@ -9,15 +9,25 @@ import {
   employeeShellViewportMode,
   syncEmployeeShellHeight,
 } from '@/lib/employeeMobileViewport';
-import { isPwaStandalone } from '@/lib/pwaStandalone';
 import { syncPwaVisualViewport } from '@/lib/pwaVisualViewport';
 
 export function syncEmployeeMobileViewport() {
-  if (isPwaStandalone()) {
-    syncPwaVisualViewport();
-  }
+  syncPwaVisualViewport();
   syncEmployeeShellHeight();
   syncEmployeeSafeAreaInsets();
+}
+
+/** Ép đồng bộ nhiều frame — bàn phím iOS/Safari báo visualViewport trễ. */
+export function burstEmployeeMobileViewport(durationMs = 720) {
+  if (typeof window === 'undefined') return;
+  const end = performance.now() + durationMs;
+  const tick = () => {
+    syncEmployeeMobileViewport();
+    if (performance.now() < end) {
+      requestAnimationFrame(tick);
+    }
+  };
+  requestAnimationFrame(tick);
 }
 
 export function useEmployeeMobileViewport() {

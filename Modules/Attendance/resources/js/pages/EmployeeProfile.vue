@@ -543,9 +543,13 @@ onBeforeUnmount(() => {
           class="emp-profile__avatar-input"
           @change="onAvatarSelected"
         />
-      </div>
-      <div v-if="subtitleChips.length" class="emp-profile__chips">
-        <span v-for="chip in subtitleChips" :key="chip" class="emp-profile__chip">{{ chip }}</span>
+        <div class="emp-profile__hub-body">
+          <h2 class="emp-profile__hub-name">{{ displayName || 'Hồ sơ của tôi' }}</h2>
+          <p v-if="subtitle" class="emp-profile__hub-subtitle">{{ subtitle }}</p>
+          <div v-if="subtitleChips.length" class="emp-profile__chips">
+            <span v-for="chip in subtitleChips" :key="chip" class="emp-profile__chip">{{ chip }}</span>
+          </div>
+        </div>
       </div>
       <button
         v-if="canRequestProfileChanges"
@@ -816,9 +820,35 @@ onBeforeUnmount(() => {
 }
 
 .emp-profile__hub-top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.emp-profile__hub-body {
+  min-width: 0;
   display: flex;
-  justify-content: center;
-  align-items: center;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: flex-start;
+  text-align: left;
+}
+
+.emp-profile__hub-name {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--color-text);
+}
+
+.emp-profile__hub-subtitle {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
 }
 
 .emp-profile__chips {
@@ -1107,12 +1137,12 @@ onBeforeUnmount(() => {
 
 .emp-profile__hero-body {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-3);
+  align-items: center;
   padding: var(--space-5) var(--space-4) var(--space-4);
-  text-align: center;
+  text-align: left;
 }
 
 .emp-profile__avatar-btn {
@@ -1580,8 +1610,14 @@ onBeforeUnmount(() => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-1);
+}
+
+.emp-profile__hero--loading .emp-profile__hero-body {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  text-align: left;
 }
 
 .emp-profile__sk-line {
