@@ -130,9 +130,6 @@ function initial(name) {
         aria-labelledby="chat-group-title"
       >
         <div class="chat-group__head">
-          <span class="chat-group__icon" aria-hidden="true">
-            <AppIcon name="users" :size="22" :stroke-width="1.75" />
-          </span>
           <h2 id="chat-group-title" class="chat-group__heading">Tạo nhóm</h2>
           <button type="button" class="chat-group__close" aria-label="Đóng" :disabled="saving" @click="close">
             <AppIcon name="close" :size="16" />
@@ -140,8 +137,8 @@ function initial(name) {
         </div>
 
         <div class="chat-group__body hide-scrollbar">
-          <form id="chat-group-form" class="chat-group__grid" @submit.prevent="submit">
-            <label class="chat-group__field chat-group__field--wide">
+          <form id="chat-group-form" class="chat-group__form" @submit.prevent="submit">
+            <label class="chat-group__field">
               <span class="chat-group__label">Tên nhóm</span>
               <input
                 v-model="title"
@@ -154,8 +151,23 @@ function initial(name) {
               />
             </label>
 
-            <label class="chat-group__field chat-group__field--wide">
-              <span class="chat-group__label">Thành viên</span>
+            <div v-if="selected.length > 0" class="chat-group__chips hide-scrollbar" aria-label="Thành viên đã chọn">
+              <span v-for="user in selected" :key="user.id" class="chat-group__chip">
+                <span class="chat-group__chip-name">{{ user.name }}</span>
+                <button
+                  type="button"
+                  class="chat-group__chip-remove"
+                  :aria-label="`Bỏ ${user.name}`"
+                  @click="removeUser(user.id)"
+                >
+                  <AppIcon name="close" :size="12" />
+                </button>
+              </span>
+            </div>
+            <p v-else class="chat-group__hint">Chọn ít nhất một thành viên.</p>
+
+            <label class="chat-group__field">
+              <span class="chat-group__label">Thêm thành viên</span>
               <span class="chat-group__search">
                 <AppIcon name="search" :size="16" :stroke-width="1.75" />
                 <input
@@ -168,56 +180,30 @@ function initial(name) {
               </span>
             </label>
 
-            <div class="chat-group__column">
-              <p class="chat-group__column-label">Kết quả</p>
-              <div class="chat-group__list hide-scrollbar">
-                <p v-if="query.trim() === ''" class="chat-group__empty">Nhập tên để tìm đồng nghiệp.</p>
-                <p v-else-if="searching" class="chat-group__empty">Đang tìm…</p>
-                <p v-else-if="results.length === 0" class="chat-group__empty">Không tìm thấy ai phù hợp.</p>
-                <button
-                  v-for="user in results"
-                  :key="user.id"
-                  type="button"
-                  class="chat-group__person"
-                  @click="addUser(user)"
-                >
-                  <img
-                    v-if="user.avatar_url"
-                    class="chat-group__avatar"
-                    :src="user.avatar_url"
-                    :alt="`Ảnh đại diện của ${user.name}`"
-                  />
-                  <span v-else class="chat-group__avatar">{{ initial(user.name) }}</span>
-                  <span class="chat-group__person-copy">
-                    <span class="chat-group__person-name">{{ user.name }}</span>
-                    <span v-if="formatPeerMeta(user)" class="chat-group__person-meta">{{ formatPeerMeta(user) }}</span>
-                  </span>
-                  <AppIcon name="plus" :size="16" :stroke-width="1.75" />
-                </button>
-              </div>
-            </div>
-
-            <div class="chat-group__column">
-              <p class="chat-group__column-label">Đã chọn ({{ selected.length }})</p>
-              <div class="chat-group__list hide-scrollbar">
-                <p v-if="selected.length === 0" class="chat-group__empty">Chưa chọn thành viên.</p>
-                <div v-for="user in selected" :key="user.id" class="chat-group__person chat-group__person--static">
-                  <img
-                    v-if="user.avatar_url"
-                    class="chat-group__avatar"
-                    :src="user.avatar_url"
-                    :alt="`Ảnh đại diện của ${user.name}`"
-                  />
-                  <span v-else class="chat-group__avatar">{{ initial(user.name) }}</span>
-                  <span class="chat-group__person-copy">
-                    <span class="chat-group__person-name">{{ user.name }}</span>
-                    <span v-if="formatPeerMeta(user)" class="chat-group__person-meta">{{ formatPeerMeta(user) }}</span>
-                  </span>
-                  <button type="button" class="chat-group__remove" :aria-label="`Bỏ ${user.name}`" @click="removeUser(user.id)">
-                    <AppIcon name="close" :size="14" />
-                  </button>
-                </div>
-              </div>
+            <div class="chat-group__list hide-scrollbar">
+              <p v-if="query.trim() === ''" class="chat-group__empty">Nhập tên để tìm đồng nghiệp.</p>
+              <p v-else-if="searching" class="chat-group__empty">Đang tìm…</p>
+              <p v-else-if="results.length === 0" class="chat-group__empty">Không tìm thấy ai phù hợp.</p>
+              <button
+                v-for="user in results"
+                :key="user.id"
+                type="button"
+                class="chat-group__person"
+                @click="addUser(user)"
+              >
+                <img
+                  v-if="user.avatar_url"
+                  class="chat-group__avatar"
+                  :src="user.avatar_url"
+                  :alt="`Ảnh đại diện của ${user.name}`"
+                />
+                <span v-else class="chat-group__avatar">{{ initial(user.name) }}</span>
+                <span class="chat-group__person-copy">
+                  <span class="chat-group__person-name">{{ user.name }}</span>
+                  <span v-if="formatPeerMeta(user)" class="chat-group__person-meta">{{ formatPeerMeta(user) }}</span>
+                </span>
+                <AppIcon name="plus" :size="16" :stroke-width="1.75" />
+              </button>
             </div>
           </form>
           <p v-if="error" class="chat-group__error" role="alert">{{ error }}</p>
@@ -242,23 +228,30 @@ function initial(name) {
   inset: 0;
   z-index: 300;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  padding: 0.625rem;
+  padding: 0;
   background: var(--color-sidebar-overlay);
 }
 
 .chat-group__panel {
   display: flex;
   flex-direction: column;
-  width: calc(100vw - 2.5rem);
-  max-width: calc(100vw - 2.5rem);
-  height: calc(100vh - 2.5rem);
-  max-height: calc(100vh - 2.5rem);
+  width: 100%;
+  max-width: 28rem;
+  max-height: min(88vh, 36rem);
   overflow: hidden;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--color-surface);
   box-shadow: var(--shadow-lg);
+  animation: chat-group-sheet-in 220ms ease;
+}
+
+@keyframes chat-group-sheet-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0.6;
+  }
 }
 
 .chat-group__head,
@@ -267,34 +260,39 @@ function initial(name) {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-4);
 }
 
 .chat-group__head {
   box-shadow: 0 1px 0 var(--color-border);
 }
 
-.chat-group__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--radius-md);
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
+.chat-group__head::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0.45rem;
+  width: 2.25rem;
+  height: 0.25rem;
+  margin-left: -1.125rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-border) 85%, var(--color-text-muted));
+}
+
+.chat-group__head {
+  position: relative;
+  padding-top: 0.85rem;
 }
 
 .chat-group__heading {
   flex: 1;
   margin: 0;
   color: var(--color-text);
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 700;
 }
 
-.chat-group__close,
-.chat-group__remove {
+.chat-group__close {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -319,17 +317,14 @@ function initial(name) {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-4);
 }
 
-.chat-group__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.chat-group__form {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
-}
-
-.chat-group__field--wide {
-  grid-column: 1 / -1;
+  min-height: 0;
 }
 
 .chat-group__field {
@@ -339,15 +334,60 @@ function initial(name) {
   min-width: 0;
 }
 
-.chat-group__label,
-.chat-group__column-label {
-  color: var(--color-text);
-  font-size: 0.75rem;
+.chat-group__label {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
   font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
-.chat-group__column-label {
-  margin: 0 0 0.35rem;
+.chat-group__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.chat-group__chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.1rem;
+}
+
+.chat-group__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 12rem;
+  padding: 0.25rem 0.35rem 0.25rem 0.55rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.chat-group__chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.chat-group__chip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .chat-group__input,
@@ -387,15 +427,10 @@ function initial(name) {
   outline: none;
 }
 
-.chat-group__column {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
 .chat-group__list {
-  min-height: 12rem;
-  max-height: 22rem;
+  flex: 1;
+  min-height: 8rem;
+  max-height: 14rem;
   overflow: auto;
   padding: 0.25rem;
   border-radius: var(--radius-md);
@@ -427,14 +462,6 @@ function initial(name) {
 
 .chat-group__person:hover {
   background: var(--color-surface-muted);
-}
-
-.chat-group__person--static {
-  cursor: default;
-}
-
-.chat-group__person--static:hover {
-  background: transparent;
 }
 
 .chat-group__avatar {
@@ -475,13 +502,6 @@ function initial(name) {
   font-size: 0.6875rem;
 }
 
-.chat-group__remove {
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: var(--radius-full);
-  flex-shrink: 0;
-}
-
 .chat-group__error {
   margin: var(--space-3) 0 0;
   color: var(--color-danger-tint-fg);
@@ -518,23 +538,24 @@ function initial(name) {
   color: var(--color-on-primary);
 }
 
-@media (max-width: 720px) {
+@media (min-width: 640px) {
+  .chat-group {
+    align-items: center;
+    padding: var(--space-5);
+  }
+
   .chat-group__panel {
-    width: calc(100vw - 1.25rem);
-    max-width: calc(100vw - 1.25rem);
-    height: calc(100vh - 1.25rem);
-    max-height: calc(100vh - 1.25rem);
+    width: min(28rem, calc(100vw - 2.5rem));
+    max-height: min(36rem, calc(100vh - 2.5rem));
+    border-radius: var(--radius-lg);
   }
 
-  .chat-group__grid {
-    grid-template-columns: 1fr;
+  .chat-group__head::before {
+    display: none;
   }
 
-  .chat-group__head,
-  .chat-group__actions,
-  .chat-group__body {
-    padding-left: var(--space-3);
-    padding-right: var(--space-3);
+  .chat-group__head {
+    padding-top: var(--space-3);
   }
 }
 </style>

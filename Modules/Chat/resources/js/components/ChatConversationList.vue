@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, inject, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { formatRelativeTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
@@ -10,8 +10,13 @@ import { useChatStore } from '../store/chatStore';
 
 const store = useChatStore();
 const auth = useAuthStore();
-const groupOpen = ref(false);
-const listQuery = ref('');
+const shellGroupOpen = inject('employeeChatGroupOpen', null);
+const shellListQuery = inject('employeeChatListQuery', null);
+const groupOpenLocal = ref(false);
+const listQueryLocal = ref('');
+const groupOpen = shellGroupOpen ?? groupOpenLocal;
+const listQuery = shellListQuery ?? listQueryLocal;
+const useShellToolbar = Boolean(shellListQuery);
 
 function initial(name) {
   return name?.trim().charAt(0).toUpperCase() || '?';
@@ -66,18 +71,19 @@ const visibleConversations = computed(() => {
 </script>
 
 <template>
-  <div class="chat-list">
-    <div class="chat-list__create">
-      <button type="button" class="chat-list__create-btn" @click="groupOpen = true">
-        <AppIcon name="users" :size="16" :stroke-width="1.75" />
-        Tạo nhóm
-      </button>
-    </div>
-    <ChatUserSearch />
-    <label class="chat-list__find">
-      <AppIcon name="search" :size="14" :stroke-width="1.75" />
-      <input v-model="listQuery" type="search" placeholder="Tìm hội thoại" aria-label="Tìm hội thoại" />
-    </label>
+  <div class="chat-list" :class="{ 'chat-list--shell': useShellToolbar }">
+    <template v-if="!useShellToolbar">
+      <div class="chat-list__toolbar">
+        <label class="chat-list__find">
+          <AppIcon name="search" :size="14" :stroke-width="1.75" />
+          <input v-model="listQuery" type="search" placeholder="Tìm hội thoại" aria-label="Tìm hội thoại" />
+        </label>
+        <button type="button" class="chat-list__group-btn" aria-label="Tạo nhóm" @click="groupOpen = true">
+          <AppIcon name="userPlus" :size="18" :stroke-width="1.75" />
+        </button>
+      </div>
+      <ChatUserSearch />
+    </template>
 
     <div class="chat-list__items">
       <p v-if="store.loadingConversations" class="chat-list__empty chat-list__empty--loading">
@@ -163,24 +169,29 @@ const visibleConversations = computed(() => {
   overflow: hidden;
 }
 
-.chat-list__create {
-  display: flex;
-  flex-shrink: 0;
-  padding: var(--space-3) var(--space-3) 0;
+.chat-list--shell .chat-list__items {
+  padding-top: 0.15rem;
 }
 
-.chat-list__create-btn {
-  display: inline-flex;
+.chat-list__toolbar {
+  display: flex;
   align-items: center;
   gap: 0.35rem;
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-3) 0;
+}
+
+.chat-list__group-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
   border: none;
   border-radius: var(--radius-full);
   background: var(--color-primary-surface);
   color: var(--color-primary);
-  font-family: inherit;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  padding: 0.4rem 0.75rem;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -190,9 +201,11 @@ const visibleConversations = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  margin: 0.35rem 0.75rem 0;
-  padding: 0.35rem 0.55rem;
-  border-radius: 10px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius-full);
   background: var(--color-surface);
   box-shadow: inset 0 0 0 1px var(--color-border);
   color: var(--color-text-muted, var(--color-text));

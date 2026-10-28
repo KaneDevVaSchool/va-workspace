@@ -26,13 +26,12 @@
 
 @keyframes chat-typing-bounce {
   0%,
-  60%,
   100% {
-    transform: translateY(0);
-    opacity: 0.45;
+    transform: translateY(0) scale(0.92);
+    opacity: 0.35;
   }
-  30% {
-    transform: translateY(-3px);
+  40% {
+    transform: translateY(-2px) scale(1);
     opacity: 1;
   }
 }
@@ -81,6 +80,58 @@
   animation-delay: 0.3s;
 }
 
+.chat-typing--meta span {
+  width: 3px;
+  height: 3px;
+}
+
+.chat-status-enter-active,
+.chat-status-leave-active {
+  transition:
+    opacity 200ms ease,
+    transform 200ms ease;
+}
+
+.chat-status-enter-from,
+.chat-status-leave-to {
+  opacity: 0;
+  transform: translateY(3px);
+}
+
+.chat-pending-enter-active,
+.chat-pending-leave-active {
+  transition:
+    opacity 220ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.chat-pending-enter-from,
+.chat-pending-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+}
+
+.chat-typing-row-enter-active,
+.chat-typing-row-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 200ms ease,
+    max-height 220ms ease;
+  overflow: hidden;
+}
+
+.chat-typing-row-enter-from,
+.chat-typing-row-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+  max-height: 0;
+}
+
+.chat-typing-row-enter-to,
+.chat-typing-row-leave-from {
+  max-height: 3rem;
+}
+
 .chat-picker-enter-active,
 .chat-picker-leave-active {
   transition:
@@ -107,4 +158,8 @@
   opacity: 0;
   transform: translateY(6px);
   max-height: 0;
+}
+
+.employee-shell__content--chat-thread .chat-view__composer {
+  padding-bottom: max(var(--space-3), 0.625rem);
 }

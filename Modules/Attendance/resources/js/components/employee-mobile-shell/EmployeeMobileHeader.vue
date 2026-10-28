@@ -27,6 +27,7 @@ const props = defineProps({
     headerRefreshing: { type: Boolean, default: false },
     chatUnreadLabel: { type: String, default: "" },
     chatHeaderAria: { type: String, default: "Trò chuyện" },
+    hideChatShortcut: { type: Boolean, default: false },
     hasAvatarPhoto: { type: Boolean, default: false },
     avatarInitial: { type: String, default: "?" },
     avatarUrl: { type: String, default: "" },
@@ -180,6 +181,7 @@ const searchModel = computed({
                         />
                     </button>
                     <button
+                        v-if="!hideChatShortcut"
                         type="button"
                         class="employee-shell__icon-btn employee-shell__icon-btn--chat"
                         :aria-label="chatHeaderAria"
@@ -219,25 +221,27 @@ const searchModel = computed({
             </div>
         </div>
 
-        <label
-            v-if="showSearch"
-            class="employee-shell__search employee-shell__search--elevated"
-        >
-            <span class="employee-shell__search-leading" aria-hidden="true">
-                <AppIcon
-                    name="search"
-                    :size="18"
-                    class="employee-shell__search-icon"
+        <slot name="toolbar">
+            <label
+                v-if="showSearch"
+                class="employee-shell__search employee-shell__search--elevated"
+            >
+                <span class="employee-shell__search-leading" aria-hidden="true">
+                    <AppIcon
+                        name="search"
+                        :size="18"
+                        class="employee-shell__search-icon"
+                    />
+                </span>
+                <input
+                    v-model="searchModel"
+                    type="search"
+                    class="employee-shell__search-input"
+                    :placeholder="searchPlaceholder"
+                    autocomplete="off"
+                    enterkeyhint="search"
                 />
-            </span>
-            <input
-                v-model="searchModel"
-                type="search"
-                class="employee-shell__search-input"
-                :placeholder="searchPlaceholder"
-                autocomplete="off"
-                enterkeyhint="search"
-            />
-        </label>
+            </label>
+        </slot>
     </header>
 </template>

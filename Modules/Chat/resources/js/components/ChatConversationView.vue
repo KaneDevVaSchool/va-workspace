@@ -19,7 +19,8 @@ import { useChatStore } from '../store/chatStore';
 const store = useChatStore();
 const auth = useAuthStore();
 
-const QUICK_EMOJIS = ['👍', '❤️', '😂', '🎉', '🙏', '🔥'];
+/** Tạm tắt ghi âm — bật lại khi có UI/flow ổn định trên mobile. */
+const VOICE_RECORDING_ENABLED = false;
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -187,7 +188,8 @@ watch(
 );
 
 watch(typingLabel, (label) => {
-  if (label) scrollToBottom();
+  if (!label) return;
+  window.requestAnimationFrame(() => scrollToBottom());
 });
 
 watch(sending, (active) => {
@@ -818,15 +820,32 @@ function menuItems(message) {
       <span v-else class="chat-view__avatar chat-view__avatar--placeholder">{{ initial(otherUser?.name) }}</span>
       <span class="chat-view__who">
         <span class="chat-view__title">{{ headerTitle }}</span>
-        <span v-if="peerTyping" class="chat-view__dept chat-view__dept--active">
-          <span class="chat-typing" aria-hidden="true"><span /><span /><span /></span>
-          {{ typingLabel }}
-        </span>
-        <span v-else-if="sending" class="chat-view__dept chat-view__dept--active">Đang gửi…</span>
-        <span v-else-if="!isGroup && otherUser?.online" class="chat-view__dept chat-view__dept--active">Đang hoạt động</span>
-        <span v-else-if="!isGroup && otherUser?.last_seen_at" class="chat-view__dept">Truy cập {{ formatRelativeTime(otherUser.last_seen_at) }}</span>
-        <span v-else-if="isGroup" class="chat-view__dept">{{ memberLine }}</span>
-        <span v-else-if="peerMetaLine" class="chat-view__dept">{{ peerMetaLine }}</span>
+        <Transition name="chat-status" mode="out-in">
+          <span
+            v-if="peerTyping"
+            key="typing"
+            class="chat-view__dept chat-view__dept--active"
+          >
+            <span class="chat-typing" aria-hidden="true"><span /><span /><span /></span>
+            {{ typingLabel }}
+          </span>
+          <span
+            v-else-if="!isGroup && otherUser?.online"
+            key="online"
+            class="chat-view__dept chat-view__dept--active"
+          >
+            Đang hoạt động
+          </span>
+          <span
+            v-else-if="!isGroup && otherUser?.last_seen_at"
+            key="seen"
+            class="chat-view__dept"
+          >
+            Truy cập {{ formatRelativeTime(otherUser.last_seen_at) }}
+          </span>
+          <span v-else-if="isGroup" key="group" class="chat-view__dept">{{ memberLine }}</span>
+          <span v-else-if="peerMetaLine" key="meta" class="chat-view__dept">{{ peerMetaLine }}</span>
+        </Transition>
       </span>
       <button
         type="button"
@@ -989,9 +1008,10 @@ function menuItems(message) {
         </div>
       </template>
 
+      <Transition name="chat-pending">
       <div
         v-if="pendingOutgoing?.kind === 'message' || pendingOutgoing?.kind === 'sticker'"
-        class="chat-bubble-row chat-bubble-row--mine"
+        class="chat-bubble-row chat-bubble-row--mine chat-bubble-row--pending"
         aria-live="polite"
       >
         <div class="chat-message-col">
@@ -1031,7 +1051,10 @@ function menuItems(message) {
             }}
           </span>
           <span class="chat-bubble__meta">
-            <span class="chat-bubble__sending">Đang gửi…</span>
+            <span class="chat-bubble__sending">
+              <span class="chat-typing chat-typing--meta" aria-hidden="true"><span /><span /><span /></span>
+              Đang gửi
+            </span>
           </span>
         </div>
         <ChatLinkPreviewEmbed
@@ -1040,13 +1063,15 @@ function menuItems(message) {
         />
         </div>
       </div>
+      </Transition>
 
-      <div v-if="peerTyping" class="chat-bubble-row" aria-live="polite">
-        <div class="chat-bubble chat-bubble--typing">
-          <span class="chat-typing" aria-hidden="true"><span /><span /><span /></span>
-          <span>{{ typingLabel }}</span>
+      <Transition name="chat-typing-row">
+        <div v-if="peerTyping" key="typing-row" class="chat-bubble-row chat-bubble-row--typing" aria-live="polite">
+          <div class="chat-bubble chat-bubble--typing">
+            <span class="chat-typing" aria-hidden="true"><span /><span /><span /></span>
+          </div>
         </div>
-      </div>
+      </Transition>
     </div>
 
     <div class="chat-dock">
@@ -1080,20 +1105,11 @@ function menuItems(message) {
         <button
           type="button"
           class="chat-view__tool"
-          :class="{ 'chat-view__tool--on': pickerOpen && pickerPanel === 'emoji' }"
-          aria-label="Chèn emoji"
-          @click="togglePicker('emoji')"
-        >
-          <AppIcon name="smile" :size="18" :stroke-width="1.75" />
-        </button>
-        <button
-          type="button"
-          class="chat-view__tool"
           :disabled="Boolean(editing)"
           aria-label="Chụp ảnh"
           @click="cameraInput?.click()"
         >
-          <AppIcon name="camera" :size="18" :stroke-width="1.75" />
+          <AppIcon name="camera" :size="17" :stroke-width="1.75" />
         </button>
         <button
           type="button"
@@ -1102,7 +1118,7 @@ function menuItems(message) {
           aria-label="Gửi ảnh"
           @click="photoInput?.click()"
         >
-          <AppIcon name="image" :size="18" :stroke-width="1.75" />
+          <AppIcon name="image" :size="17" :stroke-width="1.75" />
         </button>
         <button
           type="button"
@@ -1111,7 +1127,7 @@ function menuItems(message) {
           aria-label="Đính kèm tệp"
           @click="fileInput?.click()"
         >
-          <AppIcon name="paperclip" :size="18" :stroke-width="1.75" />
+          <AppIcon name="paperclip" :size="17" :stroke-width="1.75" />
         </button>
         <input
           ref="cameraInput"
@@ -1145,7 +1161,7 @@ function menuItems(message) {
           aria-label="Gửi sticker"
           @click="togglePicker('sticker')"
         >
-          <AppIcon name="sticker" :size="18" :stroke-width="1.75" />
+          <AppIcon name="sticker" :size="17" :stroke-width="1.75" />
         </button>
         <button
           v-if="isGroup"
@@ -1155,9 +1171,10 @@ function menuItems(message) {
           aria-label="Tạo bình chọn"
           @click="pollOpen = true"
         >
-          <AppIcon name="listChecks" :size="18" :stroke-width="1.75" />
+          <AppIcon name="listChecks" :size="17" :stroke-width="1.75" />
         </button>
         <button
+          v-if="VOICE_RECORDING_ENABLED"
           type="button"
           class="chat-view__tool"
           :class="{ 'chat-view__tool--on': recording }"
@@ -1167,17 +1184,7 @@ function menuItems(message) {
           @pointerup="stopVoice"
           @pointerleave="recording && stopVoice()"
         >
-          <AppIcon name="mic" :size="18" :stroke-width="1.75" />
-        </button>
-        <button
-          v-for="emoji in QUICK_EMOJIS"
-          :key="emoji"
-          type="button"
-          class="chat-view__quick"
-          :aria-label="`Chèn ${emoji}`"
-          @click="insertEmoji(emoji)"
-        >
-          {{ emoji }}
+          <AppIcon name="mic" :size="17" :stroke-width="1.75" />
         </button>
       </div>
       <div v-if="files.length" class="chat-pending">
@@ -1200,14 +1207,23 @@ function menuItems(message) {
           {{ user.name }}
         </button>
       </div>
-      <div class="chat-view__input-row">
+      <div class="chat-view__input-shell">
+        <button
+          type="button"
+          class="chat-view__input-addon"
+          :class="{ 'chat-view__input-addon--on': pickerOpen && pickerPanel === 'emoji' }"
+          aria-label="Chèn emoji"
+          @click="togglePicker('emoji')"
+        >
+          <AppIcon name="smile" :size="20" :stroke-width="1.75" />
+        </button>
         <textarea
           ref="inputRef"
           v-model="draft"
           class="chat-view__input"
           rows="1"
           enterkeyhint="send"
-          :placeholder="editing ? 'Sửa nội dung…' : 'Nhập tin nhắn...'"
+          :placeholder="editing ? 'Sửa nội dung…' : 'Nhập tin nhắn…'"
           :aria-label="editing ? 'Sửa tin nhắn' : `Nhập tin nhắn gửi ${headerTitle}`"
           @focus="onInputFocus"
           @input="pingTyping"
@@ -1222,7 +1238,8 @@ function menuItems(message) {
           :aria-busy="sending"
           @click="send"
         >
-          <AppIcon :name="editing ? 'check' : 'send'" :size="18" :stroke-width="1.75" />
+          <AppIcon v-if="sending" name="refresh" :size="18" :stroke-width="1.75" class="chat-view__send-spin" />
+          <AppIcon v-else :name="editing ? 'check' : 'send'" :size="18" :stroke-width="1.75" />
         </button>
       </div>
     </div>
@@ -1544,11 +1561,19 @@ function menuItems(message) {
   box-shadow: 0 2px 10px color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
+.chat-bubble-row--pending {
+  pointer-events: none;
+}
+
 .chat-bubble--pending {
-  opacity: 0.82;
+  opacity: 0.92;
+  transition: opacity 220ms ease;
 }
 
 .chat-bubble__sending {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   font-style: italic;
   color: var(--color-primary);
 }
@@ -1576,13 +1601,17 @@ function menuItems(message) {
   font-weight: 700;
 }
 
+.chat-bubble-row--typing {
+  animation: none;
+}
+
 .chat-bubble--typing {
   flex-direction: row;
   align-items: center;
-  gap: 0.4rem;
+  justify-content: center;
+  min-width: 2.75rem;
+  padding: 0.55rem 0.75rem;
   color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-style: italic;
 }
 
 .chat-bubble__text {
@@ -1711,30 +1740,28 @@ function menuItems(message) {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: min(58%, 26rem);
-  overflow: hidden;
-  background: color-mix(in srgb, var(--color-surface) 96%, transparent);
-  box-shadow: 0 -1px 0 var(--color-border);
+  background: var(--color-surface);
+  box-shadow: 0 -4px 18px color-mix(in srgb, var(--color-tertiary-900) 6%, transparent);
 }
 
 .chat-view__composer {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: var(--space-2) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
-  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
-  backdrop-filter: blur(10px);
+  gap: 0.4rem;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  background: var(--color-surface);
 }
 
 .chat-view__tools {
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 0.1rem;
+  gap: 0.15rem;
   overflow-x: auto;
   scrollbar-width: none;
   touch-action: manipulation;
+  padding: 0 0.1rem;
 }
 
 .chat-view__tools::-webkit-scrollbar {
@@ -1742,17 +1769,17 @@ function menuItems(message) {
 }
 
 .chat-view__tool {
-  width: 1.85rem;
-  height: 1.85rem;
-  flex: 0 0 1.85rem;
-  border-radius: var(--radius-sm);
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-.chat-view__tool:active,
-.chat-view__quick:active {
-  transform: none;
+.chat-view__tool:active {
+  transform: scale(0.94);
 }
 
 .chat-view__tool--on {
@@ -1763,29 +1790,6 @@ function menuItems(message) {
 .chat-view__tool:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-.chat-view__quick {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 1.75rem;
-  border: none;
-  background: transparent;
-  width: 1.75rem;
-  height: 1.75rem;
-  overflow: hidden;
-  padding: 0;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.chat-view__quick:hover {
-  background: var(--color-surface-muted);
 }
 
 .chat-view__file-input {
@@ -1916,10 +1920,40 @@ function menuItems(message) {
   font-size: 0.625rem;
 }
 
-.chat-view__input-row {
+.chat-view__input-shell {
   display: flex;
   align-items: flex-end;
-  gap: var(--space-2);
+  gap: 0.25rem;
+  padding: 0.3rem 0.35rem 0.3rem 0.25rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  transition: box-shadow 180ms ease;
+}
+
+.chat-view__input-shell:focus-within {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, var(--color-border)),
+    0 4px 14px color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.chat-view__input-addon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.chat-view__input-addon--on {
+  color: var(--color-primary);
+  background: var(--color-primary-surface);
 }
 
 .chat-view__input {
@@ -1928,31 +1962,44 @@ function menuItems(message) {
   max-height: 6rem;
   resize: none;
   border: none;
-  border-radius: 12px;
-  background: var(--color-surface-muted);
+  border-radius: 0;
+  background: transparent;
   color: var(--color-text);
   font-family: var(--font-family-base);
   font-size: 16px;
-  padding: 0.55rem 0.75rem;
+  line-height: 1.35;
+  padding: 0.5rem 0.15rem;
 }
 
 .chat-view__input:focus {
-  outline: 2px solid var(--color-primary);
-  outline-offset: -1px;
+  outline: none;
 }
 
 .chat-view__send {
   flex-shrink: 0;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.35rem;
+  height: 2.35rem;
   border-radius: var(--radius-full);
   background: linear-gradient(145deg, var(--color-primary), var(--color-tertiary-600));
   color: var(--color-on-primary);
-  transition: transform 140ms ease, opacity 140ms ease;
+  transition:
+    transform 160ms ease,
+    opacity 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .chat-view__send--ready {
-  animation: chat-send-pulse 2.2s ease-in-out infinite;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary) 28%, transparent);
+}
+
+.chat-view__send-spin {
+  animation: chat-send-spin 0.75s linear infinite;
+}
+
+@keyframes chat-send-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .chat-view__send:active:not(:disabled) {

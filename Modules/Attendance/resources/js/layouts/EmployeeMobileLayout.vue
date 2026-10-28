@@ -24,6 +24,7 @@ import {
 } from '@/composables/useEmployeeMobileViewport';
 import AppIcon from '@/components/AppIcon.vue';
 import { useChatStore } from '@modules/Chat/resources/js/store/chatStore';
+import EmployeeChatHeaderToolbar from '@modules/Chat/resources/js/components/EmployeeChatHeaderToolbar.vue';
 import { useChatRealtime } from '@/composables/useChatRealtime';
 import EmployeeMobileHeader from '../components/employee-mobile-shell/EmployeeMobileHeader.vue';
 import EmployeeMobileTabbar from '../components/employee-mobile-shell/EmployeeMobileTabbar.vue';
@@ -50,6 +51,8 @@ let homeRefreshHandler = null;
 let feedRefreshHandler = null;
 let pageRefreshHandler = null;
 const headerRefreshing = ref(false);
+const chatListQuery = ref('');
+const chatGroupOpen = ref(false);
 
 provide('employeeHomeSearch', homeSearchQuery);
 provide('employeeFeedSearch', feedSearchQuery);
@@ -71,6 +74,8 @@ provide('employeePageRefreshRegister', (handler) => {
     if (pageRefreshHandler === handler) pageRefreshHandler = null;
   };
 });
+provide('employeeChatListQuery', chatListQuery);
+provide('employeeChatGroupOpen', chatGroupOpen);
 
 /** Màn chào mascot chỉ ở boot HTML (mobile); overlay chỉ khi xem lại thủ công. */
 const showWorkspaceIntro = ref(false);
@@ -224,6 +229,10 @@ const hideHeaderForChatThread = computed(
   () => isChatRoute.value && chatStore.activeView === 'conversation',
 );
 
+const showChatListToolbar = computed(
+  () => isChatRoute.value && chatStore.activeView === 'list',
+);
+
 /** Chỉ ẩn tab bar khi đang trong một hội thoại chat (màn full). Hồ sơ vẫn hiện menu dưới. */
 const hideTabbar = computed(() => hideHeaderForChatThread.value);
 
@@ -258,6 +267,10 @@ watch(
     }
     if (name !== 'employee.feed') {
       feedSearchQuery.value = '';
+    }
+    if (name !== 'employee.chat') {
+      chatListQuery.value = '';
+      chatGroupOpen.value = false;
     }
   },
 );
@@ -324,6 +337,7 @@ function goBackFromSubpage() {
       :header-refreshing="headerRefreshing"
       :chat-unread-label="chatUnreadLabel"
       :chat-header-aria="chatHeaderAria"
+      :hide-chat-shortcut="isChatRoute"
       :has-avatar-photo="hasAvatarPhoto"
       :avatar-initial="avatarInitial"
       :avatar-url="auth.user?.avatar_url"
@@ -332,7 +346,14 @@ function goBackFromSubpage() {
       @refresh="onHeaderRefresh"
       @open-chat="router.push({ name: 'employee.chat' })"
       @avatar-error="avatarBroken = true"
-    />
+    >
+      <template v-if="showChatListToolbar" #toolbar>
+        <EmployeeChatHeaderToolbar
+          v-model:list-query="chatListQuery"
+          @create-group="chatGroupOpen = true"
+        />
+      </template>
+    </EmployeeMobileHeader>
 
     <EmployeeMobileInstallBanner
       v-if="canInstall"
