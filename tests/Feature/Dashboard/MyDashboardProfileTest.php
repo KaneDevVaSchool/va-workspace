@@ -52,6 +52,9 @@ class MyDashboardProfileTest extends TestCase
         $this->assertContains('full_name', $keys);
         $this->assertContains('company_email', $keys);
         $this->assertContains('attendance_code', $keys);
+        $this->assertContains('job_title', $keys);
+        $this->assertContains('department_name', $keys);
+        $this->assertContains('hired_at', $keys);
     }
 
     public function test_avatar_upload_updates_user(): void

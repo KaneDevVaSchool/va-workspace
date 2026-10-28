@@ -162,7 +162,7 @@
     .employee-shell__brand-mark {
     width: 2.75rem;
     height: 2.75rem;
-    border-radius: 0.85rem;
+    border-radius: var(--radius-full);
     background: var(--color-surface);
     box-shadow:
         0 8px 18px
@@ -173,10 +173,19 @@
 
 .employee-shell--unified
     .employee-shell__header--home
-    .employee-shell__brand-logo--pwa {
-    width: 2.15rem;
-    height: 2.15rem;
-    border-radius: 0.45rem;
+    .employee-shell__brand-mark--avatar {
+    background: linear-gradient(
+        160deg,
+        #fff 0%,
+        color-mix(in srgb, var(--color-tertiary-100) 55%, #fff) 100%
+    );
+}
+
+.employee-shell--unified
+    .employee-shell__header--home
+    .employee-shell__brand-initial {
+    font-size: 1.05rem;
+    color: var(--color-tertiary-800);
 }
 
 .employee-shell--unified .employee-shell__header--home .employee-shell__kicker {

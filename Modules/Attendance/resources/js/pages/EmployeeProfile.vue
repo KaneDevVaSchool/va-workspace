@@ -543,10 +543,6 @@ onBeforeUnmount(() => {
           class="emp-profile__avatar-input"
           @change="onAvatarSelected"
         />
-        <div class="emp-profile__hub-copy">
-          <p class="emp-profile__hub-name">{{ displayName }}</p>
-          <p v-if="subtitle" class="emp-profile__hub-sub">{{ subtitle }}</p>
-        </div>
       </div>
       <div v-if="subtitleChips.length" class="emp-profile__chips">
         <span v-for="chip in subtitleChips" :key="chip" class="emp-profile__chip">{{ chip }}</span>
@@ -821,36 +817,8 @@ onBeforeUnmount(() => {
 
 .emp-profile__hub-top {
   display: flex;
+  justify-content: center;
   align-items: center;
-  gap: var(--space-3);
-}
-
-.emp-profile__hub-copy {
-  min-width: 0;
-  flex: 1;
-}
-
-.emp-profile__hub-photo-link {
-  padding: 0;
-  border: none;
-  background: none;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: var(--color-tertiary-700);
-  text-align: left;
-  cursor: pointer;
-}
-
-.emp-profile__hub-photo-link:disabled {
-  opacity: 0.65;
-  cursor: wait;
-}
-
-.emp-profile__hub-lead {
-  margin: var(--space-1) 0 0;
-  font-size: 0.75rem;
-  line-height: 1.45;
-  color: var(--color-text-muted);
 }
 
 .emp-profile__chips {
@@ -895,13 +863,27 @@ onBeforeUnmount(() => {
 }
 
 .emp-profile__avatar-btn--hub {
-  width: 4rem;
-  height: 4rem;
+  width: 4.25rem;
+  height: 4.25rem;
   flex-shrink: 0;
-  background: var(--color-surface);
+  background: transparent;
+  box-shadow: none;
+}
+
+.emp-profile__avatar-ring--hub {
   box-shadow:
-    0 6px 16px color-mix(in srgb, var(--color-tertiary-800) 12%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--color-border) 80%, transparent);
+    0 0 0 2px color-mix(in srgb, var(--color-tertiary-400) 55%, var(--color-surface)),
+    0 6px 16px color-mix(in srgb, var(--color-tertiary-800) 14%, transparent);
+}
+
+.emp-profile__avatar-fallback--hub {
+  font-size: 1.25rem;
+  color: var(--color-tertiary-800);
+  background: linear-gradient(
+    145deg,
+    var(--color-surface) 0%,
+    color-mix(in srgb, var(--color-tertiary-100) 75%, var(--color-surface)) 100%
+  );
 }
 
 .emp-profile__avatar-edit--hub {
@@ -975,14 +957,6 @@ onBeforeUnmount(() => {
 
 .emp-profile__actions-btn:active {
   transform: scale(0.99);
-}
-
-.emp-profile__actions-hint {
-  margin: 0;
-  font-size: 0.75rem;
-  line-height: 1.45;
-  color: var(--color-text-muted);
-  text-align: center;
 }
 
 .emp-profile--mobile-shell .emp-profile__card,
@@ -1144,8 +1118,8 @@ onBeforeUnmount(() => {
 .emp-profile__avatar-btn {
   position: relative;
   flex-shrink: 0;
-  width: 5.5rem;
-  height: 5.5rem;
+  width: 6rem;
+  height: 6rem;
   padding: 0;
   border: none;
   border-radius: var(--radius-full);
@@ -1796,16 +1770,6 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.emp-profile-dialog__eyebrow {
-  display: block;
-  margin-bottom: 0.15rem;
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-tertiary-700);
-}
-
 .emp-profile-dialog__head h2 {
   margin: 0;
   font-size: 1.125rem;
@@ -1830,12 +1794,6 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: auto;
   padding: var(--space-4);
-}
-
-.emp-profile-dialog__lead {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
 }
 
 .emp-profile-dialog__form {
@@ -1893,26 +1851,10 @@ onBeforeUnmount(() => {
 }
 
 .emp-profile-dialog__current {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
   margin: 0 0 var(--space-2);
-  padding: var(--space-2);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-surface-muted));
-}
-
-.emp-profile-dialog__current-key {
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
-.emp-profile-dialog__current-val {
   font-size: var(--text-sm);
-  color: var(--color-text);
+  font-style: italic;
+  color: var(--color-text-muted);
   word-break: break-word;
 }
 
