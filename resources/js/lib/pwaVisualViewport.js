@@ -80,7 +80,16 @@ export function endNativeFilePicker() {
 }
 
 function noteNativePickerLeave() {
-  if (nativePickerActive) nativePickerSawLeave = true;
+  // iOS gửi window blur khi mở action sheet chọn ảnh/tệp — không phải lúc picker đóng.
+  if (!nativePickerActive || document.visibilityState !== 'hidden') return;
+  nativePickerSawLeave = true;
+}
+
+function scheduleNativePickerEndAfterSettle() {
+  window.clearTimeout(nativePickerCloseTimer);
+  nativePickerCloseTimer = window.setTimeout(() => {
+    if (nativePickerActive && viewportSettled()) endNativeFilePicker();
+  }, 220);
 }
 
 function noteNativePickerResize() {
@@ -90,11 +99,9 @@ function noteNativePickerResize() {
     window.clearTimeout(nativePickerCloseTimer);
     return;
   }
-  if (!nativePickerSawLeave && !nativePickerSawShrink) return;
-  window.clearTimeout(nativePickerCloseTimer);
-  nativePickerCloseTimer = window.setTimeout(() => {
-    if (nativePickerActive && viewportSettled()) endNativeFilePicker();
-  }, 220);
+  // Chỉ tự đóng sau khi viewport từng thu (album / camera) rồi trở lại bình thường.
+  if (!nativePickerSawShrink) return;
+  scheduleNativePickerEndAfterSettle();
 }
 
 const CHAT_COMPOSER_INPUT_SELECTOR = 'textarea.chat-view__input';
@@ -225,8 +232,14 @@ export function bootstrapPwaVisualViewport() {
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
-      noteNativePickerLeave();
+      if (nativePickerActive) {
+        nativePickerSawLeave = true;
+        nativePickerSawShrink = true;
+      }
       return;
+    }
+    if (nativePickerActive && nativePickerSawLeave) {
+      scheduleNativePickerEndAfterSettle();
     }
     noteNativePickerResize();
     schedule();

@@ -581,13 +581,16 @@ defineExpose({ reload: load });
 }
 
 .story-rail__ring--seen {
-  padding: 3px;
+  padding: 3.5px;
   background: linear-gradient(
     145deg,
-    color-mix(in srgb, var(--color-text-muted) 55%, var(--color-border)) 0%,
-    color-mix(in srgb, var(--color-border) 92%, var(--color-surface)) 100%
+    color-mix(in srgb, var(--color-text-muted) 92%, var(--color-text)) 0%,
+    var(--color-text-muted) 48%,
+    color-mix(in srgb, var(--color-text-muted) 88%, var(--color-tertiary-700, #333)) 100%
   );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 70%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-text-muted) 35%, transparent),
+    0 2px 6px color-mix(in srgb, var(--color-text) 10%, transparent);
 }
 
 .story-rail__ring--empty {
@@ -602,9 +605,7 @@ defineExpose({ reload: load });
 }
 
 .story-rail__ring--idle .story-rail__avatar {
-  box-shadow:
-    inset 0 0 0 2px color-mix(in srgb, var(--color-border) 82%, var(--color-surface-muted)),
-    0 0 0 1px color-mix(in srgb, var(--color-border) 45%, transparent);
+  box-shadow: inset 0 0 0 2px var(--color-border-strong, #bbbbbb);
 }
 
 .story-rail__avatar {
@@ -695,6 +696,7 @@ defineExpose({ reload: load });
 
 .story-view--immersive {
   padding: 0;
+  min-height: 100dvh;
   background: #050508;
   backdrop-filter: none;
 }
@@ -958,11 +960,8 @@ defineExpose({ reload: load });
   bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
-.story-view__react-row :deep(.reaction-picker__trigger) {
+.story-view__react-row :deep(.reaction-picker--compact) {
   color: #fff;
-  background: color-mix(in srgb, #fff 14%, transparent);
-  border: 1px solid color-mix(in srgb, #fff 22%, transparent);
-  backdrop-filter: blur(10px);
 }
 
 .story-viewers {

@@ -8,7 +8,12 @@ import {
   burstEmployeeMobileViewport,
   syncEmployeeMobileViewport,
 } from '@/composables/useEmployeeMobileViewport';
-import { beginNativeFilePicker, endNativeFilePicker } from '@/lib/pwaVisualViewport';
+import { isPwaStandalone } from '@/lib/pwaStandalone';
+import {
+  beginNativeFilePicker,
+  endNativeFilePicker,
+  PWA_NATIVE_PICKER_CLASS,
+} from '@/lib/pwaVisualViewport';
 import { warmStickerAssets } from '@modules/Social/resources/js/lib/socialStickers.js';
 import { formatRelativeTime, formatTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
@@ -62,6 +67,17 @@ const searchHits = ref([]);
 const readersFor = ref(null);
 const recording = ref(false);
 const mentionIds = ref([]);
+const reactionPicker = ref(null);
+/** PWA: không gắn cảm xúc trên menu; đè giữ bong bóng thì thanh mới hiện đè lên tin. */
+const holdToReact = computed(() => {
+  if (typeof document === 'undefined') return false;
+  const root = document.documentElement;
+  return isPwaStandalone()
+    || root.classList.contains('pwa-standalone')
+    || root.classList.contains('employee-mobile-pwa');
+});
+let reactionHoldTimer = 0;
+let reactionHoldPoint = null;
 const draftCaret = ref(0);
 const mentionActive = ref(0);
 const mentionDismissed = ref(false);
@@ -308,6 +324,7 @@ watch(
 watch(draft, () => pingTyping());
 
 function onScroll() {
+  reactionPicker.value = null;
   if (listRef.value && listRef.value.scrollTop < 40) loadOlder();
 }
 
@@ -372,12 +389,19 @@ function syncCaret() {
   draftCaret.value = input?.selectionStart ?? draft.value.length;
 }
 
+function onNativeAttachPointerDown() {
+  if (editing.value) return;
+  beginNativeFilePicker();
+}
+
 function openNativePicker(input) {
   if (!(input instanceof HTMLInputElement) || editing.value) return;
   beginNativeFilePicker();
   input.click();
   const field = inputRef.value;
-  if (field && document.activeElement === field) field.blur();
+  if (field && document.activeElement === field && !coarsePointer()) {
+    field.blur();
+  }
 }
 
 function coarsePointer() {
@@ -428,9 +452,14 @@ function onInputFocus() {
   });
 }
 
+function syncViewportUnlessNativePicker() {
+  if (document.documentElement.classList.contains(PWA_NATIVE_PICKER_CLASS)) return;
+  syncEmployeeMobileViewport();
+}
+
 function onInputBlur() {
-  window.setTimeout(syncEmployeeMobileViewport, 120);
-  window.setTimeout(syncEmployeeMobileViewport, 360);
+  window.setTimeout(syncViewportUnlessNativePicker, 120);
+  window.setTimeout(syncViewportUnlessNativePicker, 360);
 }
 
 function startReply(message) {
@@ -483,9 +512,9 @@ function openMenu(message, event) {
     return;
   }
   const rect = button.getBoundingClientRect();
-  const canReactTo = canReact(message);
-  const width = canReactTo ? 264 : 168;
-  const menuHeight = canReactTo ? 248 : 168;
+  const showReactRow = canReact(message) && !holdToReact.value;
+  const width = showReactRow ? 264 : 168;
+  const menuHeight = showReactRow ? 248 : 168;
   const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
   const below = rect.bottom + 6;
   const top = below + menuHeight > window.innerHeight ? Math.max(8, rect.top - menuHeight - 6) : below;
@@ -760,8 +789,11 @@ function pollOptionSelected(option) {
 }
 
 function onDocumentPointerDown(event) {
-  if (!menu.value && !headerMenu.value) return;
   const target = event.target;
+  if (reactionPicker.value && (!(target instanceof Element) || !target.closest('.chat-react-bar'))) {
+    reactionPicker.value = null;
+  }
+  if (!menu.value && !headerMenu.value) return;
   if (target instanceof Element && target.closest('.chat-menu, .chat-bubble__more, .chat-view__head-menu')) return;
   closeMenu();
 }
@@ -770,6 +802,10 @@ function onDocumentKeydown(event) {
   if (event.key !== 'Escape') return;
   if (lightbox.value) {
     lightbox.value = null;
+    return;
+  }
+  if (reactionPicker.value) {
+    reactionPicker.value = null;
     return;
   }
   closeMenu();
@@ -781,6 +817,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  cancelReactionHold();
   document.removeEventListener('pointerdown', onDocumentPointerDown);
   document.removeEventListener('keydown', onDocumentKeydown);
 });
@@ -1077,9 +1114,52 @@ function canReact(message) {
   return Boolean(message) && !message.recalled_at && message.message_type !== 'system';
 }
 
+function cancelReactionHold() {
+  window.clearTimeout(reactionHoldTimer);
+  reactionHoldPoint = null;
+}
+
+function onBubblePointerDown(message, event) {
+  if (!holdToReact.value || !canReact(message)) return;
+  if (event.pointerType === 'mouse' && event.button !== 0) return;
+  const target = event.target;
+  if (target instanceof Element && target.closest('a, button, audio, input, textarea')) return;
+  reactionHoldPoint = { x: event.clientX, y: event.clientY };
+  const bubble = event.currentTarget;
+  window.clearTimeout(reactionHoldTimer);
+  reactionHoldTimer = window.setTimeout(() => {
+    reactionHoldPoint = null;
+    openReactionPicker(message, bubble);
+  }, 420);
+}
+
+function onBubblePointerMove(event) {
+  if (!reactionHoldPoint) return;
+  if (Math.hypot(event.clientX - reactionHoldPoint.x, event.clientY - reactionHoldPoint.y) > 12) {
+    cancelReactionHold();
+  }
+}
+
+function onBubbleContextMenu(event) {
+  if (!holdToReact.value) return;
+  event.preventDefault();
+}
+
+function openReactionPicker(message, bubble) {
+  if (!(bubble instanceof HTMLElement) || !canReact(message)) return;
+  const rect = bubble.getBoundingClientRect();
+  const width = 268;
+  const left = Math.max(8, Math.min(rect.left + (rect.width - width) / 2, window.innerWidth - width - 8));
+  const barHeight = 48;
+  let top = rect.top - barHeight + 14;
+  if (top < 8) top = Math.min(rect.bottom - 12, window.innerHeight - barHeight - 8);
+  reactionPicker.value = { id: message.id, message, top, left };
+}
+
 async function toggleReaction(message, emoji) {
   if (!canReact(message) || !store.activeConversationId) return;
   menu.value = null;
+  reactionPicker.value = null;
   try {
     await store.reactToMessage(store.activeConversationId, message.id, emoji);
   } catch (error) {
@@ -1234,7 +1314,13 @@ function menuItems(message) {
               'chat-bubble--mine': isMine(row.message),
               'chat-bubble--recalled': row.message.recalled_at,
               'chat-bubble--sticker': row.message.message_type === 'sticker' && !row.message.recalled_at,
+              'chat-bubble--hold': holdToReact && canReact(row.message),
             }"
+            @pointerdown="onBubblePointerDown(row.message, $event)"
+            @pointermove="onBubblePointerMove"
+            @pointerup="cancelReactionHold"
+            @pointercancel="cancelReactionHold"
+            @contextmenu="onBubbleContextMenu"
           >
             <button
               v-if="row.message.reply_to"
@@ -1509,6 +1595,8 @@ function menuItems(message) {
           class="chat-view__tool"
           :disabled="Boolean(editing)"
           aria-label="Chụp ảnh"
+          @touchstart.passive="onNativeAttachPointerDown"
+          @pointerdown="onNativeAttachPointerDown"
           @click="openNativePicker(cameraInput)"
         >
           <AppIcon name="camera" :size="17" :stroke-width="1.75" />
@@ -1518,6 +1606,8 @@ function menuItems(message) {
           class="chat-view__tool"
           :disabled="Boolean(editing)"
           aria-label="Gửi ảnh"
+          @touchstart.passive="onNativeAttachPointerDown"
+          @pointerdown="onNativeAttachPointerDown"
           @click="openNativePicker(photoInput)"
         >
           <AppIcon name="image" :size="17" :stroke-width="1.75" />
@@ -1527,6 +1617,8 @@ function menuItems(message) {
           class="chat-view__tool"
           :disabled="Boolean(editing)"
           aria-label="Đính kèm tệp"
+          @touchstart.passive="onNativeAttachPointerDown"
+          @pointerdown="onNativeAttachPointerDown"
           @click="openNativePicker(fileInput)"
         >
           <AppIcon name="paperclip" :size="17" :stroke-width="1.75" />
@@ -1725,12 +1817,12 @@ function menuItems(message) {
       <div
         v-if="menu"
         class="chat-menu"
-        :class="{ 'chat-menu--react': canReact(menu.message) }"
+        :class="{ 'chat-menu--react': canReact(menu.message) && !holdToReact }"
         role="menu"
         :style="{ top: `${menu.top}px`, left: `${menu.left}px` }"
       >
         <div
-          v-if="canReact(menu.message)"
+          v-if="canReact(menu.message) && !holdToReact"
           class="chat-menu__react"
           role="group"
           aria-label="Thả cảm xúc"
@@ -1758,6 +1850,29 @@ function menuItems(message) {
         >
           <AppIcon :name="item.icon" :size="15" :stroke-width="1.75" />
           {{ item.label }}
+        </button>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="reactionPicker"
+        class="chat-react-bar"
+        role="group"
+        aria-label="Thả cảm xúc"
+        :style="{ top: `${reactionPicker.top}px`, left: `${reactionPicker.left}px` }"
+      >
+        <button
+          v-for="item in CHAT_REACTIONS"
+          :key="item.emoji"
+          type="button"
+          class="chat-menu__emoji"
+          :class="{ 'chat-menu__emoji--on': myReaction(reactionPicker.message) === item.emoji }"
+          :aria-label="myReaction(reactionPicker.message) === item.emoji ? `Bỏ ${item.label}` : `Thả ${item.label}`"
+          :aria-pressed="myReaction(reactionPicker.message) === item.emoji"
+          @click="toggleReaction(reactionPicker.message, item.emoji)"
+        >
+          {{ item.emoji }}
         </button>
       </div>
     </Teleport>
@@ -2061,6 +2176,12 @@ function menuItems(message) {
     var(--color-primary-surface)
   );
   box-shadow: 0 2px 10px color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+.chat-bubble--hold {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .chat-bubble-row--pending {
@@ -2654,6 +2775,20 @@ function menuItems(message) {
 .chat-menu__emoji--on,
 .chat-menu__emoji:hover {
   background: var(--color-primary-surface);
+}
+
+.chat-react-bar {
+  position: fixed;
+  z-index: 90;
+  display: flex;
+  gap: 0.1rem;
+  width: 16.75rem;
+  padding: 0.28rem 0.35rem;
+  border-radius: 999px;
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-lg);
 }
 
 .chat-pin,
