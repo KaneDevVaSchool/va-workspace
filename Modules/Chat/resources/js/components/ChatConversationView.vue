@@ -14,6 +14,7 @@ import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import SocialAnimatedSticker from '@modules/Social/resources/js/components/SocialAnimatedSticker.vue';
 import ChatLinkPreviewEmbed from '@modules/Social/resources/js/components/ChatLinkPreviewEmbed.vue';
 import ChatAlbumDialog from './ChatAlbumDialog.vue';
+import ChatAvatar from './ChatAvatar.vue';
 import ChatMemberDialog from './ChatMemberDialog.vue';
 import ChatPicker from './ChatPicker.vue';
 import ChatPollDialog from './ChatPollDialog.vue';
@@ -190,6 +191,31 @@ const timeline = computed(() => {
   }
   return rows;
 });
+
+/**
+ * Trong nhóm, tin của người khác có avatar người gửi ở tin cuối của mỗi chuỗi liên tiếp
+ * (các tin trên chỉ chừa chỗ trống), giống cách Zalo/Messenger gom tin.
+ */
+const avatarMessageIds = computed(() => {
+  const ids = new Set();
+  if (!isGroup.value) return ids;
+  const rows = timeline.value;
+  rows.forEach((row, index) => {
+    if (row.kind !== 'message' || row.message.message_type === 'system' || isMine(row.message)) return;
+    const next = rows[index + 1];
+    const continues = next?.kind === 'message'
+      && next.message.message_type !== 'system'
+      && next.message.sender?.id === row.message.sender?.id;
+    if (!continues) ids.add(row.message.id);
+  });
+  return ids;
+});
+
+function senderAvatarUrl(message) {
+  if (message.sender?.avatar_url) return message.sender.avatar_url;
+  const member = store.activeConversation?.members?.find((item) => item.id === message.sender?.id);
+  return member?.avatar_url ?? null;
+}
 
 function dayKey(iso) {
   const date = new Date(iso);
@@ -1043,6 +1069,14 @@ function menuItems(message) {
           class="chat-bubble-row chat-bubble-row--animate"
           :class="{ 'chat-bubble-row--mine': isMine(row.message) }"
         >
+          <span v-if="isGroup && !isMine(row.message)" class="chat-bubble-row__avatar">
+            <ChatAvatar
+              v-if="avatarMessageIds.has(row.message.id)"
+              :src="senderAvatarUrl(row.message)"
+              :name="row.message.sender?.name || ''"
+              size="1.75rem"
+            />
+          </span>
           <div class="chat-message-col">
           <div
             class="chat-bubble"
@@ -1760,6 +1794,13 @@ function menuItems(message) {
 
 .chat-bubble-row--mine {
   flex-direction: row-reverse;
+}
+
+.chat-bubble-row__avatar {
+  display: flex;
+  flex-shrink: 0;
+  width: 1.75rem;
+  margin-right: 0.3rem;
 }
 
 .chat-message-col {

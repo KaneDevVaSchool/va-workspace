@@ -166,6 +166,8 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  /* Header chat đã tự cộng safe-area; reset để không bị --unified (theme.css) chèn 16px nền trắng phía trên. */
+  padding-top: 0;
   padding-bottom: 0;
 }
 
