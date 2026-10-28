@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property int $id
  * @property string $type
  * @property string|null $title
+ * @property string|null $avatar_path
  * @property int|null $created_by
  * @property int|null $pinned_message_id
  * @property int|null $disappear_seconds
@@ -25,6 +26,7 @@ class Conversation extends Model
     protected $fillable = [
         'type',
         'title',
+        'avatar_path',
         'created_by',
         'pinned_message_id',
         'disappear_seconds',

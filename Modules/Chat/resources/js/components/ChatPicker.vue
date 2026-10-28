@@ -44,7 +44,15 @@ watch(
 </script>
 
 <template>
-  <div class="chat-picker" role="dialog" aria-label="Chọn emoji hoặc sticker">
+  <div
+    class="chat-picker"
+    :class="{
+      'chat-picker--sticker': props.panel === 'sticker',
+      'chat-picker--emoji': props.panel === 'emoji',
+    }"
+    role="dialog"
+    aria-label="Chọn emoji hoặc sticker"
+  >
     <div class="chat-picker__tabs" role="tablist">
       <button
         type="button"
@@ -121,7 +129,7 @@ watch(
         {{ emoji }}
       </button>
     </div>
-    <div v-else class="chat-picker__grid chat-picker__grid--stickers">
+    <div v-else class="chat-picker__grid chat-picker__grid--stickers hide-scrollbar">
       <button
         v-for="sticker in stickers"
         :key="sticker.id"
@@ -142,7 +150,7 @@ watch(
   flex-direction: column;
   flex: 0 0 auto;
   min-height: 0;
-  max-height: min(13.5rem, 32dvh);
+  max-height: min(14rem, 34dvh);
   margin: var(--space-2) var(--space-3) 0;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
@@ -150,6 +158,10 @@ watch(
     inset 0 0 0 1px var(--color-border),
     0 8px 24px color-mix(in srgb, var(--color-tertiary-900) 8%, transparent);
   overflow: hidden;
+}
+
+.chat-picker--sticker {
+  max-height: min(21.5rem, 46dvh);
 }
 
 .chat-picker__tabs,
@@ -211,6 +223,18 @@ watch(
   line-height: 1;
 }
 
+.chat-picker--sticker .chat-picker__pack {
+  width: 2.125rem;
+  height: 2.125rem;
+  border-radius: var(--radius-md);
+}
+
+.chat-picker--sticker .chat-picker__pack-sticker :deep(.social-sticker),
+.chat-picker--sticker .chat-picker__pack-img {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
 .chat-picker__pack-img {
   width: 1.35rem;
   height: 1.35rem;
@@ -245,7 +269,15 @@ watch(
 }
 
 .chat-picker__grid--stickers {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  padding: 0.5rem 0.45rem 0.6rem;
+  align-content: start;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-surface-muted) 55%, var(--color-surface)) 0%,
+    var(--color-surface) 100%
+  );
 }
 
 .chat-picker__emoji {
@@ -271,16 +303,64 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 3.25rem;
-  overflow: hidden;
-  border-radius: var(--radius-sm);
+  height: 4.5rem;
+  overflow: visible;
+  border-radius: var(--radius-md);
+  transition:
+    background 0.16s ease,
+    transform 0.14s ease;
 }
 
 .chat-picker__sticker :deep(.social-sticker) {
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 3.65rem;
+  height: 3.65rem;
   max-width: 100%;
   max-height: 100%;
+  transform-origin: center center;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.chat-picker__sticker:active {
+  transform: scale(0.96);
+  background: color-mix(in srgb, var(--color-primary-surface) 65%, var(--color-surface-muted));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chat-picker__sticker:hover,
+  .chat-picker__sticker:focus-visible {
+    background: var(--color-surface-muted);
+  }
+
+  .chat-picker__sticker:hover :deep(.social-sticker),
+  .chat-picker__sticker:focus-visible :deep(.social-sticker) {
+    transform: scale(1.12);
+  }
+}
+
+@media (min-width: 480px) {
+  .chat-picker__grid--stickers {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .chat-picker__sticker {
+    height: 4.25rem;
+  }
+
+  .chat-picker__sticker :deep(.social-sticker) {
+    width: 3.35rem;
+    height: 3.35rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .chat-picker--sticker {
+    max-height: min(26rem, 52dvh);
+  }
+
+  .chat-picker__grid--stickers {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.35rem;
+  }
 }
 
 .chat-picker__emoji:active,

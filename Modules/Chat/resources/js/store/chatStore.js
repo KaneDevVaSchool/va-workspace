@@ -16,6 +16,7 @@ import {
   searchMessages as apiSearchMessages,
   setDisappear as apiSetDisappear,
   transferOwner as apiTransferOwner,
+  updateGroupAvatar as apiUpdateGroupAvatar,
   votePoll as apiVotePoll,
   fetchUnreadCount,
   hideMessage as apiHideMessage,
@@ -171,6 +172,12 @@ export const useChatStore = defineStore('chat', {
       const next = [...this.conversations];
       next[index] = conversation;
       this.conversations = sortConversations(next);
+    },
+
+    async updateGroupAvatar(conversationId, file) {
+      const conversation = await apiUpdateGroupAvatar(conversationId, file);
+      this.replaceConversation(conversation);
+      return conversation;
     },
 
     async addMembers(conversationId, userIds) {
@@ -506,7 +513,12 @@ export const useChatStore = defineStore('chat', {
       if (ids.size === 0) return;
       const list = this.messagesByConversation[conversationId];
       if (!list) return;
-      const reader = { id: payload.user_id, name: payload.reader_name || 'Đồng nghiệp' };
+      const member = conversation?.members?.find((item) => item.id === payload.user_id);
+      const reader = {
+        id: payload.user_id,
+        name: payload.reader_name || member?.name || 'Đồng nghiệp',
+        avatar_url: payload.reader_avatar_url ?? member?.avatar_url ?? null,
+      };
       for (const message of list) {
         if (!ids.has(message.id)) continue;
         const reads = message.reads || [];

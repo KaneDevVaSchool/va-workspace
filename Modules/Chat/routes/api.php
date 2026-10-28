@@ -9,6 +9,7 @@ Route::middleware('auth')->prefix('chat')->name('chat.')->group(function () {
     Route::get('/conversations', [ChatConversationController::class, 'index'])->name('conversations.index');
     Route::post('/conversations', [ChatConversationController::class, 'store'])->name('conversations.store');
     Route::post('/conversations/groups', [ChatConversationController::class, 'storeGroup'])->name('conversations.groups.store');
+    Route::post('/conversations/{conversationId}/avatar', [ChatConversationController::class, 'updateAvatar'])->name('conversations.avatar');
     Route::post('/presence', [ChatConversationController::class, 'presence'])->name('presence');
     Route::get('/attachments/{attachmentId}', [ChatAttachmentController::class, 'show'])->name('attachments.show');
     Route::post('/conversations/{conversationId}/members', [ChatConversationController::class, 'addMembers'])->name('conversations.members.store');

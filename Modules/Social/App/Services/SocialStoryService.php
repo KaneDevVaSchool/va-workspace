@@ -76,7 +76,15 @@ class SocialStoryService
         $rings = array_values($ringsByUserId);
         usort($rings, fn (array $left, array $right) => $this->compareRings($left, $right));
 
-        $minePresented = $mineStories->map(fn (SocialStory $story) => $this->present($story, $viewedIds))->values()->all();
+        $mineInsights = $this->viewInsightsForStories($mineStories);
+        $minePresented = $mineStories
+            ->map(fn (SocialStory $story) => $this->present(
+                $story,
+                $viewedIds,
+                $mineInsights[(int) $story->id] ?? null,
+            ))
+            ->values()
+            ->all();
 
         return [
             'mine' => [
@@ -120,7 +128,45 @@ class SocialStoryService
             'expires_at' => now()->addDay(),
         ]);
 
-        return $this->present($story, []);
+        return $this->present($story, [], ['count' => 0, 'preview' => []]);
+    }
+
+    /**
+     * @return array{view_count: int, viewers: list<array{user: array<string, mixed>, viewed_at: string|null}>}
+     */
+    public function viewers(User $actor, int $storyId): array
+    {
+        $story = SocialStory::query()->where('expires_at', '>', now())->find($storyId);
+        if (! $story) {
+            abort(404);
+        }
+        if ((int) $story->user_id !== (int) $actor->id) {
+            throw new AccessDeniedHttpException('Chỉ xem được danh sách người xem story của mình.');
+        }
+
+        $rows = SocialStoryView::query()
+            ->with('viewer')
+            ->where('story_id', $story->id)
+            ->orderByDesc('viewed_at')
+            ->limit(200)
+            ->get();
+
+        $viewers = [];
+        foreach ($rows as $row) {
+            $user = $row->viewer;
+            if (! $user || ! $user->isActive()) {
+                continue;
+            }
+            $viewers[] = [
+                'user' => $this->presentUser($user),
+                'viewed_at' => $row->viewed_at?->toIso8601String(),
+            ];
+        }
+
+        return [
+            'view_count' => count($viewers),
+            'viewers' => $viewers,
+        ];
     }
 
     public function markViewed(User $actor, int $storyId): void
@@ -173,11 +219,12 @@ class SocialStoryService
 
     /**
      * @param  list<int>  $viewedIds
+     * @param  array{count: int, preview: list<array<string, mixed>>}|null  $viewInsight
      * @return array<string, mixed>
      */
-    private function present(SocialStory $story, array $viewedIds): array
+    private function present(SocialStory $story, array $viewedIds, ?array $viewInsight = null): array
     {
-        return [
+        $payload = [
             'id' => $story->id,
             'media_kind' => $story->media_kind,
             'media_url' => url('/api/social/stories/'.$story->id.'/media'),
@@ -185,6 +232,47 @@ class SocialStoryService
             'expires_at' => $story->expires_at?->toIso8601String(),
             'viewed' => in_array((int) $story->id, $viewedIds, true) || false,
         ];
+
+        if ($viewInsight !== null) {
+            $payload['view_count'] = $viewInsight['count'];
+            $payload['viewer_preview'] = $viewInsight['preview'];
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @return array<int, array{count: int, preview: list<array<string, mixed>>}>
+     */
+    private function viewInsightsForStories(Collection $stories): array
+    {
+        if ($stories->isEmpty()) {
+            return [];
+        }
+
+        $storyIds = $stories->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $grouped = SocialStoryView::query()
+            ->with('viewer')
+            ->whereIn('story_id', $storyIds)
+            ->orderByDesc('viewed_at')
+            ->get()
+            ->groupBy('story_id');
+
+        $insights = [];
+        foreach ($storyIds as $storyId) {
+            $views = $grouped->get($storyId, collect());
+            $active = $views->filter(fn (SocialStoryView $view) => $view->viewer && $view->viewer->isActive());
+            $insights[$storyId] = [
+                'count' => $active->count(),
+                'preview' => $active
+                    ->take(4)
+                    ->map(fn (SocialStoryView $view) => $this->presentUser($view->viewer))
+                    ->values()
+                    ->all(),
+            ];
+        }
+
+        return $insights;
     }
 
     /**

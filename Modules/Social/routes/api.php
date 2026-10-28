@@ -14,6 +14,7 @@ Route::middleware('auth')->prefix('social')->name('social.')->group(function () 
     Route::get('/stories', [SocialStoryController::class, 'index']);
     Route::post('/stories', [SocialStoryController::class, 'store']);
     Route::post('/stories/{storyId}/view', [SocialStoryController::class, 'view']);
+    Route::get('/stories/{storyId}/viewers', [SocialStoryController::class, 'viewers']);
     Route::delete('/stories/{storyId}', [SocialStoryController::class, 'destroy']);
     Route::get('/stories/{storyId}/media', [SocialStoryController::class, 'media']);
 

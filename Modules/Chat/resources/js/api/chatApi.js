@@ -84,6 +84,16 @@ export function beatPresence() {
   return window.axios.post('/api/chat/presence');
 }
 
+export function updateGroupAvatar(conversationId, file) {
+  const form = new FormData();
+  form.append('avatar', file);
+  return window.axios
+    .post(`/api/chat/conversations/${conversationId}/avatar`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((r) => r.data.conversation);
+}
+
 export function addMembers(conversationId, userIds) {
   return window.axios
     .post(`/api/chat/conversations/${conversationId}/members`, { user_ids: userIds })

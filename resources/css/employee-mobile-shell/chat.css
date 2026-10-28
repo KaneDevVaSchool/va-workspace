@@ -172,6 +172,10 @@
   padding-bottom: var(--space-2);
 }
 
-.employee-shell__content--chat-thread .chat-dock--picker .chat-picker {
-  max-height: min(12rem, 30dvh);
+.employee-shell__content--chat-thread .chat-dock--picker .chat-picker--emoji {
+  max-height: min(13.5rem, 32dvh);
+}
+
+.employee-shell__content--chat-thread .chat-dock--picker .chat-picker--sticker {
+  max-height: min(20rem, 44dvh);
 }

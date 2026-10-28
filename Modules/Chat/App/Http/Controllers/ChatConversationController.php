@@ -126,6 +126,25 @@ class ChatConversationController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function updateAvatar(Request $request, int $conversationId): JsonResponse
+    {
+        $validated = $request->validate([
+            'avatar' => ['required', 'image', 'max:5120'],
+        ], [
+            'avatar.required' => 'Chọn ảnh đại diện nhóm.',
+            'avatar.image' => 'Ảnh đại diện không hợp lệ.',
+            'avatar.max' => 'Ảnh đại diện không được vượt quá 5MB.',
+        ]);
+
+        return response()->json([
+            'conversation' => $this->service->updateGroupAvatar(
+                $request->user(),
+                $conversationId,
+                $validated['avatar'],
+            ),
+        ]);
+    }
+
     public function addMembers(Request $request, int $conversationId): JsonResponse
     {
         $ids = array_map('intval', (array) $request->input('user_ids', []));

@@ -2,8 +2,10 @@
 import { computed, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
+import { showClientToast } from '@/lib/clientToast';
 import { searchUsers } from '../api/chatApi';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
+import { ChatFileError, prepareChatFile } from '../lib/prepareChatFile';
 import { useChatStore } from '../store/chatStore';
 
 const props = defineProps({
@@ -17,12 +19,16 @@ const query = ref('');
 const results = ref([]);
 const selected = ref([]);
 const saving = ref(false);
+const avatarSaving = ref(false);
 const error = ref('');
+const avatarInput = ref(null);
 let timer = null;
 
 const conversation = computed(() => store.activeConversation);
 const isOwner = computed(() => Boolean(conversation.value?.is_owner));
 const members = computed(() => conversation.value?.members || []);
+const groupAvatarUrl = computed(() => conversation.value?.avatar_url ?? null);
+const groupTitle = computed(() => conversation.value?.title || 'Nhóm');
 
 watch(() => props.open, (value) => {
   if (!value) return;
@@ -104,6 +110,33 @@ async function transfer(user) {
 function initial(name) {
   return name?.trim().charAt(0).toUpperCase() || '?';
 }
+
+function pickAvatar() {
+  avatarInput.value?.click();
+}
+
+async function onAvatarChosen(event) {
+  const raw = event.target.files?.[0];
+  event.target.value = '';
+  if (!raw || !conversation.value?.id) return;
+  avatarSaving.value = true;
+  error.value = '';
+  try {
+    const file = await prepareChatFile(raw);
+    await store.updateGroupAvatar(conversation.value.id, file);
+    showClientToast('success', 'Đã cập nhật ảnh nhóm.');
+  } catch (err) {
+    if (err instanceof ChatFileError) {
+      error.value = err.message;
+    } else {
+      error.value = err?.response?.data?.message
+        || err?.response?.data?.errors?.avatar?.[0]
+        || 'Không cập nhật được ảnh nhóm.';
+    }
+  } finally {
+    avatarSaving.value = false;
+  }
+}
 </script>
 
 <template>
@@ -117,6 +150,38 @@ function initial(name) {
           </button>
         </div>
         <div class="chat-room__body hide-scrollbar">
+          <div class="chat-room__brand">
+            <img
+              v-if="groupAvatarUrl"
+              class="chat-room__brand-img"
+              :src="groupAvatarUrl"
+              :alt="`Ảnh nhóm ${groupTitle}`"
+            />
+            <span v-else class="chat-room__brand-img chat-room__brand-img--ph">
+              <AppIcon name="users" :size="22" :stroke-width="1.75" />
+            </span>
+            <span class="chat-room__brand-copy">
+              <span class="chat-room__brand-name">{{ groupTitle }}</span>
+              <button
+                v-if="isOwner"
+                type="button"
+                class="chat-room__brand-action"
+                :disabled="avatarSaving || saving"
+                @click="pickAvatar"
+              >
+                {{ avatarSaving ? 'Đang tải ảnh…' : 'Đổi ảnh nhóm' }}
+              </button>
+            </span>
+            <input
+              ref="avatarInput"
+              class="chat-room__file"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              aria-hidden="true"
+              tabindex="-1"
+              @change="onAvatarChosen"
+            />
+          </div>
           <p v-if="error" class="chat-room__error">{{ error }}</p>
           <div class="chat-room__grid">
             <div v-if="isOwner" class="chat-room__column">
@@ -139,7 +204,13 @@ function initial(name) {
             <div class="chat-room__column">
               <p class="chat-room__label">Đang trong nhóm</p>
               <div v-for="user in members" :key="user.id" class="chat-room__person chat-room__person--static">
-                <span class="chat-room__avatar">{{ initial(user.name) }}</span>
+                <img
+                  v-if="user.avatar_url"
+                  class="chat-room__avatar chat-room__avatar--img"
+                  :src="user.avatar_url"
+                  :alt="`Ảnh đại diện của ${user.name}`"
+                />
+                <span v-else class="chat-room__avatar">{{ initial(user.name) }}</span>
                 <span class="chat-room__copy">
                   <span class="chat-room__name">
                     {{ user.name }}
@@ -218,6 +289,60 @@ function initial(name) {
   cursor: pointer;
 }
 .chat-room__body { flex: 1; min-height: 0; overflow: auto; }
+.chat-room__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.85rem;
+  box-shadow: inset 0 -1px 0 var(--color-border);
+}
+.chat-room__brand-img {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 999px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.chat-room__brand-img--ph {
+  display: grid;
+  place-items: center;
+  background: var(--color-primary-surface, var(--color-border));
+  color: var(--color-primary);
+}
+.chat-room__brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.chat-room__brand-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.chat-room__brand-action {
+  align-self: flex-start;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chat-room__brand-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.chat-room__file {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
 .chat-room__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -251,6 +376,10 @@ function initial(name) {
   height: 2rem;
   border-radius: 999px;
   background: var(--color-primary-surface, var(--color-border));
+}
+.chat-room__avatar--img {
+  display: block;
+  object-fit: cover;
 }
 .chat-room__submit {
   margin-top: 0.6rem;

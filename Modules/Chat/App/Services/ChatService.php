@@ -313,7 +313,14 @@ class ChatService
         $this->markChatNotificationsRead($actor->id, $conversationId);
         Cache::put($this->viewingKey($actor->id), $conversationId, now()->addSeconds(45));
 
-        MessageRead::dispatch($conversationId, $actor->id, now()->toIso8601String(), $readIds, $actor->name);
+        MessageRead::dispatch(
+            $conversationId,
+            $actor->id,
+            now()->toIso8601String(),
+            $readIds,
+            $actor->name,
+            $actor->avatar_url,
+        );
     }
 
     public function touchViewing(User $actor, int $conversationId): void
@@ -582,6 +589,7 @@ class ChatService
             'id' => $conversation->id,
             'type' => $conversation->type,
             'title' => $isGroup ? $conversation->title : null,
+            'avatar_url' => $isGroup ? $this->groupAvatarUrl($conversation) : null,
             'member_count' => count($members),
             'members' => $isGroup ? $members : [],
             'other_user' => $isGroup ? null : $this->presentOtherUser($other),
@@ -763,6 +771,15 @@ class ChatService
             'size' => (int) $file->file_size,
             'url' => $this->attachmentUrl($file),
         ])->values()->all();
+    }
+
+    private function groupAvatarUrl(Conversation $conversation): ?string
+    {
+        if (! $conversation->avatar_path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($conversation->avatar_path);
     }
 
     private function attachmentUrl(MessageAttachment $file): string

@@ -89,4 +89,43 @@ class SocialStoryRingsTest extends TestCase
         $this->assertFalse($ringAfter['unseen']);
         $this->assertTrue($ringAfter['stories'][0]['viewed']);
     }
+
+    public function test_owner_can_list_story_viewers(): void
+    {
+        $author = $this->makeUser();
+        $viewer = $this->makeUser();
+
+        Storage::fake('local');
+        $storyId = $this->actingAs($author)
+            ->postJson('/api/social/stories', [
+                'file' => UploadedFile::fake()->image('story.jpg'),
+            ])
+            ->assertCreated()
+            ->json('story.id');
+
+        $this->actingAs($viewer)
+            ->postJson("/api/social/stories/{$storyId}/view")
+            ->assertOk();
+
+        $payload = $this->actingAs($author)
+            ->getJson("/api/social/stories/{$storyId}/viewers")
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(1, $payload['view_count']);
+        $this->assertCount(1, $payload['viewers']);
+        $this->assertSame($viewer->id, $payload['viewers'][0]['user']['id']);
+
+        $rings = $this->actingAs($author)
+            ->getJson('/api/social/stories')
+            ->assertOk()
+            ->json('mine.stories.0');
+
+        $this->assertSame(1, $rings['view_count']);
+        $this->assertSame($viewer->id, $rings['viewer_preview'][0]['id']);
+
+        $this->actingAs($viewer)
+            ->getJson("/api/social/stories/{$storyId}/viewers")
+            ->assertForbidden();
+    }
 }

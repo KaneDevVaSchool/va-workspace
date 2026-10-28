@@ -37,6 +37,11 @@ class SocialStoryController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function viewers(Request $request, int $storyId): JsonResponse
+    {
+        return response()->json($this->stories->viewers($request->user(), $storyId));
+    }
+
     public function destroy(Request $request, int $storyId): JsonResponse
     {
         $this->stories->destroy($request->user(), $storyId);

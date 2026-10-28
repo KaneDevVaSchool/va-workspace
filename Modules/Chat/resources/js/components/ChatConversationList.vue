@@ -107,7 +107,13 @@ const visibleConversations = computed(() => {
         @click="open(conversation.id)"
       >
         <span class="chat-item__avatar-wrap" aria-hidden="true">
-          <span v-if="isGroup(conversation)" class="chat-item__avatar chat-item__avatar--group">
+          <img
+            v-if="isGroup(conversation) && conversation.avatar_url"
+            class="chat-item__avatar"
+            :src="conversation.avatar_url"
+            :alt="`Ảnh nhóm ${conversationName(conversation)}`"
+          />
+          <span v-else-if="isGroup(conversation)" class="chat-item__avatar chat-item__avatar--group">
             <AppIcon name="users" :size="16" :stroke-width="1.75" />
           </span>
           <img

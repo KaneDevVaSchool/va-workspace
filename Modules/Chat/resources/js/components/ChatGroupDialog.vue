@@ -405,7 +405,7 @@ function initial(name) {
   padding: 0.65rem 0.75rem;
 }
 
-.chat-group__input:focus,
+.chat-group__input:not(.chat-group__input--plain):focus,
 .chat-group__search:focus-within {
   outline: 2px solid var(--color-primary);
   outline-offset: -1px;

@@ -69,7 +69,7 @@ class WebPushPayloadBuilderTest extends TestCase
 
         $phone = $builder->forPhone(NotificationService::TYPE_CHAT_MESSAGE, $formatted);
 
-        $this->assertSame('1 lời nhắn từ VA', $phone['title']);
+        $this->assertSame('Mai Anh: Xin chào nhé', $phone['title']);
         $this->assertSame('', $phone['body']);
     }
 }

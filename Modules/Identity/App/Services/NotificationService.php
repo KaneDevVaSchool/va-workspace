@@ -77,7 +77,8 @@ class NotificationService
         private readonly UserRepositoryInterface $users,
         private readonly WebPushService $webPush,
         private readonly WebPushPayloadBuilder $pushPayloadBuilder,
-    ) {}
+    ) {
+    }
 
     /**
      * @param  list<int>  $recipientIds
@@ -93,9 +94,9 @@ class NotificationService
         array $data = [],
     ): void {
         $ids = collect($recipientIds)
-            ->map(fn ($id) => (int) $id)
+            ->map(fn($id) => (int) $id)
             ->unique()
-            ->reject(fn (int $id) => $id === (int) $actor->id || $id < 1)
+            ->reject(fn(int $id) => $id === (int) $actor->id || $id < 1)
             ->values()
             ->all();
 
@@ -120,7 +121,7 @@ class NotificationService
         ?string $url,
         array $data = [],
     ): ?UserNotification {
-        if ((int) $recipient->id === (int) $actor->id || ! $recipient->isActive()) {
+        if ((int) $recipient->id === (int) $actor->id || !$recipient->isActive()) {
             return null;
         }
 
@@ -140,7 +141,7 @@ class NotificationService
         ?string $url,
         array $data = [],
     ): ?UserNotification {
-        if (! $recipient->isActive()) {
+        if (!$recipient->isActive()) {
             return null;
         }
 
@@ -261,7 +262,7 @@ class NotificationService
             'title' => $formatted['title'],
             'body' => $formatted['body'],
             'url' => $url ?? '/dashboard/me/feed',
-            'tag' => $pushTag ?? ('va-n-'.($notificationId ?? uniqid('', true))),
+            'tag' => $pushTag ?? ('va-n-' . ($notificationId ?? uniqid('', true))),
             'timestamp' => time() * 1000,
         ];
 

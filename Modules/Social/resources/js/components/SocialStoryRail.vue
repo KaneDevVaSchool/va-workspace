@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
+import { formatRelativeTime } from '@/lib/formatTime';
 
 const emit = defineEmits(['posted', 'open-profile']);
 
@@ -11,10 +12,21 @@ const index = ref(0);
 const progress = ref(0);
 const fileInput = ref(null);
 const posting = ref(false);
+const viewersOpen = ref(false);
+const viewersLoading = ref(false);
+const viewersList = ref([]);
+const viewersCount = ref(0);
+const viewerPreview = ref([]);
 let timer = null;
 
 const activePack = computed(() => viewer.value);
 const activeStory = computed(() => activePack.value?.stories?.[index.value] ?? null);
+
+const isOwnStory = computed(() => {
+  const mineId = rings.value?.mine?.user?.id;
+  const packId = activePack.value?.user?.id;
+  return mineId != null && packId != null && mineId === packId;
+});
 
 const minePack = computed(() => rings.value?.mine ?? null);
 const mineHasStories = computed(() => {
@@ -34,16 +46,28 @@ function mineThumbUrl(pack) {
 
 watch(activeStory, (story) => {
   progress.value = 0;
+  viewersOpen.value = false;
   window.clearInterval(timer);
   if (!story) return;
+
+  if (isOwnStory.value) {
+    viewersCount.value = story.view_count ?? 0;
+    viewerPreview.value = story.viewer_preview ?? [];
+    refreshViewersQuiet(story.id);
+  } else {
+    viewersCount.value = 0;
+    viewerPreview.value = [];
+  }
+
   if (story.media_kind === 'image') {
     const started = Date.now();
     timer = window.setInterval(() => {
+      if (viewersOpen.value) return;
       progress.value = Math.min(100, ((Date.now() - started) / 5000) * 100);
       if (progress.value >= 100) next();
     }, 80);
   }
-  if (!story.viewed && activePack.value?.user) {
+  if (!story.viewed && activePack.value?.user && !isOwnStory.value) {
     window.axios.post(`/api/social/stories/${story.id}/view`).catch(() => {});
     story.viewed = true;
   }
@@ -101,8 +125,56 @@ function ringLabel(ring) {
 
 function closeViewer() {
   viewer.value = null;
+  viewersOpen.value = false;
+  viewersList.value = [];
   window.clearInterval(timer);
   load();
+}
+
+function storyTimeLabel(iso) {
+  return formatRelativeTime(iso) || '';
+}
+
+async function refreshViewersQuiet(storyId) {
+  try {
+    const { data } = await window.axios.get(`/api/social/stories/${storyId}/viewers`);
+    viewersCount.value = data.view_count ?? 0;
+    viewerPreview.value = (data.viewers ?? []).slice(0, 4).map((row) => row.user);
+    if (activeStory.value?.id === storyId) {
+      activeStory.value.view_count = viewersCount.value;
+      activeStory.value.viewer_preview = viewerPreview.value;
+    }
+  } catch {
+    /* giữ số liệu từ rings nếu không tải được */
+  }
+}
+
+async function openViewersSheet() {
+  const story = activeStory.value;
+  if (!story || !isOwnStory.value) return;
+  viewersOpen.value = true;
+  viewersLoading.value = true;
+  try {
+    const { data } = await window.axios.get(`/api/social/stories/${story.id}/viewers`);
+    viewersList.value = data.viewers ?? [];
+    viewersCount.value = data.view_count ?? viewersList.value.length;
+    viewerPreview.value = viewersList.value.slice(0, 4).map((row) => row.user);
+  } catch {
+    viewersList.value = [];
+  } finally {
+    viewersLoading.value = false;
+  }
+}
+
+function closeViewersSheet() {
+  viewersOpen.value = false;
+  viewersList.value = [];
+}
+
+function viewersCountLabel(count) {
+  if (!count) return 'Chưa có lượt xem';
+  if (count === 1) return '1 lượt xem';
+  return `${count} lượt xem`;
 }
 
 function next() {
@@ -132,10 +204,10 @@ function previous() {
   if (at > 0) openPack(list[at - 1]);
 }
 
-function onStageClick(event) {
-  const width = event.currentTarget?.getBoundingClientRect?.().width || 1;
-  if (event.offsetX < width * 0.35) previous();
-  else next();
+function onVideoTimeUpdate(event) {
+  if (viewersOpen.value) return;
+  const el = event.target;
+  progress.value = (el.currentTime / Math.max(el.duration || 1, 0.1)) * 100;
 }
 
 async function onFile(event) {
@@ -232,47 +304,126 @@ defineExpose({ reload: load });
         role="dialog"
         aria-modal="true"
         :aria-label="`Story của ${viewer.user.name}`"
+        @mousedown.self="closeViewer"
       >
-        <div class="story-view__panel">
-          <div class="story-view__bars" aria-hidden="true">
-            <span
-              v-for="(story, barIndex) in viewer.stories"
-              :key="story.id"
-              class="story-view__bar"
-            >
-              <span
-                class="story-view__bar-fill"
-                :style="{ width: barIndex < index ? '100%' : barIndex === index ? `${progress}%` : '0%' }"
+        <div class="story-view__shell">
+          <div class="story-view__frame">
+            <div class="story-view__media">
+              <img v-if="activeStory.media_kind === 'image'" :src="activeStory.media_url" alt="" />
+              <video
+                v-else
+                :src="activeStory.media_url"
+                autoplay
+                playsinline
+                @ended="next"
+                @timeupdate="onVideoTimeUpdate"
               />
-            </span>
-          </div>
-          <div class="story-view__head">
-            <span class="story-view__who">{{ viewer.user.name }}</span>
+            </div>
+
+            <div class="story-view__shade story-view__shade--top" aria-hidden="true" />
+            <div class="story-view__shade story-view__shade--bottom" aria-hidden="true" />
+
+            <div class="story-view__bars" aria-hidden="true">
+              <span
+                v-for="(story, barIndex) in viewer.stories"
+                :key="story.id"
+                class="story-view__bar"
+              >
+                <span
+                  class="story-view__bar-fill"
+                  :style="{ width: barIndex < index ? '100%' : barIndex === index ? `${progress}%` : '0%' }"
+                />
+              </span>
+            </div>
+
+            <header class="story-view__head">
+              <span class="story-view__avatar">
+                <img v-if="viewer.user.avatar_url" :src="viewer.user.avatar_url" alt="" />
+                <span v-else>{{ initial(viewer.user.name) }}</span>
+              </span>
+              <div class="story-view__meta">
+                <span class="story-view__who">{{ viewer.user.name }}</span>
+                <span v-if="activeStory.created_at" class="story-view__time">{{ storyTimeLabel(activeStory.created_at) }}</span>
+              </div>
+              <button
+                v-if="isOwnStory"
+                type="button"
+                class="story-view__icon"
+                aria-label="Xoá story"
+                @click.stop="removeActive"
+              >
+                <AppIcon name="trash" :size="17" :stroke-width="1.75" />
+              </button>
+              <button type="button" class="story-view__icon" aria-label="Đóng story" @click.stop="closeViewer">
+                <AppIcon name="close" :size="18" :stroke-width="1.75" />
+              </button>
+            </header>
+
+            <button type="button" class="story-view__nav story-view__nav--prev" aria-label="Story trước" @click="previous" />
+            <button type="button" class="story-view__nav story-view__nav--next" aria-label="Story sau" @click="next" />
+
             <button
-              v-if="viewer.user.id === rings.mine.user.id"
+              v-if="isOwnStory"
               type="button"
-              class="story-view__icon"
-              aria-label="Xoá story"
-              @click="removeActive"
+              class="story-view__views"
+              :aria-label="viewersCountLabel(viewersCount)"
+              @click.stop="openViewersSheet"
             >
-              <AppIcon name="trash" :size="16" :stroke-width="1.75" />
-            </button>
-            <button type="button" class="story-view__icon" aria-label="Đóng story" @click="closeViewer">
-              <AppIcon name="close" :size="16" :stroke-width="1.75" />
+              <span v-if="viewerPreview.length" class="story-view__views-stack" aria-hidden="true">
+                <span
+                  v-for="(person, previewIndex) in viewerPreview.slice(0, 3)"
+                  :key="person.id"
+                  class="story-view__views-chip"
+                  :style="{ zIndex: 3 - previewIndex }"
+                >
+                  <img v-if="person.avatar_url" :src="person.avatar_url" alt="" />
+                  <span v-else>{{ initial(person.name) }}</span>
+                </span>
+              </span>
+              <span class="story-view__views-label">{{ viewersCountLabel(viewersCount) }}</span>
+              <AppIcon class="story-view__views-chevron" name="chevronDown" :size="16" :stroke-width="2" />
             </button>
           </div>
-          <button type="button" class="story-view__stage" aria-label="Chuyển story" @click="onStageClick">
-            <img v-if="activeStory.media_kind === 'image'" :src="activeStory.media_url" alt="" />
-            <video
-              v-else
-              :src="activeStory.media_url"
-              autoplay
-              playsinline
-              @ended="next"
-              @timeupdate="progress = ($event.target.currentTime / Math.max($event.target.duration || 1, 0.1)) * 100"
-            />
-          </button>
         </div>
+
+        <Transition name="story-viewers-fade">
+          <div
+            v-if="viewersOpen"
+            class="story-viewers"
+            role="presentation"
+            @mousedown.self="closeViewersSheet"
+          >
+            <div class="story-viewers__panel" role="dialog" aria-modal="true" aria-label="Người đã xem story">
+              <header class="story-viewers__header">
+                <h2 class="story-viewers__title">{{ viewersCountLabel(viewersCount) }}</h2>
+                <button type="button" class="story-viewers__close" aria-label="Đóng" @click="closeViewersSheet">
+                  <AppIcon name="close" :size="18" />
+                </button>
+              </header>
+              <div class="story-viewers__body hide-scrollbar">
+                <p v-if="viewersLoading" class="story-viewers__empty">Đang tải...</p>
+                <p v-else-if="viewersList.length === 0" class="story-viewers__empty">Chưa có ai xem story này.</p>
+                <ul v-else class="story-viewers__people">
+                  <li v-for="item in viewersList" :key="item.user.id" class="story-viewers__person">
+                    <img
+                      v-if="item.user.avatar_url"
+                      class="story-viewers__avatar"
+                      :src="item.user.avatar_url"
+                      :alt="`Ảnh đại diện của ${item.user.name}`"
+                    />
+                    <div v-else class="story-viewers__avatar story-viewers__avatar--placeholder">
+                      {{ initial(item.user.name) }}
+                    </div>
+                    <div class="story-viewers__info">
+                      <div class="story-viewers__name">{{ item.user.name }}</div>
+                      <div v-if="item.viewed_at" class="story-viewers__time">{{ storyTimeLabel(item.viewed_at) }}</div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </Transition>
       </div>
     </Teleport>
   </section>
@@ -280,14 +431,25 @@ defineExpose({ reload: load });
 
 <style scoped>
 .story-rail {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.75rem 0.55rem;
+  border-radius: 1rem;
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-primary-surface) 55%, var(--color-surface)) 0%,
+    var(--color-surface) 48%,
+    color-mix(in srgb, var(--color-tertiary-100) 35%, var(--color-surface)) 100%
+  );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-border) 80%, transparent),
+    0 10px 28px color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
 
 .story-rail__scroller {
   display: flex;
   gap: 0.65rem;
   overflow-x: auto;
-  padding: 0.2rem 0.15rem 0.4rem;
+  padding: 0.15rem 0.05rem 0.35rem;
 }
 
 .story-rail__item {
@@ -417,47 +579,289 @@ defineExpose({ reload: load });
   z-index: 80;
   display: grid;
   place-items: center;
-  padding: 1rem;
-  background: color-mix(in srgb, var(--color-text) 35%, transparent);
+  padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+  background: color-mix(in srgb, #0a0a0c 88%, transparent);
+  backdrop-filter: blur(10px);
 }
-.story-view__panel {
+
+.story-view__shell {
   display: flex;
   flex-direction: column;
-  width: min(26rem, 100%);
-  height: min(40rem, calc(100vh - 2rem));
+  align-items: center;
+  width: min(22.5rem, 100%);
+  max-height: calc(100vh - 1.5rem);
+}
+
+.story-view__frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  max-height: calc(100vh - 1.5rem);
+  border-radius: 1.35rem;
   overflow: hidden;
-  border-radius: 16px;
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  background: #050508;
+  box-shadow:
+    0 28px 80px color-mix(in srgb, #000 55%, transparent),
+    0 0 0 1px color-mix(in srgb, #fff 12%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent);
 }
+
+.story-view__media {
+  position: absolute;
+  inset: 0;
+  background: #0d0d12;
+}
+
+.story-view__media img,
+.story-view__media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.story-view__shade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.story-view__shade--top {
+  top: 0;
+  height: 38%;
+  background: linear-gradient(180deg, color-mix(in srgb, #000 72%, transparent) 0%, transparent 100%);
+}
+
+.story-view__shade--bottom {
+  bottom: 0;
+  height: 32%;
+  background: linear-gradient(0deg, color-mix(in srgb, #000 78%, transparent) 0%, transparent 100%);
+}
+
 .story-view__bars {
+  position: absolute;
+  top: 0.65rem;
+  left: 0.65rem;
+  right: 0.65rem;
+  z-index: 3;
   display: flex;
-  gap: 0.25rem;
-  padding: 0.7rem 0.7rem 0;
+  gap: 0.22rem;
 }
+
 .story-view__bar {
   flex: 1;
-  height: 3px;
+  height: 2.5px;
   border-radius: 99px;
-  background: var(--color-border);
+  background: color-mix(in srgb, #fff 28%, transparent);
   overflow: hidden;
 }
+
 .story-view__bar-fill {
   display: block;
   height: 100%;
-  background: var(--color-primary);
+  border-radius: inherit;
+  background: #fff;
+  box-shadow: 0 0 8px color-mix(in srgb, #fff 45%, transparent);
 }
+
 .story-view__head {
+  position: absolute;
+  top: 1.15rem;
+  left: 0.65rem;
+  right: 0.55rem;
+  z-index: 4;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.55rem 0.7rem;
+  gap: 0.55rem;
+  color: #fff;
 }
-.story-view__who {
+
+.story-view__avatar {
+  display: grid;
+  place-items: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-primary) 35%, #222);
+  box-shadow: 0 0 0 2px color-mix(in srgb, #fff 35%, transparent);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.story-view__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.story-view__meta {
   flex: 1;
-  font-weight: 650;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
+
+.story-view__who {
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 6px color-mix(in srgb, #000 55%, transparent);
+}
+
+.story-view__time {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: color-mix(in srgb, #fff 78%, transparent);
+  text-shadow: 0 1px 4px color-mix(in srgb, #000 45%, transparent);
+}
+
 .story-view__icon {
+  display: grid;
+  place-items: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, #fff 12%, transparent);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.story-view__nav {
+  position: absolute;
+  top: 4.5rem;
+  bottom: 4.5rem;
+  z-index: 2;
+  width: 38%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.story-view__nav--prev {
+  left: 0;
+}
+
+.story-view__nav--next {
+  right: 0;
+}
+
+.story-view__views {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.85rem;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, #fff 14%, transparent);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 18%, transparent);
+}
+
+.story-view__views-stack {
+  display: flex;
+  align-items: center;
+  padding-left: 0.15rem;
+}
+
+.story-view__views-chip {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  margin-left: -0.45rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #2a2a32;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #fff 22%, transparent);
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+.story-view__views-chip:first-child {
+  margin-left: 0;
+}
+
+.story-view__views-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.story-view__views-label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.story-view__views-chevron {
+  flex-shrink: 0;
+  transform: rotate(180deg);
+  opacity: 0.9;
+}
+
+.story-viewers {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  display: grid;
+  align-items: end;
+  padding: 0.75rem;
+  background: color-mix(in srgb, #0a0a0c 55%, transparent);
+}
+
+.story-viewers__panel {
+  width: min(26rem, 100%);
+  max-height: min(28rem, 72vh);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 1.15rem 1.15rem 1rem 1rem;
+  background: var(--color-surface);
+  box-shadow:
+    0 24px 64px color-mix(in srgb, #000 28%, transparent),
+    inset 0 0 0 1px var(--color-border);
+}
+
+.story-viewers__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.story-viewers__title {
+  flex: 1;
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.story-viewers__close {
   display: grid;
   place-items: center;
   width: 2rem;
@@ -468,18 +872,85 @@ defineExpose({ reload: load });
   color: var(--color-text);
   cursor: pointer;
 }
-.story-view__stage {
+
+.story-viewers__body {
   flex: 1;
   min-height: 0;
-  border: 0;
-  padding: 0;
-  background: var(--color-primary-surface, var(--color-surface));
-  cursor: pointer;
+  overflow: auto;
+  padding: 0.35rem 0;
 }
-.story-view__stage img,
-.story-view__stage video {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+
+.story-viewers__empty {
+  margin: 0;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--color-text-muted, var(--color-text));
+}
+
+.story-viewers__people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.story-viewers__person {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 1rem;
+}
+
+.story-viewers__avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.story-viewers__avatar--placeholder {
+  display: grid;
+  place-items: center;
+  background: var(--color-primary-surface, var(--color-surface-muted));
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.story-viewers__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.story-viewers__name {
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.story-viewers__time {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted, var(--color-text));
+}
+
+.story-viewers-fade-enter-active,
+.story-viewers-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.story-viewers-fade-enter-active .story-viewers__panel,
+.story-viewers-fade-leave-active .story-viewers__panel {
+  transition: transform 0.22s ease;
+}
+
+.story-viewers-fade-enter-from,
+.story-viewers-fade-leave-to {
+  opacity: 0;
+}
+
+.story-viewers-fade-enter-from .story-viewers__panel,
+.story-viewers-fade-leave-to .story-viewers__panel {
+  transform: translateY(1.25rem);
 }
 </style>

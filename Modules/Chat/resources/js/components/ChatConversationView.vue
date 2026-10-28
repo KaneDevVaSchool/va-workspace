@@ -68,6 +68,7 @@ const headerTitle = computed(() => {
   return otherUser.value?.name || 'Trò chuyện';
 });
 const isOwner = computed(() => Boolean(store.activeConversation?.is_owner));
+const groupAvatarUrl = computed(() => (isGroup.value ? store.activeConversation?.avatar_url : null) ?? null);
 const pinnedMessage = computed(() => store.activeConversation?.pinned_message ?? null);
 const mentionQuery = computed(() => {
   if (!isGroup.value) return null;
@@ -469,6 +470,20 @@ function showReaders(message) {
   readersFor.value = message;
 }
 
+const readerRows = computed(() => {
+  if (!readersFor.value) return [];
+  const members = store.activeConversation?.members || [];
+  const byId = new Map(members.map((user) => [user.id, user]));
+  return (readersFor.value.reads || []).map((reader) => {
+    const member = byId.get(reader.id);
+    return {
+      id: reader.id,
+      name: reader.name || member?.name || 'Đồng nghiệp',
+      avatar_url: reader.avatar_url ?? member?.avatar_url ?? null,
+    };
+  });
+});
+
 async function pinThis(message) {
   menu.value = null;
   await store.pinMessage(store.activeConversationId, message.id).catch((error) => {
@@ -846,7 +861,13 @@ function menuItems(message) {
       <button type="button" class="chat-view__icon-btn" aria-label="Quay lại danh sách" @click="store.backToList()">
         <AppIcon name="chevronLeft" :size="18" :stroke-width="1.75" />
       </button>
-      <span v-if="isGroup" class="chat-view__avatar chat-view__avatar--group" aria-hidden="true">
+      <img
+        v-if="isGroup && groupAvatarUrl"
+        class="chat-view__avatar"
+        :src="groupAvatarUrl"
+        :alt="`Ảnh nhóm ${headerTitle}`"
+      />
+      <span v-else-if="isGroup" class="chat-view__avatar chat-view__avatar--group" aria-hidden="true">
         <AppIcon name="users" :size="16" :stroke-width="1.75" />
       </span>
       <img
@@ -1367,11 +1388,36 @@ function menuItems(message) {
     <ChatMemberDialog :open="membersOpen" @close="membersOpen = false" />
     <ChatPollDialog :open="pollOpen" @close="pollOpen = false" />
     <ChatAlbumDialog :open="albumOpen" @close="albumOpen = false" />
-    <div v-if="readersFor" class="chat-readers" role="dialog" aria-label="Người đã xem">
-      <p>Đã xem</p>
-      <p v-for="reader in readersFor.reads || []" :key="reader.id">{{ reader.name }}</p>
-      <button type="button" @click="readersFor = null">Đóng</button>
-    </div>
+    <Teleport to="body">
+      <div
+        v-if="readersFor"
+        class="chat-readers"
+        role="presentation"
+        @mousedown.self="readersFor = null"
+      >
+        <div class="chat-readers__panel" role="dialog" aria-modal="true" aria-labelledby="chat-readers-title">
+          <div class="chat-readers__head">
+            <h3 id="chat-readers-title" class="chat-readers__title">Đã xem</h3>
+            <button type="button" class="chat-readers__close" aria-label="Đóng" @click="readersFor = null">
+              <AppIcon name="close" :size="16" />
+            </button>
+          </div>
+          <ul v-if="readerRows.length" class="chat-readers__list hide-scrollbar">
+            <li v-for="reader in readerRows" :key="reader.id" class="chat-readers__row">
+              <img
+                v-if="reader.avatar_url"
+                class="chat-readers__avatar"
+                :src="reader.avatar_url"
+                :alt="`Ảnh đại diện của ${reader.name}`"
+              />
+              <span v-else class="chat-readers__avatar chat-readers__avatar--ph">{{ initial(reader.name) }}</span>
+              <span class="chat-readers__name">{{ reader.name }}</span>
+            </li>
+          </ul>
+          <p v-else class="chat-readers__empty">Chưa có ai xem tin này.</p>
+        </div>
+      </div>
+    </Teleport>
 
     <ConfirmDialog
       :open="confirmKind !== null"
@@ -2174,15 +2220,117 @@ function menuItems(message) {
 
 .chat-readers {
   position: fixed;
-  right: 1rem;
-  bottom: 5rem;
-  z-index: 70;
-  width: 14rem;
-  padding: 0.7rem;
-  border-radius: 12px;
+  inset: 0;
+  z-index: 280;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  background: var(--color-sidebar-overlay);
+}
+
+.chat-readers__panel {
+  width: 100%;
+  max-width: 22rem;
+  max-height: min(70vh, 24rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.chat-readers__head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.chat-readers__title {
+  flex: 1;
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
   color: var(--color-text);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.chat-readers__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.chat-readers__list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  list-style: none;
+  overflow: auto;
+}
+
+.chat-readers__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.45rem 0.35rem;
+}
+
+.chat-readers__avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.chat-readers__avatar--ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.chat-readers__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.chat-readers__empty {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+@media (min-width: 640px) {
+  .chat-readers {
+    align-items: center;
+    padding: var(--space-5);
+  }
+
+  .chat-readers__panel {
+    border-radius: var(--radius-lg);
+  }
 }
 
 .chat-menu__item {

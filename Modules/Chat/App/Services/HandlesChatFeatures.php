@@ -16,10 +16,32 @@ use Modules\Chat\App\Models\ConversationMember;
 use Modules\Chat\App\Models\Message;
 use Modules\Chat\App\Models\MessageAttachment;
 use Modules\Chat\App\Models\MessageMention;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 trait HandlesChatFeatures
 {
+    /**
+     * @param  list<int>  $userIds
+     */
+    public function updateGroupAvatar(User $actor, int $conversationId, UploadedFile $avatar): array
+    {
+        $conversation = $this->requireOwnedGroup($actor, $conversationId);
+
+        if ($conversation->avatar_path) {
+            Storage::disk('public')->delete($conversation->avatar_path);
+        }
+
+        $conversation->update([
+            'avatar_path' => $avatar->store('chat/groups', 'public'),
+        ]);
+
+        $this->refreshMemberInboxes($conversationId);
+
+        return $this->presentConversation($this->requireConversation($conversationId), $actor);
+    }
+
     /**
      * @param  list<int>  $userIds
      */
@@ -382,6 +404,7 @@ trait HandlesChatFeatures
             ? $message->reads->map(fn ($read) => [
                 'id' => $read->user_id,
                 'name' => $read->user?->name,
+                'avatar_url' => $read->user?->avatar_url,
             ])->values()->all()
             : [];
 

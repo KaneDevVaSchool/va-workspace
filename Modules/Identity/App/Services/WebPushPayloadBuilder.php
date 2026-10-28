@@ -77,7 +77,7 @@ final class WebPushPayloadBuilder
     }
 
     /**
-     * Dòng hiện trên điện thoại. Tin nhắn chat một câu ngắn, không lặp tên app.
+     * Dòng hiện trên điện thoại. Chat: tiêu đề là nội dung tin (OS đã hiện tên app).
      *
      * @param  array{title: string, body: string}  $formatted
      * @return array{title: string, body: string}
@@ -85,8 +85,10 @@ final class WebPushPayloadBuilder
     public function forPhone(string $type, array $formatted): array
     {
         if ($type === NotificationService::TYPE_CHAT_MESSAGE) {
+            $line = trim($formatted['body']);
+
             return [
-                'title' => self::CHAT_PHONE_TITLE,
+                'title' => $line !== '' ? $line : self::CHAT_PHONE_TITLE,
                 'body' => '',
             ];
         }
@@ -130,7 +132,7 @@ final class WebPushPayloadBuilder
     {
         $title = trim($title);
         $detail = trim($detail);
-        if ($title !== '' && $detail !== '' && ! str_contains($detail, $title)) {
+        if ($title !== '' && $detail !== '' && !str_contains($detail, $title)) {
             return "{$title} · {$detail}";
         }
 
