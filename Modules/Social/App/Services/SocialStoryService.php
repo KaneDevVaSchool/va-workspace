@@ -4,8 +4,10 @@ namespace Modules\Social\App\Services;
 
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Modules\Chat\App\Models\Conversation;
 use Modules\Social\App\Models\SocialStory;
 use Modules\Social\App\Models\SocialStoryView;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -34,7 +36,8 @@ class SocialStoryService
 
         $grouped = $stories->groupBy('user_id');
         $mineStories = $grouped->get($actor->id, collect());
-        $rings = [];
+        $contacts = $this->privateChatContacts($actor);
+        $ringsByUserId = [];
 
         foreach ($grouped as $userId => $items) {
             if ((int) $userId === (int) $actor->id) {
@@ -45,32 +48,44 @@ class SocialStoryService
                 continue;
             }
             $presented = $items->map(fn (SocialStory $story) => $this->present($story, $viewedIds))->values()->all();
-            $rings[] = [
+            $ringsByUserId[(int) $userId] = [
                 'user' => $this->presentUser($user),
+                'has_stories' => true,
                 'unseen' => collect($presented)->contains(fn (array $story) => ! $story['viewed']),
                 'stories' => $presented,
                 'latest_at' => $items->max('created_at')?->toIso8601String(),
+                'contact_rank' => $contacts['rank'][(int) $userId] ?? null,
             ];
         }
 
-        usort($rings, function (array $left, array $right) {
-            $unseen = (int) $right['unseen'] <=> (int) $left['unseen'];
-            if ($unseen !== 0) {
-                return $unseen;
+        foreach ($contacts['users'] as $rank => $user) {
+            $userId = (int) $user->id;
+            if ($userId === (int) $actor->id || isset($ringsByUserId[$userId])) {
+                continue;
             }
+            $ringsByUserId[$userId] = [
+                'user' => $this->presentUser($user),
+                'has_stories' => false,
+                'unseen' => false,
+                'stories' => [],
+                'latest_at' => null,
+                'contact_rank' => $rank,
+            ];
+        }
 
-            return strcmp((string) ($right['latest_at'] ?? ''), (string) ($left['latest_at'] ?? ''));
-        });
+        $rings = array_values($ringsByUserId);
+        usort($rings, fn (array $left, array $right) => $this->compareRings($left, $right));
 
         $minePresented = $mineStories->map(fn (SocialStory $story) => $this->present($story, $viewedIds))->values()->all();
 
         return [
             'mine' => [
                 'user' => $this->presentUser($actor),
+                'has_stories' => $minePresented !== [],
                 'unseen' => false,
                 'stories' => $minePresented,
             ],
-            'rings' => $rings,
+            'rings' => array_map(fn (array $ring) => $this->publicRing($ring), $rings),
         ];
     }
 
@@ -182,5 +197,78 @@ class SocialStoryService
             'name' => $user->name,
             'avatar_url' => $user->avatar_url,
         ];
+    }
+
+    /**
+     * @return array{users: Collection<int, User>, rank: array<int, int>}
+     */
+    private function privateChatContacts(User $actor): array
+    {
+        $conversations = Conversation::query()
+            ->where('type', Conversation::TYPE_PRIVATE)
+            ->whereHas('members', fn ($query) => $query->where('user_id', $actor->id))
+            ->with(['members.user'])
+            ->orderByDesc('updated_at')
+            ->limit(80)
+            ->get();
+
+        $users = collect();
+        $rank = [];
+        $nextRank = 0;
+
+        foreach ($conversations as $conversation) {
+            $otherMember = $conversation->members->first(
+                fn ($member) => (int) $member->user_id !== (int) $actor->id,
+            );
+            $user = $otherMember?->user;
+            if (! $user || ! $user->isActive()) {
+                continue;
+            }
+            $userId = (int) $user->id;
+            if (isset($rank[$userId])) {
+                continue;
+            }
+            $rank[$userId] = $nextRank;
+            $users->push($user);
+            $nextRank++;
+        }
+
+        return ['users' => $users, 'rank' => $rank];
+    }
+
+    /**
+     * @param  array<string, mixed>  $left
+     * @param  array<string, mixed>  $right
+     */
+    private function compareRings(array $left, array $right): int
+    {
+        $leftHas = ! empty($left['has_stories']);
+        $rightHas = ! empty($right['has_stories']);
+
+        if ($leftHas && $rightHas) {
+            $unseen = (int) $right['unseen'] <=> (int) $left['unseen'];
+            if ($unseen !== 0) {
+                return $unseen;
+            }
+
+            return strcmp((string) ($right['latest_at'] ?? ''), (string) ($left['latest_at'] ?? ''));
+        }
+
+        if ($leftHas !== $rightHas) {
+            return $leftHas ? -1 : 1;
+        }
+
+        return ((int) ($left['contact_rank'] ?? PHP_INT_MAX)) <=> ((int) ($right['contact_rank'] ?? PHP_INT_MAX));
+    }
+
+    /**
+     * @param  array<string, mixed>  $ring
+     * @return array<string, mixed>
+     */
+    private function publicRing(array $ring): array
+    {
+        unset($ring['contact_rank']);
+
+        return $ring;
     }
 }

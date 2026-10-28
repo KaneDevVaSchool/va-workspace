@@ -30,24 +30,20 @@ const {
   searchQuery,
   peopleResults,
   peopleOpen,
-  feedScope,
   postScope,
   focusedPostId,
   openCommentsPostId,
   hashtagTotal,
-  feedScopes,
   activeHashtag,
   activeHashtagLabel,
   departmentName,
   currentWallUserId,
   wallUserName,
   viewingOtherWall,
-  activeFilterLabel,
   visiblePosts,
   canLoadMore,
   firstUnpinnedIndex,
   loadMore,
-  onScopeChange,
   onTabChange,
   openColleagueWall,
   onPosted,
@@ -67,7 +63,6 @@ const {
 const pinnedSystem = ref(null);
 const pinnedCompany = ref(null);
 const hashtagPanel = ref(null);
-const filterSheetOpen = ref(false);
 const colleagueSheetOpen = ref(false);
 const colleagueSearchRef = ref(null);
 const loadMoreSentinel = ref(null);
@@ -75,24 +70,15 @@ let unregisterRefresh;
 let loadMoreObserver;
 
 const wallSegments = computed(() => {
-  const items = [{ id: 'company', label: 'Bảng tin' }];
+  const items = [{ id: 'company', label: 'Bảng tin chung' }];
   if (departmentName.value) {
-    items.push({ id: 'department', label: departmentName.value });
+    items.push({ id: 'department', label: 'Bảng tin phòng' });
   }
   items.push({ id: 'personal', label: 'Tường của tôi' });
   return items;
 });
 
-const showScopeSubtabs = computed(
-  () => !viewingOtherWall.value && postScope.value === 'company',
-);
-
-const showFilterSheetTrigger = computed(
-  () => !viewingOtherWall.value && postScope.value !== 'company',
-);
-
 function closeSheets() {
-  filterSheetOpen.value = false;
   colleagueSheetOpen.value = false;
 }
 
@@ -162,39 +148,6 @@ onBeforeUnmount(() => {
 <template>
   <div class="emp-feed">
     <div class="emp-feed__top">
-      <div class="emp-feed__toolbar">
-        <label class="emp-feed__search">
-          <AppIcon name="search" :size="18" class="emp-feed__search-icon" />
-          <input
-            v-model="searchQuery"
-            type="search"
-            class="emp-feed__search-input"
-            placeholder="Tìm bài viết, đồng nghiệp..."
-            autocomplete="off"
-            enterkeyhint="search"
-            @focus="peopleOpen = peopleResults.length > 0"
-          />
-        </label>
-        <button
-          type="button"
-          class="emp-feed__icon-btn"
-          aria-label="Tìm đồng nghiệp"
-          @click="colleagueSheetOpen = true"
-        >
-          <AppIcon name="users" :size="20" :stroke-width="1.8" />
-        </button>
-        <button
-          v-if="showFilterSheetTrigger"
-          type="button"
-          class="emp-feed__icon-btn"
-          :aria-expanded="filterSheetOpen"
-          aria-label="Lọc bài viết"
-          @click="filterSheetOpen = !filterSheetOpen"
-        >
-          <AppIcon name="sliders" :size="20" :stroke-width="1.8" />
-        </button>
-      </div>
-
       <div
         v-if="peopleOpen && searchQuery.trim().length >= 2"
         class="emp-feed__people"
@@ -234,7 +187,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <section class="emp-feed__nav-card" aria-label="Chọn tường và bộ lọc">
+      <section class="emp-feed__nav-card" aria-label="Chọn bảng tin">
         <div v-if="viewingOtherWall" class="emp-feed__wall-visit">
           <button
             type="button"
@@ -270,30 +223,20 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div
-            v-if="showScopeSubtabs"
-            class="emp-feed__subtabs"
-            role="tablist"
-            aria-label="Lọc nội dung bảng tin"
-          >
-            <button
-              v-for="item in feedScopes"
-              :key="item.id"
-              type="button"
-              role="tab"
-              class="emp-feed__subtab"
-              :class="{ 'emp-feed__subtab--active': feedScope === item.id }"
-              :aria-selected="feedScope === item.id"
-              @click="onScopeChange(item.id)"
-            >
-              {{ item.label }}
-            </button>
-          </div>
         </template>
       </section>
+
+      <button
+        type="button"
+        class="emp-feed__colleague-link"
+        @click="colleagueSheetOpen = true"
+      >
+        <AppIcon name="users" :size="16" :stroke-width="1.8" aria-hidden="true" />
+        Tìm đồng nghiệp
+      </button>
     </div>
 
-    <SocialStoryRail />
+    <SocialStoryRail @open-profile="openColleagueWall" />
     <div class="emp-feed__composer">
       <SocialPostComposer
         :key="`${postScope}-${currentWallUserId ?? 'none'}`"
@@ -393,8 +336,6 @@ onBeforeUnmount(() => {
         <p v-else-if="activeHashtag">
           Chưa có bài gắn #{{ activeHashtagLabel }} trên tường này.
         </p>
-        <p v-else-if="feedScope === 'mine'">Bạn chưa đăng bài viết nào.</p>
-        <p v-else-if="feedScope === 'reacted'">Bạn chưa tương tác bài viết nào.</p>
         <p v-else-if="viewingOtherWall">
           Chưa có bài trên tường của {{ wallUserName }}. Hãy là người đăng đầu tiên!
         </p>
@@ -421,38 +362,6 @@ onBeforeUnmount(() => {
     </div>
 
     <Teleport to="body">
-      <Transition name="emp-feed-sheet">
-        <div
-          v-if="filterSheetOpen"
-          class="emp-feed-sheet"
-          role="presentation"
-          @mousedown.self="closeSheets"
-        >
-          <div class="emp-feed-sheet__panel" role="dialog" aria-modal="true" aria-label="Lọc bảng tin">
-            <header class="emp-feed-sheet__head">
-              <h2 class="emp-feed-sheet__title">Lọc bảng tin</h2>
-              <button type="button" class="emp-feed-sheet__close" aria-label="Đóng" @click="closeSheets">
-                <AppIcon name="close" :size="20" />
-              </button>
-            </header>
-            <ul class="emp-feed-sheet__list">
-              <li v-for="item in feedScopes" :key="item.id">
-                <button
-                  type="button"
-                  class="emp-feed-sheet__option"
-                  :class="{ 'emp-feed-sheet__option--active': feedScope === item.id }"
-                  @click="onScopeChange(item.id); closeSheets()"
-                >
-                  {{ item.label }}
-                  <AppIcon v-if="feedScope === item.id" name="check" :size="18" />
-                </button>
-              </li>
-            </ul>
-            <p class="emp-feed-sheet__hint">Đang chọn: {{ activeFilterLabel }}</p>
-          </div>
-        </div>
-      </Transition>
-
       <Transition name="emp-feed-sheet">
         <div
           v-if="colleagueSheetOpen"
@@ -655,6 +564,22 @@ onBeforeUnmount(() => {
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+}
+
+.emp-feed__colleague-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+  margin: 0 var(--space-1);
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
 }
 
 .emp-feed__segmented {

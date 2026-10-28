@@ -664,7 +664,7 @@ onMounted(async () => {
                     </div>
                 </nav>
 
-                <SocialStoryRail />
+                <SocialStoryRail @open-profile="openColleagueWall" />
                 <SocialPostComposer
                     :key="`${postScope}-${currentWallUserId ?? 'none'}`"
                     ref="composer"

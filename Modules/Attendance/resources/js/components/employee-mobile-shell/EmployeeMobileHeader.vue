@@ -22,6 +22,7 @@ const props = defineProps({
     pageTitle: { type: String, default: "" },
     isAttendanceRoute: { type: Boolean, default: false },
     showSearch: { type: Boolean, default: false },
+    searchPlaceholder: { type: String, default: "Tìm tiện ích nhanh..." },
     searchQuery: { type: String, default: "" },
     headerRefreshing: { type: Boolean, default: false },
     chatUnreadLabel: { type: String, default: "" },
@@ -233,7 +234,7 @@ const searchModel = computed({
                 v-model="searchModel"
                 type="search"
                 class="employee-shell__search-input"
-                placeholder="Tìm tiện ích nhanh..."
+                :placeholder="searchPlaceholder"
                 autocomplete="off"
                 enterkeyhint="search"
             />

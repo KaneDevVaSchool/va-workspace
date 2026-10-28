@@ -1,7 +1,7 @@
 //
 // Logic bảng tin mobile (/dashboard/me/feed) — tái sử dụng API & quy tắc SocialFeed.
 //
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, inject, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
@@ -19,7 +19,7 @@ export function useEmployeeSocialFeed() {
   const loadingMore = ref(false);
   const page = ref(1);
   const lastPage = ref(1);
-  const searchQuery = ref('');
+  const searchQuery = inject('employeeFeedSearch', ref(''));
   const serverQuery = ref('');
   const peopleResults = ref([]);
   const peopleOpen = ref(false);
@@ -32,12 +32,6 @@ export function useEmployeeSocialFeed() {
   const suppressFeedReload = ref(false);
   const hashtagTotal = ref(0);
   let searchTimer = null;
-
-  const feedScopes = [
-    { id: 'all', label: 'Tất cả' },
-    { id: 'mine', label: 'Bài của tôi' },
-    { id: 'reacted', label: 'Đã tương tác' },
-  ];
 
   const activeHashtag = computed(() => {
     const raw = route.query.hashtag;
@@ -62,9 +56,6 @@ export function useEmployeeSocialFeed() {
   const viewingOtherWall = computed(
     () => postScope.value === 'personal' && wallProfile.value?.is_own === false,
   );
-  const activeFilterLabel = computed(
-    () => feedScopes.find((item) => item.id === feedScope.value)?.label ?? 'Tất cả',
-  );
   const visiblePosts = computed(() => posts.value);
   const canLoadMore = computed(
     () => page.value < lastPage.value && !serverQuery.value.trim(),
@@ -85,12 +76,6 @@ export function useEmployeeSocialFeed() {
       }
     } else if ((post.post_scope ?? 'company') !== postScope.value) {
       return false;
-    }
-    if (feedScope.value === 'mine') {
-      return post.can_edit;
-    }
-    if (feedScope.value === 'reacted') {
-      return Boolean(post.my_reaction);
     }
     if (activeHashtag.value) {
       return (post.hashtags ?? []).some(
@@ -131,14 +116,6 @@ export function useEmployeeSocialFeed() {
       loading.value = false;
       loadingMore.value = false;
     }
-  }
-
-  function onScopeChange(scope) {
-    if (feedScope.value === scope) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-    feedScope.value = scope;
   }
 
   function wallIdFromQuery() {
@@ -376,7 +353,6 @@ export function useEmployeeSocialFeed() {
     }, 300);
   });
 
-  watch(feedScope, () => loadFeed(1));
   watch(activeHashtag, () => loadFeed(1));
   watch([postScope, wallUserId], () => {
     if (suppressFeedReload.value) {
@@ -442,7 +418,6 @@ export function useEmployeeSocialFeed() {
     focusedPostId,
     openCommentsPostId,
     hashtagTotal,
-    feedScopes,
     activeHashtag,
     activeHashtagLabel,
     departmentName,
@@ -450,13 +425,11 @@ export function useEmployeeSocialFeed() {
     wallUserName,
     viewingPersonalWall,
     viewingOtherWall,
-    activeFilterLabel,
     visiblePosts,
     canLoadMore,
     firstUnpinnedIndex,
     loadFeed,
     loadMore,
-    onScopeChange,
     onTabChange,
     openPersonalWall,
     openColleagueWall,

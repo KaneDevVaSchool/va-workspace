@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
 
-const emit = defineEmits(['posted']);
+const emit = defineEmits(['posted', 'open-profile']);
 
 const rings = ref(null);
 const viewer = ref(null);
@@ -52,17 +52,31 @@ function initial(name) {
 
 function openMine() {
   const mine = rings.value?.mine;
-  if (!mine?.stories?.length) {
+  if (!mine?.has_stories && !mine?.stories?.length) {
     fileInput.value?.click();
     return;
   }
   openPack(mine);
 }
 
+function storyPacks() {
+  return (rings.value?.rings || []).filter((ring) => ring.has_stories !== false && (ring.stories?.length ?? 0) > 0);
+}
+
 function openPack(pack) {
+  if (!pack?.has_stories && !(pack?.stories?.length)) {
+    if (pack?.user?.id) emit('open-profile', pack.user.id);
+    return;
+  }
   viewer.value = pack;
   const firstUnseen = (pack.stories || []).findIndex((story) => !story.viewed);
   index.value = firstUnseen >= 0 ? firstUnseen : 0;
+}
+
+function ringLabel(ring) {
+  if (!ring.has_stories) return `${ring.user.name}, chưa có story`;
+  if (ring.unseen) return `${ring.user.name}, story mới`;
+  return `${ring.user.name}, đã xem story`;
 }
 
 function closeViewer() {
@@ -77,7 +91,7 @@ function next() {
     index.value += 1;
     return;
   }
-  const list = rings.value?.rings || [];
+  const list = storyPacks();
   const currentId = activePack.value?.user?.id;
   const at = list.findIndex((item) => item.user?.id === currentId);
   if (at >= 0 && list[at + 1]) {
@@ -92,7 +106,7 @@ function previous() {
     index.value -= 1;
     return;
   }
-  const list = rings.value?.rings || [];
+  const list = storyPacks();
   const currentId = activePack.value?.user?.id;
   const at = list.findIndex((item) => item.user?.id === currentId);
   if (at > 0) openPack(list[at - 1]);
@@ -141,10 +155,13 @@ defineExpose({ reload: load });
   <section v-if="rings" class="story-rail" aria-label="Story">
     <div class="story-rail__scroller hide-scrollbar">
       <button type="button" class="story-rail__item" @click="openMine">
-        <span class="story-rail__ring" :class="{ 'story-rail__ring--mine': !rings.mine.stories.length }">
+        <span
+          class="story-rail__ring"
+          :class="{ 'story-rail__ring--mine': !rings.mine.has_stories && !rings.mine.stories.length }"
+        >
           <img v-if="rings.mine.user.avatar_url" :src="rings.mine.user.avatar_url" alt="" />
           <span v-else>{{ initial(rings.mine.user.name) }}</span>
-          <span v-if="!rings.mine.stories.length" class="story-rail__plus" aria-hidden="true">
+          <span v-if="!rings.mine.has_stories && !rings.mine.stories.length" class="story-rail__plus" aria-hidden="true">
             <AppIcon name="plus" :size="12" :stroke-width="2.4" />
           </span>
         </span>
@@ -155,9 +172,16 @@ defineExpose({ reload: load });
         :key="ring.user.id"
         type="button"
         class="story-rail__item"
+        :aria-label="ringLabel(ring)"
         @click="openPack(ring)"
       >
-        <span class="story-rail__ring" :class="{ 'story-rail__ring--seen': !ring.unseen }">
+        <span
+          class="story-rail__ring"
+          :class="{
+            'story-rail__ring--seen': ring.has_stories && !ring.unseen,
+            'story-rail__ring--idle': !ring.has_stories,
+          }"
+        >
           <img v-if="ring.user.avatar_url" :src="ring.user.avatar_url" alt="" />
           <span v-else>{{ initial(ring.user.name) }}</span>
         </span>
@@ -260,8 +284,12 @@ defineExpose({ reload: load });
   font-weight: 650;
 }
 .story-rail__ring--seen,
-.story-rail__ring--mine {
+.story-rail__ring--mine,
+.story-rail__ring--idle {
   box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-border);
+}
+.story-rail__ring--idle {
+  opacity: 0.92;
 }
 .story-rail__ring img {
   width: 100%;

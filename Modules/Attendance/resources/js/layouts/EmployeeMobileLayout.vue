@@ -45,12 +45,14 @@ const chatStore = useChatStore();
 useChatRealtime();
 const contentRef = ref(null);
 const homeSearchQuery = ref('');
+const feedSearchQuery = ref('');
 let homeRefreshHandler = null;
 let feedRefreshHandler = null;
 let pageRefreshHandler = null;
 const headerRefreshing = ref(false);
 
 provide('employeeHomeSearch', homeSearchQuery);
+provide('employeeFeedSearch', feedSearchQuery);
 provide('employeeHomeRefreshRegister', (handler) => {
   homeRefreshHandler = handler;
   return () => {
@@ -178,6 +180,24 @@ const avatarInitial = computed(() => {
 });
 
 const isHomeHeader = computed(() => route.name === 'dashboard.me');
+const isFeedRoute = computed(() => route.name === 'employee.feed');
+
+const headerSearchQuery = computed({
+  get() {
+    return isFeedRoute.value ? feedSearchQuery.value : homeSearchQuery.value;
+  },
+  set(value) {
+    if (isFeedRoute.value) {
+      feedSearchQuery.value = value;
+    } else {
+      homeSearchQuery.value = value;
+    }
+  },
+});
+
+const headerSearchPlaceholder = computed(() =>
+  isFeedRoute.value ? 'Tìm bài viết, đồng nghiệp...' : 'Tìm tiện ích nhanh...',
+);
 
 const historyRequestsSubView = computed(() => {
   if (route.name !== 'employee.requests') return '';
@@ -235,6 +255,9 @@ watch(
   (name) => {
     if (name !== 'dashboard.me') {
       homeSearchQuery.value = '';
+    }
+    if (name !== 'employee.feed') {
+      feedSearchQuery.value = '';
     }
   },
 );
@@ -295,8 +318,9 @@ function goBackFromSubpage() {
       :today-label="todayLabel"
       :page-title="pageHeaderTitle"
       :is-attendance-route="isAttendanceRoute"
-      :show-search="route.name === 'dashboard.me'"
-      v-model:search-query="homeSearchQuery"
+      :show-search="isHomeHeader || isFeedRoute"
+      :search-placeholder="headerSearchPlaceholder"
+      v-model:search-query="headerSearchQuery"
       :header-refreshing="headerRefreshing"
       :chat-unread-label="chatUnreadLabel"
       :chat-header-aria="chatHeaderAria"
