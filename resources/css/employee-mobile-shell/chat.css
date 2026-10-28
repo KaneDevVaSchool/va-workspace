@@ -193,6 +193,10 @@
   max-height: min(20rem, 44dvh);
 }
 
+.employee-shell__content--chat-thread .chat-dock--picker .chat-attach-sheet {
+  max-height: min(11.5rem, 26dvh);
+}
+
 /*
  * Thư viện ảnh hệ điều hành co visualViewport giống bàn phím. Giữ shell theo
  * large viewport để khung chat không bị đẩy xuống và picker không nằm giữa phía trên.

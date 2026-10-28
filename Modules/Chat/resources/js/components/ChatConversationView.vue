@@ -52,6 +52,8 @@ const listRef = ref(null);
 const inputRef = ref(null);
 const pickerOpen = ref(false);
 const pickerPanel = ref('emoji');
+/** PWA: menu đính kèm trong app — tránh gọi file picker OS ngay khi bàn phím đang mở. */
+const attachSheetOpen = ref(false);
 const replyTo = ref(null);
 const editing = ref(null);
 const menu = ref(null);
@@ -310,6 +312,7 @@ watch(
     replyTo.value = null;
     editing.value = null;
     pickerOpen.value = false;
+    attachSheetOpen.value = false;
     menu.value = null;
     headerMenu.value = null;
     clearInterval(viewingTimer);
@@ -393,8 +396,23 @@ function coarsePointer() {
   return window.matchMedia('(pointer: coarse)').matches;
 }
 
+function composerHasFocus() {
+  const input = inputRef.value;
+  return Boolean(input && document.activeElement === input);
+}
+
+/** Menu đính kèm trong dock thay vì action sheet OS — giữ bàn phím khi chỉ mở menu. */
+function attachSheetEligible() {
+  return holdToReact.value && composerHasFocus();
+}
+
+function onAttachKeepFocus(event) {
+  if (!attachSheetEligible() || editing.value) return;
+  if (event?.cancelable) event.preventDefault();
+}
+
 function onNativeAttachTouchStart() {
-  if (editing.value) return;
+  if (editing.value || attachSheetEligible()) return;
   beginNativeFilePicker();
 }
 
@@ -406,6 +424,23 @@ function openNativePicker(input) {
   if (field && document.activeElement === field && !coarsePointer()) {
     field.blur();
   }
+}
+
+function onAttachToolClick(input) {
+  if (editing.value) return;
+  if (attachSheetEligible()) {
+    pickerOpen.value = false;
+    attachSheetOpen.value = !attachSheetOpen.value;
+    nextTick(() => inputRef.value?.focus());
+    return;
+  }
+  attachSheetOpen.value = false;
+  openNativePicker(input);
+}
+
+function pickAttachSource(input) {
+  attachSheetOpen.value = false;
+  openNativePicker(input);
 }
 
 function insertEmoji(emoji) {
@@ -430,6 +465,7 @@ function togglePicker(panel) {
     pickerOpen.value = false;
     return;
   }
+  attachSheetOpen.value = false;
   inputRef.value?.blur();
   pickerPanel.value = panel;
   pickerOpen.value = true;
@@ -445,6 +481,7 @@ function scheduleViewportForKeyboard() {
 
 function onInputFocus() {
   pickerOpen.value = false;
+  attachSheetOpen.value = false;
   scheduleViewportForKeyboard();
   nextTick(() => {
     scrollToBottom();
@@ -1540,7 +1577,7 @@ function menuItems(message) {
       </Transition>
     </div>
 
-    <div class="chat-dock" :class="{ 'chat-dock--picker': pickerOpen }">
+    <div class="chat-dock" :class="{ 'chat-dock--picker': pickerOpen || attachSheetOpen }">
     <div
       v-if="mentionOpen"
       id="chat-mention-list"
@@ -1588,35 +1625,87 @@ function menuItems(message) {
       />
     </Transition>
 
+    <Transition name="chat-picker">
+      <div
+        v-if="attachSheetOpen"
+        class="chat-attach-sheet"
+        role="menu"
+        aria-label="Đính kèm"
+      >
+        <button
+          type="button"
+          class="chat-attach-sheet__item"
+          role="menuitem"
+          @click="pickAttachSource(photoInput)"
+        >
+          <AppIcon name="image" :size="20" :stroke-width="1.75" />
+          <span>Thư viện ảnh</span>
+        </button>
+        <button
+          type="button"
+          class="chat-attach-sheet__item"
+          role="menuitem"
+          @click="pickAttachSource(cameraInput)"
+        >
+          <AppIcon name="camera" :size="20" :stroke-width="1.75" />
+          <span>Chụp ảnh</span>
+        </button>
+        <button
+          type="button"
+          class="chat-attach-sheet__item"
+          role="menuitem"
+          @click="pickAttachSource(fileInput)"
+        >
+          <AppIcon name="folder" :size="20" :stroke-width="1.75" />
+          <span>Chọn tệp</span>
+        </button>
+      </div>
+    </Transition>
+
     <div class="chat-view__composer">
       <div class="chat-view__tools hide-scrollbar">
         <button
           type="button"
           class="chat-view__tool"
+          :class="{ 'chat-view__tool--on': attachSheetOpen }"
           :disabled="Boolean(editing)"
           aria-label="Chụp ảnh"
+          aria-haspopup="menu"
+          :aria-expanded="attachSheetOpen"
+          @mousedown="onAttachKeepFocus"
+          @pointerdown="onAttachKeepFocus"
           @touchstart.passive="onNativeAttachTouchStart"
-          @click="openNativePicker(cameraInput)"
+          @click="onAttachToolClick(cameraInput)"
         >
           <AppIcon name="camera" :size="17" :stroke-width="1.75" />
         </button>
         <button
           type="button"
           class="chat-view__tool"
+          :class="{ 'chat-view__tool--on': attachSheetOpen }"
           :disabled="Boolean(editing)"
           aria-label="Gửi ảnh"
+          aria-haspopup="menu"
+          :aria-expanded="attachSheetOpen"
+          @mousedown="onAttachKeepFocus"
+          @pointerdown="onAttachKeepFocus"
           @touchstart.passive="onNativeAttachTouchStart"
-          @click="openNativePicker(photoInput)"
+          @click="onAttachToolClick(photoInput)"
         >
           <AppIcon name="image" :size="17" :stroke-width="1.75" />
         </button>
         <button
           type="button"
           class="chat-view__tool"
+          :class="{ 'chat-view__tool--on': attachSheetOpen }"
           :disabled="Boolean(editing)"
           aria-label="Đính kèm tệp"
+          aria-haspopup="menu"
+          :aria-expanded="attachSheetOpen"
+          @mousedown="onAttachKeepFocus"
+          @pointerdown="onAttachKeepFocus"
           @touchstart.passive="onNativeAttachTouchStart"
-          @click="openNativePicker(fileInput)"
+          @click="onAttachToolClick(fileInput)"
         >
           <AppIcon name="paperclip" :size="17" :stroke-width="1.75" />
         </button>
@@ -2689,6 +2778,32 @@ function menuItems(message) {
   opacity: 0.5;
   cursor: not-allowed;
   animation: none;
+}
+
+.chat-attach-sheet {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  background: var(--color-surface);
+}
+
+.chat-attach-sheet__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 0.7rem 0.65rem;
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.chat-attach-sheet__item:active {
+  background: var(--color-bg);
 }
 </style>
 
