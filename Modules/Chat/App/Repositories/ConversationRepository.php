@@ -39,6 +39,25 @@ class ConversationRepository implements ConversationRepositoryInterface
         return $this->findPrivateBetween($userIdA, $userIdB) ?? $this->createPrivate($userIdA, $userIdB);
     }
 
+    public function createGroup(int $creatorId, string $title, array $memberIds): Conversation
+    {
+        return DB::transaction(function () use ($creatorId, $title, $memberIds) {
+            $conversation = Conversation::create([
+                'type' => Conversation::TYPE_GROUP,
+                'title' => $title,
+                'created_by' => $creatorId,
+            ]);
+
+            $ids = array_values(array_unique(array_merge([$creatorId], $memberIds)));
+            $conversation->members()->createMany(array_map(fn (int $id) => [
+                'user_id' => $id,
+                'joined_at' => now(),
+            ], $ids));
+
+            return $conversation->load(['members.user.department']);
+        });
+    }
+
     public function find(int $id): ?Conversation
     {
         return Conversation::find($id);

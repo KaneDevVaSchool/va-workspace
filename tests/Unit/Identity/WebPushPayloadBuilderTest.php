@@ -55,4 +55,21 @@ class WebPushPayloadBuilderTest extends TestCase
 
         $this->assertSame('Dòng tùy chỉnh', $payload['body']);
     }
+
+    public function test_chat_phone_notification_is_a_short_line(): void
+    {
+        $builder = new WebPushPayloadBuilder;
+        $actor = new User(['name' => 'Mai Anh']);
+        $formatted = $builder->build(
+            NotificationService::TYPE_CHAT_MESSAGE,
+            $actor,
+            'Mai Anh đã gửi cho bạn một tin nhắn',
+            'Xin chào nhé',
+        );
+
+        $phone = $builder->forPhone(NotificationService::TYPE_CHAT_MESSAGE, $formatted);
+
+        $this->assertSame('1 lời nhắn từ VA', $phone['title']);
+        $this->assertSame('', $phone['body']);
+    }
 }

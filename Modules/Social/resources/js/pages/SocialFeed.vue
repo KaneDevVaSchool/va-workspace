@@ -12,6 +12,7 @@ import SocialHashtagPanel from "../components/SocialHashtagPanel.vue";
 import SocialPinnedPanel from "../components/SocialPinnedPanel.vue";
 import SocialPostCard from "../components/SocialPostCard.vue";
 import SocialPostComposer from "../components/SocialPostComposer.vue";
+import SocialStoryRail from "../components/SocialStoryRail.vue";
 import SocialProfilePanel from "../components/SocialProfilePanel.vue";
 
 const auth = useAuthStore();
@@ -663,6 +664,7 @@ onMounted(async () => {
                     </div>
                 </nav>
 
+                <SocialStoryRail />
                 <SocialPostComposer
                     :key="`${postScope}-${currentWallUserId ?? 'none'}`"
                     ref="composer"
@@ -1107,6 +1109,10 @@ onMounted(async () => {
     flex-direction: column;
     gap: var(--space-3);
     overflow-y: auto;
+}
+
+.social-page__rail > * {
+    flex-shrink: 0;
 }
 
 .social-page__rail--left {

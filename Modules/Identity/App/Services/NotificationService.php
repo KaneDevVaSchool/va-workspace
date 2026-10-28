@@ -246,12 +246,15 @@ class NotificationService
         ?int $notificationId,
         array $extraPushData = [],
     ): void {
-        $formatted = $this->pushPayloadBuilder->build(
+        $formatted = $this->pushPayloadBuilder->forPhone(
             $type,
-            $actor,
-            $title,
-            $body,
-            $extraPushData,
+            $this->pushPayloadBuilder->build(
+                $type,
+                $actor,
+                $title,
+                $body,
+                $extraPushData,
+            ),
         );
 
         $pushPayload = [

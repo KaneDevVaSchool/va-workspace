@@ -1,4 +1,5 @@
 import '../styles/socialStickers.css';
+import { vaStickerById } from './vaStickers.js';
 
 const STICKER_ID_RE = /^[0-9a-f]{2,8}(?:_[0-9a-f]{2,8}){0,12}$/;
 const LOTTIE_BASE = 'https://fonts.gstatic.com/s/e/notoemoji/latest';
@@ -57,7 +58,25 @@ function fetchLottieJson(id) {
  * `hoverPlay`: chỉ chạy khi hover (dùng trong picker).
  */
 export function mountStickerAnimation(el, id, { hoverPlay = false } = {}) {
-  if (!el || !isValidStickerId(id)) return () => {};
+  if (!el) return () => {};
+
+  const va = vaStickerById(id);
+  if (va) {
+    el.setAttribute('role', 'img');
+    el.setAttribute('aria-label', va.label);
+    el.textContent = '';
+    const image = document.createElement('img');
+    image.className = 'social-sticker__va';
+    image.src = va.src;
+    image.alt = '';
+    el.appendChild(image);
+    el.classList.add('social-sticker--ready', 'social-sticker--static');
+    return () => {
+      image.remove();
+    };
+  }
+
+  if (!isValidStickerId(id)) return () => {};
 
   let anim = null;
   let destroyed = false;
@@ -141,15 +160,26 @@ export function mountStickerAnimation(el, id, { hoverPlay = false } = {}) {
 
   if (hoverPlay) {
     const hoverTarget = el.closest('button, [role="button"]') || el;
-    hoverTarget.addEventListener('pointerenter', onEnter);
+    let lastPointer = 'mouse';
+    function onPointerDown(event) {
+      lastPointer = event.pointerType || 'mouse';
+    }
+    function onEnterIfFine(event) {
+      const type = event?.pointerType || lastPointer;
+      if (type === 'touch') return;
+      onEnter(event);
+    }
+    hoverTarget.addEventListener('pointerdown', onPointerDown);
+    hoverTarget.addEventListener('pointerenter', onEnterIfFine);
     hoverTarget.addEventListener('pointerleave', onLeave);
-    hoverTarget.addEventListener('focus', onEnter);
+    hoverTarget.addEventListener('focus', onEnterIfFine);
     hoverTarget.addEventListener('blur', onLeave);
     return () => {
       destroyed = true;
-      hoverTarget.removeEventListener('pointerenter', onEnter);
+      hoverTarget.removeEventListener('pointerdown', onPointerDown);
+      hoverTarget.removeEventListener('pointerenter', onEnterIfFine);
       hoverTarget.removeEventListener('pointerleave', onLeave);
-      hoverTarget.removeEventListener('focus', onEnter);
+      hoverTarget.removeEventListener('focus', onEnterIfFine);
       hoverTarget.removeEventListener('blur', onLeave);
       stopAnim();
     };

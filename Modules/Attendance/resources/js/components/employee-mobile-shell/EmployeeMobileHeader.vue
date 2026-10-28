@@ -111,11 +111,22 @@ const searchModel = computed({
                     </div>
                 </template>
                 <template v-else-if="isProfile">
+                    <p class="employee-shell__kicker">Hồ sơ cá nhân</p>
                     <h1
                         class="employee-shell__hello employee-shell__hello--page"
                     >
-                        Hồ sơ cá nhân
+                        {{ displayName || "Nhân sự" }}
                     </h1>
+                    <div
+                        v-if="departmentName || jobTitleName"
+                        class="employee-shell__meta employee-shell__meta--reserve"
+                    >
+                        <span class="employee-shell__meta-extra">{{
+                            [jobTitleName, departmentName]
+                                .filter(Boolean)
+                                .join(" · ")
+                        }}</span>
+                    </div>
                 </template>
                 <template v-else>
                     <p class="employee-shell__kicker">VA Workspace</p>

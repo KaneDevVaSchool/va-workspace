@@ -46,6 +46,12 @@ class MyDashboardProfileTest extends TestCase
             ->assertOk()
             ->assertJsonPath('workspace.name', 'Test User')
             ->assertJsonPath('hrm', null);
+
+        $response = $this->actingAs($user)->getJson('/api/dashboard/me/profile');
+        $keys = collect($response->json('editable_fields'))->pluck('key')->all();
+        $this->assertContains('full_name', $keys);
+        $this->assertContains('company_email', $keys);
+        $this->assertContains('attendance_code', $keys);
     }
 
     public function test_avatar_upload_updates_user(): void
@@ -83,5 +89,22 @@ class MyDashboardProfileTest extends TestCase
             'user_id' => $user->id,
             'status' => DashboardProfileChangeRequest::STATUS_PENDING,
         ]);
+    }
+
+    public function test_change_request_accepts_direct_manager_correction(): void
+    {
+        $user = User::factory()->create();
+        $user->assignRole('viewer');
+
+        $this->actingAs($user)
+            ->postJson('/api/dashboard/me/profile/change-requests', [
+                'changes' => [
+                    'manager_name' => 'Trần Quản lý (VA010099)',
+                ],
+                'note' => 'QLTT trên HRM không đúng với thực tế',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('request.changes.manager_name.label', 'Quản lý trực tiếp')
+            ->assertJsonPath('request.changes.manager_name.requested', 'Trần Quản lý (VA010099)');
     }
 }

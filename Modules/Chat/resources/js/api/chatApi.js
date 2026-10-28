@@ -6,6 +6,10 @@ export function openConversation(userId) {
   return window.axios.post('/api/chat/conversations', { user_id: userId }).then((r) => r.data.conversation);
 }
 
+export function createGroup(payload) {
+  return window.axios.post('/api/chat/conversations/groups', payload).then((r) => r.data.conversation);
+}
+
 export function listMessages(conversationId, beforeId = null) {
   return window.axios
     .get(`/api/chat/conversations/${conversationId}/messages`, { params: beforeId ? { before_id: beforeId } : {} })
@@ -26,6 +30,8 @@ export function sendMessage(conversationId, payload) {
   if (payload.reply_to_id) form.append('reply_to_id', String(payload.reply_to_id));
   if (payload.message_type) form.append('message_type', payload.message_type);
   if (payload.sticker_id) form.append('sticker_id', payload.sticker_id);
+  if (payload.voice_duration) form.append('voice_duration', String(payload.voice_duration));
+  (payload.mention_ids || []).forEach((id) => form.append('mention_ids[]', String(id)));
   payload.files.forEach((file) => form.append('attachments[]', file));
   return window.axios
     .post(`/api/chat/conversations/${conversationId}/messages`, form, {
@@ -62,8 +68,80 @@ export function leaveViewing(conversationId) {
   return window.axios.delete(`/api/chat/conversations/${conversationId}/viewing`);
 }
 
-export function sendTyping(conversationId) {
-  return window.axios.post(`/api/chat/conversations/${conversationId}/typing`);
+export function clearHistory(conversationId) {
+  return window.axios.delete(`/api/chat/conversations/${conversationId}/history`);
+}
+
+export function disbandGroup(conversationId) {
+  return window.axios.delete(`/api/chat/conversations/${conversationId}`);
+}
+
+export function sendTyping(conversationId, active = true) {
+  return window.axios.post(`/api/chat/conversations/${conversationId}/typing`, { active });
+}
+
+export function beatPresence() {
+  return window.axios.post('/api/chat/presence');
+}
+
+export function addMembers(conversationId, userIds) {
+  return window.axios
+    .post(`/api/chat/conversations/${conversationId}/members`, { user_ids: userIds })
+    .then((r) => r.data.conversation);
+}
+
+export function removeMember(conversationId, userId) {
+  return window.axios
+    .delete(`/api/chat/conversations/${conversationId}/members/${userId}`)
+    .then((r) => r.data);
+}
+
+export function transferOwner(conversationId, userId) {
+  return window.axios
+    .post(`/api/chat/conversations/${conversationId}/transfer`, { user_id: userId })
+    .then((r) => r.data.conversation);
+}
+
+export function pinConversation(conversationId, pinned) {
+  return window.axios
+    .post(`/api/chat/conversations/${conversationId}/pin`, { pinned })
+    .then((r) => r.data.conversation);
+}
+
+export function muteConversation(conversationId, hours) {
+  return window.axios
+    .post(`/api/chat/conversations/${conversationId}/mute`, { hours })
+    .then((r) => r.data.conversation);
+}
+
+export function setDisappear(conversationId, seconds) {
+  return window.axios
+    .post(`/api/chat/conversations/${conversationId}/disappear`, { seconds })
+    .then((r) => r.data.conversation);
+}
+
+export function pinChatMessage(conversationId, messageId) {
+  return window.axios
+    .post(`/api/chat/conversations/${conversationId}/pinned-message`, { message_id: messageId })
+    .then((r) => r.data.conversation);
+}
+
+export function searchMessages(conversationId, query) {
+  return window.axios
+    .get(`/api/chat/conversations/${conversationId}/messages`, { params: { q: query } })
+    .then((r) => r.data.messages);
+}
+
+export function listMedia(conversationId) {
+  return window.axios
+    .get(`/api/chat/conversations/${conversationId}/media`)
+    .then((r) => r.data.files);
+}
+
+export function votePoll(conversationId, messageId, optionId) {
+  return window.axios
+    .post(`/api/chat/conversations/${conversationId}/messages/${messageId}/vote`, { option_id: optionId })
+    .then((r) => r.data.message);
 }
 
 export function fetchUnreadCount() {

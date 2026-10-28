@@ -23,7 +23,7 @@ export function workSessionFromClock(hhmm) {
   return mins < AFTERNOON_START_MINUTES ? SESSIONS.morning : SESSIONS.afternoon;
 }
 
-/** Ca của lần chấm tiếp theo — theo giờ thực tế lúc bấm (sáng trước 12:00, chiều từ 12:00). */
+/** Ca theo đồng hồ (nhãn trên trang). Lần chấm tiếp theo không phụ thuộc ca này. */
 export function nextPunchSession({ now = new Date() } = {}) {
   return workSessionFromDate(now);
 }
@@ -43,21 +43,34 @@ export function sessionSlot(record, sessionId) {
   return { in: record?.afternoonInTime ?? null, out: record?.afternoonOutTime ?? null };
 }
 
-/** Lần chấm tiếp theo trong ca hiện tại (theo giờ máy). */
-export function nextPunchAction(record = {}, { now = new Date() } = {}) {
-  const session = workSessionFromDate(now);
-  const slot = sessionSlot(record, session.id);
-  if (!slot.in) {
-    return { verb: 'Chấm vào', direction: 'in', session, full: `Chấm vào · ${session.label}`, complete: false };
+/**
+ * Một ngày chỉ hai lần: vào (ca sáng) rồi ra (ca chiều).
+ * Không yêu cầu ra ca sáng hay vào ca chiều.
+ */
+export function nextPunchAction(record = {}) {
+  if (!record?.morningInTime) {
+    return {
+      verb: 'Chấm vào',
+      direction: 'in',
+      session: SESSIONS.morning,
+      full: 'Chấm vào buổi sáng',
+      complete: false,
+    };
   }
-  if (!slot.out) {
-    return { verb: 'Chấm ra', direction: 'out', session, full: `Chấm ra · ${session.label}`, complete: false };
+  if (!record?.afternoonOutTime) {
+    return {
+      verb: 'Chấm ra',
+      direction: 'out',
+      session: SESSIONS.afternoon,
+      full: 'Chấm ra buổi chiều',
+      complete: false,
+    };
   }
   return {
-    verb: 'Đã chấm xong ca',
+    verb: 'Đã chấm xong',
     direction: null,
-    session,
-    full: `Đã chấm xong · ${session.label}`,
+    session: SESSIONS.afternoon,
+    full: 'Đã chấm xong',
     complete: true,
   };
 }

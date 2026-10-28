@@ -15,6 +15,8 @@ interface MessageRepositoryInterface
 
     public function hideForUser(int $messageId, int $userId): void;
 
+    public function hideAllForUser(int $conversationId, int $userId): void;
+
     /**
      * Tin nhắn mới nhất trước, phân trang theo con trỏ id (before_id).
      * Bỏ tin người xem đã xoá ở phía mình.
@@ -29,4 +31,11 @@ interface MessageRepositoryInterface
     public function unreadCountsForUser(int $userId): array;
 
     public function latestVisibleForUser(int $conversationId, int $viewerId): ?Message;
+
+    /**
+     * Ghi đã xem cho tối đa 200 tin chưa đọc, trả về id vừa ghi.
+     *
+     * @return list<int>
+     */
+    public function markVisibleRead(int $conversationId, int $userId): array;
 }

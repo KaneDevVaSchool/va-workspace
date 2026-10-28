@@ -22,6 +22,10 @@ class ChatMessageController extends Controller
         }
 
         $beforeId = $request->query('before_id');
+        $query = trim((string) $request->query('q', ''));
+        if ($query !== '') {
+            return response()->json($this->service->searchMessages($request->user(), $conversationId, $query));
+        }
 
         return response()->json(
             $this->service->listMessages($request->user(), $conversationId, $beforeId !== null ? (int) $beforeId : null)
@@ -71,5 +75,27 @@ class ChatMessageController extends Controller
         $this->service->hideMessage($request->user(), $conversationId, $messageId);
 
         return response()->json(['ok' => true]);
+    }
+
+    public function media(Request $request, int $conversationId): JsonResponse
+    {
+        if (! $this->service->isMember($request->user(), $conversationId)) {
+            return response()->json(['message' => 'Bạn không thuộc cuộc trò chuyện này.'], 403);
+        }
+
+        return response()->json($this->service->listMedia($request->user(), $conversationId));
+    }
+
+    public function vote(Request $request, int $conversationId, int $messageId): JsonResponse
+    {
+        if (! $this->service->isMember($request->user(), $conversationId)) {
+            return response()->json(['message' => 'Bạn không thuộc cuộc trò chuyện này.'], 403);
+        }
+
+        $optionId = (int) $request->input('option_id');
+
+        return response()->json(
+            $this->service->votePoll($request->user(), $conversationId, $messageId, $optionId)
+        );
     }
 }

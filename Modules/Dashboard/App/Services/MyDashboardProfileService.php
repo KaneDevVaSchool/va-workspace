@@ -13,13 +13,28 @@ use Modules\Identity\App\Support\UserAvatarUrl;
 
 class MyDashboardProfileService
 {
-    /** @var array<string, string> */
-    public const EDITABLE_FIELD_LABELS = [
-        'phone' => 'Số điện thoại',
-        'personal_email' => 'Email cá nhân',
-        'birthdate' => 'Ngày sinh',
-        'gender' => 'Giới tính',
-        'workplace' => 'Nơi làm việc',
+    /** @var array<string, array{label: string, type: string, placeholder?: string, options?: list<array{value: string, label: string}>}> */
+    public const EDITABLE_FIELDS = [
+        'full_name' => ['label' => 'Họ và tên', 'type' => 'text'],
+        'phone' => ['label' => 'Số điện thoại', 'type' => 'tel'],
+        'personal_email' => ['label' => 'Email cá nhân', 'type' => 'email'],
+        'company_email' => ['label' => 'Email công ty', 'type' => 'email'],
+        'birthdate' => ['label' => 'Ngày sinh', 'type' => 'date'],
+        'gender' => [
+            'label' => 'Giới tính',
+            'type' => 'select',
+            'options' => [
+                ['value' => 'male', 'label' => 'Nam'],
+                ['value' => 'female', 'label' => 'Nữ'],
+            ],
+        ],
+        'workplace' => ['label' => 'Nơi làm việc', 'type' => 'text'],
+        'attendance_code' => ['label' => 'Mã chấm công', 'type' => 'text'],
+        'manager_name' => [
+            'label' => 'Quản lý trực tiếp',
+            'type' => 'text',
+            'placeholder' => 'Họ tên và mã NS, ví dụ: Nguyễn Văn A (VA010067)',
+        ],
     ];
 
     public function __construct(
@@ -75,7 +90,7 @@ class MyDashboardProfileService
 
         foreach ($changes as $field => $requested) {
             $key = (string) $field;
-            if (! array_key_exists($key, self::EDITABLE_FIELD_LABELS)) {
+            if (! array_key_exists($key, self::EDITABLE_FIELDS)) {
                 continue;
             }
 
@@ -87,12 +102,17 @@ class MyDashboardProfileService
             $current = $hrm !== null ? ($hrm[$key] ?? null) : null;
             $currentStr = is_string($current) ? trim($current) : (filled($current) ? (string) $current : '');
 
+            if ($key === 'gender') {
+                $requestedValue = $this->normalizeGenderValue($requestedValue) ?? $requestedValue;
+                $currentStr = $this->normalizeGenderValue($currentStr) ?? $currentStr;
+            }
+
             if ($requestedValue === $currentStr) {
                 continue;
             }
 
             $normalized[$key] = [
-                'label' => self::EDITABLE_FIELD_LABELS[$key],
+                'label' => self::EDITABLE_FIELDS[$key]['label'],
                 'current' => $currentStr !== '' ? $currentStr : null,
                 'requested' => $requestedValue,
             ];
@@ -151,15 +171,35 @@ class MyDashboardProfileService
     private function editableFieldMeta(?array $hrm): array
     {
         $items = [];
-        foreach (self::EDITABLE_FIELD_LABELS as $key => $label) {
+        foreach (self::EDITABLE_FIELDS as $key => $meta) {
             $items[] = [
                 'key' => $key,
-                'label' => $label,
+                'label' => $meta['label'],
+                'type' => $meta['type'],
+                'placeholder' => $meta['placeholder'] ?? null,
+                'options' => $meta['options'] ?? null,
                 'value' => $hrm[$key] ?? null,
             ];
         }
 
         return $items;
+    }
+
+    private function normalizeGenderValue(?string $value): ?string
+    {
+        if (! filled($value)) {
+            return null;
+        }
+
+        $key = strtolower(trim($value));
+        if (in_array($key, ['male', 'm', 'nam'], true)) {
+            return 'male';
+        }
+        if (in_array($key, ['female', 'f', 'nữ', 'nu'], true)) {
+            return 'female';
+        }
+
+        return $key;
     }
 
     /** @return list<array<string, mixed>> */

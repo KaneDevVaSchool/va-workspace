@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Modules\Chat\App\Events\ConversationRemoved;
 use Modules\Chat\App\Events\InboxUpdated;
 use Modules\Chat\App\Events\MessageRead;
 use Modules\Chat\App\Events\MessageSent;
@@ -16,6 +17,7 @@ use Modules\Chat\App\Events\UserTyping;
 use Modules\Chat\App\Models\Conversation;
 use Modules\Chat\App\Models\ConversationMember;
 use Modules\Chat\App\Models\Message;
+use Modules\Chat\App\Models\MessageAttachment;
 use Modules\Chat\App\Repositories\Contracts\ConversationRepositoryInterface;
 use Modules\Chat\App\Repositories\Contracts\MessageRepositoryInterface;
 use Modules\Identity\App\Models\UserNotification;
@@ -26,7 +28,9 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class ChatService
 {
-    private const STICKER_ID_PATTERN = '/^[0-9a-f]{2,8}(?:_[0-9a-f]{2,8}){0,12}$/';
+    use HandlesChatFeatures;
+
+    private const STICKER_ID_PATTERN = '/^(?:[0-9a-f]{2,8}(?:_[0-9a-f]{2,8}){0,12}|va_(?:0[1-9]|1[0-9]|20))$/';
 
     private const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
@@ -58,19 +62,78 @@ class ChatService
         return $this->presentConversation($conversation, $actor);
     }
 
+    /**
+     * @param  list<int>  $userIds
+     */
+    public function createGroup(User $actor, string $title, array $userIds): array
+    {
+        $title = trim($title);
+        if ($title === '') {
+            throw ValidationException::withMessages([
+                'title' => ['Vui lòng nhập tên nhóm.'],
+            ]);
+        }
+
+        $ids = collect($userIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0 && $id !== (int) $actor->id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            throw ValidationException::withMessages([
+                'user_ids' => ['Chọn ít nhất một thành viên khác bạn.'],
+            ]);
+        }
+
+        if ($ids->count() > 49) {
+            throw ValidationException::withMessages([
+                'user_ids' => ['Nhóm chỉ có tối đa 50 thành viên.'],
+            ]);
+        }
+
+        $activeCount = User::query()->whereIn('id', $ids)->get()->filter(fn (User $user) => $user->isActive())->count();
+        if ($activeCount !== $ids->count()) {
+            throw ValidationException::withMessages([
+                'user_ids' => ['Có thành viên không tồn tại hoặc đã ngừng hoạt động.'],
+            ]);
+        }
+
+        $conversation = $this->conversations->createGroup($actor->id, $title, $ids->all());
+
+        $this->sendMessage($actor, $conversation->id, [
+            'message' => $actor->name.' đã tạo nhóm «'.$title.'»',
+        ]);
+
+        $fresh = $this->requireConversation($conversation->id);
+        $fresh->load(['members.user.department']);
+
+        return $this->presentConversation($fresh, $actor, 0);
+    }
+
     public function listConversations(User $actor): array
     {
         $conversations = $this->conversations->listForUser($actor->id);
         $unreadCounts = $this->messages->unreadCountsForUser($actor->id);
 
-        return $conversations
+        $cards = $conversations
             ->map(fn (Conversation $conversation) => $this->presentConversation(
                 $conversation,
                 $actor,
                 $unreadCounts[$conversation->id] ?? 0,
             ))
-            ->values()
             ->all();
+
+        usort($cards, function (array $left, array $right) {
+            $pin = (int) (($right['pinned_at'] ?? null) !== null) <=> (int) (($left['pinned_at'] ?? null) !== null);
+            if ($pin !== 0) {
+                return $pin;
+            }
+
+            return strcmp((string) ($right['updated_at'] ?? ''), (string) ($left['updated_at'] ?? ''));
+        });
+
+        return array_values($cards);
     }
 
     public function isMember(User $actor, int $conversationId): bool
@@ -94,7 +157,7 @@ class ChatService
     public function sendMessage(User $actor, int $conversationId, array $input): array
     {
         $type = $input['message_type'] ?? Message::TYPE_TEXT;
-        if (! in_array($type, [Message::TYPE_TEXT, Message::TYPE_STICKER], true)) {
+        if (! in_array($type, [Message::TYPE_TEXT, Message::TYPE_STICKER, Message::TYPE_VOICE, Message::TYPE_POLL], true)) {
             throw ValidationException::withMessages([
                 'message_type' => ['Loại tin nhắn không hợp lệ.'],
             ]);
@@ -114,6 +177,20 @@ class ChatService
                 $body = '🙂';
             }
             $files = [];
+        } elseif ($type === Message::TYPE_VOICE) {
+            if ($files === []) {
+                throw ValidationException::withMessages([
+                    'attachments' => ['Chưa có tin nhắn thoại.'],
+                ]);
+            }
+            $body = '';
+        } elseif ($type === Message::TYPE_POLL) {
+            $files = [];
+            if ($body === '') {
+                throw ValidationException::withMessages([
+                    'message' => ['Vui lòng nhập câu hỏi bình chọn.'],
+                ]);
+            }
         } elseif ($body === '' && $files === []) {
             throw ValidationException::withMessages([
                 'message' => ['Vui lòng nhập nội dung hoặc chọn tệp.'],
@@ -136,39 +213,42 @@ class ChatService
             'reply_to_id' => $replyToId,
             'message' => $body,
             'sticker_id' => $stickerId,
-            // Cột enum hiện có chưa gồm 'sticker' — sticker nhận diện bằng sticker_id.
-            'message_type' => Message::TYPE_TEXT,
+            'message_type' => match ($type) {
+                Message::TYPE_VOICE => Message::TYPE_VOICE,
+                Message::TYPE_POLL => Message::TYPE_POLL,
+                default => Message::TYPE_TEXT,
+            },
+            'voice_duration' => $type === Message::TYPE_VOICE
+                ? max(1, min(180, (int) ($input['voice_duration'] ?? 1)))
+                : null,
         ]);
+
+        $conversation = $this->requireConversation($conversationId);
+        if ($type === Message::TYPE_POLL) {
+            $this->storePoll($message, $body, is_array($input['poll_options'] ?? null) ? $input['poll_options'] : []);
+        }
+        $mentionIds = $this->storeMentions(
+            $actor,
+            $conversation->loadMissing('members'),
+            $message,
+            is_array($input['mention_ids'] ?? null) ? $input['mention_ids'] : [],
+        );
+        if ($conversation->disappear_seconds) {
+            $message->expires_at = now()->addSeconds((int) $conversation->disappear_seconds);
+            $message->save();
+        }
 
         if ($files !== []) {
             $this->storeAttachments($message, $files);
-            $message = $this->messages->findForConversation($conversationId, $message->id) ?? $message;
         }
+        $message = $this->messages->findForConversation($conversationId, $message->id) ?? $message;
 
         Conversation::where('id', $conversationId)->update(['updated_at' => now()]);
 
         $presented = $this->present($message);
 
         MessageSent::dispatch($conversationId, $presented);
-
-        $recipient = $this->conversations->otherMember($conversationId, $actor->id);
-
-        if ($recipient?->user) {
-            $unread = $this->messages->unreadCountsForUser($recipient->user->id)[$conversationId] ?? 1;
-            $card = $this->presentConversation($this->requireConversation($conversationId), $recipient->user, $unread);
-            InboxUpdated::dispatch($recipient->user->id, $card, $presented);
-
-            if ((int) Cache::get($this->viewingKey($recipient->user->id)) !== $conversationId) {
-                $this->upsertChatNotification(
-                    $recipient->user,
-                    $actor,
-                    $conversationId,
-                    "{$actor->name} đã gửi cho bạn một tin nhắn",
-                    $this->notificationExcerpt($message),
-                    $actor->avatar_url,
-                );
-            }
-        }
+        $this->notifyOthers($actor, $conversationId, $presented, $message, $mentionIds);
 
         return ['message' => $presented];
     }
@@ -229,10 +309,11 @@ class ChatService
     public function markRead(User $actor, int $conversationId): void
     {
         $this->conversations->markRead($conversationId, $actor->id);
+        $readIds = $this->messages->markVisibleRead($conversationId, $actor->id);
         $this->markChatNotificationsRead($actor->id, $conversationId);
         Cache::put($this->viewingKey($actor->id), $conversationId, now()->addSeconds(45));
 
-        MessageRead::dispatch($conversationId, $actor->id, now()->toIso8601String());
+        MessageRead::dispatch($conversationId, $actor->id, now()->toIso8601String(), $readIds, $actor->name);
     }
 
     public function touchViewing(User $actor, int $conversationId): void
@@ -248,10 +329,55 @@ class ChatService
         }
     }
 
-    public function broadcastTyping(User $actor, int $conversationId): void
+    public function clearHistory(User $actor, int $conversationId): void
+    {
+        $this->messages->hideAllForUser($conversationId, $actor->id);
+        $this->markRead($actor, $conversationId);
+    }
+
+    public function disbandGroup(User $actor, int $conversationId): void
+    {
+        if (! $this->isMember($actor, $conversationId)) {
+            throw new AccessDeniedHttpException('Bạn không thuộc cuộc trò chuyện này.');
+        }
+
+        $conversation = $this->requireConversation($conversationId);
+        if ($conversation->type !== Conversation::TYPE_GROUP) {
+            throw ValidationException::withMessages([
+                'conversation' => ['Chỉ giải tán được nhóm chat.'],
+            ]);
+        }
+
+        if ((int) $conversation->created_by !== (int) $actor->id) {
+            throw new AccessDeniedHttpException('Chỉ chủ nhóm mới giải tán được nhóm.');
+        }
+
+        $conversation->loadMissing('members');
+        $memberIds = $conversation->members
+            ->pluck('user_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $attachments = MessageAttachment::query()
+            ->whereIn('message_id', Message::query()->where('conversation_id', $conversationId)->select('id'))
+            ->get(['file_path', 'disk']);
+        foreach ($attachments as $attachment) {
+            if (is_string($attachment->file_path) && $attachment->file_path !== '') {
+                Storage::disk($attachment->disk ?: 'public')->delete($attachment->file_path);
+            }
+        }
+
+        $conversation->delete();
+
+        foreach ($memberIds as $memberId) {
+            ConversationRemoved::dispatch($memberId, $conversationId);
+        }
+    }
+
+    public function broadcastTyping(User $actor, int $conversationId, bool $active = true): void
     {
         Cache::put($this->viewingKey($actor->id), $conversationId, now()->addSeconds(45));
-        UserTyping::dispatch($conversationId, $actor->id, $actor->name);
+        UserTyping::dispatch($conversationId, $actor->id, $actor->name, $active);
     }
 
     public function unreadSummary(User $actor): array
@@ -373,6 +499,14 @@ class ChatService
             return 'Đã gửi một sticker';
         }
 
+        if ($message->message_type === Message::TYPE_VOICE) {
+            return 'Đã gửi một tin nhắn thoại';
+        }
+
+        if ($message->message_type === Message::TYPE_POLL) {
+            return 'Đã tạo một bình chọn';
+        }
+
         $text = Str::limit(trim($message->message), 140);
         if ($text === '' && $message->attachments->isNotEmpty()) {
             return $this->attachmentLabel($message);
@@ -385,28 +519,84 @@ class ChatService
         return $text;
     }
 
+    private function notifyOthers(User $actor, int $conversationId, array $presented, Message $message, array $mentionIds = []): void
+    {
+        $conversation = $this->requireConversation($conversationId);
+        $conversation->loadMissing(['members.user.department']);
+
+        foreach ($conversation->members as $member) {
+            $recipient = $member->user;
+            if (! $recipient || (int) $recipient->id === (int) $actor->id) {
+                continue;
+            }
+
+            $unread = $this->messages->unreadCountsForUser($recipient->id)[$conversationId] ?? 1;
+            $card = $this->presentConversation($conversation, $recipient, $unread);
+            InboxUpdated::dispatch($recipient->id, $card, $presented);
+
+            if ((int) Cache::get($this->viewingKey($recipient->id)) === $conversationId) {
+                continue;
+            }
+
+            $mentioned = in_array((int) $recipient->id, $mentionIds, true);
+            if ($this->memberIsMuted($member) && ! $mentioned) {
+                continue;
+            }
+
+            $title = $mentioned
+                ? "{$actor->name} đã nhắc bạn trong {$conversation->title}"
+                : ($conversation->type === Conversation::TYPE_GROUP
+                    ? "{$actor->name} đã gửi tin trong {$conversation->title}"
+                    : "{$actor->name} đã gửi cho bạn một tin nhắn");
+
+            $this->upsertChatNotification(
+                $recipient,
+                $actor,
+                $conversationId,
+                $title,
+                $this->notificationExcerpt($message),
+                $actor->avatar_url,
+            );
+        }
+    }
+
     private function presentConversation(Conversation $conversation, User $actor, ?int $unreadCount = null): array
     {
-        $other = $conversation->relationLoaded('members')
-            ? $conversation->members->firstWhere('user_id', '!=', $actor->id)
-            : $this->conversations->otherMember($conversation->id, $actor->id);
-
+        $conversation->loadMissing(['members.user.department']);
+        $isGroup = $conversation->type === Conversation::TYPE_GROUP;
+        $other = $conversation->members->firstWhere('user_id', '!=', $actor->id);
         $latest = $this->messages->latestVisibleForUser($conversation->id, $actor->id);
+        $members = $conversation->members
+            ->filter(fn ($member) => $member->user)
+            ->map(fn ($member) => [
+                'id' => $member->user->id,
+                'name' => $member->user->name,
+                'avatar_url' => $member->user->avatar_url,
+                'last_seen_at' => $member->user->last_seen_at?->toIso8601String(),
+                'online' => $member->user->last_seen_at !== null && $member->user->last_seen_at->greaterThan(now()->subSeconds(90)),
+            ])
+            ->values()
+            ->all();
 
         return [
             'id' => $conversation->id,
-            'other_user' => $this->presentOtherUser($other),
-            'other_read_at' => $other?->last_read_at?->toIso8601String(),
+            'type' => $conversation->type,
+            'title' => $isGroup ? $conversation->title : null,
+            'member_count' => count($members),
+            'members' => $isGroup ? $members : [],
+            'other_user' => $isGroup ? null : $this->presentOtherUser($other),
+            'other_read_at' => $isGroup ? null : $other?->last_read_at?->toIso8601String(),
             'last_message' => $latest ? [
                 'id' => $latest->id,
                 'message' => $this->previewText($latest),
                 'message_type' => $this->publicType($latest),
                 'recalled' => $latest->isRecalled(),
                 'sender_id' => $latest->sender_id,
+                'sender_name' => $latest->sender?->name,
                 'created_at' => $latest->created_at?->toIso8601String(),
             ] : null,
             'unread_count' => $unreadCount ?? 0,
-        ];
+        ] + $this->conversationExtras($conversation, $actor);
     }
 
     private function previewText(Message $message): string
@@ -417,6 +607,14 @@ class ChatService
 
         if ($this->isSticker($message)) {
             return 'Sticker';
+        }
+
+        if ($message->message_type === Message::TYPE_VOICE) {
+            return 'Tin nhắn thoại';
+        }
+
+        if ($message->message_type === Message::TYPE_POLL) {
+            return 'Bình chọn';
         }
 
         $text = trim($message->message);
@@ -449,6 +647,8 @@ class ChatService
             'avatar_url' => $member->user->avatar_url,
             'department' => $member->user->department?->name,
             'job_title_name' => $this->hrmDepartments->hrmJobTitleFor($member->user),
+            'last_seen_at' => $member->user->last_seen_at?->toIso8601String(),
+            'online' => $member->user->last_seen_at !== null && $member->user->last_seen_at->greaterThan(now()->subSeconds(90)),
         ];
     }
 
@@ -472,7 +672,7 @@ class ChatService
                 'avatar_url' => $message->sender->avatar_url,
             ],
             'created_at' => $message->created_at?->toIso8601String(),
-        ];
+        ] + $this->messageExtras($message);
     }
 
     private function isSticker(Message $message): bool
@@ -520,14 +720,21 @@ class ChatService
     private function storeAttachments(Message $message, array $files): void
     {
         foreach ($files as $file) {
-            $path = $file->store('chat/'.$message->id, 'public');
+            $path = $file->store('chat/'.$message->id, 'local');
             $mime = $file->getMimeType();
+            $kind = 'file';
+            if (in_array($mime, self::IMAGE_MIMES, true)) {
+                $kind = 'image';
+            } elseif ($message->message_type === Message::TYPE_VOICE || (is_string($mime) && str_starts_with($mime, 'audio/'))) {
+                $kind = 'audio';
+            }
             $message->attachments()->create([
                 'file_path' => $path,
+                'disk' => 'local',
                 'file_name' => $file->getClientOriginalName(),
                 'file_size' => $file->getSize() ?: 0,
                 'mime_type' => $mime,
-                'type' => in_array($mime, self::IMAGE_MIMES, true) ? 'image' : 'file',
+                'type' => $kind,
             ]);
         }
     }
@@ -537,7 +744,7 @@ class ChatService
         $message->loadMissing('attachments');
         foreach ($message->attachments as $attachment) {
             if ($attachment->file_path) {
-                Storage::disk('public')->delete($attachment->file_path);
+                Storage::disk($attachment->disk ?: 'public')->delete($attachment->file_path);
             }
         }
         $message->attachments()->delete();
@@ -554,8 +761,30 @@ class ChatService
             'type' => $file->type,
             'name' => $file->file_name,
             'size' => (int) $file->file_size,
-            'url' => Storage::disk('public')->url($file->file_path),
+            'url' => $this->attachmentUrl($file),
         ])->values()->all();
+    }
+
+    private function attachmentUrl(MessageAttachment $file): string
+    {
+        $disk = $file->disk ?: 'public';
+        if ($disk === 'public') {
+            return Storage::disk('public')->url($file->file_path);
+        }
+
+        return url('/api/chat/attachments/'.$file->id);
+    }
+
+    private function postNotice(User $actor, int $conversationId, string $text): void
+    {
+        $message = $this->messages->create([
+            'conversation_id' => $conversationId,
+            'sender_id' => $actor->id,
+            'message' => $text,
+            'message_type' => Message::TYPE_SYSTEM,
+        ]);
+        Conversation::where('id', $conversationId)->update(['updated_at' => now()]);
+        MessageSent::dispatch($conversationId, $this->present($message));
     }
 
     private function replyExcerpt(Message $reply): string

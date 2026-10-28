@@ -115,6 +115,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   flex: 1;
+  height: 100%;
   min-height: 0;
   margin: 0 calc(-1 * var(--space-3)) calc(-1 * var(--space-3));
   overflow: hidden;

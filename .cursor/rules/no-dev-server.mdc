@@ -1,0 +1,19 @@
+---
+description: Không mở server dev khi làm việc trong repo này
+alwaysApply: true
+---
+
+# Không mở server dev
+
+Người dùng tự chạy app. Agent **không** khởi động server dev, Vite, `php artisan serve`, hay mở trình duyệt để kiểm tra UI.
+
+## Cấm
+
+- `npm run dev`, `composer run dev`, `php artisan serve`, `vite`
+- Điều hướng browser / screenshot app local chỉ để xác minh giao diện
+- Hỏi lại xem có được mở server không — quy tắc này là mặc định
+
+## Được làm
+
+- Sửa code, migration, test đơn vị không cần server
+- Nói rõ phần chưa xem trên thiết bị nếu chưa chạy được app

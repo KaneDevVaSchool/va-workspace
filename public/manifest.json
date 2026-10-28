@@ -1,7 +1,7 @@
 {
   "id": "/",
   "name": "VA Workspace",
-  "short_name": "Workspace",
+  "short_name": "VA",
   "description": "Không gian làm việc nội bộ VA Schools: công việc, dự án, chấm công, nghỉ phép.",
   "start_url": "/dashboard/me",
   "scope": "/",

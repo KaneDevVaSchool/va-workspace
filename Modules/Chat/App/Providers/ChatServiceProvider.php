@@ -19,6 +19,9 @@ class ChatServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->commands([
+            \Modules\Chat\App\Console\ExpireChatMessagesCommand::class,
+        ]);
         $this->loadMigrationsFrom(module_path('Chat', 'Database/migrations'));
         $this->registerRoutes();
     }

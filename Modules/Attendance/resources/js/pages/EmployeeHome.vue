@@ -57,11 +57,11 @@ const utilitiesEmptySearch = computed(
 
 const attendanceLabel = computed(() => {
   const row = attendanceToday.value;
-  if (!row?.checkInTime) return { tone: 'pending', text: 'Chưa chấm công' };
-  if (row.checkOutTime) {
-    return { tone: 'done', text: `Ra lúc ${row.checkOutTime}` };
-  }
-  return { tone: 'in', text: `Vào lúc ${row.checkInTime}` };
+  const checkIn = row?.morningInTime || row?.checkInTime || null;
+  const checkOut = row?.afternoonOutTime || row?.checkOutTime || null;
+  if (!checkIn) return { tone: 'pending', text: 'Chưa chấm vào buổi sáng' };
+  if (checkOut) return { tone: 'done', text: `Ra buổi chiều lúc ${checkOut}` };
+  return { tone: 'in', text: `Vào buổi sáng lúc ${checkIn}` };
 });
 
 const taskRingOffset = computed(() => {

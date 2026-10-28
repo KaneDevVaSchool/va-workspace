@@ -24,7 +24,12 @@ class SendChatMessageRequest extends FormRequest
                 'string',
                 'max:5000',
             ],
-            'message_type' => ['nullable', 'string', Rule::in([Message::TYPE_TEXT, Message::TYPE_STICKER])],
+            'message_type' => ['nullable', 'string', Rule::in([
+                Message::TYPE_TEXT,
+                Message::TYPE_STICKER,
+                Message::TYPE_VOICE,
+                Message::TYPE_POLL,
+            ])],
             'sticker_id' => [
                 Rule::requiredIf($type === Message::TYPE_STICKER),
                 'nullable',
@@ -32,11 +37,22 @@ class SendChatMessageRequest extends FormRequest
                 'max:64',
             ],
             'reply_to_id' => ['nullable', 'integer'],
+            'voice_duration' => ['nullable', 'integer', 'min:1', 'max:180'],
+            'mention_ids' => ['nullable', 'array', 'max:20'],
+            'mention_ids.*' => ['integer'],
+            'poll_options' => [
+                Rule::requiredIf($type === Message::TYPE_POLL),
+                'nullable',
+                'array',
+                'min:2',
+                'max:6',
+            ],
+            'poll_options.*' => ['string', 'max:80'],
             'attachments' => ['nullable', 'array', 'max:5'],
             'attachments.*' => [
                 'file',
                 'max:10240',
-                'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xlsx,xls,ppt,pptx,txt,csv,zip',
+                'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xlsx,xls,ppt,pptx,txt,csv,zip,webm,ogg,mp3,m4a,wav,mp4',
             ],
         ];
     }
@@ -49,7 +65,7 @@ class SendChatMessageRequest extends FormRequest
             'sticker_id.required' => 'Vui lòng chọn sticker.',
             'attachments.max' => 'Chỉ được đính kèm tối đa 5 tệp mỗi tin nhắn.',
             'attachments.*.max' => 'Mỗi tệp không được vượt quá 10MB.',
-            'attachments.*.mimes' => 'Chỉ chấp nhận ảnh, PDF, Word, Excel, PowerPoint, TXT, CSV hoặc ZIP.',
+            'attachments.*.mimes' => 'Chỉ chấp nhận ảnh, âm thanh, PDF, Word, Excel, PowerPoint, TXT, CSV hoặc ZIP.',
         ];
     }
 }

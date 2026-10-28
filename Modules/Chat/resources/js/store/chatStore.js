@@ -3,6 +3,20 @@ import { showClientToast } from '@/lib/clientToast';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import {
   editMessage as apiEditMessage,
+  clearHistory as apiClearHistory,
+  createGroup as apiCreateGroup,
+  disbandGroup as apiDisbandGroup,
+  listMedia as apiListMedia,
+  addMembers as apiAddMembers,
+  beatPresence as apiBeatPresence,
+  muteConversation as apiMuteConversation,
+  pinChatMessage as apiPinChatMessage,
+  pinConversation as apiPinConversation,
+  removeMember as apiRemoveMember,
+  searchMessages as apiSearchMessages,
+  setDisappear as apiSetDisappear,
+  transferOwner as apiTransferOwner,
+  votePoll as apiVotePoll,
   fetchUnreadCount,
   hideMessage as apiHideMessage,
   listConversations,
@@ -18,6 +32,9 @@ import {
 export function chatPreview(message) {
   if (message?.recalled_at) return 'Tin nhắn đã được thu hồi';
   if (message?.message_type === 'sticker') return 'Sticker';
+  if (message?.message_type === 'voice') return 'Tin nhắn thoại';
+  if (message?.message_type === 'poll') return 'Bình chọn';
+  if (message?.message_type === 'system') return (message.message || '').trim();
   const text = (message?.message || '').trim();
   if (text) return text;
   const files = message?.attachments ?? [];
@@ -35,8 +52,19 @@ function lastMessageFrom(message) {
     message_type: message.message_type,
     recalled: Boolean(message.recalled_at),
     sender_id: message.sender?.id,
+    sender_name: message.sender?.name ?? message.sender_name ?? null,
     created_at: message.created_at,
   };
+}
+
+function sortConversations(list) {
+  return [...list].sort((left, right) => {
+    const pin = Number(Boolean(right.pinned_at)) - Number(Boolean(left.pinned_at));
+    if (pin !== 0) return pin;
+    const rightTime = String(right.updated_at || right.last_message?.created_at || '');
+    const leftTime = String(left.updated_at || left.last_message?.created_at || '');
+    return rightTime.localeCompare(leftTime);
+  });
 }
 
 export const useChatStore = defineStore('chat', {
@@ -108,6 +136,123 @@ export const useChatStore = defineStore('chat', {
       const conversation = await openConversation(userId);
       const existing = this.conversations.find((c) => c.id === conversation.id);
       if (!existing) {
+        this.conversations.unshift(conversation);
+      }
+      this.subscribeToConversation(conversation.id);
+      await this.openConversationView(conversation.id);
+      return conversation;
+    },
+
+    async clearHistory(conversationId) {
+      await apiClearHistory(conversationId);
+      this.messagesByConversation = { ...this.messagesByConversation, [conversationId]: [] };
+      this.hasMoreByConversation = { ...this.hasMoreByConversation, [conversationId]: false };
+      const conversation = this.conversations.find((item) => item.id === conversationId);
+      if (conversation) {
+        conversation.last_message = null;
+        conversation.unread_count = 0;
+      }
+      this.recomputeUnreadTotal();
+    },
+
+    async disbandGroup(conversationId) {
+      await apiDisbandGroup(conversationId);
+      this.forgetConversation(conversationId);
+    },
+
+    replaceConversation(conversation) {
+      if (!conversation?.id) return;
+      const index = this.conversations.findIndex((item) => item.id === conversation.id);
+      if (index < 0) {
+        this.conversations = sortConversations([conversation, ...this.conversations]);
+        this.subscribeToConversation(conversation.id);
+        return;
+      }
+      const next = [...this.conversations];
+      next[index] = conversation;
+      this.conversations = sortConversations(next);
+    },
+
+    async addMembers(conversationId, userIds) {
+      const conversation = await apiAddMembers(conversationId, userIds);
+      this.replaceConversation(conversation);
+      return conversation;
+    },
+
+    async removeMember(conversationId, userId) {
+      const result = await apiRemoveMember(conversationId, userId);
+      if (result?.left) this.forgetConversation(conversationId);
+      else if (result?.conversation) this.replaceConversation(result.conversation);
+      return result;
+    },
+
+    async transferOwner(conversationId, userId) {
+      const conversation = await apiTransferOwner(conversationId, userId);
+      this.replaceConversation(conversation);
+      return conversation;
+    },
+
+    async pinConversation(conversationId, pinned) {
+      const conversation = await apiPinConversation(conversationId, pinned);
+      this.replaceConversation(conversation);
+    },
+
+    async muteConversation(conversationId, hours) {
+      const conversation = await apiMuteConversation(conversationId, hours);
+      this.replaceConversation(conversation);
+    },
+
+    async setDisappear(conversationId, seconds) {
+      const conversation = await apiSetDisappear(conversationId, seconds);
+      this.replaceConversation(conversation);
+    },
+
+    async pinMessage(conversationId, messageId) {
+      const conversation = await apiPinChatMessage(conversationId, messageId);
+      this.replaceConversation(conversation);
+    },
+
+    async searchMessages(conversationId, query) {
+      return apiSearchMessages(conversationId, query);
+    },
+
+    async listMedia(conversationId) {
+      return apiListMedia(conversationId);
+    },
+
+    async votePoll(conversationId, messageId, optionId) {
+      const message = await apiVotePoll(conversationId, messageId, optionId);
+      this.replaceMessage(conversationId, message);
+      return message;
+    },
+
+    beatPresence() {
+      return apiBeatPresence().catch(() => {});
+    },
+
+    forgetConversation(conversationId) {
+      if (this.activeConversationId === conversationId) {
+        this.backToList();
+      }
+      this.conversations = this.conversations.filter((item) => item.id !== conversationId);
+      const messages = { ...this.messagesByConversation };
+      delete messages[conversationId];
+      this.messagesByConversation = messages;
+      const more = { ...this.hasMoreByConversation };
+      delete more[conversationId];
+      this.hasMoreByConversation = more;
+      const typing = { ...this.typingByConversation };
+      delete typing[conversationId];
+      this.typingByConversation = typing;
+      this.recomputeUnreadTotal();
+    },
+
+    async createGroup(title, userIds) {
+      const conversation = await apiCreateGroup({ title, user_ids: userIds });
+      const existing = this.conversations.find((item) => item.id === conversation.id);
+      if (existing) {
+        Object.assign(existing, conversation);
+      } else {
         this.conversations.unshift(conversation);
       }
       this.subscribeToConversation(conversation.id);
@@ -316,13 +461,19 @@ export const useChatStore = defineStore('chat', {
     handleInbox(payload) {
       const conversation = payload?.conversation;
       const message = payload?.message;
-      if (!conversation?.id || !message?.id) return;
+      if (!conversation?.id) return;
 
       const known = this.conversations.some((item) => item.id === conversation.id);
-      if (known) return;
+      if (known && message?.id) return;
+      if (known) {
+        this.replaceConversation(conversation);
+        return;
+      }
 
-      this.conversations = [conversation, ...this.conversations];
+      this.conversations = sortConversations([conversation, ...this.conversations]);
       this.subscribeToConversation(conversation.id);
+      if (!message?.id) return;
+
       this.freshConversationId = conversation.id;
       window.setTimeout(() => {
         if (this.freshConversationId === conversation.id) this.freshConversationId = null;
@@ -335,9 +486,14 @@ export const useChatStore = defineStore('chat', {
       const userId = auth.user?.id;
       if (!window.Echo || !userId || this.inboxSubscribed) return;
 
-      window.Echo.private(`chat.inbox.${userId}`).listen('.inbox.updated', (payload) => {
-        this.handleInbox(payload);
-      });
+      window.Echo.private(`chat.inbox.${userId}`)
+        .listen('.inbox.updated', (payload) => {
+          this.handleInbox(payload);
+        })
+        .listen('.conversation.removed', (payload) => {
+          const id = Number(payload?.conversation_id);
+          if (id > 0) this.forgetConversation(id);
+        });
       this.inboxSubscribed = true;
     },
 
@@ -345,21 +501,51 @@ export const useChatStore = defineStore('chat', {
       const auth = useAuthStore();
       if (!payload?.read_at || payload.user_id === auth.user?.id) return;
       const conversation = this.conversations.find((item) => item.id === conversationId);
-      if (conversation) conversation.other_read_at = payload.read_at;
+      if (conversation && conversation.type !== 'group') conversation.other_read_at = payload.read_at;
+      const ids = new Set((payload.message_ids || []).map((id) => Number(id)));
+      if (ids.size === 0) return;
+      const list = this.messagesByConversation[conversationId];
+      if (!list) return;
+      const reader = { id: payload.user_id, name: payload.reader_name || 'Đồng nghiệp' };
+      for (const message of list) {
+        if (!ids.has(message.id)) continue;
+        const reads = message.reads || [];
+        if (reads.some((item) => item.id === reader.id)) continue;
+        message.reads = [...reads, reader];
+      }
     },
 
     applyTyping(conversationId, payload) {
       const auth = useAuthStore();
       if (!payload?.user_id || payload.user_id === auth.user?.id) return;
-      const until = Date.now() + 3000;
-      this.typingByConversation = { ...this.typingByConversation, [conversationId]: until };
+      const current = this.typingByConversation[conversationId];
+      const users = (current?.users ?? []).filter((user) => user.id !== payload.user_id && user.until > Date.now());
+      if (payload.active === false) {
+        const next = { ...this.typingByConversation };
+        if (users.length === 0) delete next[conversationId];
+        else next[conversationId] = { users };
+        this.typingByConversation = next;
+        return;
+      }
+      const until = Date.now() + 4000;
+      users.push({
+        id: payload.user_id,
+        name: payload.name || 'Đồng nghiệp',
+        until,
+      });
+      this.typingByConversation = {
+        ...this.typingByConversation,
+        [conversationId]: { users },
+      };
       window.setTimeout(() => {
-        if (this.typingByConversation[conversationId] === until) {
-          const next = { ...this.typingByConversation };
-          delete next[conversationId];
-          this.typingByConversation = next;
-        }
-      }, 3000);
+        const slot = this.typingByConversation[conversationId];
+        if (!slot?.users) return;
+        const alive = slot.users.filter((user) => user.until > Date.now());
+        const next = { ...this.typingByConversation };
+        if (alive.length === 0) delete next[conversationId];
+        else next[conversationId] = { users: alive };
+        this.typingByConversation = next;
+      }, 4000);
     },
   },
 });

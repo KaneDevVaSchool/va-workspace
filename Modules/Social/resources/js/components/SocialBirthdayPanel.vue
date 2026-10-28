@@ -1,15 +1,35 @@
 <script setup>
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 const birthdays = ref([]);
 const loading = ref(true);
 
-function formatDay(isoDate) {
+function formatMonth(isoDate) {
   if (!isoDate) return '';
-  const parts = isoDate.split('-');
-  if (parts.length !== 3) return isoDate;
-  return `${parts[2]}/${parts[1]}`;
+  const parts = String(isoDate).split('-');
+  if (parts.length < 2) return '';
+  const month = Number(parts[1]);
+  if (!Number.isInteger(month) || month < 1 || month > 12) return '';
+  return `Tháng ${month}`;
 }
+
+const groups = computed(() => {
+  const buckets = [];
+
+  for (const item of birthdays.value) {
+    const label = formatMonth(item.next_birthday);
+    if (!label) continue;
+
+    const last = buckets.at(-1);
+    if (last && last.label === label) {
+      last.people.push(item);
+    } else {
+      buckets.push({ label, people: [item] });
+    }
+  }
+
+  return buckets;
+});
 
 onMounted(async () => {
   try {
@@ -24,20 +44,30 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section v-if="!loading && birthdays.length > 0" class="birthday-panel">
+  <section v-if="!loading && groups.length > 0" class="birthday-panel">
     <h2 class="birthday-panel__title">Sinh nhật</h2>
-    <ul class="birthday-panel__list">
-      <li v-for="(item, index) in birthdays" :key="`${item.next_birthday}-${index}`" class="birthday-panel__item">
-        <span class="birthday-panel__date">{{ formatDay(item.next_birthday) }}</span>
-        <span class="birthday-panel__name">{{ item.name }}</span>
-        <span v-if="item.department_name" class="birthday-panel__dept">{{ item.department_name }}</span>
-      </li>
-    </ul>
+    <div class="birthday-panel__groups">
+      <section v-for="group in groups" :key="group.label" class="birthday-panel__group">
+        <h3 class="birthday-panel__month">{{ group.label }}</h3>
+        <ul class="birthday-panel__list">
+          <li
+            v-for="(item, index) in group.people"
+            :key="`${item.next_birthday}-${item.name}-${index}`"
+            class="birthday-panel__person"
+          >
+            <span class="birthday-panel__name">{{ item.name }}</span>
+            <span v-if="item.department_name" class="birthday-panel__dept">{{ item.department_name }}</span>
+          </li>
+        </ul>
+      </section>
+    </div>
   </section>
 </template>
 
 <style scoped>
 .birthday-panel {
+  flex-shrink: 0;
+  min-width: 0;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -51,6 +81,28 @@ onMounted(async () => {
   margin: 0 0 var(--space-3);
 }
 
+.birthday-panel__groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.birthday-panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.birthday-panel__month {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--color-primary);
+}
+
 .birthday-panel__list {
   list-style: none;
   margin: 0;
@@ -58,28 +110,35 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  min-width: 0;
 }
 
-.birthday-panel__item {
+.birthday-panel__person {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2);
-  font-size: 0.875rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.125rem;
+  min-width: 0;
 }
 
-.birthday-panel__date {
-  font-weight: 600;
-  color: var(--color-primary);
-  min-width: 3rem;
+.birthday-panel__name,
+.birthday-panel__dept {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: break-word;
 }
 
 .birthday-panel__name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.35;
   color: var(--color-text);
 }
 
 .birthday-panel__dept {
+  font-size: 0.75rem;
+  line-height: 1.35;
   color: var(--color-text-muted);
-  font-size: 0.8125rem;
 }
 </style>

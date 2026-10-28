@@ -70,6 +70,12 @@
     );
   }
 
+  html.employee-os-ios.pwa-standalone:not(.pwa-vv-keyboard)
+    .employee-shell--unified.employee-shell--pwa
+    .employee-shell__content--chat-thread {
+    padding-bottom: 0;
+  }
+
   html.employee-os-ios.pwa-vv-keyboard .employee-shell--pwa:not(.emp-shell-preview__shell) {
     inset: auto;
     top: var(--pwa-vv-offset-top, 0px);

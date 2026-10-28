@@ -10,6 +10,7 @@ import jsQR from 'jsqr';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import AppIcon from '@/components/AppIcon.vue';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import AttendanceGlyph from '../components/AttendanceGlyph.vue';
 import {
@@ -19,11 +20,7 @@ import {
   recordToServerPayload,
   writeEmployeeAttendanceToday,
 } from '../lib/employeeAttendanceSession';
-import {
-  nextPunchAction,
-  nextPunchSession,
-  sessionSlot,
-} from '../lib/employeeAttendanceWorkSession';
+import { nextPunchAction } from '../lib/employeeAttendanceWorkSession';
 
 const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 
@@ -75,6 +72,8 @@ const qrState = ref('idle');
 const qrValue = ref('');
 const wifiState = ref('idle');
 const wifiSignal = ref(0);
+const confirmOpen = ref(false);
+const pendingMethodId = ref(null);
 
 const stored = readEmployeeAttendanceToday();
 const punchRecord = ref(stored ?? {
@@ -118,26 +117,26 @@ const placeLabel = computed(() => {
 
 const timeLabel = computed(() => formatHm(now.value));
 const homeDateLabel = computed(() => formatLongDate(now.value));
-const punchAction = computed(() => nextPunchAction(punchRecord.value, { now: now.value }));
-const heroLabel = computed(() => punchAction.value.full);
-const activeSession = computed(() => nextPunchSession({ now: now.value }));
+const punchAction = computed(() => nextPunchAction(punchRecord.value));
 const punchComplete = computed(() => punchAction.value.complete);
-function slotForSession(sessionId) {
-  const slot = sessionSlot(punchRecord.value, sessionId);
-  const next = activeSession.value.id === sessionId && punchAction.value.direction != null;
-  return { in: slot.in, out: slot.out, next };
-}
-const morningSlot = computed(() => slotForSession('morning'));
-const afternoonSlot = computed(() => slotForSession('afternoon'));
+const morningInTime = computed(() => punchRecord.value.morningInTime || null);
+const afternoonOutTime = computed(() => punchRecord.value.afternoonOutTime || null);
 const punchHint = computed(() => {
-  if (punchComplete.value) {
-    return `Đã chấm đủ ca ${activeSession.value.label} hôm nay`;
-  }
+  if (punchComplete.value) return 'Đã chấm vào buổi sáng và ra buổi chiều';
   if (punchAction.value.direction === 'out') {
-    const slot = sessionSlot(punchRecord.value, punchAction.value.session.id);
-    return `Đã vào ${slot.in} · tiếp theo: chấm ra ${punchAction.value.session.label}`;
+    return `Đã vào ${morningInTime.value} · tiếp theo: chấm ra buổi chiều`;
   }
-  return `Chưa chấm ${punchAction.value.session.label} · ${punchAction.value.verb}`;
+  return 'Chưa chấm vào buổi sáng';
+});
+const confirmCopy = computed(() => {
+  const leaving = punchAction.value.direction === 'out';
+  return {
+    title: leaving ? 'Xác nhận chấm ra buổi chiều?' : 'Xác nhận chấm vào buổi sáng?',
+    description: leaving
+      ? `Ghi nhận giờ ra lúc ${timeLabel.value}.`
+      : `Ghi nhận giờ vào lúc ${timeLabel.value}.`,
+    confirmLabel: 'Xác nhận',
+  };
 });
 const syncLine = computed(() => {
   if (syncState.value === 'syncing') {
@@ -384,8 +383,35 @@ function rememberToday(row) {
   reloadPunch();
 }
 
+function askPunch(methodId) {
+  if (punching.value || punchComplete.value || confirmOpen.value) return;
+  if (!punchAction.value.direction) return;
+  pendingMethodId.value = methodId;
+  confirmOpen.value = true;
+}
+
+function onConfirmOpenChange(open) {
+  confirmOpen.value = open;
+  if (open || punching.value) return;
+  const methodId = pendingMethodId.value;
+  pendingMethodId.value = null;
+  if (methodId === 'qr' && screen.value === 'qr' && qrState.value === 'found') {
+    qrValue.value = '';
+    qrState.value = 'live';
+    scanQrFrame(qrCameraToken);
+  }
+}
+
+async function onConfirmPunch() {
+  const methodId = pendingMethodId.value;
+  if (!methodId || punching.value) return;
+  await commitPunch(methodId);
+  pendingMethodId.value = null;
+  confirmOpen.value = false;
+}
+
 function onHero() {
-  commitPunch('button');
+  askPunch('button');
 }
 
 function openMethod(id) {
@@ -495,7 +521,7 @@ async function punchGps() {
     const ok = await requestLocation();
     if (!ok) return;
   }
-  await commitPunch('gps');
+  askPunch('gps');
 }
 
 async function onDock() {
@@ -509,11 +535,11 @@ async function onDock() {
     return;
   }
   if (action === 'punch-wifi') {
-    await commitPunch('wifi');
+    askPunch('wifi');
     return;
   }
   if (action === 'punch-face') {
-    await commitPunch('face');
+    askPunch('face');
     return;
   }
   if (action === 'punch-qr-code') {
@@ -521,7 +547,7 @@ async function onDock() {
       codeError.value = 'Nhập ít nhất 4 ký tự.';
       return;
     }
-    await commitPunch('qr');
+    askPunch('qr');
     return;
   }
   if (action === 'punch-code') {
@@ -529,7 +555,7 @@ async function onDock() {
       codeError.value = 'Nhập ít nhất 4 ký tự.';
       return;
     }
-    await commitPunch('code');
+    askPunch('code');
   }
 }
 
@@ -725,7 +751,7 @@ function scanQrFrame(token) {
           qrValue.value = result.data;
           if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(16);
           window.setTimeout(() => {
-            if (token === qrCameraToken) commitPunch('qr');
+            if (token === qrCameraToken) askPunch('qr');
           }, 420);
           return;
         }
@@ -790,9 +816,9 @@ function stopQrCamera() {
               <div class="att-hero__meta">
                 <span
                   class="att-session att-session--on-hero"
-                  :class="`att-session--${activeSession.tone}`"
+                  :class="punchAction.direction === 'in' ? 'att-session--amber' : 'att-session--indigo'"
                 >
-                  {{ activeSession.label }}
+                  {{ punchComplete ? 'Đã xong' : (punchAction.direction === 'out' ? 'Ra chiều' : 'Vào sáng') }}
                 </span>
                 <div class="att-weather">
                   <AttendanceGlyph :name="weatherGlyph" :size="20" />
@@ -824,30 +850,28 @@ function stopQrCamera() {
             <article
               class="att-dayboard__card"
               :class="{
-                'att-dayboard__card--active': morningSlot.next,
-                'att-dayboard__card--done': morningSlot.in && morningSlot.out,
+                'att-dayboard__card--active': punchAction.direction === 'in',
+                'att-dayboard__card--done': Boolean(morningInTime),
               }"
             >
               <header>
-                <span class="att-session att-session--amber">Ca sáng</span>
-                <small>Trước 12:00</small>
+                <span class="att-session att-session--amber">Buổi sáng</span>
+                <small>Giờ vào</small>
               </header>
-              <p><span>Vào</span><strong>{{ morningSlot.in || '—' }}</strong></p>
-              <p><span>Ra</span><strong>{{ morningSlot.out || '—' }}</strong></p>
+              <p><strong>{{ morningInTime || '—' }}</strong></p>
             </article>
             <article
               class="att-dayboard__card"
               :class="{
-                'att-dayboard__card--active': afternoonSlot.next,
-                'att-dayboard__card--done': afternoonSlot.in && afternoonSlot.out,
+                'att-dayboard__card--active': punchAction.direction === 'out',
+                'att-dayboard__card--done': Boolean(afternoonOutTime),
               }"
             >
               <header>
-                <span class="att-session att-session--indigo">Ca chiều</span>
-                <small>Từ 12:00</small>
+                <span class="att-session att-session--indigo">Buổi chiều</span>
+                <small>Giờ ra</small>
               </header>
-              <p><span>Vào</span><strong>{{ afternoonSlot.in || '—' }}</strong></p>
-              <p><span>Ra</span><strong>{{ afternoonSlot.out || '—' }}</strong></p>
+              <p><strong>{{ afternoonOutTime || '—' }}</strong></p>
             </article>
           </div>
 
@@ -864,7 +888,7 @@ function stopQrCamera() {
               </svg>
               <AttendanceGlyph v-else name="fingerprint" :size="36" />
               <span class="att-punch__label">{{ punching ? 'Đang gửi…' : punchAction.verb }}</span>
-              <small v-if="!punching && !punchComplete" class="att-punch__session">{{ activeSession.label }}</small>
+              <small v-if="!punching && !punchComplete" class="att-punch__session">{{ punchAction.direction === 'out' ? 'Buổi chiều' : 'Buổi sáng' }}</small>
             </button>
           </div>
           <p class="att-punch-hint">{{ punchHint }}</p>
@@ -1066,13 +1090,13 @@ function stopQrCamera() {
           <p
             v-if="lastResult?.time"
             class="att-success__session"
-            :class="lastResult.session === 'afternoon' ? 'att-session--indigo' : 'att-session--amber'"
+            :class="lastResult.action === 'out' ? 'att-session--indigo' : 'att-session--amber'"
           >
-            {{ lastResult.session === 'afternoon' ? 'Ca chiều' : 'Ca sáng' }}
+            {{ lastResult.action === 'out' ? 'Ra buổi chiều' : 'Vào buổi sáng' }}
           </p>
           <p class="att-success__name">{{ displayName }}</p>
           <p class="att-success__time">
-            {{ lastResult?.action === 'out' ? 'Đã chấm ra lúc' : 'Đã chấm vào lúc' }}
+            {{ lastResult?.action === 'out' ? 'Đã chấm ra buổi chiều lúc' : 'Đã chấm vào buổi sáng lúc' }}
             {{ lastResult?.time }}
           </p>
           <p class="att-success__date">{{ lastResult?.dateLabel }}</p>
@@ -1135,6 +1159,16 @@ function stopQrCamera() {
         </button>
       </footer>
     </div>
+
+    <ConfirmDialog
+      :open="confirmOpen"
+      :title="confirmCopy.title"
+      :description="confirmCopy.description"
+      :confirm-label="confirmCopy.confirmLabel"
+      :loading="punching"
+      @update:open="onConfirmOpenChange"
+      @confirm="onConfirmPunch"
+    />
   </div>
 </template>
 
@@ -1512,23 +1546,14 @@ function stopQrCamera() {
 }
 
 .att-dayboard__card p {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
   margin: 0;
-  font-size: 0.78rem;
-}
-
-.att-dayboard__card p span {
-  color: var(--color-text-muted);
-  font-weight: 600;
 }
 
 .att-dayboard__card p strong {
-  font-size: 0.92rem;
+  font-size: 1.35rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
   color: var(--color-tertiary-900);
 }
 

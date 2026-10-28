@@ -290,7 +290,8 @@ onBeforeUnmount(() => {
             :aria-label="group.label"
             @click="activePack = group.key"
           >
-            {{ group.icon }}
+            <img v-if="group.iconSrc" class="emoji-picker__tab-img" :src="group.iconSrc" alt="" />
+            <template v-else>{{ group.icon }}</template>
           </button>
         </div>
       </div>
@@ -474,6 +475,13 @@ onBeforeUnmount(() => {
   transition:
     background 0.16s ease,
     transform 0.16s ease;
+}
+
+.emoji-picker__tab-img {
+  width: 1.35rem;
+  height: 1.35rem;
+  object-fit: contain;
+  display: block;
 }
 
 .emoji-picker__tab:hover {

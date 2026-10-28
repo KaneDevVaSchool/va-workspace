@@ -374,8 +374,8 @@ defineExpose({ load });
   flex-direction: column;
   gap: var(--space-2);
   box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
   min-width: 0;
-  min-height: 0;
 }
 
 .announce-panel::before {

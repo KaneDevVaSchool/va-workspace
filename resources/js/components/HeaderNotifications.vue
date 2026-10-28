@@ -56,10 +56,11 @@ async function loadUnread() {
     if (next > lastUnread && lastUnread > 0 && document.hidden && Notification.permission === 'granted') {
       try {
         const latest = data.latest_unread;
+        const isChat = latest?.type === 'chat_message';
         const line = latest?.push_line || latest?.body || latest?.title;
         await showSystemNotification({
-          title: 'VA Workspace',
-          body: line || (next === 1 ? 'Bạn có 1 thông báo mới.' : `Bạn có ${next} thông báo chưa đọc.`),
+          title: isChat ? '1 lời nhắn từ VA' : 'VA',
+          body: isChat ? '' : (line || (next === 1 ? 'Bạn có 1 thông báo mới.' : `Bạn có ${next} thông báo chưa đọc.`)),
           tag: latest?.id ? `va-n-${latest.id}` : 'va-inbox',
           url: latest?.url || '/',
           icon: latest?.actor?.avatar_url || '/images/pwa/icon-192.png',

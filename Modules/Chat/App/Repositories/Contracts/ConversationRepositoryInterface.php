@@ -14,6 +14,11 @@ interface ConversationRepositoryInterface
 
     public function findOrCreatePrivate(int $userIdA, int $userIdB): Conversation;
 
+    /**
+     * @param  list<int>  $memberIds  không gồm người tạo
+     */
+    public function createGroup(int $creatorId, string $title, array $memberIds): Conversation;
+
     public function find(int $id): ?Conversation;
 
     public function isMember(int $conversationId, int $userId): bool;

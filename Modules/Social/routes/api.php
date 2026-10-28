@@ -8,8 +8,15 @@ use Modules\Social\App\Http\Controllers\SocialHashtagController;
 use Modules\Social\App\Http\Controllers\SocialLinkPreviewController;
 use Modules\Social\App\Http\Controllers\SocialPollController;
 use Modules\Social\App\Http\Controllers\SocialPostController;
+use Modules\Social\App\Http\Controllers\SocialStoryController;
 
 Route::middleware('auth')->prefix('social')->name('social.')->group(function () {
+    Route::get('/stories', [SocialStoryController::class, 'index']);
+    Route::post('/stories', [SocialStoryController::class, 'store']);
+    Route::post('/stories/{storyId}/view', [SocialStoryController::class, 'view']);
+    Route::delete('/stories/{storyId}', [SocialStoryController::class, 'destroy']);
+    Route::get('/stories/{storyId}/media', [SocialStoryController::class, 'media']);
+
     Route::get('/me/stats', [SocialPostController::class, 'meStats']);
     Route::get('/birthdays', [SocialPostController::class, 'birthdays']);
     Route::get('/departments', [SocialPostController::class, 'departments'])->name('departments');

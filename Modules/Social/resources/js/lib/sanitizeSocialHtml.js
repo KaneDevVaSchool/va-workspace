@@ -1,6 +1,6 @@
 import DOMPurify from 'dompurify';
 
-const STICKER_ID_RE = /^[0-9a-f]{2,8}(?:_[0-9a-f]{2,8}){0,12}$/;
+const STICKER_ID_RE = /^(?:[0-9a-f]{2,8}(?:_[0-9a-f]{2,8}){0,12}|va_(?:0[1-9]|1[0-9]|20))$/;
 
 const SANITIZE_OPTIONS = {
   ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'span'],

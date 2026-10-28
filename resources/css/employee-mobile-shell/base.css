@@ -421,6 +421,10 @@ html.pwa-standalone {
   scrollbar-width: none;
 }
 
+.employee-shell__content--profile {
+  padding-top: var(--space-2);
+}
+
 .employee-shell__content--attendance::-webkit-scrollbar {
   display: none;
   width: 0;

@@ -4,12 +4,16 @@ import { sendTyping, touchViewing } from '../api/chatApi';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { showClientToast } from '@/lib/clientToast';
-import { formatTime } from '@/lib/formatTime';
+import { formatRelativeTime, formatTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import SocialAnimatedSticker from '@modules/Social/resources/js/components/SocialAnimatedSticker.vue';
 import ChatLinkPreviewEmbed from '@modules/Social/resources/js/components/ChatLinkPreviewEmbed.vue';
+import ChatAlbumDialog from './ChatAlbumDialog.vue';
+import ChatMemberDialog from './ChatMemberDialog.vue';
 import ChatPicker from './ChatPicker.vue';
+import ChatPollDialog from './ChatPollDialog.vue';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
+import { ChatFileError, prepareChatFile } from '../lib/prepareChatFile';
 import { useChatStore } from '../store/chatStore';
 
 const store = useChatStore();
@@ -22,6 +26,9 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const draft = ref('');
 const files = ref([]);
 const fileInput = ref(null);
+const cameraInput = ref(null);
+const photoInput = ref(null);
+const lightbox = ref(null);
 const sending = ref(false);
 /** Xem trước tin đang gửi (bubble pending trước khi API trả về). */
 const pendingOutgoing = ref(null);
@@ -35,23 +42,90 @@ const menu = ref(null);
 const confirmKind = ref(null);
 const confirmMessage = ref(null);
 const confirming = ref(false);
+const membersOpen = ref(false);
+const pollOpen = ref(false);
+const albumOpen = ref(false);
+const searchOpen = ref(false);
+const searchQuery = ref('');
+const searchHits = ref([]);
+const readersFor = ref(null);
+const recording = ref(false);
+const mentionIds = ref([]);
+let typingSentAt = 0;
+let typingStopTimer = null;
+let voiceRecorder = null;
+let voiceChunks = [];
+let voiceStarted = 0;
 
 const otherUser = computed(() => store.activeConversation?.other_user ?? null);
 const peerMetaLine = computed(() => formatPeerMeta(otherUser.value));
-const peerTyping = computed(() => {
-  const until = store.typingByConversation[store.activeConversationId];
-  return Boolean(until && until > Date.now());
+const isGroup = computed(() => store.activeConversation?.type === 'group');
+const headerTitle = computed(() => {
+  if (isGroup.value) return store.activeConversation?.title || 'Nhóm';
+  return otherUser.value?.name || 'Trò chuyện';
 });
-let typingTimer = null;
+const isOwner = computed(() => Boolean(store.activeConversation?.is_owner));
+const pinnedMessage = computed(() => store.activeConversation?.pinned_message ?? null);
+const mentionQuery = computed(() => {
+  if (!isGroup.value) return null;
+  const match = draft.value.match(/(?:^|\s)@([^\n@]*)$/);
+  return match ? match[1] : null;
+});
+const mentionHits = computed(() => {
+  if (mentionQuery.value === null) return [];
+  const query = mentionQuery.value.toLowerCase();
+  return (store.activeConversation?.members || [])
+    .filter((user) => user.id !== auth.user?.id && user.name.toLowerCase().includes(query))
+    .slice(0, 6);
+});
+const memberLine = computed(() => {
+  const members = store.activeConversation?.members ?? [];
+  const count = store.activeConversation?.member_count || members.length;
+  const names = members
+    .filter((member) => member.id !== auth.user?.id)
+    .map((member) => member.name)
+    .filter(Boolean);
+  const countLabel = count ? `${count} thành viên` : 'Nhóm';
+  if (names.length === 0) return countLabel;
+  const shown = names.slice(0, 3).join(', ');
+  return names.length > 3 ? `${countLabel} · ${shown}…` : `${countLabel} · ${shown}`;
+});
+const typingUsers = computed(() => {
+  const slot = store.typingByConversation[store.activeConversationId];
+  return (slot?.users ?? []).filter((user) => user.until > Date.now());
+});
+const peerTyping = computed(() => typingUsers.value.length > 0);
+const typingLabel = computed(() => {
+  const names = typingUsers.value.map((user) => user.name).filter(Boolean);
+  if (names.length === 0) return 'Đang nhập…';
+  if (names.length === 1) return `${names[0]} đang nhập…`;
+  if (names.length === 2) return `${names[0]} và ${names[1]} đang nhập…`;
+  return `${names[0]} và ${names.length - 1} người đang nhập…`;
+});
 let viewingTimer = null;
 const canSend = computed(() => !sending.value && (draft.value.trim() !== '' || (!editing.value && files.value.length > 0)));
 
+const headerMenu = ref(null);
 const confirmCopy = computed(() => {
   if (confirmKind.value === 'recall') {
     return {
       title: 'Thu hồi tin nhắn',
       description: 'Tin nhắn sẽ biến mất với cả hai người. Thao tác không hoàn tác được.',
       confirmLabel: 'Thu hồi',
+    };
+  }
+  if (confirmKind.value === 'clear') {
+    return {
+      title: 'Xoá lịch sử chat',
+      description: 'Toàn bộ tin nhắn biến mất ở phía bạn. Người khác vẫn thấy nội dung.',
+      confirmLabel: 'Xoá lịch sử',
+    };
+  }
+  if (confirmKind.value === 'disband') {
+    return {
+      title: 'Giải tán nhóm',
+      description: 'Nhóm và toàn bộ tin nhắn sẽ mất với mọi thành viên. Thao tác không hoàn tác được.',
+      confirmLabel: 'Giải tán',
     };
   }
   return {
@@ -100,8 +174,9 @@ function scrollToBottom() {
 
 onMounted(scrollToBottom);
 onBeforeUnmount(() => {
-  clearTimeout(typingTimer);
+  stopTyping();
   clearInterval(viewingTimer);
+  clearDraftFiles();
 });
 
 watch(
@@ -111,19 +186,30 @@ watch(
   },
 );
 
+watch(typingLabel, (label) => {
+  if (label) scrollToBottom();
+});
+
 watch(sending, (active) => {
   if (active && pendingOutgoing.value) scrollToBottom();
 });
 
 watch(
   () => store.activeConversationId,
-  (id) => {
+  (id, previous) => {
+    if (previous && typingSentAt) {
+      typingSentAt = 0;
+      window.clearTimeout(typingStopTimer);
+      sendTyping(previous, false).catch(() => {});
+    }
     draft.value = '';
-    files.value = [];
+    clearDraftFiles();
+    lightbox.value = null;
     replyTo.value = null;
     editing.value = null;
     pickerOpen.value = false;
     menu.value = null;
+    headerMenu.value = null;
     clearInterval(viewingTimer);
     viewingTimer = null;
     if (!id) return;
@@ -154,8 +240,12 @@ function isMine(message) {
   return message.sender?.id === auth.user?.id;
 }
 
+function showSender(message) {
+  return isGroup.value && !isMine(message) && !message.recalled_at;
+}
+
 function showRead(message) {
-  if (!isMine(message) || message.recalled_at) return false;
+  if (isGroup.value || !isMine(message) || message.recalled_at) return false;
   const lastMine = [...store.activeMessages].reverse().find((item) => isMine(item) && !item.recalled_at);
   if (!lastMine || lastMine.id !== message.id) return false;
   const readAt = store.activeConversation?.other_read_at;
@@ -166,16 +256,38 @@ function showRead(message) {
 function pingTyping() {
   const id = store.activeConversationId;
   if (!id || editing.value) return;
-  clearTimeout(typingTimer);
-  typingTimer = window.setTimeout(() => {
-    if (draft.value.trim() === '') return;
-    sendTyping(id).catch(() => {});
-  }, 400);
+  if (draft.value.trim() === '') {
+    stopTyping();
+    return;
+  }
+  const now = Date.now();
+  if (now - typingSentAt >= 2000) {
+    typingSentAt = now;
+    sendTyping(id, true).catch(() => {});
+  }
+  window.clearTimeout(typingStopTimer);
+  typingStopTimer = window.setTimeout(stopTyping, 2500);
+}
+
+function stopTyping() {
+  window.clearTimeout(typingStopTimer);
+  const id = store.activeConversationId;
+  if (!typingSentAt || !id) {
+    typingSentAt = 0;
+    return;
+  }
+  typingSentAt = 0;
+  sendTyping(id, false).catch(() => {});
+}
+
+function coarsePointer() {
+  return window.matchMedia('(pointer: coarse)').matches;
 }
 
 function insertEmoji(emoji) {
   const input = inputRef.value;
-  if (!input) {
+  const inputFocused = input && document.activeElement === input;
+  if (!input || (coarsePointer() && !inputFocused)) {
     draft.value += emoji;
     return;
   }
@@ -194,8 +306,13 @@ function togglePicker(panel) {
     pickerOpen.value = false;
     return;
   }
+  inputRef.value?.blur();
   pickerPanel.value = panel;
   pickerOpen.value = true;
+}
+
+function onInputFocus() {
+  pickerOpen.value = false;
 }
 
 function startReply(message) {
@@ -210,7 +327,7 @@ function startEdit(message) {
   if (!isMine(message) || message.recalled_at || message.message_type !== 'text') return;
   replyTo.value = null;
   editing.value = message;
-  files.value = [];
+  clearDraftFiles();
   draft.value = message.message || '';
   pickerOpen.value = false;
   menu.value = null;
@@ -263,17 +380,195 @@ function openMenu(message, event) {
 
 function closeMenu() {
   menu.value = null;
+  headerMenu.value = null;
+}
+
+function openHeaderMenu(event) {
+  const button = event.currentTarget;
+  if (!(button instanceof HTMLElement)) return;
+  if (headerMenu.value) {
+    headerMenu.value = null;
+    return;
+  }
+  menu.value = null;
+  const rect = button.getBoundingClientRect();
+  const width = 220;
+  headerMenu.value = {
+    top: rect.bottom + 6,
+    left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
+  };
+}
+
+function askClearHistory() {
+  headerMenu.value = null;
+  confirmMessage.value = null;
+  confirmKind.value = 'clear';
+}
+
+function askDisband() {
+  headerMenu.value = null;
+  confirmMessage.value = null;
+  confirmKind.value = 'disband';
+}
+
+function memberName(id) {
+  return (store.activeConversation?.members || []).find((user) => user.id === id)?.name || '';
+}
+
+function pickMention(user) {
+  const next = draft.value.replace(/(^|\s)@[^\n@]*$/, `$1@${user.name} `);
+  draft.value = next;
+  if (!mentionIds.value.includes(user.id)) mentionIds.value = [...mentionIds.value, user.id];
+}
+
+function readLabel(message) {
+  if (!isGroup.value || !isMine(message) || message.recalled_at) return '';
+  const count = message.reads?.length || 0;
+  if (!count) return '';
+  const others = Math.max(1, (store.activeConversation?.member_count || 1) - 1);
+  return `Đã xem ${count}/${others}`;
+}
+
+function showReaders(message) {
+  readersFor.value = message;
+}
+
+async function pinThis(message) {
+  menu.value = null;
+  await store.pinMessage(store.activeConversationId, message.id).catch((error) => {
+    showClientToast('error', error?.response?.data?.message || 'Không ghim được tin.');
+  });
+}
+
+async function runSearch() {
+  const query = searchQuery.value.trim();
+  if (query.length < 2) {
+    searchHits.value = [];
+    return;
+  }
+  searchHits.value = await store.searchMessages(store.activeConversationId, query).catch(() => []);
+}
+
+function jumpToHit(message) {
+  const id = store.activeConversationId;
+  const list = store.messagesByConversation[id] || [];
+  const known = list.some((item) => item.id === message.id);
+  if (!known && message.sender) {
+    store.messagesByConversation[id] = [...list, message].sort((left, right) => left.id - right.id);
+  }
+  searchOpen.value = false;
+  nextTick(() => {
+    const node = document.getElementById(`chat-msg-${message.id}`);
+    if (node) node.scrollIntoView({ block: 'center' });
+    else showClientToast('info', 'Tin này nằm phía trên. Kéo lên để xem.');
+  });
+}
+
+async function togglePinConversation() {
+  headerMenu.value = null;
+  const pinned = !store.activeConversation?.pinned_at;
+  await store.pinConversation(store.activeConversationId, pinned);
+}
+
+async function toggleMute() {
+  headerMenu.value = null;
+  const hours = store.activeConversation?.is_muted ? null : 87600;
+  await store.muteConversation(store.activeConversationId, hours);
+}
+
+async function chooseDisappear(seconds) {
+  headerMenu.value = null;
+  await store.setDisappear(store.activeConversationId, seconds);
+}
+
+function openMembers() {
+  headerMenu.value = null;
+  membersOpen.value = true;
+}
+
+function openAlbum() {
+  headerMenu.value = null;
+  albumOpen.value = true;
+}
+
+function openPoll() {
+  headerMenu.value = null;
+  pollOpen.value = true;
+}
+
+function openSearch() {
+  headerMenu.value = null;
+  searchOpen.value = true;
+  searchHits.value = [];
+  searchQuery.value = '';
+}
+
+async function startVoice(event) {
+  event.preventDefault();
+  if (recording.value || sending.value || editing.value) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    voiceRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    voiceChunks = [];
+    voiceRecorder.ondataavailable = (item) => {
+      if (item.data?.size) voiceChunks.push(item.data);
+    };
+    voiceRecorder.onstop = () => finishVoice();
+    voiceStarted = Date.now();
+    voiceRecorder.start();
+    recording.value = true;
+  } catch {
+    showClientToast('error', 'Không dùng được micro trên thiết bị này.');
+  }
+}
+
+function stopVoice() {
+  if (!voiceRecorder || voiceRecorder.state === 'inactive') return;
+  voiceRecorder.stream?.getTracks().forEach((track) => track.stop());
+  voiceRecorder.stop();
+  recording.value = false;
+}
+
+async function finishVoice() {
+  const duration = Math.round((Date.now() - voiceStarted) / 1000);
+  if (duration < 1 || voiceChunks.length === 0) return;
+  const type = voiceRecorder?.mimeType || 'audio/webm';
+  const file = new File(voiceChunks, 'thoai.webm', { type });
+  sending.value = true;
+  try {
+    await store.sendMessage(store.activeConversationId, {
+      message_type: 'voice',
+      voice_duration: Math.min(180, Math.max(1, duration)),
+      files: [file],
+    });
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.message || 'Không gửi được tin nhắn thoại.');
+  } finally {
+    sending.value = false;
+  }
+}
+
+async function castVote(message, option) {
+  await store.votePoll(store.activeConversationId, message.id, option.id).catch((error) => {
+    showClientToast('error', error?.response?.data?.message || 'Không gửi được phiếu.');
+  });
 }
 
 function onDocumentPointerDown(event) {
-  if (!menu.value) return;
+  if (!menu.value && !headerMenu.value) return;
   const target = event.target;
-  if (target instanceof Element && target.closest('.chat-menu, .chat-bubble__more')) return;
+  if (target instanceof Element && target.closest('.chat-menu, .chat-bubble__more, .chat-view__head-menu')) return;
   closeMenu();
 }
 
 function onDocumentKeydown(event) {
-  if (event.key === 'Escape') closeMenu();
+  if (event.key !== 'Escape') return;
+  if (lightbox.value) {
+    lightbox.value = null;
+    return;
+  }
+  closeMenu();
 }
 
 onMounted(() => {
@@ -306,7 +601,7 @@ function imageFiles(message) {
 }
 
 function docFiles(message) {
-  return (message.attachments ?? []).filter((file) => file.type !== 'image');
+  return (message.attachments ?? []).filter((file) => file.type !== 'image' && file.type !== 'audio');
 }
 
 function formatSize(bytes) {
@@ -316,27 +611,50 @@ function formatSize(bytes) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function onFilesChosen(event) {
+function revokePreview(item) {
+  if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+}
+
+function clearDraftFiles() {
+  for (const item of files.value) revokePreview(item);
+  files.value = [];
+}
+
+async function onFilesChosen(event) {
   const chosen = Array.from(event.target.files ?? []);
   event.target.value = '';
-  if (editing.value) return;
+  if (editing.value || chosen.length === 0) return;
   const next = [...files.value];
-  for (const file of chosen) {
+  for (const raw of chosen) {
     if (next.length >= MAX_FILES) {
       showClientToast('error', `Chỉ được đính kèm tối đa ${MAX_FILES} tệp mỗi tin nhắn.`);
       break;
+    }
+    let file = raw;
+    try {
+      file = await prepareChatFile(raw);
+    } catch (error) {
+      showClientToast('error', error instanceof ChatFileError ? error.message : 'Ảnh này không gửi được. Hãy chọn JPG hoặc PNG.');
+      continue;
     }
     if (file.size > MAX_FILE_BYTES) {
       showClientToast('error', `${file.name} vượt quá 10MB.`);
       continue;
     }
-    next.push(file);
+    const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
+    next.push({ file, previewUrl });
   }
   files.value = next;
 }
 
 function removeFile(index) {
+  revokePreview(files.value[index]);
   files.value = files.value.filter((_, i) => i !== index);
+}
+
+function openImage(file) {
+  if (!file?.url) return;
+  lightbox.value = { url: file.url, name: file.name || 'Ảnh' };
 }
 
 async function sendSticker(sticker) {
@@ -364,17 +682,21 @@ async function send() {
   const text = draft.value.trim();
   if (sending.value) return;
   if (text === '' && (editing.value || files.value.length === 0)) return;
+  const outgoing = files.value.map((item) => item.file);
+  const sentPreviews = files.value.map((item) => item.previewUrl).filter(Boolean);
   if (editing.value) {
     pendingOutgoing.value = { kind: 'edit' };
   } else {
     pendingOutgoing.value = {
       kind: 'message',
       text,
-      fileCount: files.value.length,
-      hasImages: files.value.some((file) => file.type.startsWith('image/')),
+      fileCount: outgoing.length,
+      hasImages: outgoing.some((file) => file.type.startsWith('image/')),
+      previews: sentPreviews,
     };
   }
   sending.value = true;
+  let delivered = false;
   try {
     if (editing.value) {
       await store.editMessage(store.activeConversationId, editing.value.id, text);
@@ -385,9 +707,12 @@ async function send() {
     await store.sendMessage(store.activeConversationId, {
       message: text,
       reply_to_id: replyTo.value?.id ?? null,
-      files: files.value,
+      files: outgoing,
+      mention_ids: mentionIds.value.filter((id) => text.includes(memberName(id))),
     });
+    delivered = true;
     draft.value = '';
+    mentionIds.value = [];
     files.value = [];
     replyTo.value = null;
   } catch (error) {
@@ -395,11 +720,36 @@ async function send() {
   } finally {
     sending.value = false;
     pendingOutgoing.value = null;
+    if (delivered) {
+      nextTick(() => {
+        for (const url of sentPreviews) URL.revokeObjectURL(url);
+      });
+    }
   }
 }
 
 async function confirmAction() {
-  if (!confirmMessage.value || confirming.value) return;
+  if (confirming.value) return;
+  if (confirmKind.value === 'clear' || confirmKind.value === 'disband') {
+    confirming.value = true;
+    const kind = confirmKind.value;
+    const conversationId = store.activeConversationId;
+    try {
+      if (kind === 'clear') {
+        await store.clearHistory(conversationId);
+      } else {
+        await store.disbandGroup(conversationId);
+      }
+      confirmKind.value = null;
+      confirmMessage.value = null;
+    } catch (error) {
+      showClientToast('error', error?.response?.data?.message ?? 'Không thực hiện được thao tác.');
+    } finally {
+      confirming.value = false;
+    }
+    return;
+  }
+  if (!confirmMessage.value) return;
   confirming.value = true;
   const message = confirmMessage.value;
   const kind = confirmKind.value;
@@ -442,6 +792,7 @@ function menuItems(message) {
     items.push({ key: 'edit', label: 'Sửa', icon: 'pencil', run: () => startEdit(message) });
   }
   if (mine && !recalled) {
+    items.push({ key: 'pin', label: 'Ghim tin', icon: 'pin', run: () => pinThis(message) });
     items.push({ key: 'recall', label: 'Thu hồi', icon: 'rotateCw', run: () => askRecall(message) });
   }
   items.push({ key: 'delete', label: 'Xoá', icon: 'trash', run: () => askDelete(message) });
@@ -455,23 +806,60 @@ function menuItems(message) {
       <button type="button" class="chat-view__icon-btn" aria-label="Quay lại danh sách" @click="store.backToList()">
         <AppIcon name="chevronLeft" :size="18" :stroke-width="1.75" />
       </button>
+      <span v-if="isGroup" class="chat-view__avatar chat-view__avatar--group" aria-hidden="true">
+        <AppIcon name="users" :size="16" :stroke-width="1.75" />
+      </span>
       <img
-        v-if="otherUser?.avatar_url"
+        v-else-if="otherUser?.avatar_url"
         class="chat-view__avatar"
         :src="otherUser.avatar_url"
         :alt="`Ảnh đại diện của ${otherUser.name}`"
       />
       <span v-else class="chat-view__avatar chat-view__avatar--placeholder">{{ initial(otherUser?.name) }}</span>
       <span class="chat-view__who">
-        <span class="chat-view__title">{{ otherUser?.name || 'Trò chuyện' }}</span>
+        <span class="chat-view__title">{{ headerTitle }}</span>
         <span v-if="peerTyping" class="chat-view__dept chat-view__dept--active">
           <span class="chat-typing" aria-hidden="true"><span /><span /><span /></span>
-          Đang nhập…
+          {{ typingLabel }}
         </span>
         <span v-else-if="sending" class="chat-view__dept chat-view__dept--active">Đang gửi…</span>
+        <span v-else-if="!isGroup && otherUser?.online" class="chat-view__dept chat-view__dept--active">Đang hoạt động</span>
+        <span v-else-if="!isGroup && otherUser?.last_seen_at" class="chat-view__dept">Truy cập {{ formatRelativeTime(otherUser.last_seen_at) }}</span>
+        <span v-else-if="isGroup" class="chat-view__dept">{{ memberLine }}</span>
         <span v-else-if="peerMetaLine" class="chat-view__dept">{{ peerMetaLine }}</span>
       </span>
+      <button
+        type="button"
+        class="chat-view__icon-btn chat-view__head-menu"
+        aria-label="Thao tác"
+        aria-haspopup="menu"
+        :aria-expanded="headerMenu !== null"
+        @click="openHeaderMenu"
+      >
+        <AppIcon name="moreVertical" :size="18" :stroke-width="1.75" />
+      </button>
     </div>
+
+    <button
+      v-if="pinnedMessage"
+      type="button"
+      class="chat-pin"
+      @click="jumpToHit(pinnedMessage)"
+    >
+      <AppIcon name="pin" :size="14" :stroke-width="1.75" />
+      <span>{{ pinnedMessage.sender_name ? `${pinnedMessage.sender_name}: ` : '' }}{{ pinnedMessage.message }}</span>
+    </button>
+
+    <form v-if="searchOpen" class="chat-search" @submit.prevent="runSearch">
+      <input v-model="searchQuery" type="search" placeholder="Tìm trong cuộc trò chuyện" aria-label="Tìm trong cuộc trò chuyện" />
+      <button type="submit">Tìm</button>
+      <button type="button" aria-label="Đóng tìm kiếm" @click="searchOpen = false"><AppIcon name="close" :size="14" /></button>
+      <div v-if="searchHits.length" class="chat-search__hits">
+        <button v-for="hit in searchHits" :key="hit.id" type="button" @click="jumpToHit(hit)">
+          {{ hit.message }}
+        </button>
+      </div>
+    </form>
 
     <div ref="listRef" class="chat-view__messages" @scroll="onScroll">
       <p v-if="store.loadingMessages && store.activeMessages.length === 0" class="chat-view__empty">Đang tải tin nhắn…</p>
@@ -480,6 +868,7 @@ function menuItems(message) {
       </p>
       <template v-for="row in timeline" :key="row.kind === 'day' ? row.id : row.message.id">
         <div v-if="row.kind === 'day'" class="chat-day">{{ row.label }}</div>
+        <div v-else-if="row.message.message_type === 'system'" class="chat-day">{{ row.message.message }}</div>
         <div
           v-else
           :id="`chat-msg-${row.message.id}`"
@@ -508,6 +897,7 @@ function menuItems(message) {
               </span>
             </button>
 
+            <span v-if="showSender(row.message)" class="chat-bubble__sender">{{ row.message.sender?.name }}</span>
             <span v-if="row.message.recalled_at" class="chat-bubble__recalled">
               <AppIcon name="rotateCw" :size="13" :stroke-width="1.75" />
               Tin nhắn đã được thu hồi
@@ -515,18 +905,44 @@ function menuItems(message) {
             <span v-else-if="row.message.message_type === 'sticker' && row.message.sticker_id" class="chat-sticker">
               <SocialAnimatedSticker :id="row.message.sticker_id" :emoji="row.message.message || ''" />
             </span>
+            <div v-else-if="row.message.message_type === 'poll' && row.message.poll" class="chat-poll-card">
+              <p class="chat-poll-card__q">{{ row.message.poll.question }}</p>
+              <button
+                v-for="option in row.message.poll.options"
+                :key="option.id"
+                type="button"
+                class="chat-poll-card__opt"
+                :class="{ 'chat-poll-card__opt--on': (option.voter_ids || []).map(Number).includes(Number(auth.user?.id)) }"
+                @click="castVote(row.message, option)"
+              >
+                <span>{{ option.label }}</span>
+                <span>{{ option.votes }}</span>
+              </button>
+            </div>
+            <div
+              v-else-if="row.message.message_type === 'voice'"
+              class="chat-voice"
+            >
+              <AppIcon name="mic" :size="16" :stroke-width="1.75" />
+              <span>{{ row.message.voice_duration || 1 }} giây</span>
+              <audio :src="row.message.attachments?.[0]?.url" controls preload="none" />
+            </div>
             <span v-else-if="row.message.message" class="chat-bubble__text">{{ row.message.message }}</span>
-            <div v-if="!row.message.recalled_at && imageFiles(row.message).length" class="chat-images">
-              <a
+            <div
+              v-if="!row.message.recalled_at && imageFiles(row.message).length"
+              class="chat-images"
+              :class="{ 'chat-images--single': imageFiles(row.message).length === 1 }"
+            >
+              <button
                 v-for="file in imageFiles(row.message)"
                 :key="file.id"
+                type="button"
                 class="chat-images__link"
-                :href="file.url"
-                target="_blank"
-                rel="noopener"
+                :aria-label="`Xem ảnh ${file.name || ''}`"
+                @click="openImage(file)"
               >
-                <img :src="file.url" :alt="file.name" />
-              </a>
+                <img :src="file.url" :alt="file.name || 'Ảnh'" />
+              </button>
             </div>
             <div v-if="!row.message.recalled_at && docFiles(row.message).length" class="chat-docs">
               <a
@@ -548,7 +964,10 @@ function menuItems(message) {
             <span class="chat-bubble__meta">
               <span v-if="row.message.edited_at && !row.message.recalled_at">Đã sửa</span>
               <span>{{ formatTime(row.message.created_at) }}</span>
-              <span v-if="showRead(row.message)">Đã xem</span>
+              <button v-if="readLabel(row.message)" type="button" class="chat-read" @click="showReaders(row.message)">
+                {{ readLabel(row.message) }}
+              </button>
+              <span v-else-if="showRead(row.message)">Đã xem</span>
             </span>
           </div>
           <ChatLinkPreviewEmbed
@@ -590,8 +1009,17 @@ function menuItems(message) {
             />
           </span>
           <span v-else-if="pendingOutgoing.text" class="chat-bubble__text">{{ pendingOutgoing.text }}</span>
+          <div
+            v-if="pendingOutgoing.previews?.length"
+            class="chat-images"
+            :class="{ 'chat-images--single': pendingOutgoing.previews.length === 1 }"
+          >
+            <span v-for="url in pendingOutgoing.previews" :key="url" class="chat-images__link">
+              <img :src="url" alt="Ảnh đang gửi" />
+            </span>
+          </div>
           <span
-            v-if="pendingOutgoing.kind === 'message' && pendingOutgoing.fileCount > 0"
+            v-if="pendingOutgoing.kind === 'message' && pendingOutgoing.fileCount > 0 && !pendingOutgoing.previews?.length"
             class="chat-bubble__pending-files"
           >
             {{
@@ -612,8 +1040,16 @@ function menuItems(message) {
         />
         </div>
       </div>
+
+      <div v-if="peerTyping" class="chat-bubble-row" aria-live="polite">
+        <div class="chat-bubble chat-bubble--typing">
+          <span class="chat-typing" aria-hidden="true"><span /><span /><span /></span>
+          <span>{{ typingLabel }}</span>
+        </div>
+      </div>
     </div>
 
+    <div class="chat-dock">
     <Transition name="chat-compose-banner">
       <div v-if="replyTo || editing" class="chat-compose-banner">
       <AppIcon :name="editing ? 'pencil' : 'reply'" :size="14" :stroke-width="1.75" />
@@ -640,7 +1076,7 @@ function menuItems(message) {
     </Transition>
 
     <div class="chat-view__composer">
-      <div class="chat-view__tools">
+      <div class="chat-view__tools hide-scrollbar">
         <button
           type="button"
           class="chat-view__tool"
@@ -654,17 +1090,51 @@ function menuItems(message) {
           type="button"
           class="chat-view__tool"
           :disabled="Boolean(editing)"
+          aria-label="Chụp ảnh"
+          @click="cameraInput?.click()"
+        >
+          <AppIcon name="camera" :size="18" :stroke-width="1.75" />
+        </button>
+        <button
+          type="button"
+          class="chat-view__tool"
+          :disabled="Boolean(editing)"
+          aria-label="Gửi ảnh"
+          @click="photoInput?.click()"
+        >
+          <AppIcon name="image" :size="18" :stroke-width="1.75" />
+        </button>
+        <button
+          type="button"
+          class="chat-view__tool"
+          :disabled="Boolean(editing)"
           aria-label="Đính kèm tệp"
           @click="fileInput?.click()"
         >
           <AppIcon name="paperclip" :size="18" :stroke-width="1.75" />
         </button>
         <input
+          ref="cameraInput"
+          class="chat-view__file-input"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          @change="onFilesChosen"
+        />
+        <input
+          ref="photoInput"
+          class="chat-view__file-input"
+          type="file"
+          accept="image/*"
+          multiple
+          @change="onFilesChosen"
+        />
+        <input
           ref="fileInput"
           class="chat-view__file-input"
           type="file"
           multiple
-          accept="image/*,.pdf,.doc,.docx,.xlsx,.xls,.ppt,.pptx,.txt,.csv,.zip"
+          accept=".pdf,.doc,.docx,.xlsx,.xls,.ppt,.pptx,.txt,.csv,.zip,image/*"
           @change="onFilesChosen"
         />
         <button
@@ -678,6 +1148,28 @@ function menuItems(message) {
           <AppIcon name="sticker" :size="18" :stroke-width="1.75" />
         </button>
         <button
+          v-if="isGroup"
+          type="button"
+          class="chat-view__tool"
+          :disabled="Boolean(editing)"
+          aria-label="Tạo bình chọn"
+          @click="pollOpen = true"
+        >
+          <AppIcon name="listChecks" :size="18" :stroke-width="1.75" />
+        </button>
+        <button
+          type="button"
+          class="chat-view__tool"
+          :class="{ 'chat-view__tool--on': recording }"
+          :disabled="Boolean(editing)"
+          aria-label="Giữ để ghi âm"
+          @pointerdown="startVoice"
+          @pointerup="stopVoice"
+          @pointerleave="recording && stopVoice()"
+        >
+          <AppIcon name="mic" :size="18" :stroke-width="1.75" />
+        </button>
+        <button
           v-for="emoji in QUICK_EMOJIS"
           :key="emoji"
           type="button"
@@ -689,13 +1181,24 @@ function menuItems(message) {
         </button>
       </div>
       <div v-if="files.length" class="chat-pending">
-        <span v-for="(file, index) in files" :key="`${file.name}-${index}`" class="chat-pending__item">
-          <AppIcon :name="file.type.startsWith('image/') ? 'camera' : 'fileText'" :size="14" :stroke-width="1.75" />
-          <span class="chat-pending__name">{{ file.name }}</span>
-          <button type="button" class="chat-pending__remove" :aria-label="`Bỏ ${file.name}`" @click="removeFile(index)">
+        <span
+          v-for="(item, index) in files"
+          :key="`${item.file.name}-${index}`"
+          class="chat-pending__item"
+          :class="{ 'chat-pending__item--image': item.previewUrl }"
+        >
+          <img v-if="item.previewUrl" class="chat-pending__thumb" :src="item.previewUrl" alt="" />
+          <AppIcon v-else name="fileText" :size="14" :stroke-width="1.75" />
+          <span class="chat-pending__name">{{ item.file.name }}</span>
+          <button type="button" class="chat-pending__remove" :aria-label="`Bỏ ${item.file.name}`" @click="removeFile(index)">
             <AppIcon name="close" :size="12" :stroke-width="1.75" />
           </button>
         </span>
+      </div>
+      <div v-if="mentionHits.length" class="chat-mentions">
+        <button v-for="user in mentionHits" :key="user.id" type="button" @click="pickMention(user)">
+          {{ user.name }}
+        </button>
       </div>
       <div class="chat-view__input-row">
         <textarea
@@ -703,8 +1206,11 @@ function menuItems(message) {
           v-model="draft"
           class="chat-view__input"
           rows="1"
+          enterkeyhint="send"
           :placeholder="editing ? 'Sửa nội dung…' : 'Nhập tin nhắn...'"
-          :aria-label="editing ? 'Sửa tin nhắn' : `Nhập tin nhắn gửi ${otherUser?.name || ''}`"
+          :aria-label="editing ? 'Sửa tin nhắn' : `Nhập tin nhắn gửi ${headerTitle}`"
+          @focus="onInputFocus"
+          @input="pingTyping"
           @keydown="onKeydown"
         />
         <button
@@ -720,6 +1226,67 @@ function menuItems(message) {
         </button>
       </div>
     </div>
+    </div>
+
+    <Teleport to="body">
+      <div
+        v-if="lightbox"
+        class="chat-lightbox"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Xem ảnh"
+        @click.self="lightbox = null"
+      >
+        <button type="button" class="chat-lightbox__close" aria-label="Đóng ảnh" @click="lightbox = null">
+          <AppIcon name="close" :size="18" :stroke-width="1.75" />
+        </button>
+        <img class="chat-lightbox__img" :src="lightbox.url" :alt="lightbox.name" />
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="headerMenu"
+        class="chat-menu chat-menu--wide"
+        role="menu"
+        :style="{ top: `${headerMenu.top}px`, left: `${headerMenu.left}px` }"
+      >
+        <button type="button" class="chat-menu__item" role="menuitem" @click="askClearHistory">
+          <AppIcon name="trash" :size="15" :stroke-width="1.75" />
+          Xoá lịch sử
+        </button>
+        <button type="button" class="chat-menu__item" role="menuitem" @click="openSearch">
+          <AppIcon name="search" :size="15" :stroke-width="1.75" />
+          Tìm tin
+        </button>
+        <button type="button" class="chat-menu__item" role="menuitem" @click="openAlbum">
+          <AppIcon name="image" :size="15" :stroke-width="1.75" />
+          Ảnh và tệp
+        </button>
+        <button type="button" class="chat-menu__item" role="menuitem" @click="togglePinConversation">
+          <AppIcon name="pin" :size="15" :stroke-width="1.75" />
+          {{ store.activeConversation?.pinned_at ? 'Bỏ ghim' : 'Ghim hội thoại' }}
+        </button>
+        <button type="button" class="chat-menu__item" role="menuitem" @click="toggleMute">
+          <AppIcon name="bell" :size="15" :stroke-width="1.75" />
+          {{ store.activeConversation?.is_muted ? 'Bật thông báo' : 'Tắt thông báo' }}
+        </button>
+        <button type="button" class="chat-menu__item" role="menuitem" @click="chooseDisappear(null)">Tin tự xoá: tắt</button>
+        <button type="button" class="chat-menu__item" role="menuitem" @click="chooseDisappear(86400)">Tin tự xoá: 24 giờ</button>
+        <button type="button" class="chat-menu__item" role="menuitem" @click="chooseDisappear(604800)">Tin tự xoá: 7 ngày</button>
+        <button v-if="isGroup" type="button" class="chat-menu__item" role="menuitem" @click="openMembers">
+          <AppIcon name="users" :size="15" :stroke-width="1.75" />
+          Thành viên
+        </button>
+        <button v-if="isGroup && isOwner" type="button" class="chat-menu__item" role="menuitem" @click="askDisband">
+          <AppIcon name="users" :size="15" :stroke-width="1.75" />
+          Giải tán nhóm
+        </button>
+        <button v-else-if="isGroup" type="button" class="chat-menu__item" role="menuitem" @click="openMembers">
+          Rời nhóm
+        </button>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div
@@ -742,6 +1309,15 @@ function menuItems(message) {
       </div>
     </Teleport>
 
+    <ChatMemberDialog :open="membersOpen" @close="membersOpen = false" />
+    <ChatPollDialog :open="pollOpen" @close="pollOpen = false" />
+    <ChatAlbumDialog :open="albumOpen" @close="albumOpen = false" />
+    <div v-if="readersFor" class="chat-readers" role="dialog" aria-label="Người đã xem">
+      <p>Đã xem</p>
+      <p v-for="reader in readersFor.reads || []" :key="reader.id">{{ reader.name }}</p>
+      <button type="button" @click="readersFor = null">Đóng</button>
+    </div>
+
     <ConfirmDialog
       :open="confirmKind !== null"
       :title="confirmCopy.title"
@@ -761,6 +1337,9 @@ function menuItems(message) {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  touch-action: manipulation;
   background:
     radial-gradient(
       ellipse 120% 80% at 50% -20%,
@@ -842,7 +1421,8 @@ function menuItems(message) {
   flex-shrink: 0;
 }
 
-.chat-view__avatar--placeholder {
+.chat-view__avatar--placeholder,
+.chat-view__avatar--group {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -855,6 +1435,7 @@ function menuItems(message) {
 
 .chat-view__who {
   min-width: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
 }
@@ -882,9 +1463,11 @@ function menuItems(message) {
 }
 
 .chat-view__messages {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -985,6 +1568,21 @@ function menuItems(message) {
 .chat-bubble--recalled {
   background: var(--color-surface-muted);
   box-shadow: none;
+}
+
+.chat-bubble__sender {
+  color: var(--color-primary);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.chat-bubble--typing {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
 }
 
 .chat-bubble__text {
@@ -1108,6 +1706,17 @@ function menuItems(message) {
   white-space: nowrap;
 }
 
+.chat-dock {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(58%, 26rem);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-surface) 96%, transparent);
+  box-shadow: 0 -1px 0 var(--color-border);
+}
+
 .chat-view__composer {
   flex-shrink: 0;
   display: flex;
@@ -1116,19 +1725,34 @@ function menuItems(message) {
   padding: var(--space-2) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
   background: color-mix(in srgb, var(--color-surface) 92%, transparent);
   backdrop-filter: blur(10px);
-  box-shadow: 0 -1px 0 var(--color-border);
 }
 
 .chat-view__tools {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 0.1rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  touch-action: manipulation;
+}
+
+.chat-view__tools::-webkit-scrollbar {
+  display: none;
 }
 
 .chat-view__tool {
   width: 1.85rem;
   height: 1.85rem;
+  flex: 0 0 1.85rem;
   border-radius: var(--radius-sm);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chat-view__tool:active,
+.chat-view__quick:active {
+  transform: none;
 }
 
 .chat-view__tool--on {
@@ -1142,14 +1766,22 @@ function menuItems(message) {
 }
 
 .chat-view__quick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 1.75rem;
   border: none;
   background: transparent;
-  width: 1.7rem;
-  height: 1.7rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  overflow: hidden;
+  padding: 0;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .chat-view__quick:hover {
@@ -1176,6 +1808,18 @@ function menuItems(message) {
   background: var(--color-surface-muted);
   color: var(--color-text);
   font-size: 0.75rem;
+}
+
+.chat-pending__item--image {
+  padding-left: 0.2rem;
+}
+
+.chat-pending__thumb {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .chat-pending__name {
@@ -1205,10 +1849,19 @@ function menuItems(message) {
   margin-top: 0.25rem;
 }
 
+.chat-images--single {
+  grid-template-columns: minmax(0, 14rem);
+}
+
 .chat-images__link {
   display: block;
+  border: none;
+  padding: 0;
   border-radius: 8px;
   overflow: hidden;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
 }
 
 .chat-images__link img {
@@ -1216,6 +1869,11 @@ function menuItems(message) {
   width: 100%;
   height: 6.5rem;
   object-fit: cover;
+}
+
+.chat-images--single .chat-images__link img {
+  height: auto;
+  max-height: 16rem;
 }
 
 .chat-docs {
@@ -1309,16 +1967,137 @@ function menuItems(message) {
 </style>
 
 <style>
+.chat-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-tertiary-900) 72%, transparent);
+}
+
+.chat-lightbox__img {
+  max-width: min(100%, 48rem);
+  max-height: calc(100vh - 5rem);
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.chat-lightbox__close {
+  position: absolute;
+  top: max(var(--space-3), env(safe-area-inset-top, 0px));
+  right: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
 .chat-menu {
   position: fixed;
   z-index: 80;
   width: 10.5rem;
+  max-height: 70vh;
+  overflow: auto;
   padding: 0.25rem;
   border-radius: 10px;
   background: var(--color-surface);
   box-shadow:
     inset 0 0 0 1px var(--color-border),
     var(--shadow-lg);
+}
+
+.chat-menu--wide {
+  width: 14rem;
+}
+
+.chat-pin,
+.chat-search {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0.6rem 0.4rem;
+  padding: 0.4rem 0.55rem;
+  border: 0;
+  border-radius: 10px;
+  background: var(--color-primary-surface, var(--color-surface));
+  color: var(--color-text);
+  text-align: left;
+}
+
+.chat-search {
+  flex-wrap: wrap;
+}
+
+.chat-search input {
+  flex: 1;
+  min-width: 8rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.chat-search__hits {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.chat-mentions {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.35rem;
+}
+
+.chat-poll-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 11rem;
+}
+
+.chat-poll-card__opt,
+.chat-voice,
+.chat-read,
+.chat-mentions button,
+.chat-search button {
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.chat-poll-card__opt,
+.chat-voice {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.chat-poll-card__opt--on {
+  color: var(--color-primary);
+}
+
+.chat-readers {
+  position: fixed;
+  right: 1rem;
+  bottom: 5rem;
+  z-index: 70;
+  width: 14rem;
+  padding: 0.7rem;
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .chat-menu__item {

@@ -2,9 +2,13 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { showClientToast } from '@/lib/clientToast';
+import { useEmployeeMobileView } from '@/composables/useEmployeeMobileView';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 
 const auth = useAuthStore();
+const { isEmployeeMobile } = useEmployeeMobileView();
+/** Trong shell mobile: một header (EmployeeMobileLayout), không hero gradient thứ hai. */
+const useMobileShellProfile = computed(() => isEmployeeMobile.value);
 const registerPageRefresh = inject('employeePageRefreshRegister', null);
 
 const loading = ref(true);
@@ -117,51 +121,118 @@ const workGroupRows = computed(() => {
   const hrm = profile.value?.hrm;
   const ws = profile.value?.workspace;
   const code = hrm?.code || ws?.employee_code;
+  const jobTitle = hrm?.job_title;
   return [
+    isHeroDuplicate(jobTitle) ? null : profileField('Chức danh', jobTitle, 'clipboardCheck'),
     isHeroDuplicate(code) ? null : profileField('Mã nhân sự', code, 'hash'),
     profileField('Mã chấm công', hrm?.attendance_code, 'hash'),
+    profileField('Mã công ty', hrm?.company_code, 'building'),
+    profileField('Mã đơn vị', hrm?.org_unit_code, 'hash'),
     profileField('Cấp bậc', hrm?.level_name, 'layers'),
     profileField('Loại nhân sự', hrm?.personnel_type, 'shield'),
+    profileField('Trạng thái làm việc', formatEmploymentStatus(hrm?.employment_status), 'activity'),
+    profileField('Trạng thái hồ sơ', formatHrmStatus(hrm?.status), 'shield'),
     profileField('Nơi làm việc', hrm?.workplace, 'globe'),
     profileField('Ngày vào làm', formatDate(hrm?.hired_at), 'calendar'),
     profileField('Ngày bắt đầu thực tế', formatDate(hrm?.actual_start_date), 'calendar'),
   ].filter(Boolean);
 });
 
+const orgExtraRows = computed(() => {
+  const hrm = profile.value?.hrm;
+  return [
+    profileField('Đường dẫn đơn vị', hrm?.org_unit_path, 'globe'),
+    profileField(
+      'Phòng ban (hồ sơ)',
+      hrm?.profile_department_name,
+      'building',
+    ),
+  ].filter(Boolean);
+});
+
+const subtitleChips = computed(() => {
+  const hrm = profile.value?.hrm;
+  const ws = profile.value?.workspace;
+  return [
+    hrm?.job_title,
+    hrm?.department_name || ws?.department_name,
+    filled(heroCode.value) ? `Mã ${heroCode.value}` : null,
+  ].filter(filled);
+});
+
 const profileBlocks = computed(() => {
   const blocks = [];
   const contact = contactRows.value;
   const personal = personalRows.value;
-  if (contact.length || personal.length) {
+  if (contact.length) {
     blocks.push({
       id: 'contact',
-      title: 'Liên hệ & cá nhân',
+      title: 'Liên hệ',
+      icon: 'mail',
+      accent: 'tertiary',
+      groups: [{ title: '', rows: contact }],
+    });
+  }
+  if (personal.length) {
+    blocks.push({
+      id: 'personal',
+      title: 'Thông tin cá nhân',
       icon: 'user',
-      iconVariant: '',
-      showEdit: true,
-      groups: [
-        contact.length ? { title: 'Liên hệ', rows: contact } : null,
-        personal.length ? { title: 'Cá nhân', rows: personal } : null,
-      ].filter(Boolean),
+      accent: 'secondary',
+      groups: [{ title: '', rows: personal }],
     });
   }
   const org = orgGroupRows.value;
+  const orgExtra = orgExtraRows.value;
+  if (org.length || orgExtra.length) {
+    blocks.push({
+      id: 'org',
+      title: 'Tổ chức',
+      icon: 'building',
+      accent: 'primary',
+      groups: [
+        org.length ? { title: 'Phân công', rows: org } : null,
+        orgExtra.length ? { title: 'Chi tiết đơn vị', rows: orgExtra } : null,
+      ].filter(Boolean),
+    });
+  }
   const work = workGroupRows.value;
-  if (org.length || work.length) {
+  if (work.length) {
     blocks.push({
       id: 'work',
-      title: 'Công việc & tổ chức',
+      title: 'Hành chính & công việc',
       icon: 'clipboardCheck',
+      accent: 'tertiary',
       iconVariant: 'work',
-      showEdit: false,
-      groups: [
-        org.length ? { title: 'Tổ chức', rows: org } : null,
-        work.length ? { title: 'Hành chính', rows: work } : null,
-      ].filter(Boolean),
+      groups: [{ title: '', rows: work }],
     });
   }
   return blocks;
 });
+
+const editableFieldGroups = computed(() => {
+  const fields = profile.value?.editable_fields ?? [];
+  const personalKeys = new Set(['full_name', 'gender', 'birthdate']);
+  const contactKeys = new Set(['phone', 'personal_email', 'company_email']);
+  const workKeys = new Set(['workplace', 'attendance_code']);
+  const orgKeys = new Set(['manager_name']);
+  const groups = [
+    { id: 'personal', title: 'Thông tin cá nhân', keys: personalKeys },
+    { id: 'contact', title: 'Liên hệ', keys: contactKeys },
+    { id: 'org', title: 'Tổ chức', keys: orgKeys },
+    { id: 'work', title: 'Công việc', keys: workKeys },
+  ];
+  return groups
+    .map((group) => ({
+      ...group,
+      fields: fields.filter((field) => group.keys.has(field.key)),
+    }))
+    .filter((group) => group.fields.length > 0);
+});
+
+const canRequestProfileChanges = computed(
+  () => Boolean(profile.value?.hrm) && (profile.value?.editable_fields?.length ?? 0) > 0,
+);
 
 const directManagerLabel = computed(() => {
   const hrm = profile.value?.hrm;
@@ -195,6 +266,34 @@ function formatDate(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
   return new Intl.DateTimeFormat('vi-VN').format(d);
+}
+
+function formatEmploymentStatus(value) {
+  if (!filled(value)) return null;
+  const key = String(value).toLowerCase();
+  const map = {
+    active: 'Đang làm việc',
+    inactive: 'Ngừng làm việc',
+    resigned: 'Đã nghỉ',
+    terminated: 'Chấm dứt hợp đồng',
+    on_leave: 'Tạm nghỉ',
+  };
+  return map[key] || String(value);
+}
+
+function formatHrmStatus(value) {
+  if (!filled(value)) return null;
+  const key = String(value).toLowerCase();
+  if (key === 'active') return 'Đang hoạt động';
+  if (key === 'inactive') return 'Không hoạt động';
+  return String(value);
+}
+
+function formatFieldValueForDisplay(field) {
+  if (!filled(field?.value)) return '—';
+  if (field.key === 'gender') return formatGender(field.value) || field.value;
+  if (field.type === 'date') return formatDate(field.value) || field.value;
+  return field.value;
 }
 
 async function loadProfile() {
@@ -313,8 +412,18 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="emp-profile" :class="{ 'emp-profile--revealed': pageRevealed && !loading }">
-    <section v-if="loading" class="emp-profile__hero emp-profile__hero--loading" aria-busy="true">
+  <div
+    class="emp-profile"
+    :class="{
+      'emp-profile--revealed': pageRevealed && !loading,
+      'emp-profile--mobile-shell': useMobileShellProfile,
+    }"
+  >
+    <section
+      v-if="loading && !useMobileShellProfile"
+      class="emp-profile__hero emp-profile__hero--loading"
+      aria-busy="true"
+    >
       <div class="emp-profile__hero-bg" aria-hidden="true" />
       <div class="emp-profile__hero-body">
         <div class="emp-profile__sk-avatar" />
@@ -328,7 +437,7 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section v-else class="emp-profile__hero">
+    <section v-else-if="!useMobileShellProfile" class="emp-profile__hero">
       <div class="emp-profile__hero-bg" aria-hidden="true">
         <div class="emp-profile__hero-glow" />
       </div>
@@ -373,6 +482,90 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
+    <section
+      v-if="useMobileShellProfile && loading"
+      class="emp-profile__hub emp-profile__hub--loading"
+      aria-busy="true"
+    >
+      <div class="emp-profile__hub-top">
+        <div class="emp-profile__sk-avatar emp-profile__sk-avatar--hub" />
+        <div class="emp-profile__sk-lines emp-profile__sk-lines--hub">
+          <span class="emp-profile__sk-line" />
+          <span class="emp-profile__sk-line emp-profile__sk-line--short" />
+        </div>
+      </div>
+      <div class="emp-profile__sk-block" />
+    </section>
+
+    <section v-else-if="useMobileShellProfile" class="emp-profile__hub">
+      <div class="emp-profile__hub-top">
+        <button
+          type="button"
+          class="emp-profile__avatar-btn emp-profile__avatar-btn--hub"
+          :class="{ 'emp-profile__avatar-btn--busy': avatarUploading }"
+          :disabled="avatarUploading"
+          aria-label="Đổi ảnh đại diện"
+          @click="openAvatarPicker"
+        >
+          <img
+            v-if="hasAvatarPhoto"
+            class="emp-profile__avatar-img"
+            :src="avatarUrl"
+            alt=""
+            @error="avatarBroken = true"
+          />
+          <span v-else class="emp-profile__avatar-fallback">{{ avatarInitial }}</span>
+          <span class="emp-profile__avatar-edit emp-profile__avatar-edit--hub" aria-hidden="true">
+            <AppIcon v-if="!avatarUploading" name="camera" :size="14" :stroke-width="2" />
+            <span v-else class="emp-profile__avatar-spinner" />
+          </span>
+        </button>
+        <input
+          ref="avatarInputRef"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          class="emp-profile__avatar-input"
+          @change="onAvatarSelected"
+        />
+        <div class="emp-profile__hub-copy">
+          <button
+            type="button"
+            class="emp-profile__hub-photo-link"
+            :disabled="avatarUploading"
+            @click="openAvatarPicker"
+          >
+            {{ avatarUploading ? 'Đang tải ảnh…' : 'Cập nhật ảnh đại diện' }}
+          </button>
+          <p class="emp-profile__hub-lead">Thông tin dưới đây đồng bộ từ HRM.</p>
+        </div>
+      </div>
+      <div v-if="subtitleChips.length" class="emp-profile__chips">
+        <span v-for="chip in subtitleChips" :key="chip" class="emp-profile__chip">{{ chip }}</span>
+      </div>
+      <button
+        v-if="canRequestProfileChanges"
+        type="button"
+        class="emp-profile__hub-cta"
+        @click="openChangeDialog"
+      >
+        <AppIcon name="pencil" :size="18" :stroke-width="2" />
+        <span>Yêu cầu chỉnh sửa hồ sơ</span>
+      </button>
+    </section>
+
+    <div
+      v-if="canRequestProfileChanges && !loading && !useMobileShellProfile"
+      class="emp-profile__actions"
+    >
+      <button type="button" class="emp-profile__actions-btn" @click="openChangeDialog">
+        <AppIcon name="pencil" :size="18" />
+        <span>Yêu cầu chỉnh sửa hồ sơ</span>
+      </button>
+      <p class="emp-profile__actions-hint">
+        Gửi thay đổi lên HC-NS — gồm quản lý trực tiếp nếu đang hiển thị sai.
+      </p>
+    </div>
+
     <div v-if="hrmMissing" class="emp-profile__notice">
       <span class="emp-profile__notice-icon" aria-hidden="true">
         <AppIcon name="info" :size="18" />
@@ -380,10 +573,14 @@ onBeforeUnmount(() => {
       <p>Chưa liên kết hồ sơ HRM. Thông tin hiển thị từ tài khoản Workspace.</p>
     </div>
 
-    <div v-if="pendingRequests.length" class="emp-profile__pending">
-      <header class="emp-profile__pending-head">
-        <AppIcon name="clock" :size="16" />
-        <h2 class="emp-profile__section-title">Yêu cầu đang chờ</h2>
+    <section v-if="pendingRequests.length" class="emp-profile__card emp-profile__card--pending">
+      <header class="emp-profile__card-head">
+        <div class="emp-profile__card-title">
+          <span class="emp-profile__card-icon emp-profile__card-icon--pending" aria-hidden="true">
+            <AppIcon name="clock" :size="16" />
+          </span>
+          <h2 class="emp-profile__section-title emp-profile__section-title--card">Yêu cầu đang chờ</h2>
+        </div>
       </header>
       <article
         v-for="req in pendingRequests"
@@ -401,13 +598,18 @@ onBeforeUnmount(() => {
         </ul>
         <p v-if="req.note" class="emp-profile__pending-note">{{ req.note }}</p>
       </article>
-    </div>
+    </section>
 
-    <template v-if="!loading">
+    <template v-if="loading && useMobileShellProfile">
+      <div v-for="n in 3" :key="n" class="emp-profile__sk-card" aria-hidden="true" />
+    </template>
+
+    <template v-else-if="!loading">
     <section
       v-for="(block, blockIndex) in profileBlocks"
       :key="block.id"
-      class="emp-profile__card emp-profile__card--anim"
+      class="emp-profile__card emp-profile__card--anim emp-profile__card--accent"
+      :class="`emp-profile__card--accent-${block.accent}`"
       :style="{ '--emp-card-i': blockIndex }"
     >
       <div class="emp-profile__card-head">
@@ -419,39 +621,39 @@ onBeforeUnmount(() => {
           >
             <AppIcon :name="block.icon" :size="16" />
           </span>
-          <h2 class="emp-profile__section-title">{{ block.title }}</h2>
+          <h2 class="emp-profile__section-title emp-profile__section-title--card">{{ block.title }}</h2>
         </div>
-        <button
-          v-if="block.showEdit"
-          type="button"
-          class="emp-profile__edit-btn"
-          :disabled="!profile?.hrm"
-          @click="openChangeDialog"
-        >
-          <AppIcon name="pencil" :size="16" />
-          <span>Yêu cầu sửa</span>
-        </button>
       </div>
       <div
         v-for="(group, groupIndex) in block.groups"
-        :key="group.title"
+        :key="group.title || groupIndex"
         class="emp-profile__group"
         :class="{ 'emp-profile__group--border': groupIndex > 0 }"
       >
-        <h3 class="emp-profile__group-title">{{ group.title }}</h3>
-        <dl class="emp-profile__dl emp-profile__dl--grid">
-          <div v-for="row in group.rows" :key="row.label" class="emp-profile__row">
-            <dt>{{ row.label }}</dt>
-            <dd>{{ row.value }}</dd>
-          </div>
-        </dl>
+        <h3 v-if="group.title" class="emp-profile__group-title">{{ group.title }}</h3>
+        <ul class="emp-profile__fields">
+          <li
+            v-for="row in group.rows"
+            :key="row.label"
+            class="emp-profile__field"
+            :class="{ 'emp-profile__field--manager': row.label === 'Quản lý trực tiếp' }"
+          >
+            <span class="emp-profile__field-icon" aria-hidden="true">
+              <AppIcon :name="row.icon" :size="16" :stroke-width="1.75" />
+            </span>
+            <div class="emp-profile__field-body">
+              <span class="emp-profile__field-label">{{ row.label }}</span>
+              <span class="emp-profile__field-value">{{ row.value }}</span>
+            </div>
+          </li>
+        </ul>
       </div>
     </section>
     </template>
 
     <section
       v-if="!loading && concurrentRows.length"
-      class="emp-profile__card emp-profile__card--anim"
+      class="emp-profile__card emp-profile__card--anim emp-profile__card--accent emp-profile__card--accent-secondary"
       :style="{ '--emp-card-i': profileBlocks.length }"
     >
       <div class="emp-profile__card-title emp-profile__card-title--solo">
@@ -498,32 +700,56 @@ onBeforeUnmount(() => {
             </header>
             <div class="emp-profile-dialog__body hide-scrollbar">
               <p class="emp-profile-dialog__lead">
-                Chỉ điền các trường cần thay đổi. Phòng HC-NS sẽ duyệt và cập nhật trên HRM.
+                Chỉ điền các trường cần thay đổi (kể cả quản lý trực tiếp nếu đang sai).
+                Phòng HC-NS sẽ duyệt và cập nhật trên HRM.
               </p>
               <form class="emp-profile-dialog__form" @submit.prevent="submitChangeRequest">
-                <div
-                  v-for="field in profile?.editable_fields ?? []"
-                  :key="field.key"
-                  class="emp-profile-dialog__field-card"
+                <section
+                  v-for="group in editableFieldGroups"
+                  :key="group.id"
+                  class="emp-profile-dialog__section"
                 >
-                  <label :for="`chg-${field.key}`" class="emp-profile-dialog__field-label">
-                    {{ field.label }}
-                  </label>
-                  <p class="emp-profile-dialog__current">
-                    <span class="emp-profile-dialog__current-key">Hiện tại</span>
-                    <span class="emp-profile-dialog__current-val">
-                      {{ filled(field.value) ? field.value : '—' }}
-                    </span>
-                  </p>
-                  <input
-                    :id="`chg-${field.key}`"
-                    v-model="changeDraft[field.key]"
-                    type="text"
-                    class="emp-profile-dialog__input"
-                    :placeholder="`Giá trị mới`"
-                    autocomplete="off"
-                  />
-                </div>
+                  <h3 class="emp-profile-dialog__section-title">{{ group.title }}</h3>
+                  <div
+                    v-for="field in group.fields"
+                    :key="field.key"
+                    class="emp-profile-dialog__field-card"
+                  >
+                    <label :for="`chg-${field.key}`" class="emp-profile-dialog__field-label">
+                      {{ field.label }}
+                    </label>
+                    <p class="emp-profile-dialog__current">
+                      <span class="emp-profile-dialog__current-key">Hiện tại</span>
+                      <span class="emp-profile-dialog__current-val">
+                        {{ formatFieldValueForDisplay(field) }}
+                      </span>
+                    </p>
+                    <select
+                      v-if="field.type === 'select'"
+                      :id="`chg-${field.key}`"
+                      v-model="changeDraft[field.key]"
+                      class="emp-profile-dialog__input emp-profile-dialog__select"
+                    >
+                      <option value="">— Chọn giá trị mới —</option>
+                      <option
+                        v-for="opt in field.options ?? []"
+                        :key="opt.value"
+                        :value="opt.value"
+                      >
+                        {{ opt.label }}
+                      </option>
+                    </select>
+                    <input
+                      v-else
+                      :id="`chg-${field.key}`"
+                      v-model="changeDraft[field.key]"
+                      :type="field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : field.type === 'tel' ? 'tel' : 'text'"
+                      class="emp-profile-dialog__input"
+                      :placeholder="field.placeholder || 'Giá trị mới'"
+                      autocomplete="off"
+                    />
+                  </div>
+                </section>
                 <div class="emp-profile-dialog__field-card emp-profile-dialog__field-card--full">
                   <label for="chg-note" class="emp-profile-dialog__field-label">Ghi chú</label>
                   <textarea
@@ -562,6 +788,292 @@ onBeforeUnmount(() => {
   padding: 0 0 var(--space-6);
   max-width: 36rem;
   margin-inline: auto;
+}
+
+.emp-profile--mobile-shell {
+  --eh-shadow: var(
+    --eh-card-shadow,
+    0 4px 18px color-mix(in srgb, var(--color-tertiary-900) 7%, transparent)
+  );
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 0 var(--space-2);
+  max-width: none;
+  margin-inline: 0;
+}
+
+.emp-profile__hub {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-tertiary-surface) 55%, var(--color-surface) 45%) 0%,
+    var(--color-surface) 58%
+  );
+  box-shadow: var(--eh-shadow);
+}
+
+.emp-profile__hub--loading {
+  min-height: 9rem;
+}
+
+.emp-profile__hub-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.emp-profile__hub-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.emp-profile__hub-photo-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-tertiary-700);
+  text-align: left;
+  cursor: pointer;
+}
+
+.emp-profile__hub-photo-link:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.emp-profile__hub-lead {
+  margin: var(--space-1) 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.emp-profile__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.emp-profile__chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.25rem 0.55rem;
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--color-tertiary-800);
+  background: color-mix(in srgb, var(--color-tertiary-surface) 70%, var(--color-surface) 30%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-tertiary-200) 55%, transparent);
+}
+
+.emp-profile__hub-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-tertiary-600);
+  color: var(--color-on-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--color-tertiary-800) 18%, transparent);
+}
+
+.emp-profile__hub-cta:active {
+  transform: scale(0.99);
+}
+
+.emp-profile__avatar-btn--hub {
+  width: 4rem;
+  height: 4rem;
+  flex-shrink: 0;
+  background: var(--color-surface);
+  box-shadow:
+    0 6px 16px color-mix(in srgb, var(--color-tertiary-800) 12%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-border) 80%, transparent);
+}
+
+.emp-profile__avatar-edit--hub {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.emp-profile__sk-avatar--hub {
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  background: var(--color-surface-muted);
+  animation: emp-profile-pulse 1.2s ease-in-out infinite;
+}
+
+.emp-profile__sk-lines--hub {
+  flex: 1;
+  align-items: flex-start;
+}
+
+.emp-profile__sk-block {
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  animation: emp-profile-pulse 1.2s ease-in-out infinite;
+}
+
+.emp-profile__sk-card {
+  height: 7.5rem;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--eh-shadow);
+  animation: emp-profile-pulse 1.2s ease-in-out infinite;
+}
+
+.emp-profile__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.emp-profile__actions-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    135deg,
+    var(--color-tertiary-600),
+    var(--color-tertiary-700)
+  );
+  color: var(--color-on-primary);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--eh-shadow);
+}
+
+.emp-profile--mobile-shell .emp-profile__actions-btn {
+  background: var(--color-surface);
+  color: var(--color-tertiary-700);
+  box-shadow:
+    var(--eh-shadow),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-tertiary-300) 45%, var(--color-border));
+}
+
+.emp-profile__actions-btn:active {
+  transform: scale(0.99);
+}
+
+.emp-profile__actions-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.emp-profile--mobile-shell .emp-profile__card,
+.emp-profile--mobile-shell .emp-profile__notice {
+  margin-inline: 0;
+}
+
+.emp-profile--mobile-shell .emp-profile__notice {
+  box-shadow: var(--eh-shadow);
+}
+
+.emp-profile__fields {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.emp-profile__field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: start;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+}
+
+.emp-profile__field:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.emp-profile__field:first-child {
+  padding-top: 0;
+}
+
+.emp-profile__field-icon {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  margin-top: 1px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-tertiary-100) 45%, var(--color-surface-muted));
+  color: var(--color-tertiary-700);
+}
+
+.emp-profile__field-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.emp-profile__field-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.emp-profile__field-value {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.emp-profile__field--manager {
+  position: relative;
+  margin: var(--space-1) 0;
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-tertiary-surface) 55%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-tertiary-200) 45%, var(--color-border));
+}
+
+.emp-profile__field--manager .emp-profile__field-icon {
+  background: color-mix(in srgb, var(--color-tertiary-500) 16%, var(--color-surface));
+}
+
+.emp-profile__field--manager .emp-profile__field-value {
+  font-weight: 600;
+  color: var(--color-tertiary-800);
 }
 
 .emp-profile__hero {
@@ -756,7 +1268,7 @@ onBeforeUnmount(() => {
   display: flex;
   gap: var(--space-2);
   align-items: flex-start;
-  margin: 0 var(--space-3) var(--space-2);
+  margin: 0 0 var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--color-info) 10%, var(--color-surface));
@@ -778,12 +1290,63 @@ onBeforeUnmount(() => {
 
 .emp-profile__card {
   position: relative;
-  margin: 0 var(--space-3) var(--space-2);
-  padding: var(--space-3);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-4);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+}
+
+.emp-profile--mobile-shell .emp-profile__card {
+  box-shadow: var(--eh-shadow);
+}
+
+.emp-profile__card--accent {
+  padding-left: calc(var(--space-2) + 3px + var(--space-3));
+}
+
+.emp-profile__card--accent::before {
+  content: '';
+  position: absolute;
+  top: var(--space-3);
+  bottom: var(--space-3);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-tertiary-500);
+}
+
+.emp-profile__card--accent-primary::before {
+  background: var(--color-primary-500);
+}
+
+.emp-profile__card--accent-secondary::before {
+  background: var(--color-secondary-500);
+}
+
+.emp-profile__card--accent-tertiary::before {
+  background: var(--color-tertiary-500);
+}
+
+.emp-profile__card--pending {
+  padding-left: calc(var(--space-2) + 3px + var(--space-3));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-warning) 6%, var(--color-surface)) 0%,
+    var(--color-surface) 100%
+  );
+}
+
+.emp-profile__card--pending::before {
+  content: '';
+  position: absolute;
+  top: var(--space-3);
+  bottom: var(--space-3);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-warning);
 }
 
 .emp-profile__card::after {
@@ -866,6 +1429,17 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-text-muted);
+}
+
+.emp-profile__section-title--card {
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  color: var(--color-text);
+}
+
+.emp-profile__card-icon--pending {
+  background: color-mix(in srgb, var(--color-warning) 18%, var(--color-surface));
+  color: color-mix(in srgb, var(--color-warning) 90%, #000);
 }
 
 .emp-profile__edit-btn {
@@ -980,29 +1554,16 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
-.emp-profile__pending {
-  margin: 0 var(--space-3) var(--space-2);
-}
-
-.emp-profile__pending-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin-bottom: var(--space-1);
-  color: var(--color-warning);
-}
-
-.emp-profile__pending-head .emp-profile__section-title {
-  color: inherit;
-}
-
 .emp-profile__pending-card {
-  margin-top: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-surface));
-  box-shadow: var(--shadow-sm);
-  border: 1px solid color-mix(in srgb, var(--color-warning) 22%, transparent);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.emp-profile__pending-card:first-of-type {
+  margin-top: 0;
 }
 
 .emp-profile__pending-meta {
@@ -1282,7 +1843,36 @@ onBeforeUnmount(() => {
 .emp-profile-dialog__form {
   display: flex;
   flex-direction: column;
+  gap: var(--space-3);
+}
+
+.emp-profile-dialog__section {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-2);
+}
+
+.emp-profile-dialog__section-title {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.emp-profile-dialog__select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-text-muted) 50%),
+    linear-gradient(135deg, var(--color-text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% + 2px),
+    calc(100% - 12px) calc(50% + 2px);
+  background-size:
+    6px 6px,
+    6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 2rem;
 }
 
 .emp-profile-dialog__field-card {

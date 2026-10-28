@@ -17,6 +17,7 @@ class UserTyping implements ShouldBroadcastNow
         public readonly int $conversationId,
         public readonly int $userId,
         public readonly string $name,
+        public readonly bool $active = true,
     ) {}
 
     public function broadcastOn(): Channel
@@ -35,6 +36,7 @@ class UserTyping implements ShouldBroadcastNow
             'conversation_id' => $this->conversationId,
             'user_id' => $this->userId,
             'name' => $this->name,
+            'active' => $this->active,
         ];
     }
 }

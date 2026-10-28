@@ -1,25 +1,53 @@
 <script setup>
+import { computed, ref } from 'vue';
+import AppIcon from '@/components/AppIcon.vue';
 import { formatRelativeTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
+import ChatGroupDialog from './ChatGroupDialog.vue';
 import ChatUserSearch from './ChatUserSearch.vue';
 import { useChatStore } from '../store/chatStore';
 
 const store = useChatStore();
 const auth = useAuthStore();
+const groupOpen = ref(false);
+const listQuery = ref('');
 
 function initial(name) {
   return name?.trim().charAt(0).toUpperCase() || '?';
 }
 
+function isGroup(conversation) {
+  return conversation.type === 'group';
+}
+
+function conversationName(conversation) {
+  if (isGroup(conversation)) return conversation.title || 'Nhóm';
+  return conversation.other_user?.name || 'Người dùng';
+}
+
 function peerMeta(conversation) {
+  if (isGroup(conversation)) {
+    const count = conversation.member_count || conversation.members?.length || 0;
+    return count ? `${count} thành viên` : 'Nhóm';
+  }
   return formatPeerMeta(conversation.other_user);
+}
+
+function typingText(conversation) {
+  const users = (store.typingByConversation[conversation.id]?.users ?? []).filter((user) => user.until > Date.now());
+  if (users.length === 0) return '';
+  if (isGroup(conversation) && users[0]?.name) return `${users[0].name} đang nhập…`;
+  return 'Đang nhập…';
 }
 
 function excerpt(conversation) {
   const msg = conversation.last_message;
   if (!msg?.message) return 'Chưa có tin nhắn';
   const text = msg.message;
+  if (isGroup(conversation) && auth.user?.id && msg.sender_id !== auth.user.id && msg.sender_name && !msg.recalled) {
+    return `${msg.sender_name}: ${text}`;
+  }
   if (auth.user?.id && msg.sender_id === auth.user.id && !msg.recalled) {
     return `Bạn: ${text}`;
   }
@@ -29,11 +57,27 @@ function excerpt(conversation) {
 function open(conversationId) {
   store.openConversationView(conversationId);
 }
+
+const visibleConversations = computed(() => {
+  const query = listQuery.value.trim().toLowerCase();
+  if (!query) return store.conversations;
+  return store.conversations.filter((conversation) => conversationName(conversation).toLowerCase().includes(query));
+});
 </script>
 
 <template>
   <div class="chat-list">
+    <div class="chat-list__create">
+      <button type="button" class="chat-list__create-btn" @click="groupOpen = true">
+        <AppIcon name="users" :size="16" :stroke-width="1.75" />
+        Tạo nhóm
+      </button>
+    </div>
     <ChatUserSearch />
+    <label class="chat-list__find">
+      <AppIcon name="search" :size="14" :stroke-width="1.75" />
+      <input v-model="listQuery" type="search" placeholder="Tìm hội thoại" aria-label="Tìm hội thoại" />
+    </label>
 
     <div class="chat-list__items">
       <p v-if="store.loadingConversations" class="chat-list__empty chat-list__empty--loading">
@@ -41,10 +85,10 @@ function open(conversationId) {
         Đang tải hội thoại…
       </p>
       <p v-else-if="store.conversations.length === 0" class="chat-list__empty">
-        Chưa có cuộc trò chuyện nào. Tìm tên đồng nghiệp ở trên để bắt đầu.
+        Chưa có cuộc trò chuyện nào. Tìm đồng nghiệp hoặc tạo nhóm để bắt đầu.
       </p>
       <button
-        v-for="(conversation, index) in store.conversations"
+        v-for="(conversation, index) in visibleConversations"
         v-else
         :key="conversation.id"
         type="button"
@@ -57,8 +101,11 @@ function open(conversationId) {
         @click="open(conversation.id)"
       >
         <span class="chat-item__avatar-wrap" aria-hidden="true">
+          <span v-if="isGroup(conversation)" class="chat-item__avatar chat-item__avatar--group">
+            <AppIcon name="users" :size="16" :stroke-width="1.75" />
+          </span>
           <img
-            v-if="conversation.other_user?.avatar_url"
+            v-else-if="conversation.other_user?.avatar_url"
             class="chat-item__avatar"
             :src="conversation.other_user.avatar_url"
             :alt="`Ảnh đại diện của ${conversation.other_user.name}`"
@@ -69,13 +116,21 @@ function open(conversationId) {
         </span>
         <span class="chat-item__body">
           <span class="chat-item__row">
-            <span class="chat-item__name">{{ conversation.other_user?.name || 'Người dùng' }}</span>
+            <span class="chat-item__name">
+              <AppIcon v-if="conversation.pinned_at" name="pin" :size="12" :stroke-width="1.75" />
+              {{ conversationName(conversation) }}
+            </span>
             <span v-if="conversation.last_message" class="chat-item__time">
               {{ formatRelativeTime(conversation.last_message.created_at) }}
             </span>
           </span>
           <span v-if="peerMeta(conversation)" class="chat-item__meta">{{ peerMeta(conversation) }}</span>
+          <span v-if="typingText(conversation)" class="chat-item__excerpt chat-item__excerpt--typing">
+            <span class="chat-typing" aria-hidden="true"><span /><span /><span /></span>
+            {{ typingText(conversation) }}
+          </span>
           <span
+            v-else
             class="chat-item__excerpt"
             :class="{
               'chat-item__excerpt--muted':
@@ -93,6 +148,8 @@ function open(conversationId) {
         </span>
       </button>
     </div>
+
+    <ChatGroupDialog :open="groupOpen" @close="groupOpen = false" />
   </div>
 </template>
 
@@ -102,6 +159,50 @@ function open(conversationId) {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.chat-list__create {
+  display: flex;
+  flex-shrink: 0;
+  padding: var(--space-3) var(--space-3) 0;
+}
+
+.chat-list__create-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chat-list__find {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.35rem 0.75rem 0;
+  padding: 0.35rem 0.55rem;
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text-muted, var(--color-text));
+}
+
+.chat-list__find input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
 }
 
 .chat-list__items {
@@ -210,7 +311,8 @@ function open(conversationId) {
     0 0 0 3px color-mix(in srgb, var(--color-tertiary-400) 35%, transparent);
 }
 
-.chat-item__avatar--placeholder {
+.chat-item__avatar--placeholder,
+.chat-item__avatar--group {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -281,8 +383,16 @@ function open(conversationId) {
   font-weight: 600;
 }
 
-.chat-item__excerpt--muted {
+.chat-item__excerpt--muted,
+.chat-item__excerpt--typing {
   font-style: italic;
+}
+
+.chat-item__excerpt--typing {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-primary);
+  font-weight: 600;
 }
 
 .chat-item__count {

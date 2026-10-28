@@ -22,11 +22,15 @@ class ConversationMember extends Model
         'user_id',
         'joined_at',
         'last_read_at',
+        'pinned_at',
+        'muted_until',
     ];
 
     protected $casts = [
         'joined_at' => 'datetime',
         'last_read_at' => 'datetime',
+        'pinned_at' => 'datetime',
+        'muted_until' => 'datetime',
     ];
 
     public function conversation(): BelongsTo

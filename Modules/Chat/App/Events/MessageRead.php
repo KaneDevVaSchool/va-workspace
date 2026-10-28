@@ -17,6 +17,8 @@ class MessageRead implements ShouldBroadcastNow
         public readonly int $conversationId,
         public readonly int $userId,
         public readonly string $readAt,
+        public readonly array $messageIds = [],
+        public readonly string $readerName = '',
     ) {}
 
     public function broadcastOn(): Channel
@@ -35,6 +37,8 @@ class MessageRead implements ShouldBroadcastNow
             'conversation_id' => $this->conversationId,
             'user_id' => $this->userId,
             'read_at' => $this->readAt,
+            'message_ids' => $this->messageIds,
+            'reader_name' => $this->readerName,
         ];
     }
 }

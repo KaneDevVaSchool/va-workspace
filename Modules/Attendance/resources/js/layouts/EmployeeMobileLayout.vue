@@ -321,6 +321,7 @@ function goBackFromSubpage() {
       class="employee-shell__content employee-shell__content--unified"
       :class="{
         'employee-shell__content--chat': isChatRoute,
+        'employee-shell__content--chat-thread': hideHeaderForChatThread,
         'employee-shell__content--attendance': isAttendanceRoute,
         'employee-shell__content--profile': isProfileRoute,
       }"

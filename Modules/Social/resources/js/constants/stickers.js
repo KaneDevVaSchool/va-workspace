@@ -1,4 +1,5 @@
 import { emojiToStickerId } from '../lib/socialStickers.js';
+import { VA_STICKER_PACK } from '../lib/vaStickers.js';
 
 function pack(key, label, icon, emojis) {
   return {
@@ -13,6 +14,7 @@ function pack(key, label, icon, emojis) {
 }
 
 export const STICKER_PACKS = [
+  VA_STICKER_PACK,
   pack('faces', 'Cảm xúc', '😀', [
     '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
     '🫠', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '☺️',

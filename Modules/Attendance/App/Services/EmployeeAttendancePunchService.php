@@ -9,7 +9,8 @@ use Modules\Identity\App\Hrm\Services\HrmApiClient;
 /**
  * Gửi giờ vào/ra của người đang đăng nhập về HRM.
  * Danh tính = hrm_employee_uuid trên tài khoản — không nhận uuid từ trình duyệt.
- * Giờ lấy theo server. Bốn ô: vào/ra sáng, vào/ra chiều — đã lưu thì không ghi đè.
+ * Giờ lấy theo server. Màn nhân viên chỉ gửi vào sáng và ra chiều.
+ * API vẫn nhận ra sáng / vào chiều; ô đã lưu thì không ghi đè.
  */
 class EmployeeAttendancePunchService
 {

@@ -72,7 +72,8 @@ function setPanel(panel) {
         :aria-label="pack.label"
         @click="activePack = pack.key"
       >
-        {{ pack.icon }}
+        <img v-if="pack.iconSrc" class="chat-picker__pack-img" :src="pack.iconSrc" alt="" />
+        <template v-else>{{ pack.icon }}</template>
       </button>
     </div>
 
@@ -107,9 +108,10 @@ function setPanel(panel) {
 .chat-picker {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: 16rem;
-  margin: 0 var(--space-3) var(--space-2);
+  max-height: min(13.5rem, 36dvh);
+  margin: var(--space-2) var(--space-3) 0;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow:
@@ -144,6 +146,8 @@ function setPanel(panel) {
   background: transparent;
   cursor: pointer;
   font-family: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .chat-picker__tab {
@@ -165,11 +169,20 @@ function setPanel(panel) {
 
 .chat-picker__pack {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 1.75rem;
   height: 1.75rem;
   border-radius: var(--radius-sm);
   font-size: 1rem;
   line-height: 1;
+}
+
+.chat-picker__pack-img {
+  width: 1.35rem;
+  height: 1.35rem;
+  object-fit: contain;
 }
 
 .chat-picker__grid {
@@ -187,9 +200,14 @@ function setPanel(panel) {
 }
 
 .chat-picker__emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 2rem;
+  overflow: hidden;
+  padding: 0;
   border-radius: var(--radius-sm);
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   line-height: 1;
 }
 
@@ -205,6 +223,20 @@ function setPanel(panel) {
   align-items: center;
   justify-content: center;
   height: 3.25rem;
+  overflow: hidden;
   border-radius: var(--radius-sm);
+}
+
+.chat-picker__sticker :deep(.social-sticker) {
+  width: 2.75rem;
+  height: 2.75rem;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.chat-picker__emoji:active,
+.chat-picker__sticker:active,
+.chat-picker__pack:active {
+  transform: none;
 }
 </style>

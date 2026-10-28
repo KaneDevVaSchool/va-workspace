@@ -50,6 +50,7 @@ export const APP_ICON_NAMES = [
   'heart',
   'helpCircle',
   'home',
+  'image',
   'info',
   'italic',
   'layers',

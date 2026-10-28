@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * @property int $id
@@ -33,6 +34,10 @@ class Message extends Model
 
     public const TYPE_STICKER = 'sticker';
 
+    public const TYPE_VOICE = 'voice';
+
+    public const TYPE_POLL = 'poll';
+
     protected $fillable = [
         'conversation_id',
         'sender_id',
@@ -42,11 +47,15 @@ class Message extends Model
         'message_type',
         'edited_at',
         'recalled_at',
+        'expires_at',
+        'voice_duration',
     ];
 
     protected $casts = [
         'edited_at' => 'datetime',
         'recalled_at' => 'datetime',
+        'expires_at' => 'datetime',
+        'voice_duration' => 'integer',
     ];
 
     public function conversation(): BelongsTo
@@ -72,6 +81,21 @@ class Message extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(MessageAttachment::class, 'message_id');
+    }
+
+    public function reads(): HasMany
+    {
+        return $this->hasMany(MessageReceipt::class, 'message_id');
+    }
+
+    public function mentions(): HasMany
+    {
+        return $this->hasMany(MessageMention::class, 'message_id');
+    }
+
+    public function poll(): HasOne
+    {
+        return $this->hasOne(ChatPoll::class, 'message_id');
     }
 
     public function isRecalled(): bool

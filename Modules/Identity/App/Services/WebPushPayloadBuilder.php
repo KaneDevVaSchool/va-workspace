@@ -11,6 +11,8 @@ final class WebPushPayloadBuilder
 {
     public const BRAND_TITLE = 'VA Workspace';
 
+    public const CHAT_PHONE_TITLE = '1 lời nhắn từ VA';
+
     private const BODY_MAX = 240;
 
     /**
@@ -72,6 +74,24 @@ final class WebPushPayloadBuilder
             'title' => self::BRAND_TITLE,
             'body' => $this->trimBody($line),
         ];
+    }
+
+    /**
+     * Dòng hiện trên điện thoại. Tin nhắn chat một câu ngắn, không lặp tên app.
+     *
+     * @param  array{title: string, body: string}  $formatted
+     * @return array{title: string, body: string}
+     */
+    public function forPhone(string $type, array $formatted): array
+    {
+        if ($type === NotificationService::TYPE_CHAT_MESSAGE) {
+            return [
+                'title' => self::CHAT_PHONE_TITLE,
+                'body' => '',
+            ];
+        }
+
+        return $formatted;
     }
 
     private function actorName(?User $actor): string

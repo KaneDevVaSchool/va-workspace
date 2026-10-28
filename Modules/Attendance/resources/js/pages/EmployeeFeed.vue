@@ -18,6 +18,7 @@ import SocialHashtagPanel from '@modules/Social/resources/js/components/SocialHa
 import SocialPinnedPanel from '@modules/Social/resources/js/components/SocialPinnedPanel.vue';
 import SocialPostCard from '@modules/Social/resources/js/components/SocialPostCard.vue';
 import SocialPostComposer from '@modules/Social/resources/js/components/SocialPostComposer.vue';
+import SocialStoryRail from '@modules/Social/resources/js/components/SocialStoryRail.vue';
 import { useEmployeeSocialFeed } from '../composables/useEmployeeSocialFeed.js';
 
 const registerFeedRefresh = inject('employeeFeedRefreshRegister', null);
@@ -292,6 +293,7 @@ onBeforeUnmount(() => {
       </section>
     </div>
 
+    <SocialStoryRail />
     <div class="emp-feed__composer">
       <SocialPostComposer
         :key="`${postScope}-${currentWallUserId ?? 'none'}`"

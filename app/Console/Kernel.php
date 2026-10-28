@@ -27,6 +27,7 @@ class Kernel extends ConsoleKernel
         // Làm nóng cache JWKS VA-HRM (SSO) — giảm khả năng cache-miss đúng
         // lúc user đang login, xem Modules/Identity/App/Console/WarmHrmJwksCommand.
         $schedule->command('identity:hrm-warm-jwks')->hourly();
+        $schedule->command('chat:expire-messages')->everyMinute();
     }
 
     /**
