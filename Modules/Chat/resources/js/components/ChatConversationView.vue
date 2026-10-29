@@ -24,7 +24,15 @@ import ChatAvatar from './ChatAvatar.vue';
 import ChatMemberDialog from './ChatMemberDialog.vue';
 import ChatPicker from './ChatPicker.vue';
 import ChatPollDialog from './ChatPollDialog.vue';
+import ChatReactionBurst from './ChatReactionBurst.vue';
 import { CHAT_REACTIONS, reactionLabel } from '../lib/chatReactions';
+import {
+  BIRTHDAY_STICKER,
+  CHAT_ACCENTS,
+  CHAT_MOODS,
+  CHAT_QUICK_REPLIES,
+  moodById,
+} from '../lib/chatPlay';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
 import { ChatFileError, prepareChatFile } from '../lib/prepareChatFile';
 import { useChatStore } from '../store/chatStore';
@@ -61,6 +69,13 @@ const searchHits = ref([]);
 const readersFor = ref(null);
 const mentionIds = ref([]);
 const reactionPicker = ref(null);
+const funSheet = ref(null);
+const burstTick = ref(0);
+const burstEmoji = ref('');
+let holdFired = false;
+let pointerMoved = false;
+let tapMessageId = 0;
+let tapStamp = 0;
 /** PWA: không gắn cảm xúc trên menu; đè giữ bong bóng thì thanh mới hiện đè lên tin. */
 const holdToReact = computed(() => {
   if (typeof document === 'undefined') return false;
@@ -87,6 +102,22 @@ const headerTitle = computed(() => {
 });
 const isOwner = computed(() => Boolean(store.activeConversation?.is_owner));
 const groupAvatarUrl = computed(() => (isGroup.value ? store.activeConversation?.avatar_url : null) ?? null);
+const peerMood = computed(() => (isGroup.value ? null : moodById(otherUser.value?.mood)));
+const myMood = computed(() => moodById(store.activeConversation?.my_mood));
+const streakCount = computed(() => (isGroup.value ? 0 : Number(store.activeConversation?.streak) || 0));
+const groupAccent = computed(() => (isGroup.value ? store.activeConversation?.accent || '' : ''));
+const birthdayNames = computed(() => {
+  if (isGroup.value) {
+    return (store.activeConversation?.members || [])
+      .filter((user) => user.birthday_today)
+      .map((user) => user.name)
+      .filter(Boolean);
+  }
+  return otherUser.value?.birthday_today && otherUser.value?.name ? [otherUser.value.name] : [];
+});
+const showQuickReplies = computed(() => (
+  !editing.value && draft.value.trim() === '' && files.value.length === 0 && !sending.value
+));
 const pinnedMessage = computed(() => store.activeConversation?.pinned_message ?? null);
 const mentionMatch = computed(() => {
   if (!isGroup.value || editing.value) return null;
@@ -193,12 +224,11 @@ const timeline = computed(() => {
 });
 
 /**
- * Trong nhóm, tin của người khác có avatar người gửi ở tin cuối của mỗi chuỗi liên tiếp
+ * Tin của người khác có avatar người gửi ở tin cuối của mỗi chuỗi liên tiếp
  * (các tin trên chỉ chừa chỗ trống), giống cách Zalo/Messenger gom tin.
  */
 const avatarMessageIds = computed(() => {
   const ids = new Set();
-  if (!isGroup.value) return ids;
   const rows = timeline.value;
   rows.forEach((row, index) => {
     if (row.kind !== 'message' || row.message.message_type === 'system' || isMine(row.message)) return;
@@ -214,7 +244,11 @@ const avatarMessageIds = computed(() => {
 function senderAvatarUrl(message) {
   if (message.sender?.avatar_url) return message.sender.avatar_url;
   const member = store.activeConversation?.members?.find((item) => item.id === message.sender?.id);
-  return member?.avatar_url ?? null;
+  if (member?.avatar_url) return member.avatar_url;
+  if (!isGroup.value && otherUser.value?.id === message.sender?.id) {
+    return otherUser.value.avatar_url ?? null;
+  }
+  return null;
 }
 
 function dayKey(iso) {
@@ -1195,23 +1229,67 @@ function cancelReactionHold() {
   reactionHoldPoint = null;
 }
 
+function playBurst(emoji) {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  burstEmoji.value = emoji;
+  burstTick.value += 1;
+}
+
 function onBubblePointerDown(message, event) {
-  if (!holdToReact.value || !canReact(message)) return;
   if (event.pointerType === 'mouse' && event.button !== 0) return;
   const target = event.target;
   if (target instanceof Element && target.closest('a, button, audio, input, textarea')) return;
+  pointerMoved = false;
+  const now = Date.now();
+  if (canReact(message) && tapMessageId === message.id && now - tapStamp < 340) {
+    tapMessageId = 0;
+    tapStamp = 0;
+    holdFired = false;
+    cancelReactionHold();
+    quickHeart(message);
+    return;
+  }
+  if (!holdToReact.value || !canReact(message)) return;
+  holdFired = false;
   reactionHoldPoint = { x: event.clientX, y: event.clientY };
   const bubble = event.currentTarget;
   window.clearTimeout(reactionHoldTimer);
   reactionHoldTimer = window.setTimeout(() => {
+    holdFired = true;
     reactionHoldPoint = null;
     openReactionPicker(message, bubble);
   }, 420);
 }
 
+function onBubblePointerUp(message, event) {
+  const moved = pointerMoved || (reactionHoldPoint
+    ? Math.hypot(event.clientX - reactionHoldPoint.x, event.clientY - reactionHoldPoint.y) > 12
+    : false);
+  const held = holdFired;
+  cancelReactionHold();
+  if (held || moved || !canReact(message)) return;
+  tapMessageId = message.id;
+  tapStamp = Date.now();
+}
+
+function quickHeart(message) {
+  if (!canReact(message)) return;
+  if (myReaction(message) === '❤️') {
+    playBurst('❤️');
+    return;
+  }
+  toggleReaction(message, '❤️');
+}
+
+function senderMood(message) {
+  const member = store.activeConversation?.members?.find((item) => item.id === message.sender?.id);
+  return moodById(member?.mood);
+}
+
 function onBubblePointerMove(event) {
   if (!reactionHoldPoint) return;
   if (Math.hypot(event.clientX - reactionHoldPoint.x, event.clientY - reactionHoldPoint.y) > 12) {
+    pointerMoved = true;
     cancelReactionHold();
   }
 }
@@ -1235,13 +1313,52 @@ function openReactionPicker(message, bubble) {
 
 async function toggleReaction(message, emoji) {
   if (!canReact(message) || !store.activeConversationId) return;
+  const removing = myReaction(message) === emoji;
   menu.value = null;
   reactionPicker.value = null;
   try {
     await store.reactToMessage(store.activeConversationId, message.id, emoji);
+    if (!removing && (emoji === '❤️' || emoji === '😂')) playBurst(emoji);
   } catch (error) {
     showClientToast('error', error?.response?.data?.message ?? 'Không thả được cảm xúc.');
   }
+}
+
+function sendQuick(text) {
+  if (editing.value || sending.value || !store.activeConversationId) return;
+  const replyId = replyTo.value?.id ?? null;
+  replyTo.value = null;
+  draft.value = '';
+  queueOutgoing({ kind: 'text', text, replyId });
+}
+
+function sendBirthdayWish() {
+  if (editing.value || sending.value) return;
+  sendSticker(BIRTHDAY_STICKER);
+}
+
+async function chooseMood(mood) {
+  try {
+    await store.setMood(mood);
+    funSheet.value = null;
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.errors?.mood?.[0] ?? 'Không lưu được tâm trạng.');
+  }
+}
+
+async function chooseAccent(accent) {
+  if (!store.activeConversationId) return;
+  try {
+    await store.setGroupAccent(store.activeConversationId, accent);
+    funSheet.value = null;
+  } catch (error) {
+    showClientToast('error', error?.response?.data?.errors?.accent?.[0] ?? 'Không đổi được màu nhóm.');
+  }
+}
+
+function openFun(kind) {
+  headerMenu.value = null;
+  funSheet.value = funSheet.value === kind ? null : kind;
 }
 
 function initial(name) {
@@ -1271,7 +1388,7 @@ function menuItems(message) {
 </script>
 
 <template>
-  <div class="chat-view">
+  <div class="chat-view" :data-accent="groupAccent || null">
     <div class="chat-view__head">
       <button type="button" class="chat-view__icon-btn" aria-label="Quay lại danh sách" @click="store.backToList()">
         <AppIcon name="chevronLeft" :size="18" :stroke-width="1.75" />
@@ -1328,6 +1445,7 @@ function menuItems(message) {
           <span v-else-if="isGroup" key="group" class="chat-view__dept">{{ memberLine }}</span>
           <span v-else-if="peerMetaLine" key="meta" class="chat-view__dept">{{ peerMetaLine }}</span>
         </Transition>
+        <span v-if="peerMood" class="chat-view__mood">{{ peerMood.emoji }} {{ peerMood.label }}</span>
       </span>
       <button
         type="button"
@@ -1339,6 +1457,43 @@ function menuItems(message) {
       >
         <AppIcon name="moreVertical" :size="18" :stroke-width="1.75" />
       </button>
+    </div>
+
+    <div v-if="birthdayNames.length || streakCount >= 2 || funSheet" class="chat-fun-stack">
+      <div v-if="birthdayNames.length" class="chat-bday">
+        <span>🎂 Hôm nay sinh nhật {{ birthdayNames.join(', ') }}</span>
+        <button type="button" @click="sendBirthdayWish">Gửi sticker chúc mừng</button>
+      </div>
+      <p v-if="streakCount >= 2" class="chat-streak">🔥 {{ streakCount }} ngày nhắn liên tiếp</p>
+      <div v-if="funSheet === 'mood'" class="chat-fun" role="group" aria-label="Chọn tâm trạng">
+        <button
+          v-for="mood in CHAT_MOODS"
+          :key="mood.id"
+          type="button"
+          class="chat-fun__chip"
+          :class="{ 'chat-fun__chip--on': store.activeConversation?.my_mood === mood.id }"
+          @click="chooseMood(mood.id)"
+        >
+          {{ mood.emoji }} {{ mood.label }}
+        </button>
+        <button v-if="myMood" type="button" class="chat-fun__chip" @click="chooseMood(null)">Bỏ</button>
+      </div>
+      <div v-else-if="funSheet === 'accent'" class="chat-fun" role="group" aria-label="Màu nhóm">
+        <button type="button" class="chat-fun__chip" :class="{ 'chat-fun__chip--on': !groupAccent }" @click="chooseAccent(null)">
+          Mặc định
+        </button>
+        <button
+          v-for="accent in CHAT_ACCENTS"
+          :key="accent.id"
+          type="button"
+          class="chat-fun__chip"
+          :data-accent="accent.id"
+          :class="{ 'chat-fun__chip--on': groupAccent === accent.id }"
+          @click="chooseAccent(accent.id)"
+        >
+          {{ accent.label }}
+        </button>
+      </div>
     </div>
 
     <button
@@ -1388,11 +1543,11 @@ function menuItems(message) {
             'chat-bubble-row--animate': freshBubbleIds.has(row.message.id),
           }"
         >
-          <span v-if="isGroup && !isMine(row.message)" class="chat-bubble-row__avatar">
+          <span v-if="!isMine(row.message)" class="chat-bubble-row__avatar">
             <ChatAvatar
               v-if="avatarMessageIds.has(row.message.id)"
               :src="senderAvatarUrl(row.message)"
-              :name="row.message.sender?.name || ''"
+              :name="row.message.sender?.name || otherUser?.name || ''"
               size="1.75rem"
             />
           </span>
@@ -1407,7 +1562,7 @@ function menuItems(message) {
             }"
             @pointerdown="onBubblePointerDown(row.message, $event)"
             @pointermove="onBubblePointerMove"
-            @pointerup="cancelReactionHold"
+            @pointerup="onBubblePointerUp(row.message, $event)"
             @pointercancel="cancelReactionHold"
             @contextmenu="onBubbleContextMenu"
           >
@@ -1424,7 +1579,9 @@ function menuItems(message) {
               </span>
             </button>
 
-            <span v-if="showSender(row.message)" class="chat-bubble__sender">{{ row.message.sender?.name }}</span>
+            <span v-if="showSender(row.message)" class="chat-bubble__sender">
+              <template v-if="senderMood(row.message)">{{ senderMood(row.message).emoji }} </template>{{ row.message.sender?.name }}
+            </span>
             <span v-if="row.message.recalled_at" class="chat-bubble__recalled">
               <AppIcon name="rotateCw" :size="13" :stroke-width="1.75" />
               Tin nhắn đã được thu hồi
@@ -1689,6 +1846,17 @@ function menuItems(message) {
     </Transition>
 
     <div class="chat-view__composer">
+      <div v-if="showQuickReplies" class="chat-quick hide-scrollbar" aria-label="Trả lời nhanh">
+        <button
+          v-for="text in CHAT_QUICK_REPLIES"
+          :key="text"
+          type="button"
+          class="chat-quick__chip"
+          @click="sendQuick(text)"
+        >
+          {{ text }}
+        </button>
+      </div>
       <div class="chat-view__tools hide-scrollbar">
         <button
           type="button"
@@ -1738,7 +1906,6 @@ function menuItems(message) {
           <span class="chat-view__at" aria-hidden="true">@</span>
         </button>
         <button
-          v-if="isGroup"
           type="button"
           class="chat-view__tool"
           :disabled="Boolean(editing)"
@@ -1868,6 +2035,12 @@ function menuItems(message) {
         role="menu"
         :style="{ top: `${headerMenu.top}px`, left: `${headerMenu.left}px` }"
       >
+        <button type="button" class="chat-menu__item" role="menuitem" @click="openFun('mood')">
+          {{ myMood ? `${myMood.emoji} Tâm trạng` : '✨ Tâm trạng' }}
+        </button>
+        <button v-if="isGroup && isOwner" type="button" class="chat-menu__item" role="menuitem" @click="openFun('accent')">
+          Màu nhóm
+        </button>
         <button type="button" class="chat-menu__item" role="menuitem" @click="askClearHistory">
           <AppIcon name="trash" :size="15" :stroke-width="1.75" />
           Xoá lịch sử
@@ -1972,6 +2145,7 @@ function menuItems(message) {
     <ChatMemberDialog :open="membersOpen" @close="membersOpen = false" />
     <ChatPollDialog :open="pollOpen" @close="pollOpen = false" />
     <ChatAlbumDialog :open="albumOpen" @close="albumOpen = false" />
+    <ChatReactionBurst :tick="burstTick" :emoji="burstEmoji" />
     <Teleport to="body">
       <div
         v-if="readersFor"
@@ -3538,5 +3712,81 @@ function menuItems(message) {
 .chat-menu__item:hover {
   background: var(--color-primary-surface);
   color: var(--color-primary);
+}
+
+.chat-view__mood {
+  color: color-mix(in srgb, var(--color-on-primary) 92%, transparent);
+  font-size: 0.6875rem;
+  font-style: italic;
+}
+
+.chat-fun-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.45rem 0.7rem 0;
+  flex-shrink: 0;
+}
+
+.chat-bday,
+.chat-streak,
+.chat-fun {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chat-bday,
+.chat-streak {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.75rem;
+}
+
+.chat-bday button,
+.chat-fun__chip,
+.chat-quick__chip {
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 0.28rem 0.65rem;
+  cursor: pointer;
+}
+
+.chat-fun__chip--on,
+.chat-bday button {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+}
+
+.chat-quick {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+}
+
+.chat-quick__chip {
+  flex-shrink: 0;
+}
+
+.chat-view[data-accent='coral'] { --chat-fun: #c23b4a; }
+.chat-view[data-accent='gold'] { --chat-fun: #a16207; }
+.chat-view[data-accent='teal'] { --chat-fun: #0f766e; }
+.chat-view[data-accent='violet'] { --chat-fun: #6d28d9; }
+.chat-view[data-accent='leaf'] { --chat-fun: #3f6212; }
+
+.chat-view[data-accent] .chat-bubble--mine {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--chat-fun) 18%, var(--color-surface)),
+    var(--color-surface)
+  );
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--chat-fun) 16%, transparent);
 }
 </style>

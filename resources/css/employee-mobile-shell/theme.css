@@ -173,19 +173,10 @@
 
 .employee-shell--unified
     .employee-shell__header--home
-    .employee-shell__brand-mark--avatar {
-    background: linear-gradient(
-        160deg,
-        #fff 0%,
-        color-mix(in srgb, var(--color-tertiary-100) 55%, #fff) 100%
-    );
-}
-
-.employee-shell--unified
-    .employee-shell__header--home
-    .employee-shell__brand-initial {
-    font-size: 1.05rem;
-    color: var(--color-tertiary-800);
+    .employee-shell__brand-logo--pwa {
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 0.5rem;
 }
 
 .employee-shell--unified .employee-shell__header--home .employee-shell__kicker {

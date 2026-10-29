@@ -4,6 +4,7 @@ import AppIcon from '@/components/AppIcon.vue';
 import { formatRelativeTime } from '@/lib/formatTime';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
+import { moodById } from '../lib/chatPlay';
 import { useColleagueSearch } from '../lib/useColleagueSearch';
 import ChatGroupDialog from './ChatGroupDialog.vue';
 import { useChatStore } from '../store/chatStore';
@@ -77,6 +78,18 @@ function excerpt(conversation) {
     return `Bạn: ${text}`;
   }
   return text;
+}
+
+function listMarks(conversation) {
+  const marks = [];
+  const birthday = isGroup(conversation)
+    ? (conversation.members || []).some((user) => user.birthday_today)
+    : Boolean(conversation.other_user?.birthday_today);
+  if (birthday) marks.push('🎂');
+  const mood = moodById(isGroup(conversation) ? null : conversation.other_user?.mood);
+  if (mood) marks.push(mood.emoji);
+  if (!isGroup(conversation) && (conversation.streak || 0) >= 2) marks.push('🔥');
+  return marks.join(' ');
 }
 
 function open(conversationId) {
@@ -197,6 +210,7 @@ const visibleConversations = computed(() => {
             <span class="chat-item__name">
               <AppIcon v-if="conversation.pinned_at" name="pin" :size="12" :stroke-width="1.75" />
               {{ conversationName(conversation) }}
+              <span v-if="listMarks(conversation)" class="chat-item__marks">{{ listMarks(conversation) }}</span>
             </span>
             <span v-if="conversation.last_message" class="chat-item__time">
               {{ formatRelativeTime(conversation.last_message.created_at) }}
@@ -480,6 +494,10 @@ const visibleConversations = computed(() => {
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-2);
+}
+
+.chat-item__marks {
+  margin-left: 0.25rem;
 }
 
 .chat-item__name {

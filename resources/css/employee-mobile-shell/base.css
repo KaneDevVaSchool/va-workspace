@@ -149,33 +149,6 @@ html.pwa-standalone {
   border-radius: 0.35rem;
 }
 
-.employee-shell__brand-mark--avatar {
-  overflow: hidden;
-  border-radius: var(--radius-full);
-  background: linear-gradient(
-    145deg,
-    var(--color-surface) 0%,
-    color-mix(in srgb, var(--color-tertiary-100) 65%, var(--color-surface)) 100%
-  );
-  box-shadow:
-    0 4px 12px color-mix(in srgb, var(--color-tertiary-900) 22%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--color-on-primary) 35%, transparent);
-}
-
-.employee-shell__brand-logo--avatar {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: inherit;
-}
-
-.employee-shell__brand-initial {
-  font-size: 0.875rem;
-  font-weight: 800;
-  line-height: 1;
-  color: var(--color-tertiary-700);
-}
-
 .employee-shell__back-btn {
   color: var(--color-on-primary);
 }

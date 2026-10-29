@@ -11,7 +11,9 @@ Route::middleware('auth')->prefix('chat')->name('chat.')->group(function () {
     Route::post('/conversations/groups', [ChatConversationController::class, 'storeGroup'])->name('conversations.groups.store');
     Route::post('/conversations/{conversationId}/avatar', [ChatConversationController::class, 'updateAvatar'])->name('conversations.avatar');
     Route::patch('/conversations/{conversationId}/title', [ChatConversationController::class, 'updateTitle'])->name('conversations.title');
+    Route::patch('/conversations/{conversationId}/accent', [ChatConversationController::class, 'accent'])->name('conversations.accent');
     Route::post('/presence', [ChatConversationController::class, 'presence'])->name('presence');
+    Route::put('/mood', [ChatConversationController::class, 'mood'])->name('mood');
     Route::get('/attachments/{attachmentId}', [ChatAttachmentController::class, 'show'])->name('attachments.show');
     Route::post('/conversations/{conversationId}/members', [ChatConversationController::class, 'addMembers'])->name('conversations.members.store');
     Route::delete('/conversations/{conversationId}/members/{userId}', [ChatConversationController::class, 'removeMember'])->name('conversations.members.destroy');

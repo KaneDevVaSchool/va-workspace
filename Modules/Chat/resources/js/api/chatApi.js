@@ -166,6 +166,16 @@ export function votePoll(conversationId, messageId, optionId) {
     .then((r) => r.data.message);
 }
 
+export function setChatMood(mood) {
+  return window.axios.put('/api/chat/mood', { mood }).then((r) => r.data);
+}
+
+export function setGroupAccent(conversationId, accent) {
+  return window.axios
+    .patch(`/api/chat/conversations/${conversationId}/accent`, { accent })
+    .then((r) => r.data.conversation);
+}
+
 export function fetchUnreadCount() {
   return window.axios.get('/api/chat/unread-count').then((r) => r.data.unread_total ?? 0);
 }

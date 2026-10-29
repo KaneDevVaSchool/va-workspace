@@ -14,6 +14,7 @@ use Modules\Chat\App\Events\MessageRead;
 use Modules\Chat\App\Events\MessageSent;
 use Modules\Chat\App\Events\MessageUpdated;
 use Modules\Chat\App\Events\UserTyping;
+use Modules\Chat\App\Models\ChatUserMood;
 use Modules\Chat\App\Models\Conversation;
 use Modules\Chat\App\Models\ConversationMember;
 use Modules\Chat\App\Models\Message;
@@ -22,6 +23,7 @@ use Modules\Chat\App\Repositories\Contracts\ConversationRepositoryInterface;
 use Modules\Chat\App\Repositories\Contracts\MessageRepositoryInterface;
 use Modules\Identity\App\Models\UserNotification;
 use Modules\Identity\App\Hrm\Services\HrmDepartmentSyncService;
+use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Services\NotificationService;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -34,11 +36,27 @@ class ChatService
 
     private const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
+    /** @var list<string> */
+    public const MOODS = ['coffee', 'book', 'run', 'lunch', 'focus'];
+
+    /** @var list<string> */
+    public const ACCENTS = ['coral', 'gold', 'teal', 'violet', 'leaf'];
+
+    /** @var array<int, int>|null */
+    private ?array $streakCache = null;
+
+    /** @var array<int|string, string>|null */
+    private ?array $moodCache = null;
+
+    /** @var array<string, true>|null */
+    private ?array $birthdayUuids = null;
+
     public function __construct(
         private readonly ConversationRepositoryInterface $conversations,
         private readonly MessageRepositoryInterface $messages,
         private readonly NotificationService $notifications,
         private readonly HrmDepartmentSyncService $hrmDepartments,
+        private readonly HrmEmployeeDirectory $hrmEmployees,
     ) {}
 
     public function openPrivateConversationWith(User $actor, int $otherUserId): array
@@ -114,6 +132,7 @@ class ChatService
     public function listConversations(User $actor): array
     {
         $conversations = $this->conversations->listForUser($actor->id);
+        $this->primeFunContext($conversations);
         $unreadCounts = $this->messages->unreadCountsForUser($actor->id);
 
         $cards = $conversations
@@ -613,6 +632,8 @@ class ChatService
                 'id' => $member->user->id,
                 'name' => $member->user->name,
                 'avatar_url' => $member->user->avatar_url,
+                'mood' => $this->chatMoodFor($member->user),
+                'birthday_today' => $this->chatBirthdayToday($member->user),
                 'last_seen_at' => $member->user->last_seen_at?->toIso8601String(),
                 'online' => $member->user->last_seen_at !== null && $member->user->last_seen_at->greaterThan(now()->subSeconds(90)),
             ])
@@ -687,6 +708,8 @@ class ChatService
             'id' => $member->user->id,
             'name' => $member->user->name,
             'avatar_url' => $member->user->avatar_url,
+            'mood' => $this->chatMoodFor($member->user),
+            'birthday_today' => $this->chatBirthdayToday($member->user),
             'department' => $member->user->department?->name,
             'job_title_name' => $this->hrmDepartments->hrmJobTitleFor($member->user),
             'last_seen_at' => $member->user->last_seen_at?->toIso8601String(),
@@ -850,5 +873,227 @@ class ChatService
         }
 
         return '';
+    }
+
+    public function setMood(User $actor, ?string $mood): array
+    {
+        if ($mood !== null && ! in_array($mood, self::MOODS, true)) {
+            throw ValidationException::withMessages([
+                'mood' => ['Tâm trạng không hợp lệ.'],
+            ]);
+        }
+
+        if ($mood === null) {
+            ChatUserMood::query()->where('user_id', $actor->id)->delete();
+        } else {
+            ChatUserMood::query()->updateOrCreate(
+                ['user_id' => $actor->id],
+                ['mood' => $mood],
+            );
+        }
+
+        $this->moodCache = null;
+        $conversationIds = ConversationMember::query()
+            ->where('user_id', $actor->id)
+            ->orderByDesc('updated_at')
+            ->limit(30)
+            ->pluck('conversation_id');
+
+        foreach ($conversationIds as $conversationId) {
+            $this->refreshMemberInboxes((int) $conversationId);
+        }
+
+        return ['mood' => $mood];
+    }
+
+    public function setGroupAccent(User $actor, int $conversationId, ?string $accent): array
+    {
+        if ($accent !== null && ! in_array($accent, self::ACCENTS, true)) {
+            throw ValidationException::withMessages([
+                'accent' => ['Màu nhóm không hợp lệ.'],
+            ]);
+        }
+
+        $conversation = $this->requireOwnedGroup($actor, $conversationId);
+        $conversation->update(['accent' => $accent]);
+        $this->refreshMemberInboxes($conversationId);
+
+        return $this->presentConversation($this->requireConversation($conversationId), $actor);
+    }
+
+    /**
+     * @param  iterable<int, Conversation>  $conversations
+     */
+    private function primeFunContext(iterable $conversations): void
+    {
+        $this->streakCache = $this->computeStreaks($conversations);
+        $userIds = [];
+        foreach ($conversations as $conversation) {
+            foreach ($conversation->members as $member) {
+                if ($member->user_id) {
+                    $userIds[] = (int) $member->user_id;
+                }
+            }
+        }
+
+        $this->moodCache = $userIds === []
+            ? []
+            : ChatUserMood::query()->whereIn('user_id', array_values(array_unique($userIds)))->pluck('mood', 'user_id')->all();
+    }
+
+    protected function chatMoodFor(?User $user): ?string
+    {
+        if (! $user) {
+            return null;
+        }
+
+        if ($this->moodCache === null) {
+            $mood = ChatUserMood::query()->where('user_id', $user->id)->value('mood');
+
+            return is_string($mood) && in_array($mood, self::MOODS, true) ? $mood : null;
+        }
+
+        $mood = $this->moodCache[$user->id] ?? $this->moodCache[(string) $user->id] ?? null;
+
+        return is_string($mood) && in_array($mood, self::MOODS, true) ? $mood : null;
+    }
+
+    protected function chatBirthdayToday(?User $user): bool
+    {
+        $uuid = trim((string) ($user->hrm_employee_uuid ?? ''));
+        if ($uuid === '') {
+            return false;
+        }
+
+        return isset($this->birthdayUuidSet()[$uuid]);
+    }
+
+    protected function chatStreak(Conversation $conversation): int
+    {
+        if ($conversation->type !== Conversation::TYPE_PRIVATE) {
+            return 0;
+        }
+
+        if ($this->streakCache !== null) {
+            return (int) ($this->streakCache[$conversation->id] ?? 0);
+        }
+
+        return (int) ($this->computeStreaks([$conversation])[$conversation->id] ?? 0);
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private function birthdayUuidSet(): array
+    {
+        if ($this->birthdayUuids !== null) {
+            return $this->birthdayUuids;
+        }
+
+        $cacheKey = 'chat.birthday-uuids.'.now()->toDateString();
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            /** @var array<string, true> $cached */
+            $this->birthdayUuids = $cached;
+
+            return $cached;
+        }
+
+        $set = [];
+        try {
+            if (HrmEmployeeDirectory::isConfigured()) {
+                $today = now()->toDateString();
+                foreach ($this->hrmEmployees->upcomingBirthdays(1) as $row) {
+                    $uuid = trim((string) ($row['hrm_employee_uuid'] ?? ''));
+                    if ($uuid !== '' && ($row['next_birthday'] ?? '') === $today) {
+                        $set[$uuid] = true;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            $set = [];
+        }
+
+        Cache::put($cacheKey, $set, now()->addMinutes(15));
+        $this->birthdayUuids = $set;
+
+        return $set;
+    }
+
+    /**
+     * Ngày tính khi cả hai người đều đã gửi tin. Hôm nay chưa đủ thì nối tiếp từ hôm qua.
+     *
+     * @param  iterable<int, Conversation>  $conversations
+     * @return array<int, int>
+     */
+    private function computeStreaks(iterable $conversations): array
+    {
+        $pairs = [];
+        foreach ($conversations as $conversation) {
+            if ($conversation->type !== Conversation::TYPE_PRIVATE) {
+                continue;
+            }
+            $memberIds = $conversation->members
+                ->pluck('user_id')
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values();
+            if ($memberIds->count() !== 2) {
+                continue;
+            }
+            $pairs[$conversation->id] = $memberIds->all();
+        }
+
+        if ($pairs === []) {
+            return [];
+        }
+
+        $rows = Message::query()
+            ->whereIn('conversation_id', array_keys($pairs))
+            ->whereNull('recalled_at')
+            ->where('message_type', '!=', Message::TYPE_SYSTEM)
+            ->where('created_at', '>=', now()->subDays(21)->startOfDay())
+            ->get(['conversation_id', 'sender_id', 'created_at']);
+
+        $byDay = [];
+        foreach ($rows as $row) {
+            $day = $row->created_at?->toDateString();
+            if (! is_string($day) || $day === '') {
+                continue;
+            }
+            $byDay[$row->conversation_id][$day][(int) $row->sender_id] = true;
+        }
+
+        $streaks = [];
+        foreach ($pairs as $conversationId => $memberIds) {
+            $days = $byDay[$conversationId] ?? [];
+            $cursor = now()->startOfDay();
+            if (! $this->dayHasBoth($days[$cursor->toDateString()] ?? [], $memberIds)) {
+                $cursor->subDay();
+            }
+            $streak = 0;
+            while ($this->dayHasBoth($days[$cursor->toDateString()] ?? [], $memberIds)) {
+                $streak++;
+                $cursor->subDay();
+            }
+            $streaks[$conversationId] = $streak;
+        }
+
+        return $streaks;
+    }
+
+    /**
+     * @param  array<int, true>  $senders
+     * @param  list<int>  $memberIds
+     */
+    private function dayHasBoth(array $senders, array $memberIds): bool
+    {
+        foreach ($memberIds as $memberId) {
+            if (empty($senders[$memberId])) {
+                return false;
+            }
+        }
+
+        return $memberIds !== [];
     }
 }

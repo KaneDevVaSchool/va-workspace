@@ -18,6 +18,8 @@ import {
   transferOwner as apiTransferOwner,
   updateGroupAvatar as apiUpdateGroupAvatar,
   updateGroupTitle as apiUpdateGroupTitle,
+  setChatMood as apiSetChatMood,
+  setGroupAccent as apiSetGroupAccent,
   reactToMessage as apiReactToMessage,
   votePoll as apiVotePoll,
   fetchUnreadCount,
@@ -238,6 +240,26 @@ export const useChatStore = defineStore('chat', {
 
     async updateGroupTitle(conversationId, title) {
       const conversation = await apiUpdateGroupTitle(conversationId, title);
+      this.replaceConversation(conversation);
+      return conversation;
+    },
+
+    async setMood(mood) {
+      const result = await apiSetChatMood(mood);
+      const value = result?.mood ?? null;
+      const mineId = useAuthStore().user?.id;
+      this.conversations = this.conversations.map((conversation) => ({
+        ...conversation,
+        my_mood: value,
+        members: (conversation.members || []).map((member) => (
+          member.id === mineId ? { ...member, mood: value } : member
+        )),
+      }));
+      return value;
+    },
+
+    async setGroupAccent(conversationId, accent) {
+      const conversation = await apiSetGroupAccent(conversationId, accent);
       this.replaceConversation(conversation);
       return conversation;
     },

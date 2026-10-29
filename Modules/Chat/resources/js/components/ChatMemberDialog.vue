@@ -5,6 +5,7 @@ import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { showClientToast } from '@/lib/clientToast';
 import { formatRelativeTime } from '@/lib/formatTime';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
+import { moodById } from '../lib/chatPlay';
 import { ChatFileError, prepareChatFile } from '../lib/prepareChatFile';
 import { useColleagueSearch } from '../lib/useColleagueSearch';
 import { useChatStore } from '../store/chatStore';
@@ -409,6 +410,8 @@ async function saveTitle() {
                   <span class="chat-room__copy">
                     <span class="chat-room__name">
                       {{ user.name }}
+                      <span v-if="moodById(user.mood)" class="chat-room__you">{{ moodById(user.mood).emoji }}</span>
+                      <span v-if="user.birthday_today" class="chat-room__you">🎂</span>
                       <span v-if="user.id === auth.user?.id" class="chat-room__you">(Bạn)</span>
                     </span>
                     <span v-if="memberLine(user)" class="chat-room__meta">{{ memberLine(user) }}</span>

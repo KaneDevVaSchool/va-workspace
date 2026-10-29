@@ -288,6 +288,7 @@ trait HandlesChatFeatures
                     ->whereNull('recalled_at')
                     ->whereDoesntHave('hides', fn ($hide) => $hide->where('user_id', $actor->id));
             })
+            ->with('message:id,created_at')
             ->latest('id')
             ->limit(80)
             ->get();
@@ -300,6 +301,7 @@ trait HandlesChatFeatures
                 'name' => $file->file_name,
                 'size' => (int) $file->file_size,
                 'url' => $this->attachmentUrl($file),
+                'created_at' => $file->message?->created_at?->toIso8601String(),
             ])->values()->all(),
         ];
     }
@@ -547,6 +549,9 @@ trait HandlesChatFeatures
             'disappear_seconds' => $conversation->disappear_seconds,
             'pinned_message' => $pinned,
             'updated_at' => $conversation->updated_at?->toIso8601String(),
+            'streak' => $this->chatStreak($conversation),
+            'accent' => $conversation->type === Conversation::TYPE_GROUP ? ($conversation->accent ?: null) : null,
+            'my_mood' => $this->chatMoodFor($actor),
         ];
     }
 

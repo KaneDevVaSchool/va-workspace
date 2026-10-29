@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
+import { CHAT_POLL_PRESETS } from '../lib/chatPlay';
 import { useChatStore } from '../store/chatStore';
 
 const MAX_OPTIONS = 6;
@@ -55,6 +56,12 @@ function close() {
 
 function onKeydown(event) {
   if (event.key === 'Escape') close();
+}
+
+function applyPreset(preset) {
+  question.value = preset.question;
+  options.value = [...preset.options];
+  error.value = '';
 }
 
 function setOption(index, value) {
@@ -125,6 +132,18 @@ async function submit() {
           </div>
 
           <div class="chat-poll__body hide-scrollbar">
+            <div class="chat-poll__presets" aria-label="Mẫu bình chọn">
+              <button
+                v-for="preset in CHAT_POLL_PRESETS"
+                :key="preset.label"
+                type="button"
+                class="chat-poll__preset"
+                :disabled="saving"
+                @click="applyPreset(preset)"
+              >
+                {{ preset.label }}
+              </button>
+            </div>
             <form id="chat-poll-form" class="chat-poll__form" @submit.prevent="submit">
               <label class="chat-poll__field chat-poll__field--question">
                 <span class="chat-poll__label">
@@ -330,6 +349,24 @@ async function submit() {
   min-height: 0;
   overflow-y: auto;
   padding: var(--space-3) var(--space-4);
+}
+
+.chat-poll__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: var(--space-3);
+}
+
+.chat-poll__preset {
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 0.28rem 0.65rem;
+  cursor: pointer;
 }
 
 .chat-poll__form {

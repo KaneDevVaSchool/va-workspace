@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property int|null $created_by
  * @property int|null $pinned_message_id
  * @property int|null $disappear_seconds
+ * @property string|null $accent
  */
 class Conversation extends Model
 {
@@ -30,6 +31,7 @@ class Conversation extends Model
         'created_by',
         'pinned_message_id',
         'disappear_seconds',
+        'accent',
     ];
 
     public function members(): HasMany

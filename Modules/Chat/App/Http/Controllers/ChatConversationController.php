@@ -104,6 +104,24 @@ class ChatConversationController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function mood(Request $request): JsonResponse
+    {
+        $mood = $request->input('mood');
+        $mood = $mood === null || $mood === '' ? null : (string) $mood;
+
+        return response()->json($this->service->setMood($request->user(), $mood));
+    }
+
+    public function accent(Request $request, int $conversationId): JsonResponse
+    {
+        $accent = $request->input('accent');
+        $accent = $accent === null || $accent === '' ? null : (string) $accent;
+
+        return response()->json([
+            'conversation' => $this->service->setGroupAccent($request->user(), $conversationId, $accent),
+        ]);
+    }
+
     public function unreadCount(Request $request): JsonResponse
     {
         return response()->json($this->service->unreadSummary($request->user()));
