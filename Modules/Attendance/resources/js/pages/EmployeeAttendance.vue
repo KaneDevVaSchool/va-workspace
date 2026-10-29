@@ -1218,53 +1218,62 @@ function stopQrCamera() {
           <p class="att-punch-hint">{{ punchHint }}</p>
 
           <article class="att-checkin-site">
-            <p class="att-checkin-site__lead">
-              <template v-if="canPickCheckInBranch">
-                Bạn sẽ chấm công ở đây, nếu nhầm lẫn xin
-                <button
-                  type="button"
-                  class="att-checkin-site__pick"
-                  :aria-expanded="branchPickerOpen"
-                  @click="toggleBranchPicker"
-                >
-                  chọn vị trí
-                </button>
-              </template>
-              <template v-else>
-                Bạn sẽ chấm công ở đây.
-              </template>
-            </p>
+            <p class="att-checkin-site__lead">Bạn sẽ chấm công tại chi nhánh bên dưới.</p>
 
             <div v-if="activeCheckInBranch" class="att-checkin-site__branch">
               <span class="att-tile__icon att-tone--green">
                 <AttendanceGlyph name="pin" :size="18" />
               </span>
-              <span class="att-checkin-site__branch-text">
-                <strong>{{ activeCheckInBranch.name }}</strong>
+              <div class="att-checkin-site__branch-main">
+                <span class="att-checkin-site__branch-kicker">Chi nhánh</span>
+                <strong class="att-checkin-site__branch-name">{{ activeCheckInBranch.name }}</strong>
+                <small v-if="activeCheckInBranch.code" class="att-checkin-site__branch-code">
+                  {{ activeCheckInBranch.code }}
+                </small>
                 <small class="att-checkin-site__coords">{{ activeBranchCoordsLabel }}</small>
-              </span>
+              </div>
+              <button
+                v-if="canPickCheckInBranch"
+                type="button"
+                class="att-checkin-site__change"
+                :aria-expanded="branchPickerOpen"
+                aria-label="Đổi chi nhánh chấm công"
+                @click="toggleBranchPicker"
+              >
+                Đổi
+              </button>
             </div>
             <p v-else class="att-checkin-site__empty">Chưa có tọa độ chi nhánh từ HRM.</p>
 
-            <ul
+            <p v-if="!canPickCheckInBranch && activeCheckInBranch" class="att-checkin-site__note">
+              Nếu chi nhánh không khớp, liên hệ quản lý hoặc IT để cập nhật trên HRM.
+            </p>
+
+            <div
               v-if="branchPickerOpen && canPickCheckInBranch"
-              class="att-checkin-site__options"
-              role="listbox"
-              aria-label="Chọn chi nhánh chấm công"
+              class="att-checkin-site__picker"
             >
-              <li v-for="branch in branchOptions" :key="branch.id" role="presentation">
-                <button
-                  type="button"
-                  role="option"
-                  class="att-checkin-site__option"
-                  :aria-selected="branch.id === activeCheckInBranch?.id"
-                  @click="selectCheckInBranch(branch)"
-                >
-                  <span>{{ branch.name }}</span>
-                  <small>{{ formatBranchCoordinates(branch) }}</small>
-                </button>
-              </li>
-            </ul>
+              <p class="att-checkin-site__picker-title">Chọn chi nhánh đúng với vị trí bạn đang đứng</p>
+              <ul
+                class="att-checkin-site__options"
+                role="listbox"
+                aria-label="Chọn chi nhánh chấm công"
+              >
+                <li v-for="branch in branchOptions" :key="branch.id" role="presentation">
+                  <button
+                    type="button"
+                    role="option"
+                    class="att-checkin-site__option"
+                    :aria-selected="branch.id === activeCheckInBranch?.id"
+                    @click="selectCheckInBranch(branch)"
+                  >
+                    <span class="att-checkin-site__option-name">{{ branch.name }}</span>
+                    <small v-if="branch.code" class="att-checkin-site__option-code">{{ branch.code }}</small>
+                    <small class="att-checkin-site__option-coords">{{ formatBranchCoordinates(branch) }}</small>
+                  </button>
+                </li>
+              </ul>
+            </div>
 
             <p
               class="att-checkin-site__status"
@@ -1288,19 +1297,19 @@ function stopQrCamera() {
 
           <div class="att-home__footer">
             <p class="att-methods__label">Hình thức khác</p>
-            <div class="att-grid att-grid--pair">
+            <div class="att-alt-methods">
               <button
                 v-for="tile in HOME_TILES"
                 :key="tile.id"
                 type="button"
-                class="att-tile att-tile--maintenance att-tile--compact"
+                class="att-alt-method"
                 @click="openMethod(tile.id)"
               >
-                <span class="att-tile__icon" :class="`att-tone--${tile.tone}`">
-                  <AttendanceGlyph :name="tile.glyph" :size="20" />
+                <span class="att-alt-method__icon" :class="`att-tone--${tile.tone}`">
+                  <AttendanceGlyph :name="tile.glyph" :size="22" />
                 </span>
-                <span class="att-tile__label">{{ tile.label }}</span>
-                <small class="att-tile__hint">{{ tile.hint }}</small>
+                <span class="att-alt-method__label">{{ tile.label }}</span>
+                <small class="att-alt-method__hint">{{ tile.hint }}</small>
               </button>
             </div>
           </div>
@@ -1992,35 +2001,68 @@ function stopQrCamera() {
   line-height: 1.45;
 }
 
-.att-checkin-site__pick {
-  display: inline;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--color-tertiary-700);
-  font: inherit;
-  font-weight: 800;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-
 .att-checkin-site__branch {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
 }
 
-.att-checkin-site__branch-text {
+.att-checkin-site__branch-main {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 0;
 }
 
-.att-checkin-site__branch-text strong {
-  font-size: 0.92rem;
+.att-checkin-site__branch-kicker {
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.att-checkin-site__branch-name {
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.25;
   color: var(--color-text);
+  letter-spacing: -0.02em;
+}
+
+.att-checkin-site__branch-code {
+  color: var(--color-tertiary-800);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.att-checkin-site__change {
+  flex-shrink: 0;
+  align-self: center;
+  border: 1px solid color-mix(in srgb, var(--color-tertiary-400) 45%, var(--color-border));
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  background: color-mix(in srgb, var(--color-tertiary-50) 70%, var(--color-surface));
+  color: var(--color-tertiary-800);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.att-checkin-site__note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.att-checkin-site__picker-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .att-checkin-site__coords {
@@ -2068,7 +2110,24 @@ function stopQrCamera() {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-tertiary-200) 75%, transparent);
 }
 
-.att-checkin-site__option small {
+.att-checkin-site__picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.att-checkin-site__option-name {
+  font-weight: 700;
+  font-size: 0.8125rem;
+}
+
+.att-checkin-site__option-code {
+  color: var(--color-tertiary-800);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.att-checkin-site__option-coords {
   color: var(--color-text-muted);
   font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
@@ -2237,24 +2296,56 @@ function stopQrCamera() {
   gap: var(--space-2);
 }
 
-.att-grid--pair .att-tile:last-child {
-  grid-column: auto;
+.att-alt-methods {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
 }
 
-.att-tile--compact {
-  grid-template-columns: 1fr;
-  grid-template-rows: auto auto auto;
-  justify-items: center;
+.att-alt-method {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  min-height: 6.75rem;
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: var(--att-shadow);
+  color: var(--color-text);
+  font: inherit;
   text-align: center;
+  cursor: pointer;
 }
 
-.att-tile--compact .att-tile__icon {
-  grid-column: 1;
+.att-alt-method__icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 14px;
+  flex-shrink: 0;
+  color: var(--color-on-tertiary);
 }
 
-.att-tile--compact .att-tile__label,
-.att-tile--compact .att-tile__hint {
-  grid-column: 1;
+.att-alt-method__label {
+  display: block;
+  width: 100%;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.att-alt-method__hint {
+  display: block;
+  width: 100%;
+  color: var(--color-warning-tint-fg, var(--color-text-muted));
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .att-tile--maintenance .att-tile__hint {

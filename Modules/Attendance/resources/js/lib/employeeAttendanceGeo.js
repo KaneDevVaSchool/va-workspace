@@ -17,10 +17,15 @@ export function normalizeCheckInBranch(raw, fallbackId = null) {
   const { lat, lon } = readLatLon(raw);
   if (lat == null || lon == null) return null;
   const id = raw.uuid ?? raw.id ?? fallbackId;
-  const name = raw.short_name ?? raw.name ?? raw.label;
+  const fullName = [raw.name, raw.label].find((value) => typeof value === 'string' && value.trim());
+  const shortName = [raw.short_name, raw.shortName].find((value) => typeof value === 'string' && value.trim());
+  const title = (fullName && fullName.trim()) || (shortName && shortName.trim()) || 'Cơ sở chấm công';
+  const code = shortName && shortName.trim() !== title ? shortName.trim() : null;
+
   return {
     id: id != null ? String(id) : `${lat},${lon}`,
-    name: typeof name === 'string' && name.trim() ? name.trim() : 'Cơ sở chấm công',
+    name: title,
+    code,
     lat,
     lon,
   };
@@ -37,6 +42,8 @@ export function branchesFromCheckInContext(context) {
     context.branches,
     context.check_in_branches,
     context.branch_options,
+    context.available_branches,
+    context.nearby_branches,
   ];
   for (const list of lists) {
     if (!Array.isArray(list) || list.length === 0) continue;
@@ -51,7 +58,12 @@ export function branchesFromCheckInContext(context) {
 
   const branchMeta = context.branch && typeof context.branch === 'object' ? context.branch : {};
   const merged = normalizeCheckInBranch(
-    { ...branchMeta, latitude: lat, longitude: lon },
+    {
+      ...branchMeta,
+      name: branchMeta.name ?? context.workplace_label,
+      latitude: lat,
+      longitude: lon,
+    },
     'default',
   );
 
