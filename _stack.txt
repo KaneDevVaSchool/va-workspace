@@ -1,0 +1,88 @@
+{
+  "mismatches": [
+    {
+      "line": 1427,
+      "close": "button",
+      "expected": "div",
+      "expectedLine": 1407
+    },
+    {
+      "line": 1445,
+      "close": "span",
+      "expected": "Transition",
+      "expectedLine": 1437
+    },
+    {
+      "line": 1452,
+      "close": "span",
+      "expected": "Transition",
+      "expectedLine": 1437
+    },
+    {
+      "line": 1459,
+      "close": "span",
+      "expected": "Transition",
+      "expectedLine": 1437
+    },
+    {
+      "line": 1474,
+      "close": "button",
+      "expected": "div",
+      "expectedLine": 1407
+    },
+    {
+      "line": 1493,
+      "close": "button",
+      "expected": "div",
+      "expectedLine": 1483
+    },
+    {
+      "line": 1510,
+      "close": "button",
+      "expected": "div",
+      "expectedLine": 1496
+    },
+    {
+      "line": 1522,
+      "close": "button",
+      "expected": "div",
+      "expectedLine": 1406
+    },
+    {
+      "line": 1598,
+      "close": "button",
+      "expected": "div",
+      "expectedLine": 1406
+    },
+    {
+      "line": 1601,
+      "close": "template",
+      "expected": "span",
+      "expectedLine": 1600
+    },
+    {
+      "line": 1647,
+      "close": "span",
+      "expected": "div",
+      "expectedLine": 1621
+    },
+    {
+      "line": 1648,
+      "close": "button",
+      "expected": "div",
+      "expectedLine": 1621
+    },
+    {
+      "line": 1662,
+      "close": "template",
+      "expected": "span",
+      "expectedLine": 1659
+    }
+  ],
+  "unclosed": [
+    {
+      "tag": "span",
+      "line": 1659
+    }
+  ]
+}

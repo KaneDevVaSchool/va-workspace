@@ -2050,6 +2050,7 @@ function menuItems(message) {
       </div>
     </div>
     </div>
+    </div>
 
     <Teleport to="body">
       <div
