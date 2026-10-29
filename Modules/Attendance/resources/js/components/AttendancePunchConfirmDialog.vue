@@ -12,6 +12,7 @@ const props = defineProps({
   dateLabel: { type: String, default: '' },
   methodLabel: { type: String, default: 'Chấm bằng nút' },
   branchName: { type: String, default: '' },
+  branchSchoolName: { type: String, default: '' },
   branchCode: { type: String, default: '' },
   branchCoords: { type: String, default: '' },
   deviceCoords: { type: String, default: '' },
@@ -34,6 +35,8 @@ const emit = defineEmits(['update:open', 'confirm', 'select-branch']);
 const branchPickerOpen = ref(false);
 
 const canPickBranch = computed(() => props.branchOptions.length > 1);
+
+const branchKicker = computed(() => (props.branchSchoolName ? 'Tên trường' : 'Chi nhánh'));
 
 const leaving = computed(() => props.direction === 'out');
 
@@ -198,7 +201,7 @@ onBeforeUnmount(() => {
 
             <div v-if="canPickBranch" class="att-punch-confirm__branch-row">
               <div class="att-punch-confirm__branch-summary">
-                <span class="att-punch-confirm__branch-kicker">Chi nhánh chấm công</span>
+                <span class="att-punch-confirm__branch-kicker">{{ branchKicker }}</span>
                 <strong>{{ branchName || '—' }}</strong>
                 <small v-if="branchCode">{{ branchCode }}</small>
               </div>
@@ -235,7 +238,7 @@ onBeforeUnmount(() => {
 
             <dl class="att-punch-confirm__facts">
               <div v-if="!canPickBranch" class="att-punch-confirm__fact">
-                <dt>Chi nhánh</dt>
+                <dt>{{ branchKicker }}</dt>
                 <dd>
                   <strong>{{ branchName || '—' }}</strong>
                   <small v-if="branchCode">{{ branchCode }}</small>

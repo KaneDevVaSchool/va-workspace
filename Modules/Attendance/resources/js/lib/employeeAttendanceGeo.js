@@ -18,14 +18,23 @@ export function normalizeCheckInBranch(raw, fallbackId = null) {
   if (lat == null || lon == null) return null;
   const id = raw.uuid ?? raw.id ?? fallbackId;
   const tolerance = raw.gps_tolerance_meters ?? raw.gpsToleranceMeters;
-  const fullName = [raw.name, raw.label].find((value) => typeof value === 'string' && value.trim());
-  const shortName = [raw.short_name, raw.shortName].find((value) => typeof value === 'string' && value.trim());
-  const title = (fullName && fullName.trim()) || (shortName && shortName.trim()) || 'Cơ sở chấm công';
-  const code = shortName && shortName.trim() !== title ? shortName.trim() : null;
+  const schoolName = [raw.school_name, raw.schoolName].find((value) => typeof value === 'string' && value.trim());
+  const branchName = [raw.name, raw.label].find((value) => typeof value === 'string' && value.trim());
+  const shortName = [raw.short_name, raw.shortName, raw.code].find((value) => typeof value === 'string' && value.trim());
+  const schoolTitle = schoolName?.trim() || null;
+  const title = schoolTitle
+    || (branchName && branchName.trim())
+    || (shortName && shortName.trim())
+    || 'Cơ sở chấm công';
+  let code = shortName && shortName.trim() !== title ? shortName.trim() : null;
+  if (!code && branchName && branchName.trim() !== title && schoolTitle) {
+    code = branchName.trim();
+  }
 
   return {
     id: id != null ? String(id) : `${lat},${lon}`,
     name: title,
+    schoolName: schoolTitle,
     code,
     lat,
     lon,

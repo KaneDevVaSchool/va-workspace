@@ -263,6 +263,10 @@ const branchCheckInLabel = computed(() => {
 
 const activeBranchCoordsLabel = computed(() => formatBranchCoordinates(activeCheckInBranch.value));
 
+const activeBranchSiteKicker = computed(() => (
+  activeCheckInBranch.value?.schoolName ? 'Tên trường' : 'Chi nhánh'
+));
+
 const canPickCheckInBranch = computed(() => branchOptions.value.length > 1);
 
 const geoBlockMessage = computed(() => {
@@ -1252,7 +1256,7 @@ function stopQrCamera() {
                 <AttendanceGlyph name="pin" :size="18" />
               </span>
               <div class="att-checkin-site__branch-main">
-                <span class="att-checkin-site__branch-kicker">Chi nhánh</span>
+                <span class="att-checkin-site__branch-kicker">{{ activeBranchSiteKicker }}</span>
                 <strong class="att-checkin-site__branch-name">{{ activeCheckInBranch.name }}</strong>
                 <small v-if="activeCheckInBranch.code" class="att-checkin-site__branch-code">
                   {{ activeCheckInBranch.code }}
@@ -1516,6 +1520,7 @@ function stopQrCamera() {
       :date-label="homeDateLabel"
       :method-label="punchConfirmMethodLabel"
       :branch-name="activeCheckInBranch?.name || branchCheckInLabel || ''"
+      :branch-school-name="activeCheckInBranch?.schoolName || ''"
       :branch-code="activeCheckInBranch?.code || ''"
       :branch-coords="activeBranchCoordsLabel"
       :device-coords="punchConfirmDeviceCoords"
