@@ -117,6 +117,55 @@ class SocialPostModerationQueueTest extends TestCase
             ->assertJsonPath('rejected_count', 0);
     }
 
+    public function test_manually_approved_posts_are_listed_separately(): void
+    {
+        $author = $this->makeUser();
+        $reviewer = $this->makeUser([], ['super_admin']);
+
+        $pendingId = $this->createPendingPost($author, 'Bài sẽ duyệt');
+        $this->createPendingPost($author, 'Bài vẫn chờ');
+
+        $this->actingAs($reviewer)
+            ->postJson("/api/social/moderation/{$pendingId}/approve")
+            ->assertOk();
+
+        $approved = $this->actingAs($reviewer)
+            ->getJson('/api/social/moderation?status=approved')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame('approved', $approved['status']);
+        $this->assertSame(1, $approved['total']);
+        $this->assertSame(1, $approved['approved_count']);
+        $this->assertSame(1, $approved['pending_count']);
+        $this->assertSame($pendingId, $approved['posts'][0]['id']);
+        $this->assertSame('approved', $approved['posts'][0]['review_status']);
+        $this->assertSame($reviewer->name, $approved['posts'][0]['reviewed_by']);
+    }
+
+    public function test_approved_post_can_be_rejected_to_hide_from_feed(): void
+    {
+        $author = $this->makeUser();
+        $reviewer = $this->makeUser([], ['super_admin']);
+        $postId = $this->createPendingPost($author, 'Bài đang công khai');
+
+        $this->actingAs($reviewer)
+            ->postJson("/api/social/moderation/{$postId}/approve")
+            ->assertOk();
+
+        $this->actingAs($reviewer)
+            ->postJson("/api/social/moderation/{$postId}/reject", ['reason' => 'Cần chỉnh sau'])
+            ->assertOk()
+            ->assertJsonPath('post.review_status', 'rejected');
+
+        $this->actingAs($reviewer)
+            ->getJson('/api/social/moderation?status=approved')
+            ->assertOk()
+            ->assertJsonPath('total', 0)
+            ->assertJsonPath('approved_count', 0)
+            ->assertJsonPath('rejected_count', 1);
+    }
+
     public function test_already_rejected_post_cannot_be_rejected_again(): void
     {
         $author = $this->makeUser();

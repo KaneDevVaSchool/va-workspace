@@ -283,6 +283,16 @@ class SocialPostRepository implements SocialPostRepositoryInterface
             ->paginate($perPage, ['*'], 'page', $page);
     }
 
+    public function paginateApproved(int $perPage, int $page): LengthAwarePaginator
+    {
+        return $this->baseQuery()
+            ->where('review_status', SocialPost::REVIEW_APPROVED)
+            ->whereNotNull('reviewed_at')
+            ->orderByDesc('reviewed_at')
+            ->orderByDesc('id')
+            ->paginate($perPage, ['*'], 'page', $page);
+    }
+
     public function countPending(): int
     {
         return SocialPost::query()->where('review_status', SocialPost::REVIEW_PENDING)->count();
@@ -291,6 +301,14 @@ class SocialPostRepository implements SocialPostRepositoryInterface
     public function countRejected(): int
     {
         return SocialPost::query()->where('review_status', SocialPost::REVIEW_REJECTED)->count();
+    }
+
+    public function countApproved(): int
+    {
+        return SocialPost::query()
+            ->where('review_status', SocialPost::REVIEW_APPROVED)
+            ->whereNotNull('reviewed_at')
+            ->count();
     }
 
     public function create(array $data): SocialPost

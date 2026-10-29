@@ -52,6 +52,11 @@ interface SocialPostRepositoryInterface
      */
     public function paginateRejected(int $perPage, int $page): LengthAwarePaginator;
 
+    /**
+     * Bài đã duyệt thủ công (có reviewed_at), mới duyệt trước — nhật ký quyết định duyệt.
+     */
+    public function paginateApproved(int $perPage, int $page): LengthAwarePaginator;
+
     public function create(array $data): SocialPost;
 
     /** Ghi các phòng ban được chọn (include/exclude) cho bài đăng bảng tin chung. */
@@ -95,4 +100,6 @@ interface SocialPostRepositoryInterface
     public function countPending(): int;
 
     public function countRejected(): int;
+
+    public function countApproved(): int;
 }

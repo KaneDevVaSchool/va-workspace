@@ -96,16 +96,18 @@ class SocialPostService
     }
 
     /**
-     * Hàng chờ duyệt hoặc danh sách bài đã từ chối (để xem xét lại).
+     * Hàng chờ duyệt, bài đã duyệt thủ công, hoặc danh sách bài đã từ chối (để xem xét lại).
      *
-     * @param  'pending'|'rejected'  $status
+     * @param  'pending'|'approved'|'rejected'  $status
      */
     public function reviewQueue(User $reviewer, int $perPage, int $page, string $status = SocialPost::REVIEW_PENDING): array
     {
         $status = $this->normalizeReviewQueueStatus($status);
-        $paginator = $status === SocialPost::REVIEW_REJECTED
-            ? $this->posts->paginateRejected($perPage, $page)
-            : $this->posts->paginatePending($perPage, $page);
+        $paginator = match ($status) {
+            SocialPost::REVIEW_REJECTED => $this->posts->paginateRejected($perPage, $page),
+            SocialPost::REVIEW_APPROVED => $this->posts->paginateApproved($perPage, $page),
+            default => $this->posts->paginatePending($perPage, $page),
+        };
 
         return [
             'posts' => collect($paginator->items())
@@ -116,6 +118,7 @@ class SocialPostService
             'total' => $paginator->total(),
             'status' => $status,
             'pending_count' => $this->posts->countPending(),
+            'approved_count' => $this->posts->countApproved(),
             'rejected_count' => $this->posts->countRejected(),
         ];
     }
@@ -175,9 +178,11 @@ class SocialPostService
 
     private function normalizeReviewQueueStatus(string $status): string
     {
-        return $status === SocialPost::REVIEW_REJECTED
-            ? SocialPost::REVIEW_REJECTED
-            : SocialPost::REVIEW_PENDING;
+        return match ($status) {
+            SocialPost::REVIEW_REJECTED => SocialPost::REVIEW_REJECTED,
+            SocialPost::REVIEW_APPROVED => SocialPost::REVIEW_APPROVED,
+            default => SocialPost::REVIEW_PENDING,
+        };
     }
 
     private function normalizeFeedScope(string $scope): string

@@ -63,17 +63,19 @@ class SocialPostModerationController extends Controller
 
     public function reject(RejectSocialPostRequest $request, int $postId): JsonResponse
     {
-        $post = $this->pendingPost($postId);
+        $post = $this->rejectablePost($postId);
         if (! $post) {
-            return response()->json(['message' => 'Không tìm thấy bài viết đang chờ duyệt.'], 404);
+            return response()->json(['message' => 'Không tìm thấy bài viết có thể từ chối.'], 404);
         }
 
+        $wasApproved = $post->review_status === SocialPost::REVIEW_APPROVED;
         $reason = $request->validated()['reason'] ?? null;
         $post = $this->service->reject($post, $request->user(), $reason);
 
         $this->activityLogs->record(
             'social_post.reject',
-            'Từ chối bài viết của "'.($post->is_anonymous ? 'ẩn danh' : $post->user->name).'" trên bảng tin',
+            ($wasApproved ? 'Thu hồi duyệt — từ chối bài viết của "' : 'Từ chối bài viết của "')
+                .($post->is_anonymous ? 'ẩn danh' : $post->user->name).'" trên bảng tin',
             $request->user(),
             'social_post',
             $post->id,
@@ -82,11 +84,17 @@ class SocialPostModerationController extends Controller
         return response()->json(['post' => $this->service->present($post, $request->user())]);
     }
 
-    private function pendingPost(int $postId): ?SocialPost
+    /** Bài chờ duyệt hoặc đã duyệt công khai — có thể từ chối / thu hồi. */
+    private function rejectablePost(int $postId): ?SocialPost
     {
         $post = $this->posts->find($postId);
+        if (! $post) {
+            return null;
+        }
 
-        return $post && $post->review_status === SocialPost::REVIEW_PENDING ? $post : null;
+        return in_array($post->review_status, [SocialPost::REVIEW_PENDING, SocialPost::REVIEW_APPROVED], true)
+            ? $post
+            : null;
     }
 
     /** Bài chờ duyệt hoặc đã từ chối — đều có thể duyệt (kể cả duyệt lại). */

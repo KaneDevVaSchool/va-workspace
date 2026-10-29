@@ -2,7 +2,7 @@
 //
 // Trang duyệt bài viết (toàn trường) — /manager/social/moderation.
 // Hàng chờ bên trái, khung xem bài bên phải để Duyệt/Từ chối.
-// Tab "Đã từ chối" lưu bài bị từ chối để xem xét lại và duyệt lại nếu cần.
+// Tab "Đã duyệt" / "Đã từ chối" — nhật ký quyết định và xem xét lại khi cần.
 // Bất kỳ ai có quyền social.review đều vào được (route guard
 // requiresPermission ở resources/js/router/index.js).
 //
@@ -25,6 +25,7 @@ const SCOPE_FILTERS = [
 ];
 
 const QUEUE_PENDING = 'pending';
+const QUEUE_APPROVED = 'approved';
 const QUEUE_REJECTED = 'rejected';
 
 const posts = ref([]);
@@ -39,10 +40,37 @@ const search = ref('');
 const scopeFilter = ref('all');
 const queue = ref(QUEUE_PENDING);
 const pendingCount = ref(0);
+const approvedCount = ref(0);
 const rejectedCount = ref(0);
 const rejectInput = ref(null);
 
+const isPendingQueue = computed(() => queue.value === QUEUE_PENDING);
+const isApprovedQueue = computed(() => queue.value === QUEUE_APPROVED);
 const isRejectedQueue = computed(() => queue.value === QUEUE_REJECTED);
+
+const queueEmptyTitle = computed(() => {
+  if (isApprovedQueue.value) return 'Chưa có bài viết nào được duyệt thủ công.';
+  if (isRejectedQueue.value) return 'Chưa có bài viết nào bị từ chối.';
+  return 'Không có bài viết nào đang chờ duyệt.';
+});
+
+const queueEmptyHint = computed(() => {
+  if (isApprovedQueue.value) return 'Bài bạn duyệt từ hàng chờ sẽ xuất hiện ở đây.';
+  if (isRejectedQueue.value) return 'Bài bị từ chối sẽ xuất hiện ở đây để xem xét lại.';
+  return 'Bảng tin đang thông thoáng.';
+});
+
+const queueLoadingLabel = computed(() => {
+  if (isApprovedQueue.value) return 'Đang tải bài đã duyệt…';
+  if (isRejectedQueue.value) return 'Đang tải bài đã từ chối…';
+  return 'Đang tải hàng chờ…';
+});
+
+const queueListLabel = computed(() => {
+  if (isApprovedQueue.value) return 'Bài viết đã duyệt';
+  if (isRejectedQueue.value) return 'Bài viết đã từ chối';
+  return 'Bài viết chờ duyệt';
+});
 
 const selected = computed(() => posts.value.find((post) => post.id === selectedId.value) || null);
 
@@ -120,8 +148,12 @@ function excerpt(html, limit = 120) {
 function waitLabel(iso, kind = QUEUE_PENDING) {
   if (!iso) return '';
   const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
-  if (mins < 1) return kind === QUEUE_REJECTED ? 'Vừa từ chối' : 'Vừa xong';
-  const prefix = kind === QUEUE_REJECTED ? 'Từ chối' : 'Chờ';
+  if (mins < 1) {
+    if (kind === QUEUE_REJECTED) return 'Vừa từ chối';
+    if (kind === QUEUE_APPROVED) return 'Vừa duyệt';
+    return 'Vừa xong';
+  }
+  const prefix = kind === QUEUE_REJECTED ? 'Từ chối' : kind === QUEUE_APPROVED ? 'Duyệt' : 'Chờ';
   if (mins < 60) return `${prefix} ${mins} phút`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${prefix} ${hours} giờ`;
@@ -133,11 +165,29 @@ function itemWait(post) {
   if (post?.review_status === QUEUE_REJECTED) {
     return waitLabel(post.reviewed_at || post.created_at, QUEUE_REJECTED);
   }
+  if (post?.review_status === QUEUE_APPROVED) {
+    return waitLabel(post.reviewed_at || post.created_at, QUEUE_APPROVED);
+  }
   return waitLabel(post?.created_at);
 }
 
 function isRejected(post) {
   return post?.review_status === QUEUE_REJECTED;
+}
+
+function isApproved(post) {
+  return post?.review_status === QUEUE_APPROVED;
+}
+
+function postPublicHref(post) {
+  if (!post?.id) return '/social';
+  return `/social?post=${post.id}`;
+}
+
+function queueLoadErrorMessage() {
+  if (isApprovedQueue.value) return 'Không tải được danh sách bài đã duyệt.';
+  if (isRejectedQueue.value) return 'Không tải được danh sách bài đã từ chối.';
+  return 'Không tải được danh sách bài chờ duyệt.';
 }
 
 async function loadQueue(page = 1) {
@@ -153,6 +203,7 @@ async function loadQueue(page = 1) {
       total: data.total ?? 0,
     };
     pendingCount.value = data.pending_count ?? 0;
+    approvedCount.value = data.approved_count ?? 0;
     rejectedCount.value = data.rejected_count ?? 0;
 
     if (selectedId.value && !posts.value.some((post) => post.id === selectedId.value)) {
@@ -162,13 +213,7 @@ async function loadQueue(page = 1) {
       selectedId.value = posts.value[0].id;
     }
   } catch (error) {
-    showClientToast(
-      'error',
-      error?.response?.data?.message
-        || (isRejectedQueue.value
-          ? 'Không tải được danh sách bài đã từ chối.'
-          : 'Không tải được danh sách bài chờ duyệt.'),
-    );
+    showClientToast('error', error?.response?.data?.message || queueLoadErrorMessage());
   } finally {
     loading.value = false;
   }
@@ -207,14 +252,18 @@ function clearSelection() {
   rejectReason.value = '';
 }
 
-function removeFromList(postId, { toRejected = false } = {}) {
+function removeFromList(postId, { toRejected = false, toApproved = false } = {}) {
   posts.value = posts.value.filter((post) => post.id !== postId);
   meta.value.total = Math.max(0, meta.value.total - 1);
   if (isRejectedQueue.value) {
     rejectedCount.value = Math.max(0, rejectedCount.value - 1);
+  } else if (isApprovedQueue.value) {
+    approvedCount.value = Math.max(0, approvedCount.value - 1);
+    if (toRejected) rejectedCount.value += 1;
   } else {
     pendingCount.value = Math.max(0, pendingCount.value - 1);
     if (toRejected) rejectedCount.value += 1;
+    if (toApproved) approvedCount.value += 1;
   }
   if (selectedId.value === postId) {
     const next = visiblePosts.value[0] ?? posts.value[0];
@@ -237,7 +286,7 @@ async function approve(post) {
         ? 'Đã duyệt lại bài viết. Bài đã hiển thị công khai.'
         : 'Đã duyệt bài viết. Bài đã hiển thị công khai.',
     );
-    removeFromList(post.id);
+    removeFromList(post.id, { toApproved: true });
   } catch (error) {
     showClientToast('error', error?.response?.data?.message || 'Không duyệt được bài viết.');
   } finally {
@@ -264,7 +313,13 @@ async function confirmReject(post) {
     await window.axios.post(`/api/social/moderation/${post.id}/reject`, {
       reason: rejectReason.value.trim() || undefined,
     });
-    showClientToast('success', 'Đã từ chối bài viết. Bài được lưu để xem xét lại.');
+    const fromApproved = isApproved(post);
+    showClientToast(
+      'success',
+      fromApproved
+        ? 'Đã thu hồi duyệt. Bài không còn hiển thị công khai và được lưu để xem xét lại.'
+        : 'Đã từ chối bài viết. Bài được lưu để xem xét lại.',
+    );
     rejecting.value = false;
     rejectReason.value = '';
     removeFromList(post.id, { toRejected: true });
@@ -341,7 +396,7 @@ onBeforeUnmount(() => {
     <PageHeader
       title="Duyệt bài viết"
       icon="listChecks"
-      description="Bài viết mới chỉ hiện công khai sau khi được duyệt. Bài bị từ chối được lưu lại để xem xét và duyệt lại khi cần."
+      description="Duyệt bài bảng tin chung, theo dõi bài đã duyệt và xử lý bài bị từ chối. Phím tắt: J/K chọn bài, A duyệt, R từ chối hoặc thu hồi."
     >
       <template #actions>
         <button type="button" class="moderation-page__header-btn" :disabled="loading" @click="loadQueue(meta.current_page)">
@@ -354,17 +409,42 @@ onBeforeUnmount(() => {
     <div class="moderation-page__body">
       <div class="moderation-page__queue">
         <div class="moderation-page__queue-head">
-          <div class="moderation-page__tabs" role="tablist" aria-label="Hàng duyệt">
+          <div class="moderation-page__stats" aria-label="Tóm tắt hàng duyệt">
+            <span class="moderation-page__stat moderation-page__stat--pending">
+              <AppIcon name="clock" :size="14" />
+              {{ pendingCount }} chờ
+            </span>
+            <span class="moderation-page__stat moderation-page__stat--approved">
+              <AppIcon name="check" :size="14" />
+              {{ approvedCount }} đã duyệt
+            </span>
+            <span class="moderation-page__stat moderation-page__stat--rejected">
+              <AppIcon name="close" :size="14" />
+              {{ rejectedCount }} từ chối
+            </span>
+          </div>
+          <div class="moderation-page__tabs hide-scrollbar" role="tablist" aria-label="Hàng duyệt">
             <button
               type="button"
               role="tab"
               class="moderation-page__tab"
-              :class="{ 'moderation-page__tab--on': !isRejectedQueue }"
-              :aria-selected="!isRejectedQueue"
+              :class="{ 'moderation-page__tab--on': isPendingQueue }"
+              :aria-selected="isPendingQueue"
               @click="switchQueue(QUEUE_PENDING)"
             >
               Chờ duyệt
               <span class="moderation-page__count">{{ pendingCount }}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="moderation-page__tab"
+              :class="{ 'moderation-page__tab--on': isApprovedQueue }"
+              :aria-selected="isApprovedQueue"
+              @click="switchQueue(QUEUE_APPROVED)"
+            >
+              Đã duyệt
+              <span class="moderation-page__count moderation-page__count--success">{{ approvedCount }}</span>
             </button>
             <button
               type="button"
@@ -402,15 +482,15 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="moderation-page__list hide-scrollbar" :aria-label="isRejectedQueue ? 'Bài viết đã từ chối' : 'Bài viết chờ duyệt'" role="listbox">
+        <div class="moderation-page__list hide-scrollbar" :aria-label="queueListLabel" role="listbox">
           <div v-if="loading && posts.length === 0" class="moderation-page__empty">
             <AppIcon name="refresh" :size="20" class="moderation-page__spin" />
-            <p>{{ isRejectedQueue ? 'Đang tải bài đã từ chối…' : 'Đang tải hàng chờ…' }}</p>
+            <p>{{ queueLoadingLabel }}</p>
           </div>
           <div v-else-if="posts.length === 0" class="moderation-page__empty">
-            <AppIcon :name="isRejectedQueue ? 'close' : 'check'" :size="22" />
-            <p>{{ isRejectedQueue ? 'Chưa có bài viết nào bị từ chối.' : 'Không có bài viết nào đang chờ duyệt.' }}</p>
-            <span>{{ isRejectedQueue ? 'Bài bị từ chối sẽ xuất hiện ở đây để xem xét lại.' : 'Bảng tin đang thông thoáng.' }}</span>
+            <AppIcon :name="isRejectedQueue ? 'close' : isApprovedQueue ? 'check' : 'listChecks'" :size="22" />
+            <p>{{ queueEmptyTitle }}</p>
+            <span>{{ queueEmptyHint }}</span>
           </div>
           <div v-else-if="visiblePosts.length === 0" class="moderation-page__empty">
             <AppIcon name="search" :size="20" />
@@ -427,6 +507,7 @@ onBeforeUnmount(() => {
             :class="{
               'moderation-page__item--active': selectedId === post.id,
               'moderation-page__item--rejected': isRejected(post),
+              'moderation-page__item--approved': isApproved(post),
             }"
             :aria-selected="selectedId === post.id"
             @click="select(post)"
@@ -438,7 +519,13 @@ onBeforeUnmount(() => {
             <span class="moderation-page__item-body">
               <span class="moderation-page__item-top">
                 <span class="moderation-page__item-author">{{ authorName(post) }}</span>
-                <span class="moderation-page__item-wait" :class="{ 'moderation-page__item-wait--rejected': isRejected(post) }">{{ itemWait(post) }}</span>
+                <span
+                  class="moderation-page__item-wait"
+                  :class="{
+                    'moderation-page__item-wait--rejected': isRejected(post),
+                    'moderation-page__item-wait--approved': isApproved(post),
+                  }"
+                >{{ itemWait(post) }}</span>
               </span>
               <span class="moderation-page__item-excerpt">{{ excerpt(post.content) }}</span>
               <span class="moderation-page__item-meta">
@@ -488,13 +575,21 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="moderation-page__scroll hide-scrollbar">
-            <div class="moderation-page__lead" :class="{ 'moderation-page__lead--rejected': isRejected(selected) }">
+            <div
+              class="moderation-page__lead"
+              :class="{
+                'moderation-page__lead--rejected': isRejected(selected),
+                'moderation-page__lead--approved': isApproved(selected),
+              }"
+            >
               <span class="moderation-page__dot" />
               <div>
-                <span class="moderation-page__lead-kicker">{{ isRejected(selected) ? 'Đã từ chối' : 'Đang chờ duyệt' }}</span>
+                <span class="moderation-page__lead-kicker">
+                  {{ isRejected(selected) ? 'Đã từ chối' : isApproved(selected) ? 'Đã duyệt — đang hiển thị' : 'Đang chờ duyệt' }}
+                </span>
                 <p class="moderation-page__lead-desc">
-                  {{ isRejected(selected) ? itemWait(selected) : waitLabel(selected.created_at) }}
-                  · {{ formatSocialTime(isRejected(selected) ? (selected.reviewed_at || selected.created_at) : selected.created_at) }}
+                  {{ itemWait(selected) }}
+                  · {{ formatSocialTime(isRejected(selected) || isApproved(selected) ? (selected.reviewed_at || selected.created_at) : selected.created_at) }}
                 </p>
               </div>
             </div>
@@ -518,6 +613,14 @@ onBeforeUnmount(() => {
               <div class="moderation-page__row">
                 <span class="moderation-page__row-label">Thời gian đăng</span>
                 <span class="moderation-page__row-value">{{ formatSocialTime(selected.created_at) }}</span>
+              </div>
+              <div v-if="isApproved(selected)" class="moderation-page__row">
+                <span class="moderation-page__row-label">Người duyệt</span>
+                <span class="moderation-page__row-value">{{ selected.reviewed_by || '—' }}</span>
+              </div>
+              <div v-if="isApproved(selected)" class="moderation-page__row">
+                <span class="moderation-page__row-label">Thời gian duyệt</span>
+                <span class="moderation-page__row-value">{{ formatSocialTime(selected.reviewed_at) }}</span>
               </div>
               <div v-if="isRejected(selected)" class="moderation-page__row">
                 <span class="moderation-page__row-label">Người từ chối</span>
@@ -567,6 +670,20 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
+            <div v-else-if="isApproved(selected) && !rejecting" class="moderation-page__actions">
+              <p class="moderation-page__hint">J / K chọn bài · R thu hồi duyệt</p>
+              <div class="moderation-page__action-btns">
+                <a :href="postPublicHref(selected)" target="_blank" rel="noopener" class="moderation-page__btn moderation-page__btn--ghost">
+                  <AppIcon name="externalLink" :size="16" />
+                  Xem trên bảng tin
+                </a>
+                <button type="button" class="moderation-page__btn moderation-page__btn--danger" :disabled="acting" @click="openReject">
+                  <AppIcon name="close" :size="16" />
+                  Thu hồi duyệt
+                </button>
+              </div>
+            </div>
+
             <div v-else-if="!rejecting" class="moderation-page__actions">
               <p class="moderation-page__hint">J / K chọn bài · A duyệt · R từ chối</p>
               <div class="moderation-page__action-btns">
@@ -583,7 +700,7 @@ onBeforeUnmount(() => {
 
             <div v-else class="moderation-page__reject">
               <label class="moderation-page__label" for="reject-reason">
-                Lý do từ chối
+                {{ isApproved(selected) ? 'Lý do thu hồi duyệt' : 'Lý do từ chối' }}
                 <span>Không bắt buộc — lưu lại để xem xét lại sau</span>
               </label>
               <textarea
@@ -601,7 +718,11 @@ onBeforeUnmount(() => {
                   Huỷ
                 </button>
                 <button type="button" class="moderation-page__btn moderation-page__btn--danger" :disabled="acting" @click="confirmReject(selected)">
-                  {{ acting ? 'Đang từ chối…' : 'Xác nhận từ chối' }}
+                  {{
+                    acting
+                      ? (isApproved(selected) ? 'Đang thu hồi…' : 'Đang từ chối…')
+                      : (isApproved(selected) ? 'Xác nhận thu hồi' : 'Xác nhận từ chối')
+                  }}
                 </button>
               </div>
             </div>
@@ -613,13 +734,9 @@ onBeforeUnmount(() => {
           <p>
             {{ posts.length
               ? 'Chọn một bài viết bên trái để xem.'
-              : (isRejectedQueue ? 'Không có bài đã từ chối.' : 'Không có bài nào cần duyệt.') }}
+              : queueEmptyTitle }}
           </p>
-          <span>
-            {{ isRejectedQueue
-              ? 'Bài bị từ chối được giữ lại để xem xét và duyệt lại khi cần.'
-              : 'Bài cũ nhất được đưa lên trước để không bị tồn đọng.' }}
-          </span>
+          <span>{{ queueEmptyHint }}</span>
         </div>
       </aside>
     </div>
@@ -699,13 +816,47 @@ onBeforeUnmount(() => {
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-border) 75%, transparent);
 }
 
+.moderation-page__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.moderation-page__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.moderation-page__stat--pending {
+  color: var(--color-warning-tint-fg);
+}
+
+.moderation-page__stat--approved {
+  color: var(--color-success-tint-fg);
+}
+
+.moderation-page__stat--rejected {
+  color: var(--color-danger-tint-fg);
+}
+
 .moderation-page__tabs {
   display: flex;
   gap: var(--space-1);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
 }
 
 .moderation-page__tab {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 5.5rem;
+  scroll-snap-align: start;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -739,6 +890,10 @@ onBeforeUnmount(() => {
 
 .moderation-page__count--danger {
   color: var(--color-danger-tint-fg);
+}
+
+.moderation-page__count--success {
+  color: var(--color-success-tint-fg);
 }
 
 .moderation-page__tab--on .moderation-page__count {
@@ -889,6 +1044,14 @@ onBeforeUnmount(() => {
   background: var(--color-danger);
 }
 
+.moderation-page__item--approved::before {
+  background: var(--color-success);
+}
+
+.moderation-page__item--approved.moderation-page__item--active::before {
+  background: var(--color-success);
+}
+
 .moderation-page__anon-avatar {
   flex-shrink: 0;
   display: inline-flex;
@@ -935,6 +1098,10 @@ onBeforeUnmount(() => {
 
 .moderation-page__item-wait--rejected {
   color: var(--color-danger-tint-fg);
+}
+
+.moderation-page__item-wait--approved {
+  color: var(--color-success-tint-fg);
 }
 
 .moderation-page__item-excerpt {
@@ -1076,6 +1243,14 @@ onBeforeUnmount(() => {
 
 .moderation-page__lead--rejected .moderation-page__dot {
   background: var(--color-danger);
+}
+
+.moderation-page__lead--approved::before {
+  background: var(--color-success);
+}
+
+.moderation-page__lead--approved .moderation-page__dot {
+  background: var(--color-success);
 }
 
 .moderation-page__dot {
@@ -1260,6 +1435,7 @@ onBeforeUnmount(() => {
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .moderation-page__btn:disabled {
