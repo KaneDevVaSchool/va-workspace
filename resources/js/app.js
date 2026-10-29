@@ -39,11 +39,17 @@ import { createPinia } from 'pinia';
 import router from './router';
 import App from './App.vue';
 import { dismissAppBoot } from './lib/dismissAppBoot';
+import { installEmployeeShellViewportRouteSync } from './lib/employeeMobileShellRoutes';
 
 const app = createApp(App);
 
 app.use(createPinia());
 app.use(router);
+
+installEmployeeShellViewportRouteSync(router, async () => {
+  const { useAuthStore } = await import('@modules/Identity/resources/js/stores/auth.js');
+  return useAuthStore();
+});
 
 app.mount('#app');
 

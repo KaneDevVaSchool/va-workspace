@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Support\Collection;
 use Modules\Identity\App\Exceptions\PermissionKeyReserved;
 use Modules\Identity\App\Exceptions\ScopeNotFound;
+use Modules\Identity\App\Repositories\Contracts\DepartmentRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\PermissionGrantRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\TeamRepositoryInterface;
 use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
@@ -41,6 +42,7 @@ class PermissionService
         private readonly PermissionGrantRepositoryInterface $grants,
         private readonly TeamRepositoryInterface $teams,
         private readonly UserRepositoryInterface $users,
+        private readonly DepartmentRepositoryInterface $departments,
     ) {}
 
     /**
@@ -112,23 +114,25 @@ class PermissionService
     }
 
     /**
-     * Kiểm tra permission_key có phải reserved (chỉ super_admin) không.
-     * UI superadmin/permissions dùng để ẩn/block các keys này.
+     * Kiểm tra permission_key có bị khoá với role này không.
+     * Không truyền role: khoá nếu key khớp reserved, kể cả khi có ngoại lệ.
+     * Có role: mở khoá chỉ khi role nằm trong reserved_exceptions của đúng key.
      */
-    public function isReserved(string $key): bool
+    public function isReserved(string $key, ?string $roleCode = null): bool
     {
         $reserved = config('permissions.reserved', []);
 
         foreach ($reserved as $pattern) {
-            if ($this->keyMatchesPattern($key, $pattern)) {
-                // Ngoại lệ: một số reserved key được cấp cho role nhất định
-                $exceptions = config('permissions.reserved_exceptions', []);
-                if (isset($exceptions[$key])) {
-                    return false;
-                }
-
-                return true;
+            if (! $this->keyMatchesPattern($key, $pattern)) {
+                continue;
             }
+
+            $allowed = config("permissions.reserved_exceptions.{$key}", []);
+            if ($roleCode !== null && is_array($allowed) && in_array($roleCode, $allowed, true)) {
+                return false;
+            }
+
+            return true;
         }
 
         return false;
@@ -187,7 +191,7 @@ class PermissionService
      * chuỗi 3 bậc team→department→global→config không tồn tại.
      *
      * @return array<string, array<string, array{
-     *     default: bool, effective: bool, reserved: bool,
+     *     default: bool, effective: bool, reserved: bool, baseline: bool,
      *     global_override: bool|null, scoped_override: bool|null,
      *     effective_source: 'config'|'global'|'scoped',
      * }>>
@@ -240,21 +244,26 @@ class PermissionService
     /**
      * @param  array<string, bool>  $globalGrants
      * @param  array<string, bool>  $scopedGrants
-     * @return array{default: bool, effective: bool, reserved: bool, global_override: bool|null, scoped_override: bool|null, effective_source: string}
+     * @return array{default: bool, effective: bool, reserved: bool, baseline: bool, global_override: bool|null, scoped_override: bool|null, effective_source: string}
      */
     private function buildCell(string $roleCode, string $key, string $scopeType, array $globalGrants, array $scopedGrants): array
     {
         $default = $this->checkConfigDefault($roleCode, $key);
-        $globalOverride = $this->lookupOverride($globalGrants, $key);
-        $scopedOverride = $scopeType !== 'global'
+        $globalExact = array_key_exists($key, $globalGrants) ? (bool) $globalGrants[$key] : null;
+        $scopedExact = $scopeType !== 'global' && array_key_exists($key, $scopedGrants)
+            ? (bool) $scopedGrants[$key]
+            : null;
+
+        $globalResolved = $this->lookupOverride($globalGrants, $key);
+        $scopedResolved = $scopeType !== 'global'
             ? $this->lookupOverride($scopedGrants, $key)
             : null;
 
-        if ($scopedOverride !== null) {
-            $effective = $scopedOverride;
+        if ($scopedResolved !== null) {
+            $effective = $scopedResolved;
             $source = 'scoped';
-        } elseif ($globalOverride !== null) {
-            $effective = $globalOverride;
+        } elseif ($globalResolved !== null) {
+            $effective = $globalResolved;
             $source = 'global';
         } else {
             $effective = $default;
@@ -264,11 +273,36 @@ class PermissionService
         return [
             'default' => $default,
             'effective' => $effective,
-            'reserved' => $this->isReserved($key),
-            'global_override' => $globalOverride,
-            'scoped_override' => $scopedOverride,
+            'reserved' => $this->isReserved($key, $roleCode),
+            'baseline' => $this->baselineWithoutExact($key, $scopeType, $default, $globalGrants, $scopedGrants),
+            'global_override' => $globalExact,
+            'scoped_override' => $scopedExact,
             'effective_source' => $source,
         ];
+    }
+
+    /**
+     * Giá trị còn lại nếu xoá đúng dòng override của $key ở scope hiện tại.
+     * Wildcard cùng scope và override scope khác vẫn được tính.
+     *
+     * @param  array<string, bool>  $globalGrants
+     * @param  array<string, bool>  $scopedGrants
+     */
+    private function baselineWithoutExact(string $key, string $scopeType, bool $default, array $globalGrants, array $scopedGrants): bool
+    {
+        if ($scopeType === 'global') {
+            unset($globalGrants[$key]);
+
+            return $this->lookupOverride($globalGrants, $key) ?? $default;
+        }
+
+        unset($scopedGrants[$key]);
+        $scopedResolved = $this->lookupOverride($scopedGrants, $key);
+        if ($scopedResolved !== null) {
+            return $scopedResolved;
+        }
+
+        return $this->lookupOverride($globalGrants, $key) ?? $default;
     }
 
     /**
@@ -309,13 +343,11 @@ class PermissionService
         ?int $scopeId,
         int $createdBy,
     ): array {
-        if ($scopeType === 'team' && $scopeId !== null && ! $this->teams->find($scopeId)) {
-            throw new ScopeNotFound('team');
-        }
+        $this->assertScopeExists($scopeType, $scopeId);
 
         $applied = [];
         foreach ($keys as $key) {
-            if ($this->isReserved($key)) {
+            if ($this->isReserved($key, $roleCode)) {
                 continue;
             }
 
@@ -349,17 +381,28 @@ class PermissionService
      */
     private function guardGrantable(string $roleCode, string $key, string $scopeType, ?int $scopeId): void
     {
-        if ($this->isReserved($key)) {
-            $exceptions = config('permissions.reserved_exceptions', []);
-            $allowedRoles = $exceptions[$key] ?? [];
-
-            if (! in_array($roleCode, $allowedRoles, true)) {
-                throw new PermissionKeyReserved($key);
-            }
+        if ($this->isReserved($key, $roleCode)) {
+            throw new PermissionKeyReserved($key);
         }
 
-        if ($scopeType === 'team' && $scopeId !== null && ! $this->teams->find($scopeId)) {
+        $this->assertScopeExists($scopeType, $scopeId);
+    }
+
+    /**
+     * @throws ScopeNotFound
+     */
+    private function assertScopeExists(string $scopeType, ?int $scopeId): void
+    {
+        if ($scopeId === null) {
+            return;
+        }
+
+        if ($scopeType === 'team' && ! $this->teams->find($scopeId)) {
             throw new ScopeNotFound('team');
+        }
+
+        if ($scopeType === 'department' && ! $this->departments->find($scopeId)) {
+            throw new ScopeNotFound('department');
         }
     }
 

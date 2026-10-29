@@ -75,15 +75,6 @@ const roleByCode = computed(() => {
 
 const selectedRole = computed(() => roleByCode.value[selectedRoleCode.value] ?? null);
 
-const permissionsByModule = computed(() => {
-  const map = {};
-  for (const perm of permissions.value) {
-    const key = perm.module || 'Khác';
-    (map[key] ??= []).push(perm);
-  }
-  return map;
-});
-
 const sortedPermissions = computed(() =>
   [...permissions.value].sort((a, b) => {
     const mod = (a.module || '').localeCompare(b.module || '', 'vi');
@@ -129,11 +120,7 @@ const filteredPermissions = computed(() => {
     if (moduleFilter.value !== 'all' && perm.module !== moduleFilter.value) return false;
     if (!permissionMatchesStatus(perm)) return false;
     if (!term) return true;
-    return (
-      perm.label.toLowerCase().includes(term) ||
-      perm.key.toLowerCase().includes(term) ||
-      (perm.description ?? '').toLowerCase().includes(term)
-    );
+    return perm.label.toLowerCase().includes(term) || perm.key.toLowerCase().includes(term);
   });
 });
 
@@ -144,7 +131,11 @@ const groups = computed(() => {
     if (!map.has(label)) map.set(label, []);
     map.get(label).push(perm);
   }
-  return [...map.entries()].map(([module, items]) => ({ module, items }));
+  return [...map.entries()].map(([module, items]) => ({
+    module,
+    items,
+    ...moduleStats(items),
+  }));
 });
 
 const confirmOpen = computed({
@@ -182,9 +173,10 @@ const confirmCopy = computed(() => {
   const role = roleLabel(action.roleCode);
 
   if (action.type === 'restore') {
+    const next = action.cell.baseline ?? action.cell.default;
     return {
       title: 'Bỏ sửa?',
-      description: `“${perm}” của ${role} sẽ theo mặc định.`,
+      description: `“${perm}” của ${role} sẽ ${next ? 'bật' : 'tắt'}.`,
       confirmLabel: 'Bỏ sửa',
       danger: false,
     };
@@ -215,6 +207,7 @@ function emptyCell() {
     global_override: null,
     scoped_override: null,
     effective_source: 'config',
+    baseline: false,
   };
 }
 
@@ -243,16 +236,14 @@ function permissionMatchesStatus(perm) {
   return statusFilter.value === 'granted' ? cell.effective : !cell.effective;
 }
 
-function grantableKeys(moduleLabel) {
-  return (permissionsByModule.value[moduleLabel] ?? [])
-    .filter((perm) => !cellFor(selectedRoleCode.value, perm.key).reserved)
-    .map((perm) => perm.key);
+function grantableItems(items) {
+  return items.filter((perm) => !cellFor(selectedRoleCode.value, perm.key).reserved);
 }
 
-function moduleStats(moduleLabel) {
-  const keys = grantableKeys(moduleLabel);
-  const granted = keys.filter((key) => cellFor(selectedRoleCode.value, key).effective).length;
-  return { total: keys.length, granted };
+function moduleStats(items) {
+  const rows = grantableItems(items);
+  const granted = rows.filter((perm) => cellFor(selectedRoleCode.value, perm.key).effective).length;
+  return { total: rows.length, granted };
 }
 
 function moduleOpen(moduleLabel) {
@@ -269,9 +260,9 @@ function isPending(roleCode, key) {
   return Boolean(pendingCells[`${roleCode}|${key}`]);
 }
 
-function moduleBusy(moduleLabel) {
+function moduleBusy(items) {
   const roleCode = selectedRoleCode.value;
-  return grantableKeys(moduleLabel).some((key) => isPending(roleCode, key));
+  return grantableItems(items).some((perm) => isPending(roleCode, perm.key));
 }
 
 async function loadDepartments() {
@@ -391,13 +382,12 @@ function requestRestore(perm) {
   pendingAction.value = { type: 'restore', roleCode, permissionKey: perm.key, cell };
 }
 
-function requestBulk(moduleLabel, granted) {
+function requestBulk(moduleLabel, items, granted) {
   const roleCode = selectedRoleCode.value;
-  const keys = grantableKeys(moduleLabel);
-  if (!keys.length || !ensureScope() || moduleBusy(moduleLabel)) return;
-  const { granted: current } = moduleStats(moduleLabel);
-  if (granted && current === keys.length) return;
-  if (!granted && current === 0) return;
+  const keys = grantableItems(items)
+    .filter((perm) => cellFor(roleCode, perm.key).effective !== granted)
+    .map((perm) => perm.key);
+  if (!keys.length || !ensureScope() || moduleBusy(items)) return;
   pendingAction.value = { type: 'bulk-module', roleCode, moduleLabel, keys, granted };
 }
 
@@ -450,13 +440,14 @@ async function applyToggle({ roleCode, permissionKey, cell }) {
   const cellKey = `${roleCode}|${permissionKey}`;
   if (pendingCells[cellKey]) throw new Error('pending');
 
-  const newValue = !cell.effective;
-  const here = scope.value.type === 'global' ? cell.global_override : cell.scoped_override;
-  pendingCells[cellKey] = true;
+    const newValue = !cell.effective;
+    const here = scope.value.type === 'global' ? cell.global_override : cell.scoped_override;
+    const baseline = cell.baseline ?? cell.default;
+    pendingCells[cellKey] = true;
 
-  try {
-    let cellResult;
-    if (newValue === cell.default && here !== null) {
+    try {
+      let cellResult;
+      if (here !== null && newValue === baseline) {
       const { data } = await window.axios.delete('/api/permissions/grants', {
         data: {
           role_code: roleCode,
@@ -507,7 +498,7 @@ async function restoreDefault({ roleCode, permissionKey }) {
       },
     });
     applyCellUpdate(roleCode, permissionKey, data.cell);
-    showClientToast('success', `“${permissionLabel(permissionKey)}” đã về mặc định.`);
+    showClientToast('success', `Đã bỏ sửa “${permissionLabel(permissionKey)}”.`);
   } catch (error) {
     const message = error?.response?.data?.message;
     showClientToast('error', message || 'Không khôi phục được mặc định.');
@@ -572,168 +563,173 @@ onMounted(() => {
 
     <div class="perm__body">
       <aside class="perm__rail" aria-label="Chọn phạm vi và vai trò">
-        <div class="perm__scope">
-          <p class="perm__kicker">Áp dụng cho</p>
-          <div class="perm__segments" role="radiogroup" aria-label="Phạm vi">
-            <button type="button" role="radio" :aria-checked="scope.type === 'global'" @click="setScopeType('global')">
-              Toàn hệ thống
-            </button>
-            <button
-              type="button"
-              role="radio"
-              :aria-checked="scope.type === 'department'"
-              @click="setScopeType('department')"
-            >
-              Phòng ban
-            </button>
-            <button type="button" role="radio" :aria-checked="scope.type === 'team'" @click="setScopeType('team')">
-              Nhóm
-            </button>
+        <div class="perm__panel">
+          <div class="perm__scope">
+            <p class="perm__kicker">Áp dụng cho</p>
+            <div class="perm__segments" role="radiogroup" aria-label="Phạm vi">
+              <button type="button" role="radio" :aria-checked="scope.type === 'global'" @click="setScopeType('global')">
+                Toàn hệ thống
+              </button>
+              <button
+                type="button"
+                role="radio"
+                :aria-checked="scope.type === 'department'"
+                @click="setScopeType('department')"
+              >
+                Phòng ban
+              </button>
+              <button type="button" role="radio" :aria-checked="scope.type === 'team'" @click="setScopeType('team')">
+                Nhóm
+              </button>
+            </div>
+
+            <label v-if="scope.type !== 'global'" class="perm__field">
+              <span>Phòng ban</span>
+              <select v-model="departmentId" @change="onDepartmentChange">
+                <option :value="null" disabled>Chọn phòng ban</option>
+                <option v-for="dept in departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
+              </select>
+            </label>
+
+            <label v-if="scope.type === 'team'" class="perm__field">
+              <span>Nhóm</span>
+              <select v-model="teamId" :disabled="!departmentId || loadingTeams" @change="onTeamChange">
+                <option :value="null" disabled>{{ departmentId ? 'Chọn nhóm' : 'Chọn phòng ban trước' }}</option>
+                <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
+              </select>
+            </label>
           </div>
 
-          <label v-if="scope.type !== 'global'" class="perm__field">
-            <span>Phòng ban</span>
-            <select v-model="departmentId" @change="onDepartmentChange">
-              <option :value="null" disabled>Chọn phòng ban</option>
-              <option v-for="dept in departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
-            </select>
+          <label class="perm__search">
+            <AppIcon name="search" :size="16" />
+            <input v-model="roleQuery" type="search" placeholder="Tìm vai trò" aria-label="Tìm vai trò" />
           </label>
 
-          <label v-if="scope.type === 'team'" class="perm__field">
-            <span>Nhóm</span>
-            <select v-model="teamId" :disabled="!departmentId || loadingTeams" @change="onTeamChange">
-              <option :value="null" disabled>{{ departmentId ? 'Chọn nhóm' : 'Chọn phòng ban trước' }}</option>
-              <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
-            </select>
-          </label>
-        </div>
-
-        <p class="perm__kicker">Vai trò</p>
-        <label class="perm__search">
-          <AppIcon name="search" :size="16" />
-          <input v-model="roleQuery" type="search" placeholder="Tìm vai trò" aria-label="Tìm vai trò" />
-        </label>
-
-        <div class="perm__roles hide-scrollbar" role="listbox" aria-label="Vai trò">
-          <p v-if="!visibleRoles.length" class="perm__empty">Không có vai trò khớp.</p>
-          <button
-            v-for="role in visibleRoles"
-            :key="role.code"
-            type="button"
-            class="perm__role"
-            role="option"
-            :aria-selected="role.code === selectedRoleCode"
-            @click="selectRole(role.code)"
-          >
-            <span class="perm__role-name">{{ role.label }}</span>
-            <span v-if="role.granted !== null" class="perm__role-meta">{{ role.granted }} bật</span>
-          </button>
+          <div class="perm__roles hide-scrollbar" role="listbox" aria-label="Vai trò">
+            <p v-if="!visibleRoles.length" class="perm__empty">Không có vai trò khớp.</p>
+            <button
+              v-for="role in visibleRoles"
+              :key="role.code"
+              type="button"
+              class="perm__role"
+              role="option"
+              :aria-selected="role.code === selectedRoleCode"
+              @click="selectRole(role.code)"
+            >
+              <span class="perm__role-name">{{ role.label }}</span>
+              <span
+                v-if="role.granted !== null"
+                class="perm__count"
+                :aria-label="`${role.granted} trên ${role.editable} quyền đang bật`"
+              >
+                {{ role.granted }}/{{ role.editable }}
+              </span>
+            </button>
+          </div>
         </div>
       </aside>
 
       <div class="perm__main">
-        <div v-if="!scopeReady" class="perm__prompt" role="status">
-          <AppIcon name="building" :size="22" />
-          <p>{{ blockedMessage }}</p>
-        </div>
+        <div class="perm__panel perm__workspace">
+          <div v-if="!scopeReady" class="perm__prompt" role="status">
+            <AppIcon name="building" :size="22" />
+            <p>{{ blockedMessage }}</p>
+          </div>
 
-        <div v-else-if="isLoading && !permissions.length" class="perm__prompt" role="status">
-          <AppIcon name="refresh" :size="22" class="perm__spin" />
-          <p>Đang tải.</p>
-        </div>
+          <div v-else-if="isLoading && !permissions.length" class="perm__prompt" role="status">
+            <AppIcon name="refresh" :size="22" class="perm__spin" />
+            <p>Đang tải.</p>
+          </div>
 
-        <div v-else-if="!selectedRole" class="perm__prompt" role="status">
-          <p>Chưa có vai trò.</p>
-        </div>
+          <div v-else-if="!selectedRole" class="perm__prompt" role="status">
+            <p>Chưa có vai trò.</p>
+          </div>
 
-        <template v-else>
-          <header class="perm__now">
-            <h2>{{ selectedRole.label }}</h2>
-            <p v-if="selectedSummary && selectedSummary.granted !== null">
-              {{ scopeLabel }} · {{ selectedSummary.granted }} đang bật
-            </p>
-          </header>
-
-          <div class="perm__tools">
-            <label class="perm__search perm__search--grow">
-              <AppIcon name="search" :size="16" />
-              <input v-model="query" type="search" placeholder="Tìm quyền" aria-label="Tìm quyền" />
-            </label>
-
-            <select v-model="moduleFilter" class="perm__select" aria-label="Module">
-              <option value="all">Mọi module</option>
-              <option v-for="item in modules" :key="item.key" :value="item.label">{{ item.label }}</option>
-            </select>
-
-            <div class="perm__segments" role="radiogroup" aria-label="Lọc trạng thái">
-              <button
-                v-for="item in STATUS_OPTIONS"
-                :key="item.value || 'all'"
-                type="button"
-                role="radio"
-                :aria-checked="statusFilter === item.value"
-                @click="statusFilter = item.value"
+          <template v-else>
+            <header class="perm__now">
+              <div>
+                <h2>{{ selectedRole.label }}</h2>
+                <p>{{ scopeLabel }}</p>
+              </div>
+              <span
+                v-if="selectedSummary && selectedSummary.granted !== null"
+                class="perm__stat"
+                :aria-label="`${selectedSummary.granted} trên ${selectedSummary.editable} quyền đang bật`"
               >
-                {{ item.label }}
+                {{ selectedSummary.granted }}/{{ selectedSummary.editable }}
+              </span>
+            </header>
+
+            <div class="perm__tools">
+              <label class="perm__search perm__search--grow">
+                <AppIcon name="search" :size="16" />
+                <input v-model="query" type="search" placeholder="Tìm quyền" aria-label="Tìm quyền" />
+              </label>
+
+              <select v-model="moduleFilter" class="perm__select" aria-label="Module">
+                <option value="all">Mọi module</option>
+                <option v-for="item in modules" :key="item.key" :value="item.label">{{ item.label }}</option>
+              </select>
+
+              <div class="perm__segments" role="radiogroup" aria-label="Lọc trạng thái">
+                <button
+                  v-for="item in STATUS_OPTIONS"
+                  :key="item.value || 'all'"
+                  type="button"
+                  role="radio"
+                  :aria-checked="statusFilter === item.value"
+                  @click="statusFilter = item.value"
+                >
+                  {{ item.label }}
+                </button>
+              </div>
+
+              <button v-if="hasActiveFilters" type="button" class="perm__text-btn" @click="clearFilters">
+                Bỏ lọc
               </button>
             </div>
 
-            <button v-if="hasActiveFilters" type="button" class="perm__text-btn" @click="clearFilters">
-              Bỏ lọc
-            </button>
-          </div>
+            <div class="perm__list hide-scrollbar" :aria-busy="isLoading">
+              <p v-if="!groups.length" class="perm__empty perm__empty--pad">Không thấy quyền.</p>
 
-          <div class="perm__list hide-scrollbar" :aria-busy="isLoading">
-            <p v-if="!groups.length" class="perm__empty perm__empty--pad">Không thấy quyền.</p>
-
-            <article v-for="group in groups" :key="group.module" class="perm__module">
-              <header class="perm__module-head">
-                <button
-                  type="button"
-                  class="perm__module-toggle"
-                  :aria-expanded="moduleOpen(group.module)"
-                  @click="toggleModule(group.module)"
-                >
-                  <AppIcon :name="moduleOpen(group.module) ? 'chevronDown' : 'chevronRight'" :size="16" />
-                  <strong>{{ group.module }}</strong>
-                  <small v-if="moduleStats(group.module).total">{{ moduleStats(group.module).granted }} bật</small>
-                </button>
-                <div class="perm__module-actions">
+              <article v-for="group in groups" :key="group.module" class="perm__module">
+                <header class="perm__module-head">
                   <button
                     type="button"
-                    class="perm__text-btn"
-                    :disabled="
-                      moduleBusy(group.module) ||
-                      moduleStats(group.module).total === 0 ||
-                      moduleStats(group.module).granted === moduleStats(group.module).total
-                    "
-                    @click="requestBulk(group.module, true)"
+                    class="perm__module-toggle"
+                    :aria-expanded="moduleOpen(group.module)"
+                    @click="toggleModule(group.module)"
                   >
-                    Bật hết
+                    <AppIcon :name="moduleOpen(group.module) ? 'chevronDown' : 'chevronRight'" :size="16" />
+                    <strong>{{ group.module }}</strong>
+                    <small v-if="group.total">{{ group.granted }}/{{ group.total }}</small>
                   </button>
-                  <button
-                    type="button"
-                    class="perm__text-btn perm__text-btn--danger"
-                    :disabled="
-                      moduleBusy(group.module) ||
-                      moduleStats(group.module).total === 0 ||
-                      moduleStats(group.module).granted === 0
-                    "
-                    @click="requestBulk(group.module, false)"
-                  >
-                    Tắt hết
-                  </button>
-                </div>
-              </header>
+                  <div class="perm__module-actions">
+                    <button
+                      type="button"
+                      class="perm__text-btn"
+                      :disabled="moduleBusy(group.items) || group.total === 0 || group.granted === group.total"
+                      @click="requestBulk(group.module, group.items, true)"
+                    >
+                      Bật hết
+                    </button>
+                    <button
+                      type="button"
+                      class="perm__text-btn perm__text-btn--danger"
+                      :disabled="moduleBusy(group.items) || group.total === 0 || group.granted === 0"
+                      @click="requestBulk(group.module, group.items, false)"
+                    >
+                      Tắt hết
+                    </button>
+                  </div>
+                </header>
 
-              <ul v-if="moduleOpen(group.module)" class="perm__items">
-                <li v-for="perm in group.items" :key="perm.key" class="perm__item">
-                  <div class="perm__item-copy">
+                <ul v-if="moduleOpen(group.module)" class="perm__items">
+                  <li v-for="perm in group.items" :key="perm.key" class="perm__item">
                     <p class="perm__item-title">{{ perm.label }}</p>
-                    <p v-if="perm.description" class="perm__item-desc">{{ perm.description }}</p>
-                    <p v-if="overrideHere(cellFor(selectedRoleCode, perm.key)) !== null" class="perm__note">
-                      Đã sửa
+                    <div class="perm__item-actions">
                       <button
+                        v-if="!cellFor(selectedRoleCode, perm.key).reserved && overrideHere(cellFor(selectedRoleCode, perm.key)) !== null"
                         type="button"
                         class="perm__link"
                         :disabled="restoring || isPending(selectedRoleCode, perm.key)"
@@ -741,43 +737,29 @@ onMounted(() => {
                       >
                         Bỏ sửa
                       </button>
-                    </p>
-                  </div>
-                  <div class="perm__item-actions">
-                    <span v-if="cellFor(selectedRoleCode, perm.key).reserved" class="perm__state">
-                      <AppIcon name="lock" :size="14" />
-                      Khoá
-                    </span>
-                    <template v-else>
-                      <span class="perm__state">
-                        <span
-                          class="perm__dot"
-                          :class="
-                            cellFor(selectedRoleCode, perm.key).effective ? 'perm__dot--on' : 'perm__dot--off'
-                          "
-                        />
-                        {{ cellFor(selectedRoleCode, perm.key).effective ? 'Bật' : 'Tắt' }}
+                      <span v-if="cellFor(selectedRoleCode, perm.key).reserved" class="perm__lock">
+                        <AppIcon name="lock" :size="14" />
+                        Khoá
                       </span>
                       <button
+                        v-else
                         type="button"
                         class="perm__switch"
                         role="switch"
                         :aria-checked="cellFor(selectedRoleCode, perm.key).effective"
-                        :aria-label="
-                          cellFor(selectedRoleCode, perm.key).effective ? `Tắt ${perm.label}` : `Bật ${perm.label}`
-                        "
+                        :aria-label="cellFor(selectedRoleCode, perm.key).effective ? `Tắt ${perm.label}` : `Bật ${perm.label}`"
                         :disabled="isPending(selectedRoleCode, perm.key)"
                         @click="requestToggle(perm)"
                       >
                         <span class="perm__switch-knob" />
                       </button>
-                    </template>
-                  </div>
-                </li>
-              </ul>
-            </article>
-          </div>
-        </template>
+                    </div>
+                  </li>
+                </ul>
+              </article>
+            </div>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -805,7 +787,8 @@ onMounted(() => {
 }
 
 .perm__header-btn,
-.perm__text-btn {
+.perm__text-btn,
+.perm__link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -822,8 +805,19 @@ onMounted(() => {
   box-shadow: 0 0 0 1px var(--color-border);
 }
 
+.perm__text-btn,
+.perm__link {
+  height: 1.75rem;
+  padding: 0 0.55rem;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
 .perm__header-btn:disabled,
 .perm__text-btn:disabled,
+.perm__link:disabled,
 .perm__switch:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -845,20 +839,25 @@ onMounted(() => {
   flex-shrink: 0;
   min-height: 0;
   display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
 }
 
-.perm__scope,
-.perm__module {
-  position: relative;
+.perm__panel {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
   background: var(--color-surface);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
 }
 
-.perm__scope {
+.perm__rail .perm__panel {
   padding: var(--space-3);
+}
+
+.perm__scope {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -928,10 +927,12 @@ onMounted(() => {
   padding: 0 0.75rem;
 }
 
-.perm__role-meta,
-.perm__module-toggle small {
+.perm__count,
+.perm__module-toggle small,
+.perm__stat {
   color: var(--color-text-muted);
   font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .perm__search {
@@ -970,7 +971,7 @@ onMounted(() => {
 .perm__roles {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 2px;
 }
 
 .perm__role {
@@ -981,15 +982,15 @@ onMounted(() => {
   justify-content: space-between;
   gap: var(--space-2);
   width: 100%;
-  padding: 0.7rem var(--space-3);
-  padding-left: calc(var(--space-2) + 3px + var(--space-3));
+  min-height: 2.5rem;
+  padding: 0.45rem 0.65rem;
+  padding-left: calc(var(--space-2) + 3px + 0.65rem);
   border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--color-text);
   text-align: left;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
 }
 
 .perm__role::before {
@@ -1000,10 +1001,15 @@ onMounted(() => {
   left: var(--space-2);
   width: 3px;
   border-radius: 0;
-  background: var(--color-border);
+  background: transparent;
 }
 
-.perm__role[aria-selected='true'] {
+.perm__role:hover {
+  background: var(--color-surface-muted);
+}
+
+.perm__role[aria-selected='true'],
+.perm__role[aria-selected='true']:hover {
   background: var(--color-primary-surface);
 }
 
@@ -1022,7 +1028,7 @@ onMounted(() => {
   font-size: 0.875rem;
 }
 
-.perm__role-meta {
+.perm__count {
   flex-shrink: 0;
 }
 
@@ -1031,8 +1037,6 @@ onMounted(() => {
   min-width: 0;
   min-height: 0;
   display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
 }
 
 .perm__prompt {
@@ -1056,29 +1060,38 @@ onMounted(() => {
   padding: var(--space-5);
 }
 
+.perm__workspace {
+  overflow: hidden;
+}
+
 .perm__now {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
 .perm__now h2 {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 1.0625rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
-.perm__now p,
-.perm__item-desc,
-.perm__note {
-  margin: 0.2rem 0 0;
+.perm__now p {
+  margin: 0.15rem 0 0;
   color: var(--color-text-muted);
   font-size: 0.8125rem;
-  line-height: 1.4;
 }
 
-.perm__note {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+.perm__stat {
+  flex-shrink: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 .perm__tools {
@@ -1087,17 +1100,36 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: 0 1px 0 var(--color-border);
 }
 
 .perm__list {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-1);
+  padding: var(--space-4);
+  background: var(--color-bg);
 }
 
 .perm__module {
+  position: relative;
   flex-shrink: 0;
+  padding-left: calc(var(--space-2) + 3px + var(--space-2));
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.perm__module::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-primary);
 }
 
 .perm__module-head {
@@ -1105,7 +1137,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) 0;
 }
 
 .perm__module-toggle {
@@ -1132,7 +1164,7 @@ onMounted(() => {
 .perm__items {
   list-style: none;
   margin: 0;
-  padding: 0 var(--space-3) var(--space-2);
+  padding: 0 var(--space-3) var(--space-2) 0;
 }
 
 .perm__item {
@@ -1141,7 +1173,7 @@ onMounted(() => {
   justify-content: space-between;
   gap: var(--space-3);
   min-height: 2.75rem;
-  padding: var(--space-2) 0;
+  padding: 0.35rem 0;
   box-shadow: 0 1px 0 var(--color-border);
 }
 
@@ -1149,52 +1181,22 @@ onMounted(() => {
   box-shadow: none;
 }
 
-.perm__item-copy {
-  min-width: 0;
-}
-
 .perm__item-title {
   margin: 0;
+  min-width: 0;
   font-size: 0.875rem;
 }
 
-.perm__state {
+.perm__lock {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  min-width: 3.25rem;
-  color: var(--color-text);
-  font-size: 0.8125rem;
-}
-
-.perm__dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: var(--radius-full);
-  flex-shrink: 0;
-}
-
-.perm__dot--on {
-  background: var(--color-success);
-}
-
-.perm__dot--off {
-  background: var(--color-border-strong);
-}
-
-.perm__link {
-  border: none;
-  background: transparent;
-  color: var(--color-primary);
-  font-family: var(--font-family-base);
-  font-size: 0.8125rem;
-  cursor: pointer;
-  padding: 0;
-}
-
-.perm__link:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+  gap: var(--space-1);
+  height: 1.75rem;
+  padding: 0 0.55rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
 }
 
 .perm__item-actions {
@@ -1235,18 +1237,6 @@ onMounted(() => {
   transform: translateX(1.25rem);
 }
 
-.perm__switch :deep(svg) {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: var(--color-text);
-}
-
-.perm__switch[aria-checked='true'] :deep(svg) {
-  color: var(--color-surface);
-}
-
 .perm__spin {
   animation: perm-spin 0.8s linear infinite;
 }
@@ -1281,6 +1271,10 @@ input:focus-visible {
 
   .perm__roles {
     max-height: 16rem;
+  }
+
+  .perm__workspace {
+    min-height: 24rem;
   }
 }
 </style>

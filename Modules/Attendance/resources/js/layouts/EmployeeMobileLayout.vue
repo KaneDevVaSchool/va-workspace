@@ -3,7 +3,7 @@
 // Shell mobile dùng chung cho MỌI tài khoản trên viewport ≤768px — KHÔNG
 // dùng AppSidebar/AppHeader. Điều phối state (route, auth, chat, viewport)
 // và render các component con trong components/employee-mobile-shell/:
-//   EmployeeMobileHeader.vue        — header (chào/tiêu đề trang)
+//   EmployeeMobileHeader.vue        — header (chào/tiêu đề trang, chuông thông báo)
 //   EmployeeMobileTabbar.vue         — bottom tab bar
 //   EmployeeMobileInstallBanner.vue  — gợi ý cài PWA
 //   EmployeeMobileWorkspaceIntro.vue — màn giới thiệu lần đầu
@@ -27,6 +27,7 @@ import { useChatStore } from '@modules/Chat/resources/js/store/chatStore';
 import EmployeeChatHeaderToolbar from '@modules/Chat/resources/js/components/EmployeeChatHeaderToolbar.vue';
 import { useChatRealtime } from '@/composables/useChatRealtime';
 import { setAppBadgeCount } from '@/lib/appBadge';
+import { useEmployeeNotificationInbox } from '../composables/useEmployeeNotificationInbox.js';
 import EmployeeMobileHeader from '../components/employee-mobile-shell/EmployeeMobileHeader.vue';
 import EmployeeMobileTabbar from '../components/employee-mobile-shell/EmployeeMobileTabbar.vue';
 import EmployeeMobileInstallBanner from '../components/employee-mobile-shell/EmployeeMobileInstallBanner.vue';
@@ -249,8 +250,9 @@ const chatUnreadLabel = computed(() => {
   return chatStore.unreadTotal > 99 ? '99+' : String(chatStore.unreadTotal);
 });
 
-// Số tin chưa đọc hiện trên icon app ở màn hình chính (shell mobile không có chuông thông báo như desktop).
-watch(() => chatStore.unreadTotal, (count) => setAppBadgeCount(count), { immediate: true });
+// Số trên icon app khớp chuông thông báo (desktop cũng đếm thông báo, không đếm từng tin chat).
+const { unreadCount: notificationUnreadCount } = useEmployeeNotificationInbox();
+watch(notificationUnreadCount, (count) => setAppBadgeCount(count), { immediate: true });
 
 const chatHeaderAria = computed(() =>
   chatStore.unreadTotal > 0

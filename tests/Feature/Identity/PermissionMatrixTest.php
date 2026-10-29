@@ -162,6 +162,54 @@ class PermissionMatrixTest extends TestCase
         ]);
     }
 
+    public function test_reserved_exception_unlocks_only_the_listed_role(): void
+    {
+        $this->seed(RoleSeeder::class);
+        config([
+            'permissions.reserved_exceptions' => [
+                'permissions.manage' => ['admin'],
+            ],
+        ]);
+
+        $member = $this->service()->cellFor('member', 'permissions.manage', 'global', null);
+        $admin = $this->service()->cellFor('admin', 'permissions.manage', 'global', null);
+
+        $this->assertTrue($member['reserved']);
+        $this->assertFalse($admin['reserved']);
+
+        $this->service()->setGrant('admin', 'permissions.manage', true, 'global', null, 1);
+        $this->assertDatabaseHas('permission_grants', [
+            'role_code' => 'admin',
+            'permission_key' => 'permissions.manage',
+        ]);
+
+        $this->expectException(PermissionKeyReserved::class);
+        $this->service()->setGrant('member', 'permissions.manage', true, 'global', null, 1);
+    }
+
+    public function test_wildcard_grant_does_not_mark_child_key_as_its_own_override(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $this->service()->setGrant('member', 'project.*', false, 'global', null, 1);
+
+        $child = $this->service()->cellFor('member', 'project.view', 'global', null);
+        $wildcard = $this->service()->cellFor('member', 'project.*', 'global', null);
+
+        $this->assertTrue($child['default']);
+        $this->assertFalse($child['effective']);
+        $this->assertNull($child['global_override']);
+        $this->assertFalse($child['baseline']);
+        $this->assertFalse($wildcard['global_override']);
+
+        $this->service()->setGrant('member', 'project.view', true, 'global', null, 1);
+        $child = $this->service()->cellFor('member', 'project.view', 'global', null);
+
+        $this->assertTrue($child['effective']);
+        $this->assertTrue($child['global_override']);
+        $this->assertFalse($child['baseline']);
+    }
+
     // ------------------------------------------------------------------
     // super_admin bypass
     // ------------------------------------------------------------------
@@ -343,6 +391,14 @@ class PermissionMatrixTest extends TestCase
 
         $this->expectException(ScopeNotFound::class);
         $this->service()->setGrant('member', 'task.delegate', true, 'team', 999999, 1);
+    }
+
+    public function test_department_scope_with_nonexistent_id_is_rejected_by_service(): void
+    {
+        $this->seed(RoleSeeder::class);
+
+        $this->expectException(ScopeNotFound::class);
+        $this->service()->setGrant('member', 'task.delegate', true, 'department', 999999, 1);
     }
 
     public function test_put_grants_rejects_nonexistent_team_scope_id_with_422(): void

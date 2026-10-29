@@ -10,6 +10,7 @@
 @import './employee-mobile-shell/safe-area.css';
 @import './employee-mobile-shell/chat.css';
 @import './employee-mobile-shell/birthday-greeting.css';
+@import './employee-mobile-shell/notifications.css';
 
 /* Be Vietnam Pro self-host — tránh Google Fonts (render-blocking) trên mobile/PWA audit */
 @font-face {

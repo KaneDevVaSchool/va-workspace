@@ -345,8 +345,9 @@ return [
     |--------------------------------------------------------------------------
     | Reserved keys — chỉ super_admin, không thể grant qua UI cho role khác
     |--------------------------------------------------------------------------
-    | PermissionService::isReserved($key) trả true nếu key match bất kỳ pattern
-    | nào dưới đây. UI /superadmin/permissions phải ẩn/block các keys này.
+    | PermissionService::isReserved($key, $role) trả true nếu key khớp pattern
+    | và role không nằm trong reserved_exceptions của đúng key đó.
+    | UI /superadmin/permissions khoá các key này theo từng vai trò.
     |
     | Ngoại lệ được quản lý trong 'reserved_exceptions' bên dưới.
     */

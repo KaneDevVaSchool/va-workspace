@@ -17,9 +17,8 @@ import { showClientToast } from '../lib/clientToast';
 import {
     EMPLOYEE_SHELL_BLOCK_MESSAGE,
     EMPLOYEE_SHELL_BLOCK_TOAST_KEY,
-    isEmployeeMobileShellPath,
-    isEmployeeShellGuestPath,
     isEmployeeShellRestrictedContext,
+    resolveEmployeeShellViewportRouteSync,
 } from '../lib/employeeMobileShellRoutes';
 
 /**
@@ -234,27 +233,17 @@ router.beforeEach(async (to) => {
         }
     }
 
-    if (
-        to.name === 'home'
-        && isEmployeeShellRestrictedContext()
-        && auth.can('dashboard.view')
-    ) {
-        return { name: 'employee.feed' };
-    }
-
-    if (
-        isEmployeeShellRestrictedContext()
-        && auth.isAuthenticated
-        && auth.can('dashboard.view')
-        && !isEmployeeMobileShellPath(to.path)
-        && !isEmployeeShellGuestPath(to.path)
-    ) {
-        try {
-            sessionStorage.setItem(EMPLOYEE_SHELL_BLOCK_TOAST_KEY, '1');
-        } catch {
-            // sessionStorage có thể bị chặn
+    const shellViewportSync = resolveEmployeeShellViewportRouteSync(to, auth);
+    if (shellViewportSync) {
+        if (shellViewportSync.desktopOnlyToast) {
+            try {
+                sessionStorage.setItem(EMPLOYEE_SHELL_BLOCK_TOAST_KEY, '1');
+            } catch {
+                // sessionStorage có thể bị chặn
+            }
         }
-        return { name: 'employee.feed' };
+        const { desktopOnlyToast, ...nav } = shellViewportSync;
+        return { ...nav, replace: true };
     }
 
     if (to.query.vaDesktopOnly === '1') {

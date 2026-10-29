@@ -12,6 +12,7 @@ import EmployeePwaLogoClip from '../components/EmployeePwaLogoClip.vue';
 import { EMPLOYEE_HISTORY_UTILITIES, isHistoryUtilityId } from '../constants/employeeHistoryUtilities.js';
 import { preloadEmployeePwaLogos } from '../constants/employeePwaBrandVisuals.js';
 import { buildAttendanceMonth } from '../lib/employeeAttendanceHistory';
+import { groupItemsByWeek, parseIsoDate } from '../lib/employeeHistoryWeek';
 import { readEmployeeAttendanceLog } from '../lib/employeeAttendanceSession';
 
 const LEAVE_FILTERS = [
@@ -43,6 +44,10 @@ const filteredLeaveRequests = computed(() => {
   return requests.value.filter((row) => row.status === leaveFilter.value);
 });
 
+const leaveWeekGroups = computed(() =>
+  groupItemsByWeek(filteredLeaveRequests.value, (row) => row.sortDate ?? null),
+);
+
 const leaveFilterCounts = computed(() => {
   const counts = { all: requests.value.length };
   for (const row of requests.value) {
@@ -69,9 +74,7 @@ function refreshHubAttendanceCount() {
     new Date(now.getFullYear(), now.getMonth(), 1),
     readEmployeeAttendanceLog(),
   );
-  hubAttendanceDays.value = model.rows.filter(
-    (row) => row.kind === 'work' && !row.sample,
-  ).length;
+  hubAttendanceDays.value = model.stats.recorded;
 }
 
 async function loadHubLeaveCount() {
@@ -212,8 +215,12 @@ function mapLeaveRow(row, index) {
   const dateTo =
     row.date_to && row.date_to !== row.date_from ? formatDateOnly(row.date_to) : '';
 
+  const sortSource = row.date_from ?? row.submitted_at ?? row.created_at;
+  const sortDate = parseIsoDate(sortSource);
+
   return {
     id: row.uuid ?? `leave-${index}`,
+    sortDate,
     kind: row.leave_type_name ?? 'Nghỉ phép',
     leaveTypeCode: String(row.leave_type_code ?? '').trim(),
     submittedAt: formatDateOnly(row.submitted_at ?? row.created_at),
@@ -396,32 +403,45 @@ onBeforeUnmount(() => {
           <p v-if="filteredLeaveRequests.length === 0" class="requests-state">
             Không có đơn ở trạng thái này.
           </p>
-          <ul v-else class="requests-list">
-        <li v-for="req in filteredLeaveRequests" :key="req.id">
-          <button
-            type="button"
-            class="request-row"
-            :class="`request-row--${req.status}`"
-            @click="openDetail(req)"
-          >
-            <span class="request-row__body">
-              <span class="request-row__line">
-                <span class="request-row__kind">{{ req.kind }}</span>
-                <span class="request-row__badge" :data-status="req.status">
-                  {{ req.statusLabel }}
-                </span>
-              </span>
-              <span class="request-row__range">{{ req.range }}</span>
-              <span class="request-row__sub">
-                {{ req.submittedAt }}
-                <template v-if="req.totalDays > 0"> · {{ req.totalDays }} ngày</template>
-                <template v-if="req.approver"> · {{ req.approver.name }}</template>
-              </span>
-            </span>
-            <AppIcon name="chevronRight" :size="18" class="request-row__chev" aria-hidden="true" />
-          </button>
-        </li>
-          </ul>
+          <div v-else class="requests-weeks">
+            <section
+              v-for="group in leaveWeekGroups"
+              :key="group.key"
+              class="requests-week"
+              :aria-label="`Tuần ${group.weekNum}`"
+            >
+              <header class="requests-week__head">
+                <span class="requests-week__title">Tuần {{ group.weekNum }}</span>
+                <span class="requests-week__range">{{ group.label }}</span>
+              </header>
+              <ul class="requests-list">
+                <li v-for="req in group.items" :key="req.id">
+                  <button
+                    type="button"
+                    class="request-row"
+                    :class="`request-row--${req.status}`"
+                    @click="openDetail(req)"
+                  >
+                    <span class="request-row__body">
+                      <span class="request-row__line">
+                        <span class="request-row__kind">{{ req.kind }}</span>
+                        <span class="request-row__badge" :data-status="req.status">
+                          {{ req.statusLabel }}
+                        </span>
+                      </span>
+                      <span class="request-row__range">{{ req.range }}</span>
+                      <span class="request-row__sub">
+                        {{ req.submittedAt }}
+                        <template v-if="req.totalDays > 0"> · {{ req.totalDays }} ngày</template>
+                        <template v-if="req.approver"> · {{ req.approver.name }}</template>
+                      </span>
+                    </span>
+                    <AppIcon name="chevronRight" :size="18" class="request-row__chev" aria-hidden="true" />
+                  </button>
+                </li>
+              </ul>
+            </section>
+          </div>
         </template>
       </template>
     </template>
@@ -697,6 +717,38 @@ onBeforeUnmount(() => {
 
 .requests-state--error {
   color: var(--color-primary);
+}
+
+.requests-weeks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.requests-week {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.requests-week__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+}
+
+.requests-week__title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.requests-week__range {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .requests-list {

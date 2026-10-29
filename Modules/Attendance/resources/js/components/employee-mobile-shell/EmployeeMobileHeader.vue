@@ -7,6 +7,7 @@
 //
 import { computed } from "vue";
 import AppIcon from "@/components/AppIcon.vue";
+import EmployeeMobileNotifications from "./EmployeeMobileNotifications.vue";
 
 const props = defineProps({
     isHome: { type: Boolean, default: false },
@@ -190,6 +191,7 @@ const searchModel = computed({
                             }"
                         />
                     </button>
+                    <EmployeeMobileNotifications />
                     <button
                         v-if="!hideChatShortcut"
                         type="button"
