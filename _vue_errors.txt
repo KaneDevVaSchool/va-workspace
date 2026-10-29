@@ -1,8 +1,0 @@
-[
-  {
-    "message": "Element is missing end tag.",
-    "code": 24,
-    "line": 2,
-    "column": 3
-  }
-]
