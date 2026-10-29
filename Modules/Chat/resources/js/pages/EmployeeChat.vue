@@ -24,9 +24,7 @@ async function openUserFromQuery(rawUserId) {
   const id = Number(rawUserId);
   if (!Number.isFinite(id) || id < 1) return;
   try {
-    if (store.conversations.length === 0) {
-      await store.fetchConversations();
-    }
+    await store.fetchConversations();
     await store.openWithUser(id);
   } catch {
     store.panelOpen = true;
@@ -38,9 +36,7 @@ async function openConversationFromQuery(rawConversationId) {
   const id = Number(rawConversationId);
   if (!Number.isFinite(id) || id < 1) return;
   try {
-    if (store.conversations.length === 0) {
-      await store.fetchConversations();
-    }
+    await store.fetchConversations();
     await store.openConversationView(id);
   } catch {
     store.panelOpen = true;

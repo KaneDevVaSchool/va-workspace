@@ -33,9 +33,7 @@ watch(
     const id = Number(value);
     if (!Number.isFinite(id) || id < 1) return;
     try {
-      if (store.conversations.length === 0) {
-        await store.fetchConversations();
-      }
+      await store.fetchConversations();
       await store.openConversationView(id);
     } catch {
       store.panelOpen = true;

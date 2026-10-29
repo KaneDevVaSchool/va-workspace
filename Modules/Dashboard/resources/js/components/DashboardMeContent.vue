@@ -5,11 +5,9 @@ import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import DashboardSkeleton from './DashboardSkeleton.vue';
-import DonutChart from './DonutChart.vue';
 import MyTaskTable from './MyTaskTable.vue';
 import KpiCard from './KpiCard.vue';
 import QuickUtilitiesGrid from './QuickUtilitiesGrid.vue';
-import { statusColor } from '../utils/chartColors';
 import { asList, asRecord } from '../utils/dashboardPayload';
 
 const props = defineProps({
@@ -134,17 +132,6 @@ const activeStatusLabel = computed(() => {
   return taskStatusLabels[statusFilter.value] ?? statusFilter.value;
 });
 
-const workStatusDonutData = computed(() => {
-  const breakdown = asRecord(props.overview?.tasks_status_breakdown);
-  if (!breakdown) return { labels: [], series: [] };
-  const labels = Object.keys(breakdown).map((key) => ({
-    value: key,
-    label: taskStatusLabels[key] ?? key,
-    color: statusColor(key),
-  }));
-  return { labels, series: Object.values(breakdown) };
-});
-
 const allTasks = computed(() => asList(props.overview?.tasks));
 
 const filteredTasks = computed(() => {
@@ -184,18 +171,17 @@ const hasActiveFilters = computed(
   () => Boolean(statusFilter.value || quickFilter.value || taskSearch.value.trim()),
 );
 
+const quickFilterLabel = computed(() => {
+  const chip = heroQuickFilters.value.find((item) => item.key === quickFilter.value);
+  return chip?.label ?? null;
+});
+
 const overdueCount = computed(() => props.overview?.kpis?.overdue_tasks_count ?? 0);
 
 function clearAllFilters() {
   statusFilter.value = null;
   quickFilter.value = null;
   taskSearch.value = '';
-}
-
-function toggleStatus(value) {
-  if (props.preview) return;
-  quickFilter.value = null;
-  statusFilter.value = statusFilter.value === value ? null : value;
 }
 
 function toggleQuickFilter(key) {
@@ -250,13 +236,10 @@ async function onAcceptTask(task) {
     }"
   >
     <section class="dashboard-me__hero">
-      <div class="dashboard-me__hero-orbs" aria-hidden="true" />
       <div class="dashboard-me__hero-copy">
-        <p class="dashboard-me__hero-kicker">
-          <span>{{ greeting }}, {{ displayName }}</span>
-          <span class="dashboard-me__hero-date">{{ todayLabel }}</span>
-        </p>
-        <h2 class="dashboard-me__hero-title">Hôm nay bạn tập trung vào việc gì?</h2>
+        <p class="dashboard-me__hero-kicker">{{ todayLabel }}</p>
+        <h2 class="dashboard-me__hero-title">{{ greeting }}, {{ displayName }}</h2>
+        <p class="dashboard-me__hero-lead">Hôm nay bạn tập trung vào việc gì?</p>
         <div class="dashboard-me__hero-actions">
           <button
             v-for="chip in heroQuickFilters"
@@ -278,7 +261,7 @@ async function onAcceptTask(task) {
         <div v-if="hasActiveFilters" class="dashboard-me__filter-chip">
           <AppIcon name="sliders" :size="14" />
           <span v-if="activeStatusLabel">Trạng thái: {{ activeStatusLabel }}</span>
-          <span v-else-if="quickFilter">Bộ lọc nhanh đang bật</span>
+          <span v-else-if="quickFilterLabel">{{ quickFilterLabel }}</span>
           <span v-else-if="taskSearch.trim()">Tìm: «{{ taskSearch.trim() }}»</span>
           <button
             type="button"
@@ -324,46 +307,6 @@ async function onAcceptTask(task) {
       </div>
     </section>
 
-    <section class="dashboard-me__panel dashboard-me__panel--utilities dashboard-me__panel--accent-gold">
-      <div class="dashboard-me__panel-head dashboard-me__panel-head--row">
-        <div>
-          <h2>Tiện ích nhanh</h2>
-          <p class="dashboard-me__panel-sub">Lối tắt tới công cụ thường dùng</p>
-        </div>
-        <AppIcon name="sparkles" :size="18" class="dashboard-me__panel-accent-icon" aria-hidden="true" />
-      </div>
-      <QuickUtilitiesGrid
-        :items="utilities"
-        :loading="utilitiesLoading"
-        :preview="preview"
-        :active-key="activeUtilityKey"
-        @select="onUtilitySelect"
-      />
-    </section>
-
-    <section class="dashboard-me__panel dashboard-me__panel--shortcuts dashboard-me__panel--accent-primary">
-      <div class="dashboard-me__panel-head">
-        <h2>Đi tới nhanh</h2>
-        <p class="dashboard-me__panel-sub">Chấm công, bảng tin, trò chuyện và hồ sơ</p>
-      </div>
-      <ul class="dashboard-me__shortcuts">
-        <li v-for="link in quickLinks" :key="link.route">
-          <button
-            type="button"
-            class="dashboard-me__shortcut"
-            :class="`dashboard-me__shortcut--${link.tone}`"
-            :disabled="preview"
-            @click="goQuickLink(link.route)"
-          >
-            <span class="dashboard-me__shortcut-icon" aria-hidden="true">
-              <AppIcon :name="link.icon" :size="20" />
-            </span>
-            <span class="dashboard-me__shortcut-label">{{ link.label }}</span>
-          </button>
-        </li>
-      </ul>
-    </section>
-
     <div class="dashboard-me__kpis">
       <KpiCard
         label="Tổng công việc"
@@ -396,27 +339,55 @@ async function onAcceptTask(task) {
       />
     </div>
 
-    <div class="dashboard-me__grid">
-      <section class="dashboard-me__panel dashboard-me__panel--donut dashboard-me__panel--accent-tertiary">
-        <div class="dashboard-me__panel-head">
-          <h2>Công việc theo trạng thái</h2>
-          <p class="dashboard-me__panel-sub">Nhấn vào lát biểu đồ để lọc danh sách</p>
+    <div class="dashboard-me__tools">
+      <section class="dashboard-me__panel dashboard-me__panel--utilities dashboard-me__panel--accent-gold">
+        <div class="dashboard-me__panel-head dashboard-me__panel-head--row">
+          <div>
+            <h2>Tiện ích nhanh</h2>
+            <p class="dashboard-me__panel-sub">Lối tắt tới công cụ thường dùng</p>
+          </div>
+          <AppIcon name="sparkles" :size="18" class="dashboard-me__panel-accent-icon" aria-hidden="true" />
         </div>
-        <DashboardSkeleton v-if="overviewLoading" height="240px" />
-        <DonutChart
-          v-else
-          :labels="workStatusDonutData.labels"
-          :series="workStatusDonutData.series"
-          :selected="statusFilter"
-          @select="toggleStatus"
+        <QuickUtilitiesGrid
+          :items="utilities"
+          :loading="utilitiesLoading"
+          :preview="preview"
+          :active-key="activeUtilityKey"
+          @select="onUtilitySelect"
         />
       </section>
 
-      <section class="dashboard-me__panel dashboard-me__panel--table dashboard-me__panel--accent-secondary">
+      <section class="dashboard-me__panel dashboard-me__panel--shortcuts dashboard-me__panel--accent-primary">
+        <div class="dashboard-me__panel-head">
+          <h2>Đi tới nhanh</h2>
+          <p class="dashboard-me__panel-sub">Chấm công, bảng tin, trò chuyện và hồ sơ</p>
+        </div>
+        <ul class="dashboard-me__shortcuts">
+          <li v-for="link in quickLinks" :key="link.route">
+            <button
+              type="button"
+              class="dashboard-me__shortcut"
+              :class="`dashboard-me__shortcut--${link.tone}`"
+              :disabled="preview"
+              @click="goQuickLink(link.route)"
+            >
+              <span class="dashboard-me__shortcut-icon" aria-hidden="true">
+                <AppIcon :name="link.icon" :size="18" />
+              </span>
+              <span class="dashboard-me__shortcut-label">{{ link.label }}</span>
+            </button>
+          </li>
+        </ul>
+      </section>
+    </div>
+
+    <section class="dashboard-me__panel dashboard-me__panel--table dashboard-me__panel--accent-secondary">
         <div class="dashboard-me__panel-head dashboard-me__panel-head--row">
           <div class="dashboard-me__panel-head-main">
-            <h2>Danh sách công việc</h2>
-            <p v-if="activeStatusLabel" class="dashboard-me__panel-sub">Chỉ hiển thị: {{ activeStatusLabel }}</p>
+            <div class="dashboard-me__panel-title">
+              <h2>Danh sách công việc</h2>
+              <p v-if="activeStatusLabel" class="dashboard-me__panel-sub">Chỉ hiển thị: {{ activeStatusLabel }}</p>
+            </div>
             <label class="dashboard-me__task-search">
               <AppIcon name="search" :size="16" class="dashboard-me__task-search-icon" aria-hidden="true" />
               <input
@@ -449,8 +420,7 @@ async function onAcceptTask(task) {
           :accepting-task-id="acceptingTaskId"
           @accept-task="onAcceptTask"
         />
-      </section>
-    </div>
+    </section>
   </div>
 </template>
 
@@ -461,10 +431,7 @@ async function onAcceptTask(task) {
   gap: var(--space-4);
   padding: var(--space-4);
   max-width: 100%;
-  background:
-    radial-gradient(ellipse 85% 55% at 0% 0%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 58%),
-    radial-gradient(ellipse 70% 45% at 100% 100%, color-mix(in srgb, var(--color-secondary) 8%, transparent), transparent 52%),
-    var(--color-primary-surface);
+  background: var(--color-surface-muted);
   border-radius: var(--radius-lg);
 }
 
@@ -486,54 +453,26 @@ async function onAcceptTask(task) {
 .dashboard-me__hero {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1.45fr) minmax(16rem, 0.7fr);
+  gap: var(--space-5);
+  align-items: center;
   padding: var(--space-5);
-  border-radius: var(--radius-xl);
-  overflow: hidden;
-  background:
-    radial-gradient(ellipse 80% 120% at 100% 0%, rgba(255, 255, 255, 0.22) 0%, transparent 55%),
-    linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-700) 48%, var(--color-secondary) 100%);
-  color: #fff;
-  box-shadow: var(--shadow-md);
+  padding-left: calc(var(--space-5) + 0.35rem);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
 }
 
 .dashboard-me__hero::before {
   content: '';
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 0.45rem;
-  background: color-mix(in srgb, var(--color-gold) 78%, var(--color-on-primary));
-}
-
-.dashboard-me__hero-orbs {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.dashboard-me__hero-orbs::before,
-.dashboard-me__hero-orbs::after {
-  content: '';
-  position: absolute;
-  border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.dashboard-me__hero-orbs::before {
-  width: 12rem;
-  height: 12rem;
-  top: -3rem;
-  right: 8%;
-}
-
-.dashboard-me__hero-orbs::after {
-  width: 7rem;
-  height: 7rem;
-  bottom: -2rem;
-  left: 42%;
-  background: rgba(255, 255, 255, 0.06);
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-primary);
 }
 
 .dashboard-me__hero-copy {
@@ -542,26 +481,22 @@ async function onAcceptTask(task) {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding-left: var(--space-2);
+  min-width: 0;
 }
 
 .dashboard-me__hero-kicker {
   margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 0.65rem;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  opacity: 0.92;
+  color: var(--color-text-muted);
+  text-transform: capitalize;
 }
 
-.dashboard-me__hero-date {
-  font-size: 0.75rem;
-  font-weight: 500;
-  opacity: 0.82;
-  text-transform: capitalize;
+.dashboard-me__hero-lead {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
 }
 
 .dashboard-me__hero-actions {
@@ -578,54 +513,74 @@ async function onAcceptTask(task) {
   padding: 0.35rem 0.65rem;
   border: none;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.14);
-  color: inherit;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
   font-family: inherit;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .dashboard-me__hero-chip:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.22);
   transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px var(--color-border-strong), var(--shadow-sm);
+}
+
+.dashboard-me__hero-chip--info {
+  background: var(--color-info-tint-bg);
+  color: var(--color-info-tint-fg);
+}
+
+.dashboard-me__hero-chip--danger {
+  background: var(--color-danger-tint-bg);
+  color: var(--color-danger-tint-fg);
+}
+
+.dashboard-me__hero-chip--gold {
+  background: var(--color-gold-surface);
+  color: var(--color-gold-800);
+}
+
+.dashboard-me__hero-chip--tertiary {
+  background: var(--color-tertiary-surface);
+  color: var(--color-tertiary-800);
 }
 
 .dashboard-me__hero-chip--active {
-  background: rgba(255, 255, 255, 0.28);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
-}
-
-.dashboard-me__hero-chip--danger.dashboard-me__hero-chip--active {
-  background: color-mix(in srgb, var(--color-danger) 35%, rgba(255, 255, 255, 0.2));
+  box-shadow: inset 0 0 0 1.5px currentColor;
 }
 
 .dashboard-me__hero-chip-value {
   min-width: 1.25rem;
-  padding: 0.05rem 0.35rem;
+  padding: 0.05rem 0.4rem;
   border-radius: var(--radius-full);
-  background: rgba(0, 0, 0, 0.15);
-  font-size: 0.625rem;
+  background: var(--color-surface);
+  font-size: 0.6875rem;
   font-weight: 800;
   text-align: center;
 }
 
 .dashboard-me__hero-title {
   margin: 0;
-  font-size: clamp(1.25rem, 2vw, 1.625rem);
-  font-weight: 800;
-  line-height: 1.25;
+  font-size: clamp(1.375rem, 2vw, 1.75rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
 }
 
 .dashboard-me__filter-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  margin-top: var(--space-2);
-  padding: 0.35rem 0.5rem 0.35rem 0.65rem;
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  padding: 0.3rem 0.45rem 0.3rem 0.65rem;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--color-primary-surface);
+  color: var(--color-primary-900);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -638,8 +593,8 @@ async function onAcceptTask(task) {
   padding: 0;
   border: none;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.2);
-  color: inherit;
+  background: var(--color-surface);
+  color: var(--color-primary);
   cursor: pointer;
 }
 
@@ -650,6 +605,9 @@ async function onAcceptTask(task) {
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
 }
 
 .dashboard-me__ring {
@@ -667,13 +625,13 @@ async function onAcceptTask(task) {
 
 .dashboard-me__ring-track {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.22);
+  stroke: var(--color-border);
   stroke-width: 10;
 }
 
 .dashboard-me__ring-fill {
   fill: none;
-  stroke: color-mix(in srgb, var(--color-gold) 55%, var(--color-on-primary));
+  stroke: var(--color-primary);
   stroke-width: 10;
   stroke-linecap: round;
   stroke-dasharray: 326.7;
@@ -696,8 +654,9 @@ async function onAcceptTask(task) {
 
 .dashboard-me__ring-value {
   font-size: 1.125rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.1;
+  color: var(--color-text);
 }
 
 .dashboard-me__ring-label {
@@ -705,7 +664,7 @@ async function onAcceptTask(task) {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  opacity: 0.85;
+  color: var(--color-text-muted);
 }
 
 .dashboard-me__hero-metrics {
@@ -724,23 +683,31 @@ async function onAcceptTask(task) {
   gap: 2px;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .dashboard-me__metric-value {
   font-size: 1.25rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.1;
+  color: var(--color-text);
 }
 
 .dashboard-me__metric-label {
   font-size: 0.6875rem;
   font-weight: 600;
-  opacity: 0.88;
+  color: var(--color-text-muted);
 }
 
 .dashboard-me__metric--warn {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--color-danger-tint-bg);
+  box-shadow: inset 0 0 0 1px var(--color-danger-tint-border);
+}
+
+.dashboard-me__metric--warn .dashboard-me__metric-value,
+.dashboard-me__metric--warn .dashboard-me__metric-label {
+  color: var(--color-danger-tint-fg);
 }
 
 .dashboard-me__panel {
@@ -755,7 +722,6 @@ async function onAcceptTask(task) {
 
 .dashboard-me__panel--accent-primary::before,
 .dashboard-me__panel--accent-secondary::before,
-.dashboard-me__panel--accent-tertiary::before,
 .dashboard-me__panel--accent-gold::before {
   content: '';
   position: absolute;
@@ -774,16 +740,8 @@ async function onAcceptTask(task) {
   background: var(--color-secondary);
 }
 
-.dashboard-me__panel--accent-tertiary::before {
-  background: var(--color-tertiary);
-}
-
 .dashboard-me__panel--accent-gold::before {
   background: var(--color-gold);
-}
-
-.dashboard-me__panel--utilities {
-  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-surface-muted) 140%);
 }
 
 .dashboard-me__panel-head {
@@ -828,18 +786,26 @@ async function onAcceptTask(task) {
 
 .dashboard-me__panel-head-main {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   min-width: 0;
   flex: 1;
+}
+
+.dashboard-me__panel-title {
+  min-width: 0;
 }
 
 .dashboard-me__task-search {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex: 1;
   max-width: 22rem;
-  padding: 0.35rem 0.65rem;
+  margin-left: auto;
+  padding: 0.4rem 0.7rem;
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 1px var(--color-border);
@@ -879,8 +845,8 @@ async function onAcceptTask(task) {
 }
 
 .dashboard-me__shortcuts {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: var(--space-2);
   list-style: none;
   margin: 0;
@@ -889,13 +855,14 @@ async function onAcceptTask(task) {
 
 .dashboard-me__shortcut {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: var(--space-2);
+  justify-content: flex-start;
+  gap: var(--space-3);
   width: 100%;
-  padding: var(--space-3) var(--space-2);
+  padding: 0.55rem var(--space-3);
   border: none;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 1px var(--color-border);
   font-family: inherit;
@@ -911,8 +878,9 @@ async function onAcceptTask(task) {
 .dashboard-me__shortcut-icon {
   display: grid;
   place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
   border-radius: var(--radius-md);
 }
 
@@ -942,10 +910,10 @@ async function onAcceptTask(task) {
 }
 
 .dashboard-me__shortcut-label {
-  font-size: 0.6875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-text);
-  text-align: center;
+  text-align: left;
   line-height: 1.25;
 }
 
@@ -955,9 +923,25 @@ async function onAcceptTask(task) {
   gap: var(--space-3);
 }
 
-.dashboard-me__grid {
+.dashboard-me__kpis :deep(.kpi-card) {
+  clip-path: none;
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
+}
+
+.dashboard-me__kpis :deep(.kpi-card::before) {
+  top: var(--space-2);
+  right: auto;
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  height: auto;
+  border-radius: 0;
+}
+
+.dashboard-me__tools {
   display: grid;
-  grid-template-columns: 5fr 7fr;
+  grid-template-columns: minmax(0, 1.6fr) minmax(16rem, 0.85fr);
   gap: var(--space-3);
   align-items: start;
 }
@@ -971,8 +955,34 @@ async function onAcceptTask(task) {
     justify-content: flex-start;
   }
 
-  .dashboard-me__grid {
+  .dashboard-me__tools {
     grid-template-columns: 1fr;
+  }
+
+  .dashboard-me__shortcuts {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .dashboard-me__shortcut {
+    flex-direction: column;
+    justify-content: center;
+    padding: var(--space-3) var(--space-2);
+  }
+
+  .dashboard-me__shortcut-label {
+    font-size: 0.6875rem;
+    text-align: center;
+  }
+
+  .dashboard-me__panel-head-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dashboard-me__task-search {
+    margin-left: 0;
+    max-width: none;
   }
 }
 
@@ -993,6 +1003,7 @@ async function onAcceptTask(task) {
 
   .dashboard-me__hero {
     padding: var(--space-4);
+    padding-left: calc(var(--space-4) + 0.35rem);
   }
 
   .dashboard-me__kpis {
@@ -1015,7 +1026,7 @@ async function onAcceptTask(task) {
 }
 
 .dashboard-me.dashboard-me--desktop-layout .dashboard-me__hero {
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.45fr) minmax(16rem, 0.7fr);
 }
 
 .dashboard-me.dashboard-me--desktop-layout .dashboard-me__hero-stats {
@@ -1026,7 +1037,34 @@ async function onAcceptTask(task) {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.dashboard-me.dashboard-me--desktop-layout .dashboard-me__grid {
-  grid-template-columns: 5fr 7fr;
+.dashboard-me.dashboard-me--desktop-layout .dashboard-me__tools {
+  grid-template-columns: minmax(0, 1.6fr) minmax(16rem, 0.85fr);
+}
+
+.dashboard-me.dashboard-me--desktop-layout .dashboard-me__shortcuts {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-me.dashboard-me--desktop-layout .dashboard-me__shortcut {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 0.55rem var(--space-3);
+}
+
+.dashboard-me.dashboard-me--desktop-layout .dashboard-me__shortcut-label {
+  font-size: 0.8125rem;
+  text-align: left;
+}
+
+.dashboard-me.dashboard-me--desktop-layout .dashboard-me__panel-head-main {
+  flex-direction: row;
+  align-items: center;
+}
+
+.dashboard-me.dashboard-me--desktop-layout .dashboard-me__task-search {
+  margin-left: auto;
+  max-width: 22rem;
 }
 </style>

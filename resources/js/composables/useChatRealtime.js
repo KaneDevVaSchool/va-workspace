@@ -1,6 +1,8 @@
 import { onBeforeUnmount, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 import { useChatStore } from '@modules/Chat/resources/js/store/chatStore';
+import { resetMessageFetchEpochs } from '@modules/Chat/resources/js/lib/chatMessageFetchEpoch';
 import { leaveAllEchoChannels } from '@/echo';
 import { onAppResume } from '@/lib/appResume';
 import { onSessionCleanup } from '@/lib/sessionCleanup';
@@ -13,6 +15,7 @@ onSessionCleanup(() => {
   window.clearInterval(presenceTimer);
   presenceTimer = null;
   leaveAllEchoChannels();
+  resetMessageFetchEpochs();
   useChatStore().$reset();
 });
 
@@ -23,6 +26,7 @@ onSessionCleanup(() => {
 export function useChatRealtime() {
   const auth = useAuthStore();
   const chatStore = useChatStore();
+  const route = useRoute();
 
   watch(
     () => auth.user?.id,
@@ -44,4 +48,37 @@ export function useChatRealtime() {
     chatStore.refreshAfterResume().catch(() => {});
   });
   onBeforeUnmount(stopResume);
+
+  // Metadata hội thoại đổi (inbox, fetch list, push) trong khi đang xem thread — kéo tin mới.
+  watch(
+    () => chatStore.conversations.map(
+      (item) => `${item.id}:${item.unread_count ?? 0}:${item.last_message?.id ?? 0}`,
+    ).join('|'),
+    () => {
+      chatStore.syncActiveConversationIfStale().catch(() => {});
+    },
+  );
+
+  // Deep link / tab chat (?chat, ?user) — không kích khi chỉ thêm ?thread= cho nút Back.
+  watch(
+    () => (
+      route.name === 'employee.chat'
+        ? `${route.query.chat ?? ''}|${route.query.user ?? ''}`
+        : ''
+    ),
+    (key, previous) => {
+      if (!key && !previous) return;
+      chatStore.fetchConversations().catch(() => {});
+    },
+  );
+
+  // Tab hiện lại < 30s (không kích appResume): vẫn sync thread đang mở.
+  if (typeof document !== 'undefined') {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      chatStore.syncActiveConversationIfStale().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisible));
+  }
 }

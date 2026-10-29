@@ -72,12 +72,11 @@ const canTogglePush = computed(() => {
   return configured.value && permission.value !== 'denied';
 });
 
-const pushStatusLabel = computed(() => {
-  if (iosNeedsInstall.value) return 'Thêm app vào Màn hình chính để nhận thông báo.';
-  if (permission.value === 'denied') return 'Trình duyệt đang chặn thông báo.';
-  if (vapidChecked.value && !configured.value) return 'Máy chủ chưa cấu hình thông báo đẩy.';
-  if (pushReady.value) return 'Đang bật trên máy này';
-  return 'Bật để nhận khi có hoạt động mới';
+const pushToggleLabel = computed(() => {
+  if (iosNeedsInstall.value) return 'Thêm app vào Màn hình chính để nhận thông báo trên máy này';
+  if (permission.value === 'denied') return 'Trình duyệt đang chặn thông báo trên máy này';
+  if (vapidChecked.value && !configured.value) return 'Máy chủ chưa cấu hình thông báo đẩy';
+  return pushReady.value ? 'Tắt thông báo trên máy này' : 'Bật thông báo trên máy này';
 });
 
 const bellLabel = computed(() => (
@@ -228,7 +227,23 @@ function togglePanel() {
           <div class="employee-notices__grabber" aria-hidden="true"></div>
           <header class="employee-notices__head">
             <div class="employee-notices__heading">
-              <h2 id="employee-notices-title" class="employee-notices__title">Thông báo</h2>
+              <div class="employee-notices__title-row">
+                <h2 id="employee-notices-title" class="employee-notices__title">Thông báo</h2>
+                <button
+                  v-if="showPushRow"
+                  type="button"
+                  class="employee-notices__switch"
+                  :class="{ 'employee-notices__switch--on': pushReady }"
+                  role="switch"
+                  :aria-checked="pushReady"
+                  :aria-label="pushToggleLabel"
+                  :disabled="!canTogglePush"
+                  :aria-busy="enabling"
+                  @click="onTogglePush"
+                >
+                  <span class="employee-notices__switch-thumb"></span>
+                </button>
+              </div>
               <p v-if="unreadCount > 0" class="employee-notices__sub">{{ unreadCount }} chưa đọc</p>
               <p v-else-if="rows.length > 0" class="employee-notices__sub">Bạn đã xem hết</p>
             </div>
@@ -252,30 +267,6 @@ function togglePanel() {
               </button>
             </div>
           </header>
-
-          <div v-if="showPushRow" class="employee-notices__push">
-            <span class="employee-notices__push-icon" aria-hidden="true">
-              <AppIcon name="bell" :size="16" :stroke-width="1.8" />
-            </span>
-            <span class="employee-notices__push-copy">
-              <span class="employee-notices__push-title">Thông báo trên máy</span>
-              <span class="employee-notices__push-hint">{{ pushStatusLabel }}</span>
-            </span>
-            <button
-              v-if="pushSupported"
-              type="button"
-              class="employee-notices__switch"
-              :class="{ 'employee-notices__switch--on': pushReady }"
-              role="switch"
-              :aria-checked="pushReady"
-              :aria-label="pushReady ? 'Tắt thông báo trên máy' : 'Bật thông báo trên máy'"
-              :disabled="!canTogglePush"
-              :aria-busy="enabling"
-              @click="onTogglePush"
-            >
-              <span class="employee-notices__switch-thumb"></span>
-            </button>
-          </div>
 
           <div
             class="employee-notices__list hide-scrollbar"
@@ -357,7 +348,7 @@ function togglePanel() {
                     <span class="employee-notices__name">{{ row.view.lead }}</span><span
                       v-if="row.view.inline"
                       class="employee-notices__action"
-                    > {{ row.view.inline }}</span>
+                    >{{ row.view.inline }}</span>
                   </span>
                   <span v-if="row.view.preview" class="employee-notices__preview">{{ row.view.preview }}</span>
                   <span v-if="row.timeLabel" class="employee-notices__time">{{ row.timeLabel }}</span>

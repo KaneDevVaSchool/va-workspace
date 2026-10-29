@@ -36,7 +36,6 @@ class MyDashboardProfileService
         'division_name' => ['label' => 'Bộ phận', 'type' => 'text'],
         'org_unit_name' => ['label' => 'Đơn vị', 'type' => 'text'],
         'profile_department_name' => ['label' => 'Phòng ban (hồ sơ)', 'type' => 'text'],
-        'org_unit_path' => ['label' => 'Đường dẫn đơn vị', 'type' => 'text'],
         'personnel_type' => ['label' => 'Loại nhân sự', 'type' => 'text'],
         'level_name' => ['label' => 'Cấp bậc', 'type' => 'text'],
         'hired_at' => ['label' => 'Ngày vào làm', 'type' => 'date'],

@@ -44,14 +44,34 @@ const avatarInitial = computed(() => {
   return name.trim().charAt(0).toUpperCase() || '?';
 });
 
-const subtitle = computed(() => {
+const departmentDisplayName = computed(() => {
   const hrm = profile.value?.hrm;
   const ws = profile.value?.workspace;
-  const parts = [
-    hrm?.job_title,
-    hrm?.department_name || ws?.department_name,
-  ].filter(Boolean);
-  return parts.join(' · ');
+  return hrm?.department_name || hrm?.profile_department_name || ws?.department_name || null;
+});
+
+const divisionDisplayName = computed(() => {
+  const hrm = profile.value?.hrm;
+  if (filled(hrm?.division_name)) return hrm.division_name;
+  const orgUnit = hrm?.org_unit_name;
+  if (filled(orgUnit) && !labelsEqual(orgUnit, departmentDisplayName.value)) {
+    return orgUnit;
+  }
+  return null;
+});
+
+const orgUnitDisplayName = computed(() => {
+  const hrm = profile.value?.hrm;
+  const name = hrm?.org_unit_name;
+  if (!filled(name)) return null;
+  if (labelsEqual(name, departmentDisplayName.value)) return null;
+  if (labelsEqual(name, divisionDisplayName.value)) return null;
+  return name;
+});
+
+const subtitle = computed(() => {
+  const hrm = profile.value?.hrm;
+  return uniqueDisplayParts(hrm?.job_title, departmentDisplayName.value, divisionDisplayName.value).join(' · ');
 });
 
 /** Chỉ mã NS trên hero — email/mã/công ty nằm trong thẻ bên dưới. */
@@ -77,7 +97,8 @@ function isHeroDuplicate(value) {
   const code = hrm?.code || ws?.employee_code;
   const heroBits = [
     hrm?.job_title,
-    hrm?.department_name || ws?.department_name,
+    departmentDisplayName.value,
+    divisionDisplayName.value,
     displayName.value,
     code,
   ]
@@ -107,12 +128,11 @@ const personalRows = computed(() => {
 const orgGroupRows = computed(() => {
   const hrm = profile.value?.hrm;
   const ws = profile.value?.workspace;
-  const dept = hrm?.department_name || ws?.department_name;
   return [
     profileField('Công ty', hrm?.company_name || ws?.company_name, 'building'),
-    isHeroDuplicate(dept) ? null : profileField('Phòng ban', dept, 'building'),
-    profileField('Bộ phận', hrm?.division_name, 'users'),
-    profileField('Đơn vị', hrm?.org_unit_name, 'globe'),
+    profileField('Phòng ban', departmentDisplayName.value, 'building'),
+    profileField('Bộ phận', divisionDisplayName.value, 'users'),
+    profileField('Đơn vị', orgUnitDisplayName.value, 'globe'),
     profileField('Quản lý trực tiếp', directManagerLabel.value, 'userPlus'),
   ].filter(Boolean);
 });
@@ -138,26 +158,14 @@ const workGroupRows = computed(() => {
   ].filter(Boolean);
 });
 
-const orgExtraRows = computed(() => {
-  const hrm = profile.value?.hrm;
-  return [
-    profileField('Đường dẫn đơn vị', hrm?.org_unit_path, 'globe'),
-    profileField(
-      'Phòng ban (hồ sơ)',
-      hrm?.profile_department_name,
-      'building',
-    ),
-  ].filter(Boolean);
-});
-
 const subtitleChips = computed(() => {
   const hrm = profile.value?.hrm;
-  const ws = profile.value?.workspace;
-  return [
+  return uniqueDisplayParts(
     hrm?.job_title,
-    hrm?.department_name || ws?.department_name,
+    departmentDisplayName.value,
+    divisionDisplayName.value,
     filled(heroCode.value) ? `Mã ${heroCode.value}` : null,
-  ].filter(filled);
+  );
 });
 
 const profileBlocks = computed(() => {
@@ -183,17 +191,13 @@ const profileBlocks = computed(() => {
     });
   }
   const org = orgGroupRows.value;
-  const orgExtra = orgExtraRows.value;
-  if (org.length || orgExtra.length) {
+  if (org.length) {
     blocks.push({
       id: 'org',
       title: 'Tổ chức',
       icon: 'building',
       accent: 'primary',
-      groups: [
-        org.length ? { title: 'Phân công', rows: org } : null,
-        orgExtra.length ? { title: 'Chi tiết đơn vị', rows: orgExtra } : null,
-      ].filter(Boolean),
+      groups: [{ title: 'Phân công', rows: org }],
     });
   }
   const work = workGroupRows.value;
@@ -229,7 +233,6 @@ const editableFieldGroups = computed(() => {
     'division_name',
     'org_unit_name',
     'profile_department_name',
-    'org_unit_path',
   ]);
   const groups = [
     { id: 'personal', title: 'Thông tin cá nhân', keys: personalKeys },
@@ -266,6 +269,25 @@ const hrmMissing = computed(() => !loading.value && profile.value && !profile.va
 
 function filled(value) {
   return value !== null && value !== undefined && String(value).trim() !== '';
+}
+
+function labelsEqual(a, b) {
+  if (!filled(a) || !filled(b)) return false;
+  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+}
+
+/** Các nhãn hiển thị trên hero — bỏ trùng (không phân biệt hoa thường). */
+function uniqueDisplayParts(...values) {
+  const seen = new Set();
+  const out = [];
+  for (const value of values) {
+    if (!filled(value)) continue;
+    const key = String(value).trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(String(value).trim());
+  }
+  return out;
 }
 
 function formatGender(value) {

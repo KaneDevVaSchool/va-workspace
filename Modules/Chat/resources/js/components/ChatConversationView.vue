@@ -711,6 +711,19 @@ function readLabel(message) {
   return `Đã xem ${count}/${groupReadOthersCount()}`;
 }
 
+function readFaces(message) {
+  const members = store.activeConversation?.members || [];
+  const byId = new Map(members.map((user) => [user.id, user]));
+  return (message.reads || []).slice(0, 3).map((reader) => {
+    const member = byId.get(reader.id);
+    return {
+      id: reader.id,
+      name: reader.name || member?.name || 'Đồng nghiệp',
+      avatar_url: reader.avatar_url ?? member?.avatar_url ?? null,
+    };
+  });
+}
+
 function showReaders(message) {
   readersFor.value = message;
 }
@@ -759,10 +772,9 @@ async function runSearch() {
 
 function jumpToHit(message) {
   const id = store.activeConversationId;
-  const list = store.messagesByConversation[id] || [];
-  const known = list.some((item) => item.id === message.id);
+  const known = store.activeMessages.some((item) => item.id === message.id);
   if (!known && message.sender) {
-    store.messagesByConversation[id] = [...list, message].sort((left, right) => left.id - right.id);
+    store.upsertMessages(id, [message]);
   }
   searchOpen.value = false;
   nextTick(() => {
@@ -1212,11 +1224,12 @@ function onBubbleContextMenu(event) {
 function openReactionPicker(message, bubble) {
   if (!(bubble instanceof HTMLElement) || !canReact(message)) return;
   const rect = bubble.getBoundingClientRect();
-  const width = 268;
+  const width = 272;
+  const barHeight = 52;
+  const gap = 8;
   const left = Math.max(8, Math.min(rect.left + (rect.width - width) / 2, window.innerWidth - width - 8));
-  const barHeight = 48;
-  let top = rect.top - barHeight + 14;
-  if (top < 8) top = Math.min(rect.bottom - 12, window.innerHeight - barHeight - 8);
+  let top = rect.top - barHeight - gap;
+  if (top < 8) top = Math.min(rect.bottom + gap, window.innerHeight - barHeight - 8);
   reactionPicker.value = { id: message.id, message, top, left };
 }
 
@@ -1510,10 +1523,7 @@ function menuItems(message) {
             <span class="chat-bubble__meta">
               <span v-if="row.message.edited_at && !row.message.recalled_at">Đã sửa</span>
               <span>{{ formatTime(row.message.created_at) }}</span>
-              <button v-if="readLabel(row.message)" type="button" class="chat-read" @click="showReaders(row.message)">
-                {{ readLabel(row.message) }}
-              </button>
-              <span v-else-if="showRead(row.message)">Đã xem</span>
+              <span v-if="showRead(row.message)">Đã xem</span>
             </span>
           </div>
           <div v-if="reactionRows(row.message).length" class="chat-reactions">
@@ -1531,6 +1541,25 @@ function menuItems(message) {
               <span class="chat-reactions__count">{{ chip.count }}</span>
             </button>
           </div>
+          <button
+            v-if="readLabel(row.message)"
+            type="button"
+            class="chat-read"
+            :aria-label="readLabel(row.message)"
+            @click="showReaders(row.message)"
+          >
+            <span v-if="readFaces(row.message).length" class="chat-read__faces">
+              <ChatAvatar
+                v-for="reader in readFaces(row.message)"
+                :key="reader.id"
+                class="chat-read__face"
+                :src="reader.avatar_url"
+                :name="reader.name"
+                size="1.05rem"
+              />
+            </span>
+            <AppIcon v-else name="user" :size="14" :stroke-width="1.75" />
+          </button>
           <ChatLinkPreviewEmbed
             v-if="!row.message.recalled_at && row.message.message_type === 'text' && row.message.message"
             :text="row.message.message"
@@ -2387,10 +2416,13 @@ function menuItems(message) {
 }
 
 .chat-reactions {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
-  margin-top: -0.1rem;
+  gap: 0.2rem;
+  margin-top: -0.55rem;
+  padding-inline: 0.35rem;
 }
 
 .chat-bubble-row--mine .chat-reactions {
@@ -2400,24 +2432,34 @@ function menuItems(message) {
 .chat-reactions__chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
-  padding: 0.05rem 0.4rem 0.05rem 0.28rem;
+  gap: 0.2rem;
+  min-height: 1.5rem;
+  padding: 0.05rem 0.45rem 0.05rem 0.3rem;
   border: none;
   border-radius: var(--radius-full);
   background: var(--color-surface);
   color: var(--color-text);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  box-shadow:
+    0 3px 10px color-mix(in srgb, var(--color-tertiary-900) 12%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-border) 75%, transparent);
   cursor: pointer;
   font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chat-reactions__chip:active {
+  transform: scale(0.96);
 }
 
 .chat-reactions__chip--mine {
   background: var(--color-primary-surface);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
+  box-shadow:
+    0 3px 10px color-mix(in srgb, var(--color-primary) 16%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
 }
 
 .chat-reactions__emoji {
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   line-height: 1;
 }
 
@@ -2923,21 +2965,29 @@ function menuItems(message) {
 
 .chat-menu__react {
   display: flex;
-  gap: 0.1rem;
-  padding: 0.15rem 0.1rem 0.35rem;
-  margin-bottom: 0.2rem;
-  box-shadow: 0 1px 0 var(--color-border);
+  gap: 0.12rem;
+  margin: 0.15rem 0.2rem 0.4rem;
+  padding: 0.2rem 0.25rem;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
 }
 
 .chat-menu__emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 1 1 0;
-  height: 2rem;
+  height: 2.15rem;
   border: none;
-  border-radius: 8px;
+  border-radius: 999px;
   background: transparent;
-  font-size: 1.15rem;
+  font-size: 1.28rem;
   line-height: 1;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 140ms ease,
+    background 140ms ease;
 }
 
 .chat-menu__emoji--on,
@@ -2945,18 +2995,71 @@ function menuItems(message) {
   background: var(--color-primary-surface);
 }
 
+.chat-menu__emoji:active {
+  transform: scale(1.12);
+}
+
 .chat-react-bar {
   position: fixed;
   z-index: 90;
   display: flex;
-  gap: 0.1rem;
-  width: 16.75rem;
-  padding: 0.28rem 0.35rem;
+  align-items: center;
+  gap: 0.15rem;
+  width: 17rem;
+  padding: 0.3rem 0.4rem;
   border-radius: 999px;
   background: var(--color-surface);
   box-shadow:
-    inset 0 0 0 1px var(--color-border),
-    var(--shadow-lg);
+    0 12px 28px color-mix(in srgb, var(--color-tertiary-900) 18%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-border) 80%, transparent);
+  animation: chat-react-pop 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.chat-react-bar .chat-menu__emoji {
+  position: relative;
+  height: 2.5rem;
+  font-size: 1.45rem;
+}
+
+.chat-react-bar .chat-menu__emoji--on {
+  transform: translateY(-3px) scale(1.08);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+
+.chat-react-bar .chat-menu__emoji--on::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0.12rem;
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  transform: translateX(-50%);
+}
+
+.chat-react-bar .chat-menu__emoji--on:active {
+  transform: translateY(-1px) scale(1.02);
+}
+
+@keyframes chat-react-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-react-bar,
+  .chat-menu__emoji,
+  .chat-reactions__chip {
+    animation: none;
+    transition: none;
+  }
 }
 
 .chat-pin,
@@ -3242,13 +3345,36 @@ function menuItems(message) {
 }
 
 .chat-read {
+  align-self: flex-end;
   flex-shrink: 0;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  min-height: 1.15rem;
+  margin-top: 0.15rem;
   padding: 0;
-  font: inherit;
-  font-size: inherit;
-  font-weight: 600;
+  line-height: 0;
   color: var(--color-primary);
+}
+
+.chat-read :deep(.app-icon) {
+  width: 14px;
+  height: 14px;
+  max-width: none;
+}
+
+.chat-read__faces {
+  display: inline-flex;
+  align-items: center;
+}
+
+.chat-read__face {
+  box-shadow: 0 0 0 1.5px var(--color-surface);
+}
+
+.chat-read__face + .chat-read__face {
+  margin-left: -0.28rem;
 }
 
 .chat-voice {

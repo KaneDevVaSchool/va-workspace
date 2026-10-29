@@ -31,6 +31,14 @@ import {
   sendMessage as apiSendMessage,
   touchViewing,
 } from '../api/chatApi';
+import {
+  bumpMessageFetchEpoch,
+  isMessageFetchEpochCurrent,
+} from '../lib/chatMessageFetchEpoch';
+import {
+  conversationNeedsMessageSync,
+  mergeMessageLists,
+} from '../lib/chatMessageSync';
 
 function withLocalReaction(message, emoji, userId) {
   const rows = (message.reactions || []).map((row) => ({
@@ -164,6 +172,7 @@ export const useChatStore = defineStore('chat', {
         this.recomputeUnreadTotal();
         this.subscribeToAllConversations();
         this.subscribeInbox();
+        await this.syncActiveConversationIfStale();
       } finally {
         this.loadingConversations = false;
       }
@@ -364,11 +373,75 @@ export const useChatStore = defineStore('chat', {
       this.panelOpen = true;
       this.activeConversationId = conversationId;
       this.activeView = 'conversation';
-      if (!this.messagesByConversation[conversationId]) {
-        await this.fetchMessages(conversationId);
-      }
+      this.subscribeToConversation(conversationId);
+
+      await this.syncConversationMessages(conversationId, { force: true });
+
       await this.markRead(conversationId);
       touchViewing(conversationId).catch(() => {});
+    },
+
+    /**
+     * Đồng bộ tin một hội thoại với server (mở thread, deep link, sau fetchConversations…).
+     * @param {{ force?: boolean }} options force = luôn gọi API dù cache có vẻ đủ.
+     */
+    async syncConversationMessages(conversationId, { force = false } = {}) {
+      const cached = this.messagesByConversation[conversationId];
+      const conversation = this.conversations.find((item) => item.id === conversationId);
+      const empty = !Array.isArray(cached) || cached.length === 0;
+      const stale = conversationNeedsMessageSync(conversation, cached);
+
+      if (!force && !empty && !stale) return;
+
+      if (empty) {
+        await this.fetchMessages(conversationId);
+      } else {
+        await this.refreshLatestMessages(conversationId);
+      }
+    },
+
+    /** Thread đang mở nhưng last_message / unread không khớp cache. */
+    async syncActiveConversationIfStale() {
+      if (this.activeView !== 'conversation' || !this.activeConversationId) return;
+      const id = this.activeConversationId;
+      const conversation = this.conversations.find((item) => item.id === id);
+      const cached = this.messagesByConversation[id];
+      if (!conversationNeedsMessageSync(conversation, cached)) return;
+      await this.syncConversationMessages(id);
+    },
+
+    /**
+     * Prefetch nhẹ hội thoại có badge chưa đọc (metadata đã lệch cache) — sau resume / fetch list.
+     */
+    async syncUnreadConversationCaches({ limit = 6 } = {}) {
+      const activeId =
+        this.activeView === 'conversation' ? this.activeConversationId : null;
+      const candidates = this.conversations
+        .filter((item) => (item.unread_count ?? 0) > 0)
+        .filter((item) => conversationNeedsMessageSync(item, this.messagesByConversation[item.id]))
+        .filter((item) => item.id !== activeId)
+        .slice(0, limit);
+
+      await Promise.all(
+        candidates.map(async (item) => {
+          const cached = this.messagesByConversation[item.id];
+          if (Array.isArray(cached) && cached.length > 0) {
+            await this.refreshLatestMessages(item.id).catch(() => {});
+          } else {
+            await this.fetchMessages(item.id).catch(() => {});
+          }
+        }),
+      );
+    },
+
+    /** Gắn tin tìm kiếm / preview vào cache (không ghi đè bản server đã có). */
+    upsertMessages(conversationId, messages) {
+      if (!messages?.length) return;
+      const existing = this.messagesByConversation[conversationId] ?? [];
+      this.messagesByConversation = {
+        ...this.messagesByConversation,
+        [conversationId]: mergeMessageLists(existing, messages),
+      };
     },
 
     backToList() {
@@ -379,15 +452,25 @@ export const useChatStore = defineStore('chat', {
     },
 
     async fetchMessages(conversationId, beforeId = null) {
-      this.loadingMessages = true;
+      const epoch = bumpMessageFetchEpoch(conversationId);
+      const isInitialPage = beforeId == null;
+      if (isInitialPage) this.loadingMessages = true;
       try {
         const { messages, has_more: hasMore } = await listMessages(conversationId, beforeId);
+        if (!isMessageFetchEpochCurrent(conversationId, epoch)) return;
+        const page = messages.slice().reverse();
         const existing = this.messagesByConversation[conversationId] ?? [];
-        const merged = beforeId ? [...messages.slice().reverse(), ...existing] : messages.slice().reverse();
+        const merged = beforeId ? mergeMessageLists(page, existing) : mergeMessageLists(existing, page);
         this.messagesByConversation = { ...this.messagesByConversation, [conversationId]: merged };
-        this.hasMoreByConversation = { ...this.hasMoreByConversation, [conversationId]: hasMore };
+        if (isInitialPage) {
+          this.hasMoreByConversation = { ...this.hasMoreByConversation, [conversationId]: hasMore };
+        } else if (hasMore === false) {
+          this.hasMoreByConversation = { ...this.hasMoreByConversation, [conversationId]: false };
+        }
       } finally {
-        this.loadingMessages = false;
+        if (isInitialPage && isMessageFetchEpochCurrent(conversationId, epoch)) {
+          this.loadingMessages = false;
+        }
       }
     },
 
@@ -396,18 +479,18 @@ export const useChatStore = defineStore('chat', {
      * để tin sửa/thu hồi trong lúc mất kết nối cũng được cập nhật.
      */
     async refreshLatestMessages(conversationId) {
-      const { messages } = await listMessages(conversationId, null);
+      const epoch = bumpMessageFetchEpoch(conversationId);
+      const { messages, has_more: hasMore } = await listMessages(conversationId, null);
+      if (!isMessageFetchEpochCurrent(conversationId, epoch)) return;
       const latest = messages.slice().reverse();
-      const latestIds = new Set(latest.map((message) => message.id));
-      const oldestLatestId = Number(latest[0]?.id ?? 0);
       const existing = this.messagesByConversation[conversationId] ?? [];
-      const older = existing.filter(
-        (message) => !latestIds.has(message.id) && Number(message.id) < oldestLatestId,
-      );
       this.messagesByConversation = {
         ...this.messagesByConversation,
-        [conversationId]: [...older, ...latest],
+        [conversationId]: mergeMessageLists(existing, latest),
       };
+      if (typeof hasMore === 'boolean') {
+        this.hasMoreByConversation = { ...this.hasMoreByConversation, [conversationId]: hasMore };
+      }
     },
 
     /**
@@ -428,8 +511,9 @@ export const useChatStore = defineStore('chat', {
       }
 
       if (this.activeView === 'conversation' && this.activeConversationId) {
-        await this.refreshLatestMessages(this.activeConversationId).catch(() => {});
+        await this.syncConversationMessages(this.activeConversationId, { force: true }).catch(() => {});
       }
+      await this.syncUnreadConversationCaches().catch(() => {});
     },
 
     async sendMessage(conversationId, payload) {
@@ -512,12 +596,13 @@ export const useChatStore = defineStore('chat', {
     appendMessage(conversationId, message) {
       const existing = this.messagesByConversation[conversationId] ?? [];
       if (existing.some((m) => m.id === message.id)) {
+        this.replaceMessage(conversationId, message);
         this.settleOutbox(conversationId, message);
         return;
       }
       this.messagesByConversation = {
         ...this.messagesByConversation,
-        [conversationId]: [...existing, message],
+        [conversationId]: mergeMessageLists(existing, [message]),
       };
       this.syncLastMessage(conversationId, message, true);
       this.settleOutbox(conversationId, message);
@@ -529,6 +614,11 @@ export const useChatStore = defineStore('chat', {
         this.messagesByConversation = {
           ...this.messagesByConversation,
           [conversationId]: existing.map((m) => (m.id === message.id ? message : m)),
+        };
+      } else {
+        this.messagesByConversation = {
+          ...this.messagesByConversation,
+          [conversationId]: mergeMessageLists(existing, [message]),
         };
       }
       this.syncLastMessage(conversationId, message, false);
@@ -645,9 +735,13 @@ export const useChatStore = defineStore('chat', {
       if (!conversation?.id) return;
 
       const known = this.conversations.some((item) => item.id === conversation.id);
-      if (known && message?.id) return;
       if (known) {
         this.replaceConversation(conversation);
+        if (message?.id) {
+          this.handleIncomingMessage(conversation.id, message, { fromInbox: true });
+        } else {
+          void this.syncConversationMessages(conversation.id);
+        }
         return;
       }
 
