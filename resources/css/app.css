@@ -72,17 +72,28 @@ html {
   zoom: var(--app-scale);
 }
 
-/* Mobile / PWA: zoom 0.9 để lộ nền trắng body ở mép dưới viewport — tắt scale. */
+/* Mobile / PWA: không phóng to khi chụm tay, ấn đúp, hay nhấn giữ để sao chép. */
 @media (max-width: 768px) {
   html {
     zoom: 1;
-    /* manipulation: chặn zoom khi ấn đúp, vẫn pinch được. */
-    touch-action: manipulation;
+    touch-action: pan-x pan-y;
   }
 
   body,
   body * {
-    touch-action: manipulation;
+    touch-action: pan-x pan-y;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  select,
+  [contenteditable='true'] {
+    -webkit-user-select: text;
+    user-select: text;
+    font-size: 16px;
   }
 
   /* height (không phải min-height) ghi đè height:100% ở trên — tránh 2 nguồn
@@ -139,6 +150,28 @@ html {
   html.employee-mobile-pwa select {
     font-size: 16px;
   }
+}
+
+/*
+ * Mọi màn trong PWA (kể cả máy tính bảng, rộng hơn 768px): không chụm zoom,
+ * không ấn đúp, không nhấn giữ để sao chép. Ô nhập vẫn gõ được.
+ */
+html.pwa-standalone,
+html.pwa-standalone body,
+html.pwa-standalone body * {
+  touch-action: pan-x pan-y !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+html.pwa-standalone input,
+html.pwa-standalone textarea,
+html.pwa-standalone select,
+html.pwa-standalone [contenteditable='true'] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  font-size: 16px !important;
 }
 
 body {

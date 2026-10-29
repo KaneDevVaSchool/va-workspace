@@ -118,6 +118,15 @@ const birthdayNames = computed(() => {
 const showQuickReplies = computed(() => (
   !editing.value && draft.value.trim() === '' && files.value.length === 0 && !sending.value
 ));
+const draftMentionChips = computed(() => (
+  (store.activeConversation?.members || []).filter((user) => (
+    user?.id
+    && user.id !== auth.user?.id
+    && user.name
+    && draft.value.includes(`@${user.name}`)
+  ))
+));
+const draftParts = computed(() => messageParts(draft.value));
 const pinnedMessage = computed(() => store.activeConversation?.pinned_message ?? null);
 const mentionMatch = computed(() => {
   if (!isGroup.value || editing.value) return null;
@@ -498,6 +507,11 @@ function syncCaret() {
   draftCaret.value = input?.selectionStart ?? draft.value.length;
 }
 
+function syncFieldScroll(event) {
+  const mirror = event.target?.previousElementSibling;
+  if (mirror) mirror.scrollTop = event.target.scrollTop;
+}
+
 function coarsePointer() {
   return window.matchMedia('(pointer: coarse)').matches;
 }
@@ -742,6 +756,7 @@ function canShowReadReceipts(message) {
 function readLabel(message) {
   if (!canShowReadReceipts(message)) return '';
   const count = message.reads?.length || 0;
+  if (count < 1) return '';
   return `Đã xem ${count}/${groupReadOthersCount()}`;
 }
 
@@ -1551,7 +1566,10 @@ function menuItems(message) {
               size="1.75rem"
             />
           </span>
-          <div class="chat-message-col">
+          <div
+            class="chat-message-col"
+            :class="{ 'chat-message-col--sticker': row.message.message_type === 'sticker' && !row.message.recalled_at }"
+          >
           <div
             class="chat-bubble"
             :class="{
@@ -1683,40 +1701,44 @@ function menuItems(message) {
               <span v-if="showRead(row.message)">Đã xem</span>
             </span>
           </div>
-          <div v-if="reactionRows(row.message).length" class="chat-reactions">
+          <div
+            v-if="reactionRows(row.message).length || readLabel(row.message)"
+            class="chat-bubble-foot"
+          >
+            <div v-if="reactionRows(row.message).length" class="chat-reactions">
+              <button
+                v-for="chip in reactionRows(row.message)"
+                :key="chip.emoji"
+                type="button"
+                class="chat-reactions__chip"
+                :class="{ 'chat-reactions__chip--mine': chip.mine }"
+                :aria-label="chip.aria"
+                :aria-pressed="chip.mine"
+                @click="toggleReaction(row.message, chip.emoji)"
+              >
+                <span class="chat-reactions__emoji" aria-hidden="true">{{ chip.emoji }}</span>
+                <span class="chat-reactions__count">{{ chip.count }}</span>
+              </button>
+            </div>
             <button
-              v-for="chip in reactionRows(row.message)"
-              :key="chip.emoji"
+              v-if="readLabel(row.message)"
               type="button"
-              class="chat-reactions__chip"
-              :class="{ 'chat-reactions__chip--mine': chip.mine }"
-              :aria-label="chip.aria"
-              :aria-pressed="chip.mine"
-              @click="toggleReaction(row.message, chip.emoji)"
+              class="chat-read"
+              :aria-label="readLabel(row.message)"
+              @click="showReaders(row.message)"
             >
-              <span class="chat-reactions__emoji" aria-hidden="true">{{ chip.emoji }}</span>
-              <span class="chat-reactions__count">{{ chip.count }}</span>
+              <span class="chat-read__faces">
+                <ChatAvatar
+                  v-for="reader in readFaces(row.message)"
+                  :key="reader.id"
+                  class="chat-read__face"
+                  :src="reader.avatar_url"
+                  :name="reader.name"
+                  size="1.05rem"
+                />
+              </span>
             </button>
           </div>
-          <button
-            v-if="readLabel(row.message)"
-            type="button"
-            class="chat-read"
-            :aria-label="readLabel(row.message)"
-            @click="showReaders(row.message)"
-          >
-            <span v-if="readFaces(row.message).length" class="chat-read__faces">
-              <ChatAvatar
-                v-for="reader in readFaces(row.message)"
-                :key="reader.id"
-                class="chat-read__face"
-                :src="reader.avatar_url"
-                :name="reader.name"
-                size="1.05rem"
-              />
-            </span>
-            <AppIcon v-else name="user" :size="14" :stroke-width="1.75" />
-          </button>
           <ChatLinkPreviewEmbed
             v-if="!row.message.recalled_at && row.message.message_type === 'text' && row.message.message"
             :text="row.message.message"
@@ -1965,7 +1987,14 @@ function menuItems(message) {
         </span>
       </div>
       </Transition>
-      <div class="chat-view__input-shell">
+      <div class="chat-view__input-shell" :class="{ 'chat-view__input-shell--stack': draftMentionChips.length }">
+        <div v-if="draftMentionChips.length" class="chat-compose-mentions" aria-label="Đang nhắc">
+          <span v-for="user in draftMentionChips" :key="user.id" class="chat-compose-mentions__chip">
+            <ChatAvatar :src="user.avatar_url" :name="user.name" size="1rem" />
+            {{ user.name }}
+          </span>
+        </div>
+        <div class="chat-view__input-row">
         <button
           type="button"
           class="chat-view__input-addon"
@@ -1975,27 +2004,37 @@ function menuItems(message) {
         >
           <AppIcon name="smile" :size="20" :stroke-width="1.75" />
         </button>
-        <textarea
-          ref="inputRef"
-          v-model="draft"
-          class="chat-view__input"
-          rows="1"
-          enterkeyhint="send"
-          role="combobox"
-          aria-autocomplete="list"
-          :aria-activedescendant="mentionOpen ? `chat-mention-${mentionHits[mentionActive]?.id}` : undefined"
-          :aria-expanded="mentionOpen"
-          aria-controls="chat-mention-list"
-          :placeholder="editing ? 'Sửa nội dung…' : 'Nhập tin nhắn…'"
-          :aria-label="editing ? 'Sửa tin nhắn' : `Nhập tin nhắn gửi ${headerTitle}`"
-          @focus="onInputFocus"
-          @blur="onInputBlur"
-          @input="pingTyping"
-          @click="syncCaret"
-          @keyup="syncCaret"
-          @select="syncCaret"
-          @keydown="onKeydown"
-        />
+        <div class="chat-view__field">
+          <div class="chat-view__field-mirror" aria-hidden="true">
+            <template v-for="(part, partIndex) in draftParts" :key="partIndex">
+              <span v-if="part.mention" class="chat-mention">{{ part.text }}</span>
+              <template v-else>{{ part.text }}</template>
+            </template>
+            <br v-if="draft.endsWith('\n') || draft === ''" />
+          </div>
+          <textarea
+            ref="inputRef"
+            v-model="draft"
+            class="chat-view__input"
+            rows="1"
+            enterkeyhint="send"
+            role="combobox"
+            aria-autocomplete="list"
+            :aria-activedescendant="mentionOpen ? `chat-mention-${mentionHits[mentionActive]?.id}` : undefined"
+            :aria-expanded="mentionOpen"
+            aria-controls="chat-mention-list"
+            :placeholder="editing ? 'Sửa nội dung…' : 'Nhập tin nhắn…'"
+            :aria-label="editing ? 'Sửa tin nhắn' : `Nhập tin nhắn gửi ${headerTitle}`"
+            @focus="onInputFocus"
+            @blur="onInputBlur"
+            @input="pingTyping"
+            @scroll="syncFieldScroll"
+            @click="syncCaret"
+            @keyup="syncCaret"
+            @select="syncCaret"
+            @keydown="onKeydown"
+          />
+        </div>
         <button
           type="button"
           class="chat-view__send"
@@ -2545,9 +2584,19 @@ function menuItems(message) {
 }
 
 .chat-bubble--sticker {
+  align-items: flex-end;
+  gap: 0.2rem;
   background: transparent;
   box-shadow: none;
   padding: 0;
+}
+
+.chat-bubble--sticker .chat-bubble__meta {
+  margin-top: 0.1rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .chat-bubble--recalled {
@@ -2589,14 +2638,31 @@ function menuItems(message) {
   color: var(--color-tertiary-800);
 }
 
+.chat-bubble-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  margin-top: 0.15rem;
+}
+
+.chat-bubble-row--mine .chat-bubble-foot {
+  justify-content: flex-end;
+}
+
+.chat-message-col--sticker .chat-bubble-foot {
+  margin-top: 0.35rem;
+}
+
 .chat-reactions {
   position: relative;
-  z-index: 1;
+  z-index: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 0.2rem;
-  margin-top: -0.55rem;
-  padding-inline: 0.35rem;
+  margin-top: 0;
+  padding-inline: 0;
 }
 
 .chat-bubble-row--mine .chat-reactions {
@@ -2666,11 +2732,13 @@ function menuItems(message) {
   display: block;
   width: 6.5rem;
   height: 6.5rem;
+  overflow: hidden;
 }
 
 .chat-sticker :deep(.social-sticker) {
   width: 6.5rem;
   height: 6.5rem;
+  overflow: hidden;
 }
 
 .chat-quote {
@@ -2996,6 +3064,42 @@ function menuItems(message) {
   transition: box-shadow 180ms ease;
 }
 
+.chat-view__input-shell--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+  border-radius: 16px;
+  padding-top: 0.4rem;
+}
+
+.chat-view__input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.chat-compose-mentions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0 0.35rem 0.15rem 0.45rem;
+}
+
+.chat-compose-mentions__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  max-width: 100%;
+  padding: 0.1rem 0.45rem 0.1rem 0.12rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 .chat-view__input-shell:focus-within {
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, var(--color-border)),
@@ -3021,19 +3125,55 @@ function menuItems(message) {
   background: var(--color-primary-surface);
 }
 
-.chat-view__input {
+.chat-view__field {
+  position: relative;
   flex: 1;
   min-width: 0;
+  min-height: 2.25rem;
   max-height: 6rem;
-  resize: none;
-  border: none;
-  border-radius: 0;
-  background: transparent;
+}
+
+.chat-view__field-mirror {
+  min-height: 2.25rem;
+  max-height: 6rem;
+  overflow: auto;
+  padding: 0.5rem 0.15rem;
   color: var(--color-text);
   font-family: var(--font-family-base);
   font-size: 16px;
   line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: none;
+  scrollbar-width: none;
+}
+
+.chat-view__field-mirror::-webkit-scrollbar {
+  display: none;
+}
+
+.chat-view__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  resize: none;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: 16px;
+  line-height: 1.35;
   padding: 0.5rem 0.15rem;
+  overflow: auto;
+}
+
+.chat-view__input::placeholder {
+  color: var(--color-text-muted);
 }
 
 .chat-view__input:focus {
@@ -3273,7 +3413,7 @@ function menuItems(message) {
   left: var(--space-3);
   right: var(--space-3);
   bottom: calc(100% + 0.35rem);
-  z-index: 5;
+  z-index: 8;
   display: flex;
   flex-direction: column;
   max-height: min(16rem, 42dvh);
@@ -3519,14 +3659,14 @@ function menuItems(message) {
 }
 
 .chat-read {
-  align-self: flex-end;
+  align-self: center;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 1.15rem;
   min-height: 1.15rem;
-  margin-top: 0.15rem;
+  margin-top: 0;
   padding: 0;
   line-height: 0;
   color: var(--color-primary);

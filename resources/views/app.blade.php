@@ -77,6 +77,24 @@
                     osRoot.classList.add('pwa-surface-employee');
                 }
             }
+
+            var mobile = window.matchMedia('(max-width: 768px)').matches || s;
+            if (!mobile) return;
+            var viewport = document.querySelector('meta[name="viewport"]');
+            if (viewport) {
+                viewport.setAttribute(
+                    'content',
+                    'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content'
+                );
+            }
+            var blockPinch = function (event) {
+                event.preventDefault();
+            };
+            document.addEventListener('gesturestart', blockPinch, { passive: false });
+            document.addEventListener('gesturechange', blockPinch, { passive: false });
+            document.addEventListener('touchmove', function (event) {
+                if (event.touches && event.touches.length > 1) blockPinch(event);
+            }, { passive: false });
         })();
     </script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
