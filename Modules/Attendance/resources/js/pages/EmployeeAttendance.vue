@@ -689,6 +689,10 @@ async function commitPunch(methodId) {
       payload.longitude = coords.value.lon;
       if (coords.value.accuracy > 0) payload.accuracy_meters = coords.value.accuracy;
     }
+    const branchId = activeCheckInBranch.value?.id;
+    if (branchId && branchId !== 'default') {
+      payload.branch_uuid = branchId;
+    }
     const { data } = await window.axios.post('/api/attendance/punches', payload);
     const remote = normalizeRemoteRow(data?.data);
     if (hasAnyPunch(remote)) rememberToday(remote);
@@ -1244,10 +1248,6 @@ function stopQrCamera() {
               </button>
             </div>
             <p v-else class="att-checkin-site__empty">Chưa có tọa độ chi nhánh từ HRM.</p>
-
-            <p v-if="!canPickCheckInBranch && activeCheckInBranch" class="att-checkin-site__note">
-              Nếu chi nhánh không khớp, liên hệ quản lý hoặc IT để cập nhật trên HRM.
-            </p>
 
             <div
               v-if="branchPickerOpen && canPickCheckInBranch"

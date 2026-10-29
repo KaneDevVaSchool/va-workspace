@@ -81,8 +81,9 @@ class EmployeeAttendancePunchService
         string $direction,
         string $method,
         ?array $deviceLocation = null,
+        ?string $branchUuid = null,
     ): array {
-        $this->assertCheckInLocation($user, $deviceLocation);
+        $this->assertCheckInLocation($user, $deviceLocation, $branchUuid);
 
         $uuid = $this->employeeUuid($user);
         $workDate = now()->toDateString();
@@ -277,9 +278,12 @@ class EmployeeAttendancePunchService
      *
      * @throws HrmApiUnavailable
      */
-    private function assertCheckInLocation(User $user, ?array $deviceLocation): void
+    private function assertCheckInLocation(User $user, ?array $deviceLocation, ?string $branchUuid = null): void
     {
         $context = $this->checkInContext->forUser($user);
+        if ($branchUuid !== null && trim($branchUuid) !== '') {
+            $context = $this->contextForSelectedBranch($context, trim($branchUuid));
+        }
         if (! ($context['gps_enforced'] ?? false)) {
             return;
         }
@@ -309,6 +313,48 @@ class EmployeeAttendancePunchService
                 "Bạn đang ngoài vùng chấm công của {$branchName} (dung sai {$tolerance} m). Hãy đến đúng cơ sở rồi thử lại.",
             );
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function contextForSelectedBranch(array $context, string $branchUuid): array
+    {
+        $branches = $context['branches'] ?? null;
+        if (! is_array($branches)) {
+            throw HrmApiUnavailable::userFacing('Không tải được danh sách chi nhánh để đổi vị trí chấm công.');
+        }
+
+        foreach ($branches as $row) {
+            if (! is_array($row) || ($row['uuid'] ?? null) !== $branchUuid) {
+                continue;
+            }
+            $lat = $row['latitude'] ?? null;
+            $lon = $row['longitude'] ?? null;
+            if (! is_numeric($lat) || ! is_numeric($lon)) {
+                break;
+            }
+            $tolerance = $row['gps_tolerance_meters'] ?? 100;
+            if (! is_numeric($tolerance) || (int) $tolerance < 1) {
+                $tolerance = 100;
+            }
+
+            return array_merge($context, [
+                'branch' => [
+                    'uuid' => $row['uuid'],
+                    'code' => $row['code'] ?? null,
+                    'name' => $row['name'] ?? 'Cơ sở',
+                    'short_name' => $row['short_name'] ?? null,
+                ],
+                'latitude' => (float) $lat,
+                'longitude' => (float) $lon,
+                'gps_tolerance_meters' => (int) $tolerance,
+                'gps_enforced' => true,
+            ]);
+        }
+
+        throw HrmApiUnavailable::userFacing('Chi nhánh chọn không hợp lệ hoặc chưa bật GPS trên HRM.');
     }
 
     /** @throws HrmApiUnavailable */

@@ -39,6 +39,7 @@ class EmployeeAttendancePunchController extends Controller
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'accuracy_meters' => ['nullable', 'numeric', 'min:0', 'max:5000'],
+            'branch_uuid' => ['nullable', 'uuid'],
         ], [
             'session.required' => 'Chưa xác định ca chấm công.',
             'session.in' => 'Ca chấm công phải là sáng hoặc chiều.',
@@ -68,6 +69,7 @@ class EmployeeAttendancePunchController extends Controller
                             : null,
                     ]
                     : null,
+                isset($validated['branch_uuid']) ? (string) $validated['branch_uuid'] : null,
             );
         } catch (HrmApiUnavailable $e) {
             return $this->failure($e, 'Không gửi được giờ chấm công về HRM.');

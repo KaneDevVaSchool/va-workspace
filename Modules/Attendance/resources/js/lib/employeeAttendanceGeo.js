@@ -17,6 +17,7 @@ export function normalizeCheckInBranch(raw, fallbackId = null) {
   const { lat, lon } = readLatLon(raw);
   if (lat == null || lon == null) return null;
   const id = raw.uuid ?? raw.id ?? fallbackId;
+  const tolerance = raw.gps_tolerance_meters ?? raw.gpsToleranceMeters;
   const fullName = [raw.name, raw.label].find((value) => typeof value === 'string' && value.trim());
   const shortName = [raw.short_name, raw.shortName].find((value) => typeof value === 'string' && value.trim());
   const title = (fullName && fullName.trim()) || (shortName && shortName.trim()) || 'Cơ sở chấm công';
@@ -28,6 +29,7 @@ export function normalizeCheckInBranch(raw, fallbackId = null) {
     code,
     lat,
     lon,
+    gps_tolerance_meters: typeof tolerance === 'number' ? tolerance : null,
   };
 }
 
@@ -38,17 +40,23 @@ export function normalizeCheckInBranch(raw, fallbackId = null) {
 export function branchesFromCheckInContext(context) {
   if (!context) return [];
 
-  const lists = [
-    context.branches,
+  if (Array.isArray(context.branches) && context.branches.length > 0) {
+    const rows = context.branches
+      .map((item, index) => normalizeCheckInBranch(item, item?.uuid ?? index))
+      .filter(Boolean);
+    if (rows.length) return rows;
+  }
+
+  const legacyLists = [
     context.check_in_branches,
     context.branch_options,
     context.available_branches,
     context.nearby_branches,
   ];
-  for (const list of lists) {
+  for (const list of legacyLists) {
     if (!Array.isArray(list) || list.length === 0) continue;
     const rows = list
-      .map((item, index) => normalizeCheckInBranch(item, index))
+      .map((item, index) => normalizeCheckInBranch(item, item?.uuid ?? index))
       .filter(Boolean);
     if (rows.length) return rows;
   }
@@ -103,10 +111,13 @@ export function formatBranchCoordinates(branch) {
  */
 export function contextWithBranchCenter(context, branch) {
   if (!context || !branch) return context;
+  const tolerance = branch.gps_tolerance_meters ?? context.gps_tolerance_meters ?? 100;
   return {
     ...context,
     latitude: branch.lat,
     longitude: branch.lon,
+    gps_tolerance_meters: tolerance,
+    gps_enforced: context.gps_enforced ?? true,
   };
 }
 
