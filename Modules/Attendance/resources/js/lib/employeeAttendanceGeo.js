@@ -1,3 +1,103 @@
+function readLatLon(entry) {
+  if (!entry || typeof entry !== 'object') return { lat: null, lon: null };
+  const lat = entry.latitude ?? entry.lat;
+  const lon = entry.longitude ?? entry.lon ?? entry.lng;
+  return {
+    lat: typeof lat === 'number' ? lat : null,
+    lon: typeof lon === 'number' ? lon : null,
+  };
+}
+
+/**
+ * @param {Record<string, unknown>|null|undefined} raw
+ * @param {string|number|null|undefined} fallbackId
+ */
+export function normalizeCheckInBranch(raw, fallbackId = null) {
+  if (!raw || typeof raw !== 'object') return null;
+  const { lat, lon } = readLatLon(raw);
+  if (lat == null || lon == null) return null;
+  const id = raw.uuid ?? raw.id ?? fallbackId;
+  const name = raw.short_name ?? raw.name ?? raw.label;
+  return {
+    id: id != null ? String(id) : `${lat},${lon}`,
+    name: typeof name === 'string' && name.trim() ? name.trim() : 'Cơ sở chấm công',
+    lat,
+    lon,
+  };
+}
+
+/**
+ * @param {Record<string, unknown>|null|undefined} context
+ * @returns {Array<{ id: string, name: string, lat: number, lon: number }>}
+ */
+export function branchesFromCheckInContext(context) {
+  if (!context) return [];
+
+  const lists = [
+    context.branches,
+    context.check_in_branches,
+    context.branch_options,
+  ];
+  for (const list of lists) {
+    if (!Array.isArray(list) || list.length === 0) continue;
+    const rows = list
+      .map((item, index) => normalizeCheckInBranch(item, index))
+      .filter(Boolean);
+    if (rows.length) return rows;
+  }
+
+  const { lat, lon } = readLatLon(context);
+  if (lat == null || lon == null) return [];
+
+  const branchMeta = context.branch && typeof context.branch === 'object' ? context.branch : {};
+  const merged = normalizeCheckInBranch(
+    { ...branchMeta, latitude: lat, longitude: lon },
+    'default',
+  );
+
+  return merged ? [merged] : [];
+}
+
+/**
+ * @param {Array<{ lat: number, lon: number }>} branches
+ * @param {{ lat: number, lon: number }} coords
+ */
+export function nearestCheckInBranch(branches, coords) {
+  if (!branches?.length || !coords) return branches?.[0] ?? null;
+  let best = branches[0];
+  let bestDist = distanceMeters(coords.lat, coords.lon, best.lat, best.lon);
+  for (let i = 1; i < branches.length; i += 1) {
+    const candidate = branches[i];
+    const dist = distanceMeters(coords.lat, coords.lon, candidate.lat, candidate.lon);
+    if (dist < bestDist) {
+      best = candidate;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+/** @param {{ lat: number, lon: number }} branch */
+export function formatBranchCoordinates(branch) {
+  if (!branch) return '—';
+  const lat = branch.lat.toFixed(6);
+  const lon = branch.lon.toFixed(6);
+  return `${lat}, ${lon}`;
+}
+
+/**
+ * @param {Record<string, unknown>|null|undefined} context
+ * @param {{ lat: number, lon: number }} branch
+ */
+export function contextWithBranchCenter(context, branch) {
+  if (!context || !branch) return context;
+  return {
+    ...context,
+    latitude: branch.lat,
+    longitude: branch.lon,
+  };
+}
+
 /** Khoảng cách haversine (mét) — khớp EmployeeAttendanceGeo trên server. */
 export function distanceMeters(lat1, lon1, lat2, lon2) {
   const earthRadius = 6_371_000;

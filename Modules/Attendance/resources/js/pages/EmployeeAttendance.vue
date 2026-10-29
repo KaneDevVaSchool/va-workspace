@@ -21,7 +21,13 @@ import {
   recordToServerPayload,
   writeEmployeeAttendanceToday,
 } from '../lib/employeeAttendanceSession';
-import { evaluateCheckInLocation } from '../lib/employeeAttendanceGeo';
+import {
+  branchesFromCheckInContext,
+  contextWithBranchCenter,
+  evaluateCheckInLocation,
+  formatBranchCoordinates,
+  nearestCheckInBranch,
+} from '../lib/employeeAttendanceGeo';
 import { nextPunchAction } from '../lib/employeeAttendanceWorkSession';
 
 const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
@@ -105,6 +111,8 @@ const wifiSignal = ref(0);
 const confirmOpen = ref(false);
 const pendingMethodId = ref(null);
 const checkInContext = ref(null);
+const selectedBranchId = ref(null);
+const branchPickerOpen = ref(false);
 
 const stored = readEmployeeAttendanceToday();
 const punchRecord = ref(stored ?? {
@@ -200,14 +208,44 @@ const syncLine = computed(() => {
   }
   return null;
 });
-const locationEval = computed(() => evaluateCheckInLocation(checkInContext.value, coords.value));
+const branchOptions = computed(() => branchesFromCheckInContext(checkInContext.value));
+
+const autoNearestBranch = computed(() => {
+  const options = branchOptions.value;
+  if (!options.length) return null;
+  if (coords.value) return nearestCheckInBranch(options, coords.value) ?? options[0];
+  return options[0];
+});
+
+const activeCheckInBranch = computed(() => {
+  const options = branchOptions.value;
+  if (!options.length) return null;
+  if (selectedBranchId.value) {
+    return options.find((item) => item.id === selectedBranchId.value) ?? autoNearestBranch.value;
+  }
+  return autoNearestBranch.value;
+});
+
+const effectiveCheckInContext = computed(() => {
+  const base = checkInContext.value;
+  const branch = activeCheckInBranch.value;
+  if (!base || !branch) return base;
+  return contextWithBranchCenter(base, branch);
+});
+
+const locationEval = computed(() => evaluateCheckInLocation(effectiveCheckInContext.value, coords.value));
 
 const branchCheckInLabel = computed(() => {
+  if (activeCheckInBranch.value?.name) return activeCheckInBranch.value.name;
   const branch = checkInContext.value?.branch;
   if (branch?.short_name) return branch.short_name;
   if (branch?.name) return branch.name;
   return checkInContext.value?.workplace_label || null;
 });
+
+const activeBranchCoordsLabel = computed(() => formatBranchCoordinates(activeCheckInBranch.value));
+
+const canPickCheckInBranch = computed(() => branchOptions.value.length > 1);
 
 const geoBlockMessage = computed(() => {
   if (!checkInContext.value?.gps_enforced) return '';
@@ -226,16 +264,27 @@ const geoBlockMessage = computed(() => {
 });
 
 const punchLocationBlocked = computed(() => {
-  if (!checkInContext.value?.gps_enforced) return false;
+  if (geoState.value === 'unsupported') return false;
+  if (geoState.value !== 'granted') return true;
   if (geoState.value === 'pending') return true;
+  if (!checkInContext.value?.gps_enforced) return false;
   if (locationEval.value.state === 'outside') return true;
   return locationEval.value.state === 'unknown';
 });
 
-const geoBanner = computed(() => {
+const checkInSiteStatus = computed(() => {
   const enforced = Boolean(checkInContext.value?.gps_enforced);
   const branch = branchCheckInLabel.value;
   const tolerance = locationEval.value.toleranceMeters ?? checkInContext.value?.gps_tolerance_meters;
+
+  if (geoState.value !== 'granted' && geoState.value !== 'pending') {
+    const failure = GEO_MESSAGES[geoState.value];
+    if (failure) return { tone: 'warn', text: failure.long };
+    return { tone: 'warn', text: 'Cần cho phép định vị trên thiết bị để chấm công.' };
+  }
+  if (geoState.value === 'pending') {
+    return { tone: 'info', text: 'Đang lấy vị trí thiết bị…' };
+  }
 
   if (enforced && locationEval.value.state === 'inside') {
     const dist = locationEval.value.distanceMeters;
@@ -246,28 +295,13 @@ const geoBanner = computed(() => {
   if (enforced && locationEval.value.state === 'outside') {
     return { tone: 'warn', text: geoBlockMessage.value || 'Ngoài vùng chấm công' };
   }
-  if (enforced && geoState.value === 'pending') {
-    return { tone: 'ok', text: 'Đang đối chiếu vị trí với cơ sở trên HRM…' };
-  }
   if (enforced && geoBlockMessage.value) {
     return { tone: 'info', text: geoBlockMessage.value };
   }
-  if (geoState.value === 'granted') {
-    const accuracy = coords.value?.accuracy;
-    const detail = accuracy ? ` · lệch khoảng ${accuracy} m` : '';
-    return { tone: 'ok', text: `Đã xác định vị trí thiết bị${detail}` };
-  }
-  if (geoState.value === 'pending') {
-    return { tone: 'ok', text: 'Đang kiểm tra vị trí thiết bị…' };
-  }
-  const failure = GEO_MESSAGES[geoState.value];
-  if (failure) {
-    return { tone: 'info', text: enforced ? failure.long : `${failure.short} — vẫn chấm được bằng nút chấm công` };
-  }
-  if (enforced) {
-    return { tone: 'info', text: 'Bật định vị để chấm công đúng vùng cơ sở.' };
-  }
-  return { tone: 'info', text: 'Chưa bật định vị — vẫn chấm được bằng nút chấm công' };
+
+  const accuracy = coords.value?.accuracy;
+  const detail = accuracy ? ` · độ chính xác khoảng ${Math.round(accuracy)} m` : '';
+  return { tone: 'ok', text: `Đã cho phép định vị${detail}` };
 });
 const geoCanRetry = computed(() => Boolean(GEO_MESSAGES[geoState.value]) && geoState.value !== 'unsupported');
 const geoLongMessage = computed(() => GEO_MESSAGES[geoState.value]?.long || 'Cần quyền vị trí để chấm bằng GPS.');
@@ -365,6 +399,11 @@ watch(coords, (value) => {
   if (value) updateGeoMap(value);
 });
 
+watch(checkInContext, () => {
+  selectedBranchId.value = null;
+  branchPickerOpen.value = false;
+});
+
 onMounted(() => {
   timer = window.setInterval(() => {
     now.value = new Date();
@@ -376,7 +415,7 @@ onMounted(() => {
   }, 45000);
   void hydrateTodayFromHrm();
   void loadCheckInContext();
-  requestLocationIfAlreadyAllowed();
+  void requestLocation();
   stopResume = onAppResume(() => {
     // Có mạng lại / quay lại app: đẩy ngay lần chấm đang chờ lên HRM thay vì đợi nhịp 45 giây.
     if (syncState.value === 'pending' && hasAnyPunch(readEmployeeAttendanceToday())) {
@@ -399,8 +438,8 @@ async function loadCheckInContext() {
   try {
     const { data } = await window.axios.get('/api/attendance/check-in-context');
     checkInContext.value = data?.data ?? null;
-    if (checkInContext.value?.gps_enforced && geoState.value === 'idle') {
-      void requestLocationIfAlreadyAllowed();
+    if (geoState.value === 'idle') {
+      void requestLocation();
     }
   } catch {
     checkInContext.value = null;
@@ -582,22 +621,37 @@ async function onConfirmPunch() {
 }
 
 async function onHero() {
-  if (punchLocationBlocked.value) {
-    showClientToast('warning', geoBlockMessage.value || 'Chưa đủ điều kiện vị trí để chấm công.');
+  if (geoState.value === 'unsupported') {
+    showClientToast('warning', GEO_MESSAGES.unsupported.long);
     return;
   }
-  if (checkInContext.value?.gps_enforced && geoState.value !== 'granted') {
+  if (geoState.value !== 'granted') {
     const ok = await requestLocation();
     if (!ok) {
       showClientToast('warning', geoLongMessage.value);
       return;
     }
-    if (locationEval.value.state === 'outside') {
-      showClientToast('warning', geoBlockMessage.value);
-      return;
-    }
+  }
+  if (punchLocationBlocked.value) {
+    showClientToast('warning', geoBlockMessage.value || 'Chưa đủ điều kiện vị trí để chấm công.');
+    return;
+  }
+  if (checkInContext.value?.gps_enforced && locationEval.value.state === 'outside') {
+    showClientToast('warning', geoBlockMessage.value);
+    return;
   }
   askPunch('button');
+}
+
+function toggleBranchPicker() {
+  if (!canPickCheckInBranch.value) return;
+  branchPickerOpen.value = !branchPickerOpen.value;
+}
+
+function selectCheckInBranch(branch) {
+  if (!branch?.id) return;
+  selectedBranchId.value = branch.id;
+  branchPickerOpen.value = false;
 }
 
 function openMethod(id) {
@@ -776,22 +830,6 @@ function requestLocation() {
   });
 }
 
-/**
- * Mở trang chấm công không được bật hộp thoại xin quyền khi người dùng chưa hề chọn GPS
- * (iOS còn hỏi lại mỗi lần mở app). Chỉ lấy vị trí ngầm khi quyền đã được cấp từ trước.
- */
-async function requestLocationIfAlreadyAllowed() {
-  // Đã có yêu cầu vị trí (vd. mở thẳng màn GPS) thì không hỏi thêm lần nữa.
-  if (geoState.value !== 'idle') return geoState.value === 'granted';
-  try {
-    const status = await navigator.permissions?.query?.({ name: 'geolocation' });
-    if (status && status.state !== 'granted') return false;
-  } catch {
-    // Trình duyệt không hỗ trợ Permissions API cho vị trí — dùng cách cũ.
-  }
-  return requestLocation();
-}
-
 async function loadWeather(latitude, longitude) {
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude.toFixed(3)}&longitude=${longitude.toFixed(3)}&current=temperature_2m,weather_code`;
@@ -873,6 +911,8 @@ async function initGeoMap() {
 }
 
 function branchMapPoint() {
+  const branch = activeCheckInBranch.value;
+  if (branch) return { lat: branch.lat, lon: branch.lon };
   const ctx = checkInContext.value;
   if (typeof ctx?.latitude === 'number' && typeof ctx?.longitude === 'number') {
     return { lat: ctx.latitude, lon: ctx.longitude };
@@ -1114,13 +1154,6 @@ function stopQrCamera() {
                 </div>
               </div>
             </div>
-            <p class="att-hero__geo" :class="`att-hero__geo--${geoBanner.tone}`">
-              <AppIcon
-                :name="geoBanner.tone === 'ok' ? 'check' : (geoBanner.tone === 'warn' ? 'alertTriangle' : 'info')"
-                :size="14"
-              />
-              <span>{{ geoBanner.text }}</span>
-            </p>
             <div v-if="syncLine" class="att-sync-row att-sync-row--on-hero">
               <p class="att-sync att-sync--on-hero">
                 <span class="att-dot" :class="{ 'att-dot--wait': syncLine.wait }"></span>
@@ -1184,21 +1217,92 @@ function stopQrCamera() {
           </div>
           <p class="att-punch-hint">{{ punchHint }}</p>
 
-          <p class="att-methods__label">Hình thức khác</p>
-          <div class="att-grid">
-            <button
-              v-for="tile in HOME_TILES"
-              :key="tile.id"
-              type="button"
-              class="att-tile att-tile--maintenance"
-              @click="openMethod(tile.id)"
-            >
-              <span class="att-tile__icon" :class="`att-tone--${tile.tone}`">
-                <AttendanceGlyph :name="tile.glyph" :size="20" />
+          <article class="att-checkin-site">
+            <p class="att-checkin-site__lead">
+              <template v-if="canPickCheckInBranch">
+                Bạn sẽ chấm công ở đây, nếu nhầm lẫn xin
+                <button
+                  type="button"
+                  class="att-checkin-site__pick"
+                  :aria-expanded="branchPickerOpen"
+                  @click="toggleBranchPicker"
+                >
+                  chọn vị trí
+                </button>
+              </template>
+              <template v-else>
+                Bạn sẽ chấm công ở đây.
+              </template>
+            </p>
+
+            <div v-if="activeCheckInBranch" class="att-checkin-site__branch">
+              <span class="att-tile__icon att-tone--green">
+                <AttendanceGlyph name="pin" :size="18" />
               </span>
-              <span class="att-tile__label">{{ tile.label }}</span>
-              <small class="att-tile__hint">{{ tile.hint }}</small>
+              <span class="att-checkin-site__branch-text">
+                <strong>{{ activeCheckInBranch.name }}</strong>
+                <small class="att-checkin-site__coords">{{ activeBranchCoordsLabel }}</small>
+              </span>
+            </div>
+            <p v-else class="att-checkin-site__empty">Chưa có tọa độ chi nhánh từ HRM.</p>
+
+            <ul
+              v-if="branchPickerOpen && canPickCheckInBranch"
+              class="att-checkin-site__options"
+              role="listbox"
+              aria-label="Chọn chi nhánh chấm công"
+            >
+              <li v-for="branch in branchOptions" :key="branch.id" role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  class="att-checkin-site__option"
+                  :aria-selected="branch.id === activeCheckInBranch?.id"
+                  @click="selectCheckInBranch(branch)"
+                >
+                  <span>{{ branch.name }}</span>
+                  <small>{{ formatBranchCoordinates(branch) }}</small>
+                </button>
+              </li>
+            </ul>
+
+            <p
+              class="att-checkin-site__status"
+              :class="`att-checkin-site__status--${checkInSiteStatus.tone}`"
+            >
+              <AppIcon
+                :name="checkInSiteStatus.tone === 'ok' ? 'check' : (checkInSiteStatus.tone === 'warn' ? 'alertTriangle' : 'info')"
+                :size="14"
+              />
+              <span>{{ checkInSiteStatus.text }}</span>
+            </p>
+            <button
+              v-if="geoCanRetry"
+              type="button"
+              class="att-checkin-site__geo-btn"
+              @click="requestLocation"
+            >
+              Cho phép định vị
             </button>
+          </article>
+
+          <div class="att-home__footer">
+            <p class="att-methods__label">Hình thức khác</p>
+            <div class="att-grid att-grid--pair">
+              <button
+                v-for="tile in HOME_TILES"
+                :key="tile.id"
+                type="button"
+                class="att-tile att-tile--maintenance att-tile--compact"
+                @click="openMethod(tile.id)"
+              >
+                <span class="att-tile__icon" :class="`att-tone--${tile.tone}`">
+                  <AttendanceGlyph :name="tile.glyph" :size="20" />
+                </span>
+                <span class="att-tile__label">{{ tile.label }}</span>
+                <small class="att-tile__hint">{{ tile.hint }}</small>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -1520,6 +1624,7 @@ function stopQrCamera() {
 .att-home,
 .att-success {
   flex: 1;
+  min-height: 0;
 }
 
 .att-lead {
@@ -1860,6 +1965,155 @@ function stopQrCamera() {
   color: var(--color-info-tint-fg);
 }
 
+.att-home__footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.att-checkin-site {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: var(--att-shadow);
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.att-checkin-site__lead {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.att-checkin-site__pick {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-tertiary-700);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.att-checkin-site__branch {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.att-checkin-site__branch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.att-checkin-site__branch-text strong {
+  font-size: 0.92rem;
+  color: var(--color-text);
+}
+
+.att-checkin-site__coords {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.att-checkin-site__empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.att-checkin-site__options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.att-checkin-site__option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-tertiary-50) 45%, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.att-checkin-site__option[aria-selected='true'] {
+  border-color: color-mix(in srgb, var(--color-tertiary-400) 55%, var(--color-border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-tertiary-200) 75%, transparent);
+}
+
+.att-checkin-site__option small {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.att-checkin-site__status {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 8px var(--space-3);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.att-checkin-site__status--ok {
+  background: var(--color-success-tint-bg);
+  color: var(--color-success-tint-fg);
+}
+
+.att-checkin-site__status--warn {
+  background: color-mix(in srgb, var(--color-gold-200) 55%, white);
+  color: var(--color-umber-900);
+}
+
+.att-checkin-site__status--info {
+  background: var(--color-info-tint-bg);
+  color: var(--color-info-tint-fg);
+}
+
+.att-checkin-site__geo-btn {
+  align-self: flex-start;
+  border: 0;
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  background: color-mix(in srgb, var(--color-tertiary-100) 80%, white);
+  color: var(--color-tertiary-800);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .att-methods__label {
   margin: 0;
   color: var(--color-text-muted);
@@ -1981,6 +2235,26 @@ function stopQrCamera() {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
+}
+
+.att-grid--pair .att-tile:last-child {
+  grid-column: auto;
+}
+
+.att-tile--compact {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto auto;
+  justify-items: center;
+  text-align: center;
+}
+
+.att-tile--compact .att-tile__icon {
+  grid-column: 1;
+}
+
+.att-tile--compact .att-tile__label,
+.att-tile--compact .att-tile__hint {
+  grid-column: 1;
 }
 
 .att-tile--maintenance .att-tile__hint {
