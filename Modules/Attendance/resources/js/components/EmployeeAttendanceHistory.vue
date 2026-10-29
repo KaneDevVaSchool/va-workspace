@@ -8,9 +8,11 @@ import {
   startOfWeekMonday,
 } from '../lib/employeeAttendanceHistory';
 import { groupItemsByWeek } from '../lib/employeeHistoryWeek';
+import { readEmployeeAttendanceLog } from '../lib/employeeAttendanceSession';
 
 const WEEKDAY_HEADERS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-import { readEmployeeAttendanceLog } from '../lib/employeeAttendanceSession';
+const WEEKDAY_SHORT = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+const WEEKDAY_LONG = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 
 const VIEW_STORAGE_KEY = 'employee-attendance-history-view';
 
@@ -31,11 +33,11 @@ watch(layoutMode, (mode) => {
   localStorage.setItem(VIEW_STORAGE_KEY, mode);
 });
 
-const placeLabel = computed(() => {
+const placeCaption = computed(() => {
   const company = auth.user?.company?.name?.trim();
   const department = auth.user?.department?.name?.trim();
   if (department && company) return `${department} · ${company}`;
-  return department || company || 'Văn phòng làm việc';
+  return department || company || '';
 });
 
 const monthLabel = computed(() => `Tháng ${viewMonth.value.getMonth() + 1}/${viewMonth.value.getFullYear()}`);
@@ -65,10 +67,70 @@ const isCurrentWeek = computed(() => {
   return viewWeekStart.value.getTime() === thisWeek.getTime();
 });
 
-const emptyMonth = computed(() =>
-  layoutMode.value === 'list'
-  && monthModel.value.rows.length === 0
-  && !monthModel.value.stats.absent,
+const isCurrentMonth = computed(() => {
+  const today = new Date();
+  return viewMonth.value.getFullYear() === today.getFullYear()
+    && viewMonth.value.getMonth() === today.getMonth();
+});
+
+const navLabel = computed(() => (
+  layoutMode.value === 'list' ? monthLabel.value : weekModel.value.weekLabel
+));
+
+const canGoForward = computed(() => (
+  layoutMode.value === 'list' ? canNextMonth.value : canNextWeek.value
+));
+
+const showJump = computed(() => (
+  layoutMode.value === 'list' ? !isCurrentMonth.value : !isCurrentWeek.value
+));
+
+const jumpLabel = computed(() => (
+  layoutMode.value === 'list' ? 'Tháng này' : 'Tuần này'
+));
+
+const summaryStats = computed(() => {
+  if (layoutMode.value === 'calendar') {
+    const stats = weekModel.value.stats;
+    return [
+      { label: 'Đã chấm', value: stats.recorded, tone: 'info' },
+      { label: 'Đúng giờ', value: stats.onTime, tone: 'ok' },
+      { label: 'Trễ', value: stats.late, tone: 'warn' },
+    ];
+  }
+  const stats = monthModel.value.stats;
+  return [
+    { label: 'Đã chấm', value: stats.recorded, tone: 'info' },
+    { label: 'Đúng giờ', value: stats.onTime, tone: 'ok' },
+    { label: 'Trễ', value: stats.late, tone: 'warn' },
+    { label: 'Thiếu', hint: 'trên máy', value: stats.absent, tone: 'miss' },
+  ];
+});
+
+const selectedDayKey = ref('');
+
+const selectedCell = computed(() => (
+  weekModel.value.days.find((day) => day.key === selectedDayKey.value) ?? null
+));
+
+function pickDefaultDay(days) {
+  const today = days.find((day) => day.isToday);
+  if (today) return today.key;
+  const latestWork = [...days].reverse().find((day) => day.row?.kind === 'work');
+  if (latestWork) return latestWork.key;
+  const past = [...days].reverse().find((day) => !day.isFuture);
+  return past?.key ?? days[0]?.key ?? '';
+}
+
+watch(
+  () => `${layoutMode.value}:${weekModel.value.days.map((day) => day.key).join(',')}`,
+  () => {
+    if (layoutMode.value !== 'calendar') return;
+    const days = weekModel.value.days;
+    if (days.some((day) => day.key === selectedDayKey.value)) return;
+    selectedDayKey.value = pickDefaultDay(days);
+  },
+  { immediate: true },
 );
 
 function shiftMonth(delta) {
@@ -86,6 +148,69 @@ function goCurrentWeek() {
   viewWeekStart.value = startOfWeekMonday(new Date());
 }
 
+function goCurrentMonth() {
+  const today = new Date();
+  viewMonth.value = new Date(today.getFullYear(), today.getMonth(), 1);
+}
+
+function shiftPeriod(delta) {
+  if (layoutMode.value === 'list') shiftMonth(delta);
+  else shiftWeek(delta);
+}
+
+function jumpToNow() {
+  if (layoutMode.value === 'list') goCurrentMonth();
+  else goCurrentWeek();
+}
+
+function shortMethod(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const stripped = text.replace(/^Chấm bằng\s+/i, '').replace(/^Chấm\s+/i, '');
+  if (!stripped) return text;
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+}
+
+function methodCaption(row) {
+  const inbound = shortMethod(row?.methodIn);
+  const outbound = shortMethod(row?.methodOut);
+  if (inbound && outbound && inbound !== outbound) return `${inbound} · ${outbound}`;
+  return inbound || outbound || '';
+}
+
+function dayParts(date) {
+  const value = date instanceof Date ? date : new Date(date);
+  return {
+    num: value.getDate(),
+    dow: WEEKDAY_SHORT[value.getDay()] ?? '',
+  };
+}
+
+function dayAria(row) {
+  if (row.kind === 'pending') return `${row.title}. Chưa chấm công`;
+  const status = row.late ? 'Trễ' : 'Đúng giờ';
+  return `${row.title}. Vào ${row.checkIn || 'chưa có'}, ra ${row.checkOut || 'chưa có'}. ${status}`;
+}
+
+function cellAria(cell) {
+  const dateText = cell.date.toLocaleDateString('vi-VN');
+  if (cell.row?.kind === 'work') {
+    const status = cell.row.late ? 'trễ' : 'đúng giờ';
+    return `${dateText}, vào ${cell.row.checkIn || 'chưa có'}, ra ${cell.row.checkOut || 'chưa có'}, ${status}`;
+  }
+  if (cell.row?.kind === 'pending') return `${dateText}, chưa chấm công`;
+  if (cell.weekday === 0) return `${dateText}, chủ nhật`;
+  if (cell.isFuture) return dateText;
+  return `${dateText}, chưa có bản ghi`;
+}
+
+function selectedHeading(cell) {
+  if (!cell) return '';
+  const name = WEEKDAY_LONG[cell.date.getDay()] ?? '';
+  if (cell.isToday) return `Hôm nay · ${name}`;
+  return `${name} · ${cell.date.toLocaleDateString('vi-VN')}`;
+}
+
 function reload() {
   punchLog.value = readEmployeeAttendanceLog();
 }
@@ -95,7 +220,36 @@ defineExpose({ reload });
 
 <template>
   <div class="att-history">
-    <div class="att-history__toolbar">
+    <div class="att-history__bar">
+      <div class="att-history__nav">
+        <button
+          type="button"
+          :aria-label="layoutMode === 'list' ? 'Tháng trước' : 'Tuần trước'"
+          @click="shiftPeriod(-1)"
+        >
+          <AppIcon name="chevronLeft" :size="18" />
+        </button>
+        <div class="att-history__nav-label">
+          <strong>{{ navLabel }}</strong>
+          <button
+            v-if="showJump"
+            type="button"
+            class="att-history__jump"
+            @click="jumpToNow"
+          >
+            {{ jumpLabel }}
+          </button>
+        </div>
+        <button
+          type="button"
+          :aria-label="layoutMode === 'list' ? 'Tháng sau' : 'Tuần sau'"
+          :disabled="!canGoForward"
+          @click="shiftPeriod(1)"
+        >
+          <AppIcon name="chevronRight" :size="18" />
+        </button>
+      </div>
+
       <div class="att-history__modes" role="tablist" aria-label="Cách xem lịch sử">
         <button
           type="button"
@@ -105,7 +259,6 @@ defineExpose({ reload });
           :aria-selected="layoutMode === 'list'"
           @click="layoutMode = 'list'"
         >
-          <AppIcon name="listBullet" :size="16" />
           Danh sách
         </button>
         <button
@@ -116,85 +269,33 @@ defineExpose({ reload });
           :aria-selected="layoutMode === 'calendar'"
           @click="layoutMode = 'calendar'"
         >
-          <AppIcon name="calendar" :size="16" />
-          Lịch tuần
+          Tuần
         </button>
       </div>
+    </div>
 
-      <div v-if="layoutMode === 'list'" class="att-history__nav">
-        <button type="button" aria-label="Tháng trước" @click="shiftMonth(-1)">
-          <AppIcon name="chevronLeft" :size="18" />
-        </button>
-        <span>{{ monthLabel }}</span>
-        <button type="button" aria-label="Tháng sau" :disabled="!canNextMonth" @click="shiftMonth(1)">
-          <AppIcon name="chevronRight" :size="18" />
-        </button>
+    <section
+      class="att-history__stats"
+      :class="{ 'is-week': layoutMode === 'calendar' }"
+      :aria-label="layoutMode === 'list' ? 'Tóm tắt tháng' : 'Tóm tắt tuần'"
+    >
+      <div v-for="stat in summaryStats" :key="stat.label" class="att-history__stat">
+        <strong :class="stat.value > 0 ? `is-${stat.tone}` : ''">{{ stat.value }}</strong>
+        <span>
+          {{ stat.label }}
+          <small v-if="stat.hint">{{ stat.hint }}</small>
+        </span>
       </div>
+    </section>
 
-      <div v-else class="att-history__nav att-history__nav--week">
-        <button type="button" aria-label="Tuần trước" @click="shiftWeek(-1)">
-          <AppIcon name="chevronLeft" :size="18" />
-        </button>
-        <span class="att-history__week-label">{{ weekModel.weekLabel }}</span>
-        <button type="button" aria-label="Tuần sau" :disabled="!canNextWeek" @click="shiftWeek(1)">
-          <AppIcon name="chevronRight" :size="18" />
-        </button>
-      </div>
-      <button
-        v-if="layoutMode === 'calendar' && !isCurrentWeek"
-        type="button"
-        class="att-history__today"
-        @click="goCurrentWeek"
-      >
-        Tuần này
-      </button>
+    <p v-if="placeCaption" class="att-history__place">{{ placeCaption }}</p>
+
+    <div v-if="layoutMode === 'list' && monthModel.rows.length === 0" class="att-history__empty">
+      <span class="att-history__empty-icon" aria-hidden="true">
+        <AppIcon name="clock" :size="22" />
+      </span>
+      <p>Tháng này chưa có bản ghi chấm công trên máy bạn.</p>
     </div>
-
-    <div v-if="layoutMode === 'list'" class="att-history__stats">
-      <article>
-        <span class="att-history__stat-icon att-history__stat-icon--info">
-          <AppIcon name="calendar" :size="16" />
-        </span>
-        <span><small>Đã chấm</small><strong>{{ monthModel.stats.recorded }} ngày</strong></span>
-      </article>
-      <article>
-        <span class="att-history__stat-icon att-history__stat-icon--ok">
-          <AppIcon name="check" :size="16" />
-        </span>
-        <span><small>Đúng giờ</small><strong>{{ monthModel.stats.onTime }} ngày</strong></span>
-      </article>
-      <article>
-        <span class="att-history__stat-icon att-history__stat-icon--warn">
-          <AppIcon name="clock" :size="16" />
-        </span>
-        <span><small>Trễ</small><strong>{{ monthModel.stats.late }} ngày</strong></span>
-      </article>
-      <article>
-        <span class="att-history__stat-icon att-history__stat-icon--miss">
-          <AppIcon name="close" :size="16" />
-        </span>
-        <span><small>Thiếu trên máy</small><strong>{{ monthModel.stats.absent }} ngày</strong></span>
-      </article>
-    </div>
-
-    <div v-else class="att-history__stats att-history__stats--week">
-      <article>
-        <span class="att-history__stat-icon att-history__stat-icon--info">
-          <AppIcon name="calendar" :size="16" />
-        </span>
-        <span><small>Tuần này</small><strong>{{ weekModel.stats.recorded }} ngày chấm</strong></span>
-      </article>
-      <article>
-        <span class="att-history__stat-icon att-history__stat-icon--warn">
-          <AppIcon name="clock" :size="16" />
-        </span>
-        <span><small>Trễ</small><strong>{{ weekModel.stats.late }}</strong></span>
-      </article>
-    </div>
-
-    <p v-if="emptyMonth" class="att-history__empty-month">
-      Tháng này chưa có bản ghi chấm công trên máy bạn.
-    </p>
 
     <template v-else-if="layoutMode === 'list'">
       <section
@@ -215,279 +316,331 @@ defineExpose({ reload });
           :class="{
             'att-history__day--pending': row.kind === 'pending',
             'att-history__day--late': row.kind === 'work' && row.late,
-            'att-history__day--ok': row.kind === 'work' && !row.late,
           }"
+          :aria-label="dayAria(row)"
         >
-          <h3><span>{{ row.title }}</span></h3>
-          <p v-if="row.kind === 'pending'" class="att-history__empty">Chưa chấm công hôm nay</p>
-          <ul v-else>
-            <li v-if="row.checkIn">
-              <span class="att-history__mark att-history__mark--in">
-                <AppIcon name="clock" :size="14" />
-              </span>
-              <span>
-                <b>{{ row.checkIn }}</b>
-                <small>{{ row.methodIn || 'Chấm công' }}</small>
-                <small>{{ placeLabel }}</small>
-              </span>
-              <em :class="row.late ? 'is-late' : 'is-ok'">{{ row.late ? 'Trễ' : 'Đúng giờ' }}</em>
-            </li>
-            <li v-if="row.checkOut">
-              <span class="att-history__mark att-history__mark--out">
-                <AppIcon name="clock" :size="14" />
-              </span>
-              <span>
-                <b>{{ row.checkOut }}</b>
-                <small>{{ row.methodOut || 'Chấm công' }}</small>
-                <small>{{ placeLabel }}</small>
-              </span>
-              <em class="is-ok">Ra ca</em>
-            </li>
-          </ul>
+          <div class="att-history__date">
+            <strong>{{ dayParts(row.date).num }}</strong>
+            <span>{{ dayParts(row.date).dow }}</span>
+          </div>
+          <p v-if="row.kind === 'pending'" class="att-history__pending">Chưa chấm công hôm nay</p>
+          <template v-else>
+            <div class="att-history__span">
+              <p class="att-history__times">
+                <span :class="{ 'is-late': row.late }">{{ row.checkIn || '—' }}</span>
+                <i aria-hidden="true"></i>
+                <span :class="{ 'is-missing': !row.checkOut }">{{ row.checkOut || '—' }}</span>
+              </p>
+              <p v-if="methodCaption(row)" class="att-history__method">{{ methodCaption(row) }}</p>
+            </div>
+            <span class="att-history__pill" :class="row.late ? 'is-late' : 'is-ok'">
+              {{ row.late ? 'Trễ' : 'Đúng giờ' }}
+            </span>
+          </template>
         </article>
       </section>
     </template>
 
-    <div v-else class="att-week-cal" role="grid" aria-label="Lịch chấm công theo tuần">
-      <div class="att-week-cal__head" role="row">
-        <span
-          v-for="label in WEEKDAY_HEADERS"
-          :key="label"
-          class="att-week-cal__dow"
-          role="columnheader"
-        >
-          {{ label }}
-        </span>
-      </div>
-      <div class="att-week-cal__cells" role="row">
-        <button
-          v-for="cell in weekModel.days"
-          :key="cell.key"
-          type="button"
-          class="att-week-cal__cell"
-          :class="{
-            'att-week-cal__cell--today': cell.isToday,
-            'att-week-cal__cell--future': cell.isFuture,
-            'att-week-cal__cell--work': cell.row?.kind === 'work',
-            'att-week-cal__cell--late': cell.row?.kind === 'work' && cell.row.late,
-            'att-week-cal__cell--pending': cell.row?.kind === 'pending',
-            'att-week-cal__cell--off': cell.weekday === 0,
-          }"
-          :disabled="cell.isFuture"
-        >
-          <span class="att-week-cal__date">
+    <template v-else>
+      <div class="att-history__cal" role="grid" aria-label="Lịch chấm công theo tuần">
+        <div class="att-history__dows" role="row">
+          <span
+            v-for="label in WEEKDAY_HEADERS"
+            :key="label"
+            role="columnheader"
+          >
+            {{ label }}
+          </span>
+        </div>
+        <div class="att-history__cells" role="row">
+          <button
+            v-for="cell in weekModel.days"
+            :key="cell.key"
+            type="button"
+            class="att-history__cell"
+            :class="{
+              'is-today': cell.isToday,
+              'is-selected': cell.key === selectedDayKey,
+              'is-future': cell.isFuture,
+              'is-late': cell.row?.kind === 'work' && cell.row.late,
+              'is-ok': cell.row?.kind === 'work' && !cell.row.late,
+              'is-pending': cell.row?.kind === 'pending',
+              'is-off': cell.weekday === 0 && cell.row?.kind !== 'work',
+            }"
+            role="gridcell"
+            :aria-label="cellAria(cell)"
+            :aria-pressed="cell.key === selectedDayKey"
+            :disabled="cell.isFuture"
+            @click="selectedDayKey = cell.key"
+          >
             <em>{{ cell.dayNum }}</em>
-            <small v-if="cell.month !== viewWeekStart.getMonth() + 1">{{ cell.month }}/</small>
-          </span>
-          <span v-if="cell.row?.kind === 'pending'" class="att-week-cal__hint">Hôm nay</span>
-          <span v-else-if="cell.row?.kind === 'work'" class="att-week-cal__times">
-            <span v-if="cell.row.checkIn">{{ cell.row.checkIn }}</span>
-            <span v-if="cell.row.checkOut">{{ cell.row.checkOut }}</span>
-          </span>
-          <span v-else-if="cell.weekday === 0" class="att-week-cal__hint att-week-cal__hint--muted">Nghỉ</span>
-          <span v-else-if="!cell.isFuture" class="att-week-cal__hint att-week-cal__hint--muted">—</span>
-        </button>
+            <i aria-hidden="true"></i>
+          </button>
+        </div>
       </div>
-    </div>
 
-    <ul v-if="layoutMode === 'calendar'" class="att-week-detail hide-scrollbar">
-      <li
-        v-for="cell in weekModel.days.filter((d) => d.row?.kind === 'work' || d.row?.kind === 'pending')"
-        :key="`detail-${cell.key}`"
-        class="att-week-detail__item"
-      >
-        <span class="att-week-detail__when">
-          {{ cell.row.title }}
-        </span>
-        <template v-if="cell.row.kind === 'pending'">
-          <span class="att-week-detail__muted">Chưa chấm</span>
-        </template>
-        <template v-else>
-          <span class="att-week-detail__line">
-            Vào <b>{{ cell.row.checkIn || '—' }}</b>
-            · Ra <b>{{ cell.row.checkOut || '—' }}</b>
+      <article v-if="selectedCell" class="att-history__detail" :aria-label="selectedHeading(selectedCell)">
+        <header class="att-history__detail-head">
+          <h3>{{ selectedHeading(selectedCell) }}</h3>
+          <span
+            v-if="selectedCell.row?.kind === 'work'"
+            class="att-history__pill"
+            :class="selectedCell.row.late ? 'is-late' : 'is-ok'"
+          >
+            {{ selectedCell.row.late ? 'Trễ' : 'Đúng giờ' }}
           </span>
-        </template>
-      </li>
-      <li
-        v-if="!weekModel.days.some((d) => d.row?.kind === 'work' || d.row?.kind === 'pending')"
-        class="att-week-detail__empty"
-      >
-        Tuần này chưa có chấm công trên máy.
-      </li>
-    </ul>
+          <span v-else-if="selectedCell.row?.kind === 'pending'" class="att-history__pill is-pending">
+            Chưa chấm
+          </span>
+        </header>
+
+        <div v-if="selectedCell.row?.kind === 'work'" class="att-history__pair">
+          <div>
+            <small>Vào</small>
+            <strong :class="{ 'is-late': selectedCell.row.late }">{{ selectedCell.row.checkIn || '—' }}</strong>
+          </div>
+          <div>
+            <small>Ra</small>
+            <strong :class="{ 'is-missing': !selectedCell.row.checkOut }">{{ selectedCell.row.checkOut || '—' }}</strong>
+          </div>
+        </div>
+        <p v-else-if="selectedCell.row?.kind === 'pending'" class="att-history__note">
+          Chưa chấm công hôm nay.
+        </p>
+        <p v-else-if="selectedCell.weekday === 0" class="att-history__note">
+          Chủ nhật, không tính công.
+        </p>
+        <p v-else class="att-history__note">
+          Không có bản ghi trên máy.
+        </p>
+        <p
+          v-if="selectedCell.row?.kind === 'work' && methodCaption(selectedCell.row)"
+          class="att-history__method"
+        >
+          {{ methodCaption(selectedCell.row) }}
+        </p>
+      </article>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .att-history {
+  --att-card-shadow: 0 10px 28px color-mix(in srgb, var(--color-tertiary-900) 8%, transparent);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
-.att-history__toolbar {
+.att-history__bar {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
 }
 
-.att-history__modes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-1);
-  padding: 3px;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-muted);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-}
-
-.att-history__mode {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  padding: 0.45rem 0.5rem;
-  border: none;
-  border-radius: calc(var(--radius-lg) - 3px);
-  background: transparent;
-  color: var(--color-text-muted);
-  font-family: inherit;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.att-history__mode--active {
+.att-history__nav,
+.att-history__modes,
+.att-history__stats,
+.att-history__week,
+.att-history__cal,
+.att-history__detail,
+.att-history__empty {
   background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-  color: var(--color-text);
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  box-shadow: var(--att-card-shadow);
 }
 
 .att-history__nav {
   display: flex;
+  flex: 1 1 12rem;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-  color: var(--color-text);
-  font-size: 0.875rem;
-  font-weight: 600;
+  gap: 2px;
+  min-width: 0;
+  padding: 4px;
+  border-radius: 18px;
 }
 
-.att-history__nav--week .att-history__week-label {
-  text-align: center;
-  font-size: 0.8125rem;
-  line-height: 1.35;
-}
-
-.att-history__nav button {
+.att-history__nav > button {
   display: grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
   border: 0;
-  border-radius: var(--radius-full);
-  background: var(--color-surface-muted);
+  border-radius: 14px;
+  background: transparent;
   color: var(--color-text);
   cursor: pointer;
 }
 
-.att-history__nav button:disabled {
-  opacity: 0.35;
+.att-history__nav > button:disabled {
+  opacity: 0.28;
   cursor: default;
 }
 
-.att-history__today {
-  align-self: center;
-  padding: 0.35rem 0.85rem;
-  border: none;
-  border-radius: var(--radius-full);
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
+.att-history__nav > button:focus-visible,
+.att-history__mode:focus-visible,
+.att-history__jump:focus-visible,
+.att-history__cell:focus-visible {
+  outline: 2px solid var(--color-tertiary-500);
+  outline-offset: 2px;
+}
+
+.att-history__nav-label {
+  min-width: 0;
+  text-align: center;
+}
+
+.att-history__nav-label strong {
+  display: block;
+  overflow: hidden;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.att-history__jump {
+  margin-top: 1px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-tertiary-700);
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.att-history__modes {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  margin-left: auto;
+  padding: 4px;
+  border-radius: 18px;
+}
+
+.att-history__mode {
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--color-text-muted);
   font-family: inherit;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
+}
+
+.att-history__mode--active {
+  background: var(--color-tertiary-50);
+  color: var(--color-tertiary-700);
 }
 
 .att-history__stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 0.9rem 0.15rem;
+  border-radius: 18px;
 }
 
-.att-history__stats--week {
-  grid-template-columns: 1fr 1fr;
+.att-history__stats.is-week {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.att-history__stats article {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.att-history__stats small {
-  display: block;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 400;
-}
-
-.att-history__stats strong {
-  color: var(--color-text);
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.att-history__stat-icon {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: var(--radius-md);
-  flex-shrink: 0;
-}
-
-.att-history__stat-icon--info {
-  background: var(--color-tertiary-surface);
-  color: var(--color-tertiary);
-}
-
-.att-history__stat-icon--ok {
-  background: color-mix(in srgb, var(--color-success) 14%, var(--color-surface));
-  color: var(--color-success);
-}
-
-.att-history__stat-icon--warn {
-  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-surface));
-  color: var(--color-warning);
-}
-
-.att-history__stat-icon--miss {
-  background: var(--color-primary-surface);
-  color: var(--color-primary);
-}
-
-.att-history__empty-month {
-  margin: 0;
-  padding: var(--space-6) var(--space-3);
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: var(--color-text-muted);
+.att-history__stat {
+  padding: 0.1rem 0.35rem;
   text-align: center;
 }
 
-.att-history__week {
+.att-history__stat:not(:first-child) {
+  box-shadow: inset 1px 0 0 var(--color-border);
+}
+
+.att-history__stat strong {
+  display: block;
+  color: var(--color-text);
+  font-size: 1.25rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.att-history__stat strong.is-info {
+  color: var(--color-tertiary-700);
+}
+
+.att-history__stat strong.is-ok {
+  color: var(--color-success-tint-fg);
+}
+
+.att-history__stat strong.is-warn {
+  color: var(--color-warning-tint-fg);
+}
+
+.att-history__stat strong.is-miss {
+  color: var(--color-danger-tint-fg);
+}
+
+.att-history__stat span {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.att-history__stat small {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.62rem;
+  font-weight: 500;
+}
+
+.att-history__place {
+  margin: -4px 2px 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.att-history__empty {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  border-radius: 18px;
+  text-align: center;
+}
+
+.att-history__empty-icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-full);
+  background: var(--color-tertiary-50);
+  color: var(--color-tertiary-700);
+}
+
+.att-history__empty p {
+  max-width: 16rem;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.att-history__week {
+  overflow: hidden;
+  border-radius: 18px;
 }
 
 .att-history__week-head {
@@ -495,286 +648,303 @@ defineExpose({ reload });
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: 0 var(--space-1);
+  padding: 0.75rem 0.9rem 0.65rem;
 }
 
 .att-history__week-title {
-  font-size: 0.8125rem;
-  font-weight: 700;
   color: var(--color-text);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .att-history__week-range {
-  font-size: 0.75rem;
-  font-weight: 500;
   color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
 .att-history__day {
-  position: relative;
-  padding: var(--space-3) var(--space-3) var(--space-3)
-    calc(var(--space-2) + 3px + var(--space-3));
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.att-history__day::before {
-  content: '';
-  position: absolute;
-  top: var(--space-2);
-  bottom: var(--space-2);
-  left: var(--space-2);
-  width: 3px;
-  border-radius: 0;
-  background: var(--color-border);
-}
-
-.att-history__day--ok::before {
-  background: var(--color-success);
-}
-
-.att-history__day--late::before,
-.att-history__day--pending::before {
-  background: var(--color-warning);
-}
-
-.att-history__day h3 {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-2);
-  color: var(--color-text);
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.att-history__day ul {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.att-history__day li {
   display: grid;
-  grid-template-columns: 1.6rem minmax(0, 1fr) auto;
-  gap: var(--space-2);
-  align-items: start;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.8rem 0.9rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
 }
 
-.att-history__day b {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
+.att-history__day--pending {
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  background: color-mix(in srgb, var(--color-warning-tint-bg) 70%, var(--color-surface));
 }
 
-.att-history__day small {
+.att-history__date {
+  text-align: center;
+}
+
+.att-history__date strong {
   display: block;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
-.att-history__day em {
-  font-style: normal;
-  font-size: 0.6875rem;
-  font-weight: 600;
-}
-
-.att-history__day em.is-ok {
-  color: var(--color-success);
-}
-
-.att-history__day em.is-late {
-  color: var(--color-warning);
-}
-
-.att-history__mark {
-  display: grid;
-  place-items: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: var(--radius-full);
-  color: var(--color-on-tertiary);
-}
-
-.att-history__mark--in {
-  background: var(--color-success);
-}
-
-.att-history__mark--out {
-  background: var(--color-tertiary);
-}
-
-.att-history__empty {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-}
-
-.att-week-cal {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.att-week-cal__head {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 2px;
-}
-
-.att-week-cal__dow {
-  text-align: center;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: var(--color-text-muted);
-}
-
-.att-week-cal__cells {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: var(--space-1);
-}
-
-.att-week-cal__cell {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.25rem;
-  min-height: 4.25rem;
-  padding: 0.35rem 0.25rem;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  font-family: inherit;
-  text-align: center;
-  cursor: default;
-}
-
-.att-week-cal__cell--today {
-  box-shadow: inset 0 0 0 2px var(--color-primary);
-}
-
-.att-week-cal__cell--work {
-  background: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
-}
-
-.att-week-cal__cell--late {
-  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface));
-}
-
-.att-week-cal__cell--pending {
-  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-surface));
-}
-
-.att-week-cal__cell--off {
-  opacity: 0.55;
-}
-
-.att-week-cal__cell--future {
-  opacity: 0.4;
-}
-
-.att-week-cal__cell:disabled {
-  cursor: default;
-}
-
-.att-week-cal__date {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 1px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
   line-height: 1;
 }
 
-.att-week-cal__date em {
-  font-style: normal;
-  font-size: 0.875rem;
+.att-history__date span {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-text-muted);
+  font-size: 0.65rem;
   font-weight: 700;
-  color: var(--color-text);
+  letter-spacing: 0.02em;
 }
 
-.att-week-cal__date small {
-  font-size: 0.625rem;
-  color: var(--color-text-muted);
+.att-history__span {
+  min-width: 0;
 }
 
-.att-week-cal__times {
+.att-history__times {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  font-size: 0.625rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
   color: var(--color-text);
-  line-height: 1.25;
+  font-size: 1.02rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
 }
 
-.att-week-cal__hint {
-  font-size: 0.625rem;
-  font-weight: 600;
-  color: var(--color-primary);
+.att-history__times i {
+  flex-shrink: 0;
+  width: 0.7rem;
+  height: 1px;
+  background: var(--color-border-strong);
 }
 
-.att-week-cal__hint--muted {
+.att-history__times .is-late {
+  color: var(--color-warning-tint-fg);
+}
+
+.att-history__times .is-missing {
   color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.att-history__method {
+  margin: 2px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
   font-weight: 500;
 }
 
-.att-week-detail {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+.att-history__pending {
   margin: 0;
-  padding: 0;
-  list-style: none;
-  max-height: 14rem;
-  overflow-y: auto;
-}
-
-.att-week-detail__item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.att-week-detail__when {
-  font-size: 0.75rem;
+  color: var(--color-warning-tint-fg);
+  font-size: 0.84rem;
   font-weight: 600;
-  color: var(--color-text);
 }
 
-.att-week-detail__line {
-  font-size: 0.75rem;
+.att-history__pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.att-history__pill.is-ok {
+  background: var(--color-success-tint-bg);
+  color: var(--color-success-tint-fg);
+}
+
+.att-history__pill.is-late {
+  background: var(--color-warning-tint-bg);
+  color: var(--color-warning-tint-fg);
+}
+
+.att-history__pill.is-pending {
+  background: var(--color-surface-muted);
   color: var(--color-text-muted);
 }
 
-.att-week-detail__line b {
-  font-weight: 600;
-  color: var(--color-text);
+.att-history__cal {
+  padding: 0.85rem 0.65rem 0.75rem;
+  border-radius: 18px;
 }
 
-.att-week-detail__muted {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
+.att-history__dows,
+.att-history__cells {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
-.att-week-detail__empty {
-  padding: var(--space-4);
-  font-size: 0.8125rem;
+.att-history__dows span {
   color: var(--color-text-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
   text-align: center;
 }
+
+.att-history__cells {
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.att-history__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 3.15rem;
+  padding: 0.35rem 0;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.att-history__cell em {
+  color: var(--color-text);
+  font-style: normal;
+  font-size: 0.92rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.att-history__cell i {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: transparent;
+}
+
+.att-history__cell.is-ok i {
+  background: var(--color-success);
+}
+
+.att-history__cell.is-late i {
+  background: var(--color-warning);
+}
+
+.att-history__cell.is-pending i {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--color-tertiary-500);
+}
+
+.att-history__cell.is-selected {
+  background: var(--color-tertiary-50);
+}
+
+.att-history__cell.is-today em {
+  color: var(--color-tertiary-700);
+}
+
+.att-history__cell.is-off em,
+.att-history__cell.is-future em {
+  color: var(--color-text-muted);
+}
+
+.att-history__cell.is-future,
+.att-history__cell:disabled {
+  cursor: default;
+}
+
+.att-history__cell.is-future {
+  opacity: 0.4;
+}
+
+.att-history__detail {
+  padding: 0.9rem;
+  border-radius: 18px;
+}
+
+.att-history__detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.att-history__detail-head h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.att-history__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.att-history__pair div {
+  padding: 0.7rem 0.75rem;
+  border-radius: 14px;
+  background: var(--color-surface-muted);
+}
+
+.att-history__pair small {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.att-history__pair strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-tertiary-900);
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+.att-history__pair strong.is-late {
+  color: var(--color-warning-tint-fg);
+}
+
+.att-history__pair strong.is-missing {
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+
+.att-history__note {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.att-history__detail .att-history__method {
+  margin-top: var(--space-2);
+}
+
+@media (hover: hover) {
+  .att-history__nav > button:not(:disabled):hover,
+  .att-history__mode:hover {
+    background: var(--color-surface-muted);
+  }
+
+  .att-history__mode--active:hover {
+    background: var(--color-tertiary-50);
+  }
+
+  .att-history__cell:not(:disabled):hover {
+    background: color-mix(in srgb, var(--color-tertiary-50) 65%, var(--color-surface));
+  }
+
+  .att-history__cell.is-selected:hover {
+    background: var(--color-tertiary-50);
+  }
+}
+
 </style>
