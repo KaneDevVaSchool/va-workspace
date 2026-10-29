@@ -2275,18 +2275,13 @@ function menuItems(message) {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3);
-  padding-top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
   color: var(--color-on-primary);
-  background:
-    linear-gradient(
-      152deg,
-      var(--color-tertiary-600) 0%,
-      var(--color-tertiary-700) 48%,
-      var(--color-tertiary-800) 100%
-    );
-  background-repeat: no-repeat;
-  background-size: 100% calc(100% + env(safe-area-inset-top, 0px));
-  background-position: top;
+  background: linear-gradient(
+    152deg,
+    var(--color-tertiary-600) 0%,
+    var(--color-tertiary-700) 48%,
+    var(--color-tertiary-800) 100%
+  );
   box-shadow: 0 4px 18px color-mix(in srgb, var(--color-tertiary-900) 18%, transparent);
 }
 
@@ -3242,7 +3237,7 @@ function menuItems(message) {
 
 .chat-lightbox__close {
   position: absolute;
-  top: max(var(--space-3), env(safe-area-inset-top, 0px));
+  top: var(--space-3);
   right: var(--space-3);
   display: flex;
   align-items: center;

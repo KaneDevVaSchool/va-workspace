@@ -27,6 +27,16 @@ class EmployeeAttendancePunchTest extends TestCase
             'services.hrm.api_base_url' => 'https://hrm.test',
             'services.hrm.api_token' => 'test-token',
         ]);
+
+        Http::fake([
+            'https://hrm.test/api/v1/attendance/check-in-context*' => Http::response([
+                'data' => [
+                    'gps_enforced' => false,
+                    'check_in_use_gps' => false,
+                    'check_in_use_wifi' => false,
+                ],
+            ]),
+        ]);
     }
 
     protected function tearDown(): void
@@ -346,6 +356,34 @@ class EmployeeAttendancePunchTest extends TestCase
             && ($request['check_out_time'] ?? null) === '17:05'
             && ($request['check_in_method'] ?? null) === 'Chấm bằng nút'
             && ($request['check_out_method'] ?? null) === 'GPS');
+    }
+
+    public function test_rejects_punch_outside_branch_gps_tolerance(): void
+    {
+        Http::fake([
+            'https://hrm.test/api/v1/attendance/check-in-context*' => Http::response([
+                'data' => [
+                    'gps_enforced' => true,
+                    'latitude' => 10.762622,
+                    'longitude' => 106.660172,
+                    'gps_tolerance_meters' => 80,
+                    'branch' => ['name' => 'Cơ sở thử'],
+                ],
+            ]),
+            'https://hrm.test/api/v1/attendance/punches*' => Http::response(['data' => []]),
+        ]);
+
+        $this->actingAs($this->employee())
+            ->postJson('/api/attendance/punches', [
+                'session' => 'morning',
+                'direction' => 'in',
+                'method' => 'Chấm bằng nút',
+                'latitude' => 10.770000,
+                'longitude' => 106.670000,
+                'accuracy_meters' => 10,
+            ])
+            ->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Bạn đang ngoài vùng chấm công của Cơ sở thử (dung sai 80 m). Hãy đến đúng cơ sở rồi thử lại.']);
     }
 
     private function employee(): User

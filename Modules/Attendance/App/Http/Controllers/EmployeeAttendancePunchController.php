@@ -36,6 +36,9 @@ class EmployeeAttendancePunchController extends Controller
             'session' => ['required', Rule::in(['morning', 'afternoon'])],
             'direction' => ['required', Rule::in(['in', 'out'])],
             'method' => ['required', 'string', 'max:64'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'accuracy_meters' => ['nullable', 'numeric', 'min:0', 'max:5000'],
         ], [
             'session.required' => 'Chưa xác định ca chấm công.',
             'session.in' => 'Ca chấm công phải là sáng hoặc chiều.',
@@ -56,6 +59,15 @@ class EmployeeAttendancePunchController extends Controller
                 $validated['session'],
                 $validated['direction'],
                 $method,
+                isset($validated['latitude'], $validated['longitude'])
+                    ? [
+                        'latitude' => (float) $validated['latitude'],
+                        'longitude' => (float) $validated['longitude'],
+                        'accuracy_meters' => isset($validated['accuracy_meters'])
+                            ? (float) $validated['accuracy_meters']
+                            : null,
+                    ]
+                    : null,
             );
         } catch (HrmApiUnavailable $e) {
             return $this->failure($e, 'Không gửi được giờ chấm công về HRM.');

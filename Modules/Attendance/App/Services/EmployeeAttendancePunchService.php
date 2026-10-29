@@ -32,6 +32,7 @@ class EmployeeAttendancePunchService
 
     public function __construct(
         private readonly HrmApiClient $hrmApi,
+        private readonly EmployeeAttendanceCheckInContextService $checkInContext,
     ) {}
 
     /**
@@ -60,6 +61,7 @@ class EmployeeAttendancePunchService
     /**
      * @param  'morning'|'afternoon'  $session
      * @param  'in'|'out'  $direction
+     * @param  array{latitude: float, longitude: float, accuracy_meters?: float|null}|null  $deviceLocation
      * @return array{
      *     check_in_time: ?string,
      *     morning_check_out_time: ?string,
@@ -73,8 +75,15 @@ class EmployeeAttendancePunchService
      *
      * @throws HrmApiUnavailable
      */
-    public function punch(User $user, string $session, string $direction, string $method): array
-    {
+    public function punch(
+        User $user,
+        string $session,
+        string $direction,
+        string $method,
+        ?array $deviceLocation = null,
+    ): array {
+        $this->assertCheckInLocation($user, $deviceLocation);
+
         $uuid = $this->employeeUuid($user);
         $workDate = now()->toDateString();
         $existing = $this->present($this->hrmApi->getWorkspacePunch($uuid, $workDate));
@@ -260,6 +269,45 @@ class EmployeeAttendancePunchService
             if ($ordered[$i - 1] >= $ordered[$i]) {
                 throw HrmApiUnavailable::userFacing('Giờ chấm phải theo thứ tự trong ngày.');
             }
+        }
+    }
+
+    /**
+     * @param  array{latitude: float, longitude: float, accuracy_meters?: float|null}|null  $deviceLocation
+     *
+     * @throws HrmApiUnavailable
+     */
+    private function assertCheckInLocation(User $user, ?array $deviceLocation): void
+    {
+        $context = $this->checkInContext->forUser($user);
+        if (! ($context['gps_enforced'] ?? false)) {
+            return;
+        }
+
+        if ($deviceLocation === null) {
+            throw HrmApiUnavailable::userFacing('Cần bật định vị và cho phép truy cập vị trí để chấm công tại cơ sở.');
+        }
+
+        $lat = $deviceLocation['latitude'] ?? null;
+        $lon = $deviceLocation['longitude'] ?? null;
+        if (! is_numeric($lat) || ! is_numeric($lon)) {
+            throw HrmApiUnavailable::userFacing('Chưa xác định được vị trí thiết bị.');
+        }
+
+        $accuracy = $deviceLocation['accuracy_meters'] ?? null;
+        if (! EmployeeAttendanceGeo::isWithinTolerance(
+            $context,
+            (float) $lat,
+            (float) $lon,
+            is_numeric($accuracy) ? (float) $accuracy : null,
+        )) {
+            $branchName = is_array($context['branch'] ?? null)
+                ? ($context['branch']['short_name'] ?? $context['branch']['name'] ?? 'cơ sở')
+                : 'cơ sở';
+            $tolerance = $context['gps_tolerance_meters'] ?? 100;
+            throw HrmApiUnavailable::userFacing(
+                "Bạn đang ngoài vùng chấm công của {$branchName} (dung sai {$tolerance} m). Hãy đến đúng cơ sở rồi thử lại.",
+            );
         }
     }
 

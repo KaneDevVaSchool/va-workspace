@@ -21,6 +21,7 @@ import {
   recordToServerPayload,
   writeEmployeeAttendanceToday,
 } from '../lib/employeeAttendanceSession';
+import { evaluateCheckInLocation } from '../lib/employeeAttendanceGeo';
 import { nextPunchAction } from '../lib/employeeAttendanceWorkSession';
 
 const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
@@ -35,12 +36,12 @@ const METHODS = [
 ];
 
 const HOME_TILES = [
-  { id: 'qr', label: 'Quét QR', hint: 'Đưa mã tại điểm chấm vào khung', glyph: 'qr', tone: 'violet' },
-  { id: 'face', label: 'Camera Hanet', hint: 'Đưa mặt vào khung camera', glyph: 'camera', tone: 'orange' },
-  { id: 'gps', label: 'GPS', hint: 'Gắn lần chấm với vị trí máy', glyph: 'pin', tone: 'green' },
-  { id: 'wifi', label: 'Chấm bằng WiFi', hint: 'Khi đang dùng mạng công ty', glyph: 'wifi', tone: 'teal' },
-  { id: 'code', label: 'Nhập mã', hint: 'Khi không dùng được cách khác', glyph: 'keyboard', tone: 'rose' },
+  { id: 'qr', label: 'Quét QR', hint: 'Đang bảo trì', glyph: 'qr', tone: 'violet' },
+  { id: 'face', label: 'Camera Hanet', hint: 'Đang bảo trì', glyph: 'camera', tone: 'orange' },
 ];
+
+/** Màn con tạm tắt — chỉ hiện thông báo bảo trì, không mở camera / quét QR. */
+const MAINTENANCE_STEPS = new Set(['qr', 'face']);
 
 const HEADINGS = {
   face: 'Quét khuôn mặt với Hanet',
@@ -103,6 +104,7 @@ const wifiState = ref('idle');
 const wifiSignal = ref(0);
 const confirmOpen = ref(false);
 const pendingMethodId = ref(null);
+const checkInContext = ref(null);
 
 const stored = readEmployeeAttendanceToday();
 const punchRecord = ref(stored ?? {
@@ -126,6 +128,7 @@ let qrScanFrame = 0;
 let geoMap = null;
 let geoMarker = null;
 let geoRing = null;
+let geoBranchRing = null;
 let wifiTimer = 0;
 let syncRetryTimer = 0;
 let stopResume = null;
@@ -139,7 +142,7 @@ let unregisterPageRefresh;
 
 // Màn con (GPS, QR, mã…) lưu trong query `?step=` của router để nút Back của hệ thống (Android Back,
 // vuốt cạnh trên iOS) đóng màn con thay vì thoát cả trang chấm công. PWA không có nút Back của trình duyệt.
-const STEP_SCREENS = new Set(['face', 'gps', 'wifi', 'qr', 'code']);
+const STEP_SCREENS = new Set(['face', 'gps', 'wifi', 'qr']);
 let stepEntries = 0;
 
 const screen = computed(() => {
@@ -197,7 +200,58 @@ const syncLine = computed(() => {
   }
   return null;
 });
+const locationEval = computed(() => evaluateCheckInLocation(checkInContext.value, coords.value));
+
+const branchCheckInLabel = computed(() => {
+  const branch = checkInContext.value?.branch;
+  if (branch?.short_name) return branch.short_name;
+  if (branch?.name) return branch.name;
+  return checkInContext.value?.workplace_label || null;
+});
+
+const geoBlockMessage = computed(() => {
+  if (!checkInContext.value?.gps_enforced) return '';
+  const branch = branchCheckInLabel.value || 'cơ sở';
+  const tolerance = locationEval.value.toleranceMeters ?? checkInContext.value?.gps_tolerance_meters ?? 100;
+  if (locationEval.value.state === 'outside' && locationEval.value.distanceMeters != null) {
+    return `Ngoài vùng chấm công ${branch} (cách ${locationEval.value.distanceMeters} m, dung sai ${tolerance} m).`;
+  }
+  if (geoState.value === 'pending') return 'Đang kiểm tra vị trí…';
+  const failure = GEO_MESSAGES[geoState.value];
+  if (failure) return failure.long;
+  if (locationEval.value.state === 'unknown') {
+    return 'Cần bật định vị để chấm công tại cơ sở.';
+  }
+  return '';
+});
+
+const punchLocationBlocked = computed(() => {
+  if (!checkInContext.value?.gps_enforced) return false;
+  if (geoState.value === 'pending') return true;
+  if (locationEval.value.state === 'outside') return true;
+  return locationEval.value.state === 'unknown';
+});
+
 const geoBanner = computed(() => {
+  const enforced = Boolean(checkInContext.value?.gps_enforced);
+  const branch = branchCheckInLabel.value;
+  const tolerance = locationEval.value.toleranceMeters ?? checkInContext.value?.gps_tolerance_meters;
+
+  if (enforced && locationEval.value.state === 'inside') {
+    const dist = locationEval.value.distanceMeters;
+    const detail = dist != null && tolerance != null ? ` · cách điểm chấm ${dist} m / dung sai ${tolerance} m` : '';
+    const place = branch ? `Trong vùng ${branch}` : 'Trong vùng chấm công';
+    return { tone: 'ok', text: `${place}${detail}` };
+  }
+  if (enforced && locationEval.value.state === 'outside') {
+    return { tone: 'warn', text: geoBlockMessage.value || 'Ngoài vùng chấm công' };
+  }
+  if (enforced && geoState.value === 'pending') {
+    return { tone: 'ok', text: 'Đang đối chiếu vị trí với cơ sở trên HRM…' };
+  }
+  if (enforced && geoBlockMessage.value) {
+    return { tone: 'info', text: geoBlockMessage.value };
+  }
   if (geoState.value === 'granted') {
     const accuracy = coords.value?.accuracy;
     const detail = accuracy ? ` · lệch khoảng ${accuracy} m` : '';
@@ -208,9 +262,12 @@ const geoBanner = computed(() => {
   }
   const failure = GEO_MESSAGES[geoState.value];
   if (failure) {
-    return { tone: 'info', text: `${failure.short} — vẫn chấm được bằng nút, WiFi hoặc mã` };
+    return { tone: 'info', text: enforced ? failure.long : `${failure.short} — vẫn chấm được bằng nút chấm công` };
   }
-  return { tone: 'info', text: 'Chưa bật định vị — vẫn chấm được bằng nút, WiFi hoặc mã' };
+  if (enforced) {
+    return { tone: 'info', text: 'Bật định vị để chấm công đúng vùng cơ sở.' };
+  }
+  return { tone: 'info', text: 'Chưa bật định vị — vẫn chấm được bằng nút chấm công' };
 });
 const geoCanRetry = computed(() => Boolean(GEO_MESSAGES[geoState.value]) && geoState.value !== 'unsupported');
 const geoLongMessage = computed(() => GEO_MESSAGES[geoState.value]?.long || 'Cần quyền vị trí để chấm bằng GPS.');
@@ -243,12 +300,16 @@ const qrCaption = computed(() => {
   if (qrState.value === 'unavailable') return 'Thiết bị không hỗ trợ camera — nhập mã thủ công bên dưới';
   return 'Đưa mã QR tại điểm chấm công vào khung hình';
 });
+const maintenanceLead = computed(() => {
+  if (screen.value === 'qr') return 'Tính năng quét mã QR tạm thời không khả dụng.';
+  if (screen.value === 'face') return 'Tính năng camera Hanet tạm thời không khả dụng.';
+  return '';
+});
+
 const screenSubtitle = computed(() => {
-  if (screen.value === 'face') return 'Quét khuôn mặt tại điểm chấm công';
+  if (MAINTENANCE_STEPS.has(screen.value)) return 'Đang bảo trì';
   if (screen.value === 'gps') return 'Đối chiếu vị trí thiết bị với vùng cho phép';
   if (screen.value === 'wifi') return 'Đối chiếu mạng WiFi công ty';
-  if (screen.value === 'qr') return 'Đưa mã tại điểm chấm công vào khung hình';
-  if (screen.value === 'code') return 'Dành cho trường hợp đặc biệt';
   return '';
 });
 const qrFallback = computed(() => ['denied', 'busy', 'unavailable'].includes(qrState.value));
@@ -260,14 +321,10 @@ const dock = computed(() => {
   if (screen.value === 'success') return { label: 'Quay lại trang chủ', action: 'home' };
   if (screen.value === 'gps') return { label: 'Chấm công', action: 'punch-gps' };
   if (screen.value === 'wifi') return { label: 'Chấm công', action: 'punch-wifi' };
-  if (screen.value === 'face') return { label: 'Ghi nhận khuôn mặt', action: 'punch-face' };
-  if (screen.value === 'qr' && qrFallback.value) return { label: 'Chấm công', action: 'punch-qr-code' };
-  if (screen.value === 'code') return { label: 'Chấm công', action: 'punch-code' };
   return null;
 });
 const dockDisabled = computed(() => {
   if (punching.value) return true;
-  if (screen.value === 'code') return codeValue.value.trim().length < 4;
   if (screen.value === 'qr' && qrFallback.value) return qrValue.value.trim().length < 4;
   if (screen.value === 'wifi') return wifiState.value !== 'connected';
   return false;
@@ -290,9 +347,9 @@ watch(qrValue, () => {
 });
 
 watch(screen, (value, prev) => {
-  if (value === 'face') startCamera();
+  if (value === 'face' && !MAINTENANCE_STEPS.has('face')) startCamera();
   else if (prev === 'face') stopCamera();
-  if (value === 'qr') startQrCamera();
+  if (value === 'qr' && !MAINTENANCE_STEPS.has('qr')) startQrCamera();
   else if (prev === 'qr') stopQrCamera();
   if (value === 'gps') {
     nextTick(() => initGeoMap());
@@ -318,6 +375,7 @@ onMounted(() => {
     }
   }, 45000);
   void hydrateTodayFromHrm();
+  void loadCheckInContext();
   requestLocationIfAlreadyAllowed();
   stopResume = onAppResume(() => {
     // Có mạng lại / quay lại app: đẩy ngay lần chấm đang chờ lên HRM thay vì đợi nhịp 45 giây.
@@ -329,12 +387,25 @@ onMounted(() => {
   if (typeof registerPageRefresh === 'function') {
     unregisterPageRefresh = registerPageRefresh(async () => {
       await hydrateTodayFromHrm();
+      await loadCheckInContext();
       now.value = new Date();
       // Làm mới vị trí chỉ khi đã được cấp quyền — kéo để làm mới không được bật hộp thoại xin quyền.
       if (geoState.value === 'granted') await requestLocation();
     });
   }
 });
+
+async function loadCheckInContext() {
+  try {
+    const { data } = await window.axios.get('/api/attendance/check-in-context');
+    checkInContext.value = data?.data ?? null;
+    if (checkInContext.value?.gps_enforced && geoState.value === 'idle') {
+      void requestLocationIfAlreadyAllowed();
+    }
+  } catch {
+    checkInContext.value = null;
+  }
+}
 
 onBeforeUnmount(() => {
   window.clearInterval(timer);
@@ -510,15 +581,26 @@ async function onConfirmPunch() {
   confirmOpen.value = false;
 }
 
-function onHero() {
+async function onHero() {
+  if (punchLocationBlocked.value) {
+    showClientToast('warning', geoBlockMessage.value || 'Chưa đủ điều kiện vị trí để chấm công.');
+    return;
+  }
+  if (checkInContext.value?.gps_enforced && geoState.value !== 'granted') {
+    const ok = await requestLocation();
+    if (!ok) {
+      showClientToast('warning', geoLongMessage.value);
+      return;
+    }
+    if (locationEval.value.state === 'outside') {
+      showClientToast('warning', geoBlockMessage.value);
+      return;
+    }
+  }
   askPunch('button');
 }
 
 function openMethod(id) {
-  if (id === 'code') {
-    codeValue.value = '';
-    codeError.value = '';
-  }
   if (id === 'qr') {
     qrValue.value = '';
     codeError.value = '';
@@ -543,11 +625,17 @@ async function commitPunch(methodId) {
   syncState.value = 'syncing';
   let synced = false;
   try {
-    const { data } = await window.axios.post('/api/attendance/punches', {
+    const payload = {
       session: session.id,
       direction,
       method: methodLabel,
-    });
+    };
+    if (coords.value && typeof coords.value.lat === 'number' && typeof coords.value.lon === 'number') {
+      payload.latitude = coords.value.lat;
+      payload.longitude = coords.value.lon;
+      if (coords.value.accuracy > 0) payload.accuracy_meters = coords.value.accuracy;
+    }
+    const { data } = await window.axios.post('/api/attendance/punches', payload);
     const remote = normalizeRemoteRow(data?.data);
     if (hasAnyPunch(remote)) rememberToday(remote);
     synced = true;
@@ -647,25 +735,17 @@ async function onDock() {
     askPunch('wifi');
     return;
   }
-  if (action === 'punch-face') {
-    askPunch('face');
-    return;
-  }
   if (action === 'punch-qr-code') {
     if (qrValue.value.trim().length < 4) {
       codeError.value = 'Nhập ít nhất 4 ký tự.';
       return;
     }
     askPunch('qr');
-    return;
   }
-  if (action === 'punch-code') {
-    if (codeValue.value.trim().length < 4) {
-      codeError.value = 'Nhập ít nhất 4 ký tự.';
-      return;
-    }
-    askPunch('code');
-  }
+}
+
+function isMaintenanceStep(step) {
+  return MAINTENANCE_STEPS.has(step);
 }
 
 function requestLocation() {
@@ -748,14 +828,16 @@ async function initGeoMap() {
   // Người dùng có thể đã rời màn GPS trong lúc tải.
   if (geoMap || screen.value !== 'gps' || !mapElRef.value) return;
   const fallback = { lat: 21.0278, lon: 105.8342 };
-  const point = coords.value || fallback;
+  const branch = branchMapPoint();
+  const device = coords.value;
+  const point = device || branch || fallback;
   geoMap = L.map(mapElRef.value, {
     attributionControl: false,
     zoomControl: false,
     // Trên cảm ứng, kéo bằng một ngón làm kẹt thao tác cuộn trang; bản đồ chỉ để xem vị trí.
     dragging: !L.Browser.touch,
     scrollWheelZoom: false,
-  }).setView([point.lat, point.lon], coords.value ? 17 : 13);
+  }).setView([point.lat, point.lon], device || branch ? 17 : 13);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
@@ -767,23 +849,62 @@ async function initGeoMap() {
     iconSize: [34, 34],
     iconAnchor: [17, 30],
   });
-  geoMarker = L.marker([point.lat, point.lon], { icon: pinIcon }).addTo(geoMap);
-  geoRing = L.circle([point.lat, point.lon], {
-    radius: coords.value?.accuracy || 40,
-    className: 'att-geo-ring',
-    weight: 1.5,
-    fillOpacity: 0.12,
-  }).addTo(geoMap);
+  if (branch && checkInContext.value?.gps_tolerance_meters) {
+    geoBranchRing = L.circle([branch.lat, branch.lon], {
+      radius: checkInContext.value.gps_tolerance_meters,
+      className: 'att-geo-branch-ring',
+      weight: 2,
+      fillOpacity: 0.08,
+    }).addTo(geoMap);
+  }
+  if (device) {
+    geoMarker = L.marker([device.lat, device.lon], { icon: pinIcon }).addTo(geoMap);
+    geoRing = L.circle([device.lat, device.lon], {
+      radius: device.accuracy || 40,
+      className: 'att-geo-ring',
+      weight: 1.5,
+      fillOpacity: 0.12,
+    }).addTo(geoMap);
+  } else if (branch) {
+    geoMarker = L.marker([branch.lat, branch.lon], { icon: pinIcon }).addTo(geoMap);
+  }
 
   requestAnimationFrame(() => geoMap?.invalidateSize());
+}
+
+function branchMapPoint() {
+  const ctx = checkInContext.value;
+  if (typeof ctx?.latitude === 'number' && typeof ctx?.longitude === 'number') {
+    return { lat: ctx.latitude, lon: ctx.longitude };
+  }
+  return null;
 }
 
 function updateGeoMap(point) {
   if (!geoMap) return;
   geoMap.setView([point.lat, point.lon], 17);
-  geoMarker?.setLatLng([point.lat, point.lon]);
-  geoRing?.setLatLng([point.lat, point.lon]);
-  geoRing?.setRadius(point.accuracy || 40);
+  if (!geoMarker) {
+    const pinIcon = L?.divIcon({
+      className: 'att-geo-pin',
+      html: '<span></span>',
+      iconSize: [34, 34],
+      iconAnchor: [17, 30],
+    });
+    if (pinIcon) geoMarker = L.marker([point.lat, point.lon], { icon: pinIcon }).addTo(geoMap);
+  } else {
+    geoMarker.setLatLng([point.lat, point.lon]);
+  }
+  if (!geoRing) {
+    geoRing = L.circle([point.lat, point.lon], {
+      radius: point.accuracy || 40,
+      className: 'att-geo-ring',
+      weight: 1.5,
+      fillOpacity: 0.12,
+    }).addTo(geoMap);
+  } else {
+    geoRing.setLatLng([point.lat, point.lon]);
+    geoRing.setRadius(point.accuracy || 40);
+  }
 }
 
 function destroyGeoMap() {
@@ -791,6 +912,7 @@ function destroyGeoMap() {
   geoMap = null;
   geoMarker = null;
   geoRing = null;
+  geoBranchRing = null;
 }
 
 function startWifiCheck() {
@@ -993,7 +1115,10 @@ function stopQrCamera() {
               </div>
             </div>
             <p class="att-hero__geo" :class="`att-hero__geo--${geoBanner.tone}`">
-              <AppIcon :name="geoBanner.tone === 'ok' ? 'check' : 'info'" :size="14" />
+              <AppIcon
+                :name="geoBanner.tone === 'ok' ? 'check' : (geoBanner.tone === 'warn' ? 'alertTriangle' : 'info')"
+                :size="14"
+              />
               <span>{{ geoBanner.text }}</span>
             </p>
             <div v-if="syncLine" class="att-sync-row att-sync-row--on-hero">
@@ -1045,14 +1170,14 @@ function stopQrCamera() {
             <button
               type="button"
               class="att-punch"
-              :disabled="punching || punchComplete"
+              :disabled="punching || punchComplete || punchLocationBlocked"
               :aria-busy="punching"
               @click="onHero"
             >
               <svg v-if="punching" class="att-spin" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="14 42" stroke-linecap="round" />
               </svg>
-              <AttendanceGlyph v-else name="fingerprint" :size="36" />
+              <AttendanceGlyph v-else name="fingerprint" :size="44" />
               <span class="att-punch__label">{{ punching ? 'Đang gửi…' : punchAction.verb }}</span>
               <small v-if="!punching && !punchComplete" class="att-punch__session">{{ punchAction.direction === 'out' ? 'Buổi chiều' : 'Buổi sáng' }}</small>
             </button>
@@ -1065,7 +1190,7 @@ function stopQrCamera() {
               v-for="tile in HOME_TILES"
               :key="tile.id"
               type="button"
-              class="att-tile"
+              class="att-tile att-tile--maintenance"
               @click="openMethod(tile.id)"
             >
               <span class="att-tile__icon" :class="`att-tone--${tile.tone}`">
@@ -1077,49 +1202,16 @@ function stopQrCamera() {
           </div>
         </section>
 
-        <section v-else-if="screen === 'face'" class="att-stack">
-          <p v-if="faceHelp" class="att-note">
-            Đưa mặt vào khung và giữ yên. Camera Hanet tại văn phòng sẽ được nối sau; máy này dùng camera trước để xem trước.
-          </p>
-          <div class="att-face">
-            <video
-              v-show="cameraState === 'live'"
-              ref="videoRef"
-              class="att-face__video"
-              playsinline
-              muted
-              autoplay
-            />
-            <svg v-if="cameraState !== 'live'" class="att-face__art" viewBox="0 0 300 260" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-              <defs>
-                <linearGradient id="att-face-sky" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="var(--color-tertiary-200)" />
-                  <stop offset="100%" stop-color="var(--color-tertiary-400)" />
-                </linearGradient>
-              </defs>
-              <rect width="300" height="260" fill="url(#att-face-sky)" />
-              <circle cx="60" cy="52" r="34" fill="color-mix(in srgb, white 30%, transparent)" />
-              <g transform="translate(90 70)">
-                <ellipse cx="60" cy="150" rx="70" ry="14" fill="color-mix(in srgb, black 10%, transparent)" />
-                <path d="M18 150v-40c0-30 18-52 42-52s42 22 42 52v40z" fill="var(--color-tertiary-900)" />
-                <circle cx="60" cy="48" r="30" fill="var(--color-gold-200)" />
-                <path d="M32 40a28 28 0 0 1 56-2c-10 3-40 3-56 2z" fill="var(--color-umber-900)" />
-                <circle cx="48" cy="48" r="2.6" fill="var(--color-umber-900)" />
-                <circle cx="72" cy="48" r="2.6" fill="var(--color-umber-900)" />
-                <path d="M50 60c4 4 16 4 20 0" stroke="var(--color-umber-400)" stroke-width="2.4" fill="none" stroke-linecap="round" />
-              </g>
-            </svg>
-            <div class="att-face__frame" aria-hidden="true">
-              <span></span><span></span><span></span><span></span>
-            </div>
-            <p class="att-face__caption">{{ faceCaption }}</p>
+        <section v-else-if="isMaintenanceStep(screen)" class="att-stack att-maint">
+          <div class="att-maint__badge" aria-hidden="true">
+            <AppIcon name="alertTriangle" :size="36" />
           </div>
-          <p class="att-face__status">
-            <span class="att-dot" :class="{ 'att-dot--wait': cameraState !== 'live' }"></span>
-            {{ faceStatus }}
+          <h2 class="att-maint__title">Đang bảo trì</h2>
+          <p class="att-maint__lead">{{ maintenanceLead }}</p>
+          <p class="att-banner att-banner--info">
+            <AppIcon name="info" :size="16" />
+            <span>Chấm công bằng nút vân tay ở trang chủ — hệ thống vẫn ghi nhận vị trí và WiFi khi có.</span>
           </p>
-          <p v-if="faceHelpText" class="att-note" role="alert">{{ faceHelpText }}</p>
-          <button v-if="faceCanRetry" type="button" class="att-retry" @click="startCamera">Thử lại</button>
         </section>
 
         <section v-else-if="screen === 'gps'" class="att-stack">
@@ -1186,59 +1278,6 @@ function stopQrCamera() {
           </p>
         </section>
 
-        <section v-else-if="screen === 'qr'" class="att-stack att-qr">
-          <div class="att-qr__frame" :class="{ 'att-qr__frame--found': qrState === 'found' }">
-            <video
-              v-show="qrState === 'live' || qrState === 'found'"
-              ref="qrVideoRef"
-              class="att-qr__video"
-              playsinline
-              muted
-              autoplay
-            />
-            <canvas ref="qrCanvasRef" class="att-qr__canvas" aria-hidden="true"></canvas>
-            <div v-if="qrState !== 'live' && qrState !== 'found'" class="att-qr__fallback" aria-hidden="true">
-              <AttendanceGlyph name="qr" :size="40" />
-            </div>
-            <span></span><span></span><span></span><span></span>
-            <i v-if="qrState === 'live'"></i>
-            <span v-if="qrState === 'found'" class="att-qr__check" aria-hidden="true">
-              <AppIcon name="check" :size="30" :stroke-width="3" />
-            </span>
-          </div>
-          <p class="att-lead">{{ qrCaption }}</p>
-          <button v-if="qrCanRetry" type="button" class="att-retry" @click="startQrCamera">Thử lại</button>
-
-          <label v-if="qrFallback" class="att-code">
-            <span>Mã QR (nhập thủ công)</span>
-            <input
-              v-model="qrValue"
-              type="text"
-              inputmode="text"
-              autocomplete="off"
-              autocapitalize="off"
-              maxlength="40"
-              placeholder="Nhập nội dung mã QR"
-            />
-          </label>
-          <p v-if="qrFallback && codeError" class="att-code__error">{{ codeError }}</p>
-        </section>
-
-        <section v-else-if="screen === 'code'" class="att-stack">
-          <label class="att-code">
-            <span>Mã chấm công</span>
-            <input
-              v-model="codeValue"
-              type="text"
-              inputmode="text"
-              autocomplete="off"
-              autocapitalize="off"
-              maxlength="12"
-              placeholder="Nhập mã"
-            />
-          </label>
-          <p v-if="codeError" class="att-code__error">{{ codeError }}</p>
-        </section>
 
         <section v-else-if="screen === 'success'" class="att-success">
           <svg class="att-success__confetti" viewBox="0 0 320 120" aria-hidden="true">
@@ -1742,7 +1781,7 @@ function stopQrCamera() {
 }
 
 .att-punch__label {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -1783,6 +1822,12 @@ function stopQrCamera() {
   background: color-mix(in srgb, var(--color-tertiary-900) 30%, transparent);
   color: color-mix(in srgb, white 88%, transparent);
   font-weight: 600;
+}
+
+.att-hero__geo--warn {
+  background: color-mix(in srgb, var(--color-gold-200) 55%, white);
+  color: var(--color-umber-900);
+  font-weight: 700;
 }
 
 .att-success__time,
@@ -1829,8 +1874,8 @@ function stopQrCamera() {
   align-self: center;
   display: grid;
   place-items: center;
-  width: 10.5rem;
-  height: 10.5rem;
+  width: 13rem;
+  height: 13rem;
   margin-top: 0;
   overflow: visible;
 }
@@ -1867,10 +1912,10 @@ function stopQrCamera() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  width: 8.25rem;
-  height: 8.25rem;
-  border: 8px solid color-mix(in srgb, var(--color-tertiary-100) 82%, var(--color-on-tertiary));
+  gap: 8px;
+  width: 10.5rem;
+  height: 10.5rem;
+  border: 9px solid color-mix(in srgb, var(--color-tertiary-100) 82%, var(--color-on-tertiary));
   border-radius: var(--radius-full);
   background:
     radial-gradient(circle at 32% 24%, color-mix(in srgb, var(--color-on-tertiary) 32%, var(--color-tertiary-400)), transparent 46%),
@@ -1911,8 +1956,8 @@ function stopQrCamera() {
 }
 
 .att-punch span {
-  max-width: 6.6rem;
-  font-size: 0.86rem;
+  max-width: 8rem;
+  font-size: 0.92rem;
   font-weight: 800;
   line-height: 1.2;
   text-align: center;
@@ -1936,6 +1981,49 @@ function stopQrCamera() {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
+}
+
+.att-tile--maintenance .att-tile__hint {
+  color: var(--color-warning-tint-fg, var(--color-text-muted));
+  font-weight: 700;
+}
+
+.att-maint {
+  align-items: center;
+  text-align: center;
+  padding-top: var(--space-4);
+}
+
+.att-maint__badge {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-warning-tint-bg, color-mix(in srgb, var(--color-gold-200) 40%, white));
+  color: var(--color-warning-tint-fg, var(--color-gold-700));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-gold-400) 35%, transparent);
+}
+
+.att-maint__title {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+.att-maint__lead {
+  margin: 0 0 var(--space-3);
+  max-width: 22rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.att-maint .att-banner {
+  max-width: 22rem;
+  text-align: left;
 }
 
 .att-tile:last-child {
@@ -2529,13 +2617,13 @@ function stopQrCamera() {
   }
 
   .att-punch-wrap {
-    width: 10rem;
-    height: 10rem;
+    width: 12.5rem;
+    height: 12.5rem;
   }
 
   .att-punch {
-    width: 8rem;
-    height: 8rem;
+    width: 10rem;
+    height: 10rem;
   }
 }
 

@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\Attendance\App\Http\Controllers\EmployeeAttendanceCheckInContextController;
 use Modules\Attendance\App\Http\Controllers\EmployeeAttendancePunchController;
 use Modules\Attendance\App\Http\Controllers\EmployeeLeaveBalanceController;
 use Modules\Attendance\App\Http\Controllers\EmployeeLeaveCatalogController;
@@ -20,6 +21,8 @@ Route::middleware('auth')->prefix('attendance')->name('attendance.')->group(func
     Route::post('/leave-requests', [EmployeeLeaveRequestController::class, 'store'])
         ->name('leave-requests.store');
 
+    Route::get('/check-in-context', [EmployeeAttendanceCheckInContextController::class, 'show'])
+        ->name('check-in-context.show');
     Route::get('/punches/today', [EmployeeAttendancePunchController::class, 'today'])
         ->name('punches.today');
     Route::post('/punches', [EmployeeAttendancePunchController::class, 'store'])

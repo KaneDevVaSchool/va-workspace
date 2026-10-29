@@ -84,7 +84,7 @@
             if (viewport) {
                 viewport.setAttribute(
                     'content',
-                    'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content'
+                    'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content'
                 );
             }
             var blockPinch = function (event) {
@@ -201,7 +201,7 @@
             bottom: 0;
             z-index: 99999;
             box-sizing: border-box;
-            padding: 1.25rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+            padding: 1.25rem;
             border-radius: 1rem 1rem 0 0;
             background: var(--color-surface, #ffffff);
             color: var(--color-text, #1f2430);

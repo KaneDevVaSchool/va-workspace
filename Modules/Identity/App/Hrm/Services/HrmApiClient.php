@@ -351,6 +351,27 @@ class HrmApiClient
      *
      * @throws HrmApiUnavailable
      */
+    /**
+     * Chi nhánh / GPS / WiFi chấm công — GET /api/v1/attendance/check-in-context.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function getAttendanceCheckInContext(string $employeeUuid): array
+    {
+        $response = $this->timesheetRequest(
+            'get',
+            '/api/v1/attendance/check-in-context',
+            ['employee_uuid' => $employeeUuid],
+            forbiddenMessage: 'Workspace chưa được cấp quyền đọc cấu hình chấm công từ HRM. Liên hệ IT.',
+        );
+
+        $data = $response?->json('data');
+
+        return is_array($data) ? $data : [];
+    }
+
     public function getWorkspacePunch(string $employeeUuid, string $workDate): ?array
     {
         $response = $this->timesheetRequest('get', '/api/v1/attendance/punches', [

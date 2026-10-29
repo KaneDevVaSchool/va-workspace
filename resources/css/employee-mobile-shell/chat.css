@@ -173,7 +173,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  /* Header chat đã tự cộng safe-area; reset để không bị --unified (theme.css) chèn 16px nền trắng phía trên. */
+  /* Header chat full-bleed; reset padding unified để không chèn nền canvas phía trên. */
   padding-top: 0;
   padding-bottom: 0;
 }
@@ -185,13 +185,7 @@
 }
 
 .employee-shell__content--chat-thread .chat-dock {
-  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom, 0px));
-}
-
-/* PWA: khung nhập và hàng công cụ nhích lên khỏi mép dưới / home indicator. */
-html.employee-mobile-pwa:not(.pwa-vv-keyboard) .employee-shell__content--chat-thread .chat-dock,
-html.pwa-standalone:not(.pwa-vv-keyboard) .employee-shell__content--chat-thread .chat-dock {
-  padding-bottom: calc(0.75rem + max(var(--space-3), env(safe-area-inset-bottom, 0px)));
+  padding-bottom: var(--space-3);
 }
 
 .employee-shell__content--chat-thread .chat-view__composer {
