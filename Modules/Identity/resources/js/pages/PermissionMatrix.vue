@@ -1109,7 +1109,7 @@ onMounted(() => {
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  background: var(--color-bg);
+  background: var(--color-surface-muted);
 }
 
 .perm__module {

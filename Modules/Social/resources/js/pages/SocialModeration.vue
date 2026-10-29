@@ -54,12 +54,6 @@ const queueEmptyTitle = computed(() => {
   return 'Không có bài viết nào đang chờ duyệt.';
 });
 
-const queueEmptyHint = computed(() => {
-  if (isApprovedQueue.value) return 'Bài bạn duyệt từ hàng chờ sẽ xuất hiện ở đây.';
-  if (isRejectedQueue.value) return 'Bài bị từ chối sẽ xuất hiện ở đây để xem xét lại.';
-  return 'Bảng tin đang thông thoáng.';
-});
-
 const queueLoadingLabel = computed(() => {
   if (isApprovedQueue.value) return 'Đang tải bài đã duyệt…';
   if (isRejectedQueue.value) return 'Đang tải bài đã từ chối…';
@@ -396,7 +390,7 @@ onBeforeUnmount(() => {
     <PageHeader
       title="Duyệt bài viết"
       icon="listChecks"
-      description="Duyệt bài bảng tin chung, theo dõi bài đã duyệt và xử lý bài bị từ chối. Phím tắt: J/K chọn bài, A duyệt, R từ chối hoặc thu hồi."
+      description="Duyệt bài viết trước khi hiển thị trên bảng tin."
     >
       <template #actions>
         <button type="button" class="moderation-page__header-btn" :disabled="loading" @click="loadQueue(meta.current_page)">
@@ -409,20 +403,6 @@ onBeforeUnmount(() => {
     <div class="moderation-page__body">
       <div class="moderation-page__queue">
         <div class="moderation-page__queue-head">
-          <div class="moderation-page__stats" aria-label="Tóm tắt hàng duyệt">
-            <span class="moderation-page__stat moderation-page__stat--pending">
-              <AppIcon name="clock" :size="14" />
-              {{ pendingCount }} chờ
-            </span>
-            <span class="moderation-page__stat moderation-page__stat--approved">
-              <AppIcon name="check" :size="14" />
-              {{ approvedCount }} đã duyệt
-            </span>
-            <span class="moderation-page__stat moderation-page__stat--rejected">
-              <AppIcon name="close" :size="14" />
-              {{ rejectedCount }} từ chối
-            </span>
-          </div>
           <div class="moderation-page__tabs hide-scrollbar" role="tablist" aria-label="Hàng duyệt">
             <button
               type="button"
@@ -490,7 +470,6 @@ onBeforeUnmount(() => {
           <div v-else-if="posts.length === 0" class="moderation-page__empty">
             <AppIcon :name="isRejectedQueue ? 'close' : isApprovedQueue ? 'check' : 'listChecks'" :size="22" />
             <p>{{ queueEmptyTitle }}</p>
-            <span>{{ queueEmptyHint }}</span>
           </div>
           <div v-else-if="visiblePosts.length === 0" class="moderation-page__empty">
             <AppIcon name="search" :size="20" />
@@ -587,10 +566,6 @@ onBeforeUnmount(() => {
                 <span class="moderation-page__lead-kicker">
                   {{ isRejected(selected) ? 'Đã từ chối' : isApproved(selected) ? 'Đã duyệt — đang hiển thị' : 'Đang chờ duyệt' }}
                 </span>
-                <p class="moderation-page__lead-desc">
-                  {{ itemWait(selected) }}
-                  · {{ formatSocialTime(isRejected(selected) || isApproved(selected) ? (selected.reviewed_at || selected.created_at) : selected.created_at) }}
-                </p>
               </div>
             </div>
 
@@ -661,7 +636,6 @@ onBeforeUnmount(() => {
 
           <div class="moderation-page__footer">
             <div v-if="isRejected(selected)" class="moderation-page__actions">
-              <p class="moderation-page__hint">J / K chọn bài · A duyệt lại</p>
               <div class="moderation-page__action-btns">
                 <button type="button" class="moderation-page__btn moderation-page__btn--primary" :disabled="acting" @click="approve(selected)">
                   <AppIcon name="check" :size="16" />
@@ -671,7 +645,6 @@ onBeforeUnmount(() => {
             </div>
 
             <div v-else-if="isApproved(selected) && !rejecting" class="moderation-page__actions">
-              <p class="moderation-page__hint">J / K chọn bài · R thu hồi duyệt</p>
               <div class="moderation-page__action-btns">
                 <a :href="postPublicHref(selected)" target="_blank" rel="noopener" class="moderation-page__btn moderation-page__btn--ghost">
                   <AppIcon name="externalLink" :size="16" />
@@ -685,7 +658,6 @@ onBeforeUnmount(() => {
             </div>
 
             <div v-else-if="!rejecting" class="moderation-page__actions">
-              <p class="moderation-page__hint">J / K chọn bài · A duyệt · R từ chối</p>
               <div class="moderation-page__action-btns">
                 <button type="button" class="moderation-page__btn moderation-page__btn--danger" :disabled="acting" @click="openReject">
                   <AppIcon name="close" :size="16" />
@@ -701,7 +673,6 @@ onBeforeUnmount(() => {
             <div v-else class="moderation-page__reject">
               <label class="moderation-page__label" for="reject-reason">
                 {{ isApproved(selected) ? 'Lý do thu hồi duyệt' : 'Lý do từ chối' }}
-                <span>Không bắt buộc — lưu lại để xem xét lại sau</span>
               </label>
               <textarea
                 id="reject-reason"
@@ -731,12 +702,7 @@ onBeforeUnmount(() => {
 
         <div v-else class="moderation-page__empty moderation-page__empty--canvas">
           <AppIcon name="listChecks" :size="28" />
-          <p>
-            {{ posts.length
-              ? 'Chọn một bài viết bên trái để xem.'
-              : queueEmptyTitle }}
-          </p>
-          <span>{{ queueEmptyHint }}</span>
+          <p v-if="posts.length">Chọn một bài viết bên trái để xem.</p>
         </div>
       </aside>
     </div>
@@ -814,36 +780,6 @@ onBeforeUnmount(() => {
   gap: var(--space-2);
   padding: var(--space-3) var(--space-3) var(--space-2);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-border) 75%, transparent);
-}
-
-.moderation-page__stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.moderation-page__stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
-  font-size: 0.6875rem;
-  font-weight: 600;
-}
-
-.moderation-page__stat--pending {
-  color: var(--color-warning-tint-fg);
-}
-
-.moderation-page__stat--approved {
-  color: var(--color-success-tint-fg);
-}
-
-.moderation-page__stat--rejected {
-  color: var(--color-danger-tint-fg);
 }
 
 .moderation-page__tabs {
@@ -1264,17 +1200,9 @@ onBeforeUnmount(() => {
 
 .moderation-page__lead-kicker {
   display: block;
-  margin-bottom: var(--space-1);
   color: var(--color-text-muted);
   font-size: 0.75rem;
   font-weight: 600;
-}
-
-.moderation-page__lead-desc {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 0.9375rem;
-  line-height: 1.45;
 }
 
 .moderation-page__rows {
@@ -1402,14 +1330,8 @@ onBeforeUnmount(() => {
 .moderation-page__actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--space-3);
-}
-
-.moderation-page__hint {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
 }
 
 .moderation-page__action-btns {
@@ -1480,12 +1402,6 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.moderation-page__label span {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 400;
-}
-
 .moderation-page__textarea {
   width: 100%;
   padding: 0.5rem 0.75rem;
@@ -1525,10 +1441,6 @@ onBeforeUnmount(() => {
   .moderation-page__canvas {
     width: 100%;
     max-height: 52%;
-  }
-
-  .moderation-page__hint {
-    display: none;
   }
 }
 

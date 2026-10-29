@@ -2212,7 +2212,7 @@ function menuItems(message) {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  max-width: 78%;
+  max-width: 88%;
   min-width: 0;
 }
 
@@ -2438,7 +2438,9 @@ function menuItems(message) {
 
 .chat-bubble__meta {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
   gap: 0.35rem;
   color: var(--color-text-muted);
   font-size: 0.625rem;
@@ -3239,6 +3241,16 @@ function menuItems(message) {
   cursor: pointer;
 }
 
+.chat-read {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
 .chat-voice {
   display: flex;
   justify-content: space-between;
@@ -3257,9 +3269,8 @@ function menuItems(message) {
 }
 
 .chat-readers__panel {
-  width: 100%;
-  max-width: 22rem;
-  max-height: min(70vh, 24rem);
+  width: min(26rem, 100%);
+  max-height: min(72vh, 28rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
