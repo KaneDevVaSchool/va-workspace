@@ -8,7 +8,7 @@
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
-import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import AttendancePunchConfirmDialog from '../components/AttendancePunchConfirmDialog.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { onAppResume } from '@/lib/appResume';
 import { useOnlineStatus } from '@/composables/useOnlineStatus';
@@ -182,15 +182,33 @@ const punchHint = computed(() => {
   }
   return 'Chưa chấm vào buổi sáng';
 });
-const confirmCopy = computed(() => {
-  const leaving = punchAction.value.direction === 'out';
-  return {
-    title: leaving ? 'Xác nhận chấm ra buổi chiều?' : 'Xác nhận chấm vào buổi sáng?',
-    description: leaving
-      ? `Ghi nhận giờ ra lúc ${timeLabel.value}.`
-      : `Ghi nhận giờ vào lúc ${timeLabel.value}.`,
-    confirmLabel: 'Xác nhận',
-  };
+const punchConfirmMethodLabel = computed(() => {
+  const methodId = pendingMethodId.value;
+  if (!methodId) return 'Chấm bằng nút';
+  return METHODS.find((item) => item.id === methodId)?.label || methodId;
+});
+
+const punchConfirmDeviceCoords = computed(() => {
+  if (!coords.value || typeof coords.value.lat !== 'number' || typeof coords.value.lon !== 'number') {
+    return '';
+  }
+  return formatBranchCoordinates({ lat: coords.value.lat, lon: coords.value.lon });
+});
+
+const punchConfirmBlocked = computed(() => {
+  if (geoState.value === 'unsupported') return false;
+  return punchLocationBlocked.value || geoState.value === 'pending';
+});
+
+const punchConfirmHint = computed(() => {
+  if (geoState.value === 'pending') return 'Đang lấy vị trí — vui lòng đợi vài giây rồi xác nhận.';
+  if (geoState.value !== 'granted' && geoState.value !== 'unsupported') {
+    return GEO_MESSAGES[geoState.value]?.long || 'Cần cho phép định vị trên thiết bị.';
+  }
+  if (punchLocationBlocked.value) {
+    return geoBlockMessage.value || 'Chưa đủ điều kiện vị trí để chấm công.';
+  }
+  return '';
 });
 const syncLine = computed(() => {
   if (syncState.value === 'syncing') {
@@ -602,7 +620,12 @@ function askPunch(methodId) {
 
 function onConfirmOpenChange(open) {
   confirmOpen.value = open;
-  if (open || punching.value) return;
+  if (open) {
+    now.value = new Date();
+    if (geoState.value === 'granted') void requestLocation();
+    return;
+  }
+  if (punching.value) return;
   const methodId = pendingMethodId.value;
   pendingMethodId.value = null;
   if (methodId === 'qr' && screen.value === 'qr' && qrState.value === 'found') {
@@ -1485,14 +1508,32 @@ function stopQrCamera() {
       </footer>
     </div>
 
-    <ConfirmDialog
+    <AttendancePunchConfirmDialog
       :open="confirmOpen"
-      :title="confirmCopy.title"
-      :description="confirmCopy.description"
-      :confirm-label="confirmCopy.confirmLabel"
       :loading="punching"
+      :direction="punchAction.direction || 'in'"
+      :time-label="timeLabel"
+      :date-label="homeDateLabel"
+      :method-label="punchConfirmMethodLabel"
+      :branch-name="activeCheckInBranch?.name || branchCheckInLabel || ''"
+      :branch-code="activeCheckInBranch?.code || ''"
+      :branch-coords="activeBranchCoordsLabel"
+      :device-coords="punchConfirmDeviceCoords"
+      :accuracy-meters="coords?.accuracy ?? null"
+      :location-state="locationEval.state"
+      :distance-meters="locationEval.distanceMeters"
+      :tolerance-meters="locationEval.toleranceMeters ?? checkInContext?.gps_tolerance_meters ?? null"
+      :gps-enforced="Boolean(checkInContext?.gps_enforced)"
+      :map-lat="coords?.lat ?? null"
+      :map-lon="coords?.lon ?? null"
+      :geo-pending="geoState === 'pending'"
+      :branch-options="branchOptions"
+      :active-branch-id="activeCheckInBranch?.id || ''"
+      :confirm-blocked="punchConfirmBlocked"
+      :confirm-hint="punchConfirmHint"
       @update:open="onConfirmOpenChange"
       @confirm="onConfirmPunch"
+      @select-branch="selectCheckInBranch"
     />
   </div>
 </template>

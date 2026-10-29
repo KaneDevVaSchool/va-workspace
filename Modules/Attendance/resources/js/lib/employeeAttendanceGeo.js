@@ -97,6 +97,21 @@ export function nearestCheckInBranch(branches, coords) {
   return best;
 }
 
+export function googleMapsEmbedUrl(latitude, longitude, zoom = 17) {
+  const params = new URLSearchParams({
+    q: `${latitude},${longitude}`,
+    z: String(zoom),
+    hl: 'vi',
+    output: 'embed',
+  });
+  return `https://www.google.com/maps?${params.toString()}`;
+}
+
+export function googleMapsPointUrl(latitude, longitude) {
+  const query = `${latitude},${longitude}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
 /** @param {{ lat: number, lon: number }} branch */
 export function formatBranchCoordinates(branch) {
   if (!branch) return '—';

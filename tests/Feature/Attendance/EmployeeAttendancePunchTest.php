@@ -386,6 +386,51 @@ class EmployeeAttendancePunchTest extends TestCase
             ->assertJsonFragment(['message' => 'Bạn đang ngoài vùng chấm công của Cơ sở thử (dung sai 80 m). Hãy đến đúng cơ sở rồi thử lại.']);
     }
 
+    public function test_accepts_punch_against_branch_uuid_from_list(): void
+    {
+        $branchUuid = '11111111-1111-4111-8111-111111111111';
+
+        Http::fake([
+            'https://hrm.test/api/v1/attendance/check-in-context*' => Http::response([
+                'data' => [
+                    'gps_enforced' => true,
+                    'latitude' => 10.770000,
+                    'longitude' => 106.670000,
+                    'gps_tolerance_meters' => 50,
+                    'branch' => ['name' => 'Cơ sở hồ sơ', 'uuid' => '22222222-2222-4222-8222-222222222222'],
+                    'branches' => [[
+                        'uuid' => $branchUuid,
+                        'name' => 'Cơ sở đúng',
+                        'short_name' => 'CS-D',
+                        'latitude' => 10.762622,
+                        'longitude' => 106.660172,
+                        'gps_tolerance_meters' => 120,
+                        'check_in_use_gps' => true,
+                    ]],
+                ],
+            ]),
+            'https://hrm.test/api/v1/attendance/punches*' => Http::response([
+                'data' => [
+                    'check_in_time' => '08:15',
+                    'check_out_time' => null,
+                ],
+            ]),
+        ]);
+
+        $this->actingAs($this->employee())
+            ->postJson('/api/attendance/punches', [
+                'session' => 'morning',
+                'direction' => 'in',
+                'method' => 'Chấm bằng nút',
+                'latitude' => 10.762700,
+                'longitude' => 106.660200,
+                'accuracy_meters' => 10,
+                'branch_uuid' => $branchUuid,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.check_in_time', '08:15');
+    }
+
     private function employee(): User
     {
         return User::factory()->create([
