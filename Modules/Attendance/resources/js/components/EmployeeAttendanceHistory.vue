@@ -327,9 +327,15 @@ defineExpose({ reload });
           <template v-else>
             <div class="att-history__span">
               <p class="att-history__times">
-                <span :class="{ 'is-late': row.late }">{{ row.checkIn || '—' }}</span>
+                <span class="att-history__clock" :class="{ 'is-late': row.late }">
+                  <b>{{ row.checkIn || '—' }}</b>
+                  <small>Vào</small>
+                </span>
                 <i aria-hidden="true"></i>
-                <span :class="{ 'is-missing': !row.checkOut }">{{ row.checkOut || '—' }}</span>
+                <span class="att-history__clock" :class="{ 'is-missing': !row.checkOut }">
+                  <b>{{ row.checkOut || '—' }}</b>
+                  <small>Ra</small>
+                </span>
               </p>
               <p v-if="methodCaption(row)" class="att-history__method">{{ methodCaption(row) }}</p>
             </div>
@@ -373,7 +379,10 @@ defineExpose({ reload });
             :disabled="cell.isFuture"
             @click="selectedDayKey = cell.key"
           >
-            <em>{{ cell.dayNum }}</em>
+            <em>
+              {{ cell.dayNum }}
+              <small v-if="cell.month !== viewWeekStart.getMonth() + 1">{{ cell.month }}</small>
+            </em>
             <i aria-hidden="true"></i>
           </button>
         </div>
@@ -705,28 +714,46 @@ defineExpose({ reload });
 
 .att-history__times {
   display: flex;
-  align-items: center;
-  gap: 0.45rem;
+  align-items: flex-start;
+  gap: 0.55rem;
   margin: 0;
-  color: var(--color-text);
-  font-size: 1.02rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.03em;
 }
 
 .att-history__times i {
   flex-shrink: 0;
   width: 0.7rem;
   height: 1px;
+  margin-top: 0.55rem;
   background: var(--color-border-strong);
 }
 
-.att-history__times .is-late {
+.att-history__clock {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 2.6rem;
+}
+
+.att-history__clock b {
+  color: var(--color-text);
+  font-size: 1.02rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.att-history__clock small {
+  color: var(--color-text-muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+}
+
+.att-history__clock.is-late b {
   color: var(--color-warning-tint-fg);
 }
 
-.att-history__times .is-missing {
+.att-history__clock.is-missing b {
   color: var(--color-text-muted);
   font-weight: 600;
 }
@@ -815,6 +842,13 @@ defineExpose({ reload });
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+}
+
+.att-history__cell em small {
+  margin-left: 1px;
+  color: var(--color-text-muted);
+  font-size: 0.62rem;
+  font-weight: 600;
 }
 
 .att-history__cell i {
