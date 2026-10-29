@@ -1,7 +1,7 @@
 # Known issues / Nợ kỹ thuật
 
 ## 6 cách tính tiến độ Task đã ẩn khỏi UI vì chưa có công thức (2026-09-30)
-
+a
 `TaskEnums::PROGRESS_TYPES` khai 8 giá trị nhưng `TaskService` chỉ tự tính cho
 `quantity` (và `percent` là người dùng tự nhập). 6 giá trị còn lại —
 `checklist`, `child_weight`, `timeline`, `average`, `duration_weighted`,
