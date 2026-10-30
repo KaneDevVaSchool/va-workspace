@@ -1,6 +1,11 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
+import {
+  buildYoutubeEmbedSrc,
+  preconnectYoutubePlayer,
+  youtubeThumbnailCandidates,
+} from '../lib/linkPreviewUtils.js';
 
 const props = defineProps({
   preview: { type: Object, required: true },
@@ -10,6 +15,10 @@ const props = defineProps({
 const emit = defineEmits(['remove']);
 
 const playing = ref(false);
+const frameReady = ref(false);
+const thumbIndex = ref(0);
+const thumbReady = ref(false);
+const thumbFailed = ref(false);
 
 const PROVIDER_LABELS = {
   youtube: 'YouTube',
@@ -21,6 +30,45 @@ const PROVIDER_LABELS = {
 
 const isArticleEmbed = computed(() => ['workspace', 'website'].includes(props.preview.provider));
 const isVertical = computed(() => props.preview.provider === 'tiktok');
+const isYoutube = computed(() => props.preview.provider === 'youtube');
+const sourceUrl = computed(() => props.preview.url || props.preview.embed_url || '');
+
+const thumbCandidates = computed(() => {
+  if (isYoutube.value) {
+    return youtubeThumbnailCandidates(sourceUrl.value, props.preview.thumbnail_url);
+  }
+  return props.preview.thumbnail_url ? [props.preview.thumbnail_url] : [];
+});
+
+const thumbSrc = computed(() => (
+  thumbFailed.value ? '' : (thumbCandidates.value[thumbIndex.value] || '')
+));
+
+const canPlay = computed(() => {
+  if (isYoutube.value) {
+    return Boolean(buildYoutubeEmbedSrc(sourceUrl.value) || props.preview.embed_url);
+  }
+  return Boolean(props.preview.embed_url);
+});
+
+const playerSrc = computed(() => {
+  if (!playing.value) return '';
+  if (isYoutube.value) {
+    return buildYoutubeEmbedSrc(sourceUrl.value, { autoplay: true }) || props.preview.embed_url || '';
+  }
+  return props.preview.embed_url || '';
+});
+
+watch(
+  () => [props.preview.url, props.preview.embed_url, props.preview.thumbnail_url],
+  () => {
+    playing.value = false;
+    frameReady.value = false;
+    thumbIndex.value = 0;
+    thumbReady.value = false;
+    thumbFailed.value = false;
+  },
+);
 
 const siteLabel = computed(() => {
   if (props.preview.site_name) return props.preview.site_name;
@@ -35,8 +83,41 @@ function providerLabel() {
   return PROVIDER_LABELS[props.preview.provider] || props.preview.provider;
 }
 
+function warmPlayer() {
+  if (isYoutube.value) preconnectYoutubePlayer();
+}
+
 function play() {
-  if (props.preview.embed_url) playing.value = true;
+  if (!canPlay.value) {
+    openOriginal();
+    return;
+  }
+  warmPlayer();
+  frameReady.value = false;
+  playing.value = true;
+}
+
+function onThumbLoad(event) {
+  const img = event.target;
+  if (
+    img?.naturalWidth
+    && img.naturalWidth < 200
+    && thumbIndex.value < thumbCandidates.value.length - 1
+  ) {
+    thumbReady.value = false;
+    thumbIndex.value += 1;
+    return;
+  }
+  thumbReady.value = true;
+}
+
+function onThumbError() {
+  thumbReady.value = false;
+  if (thumbIndex.value < thumbCandidates.value.length - 1) {
+    thumbIndex.value += 1;
+    return;
+  }
+  thumbFailed.value = true;
 }
 
 function openOriginal() {
@@ -98,6 +179,7 @@ function onRemove(event) {
       `link-preview--${preview.provider}`,
       { 'link-preview--vertical': isVertical, 'link-preview--playing': playing },
     ]"
+    @pointerenter="warmPlayer"
   >
     <button
       v-if="removable"
@@ -111,27 +193,36 @@ function onRemove(event) {
 
     <div class="link-preview__media">
       <iframe
-        v-if="playing && preview.embed_url"
-        :src="preview.embed_url"
+        v-if="playing && playerSrc"
+        :src="playerSrc"
+        :title="preview.title || providerLabel()"
         class="link-preview__frame"
-        allow="autoplay; encrypted-media; picture-in-picture"
+        :class="{ 'link-preview__frame--ready': frameReady }"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        referrerpolicy="strict-origin-when-cross-origin"
         allowfullscreen
+        @load="frameReady = true"
       ></iframe>
+      <span v-if="playing && !frameReady" class="link-preview__loading" aria-hidden="true"></span>
 
       <button
-        v-else
+        v-if="!playing"
         type="button"
         class="link-preview__thumb-btn"
-        :aria-label="preview.embed_url ? `Phát video ${providerLabel()}` : `Mở ${providerLabel()} ở tab mới`"
-        @click="preview.embed_url ? play() : openOriginal()"
+        :aria-label="canPlay ? `Phát video ${providerLabel()}` : `Mở ${providerLabel()} ở tab mới`"
+        @pointerdown="warmPlayer"
+        @click="play"
       >
         <img
-          v-if="preview.thumbnail_url"
-          :src="preview.thumbnail_url"
+          v-if="thumbSrc"
+          :src="thumbSrc"
           alt=""
           class="link-preview__thumb-img"
+          :class="{ 'link-preview__thumb-img--ready': thumbReady }"
           loading="lazy"
           decoding="async"
+          @load="onThumbLoad"
+          @error="onThumbError"
         />
         <span v-else class="link-preview__thumb-fallback" aria-hidden="true">
           <AppIcon name="video" :size="32" />
@@ -139,7 +230,7 @@ function onRemove(event) {
 
         <span class="link-preview__scrim" aria-hidden="true"></span>
 
-        <span v-if="preview.embed_url" class="link-preview__play" aria-hidden="true">
+        <span v-if="canPlay" class="link-preview__play" aria-hidden="true">
           <AppIcon name="play" :size="26" />
         </span>
 
@@ -156,8 +247,15 @@ function onRemove(event) {
     </div>
 
     <div class="link-preview__body">
-      <p class="link-preview__title">{{ preview.title || preview.url }}</p>
-      <p v-if="!preview.embed_url" class="link-preview__meta">
+      <a
+        class="link-preview__title"
+        :href="sourceUrl || preview.url"
+        target="_blank"
+        rel="noopener noreferrer"
+      >{{ preview.title || preview.url }}</a>
+      <p v-if="preview.description" class="link-preview__description">{{ preview.description }}</p>
+      <p v-if="preview.site_name" class="link-preview__site">{{ preview.site_name }}</p>
+      <p v-if="!canPlay" class="link-preview__meta">
         Không xem trước được &middot; mở ở {{ providerLabel() }} để xem
       </p>
     </div>
@@ -229,6 +327,7 @@ function onRemove(event) {
 
 .link-preview--youtube {
   --lp-accent: #ff2d2d;
+  max-width: min(100%, 40rem);
 }
 
 .link-preview--facebook {
@@ -316,6 +415,20 @@ function onRemove(event) {
   height: 100%;
   object-fit: contain;
   display: block;
+}
+
+.link-preview__thumb-btn .link-preview__thumb-img {
+  object-fit: cover;
+  opacity: 0;
+}
+
+.link-preview__thumb-btn .link-preview__thumb-img--ready {
+  opacity: 1;
+}
+
+.link-preview__thumb-btn:focus-visible {
+  outline: 2px solid var(--lp-accent);
+  outline-offset: -2px;
 }
 
 .link-preview__thumb-img--cover {
@@ -406,6 +519,38 @@ function onRemove(event) {
   width: 100%;
   height: 100%;
   border: none;
+  opacity: 0;
+}
+
+.link-preview__frame--ready {
+  opacity: 1;
+}
+
+.link-preview__loading {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: 2rem;
+  height: 2rem;
+  margin: -1rem 0 0 -1rem;
+  border-radius: var(--radius-full);
+  border: 2px solid color-mix(in srgb, var(--lp-accent) 35%, transparent);
+  border-top-color: var(--lp-accent);
+  animation: link-preview-spin 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link-preview__loading {
+    animation: none;
+    border-top-color: var(--lp-accent);
+  }
+}
+
+@keyframes link-preview-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .link-preview__body {
@@ -422,6 +567,18 @@ function onRemove(event) {
   font-weight: 600;
   color: var(--color-text);
   line-height: 1.35;
+  text-decoration: none;
+}
+
+.link-preview__body:not(.link-preview__body--article) .link-preview__title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+a.link-preview__title:hover {
+  text-decoration: underline;
 }
 
 .link-preview__title--article {

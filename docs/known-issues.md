@@ -1,5 +1,9 @@
 # Known issues / Nợ kỹ thuật
 
+## Preview YouTube lỗi 153 nếu iframe không gửi Referer (2026-10-30)
+
+Player nhúng hiện "Video player configuration error / Error 153" khi request embed không có header Referer, hoặc thiếu `origin` trùng origin trang. `SocialLinkPreviewCard.vue` phải giữ `referrerpolicy="strict-origin-when-cross-origin"`. `buildYoutubeEmbedSrc` trong `linkPreviewUtils.js` gắn `origin` lúc phát. Không lưu `origin` trong `embed_url` (máy local và production khác origin). Không thêm `sandbox` lên iframe YouTube.
+
 ## 6 cách tính tiến độ Task đã ẩn khỏi UI vì chưa có công thức (2026-09-30)
 a
 `TaskEnums::PROGRESS_TYPES` khai 8 giá trị nhưng `TaskService` chỉ tự tính cho

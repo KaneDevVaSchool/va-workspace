@@ -68,7 +68,7 @@ class SocialLinkPreviewService
         }
         $host = strtolower($host);
 
-        if ($host === 'youtu.be' || str_ends_with($host, '.youtube.com') || $host === 'youtube.com') {
+        if ($this->isYoutubeHost($host)) {
             return SocialLinkPreview::PROVIDER_YOUTUBE;
         }
 
@@ -169,27 +169,149 @@ class SocialLinkPreviewService
         $post->unsetRelation('linkPreviews');
     }
 
+    private function isYoutubeHost(string $host): bool
+    {
+        $host = strtolower($host);
+        if (str_starts_with($host, 'www.')) {
+            $host = substr($host, 4);
+        }
+
+        return $host === 'youtu.be'
+            || $host === 'youtube.com'
+            || $host === 'youtube-nocookie.com'
+            || str_ends_with($host, '.youtube.com')
+            || str_ends_with($host, '.youtube-nocookie.com');
+    }
+
     private function extractYoutubeVideoId(string $url): ?string
     {
         $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        if ($host === '' || ! $this->isYoutubeHost($host)) {
+            return null;
+        }
+
+        $bare = str_starts_with($host, 'www.') ? substr($host, 4) : $host;
         $path = (string) parse_url($url, PHP_URL_PATH);
 
-        if ($host === 'youtu.be') {
-            $id = ltrim($path, '/');
+        if ($bare === 'youtu.be') {
+            $segment = explode('/', trim($path, '/'))[0] ?? '';
 
-            return $id !== '' ? $id : null;
+            return $this->normalizeYoutubeId(is_string($segment) ? $segment : '');
         }
 
         parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
-        if (isset($query['v']) && is_string($query['v']) && $query['v'] !== '') {
-            return $query['v'];
+        if (isset($query['v']) && is_string($query['v'])) {
+            $fromQuery = $this->normalizeYoutubeId($query['v']);
+            if ($fromQuery !== null) {
+                return $fromQuery;
+            }
         }
 
-        if (preg_match('#/(?:live|shorts|embed)/([A-Za-z0-9_-]{6,})#', $path, $m)) {
-            return $m[1];
+        if (preg_match('#/(?:live|shorts|embed|v)/([A-Za-z0-9_-]{11})(?:/|$)#', $path, $matches) === 1) {
+            return $matches[1];
         }
 
         return null;
+    }
+
+    private function normalizeYoutubeId(string $candidate): ?string
+    {
+        return preg_match('/^[A-Za-z0-9_-]{11}$/', $candidate) === 1 ? $candidate : null;
+    }
+
+    private function youtubeTimeParam(string $url): ?string
+    {
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        foreach (['t', 'start'] as $key) {
+            if (isset($query[$key]) && is_string($query[$key]) && $query[$key] !== '') {
+                return $query[$key];
+            }
+        }
+
+        $fragment = (string) parse_url($url, PHP_URL_FRAGMENT);
+        if ($fragment !== '' && preg_match('/(?:^|&)t=([^&]+)/', $fragment, $matches) === 1) {
+            return urldecode($matches[1]);
+        }
+
+        return null;
+    }
+
+    private function youtubeStartSeconds(string $url): ?int
+    {
+        $raw = $this->youtubeTimeParam($url);
+        if ($raw === null) {
+            return null;
+        }
+
+        $raw = strtolower(trim($raw));
+        if ($raw === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d+$/', $raw) === 1) {
+            $seconds = (int) $raw;
+
+            return $seconds > 0 ? $seconds : null;
+        }
+
+        if (preg_match('/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/', $raw, $matches) !== 1) {
+            return null;
+        }
+
+        $seconds = ((int) ($matches[1] ?? 0) * 3600)
+            + ((int) ($matches[2] ?? 0) * 60)
+            + (int) ($matches[3] ?? 0);
+
+        return $seconds > 0 ? $seconds : null;
+    }
+
+    /**
+     * Embed lưu trong DB không gắn `origin`: origin là của trình duyệt
+     * (local khác production). Card tự ghép origin lúc phát để tránh Error 153.
+     */
+    private function youtubeEmbedUrl(string $videoId, string $sourceUrl): string
+    {
+        $params = [
+            'playsinline' => '1',
+            'rel' => '0',
+            'hl' => 'vi',
+        ];
+        $start = $this->youtubeStartSeconds($sourceUrl);
+        if ($start !== null) {
+            $params['start'] = $start;
+        }
+
+        return 'https://www.youtube.com/embed/'.$videoId.'?'.http_build_query($params);
+    }
+
+    private function youtubeThumbnailUrl(array $thumbnails, string $videoId): string
+    {
+        foreach (['maxres', 'standard', 'high', 'medium', 'default'] as $key) {
+            $url = $thumbnails[$key]['url'] ?? null;
+            if (is_string($url) && $url !== '') {
+                return $url;
+            }
+        }
+
+        return "https://i.ytimg.com/vi/{$videoId}/hqdefault.jpg";
+    }
+
+    private function clipText(mixed $value, int $limit): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $value = trim((string) (preg_replace('/\s+/u', ' ', $value) ?? ''));
+        if ($value === '') {
+            return null;
+        }
+
+        if (mb_strlen($value) <= $limit) {
+            return $value;
+        }
+
+        return rtrim(mb_substr($value, 0, $limit - 1)).'…';
     }
 
     private function resolveYoutube(string $url): ?array
@@ -209,19 +331,17 @@ class SocialLinkPreviewService
 
             $item = $response->ok() ? ($response->json('items.0')) : null;
             if (is_array($item)) {
-                $snippet = $item['snippet'] ?? [];
-                $thumbnails = $snippet['thumbnails'] ?? [];
-                $thumbnail = $thumbnails['maxres']['url']
-                    ?? $thumbnails['high']['url']
-                    ?? $thumbnails['medium']['url']
-                    ?? null;
+                $snippet = is_array($item['snippet'] ?? null) ? $item['snippet'] : [];
+                $thumbnails = is_array($snippet['thumbnails'] ?? null) ? $snippet['thumbnails'] : [];
 
                 return [
                     'provider' => SocialLinkPreview::PROVIDER_YOUTUBE,
                     'external_id' => $videoId,
-                    'title' => $snippet['title'] ?? null,
-                    'thumbnail_url' => $thumbnail,
-                    'embed_url' => "https://www.youtube.com/embed/{$videoId}",
+                    'title' => $this->clipText($snippet['title'] ?? null, 500),
+                    'description' => $this->clipText($snippet['description'] ?? null, 1000),
+                    'site_name' => $this->clipText($snippet['channelTitle'] ?? null, 191),
+                    'thumbnail_url' => $this->youtubeThumbnailUrl($thumbnails, $videoId),
+                    'embed_url' => $this->youtubeEmbedUrl($videoId, $url),
                     'is_live' => ($snippet['liveBroadcastContent'] ?? 'none') === 'live',
                 ];
             }
@@ -237,9 +357,11 @@ class SocialLinkPreviewService
         return [
             'provider' => SocialLinkPreview::PROVIDER_YOUTUBE,
             'external_id' => $videoId,
-            'title' => $oembed->json('title'),
-            'thumbnail_url' => $oembed->json('thumbnail_url'),
-            'embed_url' => "https://www.youtube.com/embed/{$videoId}",
+            'title' => $this->clipText($oembed->json('title'), 500),
+            'description' => null,
+            'site_name' => $this->clipText($oembed->json('author_name'), 191),
+            'thumbnail_url' => "https://i.ytimg.com/vi/{$videoId}/hqdefault.jpg",
+            'embed_url' => $this->youtubeEmbedUrl($videoId, $url),
             'is_live' => false,
         ];
     }
