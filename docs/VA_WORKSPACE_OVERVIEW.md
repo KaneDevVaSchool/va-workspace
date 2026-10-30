@@ -16,7 +16,7 @@
 > (migration mới, xem `Modules/Evaluation/Database/migrations`), mục
 > sidebar riêng, quyền `evaluation.manage_global_template`. Danh mục "Vị trí
 > đánh giá" (`evaluation_positions`) **vẫn giữ lại** — độc lập, chỉ mất
-> quan hệ N-N với mẫu. Xem `docs/modules/Evaluation.md` và §7.1, §19, §21.
+> quan hệ N-N với mẫu. Xem `docs/architecture/modules/Evaluation.md` và §7.1, §19, §21.
 >
 > Cập nhật trước — 2026-08-30 (đợt 2) — module `Project`: **Task đứng độc lập +
 > đa vai trò theo dõi/phối hợp**. (1) **Task không bắt buộc thuộc Project**:
@@ -128,7 +128,7 @@ dựng** — xem `plans/2026-09-30-ra-soat-hien-trang-phan-mem.md` để có b�
 | `Chat` | Nhắn tin 1-1 + nhóm, đính kèm, ẩn tin, panel nổi realtime (Pusher) | **Ngoài lộ trình §19** |
 | `Credential` | Quản lý tài khoản/mật khẩu dùng chung, nhà cung cấp, phân quyền người xem | **Ngoài lộ trình §19** |
 | `FeatureRequest` | Ghi nhận yêu cầu tính năng của người dùng, duyệt/từ chối/hoàn thành, export Excel | **Ngoài lộ trình §19.** Thông báo chỉ tới superadmin + người gửi |
-| `Social` | Bảng tin nội bộ: đăng bài (4 loại tường), cảm xúc, bình luận đa cấp, poll, nhóm, sticker, `@mention`, ghim, lượt xem, giới hạn hiển thị theo phòng ban | **Không nằm trong kế hoạch gốc** — dựng ngoài lộ trình §19, chưa có ở bản đồ §2 trước bản cập nhật này. Chi tiết: `docs/modules/Social.md` |
+| `Social` | Bảng tin nội bộ: đăng bài (4 loại tường), cảm xúc, bình luận đa cấp, poll, nhóm, sticker, `@mention`, ghim, lượt xem, giới hạn hiển thị theo phòng ban | **Không nằm trong kế hoạch gốc** — dựng ngoài lộ trình §19, chưa có ở bản đồ §2 trước bản cập nhật này. Chi tiết: `docs/architecture/modules/Social.md` |
 | `Project` | Giai đoạn 1: CRUD dự án (loại dự án, phạm vi/scope, nhãn, thành viên/theo dõi, đính kèm), import/export Excel, nhân bản dự án, ngày kế hoạch + thực tế. Giai đoạn 2: entity **`Task`** thật (bảng `tasks`, WBS đa cấp `parent_id`, `type ∈ {task,phase,category}`), trang **"Tất cả công việc"** xuyên project (`TaskList.vue`), tạo Task qua menu chuột phải (`ProjectQuickActionModals.vue`) hoặc trang riêng **`TaskCreate.vue`**. Bổ sung 2026-08-30 đợt 1: **Task Delegation hàng loạt** (`TaskService::bulkDelegate()`, 1 người nhận, permission `task.delegate`), **chế độ xem Lịch** (`TaskCalendarView.vue`, tháng/tuần), **Dual Progress Bar** dùng chung. Bổ sung 2026-08-30 đợt 2: **Task đứng độc lập** (`project_id` nullable — "công việc thường xuyên"), **watchers/collaborators** many-to-many, **creation settings** (ẩn/hiện chéo, tự hoàn thành theo báo cáo, yêu cầu mô tả/đính kèm báo cáo), mức độ quan trọng thống nhất thang B1 5 bậc, liên kết tiêu chí đánh giá phòng ban làm nguồn "loại công việc" (`use_for_task_type`) | Giai đoạn 1+2 đã xong. **Sprint board, Gantt và Worklog ĐÃ CÓ** (`ProjectSprintBoard.vue`, `ProjectGanttTab.vue`, worklog trong `TaskDetail.vue`). **Roll-up tiến độ Task → Project đã có** qua `ProjectProgressCalculator` (module Project, 30/09) — cả trang Dự án và Dashboard dùng chung, có test `ProjectProgressRollupTest`. Task Delegation (§6) đã có bulk delegate (bọc transaction, chỉ giao cho người `status=active`) nhưng **chưa** có luồng accept/reject của người nhận, và **chưa siết phạm vi theo phòng ban** (watchers/collaborators là theo dõi/phối hợp, không phải delegation). `progress_type`: chỉ `percent` + `quantity` có logic thật và được chọn trên UI (`TaskEnums::SELECTABLE_PROGRESS_TYPES`); 6 giá trị còn lại đã ẩn khỏi UI vì chưa có công thức. Creation settings đã có cột + validate, enforcement runtime chưa rà soát hết. `project_quick_items` chỉ còn dùng cho baseline/signature. Xem §2, §6, §10, §16 |
 | `Attendance` | Đơn nghỉ qua API VA-HRM (loại nghỉ, số dư, gửi đơn, luồng duyệt). **Duyệt bảng công** (2026-10-14): Trưởng đơn vị xem / duyệt / từ chối bảng chấm công HRM tại `/attendance/timesheet-approvals` (`EmployeeTimesheetApprovalController` → `HrmApiClient` → API v1 `attendance/timesheet-approvals*`, ability `attendance:approve`); webhook `attendance.timesheet.status_changed` → `ProcessTimesheetStatusChangedJob` → chuông + web push (`NotificationService::notifySystem`, không có actor) | HRM là nguồn quyền: Workspace chỉ gửi `hrm_employee_uuid` của user đăng nhập, không nhận uuid từ trình duyệt. Token riêng tùy chọn `HRM_TIMESHEET_API_TOKEN` (fallback `HRM_API_TOKEN`) — token phải **mint sau** khi cấp ability. Mục sidebar «Duyệt bảng công» chỉ hiện khi có bảng chờ (badge, cache 60s). Thông báo URL tuyệt đối (bảng trên HRM) mở tab mới. Thiết kế: `va-hrm/docs/checklist-timesheet-approval.md` |
 | `Example` | Module mẫu | Copy khi tạo module mới (`new-module`) |
@@ -145,7 +145,7 @@ dựng** — xem `plans/2026-09-30-ra-soat-hien-trang-phan-mem.md` để có b�
 
 Giai đoạn B của `Evaluation` (tab «Tiêu chí đánh giá» trong `WorkspaceConfigHub`)
 đã xong. Giai đoạn C (Mẫu đánh giá) từng được dựng rồi **xoá khỏi phạm vi dự
-án** (2026-08-31) — xem §21 Bước 2, `docs/modules/Evaluation.md`.
+án** (2026-08-31) — xem §21 Bước 2, `docs/architecture/modules/Evaluation.md`.
 
 ---
 
@@ -222,7 +222,7 @@ VA Workspace
 ├── WorkspaceConfig        Hub cấu hình phòng ban (thành viên, nhóm, menu)
 │                          + overview super_admin (chỉ xem)
 ├── Social                 Bảng tin nội bộ — bài đăng/cảm xúc/bình luận/poll/
-│                          nhóm/sticker/mention (ngoài lộ trình gốc, xem docs/modules/Social.md)
+│                          nhóm/sticker/mention (ngoài lộ trình gốc, xem docs/architecture/modules/Social.md)
 ├── Project                Dự án — CRUD, loại dự án, phạm vi/nhãn/thành viên, đính kèm,
 │                          import/export Excel, nhân bản, ngày thực tế (Giai đoạn 1); Task
 │                          thật — WBS đa cấp, trang "Tất cả công việc" xuyên project
@@ -493,7 +493,7 @@ tasks
 > Tính năng "Mẫu đánh giá" (`evaluation_templates` — gộp nhiều
 > `evaluation_criteria` thành 1 bộ có trọng số) từng được dựng rồi **xoá
 > khỏi phạm vi dự án** (2026-08-31), chưa từng có phiếu đánh giá thực tế
-> dùng đến. Xem `docs/modules/Evaluation.md`.
+> dùng đến. Xem `docs/architecture/modules/Evaluation.md`.
 
 ### 7.2 Schema `task_scoring_configs`
 
@@ -794,7 +794,7 @@ project_documents          -- "Tài liệu dự án": có folder, người dùng
 | **1b** | Hub `WorkspaceConfig`: thành viên, gán role, sidebar theo phòng ban, overview super_admin | Phase 1 | **Xong** — thiếu tab Evaluation |
 | **1c** | Module `Evaluation` Giai đoạn B: tiêu chí đánh giá (2 kiểu), tab trong WorkspaceConfigHub | Phase 1b | **Xong** |
 | **1e** | Module `Evaluation` Giai đoạn C: Mẫu đánh giá + Vị trí đánh giá + mẫu dùng chung toàn hệ thống + trường tùy biến + Export Excel, mục **sidebar riêng** (khác Giai đoạn B). Kế hoạch: `plans/2026-08-26-mau-danh-gia.md` | Phase 1c | **Đã xoá (2026-08-31)** — dựng xong rồi bị bỏ khỏi phạm vi dự án, chưa từng có phiếu đánh giá thực tế dùng đến. "Vị trí đánh giá" (`evaluation_positions`) vẫn còn, chỉ mất quan hệ với mẫu |
-| **1d** *(ngoài kế hoạch)* | Module `Social`: bảng tin, cảm xúc, bình luận, poll, nhóm — làm song song, không nằm trong lộ trình gốc | — | **Xong phần lõi** — lượt xem + giới hạn hiển thị theo phòng ban đang dở (working tree), xem `docs/modules/Social.md` §5 |
+| **1d** *(ngoài kế hoạch)* | Module `Social`: bảng tin, cảm xúc, bình luận, poll, nhóm — làm song song, không nằm trong lộ trình gốc | — | **Xong phần lõi** — lượt xem + giới hạn hiển thị theo phòng ban đang dở (working tree), xem `docs/architecture/modules/Social.md` §5 |
 | **1f** *(ngoài thứ tự gốc)* | Module `Project` Giai đoạn 1: CRUD, loại dự án, phạm vi/nhãn/thành viên, đính kèm, import/export Excel, nhân bản dự án, ngày thực tế, menu chuột phải tạo nhanh mục (`project_quick_items`) | — | **Xong Giai đoạn 1** — làm trước Initiative dù roadmap gốc đặt Project ở Phase 2 |
 | **1g** *(ngoài thứ tự gốc)* | Module `Project` Giai đoạn 2: entity `Task` thật (bảng `tasks`, WBS đa cấp `parent_id`, `type ∈ {task,phase,category}`), trang "Tất cả công việc" xuyên project, `ProjectQuickActionModals` chuyển sang API Task thật, cột chừa chỗ Task Delegation (§6, chưa có logic) | Phase 1f | **Xong** — `project_quick_items` chỉ còn dùng cho `baseline`/`signature`. Sprint board / Worklog / Gantt UI **đã có** (bổ sung sau bản ghi này); roll-up `progress_percent` lên Project **đã có** từ 30/09 (xem Phase 7) |
 | **2** | Module `Initiative`: schema, Service/Repository, UI Vue giao/nhận, roll-up trạng thái | Phase 1, có thể tận dụng `Project` đã có | Chưa |
@@ -857,7 +857,7 @@ rồi bị **xoá khỏi phạm vi dự án** — chưa từng có phiếu đán
 migration (drop bảng), mục sidebar, quyền `evaluation.manage_global_template`.
 "Vị trí đánh giá" (`evaluation_positions`) — danh mục dùng chung, CHỈ ĐỌC —
 **vẫn giữ lại**, chỉ mất quan hệ N-N với mẫu đánh giá. Chi tiết hiện trạng:
-`docs/modules/Evaluation.md`.
+`docs/architecture/modules/Evaluation.md`.
 
 ### Bước 3 — (Project Giai đoạn 2 — Task — đã xong, xem §19 Phase 1g)
 
@@ -875,7 +875,7 @@ migration (drop bảng), mục sidebar, quyền `evaluation.manage_global_templa
 - Đổi Laravel 10 → 11/12 (nợ bảo mật, xem `docs/known-issues.md`) — không chặn Evaluation.
 - Tích hợp HRM API — chưa có API; giữ stub Repository.
 
-Khi triển khai từng phase, tạo `docs/modules/{TenModule}.md` theo `docs/README.md`.
+Khi triển khai từng phase, tạo `docs/architecture/modules/{TenModule}.md` và thêm một dòng vào `docs/architecture/modules/README.md`. Mục lục: `docs/index.md`.
 
 ---
 

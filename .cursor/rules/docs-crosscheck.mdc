@@ -1,0 +1,23 @@
+---
+description: Trước khi code phải đọc docs đúng file BMAD; sau khi sửa phải ghi ngược vào file đó
+alwaysApply: true
+---
+
+# Docs — đọc trước, ghi ngược sau
+
+Skill: `.cursor/skills/docs-crosscheck/SKILL.md`
+
+Mục lục: `docs/index.md`. Bố cục thư mục: `.cursor/rules/docs-bmad.mdc`.
+
+| Việc | File |
+| --- | --- |
+| Chưa rõ hệ thống | `docs/project-overview.md` rồi `docs/VA_WORKSPACE_OVERVIEW.md` |
+| Sửa module | `docs/architecture/modules/<Tên>.md` |
+| Khung chạy, route, quyền chung | `docs/architecture/index.md` |
+| Giao diện, token | `docs/theme.md` |
+| Bug | file module + `docs/known-issues.md` |
+| Deploy | `docs/deployment-guide.md` |
+
+Trước khi sửa: đọc file đó, đối chiếu class / route. Lệch thì tin code, rồi sửa docs cho khớp.
+
+Sau khi sửa: ghi ngược vào cùng file, kèm trang Vue (`path`, `meta.title`). Chưa có file module thì tạo `docs/architecture/modules/<Tên>.md` chỉ với việc vừa làm và thêm dòng mục lục. Đối chiếu phiếu `release/` cùng ngày: tên màn phải trùng docs. Phiếu sai thì sửa rule màn trong script release, không sửa tay phiếu. Không viết vào `docs/modules/` (lối cũ). Không tạo file tạm trong `tmp/`.

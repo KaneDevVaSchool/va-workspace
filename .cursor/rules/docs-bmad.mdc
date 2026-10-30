@@ -1,0 +1,24 @@
+---
+description: Bố cục docs VA Workspace theo BMAD brownfield — file mở đầu ở gốc docs/, thư mục chỉ khi một chủ đề có nhiều file
+alwaysApply: true
+---
+
+# Docs — bố cục BMAD
+
+Skill: `.cursor/skills/docs-bmad/SKILL.md`. Mục lục: `docs/index.md`.
+
+File mở đầu nằm ở gốc `docs/`. Giữ đúng tên. Không chuyển vào thư mục.
+
+| File | Vai trò |
+| --- | --- |
+| `docs/README.md` | Cửa thư mục, trỏ `index.md` |
+| `docs/index.md` | Mục lục |
+| `docs/project-overview.md` | Cửa bức tranh. Bản dài là `docs/VA_WORKSPACE_OVERVIEW.md` — code đang trỏ tên này, không đổi tên |
+| `docs/development-guide.md` | Máy mới |
+| `docs/deployment-guide.md` | Deploy. Chi tiết máy chủ là `docs/PRODUCTION-WORKSPACE-HRM.md` |
+| `docs/theme.md` | Token giao diện, một file |
+| `docs/known-issues.md` | Bẫy. Một file, ở gốc |
+
+Thư mục chỉ khi một chủ đề có nhiều file: `docs/architecture/` (`index.md`, `modules/`). Module đã viết nằm ở `docs/architecture/modules/`. `docs/modules/*.md` chỉ là lối cũ, một dòng trỏ sang.
+
+Thêm tài liệu: một file mở đầu → gốc `docs/`. Chủ đề đã có thư mục → thêm file trong thư mục đó. Chủ đề mới từ 2 file → thư mục + `index.md`. Không tạo `docs/architecture.md` ở gốc. Không viết thiết kế mới vào file lối cũ.

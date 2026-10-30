@@ -1,0 +1,20 @@
+---
+description: Phiếu release — commit theo ngày và tổng kết theo tuần trong thư mục release/
+globs: release/**/*.md
+alwaysApply: false
+---
+
+# Phiếu release
+
+Skill: `.cursor/skills/release-notes/SKILL.md`
+
+Mẫu: `release/README.md`, `release/summary/2026-W44-summary.md`, `release/summary/2026-W44-audit.md`, `release/2026-10-29/README.md`, `release/2026-10-29/audit.md`.
+
+Khi sửa hoặc viết phiếu trong `release/`:
+
+- Một ngày một thư mục `release/YYYY-MM-DD/`: `README.md` (tiếng thường) và `audit.md` (bảng việc + bảng từng lần lưu). Phiếu tuần nằm trong `release/summary/YYYY-Wnn-summary.md` và `YYYY-Wnn-audit.md` (thứ 2 → Chủ nhật) — không để `*-summary.md` ở gốc `release/`. Mục lục là `release/README.md`.
+- Phiếu tuần có mục **Module** (commit theo vùng) và **Tính năng lớn** (message đủ nghĩa). «Sửa tiếp …» từ commit một chữ không tính là tính năng.
+- Bảng commit **cũ → mới**. Message một chữ (`a`, `s`, `updating`…) ghi «Sửa tiếp cùng việc» và màn hình nếu nhận ra. Không bịa nghiệp vụ.
+- Tên màn là `meta.title` của trang Vue, không lấy từ tiền tố controller. `EmployeeLeaveRequest` / `EmployeeRequests.vue` = **Lịch sử**. `EmployeeLeave.vue` = **Nghỉ phép**. Phần Attendance vẫn là Chấm công.
+- Tuần liệt kê từng ngày, kể cả ngày 0 commit trong cửa sổ.
+- Không ghi đè tay một phiếu ngày nếu sắp chạy lại script trong skill — script là nguồn sinh cây thư mục.
