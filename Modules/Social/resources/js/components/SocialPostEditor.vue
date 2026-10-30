@@ -32,6 +32,7 @@ const mentionOpen = ref(false);
 const mentionQuery = ref('');
 const mentionUsers = ref([]);
 const mentionIndex = ref(0);
+const mentionAnchor = ref(null);
 let mentionTimer = null;
 const hashtagOpen = ref(false);
 const hashtagQuery = ref('');
@@ -678,13 +679,14 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div class="post-editor__body-wrap">
+    <div ref="mentionAnchor" class="post-editor__body-wrap">
       <label class="post-editor__label" :for="`${instanceId}-input`">
         {{ compact ? 'Nội dung bình luận' : 'Nội dung bài viết' }}
       </label>
       <EditorContent :id="`${instanceId}-input`" :editor="editor" class="post-editor__body" />
       <SocialMentionPicker
         v-if="mentionOpen && enableMentions"
+        :anchor="mentionAnchor"
         :users="mentionUsers"
         :active-index="mentionIndex"
         :query="mentionQuery"
