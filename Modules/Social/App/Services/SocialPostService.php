@@ -11,6 +11,7 @@ use Modules\Identity\App\Repositories\Contracts\UserRepositoryInterface;
 use Modules\Identity\App\Services\NotificationService;
 use Modules\Identity\App\Services\PermissionService;
 use Modules\Identity\App\Services\ViewAsService;
+use Modules\Social\App\Models\SocialGroup;
 use Modules\Social\App\Models\SocialGroupMember;
 use Modules\Social\App\Models\SocialHashtag;
 use Modules\Social\App\Models\SocialLinkPreview;
@@ -507,7 +508,12 @@ class SocialPostService
                 ]);
             }
 
-            if ($this->groups->membership($groupId, $actor->id) === null) {
+            $group = $this->groups->find($groupId);
+            $isMember = $this->groups->membership($groupId, $actor->id) !== null;
+            $implicit = $group !== null
+                && $group->visibility === SocialGroup::VISIBILITY_PUBLIC
+                && $group->includesCompanyOf($actor);
+            if ($group === null || (! $isMember && ! $implicit && ! $actor->isSuperAdmin())) {
                 throw ValidationException::withMessages([
                     'group_id' => ['Bạn chưa là thành viên của nhóm này.'],
                 ]);

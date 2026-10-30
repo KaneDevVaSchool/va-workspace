@@ -7,6 +7,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Modules\Identity\App\Models\Company;
 use Modules\Identity\App\Services\NotificationService;
 use Modules\Social\App\Models\SocialGroup;
 use Modules\Social\App\Models\SocialGroupJoinRequest;
@@ -23,14 +24,27 @@ class SocialGroupService
 
     public function listMine(User $viewer, int $perPage, int $page, ?string $search): array
     {
-        $paginator = $this->groups->paginateForMember($perPage, $page, $viewer->id, $search);
+        $paginator = $this->groups->paginateForMember(
+            $perPage,
+            $page,
+            $viewer->id,
+            $search,
+            SocialGroup::companyIdOf($viewer),
+        );
 
         return $this->presentPaginator($paginator, $viewer);
     }
 
     public function listDiscoverable(User $viewer, int $perPage, int $page, ?string $search): array
     {
-        $paginator = $this->groups->paginateDiscoverable($perPage, $page, $viewer->id, $search);
+        $paginator = $this->groups->paginateDiscoverable(
+            $perPage,
+            $page,
+            $viewer->id,
+            $search,
+            SocialGroup::companyIdOf($viewer),
+            $viewer->isSuperAdmin(),
+        );
 
         return $this->presentPaginator($paginator, $viewer);
     }
@@ -74,11 +88,20 @@ class SocialGroupService
 
     public function assertCanView(SocialGroup $group, User $viewer): bool
     {
-        if ($group->visibility === SocialGroup::VISIBILITY_PUBLIC) {
+        if ($viewer->isSuperAdmin()) {
             return true;
         }
 
-        return $this->groups->membership($group->id, $viewer->id) !== null || $viewer->isSuperAdmin();
+        $isMember = $this->groups->membership($group->id, $viewer->id) !== null;
+        if ($group->company_id !== null && ! $group->includesCompanyOf($viewer) && ! $isMember) {
+            return false;
+        }
+
+        if ($group->visibility === SocialGroup::VISIBILITY_PUBLIC) {
+            return $group->company_id === null || $group->includesCompanyOf($viewer) || $isMember;
+        }
+
+        return $isMember;
     }
 
     public function present(SocialGroup $group, User $viewer, ?SocialGroupMember $membership = null): array
@@ -89,12 +112,16 @@ class SocialGroupService
         $pending = $membership === null
             ? $this->groups->findPendingJoinRequest($group->id, $viewer->id)
             : null;
+        $implicitMember = $membership === null
+            && $group->visibility === SocialGroup::VISIBILITY_PUBLIC
+            && $group->includesCompanyOf($viewer);
 
         return [
             'id' => $group->id,
             'name' => $group->name,
             'description' => $group->description,
             'visibility' => $group->visibility,
+            'company' => $this->presentCompany($group),
             'cover_url' => $group->cover_path ? Storage::disk('public')->url($group->cover_path) : null,
             'avatar_url' => $group->avatar_path ? Storage::disk('public')->url($group->avatar_path) : null,
             'creator' => $group->creator ? [
@@ -102,9 +129,9 @@ class SocialGroupService
                 'name' => $group->creator->name,
                 'avatar_url' => $group->creator->avatar_url,
             ] : null,
-            'members_count' => $group->members_count ?? $this->groups->membersCount($group->id),
-            'my_role' => $membership?->role,
-            'is_member' => $membership !== null,
+            'members_count' => $this->audienceCount($group),
+            'my_role' => $membership?->role ?? ($implicitMember ? SocialGroupMember::ROLE_MEMBER : null),
+            'is_member' => $membership !== null || $implicitMember,
             'has_pending_request' => $pending?->kind === SocialGroupJoinRequest::KIND_REQUEST,
             'has_pending_invite' => $pending?->kind === SocialGroupJoinRequest::KIND_INVITE,
             'pending_invite_id' => $pending?->kind === SocialGroupJoinRequest::KIND_INVITE ? $pending->id : null,
@@ -124,9 +151,10 @@ class SocialGroupService
             'name' => $group->name,
             'description' => $group->description,
             'visibility' => $group->visibility,
+            'company' => $this->presentCompany($group),
             'cover_url' => $group->cover_path ? Storage::disk('public')->url($group->cover_path) : null,
             'avatar_url' => $group->avatar_path ? Storage::disk('public')->url($group->avatar_path) : null,
-            'members_count' => $group->members_count ?? $this->groups->membersCount($group->id),
+            'members_count' => $this->audienceCount($group),
             'my_role' => null,
             'is_member' => false,
             'has_pending_request' => $pending?->kind === SocialGroupJoinRequest::KIND_REQUEST,
@@ -172,10 +200,14 @@ class SocialGroupService
     public function create(User $creator, array $data, ?UploadedFile $cover = null, ?UploadedFile $avatar = null): SocialGroup
     {
         return DB::transaction(function () use ($creator, $data, $cover, $avatar) {
+            $companyId = $this->resolveCompanyId($creator, $data['company_id'] ?? null);
+            $this->assertCompanyGroupAvailable($companyId);
+
             $group = $this->groups->create([
                 'name' => trim((string) $data['name']),
                 'description' => $data['description'] ?? null,
                 'visibility' => $data['visibility'] ?? SocialGroup::VISIBILITY_PUBLIC,
+                'company_id' => $companyId,
                 'cover_path' => $cover ? $this->storeImage($cover) : null,
                 'avatar_path' => $avatar ? $this->storeImage($avatar) : null,
                 'created_by' => $creator->id,
@@ -192,6 +224,11 @@ class SocialGroupService
         $this->assertIsOwnerOrAdmin($group, $actor);
 
         $payload = array_intersect_key($data, array_flip(['name', 'description', 'visibility']));
+        if (array_key_exists('company_id', $data)) {
+            $companyId = $this->resolveCompanyId($actor, $data['company_id']);
+            $this->assertCompanyGroupAvailable($companyId, $group->id);
+            $payload['company_id'] = $companyId;
+        }
 
         if ($cover) {
             if ($group->cover_path) {
@@ -212,6 +249,13 @@ class SocialGroupService
 
     public function delete(SocialGroup $group, User $actor): void
     {
+        $group->loadMissing('company');
+        if ($group->company !== null && $this->isOfficialLegalEntity($group->company)) {
+            throw ValidationException::withMessages([
+                'group_id' => ['Nhóm pháp nhân không xoá được.'],
+            ]);
+        }
+
         $this->assertIsOwner($group, $actor);
 
         DB::transaction(function () use ($group) {
@@ -229,6 +273,8 @@ class SocialGroupService
 
     public function join(SocialGroup $group, User $actor, ?string $message = null): array
     {
+        $this->assertCompanyAudience($group, $actor);
+
         $pending = $this->groups->findPendingJoinRequest($group->id, $actor->id);
         if ($pending?->kind === SocialGroupJoinRequest::KIND_INVITE) {
             $this->acceptInvite($pending, $actor);
@@ -251,6 +297,8 @@ class SocialGroupService
 
     public function requestJoin(SocialGroup $group, User $actor, ?string $message): SocialGroupJoinRequest
     {
+        $this->assertCompanyAudience($group, $actor);
+
         if ($this->groups->membership($group->id, $actor->id) !== null) {
             throw ValidationException::withMessages([
                 'group_id' => ['Bạn đã là thành viên của nhóm này.'],
@@ -298,6 +346,11 @@ class SocialGroupService
             throw ValidationException::withMessages([
                 'request' => ['Yêu cầu này đã được xử lý.'],
             ]);
+        }
+
+        $applicant = User::query()->find($request->user_id);
+        if ($applicant !== null) {
+            $this->assertCompanyAudience($group, $applicant);
         }
 
         DB::transaction(function () use ($request, $actor, $group) {
@@ -380,6 +433,14 @@ class SocialGroupService
     {
         $this->assertIsOwnerOrAdmin($group, $actor);
 
+        $target = User::query()->find($targetUserId);
+        if ($target === null) {
+            throw ValidationException::withMessages([
+                'user_id' => ['Không tìm thấy người được mời.'],
+            ]);
+        }
+        $this->assertCompanyAudience($group, $target);
+
         if ((int) $targetUserId === (int) $actor->id) {
             throw ValidationException::withMessages([
                 'user_id' => ['Bạn đã là thành viên của nhóm này.'],
@@ -454,6 +515,9 @@ class SocialGroupService
         }
 
         $group = $request->group;
+        if ($group !== null) {
+            $this->assertCompanyAudience($group, $actor);
+        }
 
         DB::transaction(function () use ($request, $actor, $group) {
             $this->groups->updateJoinRequest($request, [
@@ -627,6 +691,157 @@ class SocialGroupService
             'last_page' => $paginator->lastPage(),
             'total' => $paginator->total(),
         ];
+    }
+
+    /**
+     * Tạo nhóm pháp nhân VM, Viễn Đông, Hoàng Việt, CIT nếu công ty đã đồng bộ và chưa có nhóm.
+     * Mở danh sách nhóm cũng gọi hàm này — không chờ quản trị viên bấm tay.
+     *
+     * @return list<SocialGroup>
+     */
+    public function ensureLegalEntityGroups(User $actor): array
+    {
+        $created = [];
+        $companies = Company::query()->where('is_active', true)->orderBy('name')->get();
+        foreach ($companies as $company) {
+            if (! $this->isOfficialLegalEntity($company)) {
+                continue;
+            }
+            if (SocialGroup::query()->where('company_id', $company->id)->exists()) {
+                continue;
+            }
+
+            $group = $this->groups->create([
+                'name' => $company->name,
+                'description' => 'Nhóm của pháp nhân '.$company->name.' ('.$company->code.').',
+                'visibility' => SocialGroup::VISIBILITY_PUBLIC,
+                'company_id' => $company->id,
+                'created_by' => $actor->id,
+            ]);
+            $created[] = $this->groups->find($group->id) ?? $group;
+        }
+
+        return $created;
+    }
+
+    /**
+     * @return list<SocialGroup>
+     */
+    public function provisionLegalEntityGroups(User $actor): array
+    {
+        if (! $actor->isSuperAdmin()) {
+            throw ValidationException::withMessages([
+                'company_id' => ['Chỉ quản trị viên được khởi tạo nhóm pháp nhân.'],
+            ]);
+        }
+
+        return $this->ensureLegalEntityGroups($actor);
+    }
+
+    private function isOfficialLegalEntity(Company $company): bool
+    {
+        $code = strtoupper(trim($company->code));
+        if (in_array($code, SocialGroup::LEGAL_ENTITY_CODES, true)) {
+            return true;
+        }
+
+        $name = mb_strtolower($company->name);
+        if (str_contains($name, 'hoàng việt') || str_contains($name, 'hoang viet')) {
+            return true;
+        }
+        if (str_contains($name, 'việt mỹ') || str_contains($name, 'viet my')) {
+            return true;
+        }
+
+        $isVienDong = str_contains($name, 'viễn đông') || str_contains($name, 'vien dong');
+        $isSavitech = str_contains($name, 'savitech')
+            || str_contains($name, 'công nghệ')
+            || str_contains($name, 'technology');
+        if ($isVienDong && ! $isSavitech) {
+            return true;
+        }
+
+        return preg_match('/(^|[^a-z0-9])cit([^a-z0-9]|$)/i', $company->name) === 1;
+    }
+
+    private function assertCompanyGroupAvailable(?int $companyId, ?int $ignoreGroupId = null): void
+    {
+        if ($companyId === null) {
+            return;
+        }
+
+        $query = SocialGroup::query()->where('company_id', $companyId);
+        if ($ignoreGroupId !== null) {
+            $query->where('id', '!=', $ignoreGroupId);
+        }
+        if ($query->exists()) {
+            throw ValidationException::withMessages([
+                'company_id' => ['Pháp nhân này đã có nhóm.'],
+            ]);
+        }
+    }
+
+    private function resolveCompanyId(User $actor, mixed $companyId): ?int
+    {
+        if ($companyId === null || $companyId === '') {
+            return null;
+        }
+
+        if (! $actor->isSuperAdmin()) {
+            throw ValidationException::withMessages([
+                'company_id' => ['Chỉ quản trị viên được gắn nhóm với pháp nhân.'],
+            ]);
+        }
+
+        $id = (int) $companyId;
+        if (! Company::query()->whereKey($id)->where('is_active', true)->exists()) {
+            throw ValidationException::withMessages([
+                'company_id' => ['Pháp nhân không tồn tại.'],
+            ]);
+        }
+
+        return $id;
+    }
+
+    private function assertCompanyAudience(SocialGroup $group, User $user): void
+    {
+        if ($group->company_id === null || $group->includesCompanyOf($user) || $user->isSuperAdmin()) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'group_id' => ['Nhóm này chỉ dành cho nhân sự của pháp nhân đã gắn.'],
+        ]);
+    }
+
+    /** @return array{id: int, code: string, name: string}|null */
+    private function presentCompany(SocialGroup $group): ?array
+    {
+        $company = $group->company;
+        if ($company === null) {
+            return null;
+        }
+
+        return [
+            'id' => $company->id,
+            'code' => $company->code,
+            'name' => $company->name,
+        ];
+    }
+
+    private function audienceCount(SocialGroup $group): int
+    {
+        if ($group->company_id !== null && $group->visibility === SocialGroup::VISIBILITY_PUBLIC) {
+            return User::query()
+                ->where('status', 'active')
+                ->where(function ($query) use ($group) {
+                    $query->where('company_id', $group->company_id)
+                        ->orWhereHas('department', fn ($department) => $department->where('company_id', $group->company_id));
+                })
+                ->count();
+        }
+
+        return (int) ($group->members_count ?? $this->groups->membersCount($group->id));
     }
 
     private function assertIsOwnerOrAdmin(SocialGroup $group, User $actor): void

@@ -359,7 +359,7 @@ onBeforeUnmount(() => {
                     {{ joinButtonLabel() }}
                 </button>
                 <button
-                    v-if="group?.is_member && group.my_role !== 'owner'"
+                    v-if="group?.is_member && group.my_role !== 'owner' && !group.company"
                     type="button"
                     class="group-wall__header-btn"
                     @click="leaveGroup"
@@ -491,17 +491,21 @@ onBeforeUnmount(() => {
                                 <span class="group-wall__badge">
                                     <AppIcon
                                         :name="
-                                            group.visibility === 'private'
-                                                ? 'lock'
-                                                : 'globe'
+                                            group.company
+                                                ? 'building'
+                                                : group.visibility === 'private'
+                                                  ? 'lock'
+                                                  : 'globe'
                                         "
                                         :size="13"
                                         :stroke-width="1.75"
                                     />
                                     {{
-                                        group.visibility === "private"
-                                            ? "Nhóm bảo mật"
-                                            : "Nhóm công khai"
+                                        group.company
+                                            ? `Nhóm pháp nhân · ${group.company.name}`
+                                            : group.visibility === "private"
+                                              ? "Nhóm bảo mật"
+                                              : "Nhóm công khai"
                                     }}
                                 </span>
                                 <span
@@ -612,6 +616,7 @@ onBeforeUnmount(() => {
         <SocialGroupFormModal
             :open="formOpen"
             :group="group"
+            :can-bind-company="auth.isSuperAdmin"
             @close="formOpen = false"
             @saved="onGroupSaved"
         />

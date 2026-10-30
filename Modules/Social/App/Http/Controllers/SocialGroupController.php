@@ -25,6 +25,7 @@ class SocialGroupController extends Controller
         $page = max((int) $request->query('page', 1), 1);
         $search = trim((string) $request->query('q', ''));
         $tab = $request->query('tab', 'mine');
+        $this->service->ensureLegalEntityGroups($request->user());
 
         $result = $tab === 'discover'
             ? $this->service->listDiscoverable($request->user(), $perPage, $page, $search !== '' ? $search : null)
@@ -62,11 +63,25 @@ class SocialGroupController extends Controller
 
         $viewer = $request->user();
         $canView = $this->service->assertCanView($group, $viewer);
+        if (! $canView && $group->company_id !== null && ! $group->includesCompanyOf($viewer)) {
+            return response()->json(['message' => 'Không tìm thấy nhóm.'], 404);
+        }
 
         return response()->json([
             'group' => $canView
                 ? $this->service->present($group, $viewer)
                 : $this->service->presentPreview($group, $viewer),
+        ]);
+    }
+
+    public function provisionLegalEntities(Request $request): JsonResponse
+    {
+        $groups = $this->service->provisionLegalEntityGroups($request->user());
+
+        return response()->json([
+            'created' => collect($groups)
+                ->map(fn ($group) => $this->service->present($group, $request->user()))
+                ->values(),
         ]);
     }
 

@@ -17,9 +17,17 @@ class StoreSocialGroupRequest extends FormRequest
             'name' => ['required', 'string', 'min:3', 'max:150'],
             'description' => ['nullable', 'string', 'max:2000'],
             'visibility' => ['sometimes', 'in:public,private'],
+            'company_id' => ['sometimes', 'nullable', 'integer', 'exists:companies,id'],
             'cover' => ['sometimes', 'nullable', 'image', 'max:10240'],
             'avatar' => ['sometimes', 'nullable', 'image', 'max:5120'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('company_id') === '' || $this->input('company_id') === 'null') {
+            $this->merge(['company_id' => null]);
+        }
     }
 
     public function messages(): array

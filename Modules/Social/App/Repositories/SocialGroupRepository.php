@@ -13,7 +13,7 @@ class SocialGroupRepository implements SocialGroupRepositoryInterface
     private function baseQuery()
     {
         return SocialGroup::query()
-            ->with(['creator'])
+            ->with(['creator', 'company'])
             ->withCount(['members']);
     }
 
@@ -41,6 +41,20 @@ class SocialGroupRepository implements SocialGroupRepositoryInterface
         $group->delete();
     }
 
+    private function hideForeignCompanyGroups($query, ?int $viewerCompanyId, bool $seeAllCompanies): void
+    {
+        if ($seeAllCompanies) {
+            return;
+        }
+
+        $query->where(function ($inner) use ($viewerCompanyId) {
+            $inner->whereNull('company_id');
+            if ($viewerCompanyId !== null) {
+                $inner->orWhere('company_id', $viewerCompanyId);
+            }
+        });
+    }
+
     private function applySearch($query, ?string $search): void
     {
         $needle = trim((string) $search);
@@ -52,20 +66,48 @@ class SocialGroupRepository implements SocialGroupRepositoryInterface
         $query->where('name', 'like', $like);
     }
 
-    public function paginateDiscoverable(int $perPage, int $page, int $userId, ?string $search = null): LengthAwarePaginator
-    {
+    public function paginateDiscoverable(
+        int $perPage,
+        int $page,
+        int $userId,
+        ?string $search = null,
+        ?int $viewerCompanyId = null,
+        bool $seeAllCompanies = false,
+    ): LengthAwarePaginator {
         $query = $this->baseQuery();
         $this->applySearch($query, $search);
+        $this->hideForeignCompanyGroups($query, $viewerCompanyId, $seeAllCompanies);
+
+        if ($viewerCompanyId !== null) {
+            $query->where(function ($inner) use ($viewerCompanyId) {
+                $inner->whereNull('company_id')
+                    ->orWhere('visibility', '!=', SocialGroup::VISIBILITY_PUBLIC)
+                    ->orWhere('company_id', '!=', $viewerCompanyId);
+            });
+        }
 
         return $query
             ->orderByDesc('created_at')
             ->paginate($perPage, ['*'], 'page', $page);
     }
 
-    public function paginateForMember(int $perPage, int $page, int $userId, ?string $search = null): LengthAwarePaginator
-    {
+    public function paginateForMember(
+        int $perPage,
+        int $page,
+        int $userId,
+        ?string $search = null,
+        ?int $viewerCompanyId = null,
+    ): LengthAwarePaginator {
         $query = $this->baseQuery()
-            ->whereHas('members', fn ($members) => $members->where('user_id', $userId));
+            ->where(function ($inner) use ($userId, $viewerCompanyId) {
+                $inner->whereHas('members', fn ($members) => $members->where('user_id', $userId));
+                if ($viewerCompanyId !== null) {
+                    $inner->orWhere(function ($company) use ($viewerCompanyId) {
+                        $company->where('company_id', $viewerCompanyId)
+                            ->where('visibility', SocialGroup::VISIBILITY_PUBLIC);
+                    });
+                }
+            });
 
         $this->applySearch($query, $search);
 

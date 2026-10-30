@@ -8,6 +8,7 @@ const MASCOT = "/images/congnghe/brand/vas-white-mark.png";
 const props = defineProps({
     open: { type: Boolean, default: false },
     group: { type: Object, default: null },
+    canBindCompany: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["close", "saved"]);
@@ -22,10 +23,12 @@ const avatarPreview = ref("");
 const coverInput = ref(null);
 const avatarInput = ref(null);
 
+const companies = ref([]);
 const form = reactive({
     name: "",
     description: "",
     visibility: "public",
+    company_id: "",
 });
 
 const previewName = computed(() => form.name.trim() || "Tên nhóm của bạn");
@@ -56,6 +59,7 @@ function resetForm() {
     form.name = props.group?.name ?? "";
     form.description = props.group?.description ?? "";
     form.visibility = props.group?.visibility ?? "public";
+    form.company_id = props.group?.company?.id ? String(props.group.company.id) : "";
     coverFile.value = null;
     coverPreview.value = props.group?.cover_url ?? "";
     avatarFile.value = null;
@@ -63,10 +67,23 @@ function resetForm() {
     errors.value = {};
 }
 
+async function loadCompanies() {
+    if (!props.canBindCompany) return;
+    try {
+        const { data } = await window.axios.get("/api/social/companies");
+        companies.value = data.companies ?? [];
+    } catch {
+        companies.value = [];
+    }
+}
+
 watch(
     () => props.open,
     (isOpen) => {
-        if (isOpen) resetForm();
+        if (isOpen) {
+            resetForm();
+            loadCompanies();
+        }
     },
 );
 
@@ -106,6 +123,9 @@ async function submit() {
         data.append("name", form.name.trim());
         data.append("description", form.description.trim());
         data.append("visibility", form.visibility);
+        if (props.canBindCompany) {
+            data.append("company_id", form.company_id || "");
+        }
         if (coverFile.value) data.append("cover", coverFile.value);
         if (avatarFile.value) data.append("avatar", avatarFile.value);
         if (isEdit.value) data.append("_method", "PUT");
@@ -331,6 +351,27 @@ async function submit() {
                                             : errors.description
                                     }}
                                 </span>
+                            </div>
+
+                            <div v-if="canBindCompany" class="group-dialog__field">
+                                <label class="group-dialog__label" for="social-group-company">
+                                    Pháp nhân
+                                </label>
+                                <select
+                                    id="social-group-company"
+                                    v-model="form.company_id"
+                                    class="group-dialog__input"
+                                    :disabled="saving"
+                                >
+                                    <option value="">Không gắn — nhóm công khai hoặc bảo mật</option>
+                                    <option
+                                        v-for="company in companies"
+                                        :key="company.id"
+                                        :value="String(company.id)"
+                                    >
+                                        {{ company.name }} ({{ company.code }})
+                                    </option>
+                                </select>
                             </div>
 
                             <fieldset class="group-dialog__visibility">

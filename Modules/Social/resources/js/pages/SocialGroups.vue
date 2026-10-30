@@ -97,7 +97,29 @@ function actionLabel(group) {
 }
 
 function visibilityLabel(group) {
+    if (group?.company?.name) {
+        return `Nhóm pháp nhân · ${group.company.name}`;
+    }
     return group?.visibility === "private" ? "Nhóm bảo mật" : "Nhóm công khai";
+}
+
+async function provisionLegalEntities() {
+    try {
+        const { data } = await window.axios.post("/api/social/groups/legal-entities");
+        const count = data.created?.length ?? 0;
+        showClientToast(
+            "success",
+            count > 0
+                ? `Đã tạo ${count} nhóm pháp nhân.`
+                : "Các pháp nhân VM, Viễn Đông, Hoàng Việt, CIT đã có nhóm.",
+        );
+        loadGroups(1);
+    } catch (error) {
+        showClientToast(
+            "error",
+            error?.response?.data?.message ?? "Không thể khởi tạo nhóm pháp nhân.",
+        );
+    }
 }
 
 async function onGroupAction(group) {
@@ -334,6 +356,17 @@ onMounted(() => loadGroups(1));
                             item.label
                         }}</span>
                     </button>
+                    <button
+                        v-if="auth.isSuperAdmin"
+                        type="button"
+                        class="groups-page__nav-item"
+                        @click="provisionLegalEntities"
+                    >
+                        <span class="groups-page__nav-icon" aria-hidden="true">
+                            <AppIcon name="building" :size="16" :stroke-width="1.75" />
+                        </span>
+                        <span class="groups-page__nav-label">Khởi tạo nhóm pháp nhân</span>
+                    </button>
                 </nav>
 
                 <label
@@ -520,9 +553,11 @@ onMounted(() => loadGroups(1));
                                 <p class="group-card__visibility">
                                     <AppIcon
                                         :name="
-                                            group.visibility === 'private'
-                                                ? 'lock'
-                                                : 'globe'
+                                            group.company
+                                                ? 'building'
+                                                : group.visibility === 'private'
+                                                  ? 'lock'
+                                                  : 'globe'
                                         "
                                         :size="12"
                                         :stroke-width="1.75"
@@ -629,6 +664,7 @@ onMounted(() => loadGroups(1));
 
         <SocialGroupFormModal
             :open="formOpen"
+            :can-bind-company="auth.isSuperAdmin"
             @close="formOpen = false"
             @saved="onGroupSaved"
         />

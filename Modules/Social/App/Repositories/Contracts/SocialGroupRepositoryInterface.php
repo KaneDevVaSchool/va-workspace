@@ -17,11 +17,27 @@ interface SocialGroupRepositoryInterface
 
     public function delete(SocialGroup $group): void;
 
-    /** Nhóm công khai + nhóm riêng tư mà $userId đã là thành viên (Khám phá nhóm). */
-    public function paginateDiscoverable(int $perPage, int $page, int $userId, ?string $search = null): LengthAwarePaginator;
+    /**
+     * Khám phá nhóm. Nhóm gắn pháp nhân khác người xem bị ẩn
+     * (trừ khi $seeAllCompanies — quản trị viên).
+     */
+    public function paginateDiscoverable(
+        int $perPage,
+        int $page,
+        int $userId,
+        ?string $search = null,
+        ?int $viewerCompanyId = null,
+        bool $seeAllCompanies = false,
+    ): LengthAwarePaginator;
 
-    /** Nhóm mà $userId là thành viên (Nhóm của tôi). */
-    public function paginateForMember(int $perPage, int $page, int $userId, ?string $search = null): LengthAwarePaginator;
+    /** Nhóm đã tham gia, cộng nhóm pháp nhân công khai của đúng công ty người xem. */
+    public function paginateForMember(
+        int $perPage,
+        int $page,
+        int $userId,
+        ?string $search = null,
+        ?int $viewerCompanyId = null,
+    ): LengthAwarePaginator;
 
     public function membership(int $groupId, int $userId): ?SocialGroupMember;
 

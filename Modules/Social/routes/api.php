@@ -26,6 +26,7 @@ Route::middleware('auth')->prefix('social')->name('social.')->group(function () 
 
     Route::get('/groups', [SocialGroupController::class, 'index'])->name('groups.index');
     Route::post('/groups', [SocialGroupController::class, 'store'])->name('groups.store');
+    Route::post('/groups/legal-entities', [SocialGroupController::class, 'provisionLegalEntities'])->name('groups.legal-entities');
     Route::get('/groups/mine/requests', [SocialGroupController::class, 'myJoinRequests'])->name('groups.my-requests');
     Route::delete('/groups/requests/{requestId}', [SocialGroupController::class, 'cancelJoinRequest'])->name('groups.cancel-request');
     Route::post('/groups/invites/{requestId}/accept', [SocialGroupController::class, 'acceptInvite'])->name('groups.invites.accept');

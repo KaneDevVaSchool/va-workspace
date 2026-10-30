@@ -50,7 +50,7 @@ Binding interface → implementation: `Modules/Social/App/Providers/SocialServic
 | `social_comment_likes` | `SocialCommentLike` | Cảm xúc riêng cho bình luận. |
 | `social_post_revisions` | `SocialPostRevision` | Lịch sử sửa bài (endpoint `GET /posts/{id}/revisions`). |
 | `social_polls`, `social_poll_options`, `social_poll_votes` | `SocialPoll`, `SocialPollOption`, `SocialPollVote` | Poll gắn 1-1 với 1 bài đăng, có `title`/`content`/`image` riêng, `allow_multiple`, `ends_at`, `show_results`. |
-| `social_groups`, `social_group_members`, `social_group_join_requests` | `SocialGroup`, `SocialGroupMember`, `SocialGroupJoinRequest` | Nhóm có `avatar`, `invite_kind`; yêu cầu tham gia cần duyệt (owner/admin nhóm). |
+| `social_groups`, `social_group_members`, `social_group_join_requests` | `SocialGroup`, `SocialGroupMember`, `SocialGroupJoinRequest` | Nhóm có `avatar`, `invite_kind`; yêu cầu tham gia cần duyệt (owner/admin nhóm). `company_id` (nullable) gắn một pháp nhân: nhóm công khai thì nhân sự đúng công ty xem và đăng bài mà không xin vào; pháp nhân khác không thấy nhóm. |
 | `social_link_previews` | `SocialLinkPreview` | Preview link gắn bài (YouTube, Facebook, TikTok, website, trang nội bộ). `embed_url` YouTube không lưu `origin`. |
 
 **Không có Repository nào query trực tiếp bảng `tasks`/module khác** — Social
@@ -79,6 +79,11 @@ Binding interface → implementation: `Modules/Social/App/Providers/SocialServic
   vote, đóng poll sớm, đếm ngược hạn.
 - Nhóm: tạo/sửa/xoá, tham gia công khai hoặc gửi yêu cầu, mời thành viên, duyệt/
   từ chối yêu cầu, đổi vai trò thành viên, chuyển quyền sở hữu nhóm, rời nhóm.
+  Nhóm gắn `company_id` là nhóm pháp nhân: chỉ nhân sự pháp nhân đó thấy và đăng.
+  Mở `/social/groups` (`SocialGroups.vue`, `meta.title` Nhóm) tự tạo nhóm cho
+  Việt Mỹ, Viễn Đông (không tính Savitech), Hoàng Việt và CIT khi công ty đã
+  đồng bộ. Nhóm này không xoá được. Quản trị viên gắn pháp nhân lúc tạo nhóm
+  (`POST /api/social/groups`, `company_id`).
 - Hồ sơ cá nhân trên bảng tin (`SocialProfilePanel.vue`): thống kê `posts_count`,
   `reactions_received`, `comments_count` (`GET /me/stats`).
 - Panel sinh nhật (`SocialBirthdayPanel.vue`), panel bài ghim (`SocialPinnedPanel.vue`).
