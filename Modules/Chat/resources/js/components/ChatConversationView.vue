@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue';
 import { sendTyping, touchViewing } from '../api/chatApi';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -12,6 +12,7 @@ import { isPwaStandalone } from '@/lib/pwaStandalone';
 import {
   beginNativeFilePicker,
   endNativeFilePicker,
+  PWA_KEYBOARD_FRAME_EVENT,
   PWA_NATIVE_PICKER_CLASS,
 } from '@/lib/pwaVisualViewport';
 import { warmStickerAssets } from '@modules/Social/resources/js/lib/socialStickers.js';
@@ -30,7 +31,6 @@ import {
   BIRTHDAY_STICKER,
   CHAT_ACCENTS,
   CHAT_MOODS,
-  CHAT_QUICK_REPLIES,
   moodById,
 } from '../lib/chatPlay';
 import { formatPeerMeta } from '../lib/chatPeerMeta';
@@ -43,7 +43,14 @@ const auth = useAuthStore();
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
-const draft = ref('');
+// Không đưa nội dung ô soạn vào ref: mỗi phím sẽ render lại cả danh sách tin,
+// chữ (đang trong suốt, vẽ bằng mirror) hiện trễ vài giây và iOS đẩy cả khung lên.
+let draftText = '';
+const mirrorRef = ref(null);
+const hasDraftText = ref(false);
+const mentionChips = ref([]);
+let mentionChipKey = '';
+let mentionTokenKey = '';
 const files = ref([]);
 const fileInput = ref(null);
 const cameraInput = ref(null);
@@ -52,6 +59,7 @@ const lightbox = ref(null);
 const sending = ref(false);
 const listRef = ref(null);
 const inputRef = ref(null);
+const sendRef = ref(null);
 const pickerOpen = ref(false);
 const pickerPanel = ref('emoji');
 const replyTo = ref(null);
@@ -86,7 +94,7 @@ const holdToReact = computed(() => {
 });
 let reactionHoldTimer = 0;
 let reactionHoldPoint = null;
-const draftCaret = ref(0);
+const mentionMatch = ref(null);
 const mentionActive = ref(0);
 const mentionDismissed = ref(false);
 let typingSentAt = 0;
@@ -115,28 +123,7 @@ const birthdayNames = computed(() => {
   }
   return otherUser.value?.birthday_today && otherUser.value?.name ? [otherUser.value.name] : [];
 });
-const showQuickReplies = computed(() => (
-  !editing.value && draft.value.trim() === '' && files.value.length === 0 && !sending.value
-));
-const draftMentionChips = computed(() => (
-  (store.activeConversation?.members || []).filter((user) => (
-    user?.id
-    && user.id !== auth.user?.id
-    && user.name
-    && draft.value.includes(`@${user.name}`)
-  ))
-));
-const draftParts = computed(() => messageParts(draft.value));
 const pinnedMessage = computed(() => store.activeConversation?.pinned_message ?? null);
-const mentionMatch = computed(() => {
-  if (!isGroup.value || editing.value) return null;
-  const caret = Math.min(draftCaret.value, draft.value.length);
-  const before = draft.value.slice(0, caret);
-  const match = before.match(/(^|\s)@([^\n@]*)$/);
-  if (!match) return null;
-  const query = match[2];
-  return { query, start: caret - query.length - 1, end: caret };
-});
 const mentionHits = computed(() => {
   if (!mentionMatch.value) return [];
   const query = mentionMatch.value.query.toLowerCase();
@@ -171,11 +158,19 @@ const typingLabel = computed(() => {
   return `${names[0]} và ${names.length - 1} người đang nhập…`;
 });
 let viewingTimer = null;
-const canSend = computed(() => {
+function composerCanSend() {
   if (sending.value) return false;
-  if (editing.value) return draft.value.trim() !== '';
-  return draft.value.trim() !== '' || files.value.length > 0;
-});
+  if (editing.value) return hasDraftText.value;
+  return hasDraftText.value || files.value.length > 0;
+}
+
+function paintSendButton() {
+  const button = sendRef.value;
+  if (!(button instanceof HTMLButtonElement)) return;
+  const ready = composerCanSend();
+  button.disabled = !ready;
+  button.classList.toggle('chat-view__send--ready', ready);
+}
 const activeOutbox = computed(() => (
   store.outbox.filter((item) => item.conversationId === store.activeConversationId)
 ));
@@ -343,11 +338,24 @@ function noteFreshBubbles(markOnly = false) {
   if (changed) freshBubbleIds.value = fresh;
 }
 
+function onKeyboardFrame() {
+  if (!stickToBottom.value) return;
+  scrollToBottom(false);
+  window.requestAnimationFrame(() => {
+    if (stickToBottom.value) scrollToBottom(false);
+  });
+}
+
 onMounted(() => {
   noteFreshBubbles();
+  paintComposerMirror(draftText);
+  paintSendButton();
   scrollToBottom(false);
+  window.addEventListener(PWA_KEYBOARD_FRAME_EVENT, onKeyboardFrame);
 });
+onUpdated(paintSendButton);
 onBeforeUnmount(() => {
+  window.removeEventListener(PWA_KEYBOARD_FRAME_EVENT, onKeyboardFrame);
   window.clearTimeout(programmaticScrollTimer);
   stopTyping();
   clearInterval(viewingTimer);
@@ -416,7 +424,7 @@ watch(
       window.clearTimeout(typingStopTimer);
       sendTyping(previous, false).catch(() => {});
     }
-    draft.value = '';
+    setComposerValue('');
     clearDraftFiles();
     unseenBelow.value = 0;
     lightbox.value = null;
@@ -433,8 +441,6 @@ watch(
   },
   { immediate: true },
 );
-
-watch(draft, () => pingTyping());
 
 function onScroll() {
   reactionPicker.value = null;
@@ -475,10 +481,9 @@ function showRead(message) {
 }
 
 function pingTyping() {
-  syncCaret();
   const id = store.activeConversationId;
   if (!id || editing.value) return;
-  if (draft.value.trim() === '') {
+  if (composerValue().trim() === '') {
     stopTyping();
     return;
   }
@@ -502,9 +507,87 @@ function stopTyping() {
   sendTyping(id, false).catch(() => {});
 }
 
-function syncCaret() {
+function composerValue() {
+  return inputRef.value?.value ?? draftText;
+}
+
+function paintComposerMirror(value) {
+  const mirror = mirrorRef.value;
+  if (!mirror) return;
+  if (!value) {
+    mirror.textContent = '';
+    return;
+  }
+  mirror.textContent = value.endsWith('\n') ? `${value}\u200b` : value;
+}
+
+function noteComposerFilled(value) {
+  const filled = value.trim() !== '';
+  if (hasDraftText.value === filled) return;
+  hasDraftText.value = filled;
+  paintSendButton();
+}
+
+function syncMentionChips(value) {
+  const members = (store.activeConversation?.members || []).filter((user) => (
+    user?.id
+    && user.id !== auth.user?.id
+    && user.name
+    && value.includes(`@${user.name}`)
+  ));
+  const key = members.map((user) => user.id).join(',');
+  if (key === mentionChipKey) return;
+  mentionChipKey = key;
+  mentionChips.value = members;
+}
+
+function syncMentionFromComposer() {
+  const value = composerValue();
   const input = inputRef.value;
-  draftCaret.value = input?.selectionStart ?? draft.value.length;
+  const caret = Math.min(input?.selectionStart ?? value.length, value.length);
+  if (!isGroup.value || editing.value) {
+    if (mentionTokenKey !== '') {
+      mentionTokenKey = '';
+      mentionMatch.value = null;
+    }
+    return;
+  }
+  const before = value.slice(0, caret);
+  const match = before.match(/(^|\s)@([^\n@]*)$/);
+  const token = match ? `${match[2]}\u0000${caret - match[2].length - 1}` : '';
+  if (token === mentionTokenKey) return;
+  mentionTokenKey = token;
+  mentionMatch.value = match
+    ? { query: match[2], start: caret - match[2].length - 1, end: caret }
+    : null;
+}
+
+function setComposerValue(value, cursor = null) {
+  draftText = value;
+  const input = inputRef.value;
+  if (input && input.value !== value) input.value = value;
+  paintComposerMirror(value);
+  noteComposerFilled(value);
+  syncMentionChips(value);
+  if (cursor != null && input) input.setSelectionRange(cursor, cursor);
+  syncMentionFromComposer();
+}
+
+function focusComposer(cursor = null) {
+  const input = inputRef.value;
+  if (!(input instanceof HTMLTextAreaElement)) return;
+  input.focus({ preventScroll: true });
+  if (cursor != null) input.setSelectionRange(cursor, cursor);
+  syncMentionFromComposer();
+}
+
+function onComposerInput() {
+  draftText = inputRef.value?.value ?? '';
+  paintComposerMirror(draftText);
+  noteComposerFilled(draftText);
+  syncMentionChips(draftText);
+  syncMentionFromComposer();
+  pingTyping();
 }
 
 function syncFieldScroll(event) {
@@ -551,7 +634,7 @@ function onAttachCancel() {
 
 function refocusComposerAfterAttach() {
   nextTick(() => {
-    inputRef.value?.focus();
+    focusComposer();
     scheduleViewportForKeyboard();
   });
 }
@@ -559,18 +642,16 @@ function refocusComposerAfterAttach() {
 function insertEmoji(emoji) {
   const input = inputRef.value;
   const inputFocused = input && document.activeElement === input;
+  const value = composerValue();
   if (!input || (coarsePointer() && !inputFocused)) {
-    draft.value += emoji;
+    setComposerValue(`${value}${emoji}`);
     return;
   }
-  const start = input.selectionStart ?? draft.value.length;
-  const end = input.selectionEnd ?? draft.value.length;
-  draft.value = `${draft.value.slice(0, start)}${emoji}${draft.value.slice(end)}`;
-  nextTick(() => {
-    input.focus();
-    const cursor = start + emoji.length;
-    input.setSelectionRange(cursor, cursor);
-  });
+  const start = input.selectionStart ?? value.length;
+  const end = input.selectionEnd ?? value.length;
+  const cursor = start + emoji.length;
+  setComposerValue(`${value.slice(0, start)}${emoji}${value.slice(end)}`, cursor);
+  nextTick(() => focusComposer(cursor));
 }
 
 function togglePicker(panel) {
@@ -614,7 +695,7 @@ function startReply(message) {
   editing.value = null;
   replyTo.value = message;
   menu.value = null;
-  nextTick(() => inputRef.value?.focus());
+  nextTick(() => focusComposer());
 }
 
 function startEdit(message) {
@@ -622,21 +703,29 @@ function startEdit(message) {
   replyTo.value = null;
   editing.value = message;
   clearDraftFiles();
-  draft.value = message.message || '';
+  setComposerValue(message.message || '');
   pickerOpen.value = false;
   menu.value = null;
-  nextTick(() => inputRef.value?.focus());
+  nextTick(() => focusComposer());
+}
+
+function scrollNodeWithinList(node) {
+  const list = listRef.value;
+  if (!(node instanceof HTMLElement) || !list) return;
+  const delta = node.getBoundingClientRect().top - list.getBoundingClientRect().top
+    - (list.clientHeight - node.offsetHeight) / 2;
+  list.scrollTo({ top: Math.max(0, list.scrollTop + delta), behavior: 'smooth' });
 }
 
 function scrollToQuoted(id) {
-  document.getElementById(`chat-msg-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  scrollNodeWithinList(document.getElementById(`chat-msg-${id}`));
 }
 
 function clearModes() {
   const wasEditing = Boolean(editing.value);
   editing.value = null;
   replyTo.value = null;
-  if (wasEditing) draft.value = '';
+  if (wasEditing) setComposerValue('');
 }
 
 function askRecall(message) {
@@ -713,36 +802,29 @@ function memberName(id) {
 function pickMention(user) {
   const hit = mentionMatch.value;
   if (!hit) return;
-  const before = draft.value.slice(0, hit.start);
-  const after = draft.value.slice(hit.end);
+  const value = composerValue();
+  const before = value.slice(0, hit.start);
+  const after = value.slice(hit.end);
   const insert = `@${user.name} `;
-  draft.value = `${before}${insert}${after}`;
   if (!mentionIds.value.includes(user.id)) mentionIds.value = [...mentionIds.value, user.id];
   const cursor = before.length + insert.length;
   mentionDismissed.value = true;
-  nextTick(() => {
-    const input = inputRef.value;
-    input?.focus();
-    input?.setSelectionRange(cursor, cursor);
-    draftCaret.value = cursor;
-  });
+  setComposerValue(`${before}${insert}${after}`, cursor);
+  nextTick(() => focusComposer(cursor));
 }
 
 function insertMentionTrigger() {
   const input = inputRef.value;
-  const caret = input?.selectionStart ?? draft.value.length;
-  const before = draft.value.slice(0, caret);
-  const after = draft.value.slice(input?.selectionEnd ?? caret);
+  const value = composerValue();
+  const caret = input?.selectionStart ?? value.length;
+  const before = value.slice(0, caret);
+  const after = value.slice(input?.selectionEnd ?? caret);
   const needsSpace = before.length > 0 && !/\s$/.test(before);
   const insert = `${needsSpace ? ' ' : ''}@`;
-  draft.value = `${before}${insert}${after}`;
-  mentionDismissed.value = false;
   const cursor = before.length + insert.length;
-  nextTick(() => {
-    input?.focus();
-    input?.setSelectionRange(cursor, cursor);
-    draftCaret.value = cursor;
-  });
+  mentionDismissed.value = false;
+  setComposerValue(`${before}${insert}${after}`, cursor);
+  nextTick(() => focusComposer(cursor));
 }
 
 function groupReadOthersCount() {
@@ -828,7 +910,7 @@ function jumpToHit(message) {
   searchOpen.value = false;
   nextTick(() => {
     const node = document.getElementById(`chat-msg-${message.id}`);
-    if (node) node.scrollIntoView({ block: 'center' });
+    if (node) scrollNodeWithinList(node);
     else showClientToast('info', 'Tin này nằm phía trên. Kéo lên để xem.');
   });
 }
@@ -1071,7 +1153,7 @@ function sendSticker(sticker) {
 }
 
 function send() {
-  const text = draft.value.trim();
+  const text = composerValue().trim();
   if (sending.value || !store.activeConversationId) return;
   if (text === '' && (editing.value || files.value.length === 0)) return;
 
@@ -1080,7 +1162,7 @@ function send() {
     store.editMessage(store.activeConversationId, editing.value.id, text)
       .then(() => {
         editing.value = null;
-        draft.value = '';
+        setComposerValue('');
       })
       .catch((error) => {
         showClientToast('error', error?.response?.data?.message ?? 'Không gửi được tin nhắn.');
@@ -1095,7 +1177,7 @@ function send() {
   const previews = files.value.map((item) => item.previewUrl).filter(Boolean);
   const mentionIdsForSend = mentionIds.value.filter((id) => text.includes(memberName(id)));
   const replyId = replyTo.value?.id ?? null;
-  draft.value = '';
+  setComposerValue('');
   files.value = [];
   mentionIds.value = [];
   replyTo.value = null;
@@ -1337,14 +1419,6 @@ async function toggleReaction(message, emoji) {
   } catch (error) {
     showClientToast('error', error?.response?.data?.message ?? 'Không thả được cảm xúc.');
   }
-}
-
-function sendQuick(text) {
-  if (editing.value || sending.value || !store.activeConversationId) return;
-  const replyId = replyTo.value?.id ?? null;
-  replyTo.value = null;
-  draft.value = '';
-  queueOutgoing({ kind: 'text', text, replyId });
 }
 
 function sendBirthdayWish() {
@@ -1849,7 +1923,7 @@ function menuItems(message) {
         <span class="chat-compose-banner__label">{{
           editing ? (sending ? 'Đang lưu…' : 'Sửa tin nhắn') : `Trả lời ${replyTo?.sender?.name || ''}`
         }}</span>
-        <span class="chat-compose-banner__text">{{ editing ? draft : quoteText(replyTo) }}</span>
+        <span class="chat-compose-banner__text">{{ editing ? (editing.message || '') : quoteText(replyTo) }}</span>
       </span>
       <button type="button" class="chat-view__icon-btn" aria-label="Huỷ" @click="clearModes">
         <AppIcon name="close" :size="14" :stroke-width="1.75" />
@@ -1868,17 +1942,6 @@ function menuItems(message) {
     </Transition>
 
     <div class="chat-view__composer">
-      <div v-if="showQuickReplies" class="chat-quick hide-scrollbar" aria-label="Trả lời nhanh">
-        <button
-          v-for="text in CHAT_QUICK_REPLIES"
-          :key="text"
-          type="button"
-          class="chat-quick__chip"
-          @click="sendQuick(text)"
-        >
-          {{ text }}
-        </button>
-      </div>
       <div class="chat-view__tools hide-scrollbar">
         <button
           type="button"
@@ -1987,9 +2050,9 @@ function menuItems(message) {
         </span>
       </div>
       </Transition>
-      <div class="chat-view__input-shell" :class="{ 'chat-view__input-shell--stack': draftMentionChips.length }">
-        <div v-if="draftMentionChips.length" class="chat-compose-mentions" aria-label="Đang nhắc">
-          <span v-for="user in draftMentionChips" :key="user.id" class="chat-compose-mentions__chip">
+      <div class="chat-view__input-shell" :class="{ 'chat-view__input-shell--stack': mentionChips.length }">
+        <div v-if="mentionChips.length" class="chat-compose-mentions" aria-label="Đang nhắc">
+          <span v-for="user in mentionChips" :key="user.id" class="chat-compose-mentions__chip">
             <ChatAvatar :src="user.avatar_url" :name="user.name" size="1rem" />
             {{ user.name }}
           </span>
@@ -2005,16 +2068,9 @@ function menuItems(message) {
           <AppIcon name="smile" :size="20" :stroke-width="1.75" />
         </button>
         <div class="chat-view__field">
-          <div class="chat-view__field-mirror" aria-hidden="true">
-            <template v-for="(part, partIndex) in draftParts" :key="partIndex">
-              <span v-if="part.mention" class="chat-mention">{{ part.text }}</span>
-              <template v-else>{{ part.text }}</template>
-            </template>
-            <br v-if="draft.endsWith('\n') || draft === ''" />
-          </div>
+          <div ref="mirrorRef" class="chat-view__field-mirror" aria-hidden="true"></div>
           <textarea
             ref="inputRef"
-            v-model="draft"
             class="chat-view__input"
             rows="1"
             enterkeyhint="send"
@@ -2027,19 +2083,19 @@ function menuItems(message) {
             :aria-label="editing ? 'Sửa tin nhắn' : `Nhập tin nhắn gửi ${headerTitle}`"
             @focus="onInputFocus"
             @blur="onInputBlur"
-            @input="pingTyping"
+            @input="onComposerInput"
             @scroll="syncFieldScroll"
-            @click="syncCaret"
-            @keyup="syncCaret"
-            @select="syncCaret"
+            @click="syncMentionFromComposer"
+            @keyup="syncMentionFromComposer"
+            @select="syncMentionFromComposer"
             @keydown="onKeydown"
           />
         </div>
         <button
+          ref="sendRef"
           type="button"
           class="chat-view__send"
-          :class="{ 'chat-view__send--busy': sending && editing, 'chat-view__send--ready': canSend && !sending }"
-          :disabled="!canSend"
+          :class="{ 'chat-view__send--busy': sending && editing }"
           :aria-label="sending && editing ? 'Đang gửi tin nhắn' : 'Gửi tin nhắn'"
           :aria-busy="sending && Boolean(editing)"
           @click="send"
@@ -2402,6 +2458,13 @@ function menuItems(message) {
   flex-direction: column;
   gap: 0.35rem;
   padding: var(--space-3);
+}
+
+/* Ít tin thì dồn xuống sát ô nhập; nhiều tin thì spacer co về 0 và vẫn cuộn được. */
+.chat-view__messages::before {
+  content: '';
+  flex: 1 0 auto;
+  min-height: 0;
 }
 
 .chat-view__empty {
@@ -3134,7 +3197,7 @@ function menuItems(message) {
   max-height: 6rem;
   overflow: auto;
   padding: 0.5rem 0.15rem;
-  color: var(--color-text);
+  color: transparent;
   font-family: var(--font-family-base);
   font-size: 16px;
   line-height: 1.35;
@@ -3159,7 +3222,9 @@ function menuItems(message) {
   border: none;
   border-radius: 0;
   background: transparent;
-  color: transparent;
+  /* Chữ hiện ngay trên textarea. Mirror chỉ đo chiều cao. */
+  color: var(--color-text);
+  -webkit-text-fill-color: var(--color-text);
   caret-color: var(--color-text);
   font-family: var(--font-family-base);
   font-size: 16px;
@@ -3170,6 +3235,7 @@ function menuItems(message) {
 
 .chat-view__input::placeholder {
   color: var(--color-text-muted);
+  -webkit-text-fill-color: var(--color-text-muted);
 }
 
 .chat-view__input:focus {
@@ -3881,8 +3947,7 @@ function menuItems(message) {
 }
 
 .chat-bday button,
-.chat-fun__chip,
-.chat-quick__chip {
+.chat-fun__chip {
   border: 0;
   border-radius: var(--radius-full);
   background: var(--color-surface);
@@ -3898,17 +3963,6 @@ function menuItems(message) {
 .chat-bday button {
   background: var(--color-primary-surface);
   color: var(--color-primary);
-}
-
-.chat-quick {
-  display: flex;
-  gap: 0.35rem;
-  overflow-x: auto;
-  padding-bottom: 0.35rem;
-}
-
-.chat-quick__chip {
-  flex-shrink: 0;
 }
 
 .chat-view[data-accent='coral'] { --chat-fun: #c23b4a; }

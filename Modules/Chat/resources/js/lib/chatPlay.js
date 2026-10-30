@@ -6,14 +6,6 @@ export const CHAT_MOODS = [
   { id: 'focus', emoji: '🎯', label: 'Đang tập trung' },
 ];
 
-export const CHAT_QUICK_REPLIES = [
-  'Ok ạ',
-  'Em nhận rồi',
-  'Cảm ơn anh/chị',
-  'Chiều em gửi lại',
-  'Đang làm ạ',
-];
-
 export const CHAT_POLL_PRESETS = [
   { label: 'Trưa ăn gì?', question: 'Trưa nay ăn gì?', options: ['Cơm', 'Bún', 'Gọi đồ'] },
   { label: 'Giờ họp', question: 'Họp vào khung giờ nào?', options: ['14:00', '15:00', 'Để mai'] },

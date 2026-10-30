@@ -13,6 +13,9 @@ export const PWA_VV_WIDTH = '--pwa-vv-width';
 
 export const PWA_VV_KEYBOARD_CLASS = 'pwa-vv-keyboard';
 
+/** Bắn khi khung visual viewport (bàn phím) đổi kích thước — chat kéo tin mới xuống sát ô nhập. */
+export const PWA_KEYBOARD_FRAME_EVENT = 'va-keyboard-frame';
+
 /** Giữ shell full màn khi hộp thư viện ảnh / tệp của hệ điều hành đang mở. */
 export const PWA_NATIVE_PICKER_CLASS = 'pwa-native-picker';
 
@@ -78,9 +81,12 @@ export function clearPwaVisualViewport() {
   }
 }
 
+let keyboardFrameKey = '';
+
 function setKeyboardFrame(active) {
   if (typeof document === 'undefined') return;
   document.documentElement.classList.toggle(PWA_VV_KEYBOARD_CLASS, active);
+  if (!active) keyboardFrameKey = '';
 }
 
 function composerInputFocused() {
@@ -95,7 +101,14 @@ function keyboardInsetPx(vv) {
 function isVisualViewportKeyboardOpen(vv, composerFocused = composerInputFocused()) {
   if (!vv) return false;
   const inset = keyboardInsetPx(vv);
-  return inset >= KEYBOARD_INSET_THRESHOLD || (composerFocused && inset >= 20);
+  if (inset >= KEYBOARD_INSET_THRESHOLD) return true;
+  // iOS đẩy visualViewport.offsetTop đúng bằng phần bàn phím che, nên inset còn
+  // lại ~0 dù ô soạn đang focus. Nếu bỏ qua, shell không co và header trượt
+  // lên khỏi màn — tin mới không nằm sát ô nhập như Messenger.
+  if (!composerFocused) return false;
+  const gap = Math.max(0, window.innerHeight - vv.height);
+  const panned = Math.max(0, vv.offsetTop);
+  return gap >= KEYBOARD_INSET_THRESHOLD || panned >= KEYBOARD_INSET_THRESHOLD;
 }
 
 function writeVisualViewportFrame({ height, offsetTop, offsetLeft, width }) {
@@ -118,6 +131,11 @@ function writeVisualViewportFrame({ height, offsetTop, offsetLeft, width }) {
   }
 
   syncEmployeeShellHeight();
+
+  const key = `${height}|${offsetTop}|${offsetLeft}|${width}`;
+  if (key === keyboardFrameKey) return;
+  keyboardFrameKey = key;
+  window.dispatchEvent(new CustomEvent(PWA_KEYBOARD_FRAME_EVENT));
 }
 
 function snapshotVisualViewport(vv) {
@@ -129,13 +147,33 @@ function snapshotVisualViewport(vv) {
   };
 }
 
-function applyVisualViewportKeyboardFrame(vv, composerFocused = composerInputFocused()) {
-  if (
-    isIosDevice()
-    && (vv.offsetTop > 0 || composerFocused)
-    && !isNativePickerHolding()
-  ) {
+let keyboardSettleFrame = 0;
+let didResetKeyboardScroll = false;
+
+function applyVisualViewportKeyboardFrame(vv) {
+  if (isNativePickerHolding()) return;
+
+  // Một lần mỗi lần bàn phím mở. Lặp scrollTo theo từng frame (ô soạn đang focus)
+  // làm iOS kéo cả khung chat lên rồi thả ra.
+  const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  if (isIosDevice() && scrollY > 1 && !didResetKeyboardScroll) {
+    didResetKeyboardScroll = true;
     window.scrollTo(0, 0);
+    window.cancelAnimationFrame(keyboardSettleFrame);
+    keyboardSettleFrame = window.requestAnimationFrame(() => {
+      keyboardSettleFrame = 0;
+      if (isNativePickerHolding()) return;
+      const live = window.visualViewport;
+      if (!live || !isVisualViewportKeyboardOpen(live)) {
+        didResetKeyboardScroll = false;
+        clearPwaVisualViewport();
+        setKeyboardFrame(false);
+        syncEmployeeShellHeight();
+        return;
+      }
+      writeVisualViewportFrame(snapshotVisualViewport(live));
+    });
+    return;
   }
 
   writeVisualViewportFrame(snapshotVisualViewport(vv));
@@ -268,6 +306,7 @@ export function syncPwaVisualViewport() {
   }
 
   if (!isVisualViewportKeyboardOpen(vv)) {
+    didResetKeyboardScroll = false;
     clearPwaVisualViewport();
     setKeyboardFrame(false);
     syncEmployeeShellHeight();
