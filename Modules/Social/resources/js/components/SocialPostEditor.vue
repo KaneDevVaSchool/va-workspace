@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Editor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import TextStyle from '@tiptap/extension-text-style';
@@ -28,12 +28,25 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'isEmpty', 'close', 'update:linkPreviews', 'update:dismissedLinkPreviews']);
 const instanceId = `se-${Math.random().toString(36).slice(2, 8)}`;
 
+const MENTION_LOOKBACK = 80;
+const MENTION_PAGE = 20;
+const MENTION_QUERY_RE = /@([\p{L}\p{N}._'-]*(?:\s+[\p{L}\p{N}._'-]*){0,5})$/u;
+
 const mentionOpen = ref(false);
 const mentionQuery = ref('');
 const mentionUsers = ref([]);
 const mentionIndex = ref(0);
 const mentionAnchor = ref(null);
+const mentionLoading = ref(false);
+const mentionRefreshing = ref(false);
+const mentionLoadingMore = ref(false);
+const mentionFailed = ref(false);
+const mentionHasMore = ref(false);
+const mentionFocusSearch = ref(false);
+const mentionSearchOwnsQuery = ref(false);
 let mentionTimer = null;
+let mentionRequest = 0;
+let mentionNextOffset = 0;
 const hashtagOpen = ref(false);
 const hashtagQuery = ref('');
 const hashtagTags = ref([]);
@@ -85,24 +98,75 @@ function removeLinkPreview(url) {
   emitLinkPreviews();
 }
 
+function mentionMatch(text) {
+  return text.match(MENTION_QUERY_RE);
+}
+
 function closeMention() {
+  clearTimeout(mentionTimer);
+  mentionRequest += 1;
   mentionOpen.value = false;
   mentionQuery.value = '';
   mentionUsers.value = [];
   mentionIndex.value = 0;
+  mentionLoading.value = false;
+  mentionRefreshing.value = false;
+  mentionLoadingMore.value = false;
+  mentionFailed.value = false;
+  mentionHasMore.value = false;
+  mentionFocusSearch.value = false;
+  mentionSearchOwnsQuery.value = false;
+  mentionNextOffset = 0;
 }
 
-function fetchMentions(query) {
-  clearTimeout(mentionTimer);
-  mentionTimer = setTimeout(async () => {
-    try {
-      const { data } = await window.axios.get('/api/social/mentions', { params: { q: query } });
-      mentionUsers.value = data.users ?? [];
-      mentionIndex.value = 0;
-    } catch {
-      mentionUsers.value = [];
+function readMentionCaret() {
+  if (!editor?.view) return null;
+  const coords = editor.view.coordsAtPos(editor.state.selection.from);
+  return { left: coords.left, top: coords.top, bottom: coords.bottom };
+}
+
+async function loadMentionPage(query, offset, requestId, append) {
+  try {
+    const { data } = await window.axios.get('/api/social/mentions', {
+      params: { q: query, limit: MENTION_PAGE, offset },
+    });
+    if (requestId !== mentionRequest) return;
+    const users = data.users ?? [];
+    mentionUsers.value = append ? mentionUsers.value.concat(users) : users;
+    mentionHasMore.value = Boolean(data.has_more);
+    mentionNextOffset = offset + MENTION_PAGE;
+    if (!append) mentionIndex.value = 0;
+    else mentionIndex.value = Math.min(mentionIndex.value, Math.max(mentionUsers.value.length - 1, 0));
+    mentionFailed.value = false;
+  } catch {
+    if (requestId !== mentionRequest) return;
+    if (!append) mentionUsers.value = [];
+    mentionFailed.value = true;
+    mentionHasMore.value = false;
+  } finally {
+    if (requestId === mentionRequest) {
+      mentionLoading.value = false;
+      mentionRefreshing.value = false;
+      mentionLoadingMore.value = false;
     }
-  }, 180);
+  }
+}
+
+function fetchMentions(query, { append = false } = {}) {
+  if (!append) clearTimeout(mentionTimer);
+  const requestId = ++mentionRequest;
+  const offset = append ? mentionNextOffset : 0;
+  if (!append) {
+    mentionFailed.value = false;
+    mentionLoadingMore.value = false;
+    if (mentionUsers.value.length === 0) mentionLoading.value = true;
+    else mentionRefreshing.value = true;
+  } else {
+    mentionLoadingMore.value = true;
+  }
+  const run = () => loadMentionPage(query, offset, requestId, append);
+  if (append) run();
+  else mentionTimer = setTimeout(run, 160);
 }
 
 function detectMention() {
@@ -115,15 +179,45 @@ function detectMention() {
     closeMention();
     return;
   }
-  const text = editor.state.doc.textBetween(Math.max(0, from - 40), from, '\0');
-  const match = text.match(/@([^\s@]*)$/);
+  const text = editor.state.doc.textBetween(Math.max(0, from - MENTION_LOOKBACK), from, '\0');
+  const match = mentionMatch(text);
   if (!match) {
     closeMention();
     return;
   }
-  mentionQuery.value = match[1];
+  const wasOpen = mentionOpen.value;
   mentionOpen.value = true;
-  fetchMentions(match[1]);
+  if (mentionSearchOwnsQuery.value) return;
+  const next = match[1];
+  if (!wasOpen || mentionQuery.value !== next) {
+    mentionQuery.value = next;
+    fetchMentions(next);
+  }
+}
+
+function onMentionSearch(value) {
+  mentionSearchOwnsQuery.value = true;
+  mentionQuery.value = value;
+  fetchMentions(value);
+}
+
+function retryMentions() {
+  fetchMentions(mentionQuery.value, { append: mentionUsers.value.length > 0 });
+}
+
+function startMention() {
+  if (!editor || !props.enableMentions) return;
+  const { from } = editor.state.selection;
+  const text = editor.state.doc.textBetween(Math.max(0, from - MENTION_LOOKBACK), from, '\0');
+  if (!mentionMatch(text)) {
+    editor.chain().focus().insertContent('@').run();
+  } else {
+    editor.commands.focus();
+  }
+  mentionFocusSearch.value = false;
+  nextTick(() => {
+    mentionFocusSearch.value = true;
+  });
 }
 
 function insertMention(user, { replaceQuery = true, suffix = ' ' } = {}) {
@@ -131,8 +225,8 @@ function insertMention(user, { replaceQuery = true, suffix = ' ' } = {}) {
   const chain = editor.chain().focus();
   if (replaceQuery) {
     const { from } = editor.state.selection;
-    const text = editor.state.doc.textBetween(Math.max(0, from - 40), from, '\0');
-    const match = text.match(/@([^\s@]*)$/);
+    const text = editor.state.doc.textBetween(Math.max(0, from - MENTION_LOOKBACK), from, '\0');
+    const match = mentionMatch(text);
     if (match) {
       chain.deleteRange({ from: from - match[0].length, to: from });
     }
@@ -244,7 +338,12 @@ function handleHashtagKeydown(event) {
 function handleMentionKeydown(event) {
   if (!mentionOpen.value) return false;
   if (event.key === 'ArrowDown') {
-    mentionIndex.value = Math.min(mentionIndex.value + 1, Math.max(mentionUsers.value.length - 1, 0));
+    const last = Math.max(mentionUsers.value.length - 1, 0);
+    if (mentionIndex.value >= last && mentionHasMore.value && !mentionLoadingMore.value) {
+      fetchMentions(mentionQuery.value, { append: true });
+      return true;
+    }
+    mentionIndex.value = Math.min(mentionIndex.value + 1, last);
     return true;
   }
   if (event.key === 'ArrowUp') {
@@ -379,7 +478,7 @@ function focusEditor() {
   editor.chain().focus().run();
 }
 
-defineExpose({ insertContent, insertSticker, insertMention, focus: focusEditor, removeLinkPreview });
+defineExpose({ insertContent, insertSticker, insertMention, startMention, focus: focusEditor, removeLinkPreview });
 
 function toggleColorPicker() {
   sizePickerOpen.value = false;
@@ -453,13 +552,14 @@ function removeLink() {
 }
 
 function onDocumentClick(event) {
-  if (root.value && !root.value.contains(event.target)) {
-    colorPickerOpen.value = false;
-    sizePickerOpen.value = false;
-    linkPickerOpen.value = false;
-    closeMention();
-    closeHashtag();
-  }
+  const target = event.target;
+  if (!(target instanceof Node) || root.value?.contains(target)) return;
+  if (target instanceof Element && target.closest('.mention-picker, [data-mention-trigger]')) return;
+  colorPickerOpen.value = false;
+  sizePickerOpen.value = false;
+  linkPickerOpen.value = false;
+  closeMention();
+  closeHashtag();
 }
 
 document.addEventListener('click', onDocumentClick, true);
@@ -669,6 +769,18 @@ onBeforeUnmount(() => {
       </div>
 
       <button
+        v-if="enableMentions"
+        type="button"
+        class="post-editor__btn"
+        :class="{ 'post-editor__btn--active': mentionOpen }"
+        data-mention-trigger
+        aria-label="Gắn thẻ đồng nghiệp"
+        @mousedown.prevent="startMention"
+      >
+        <AppIcon name="tag" :size="16" />
+      </button>
+
+      <button
         v-if="showClose"
         type="button"
         class="post-editor__btn post-editor__btn--close"
@@ -687,10 +799,23 @@ onBeforeUnmount(() => {
       <SocialMentionPicker
         v-if="mentionOpen && enableMentions"
         :anchor="mentionAnchor"
+        :caret-reader="readMentionCaret"
         :users="mentionUsers"
         :active-index="mentionIndex"
         :query="mentionQuery"
+        :loading="mentionLoading"
+        :refreshing="mentionRefreshing"
+        :loading-more="mentionLoadingMore"
+        :failed="mentionFailed"
+        :has-more="mentionHasMore"
+        :focus-search="mentionFocusSearch"
         @pick="insertMention($event, { replaceQuery: true })"
+        @activate="mentionIndex = $event"
+        @search="onMentionSearch"
+        @search-focus="mentionSearchOwnsQuery = $event"
+        @more="fetchMentions(mentionQuery, { append: true })"
+        @retry="retryMentions"
+        @close="closeMention"
       />
       <SocialHashtagPicker
         v-if="hashtagOpen && enableHashtags"
@@ -990,7 +1115,15 @@ onBeforeUnmount(() => {
   padding: var(--space-2) var(--space-3);
 }
 
-.post-editor__body :deep(.mention),
+.post-editor__body :deep(.mention) {
+  color: var(--color-primary);
+  font-weight: 600;
+  background: var(--color-primary-surface);
+  border-radius: 0.35rem;
+  padding: 0.05em 0.28em;
+  box-decoration-break: clone;
+}
+
 .post-editor__body :deep(.hashtag) {
   color: var(--color-primary);
   font-weight: 600;

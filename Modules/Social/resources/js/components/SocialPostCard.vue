@@ -1363,6 +1363,10 @@ onBeforeUnmount(() => {
 .post-card__shared-content :deep(.mention) {
   color: var(--color-primary);
   font-weight: 600;
+  background: var(--color-primary-surface);
+  border-radius: 0.35rem;
+  padding: 0.05em 0.28em;
+  box-decoration-break: clone;
   cursor: pointer;
 }
 

@@ -4,6 +4,7 @@ namespace Tests\Feature\Social;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Models\UserNotification;
 use Modules\Social\App\Models\SocialPost;
 use Tests\TestCase;
@@ -141,5 +142,38 @@ class SocialMentionNotificationTest extends TestCase
             ->getJson("/api/social/posts/{$postId}")
             ->assertOk()
             ->assertJsonPath('post.id', $postId);
+    }
+
+    public function test_mention_search_reaches_a_person_beyond_the_first_page(): void
+    {
+        if (HrmEmployeeDirectory::isConfigured()) {
+            $this->markTestSkipped('HRM đang bật — tìm mention không đọc bảng users.');
+        }
+
+        $viewer = $this->makeUser('Người xem');
+        foreach (range(1, 10) as $index) {
+            $this->makeUser(sprintf('An Bộ %02d', $index));
+        }
+        $this->makeUser('Trần Minh Quang');
+
+        $first = $this->actingAs($viewer)
+            ->getJson('/api/social/mentions?q=An&limit=8&offset=0')
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(8, $first['users']);
+        $this->assertTrue($first['has_more']);
+        $this->assertFalse(collect($first['users'])->contains(
+            fn (array $user) => $user['name'] === 'Trần Minh Quang'
+        ));
+
+        $byName = $this->actingAs($viewer)
+            ->getJson('/api/social/mentions?q='.urlencode('Minh Quang').'&limit=8&offset=0')
+            ->assertOk()
+            ->json('users');
+
+        $this->assertTrue(collect($byName)->contains(
+            fn (array $user) => $user['name'] === 'Trần Minh Quang'
+        ));
     }
 }

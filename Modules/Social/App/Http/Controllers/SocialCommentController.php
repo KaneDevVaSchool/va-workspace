@@ -23,10 +23,12 @@ class SocialCommentController extends Controller
     public function mentions(Request $request): JsonResponse
     {
         $query = trim((string) $request->query('q', ''));
+        $limit = (int) $request->query('limit', 20);
+        $offset = (int) $request->query('offset', 0);
 
-        return response()->json([
-            'users' => $this->service->searchMentions($request->user(), $query),
-        ]);
+        return response()->json(
+            $this->service->searchMentions($request->user(), $query, $limit, $offset)
+        );
     }
 
     public function index(Request $request, int $postId): JsonResponse

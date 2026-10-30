@@ -133,6 +133,12 @@ function insertEmoji(emoji) {
   editorRef.value?.insertContent(emoji);
 }
 
+async function tagColleague() {
+  if (!expanded.value) await expand();
+  await nextTick();
+  editorRef.value?.startMention?.();
+}
+
 function insertSticker(sticker) {
   editorRef.value?.insertSticker(sticker);
 }
@@ -448,6 +454,17 @@ defineExpose({ expand });
             @close="pickerOpen = false"
           />
         </div>
+
+        <button
+          type="button"
+          class="composer__attach-btn"
+          data-mention-trigger
+          aria-label="Gắn thẻ đồng nghiệp"
+          @mousedown.prevent="tagColleague"
+        >
+          <AppIcon name="tag" :size="16" />
+          <span>Gắn thẻ</span>
+        </button>
 
         <button
           type="button"

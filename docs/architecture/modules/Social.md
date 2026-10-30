@@ -69,6 +69,12 @@ Binding interface → implementation: `Modules/Social/App/Providers/SocialServic
 - Cảm xúc (reaction) nhiều loại cho cả bài và bình luận, có hiệu ứng "burst".
 - Bình luận đa cấp (reply lồng), cảm xúc riêng, đính kèm, `@mention` → tab
   "Được nhắc đến" (`GET /mentions`).
+- Gắn thẻ tên trên bảng tin (`EmployeeFeed.vue`, `/dashboard/me/feed`, `meta.title` Bảng tin)
+  và bảng tin nội bộ (`SocialFeed.vue`, `/social`, `meta.title` Bảng tin nội bộ): nút **Gắn thẻ**
+  ở khung soạn bài (`SocialPostComposer.vue`) và bình luận (`SocialCommentComposer.vue`),
+  hoặc gõ `@`. Ô tìm trong `SocialMentionPicker.vue` nhận cả họ tên có dấu cách
+  (ví dụ Trần Minh Quang). `GET /api/social/mentions` nhận `q`, `limit` (tối đa 30, mặc định 20),
+  `offset` và trả `users` cùng `has_more` để bấm Xem thêm.
 - Bình chọn (poll): tạo cùng lúc với bài, vote (đơn/nhiều lựa chọn), xem ai đã
   vote, đóng poll sớm, đếm ngược hạn.
 - Nhóm: tạo/sửa/xoá, tham gia công khai hoặc gửi yêu cầu, mời thành viên, duyệt/

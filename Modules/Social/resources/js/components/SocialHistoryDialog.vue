@@ -253,7 +253,16 @@ onBeforeUnmount(unbindPage);
   color: var(--color-info);
 }
 
-.history-dialog__content :deep(.mention),
+.history-dialog__content :deep(.mention) {
+  color: var(--color-primary);
+  font-weight: 600;
+  background: var(--color-primary-surface);
+  border-radius: 0.35rem;
+  padding: 0.05em 0.28em;
+  box-decoration-break: clone;
+  cursor: pointer;
+}
+
 .history-dialog__content :deep(.hashtag) {
   color: var(--color-primary);
   font-weight: 600;

@@ -84,6 +84,10 @@ function insertEmoji(emoji) {
   editorRef.value?.insertContent(emoji);
 }
 
+function tagColleague() {
+  editorRef.value?.startMention?.();
+}
+
 function openPicker(panel) {
   if (pickerOpen.value && pickerPanel.value === panel) {
     pickerOpen.value = false;
@@ -282,6 +286,16 @@ async function submit() {
             />
           </div>
 
+          <button
+            type="button"
+            class="comment-composer__tool"
+            data-mention-trigger
+            aria-label="Gắn thẻ đồng nghiệp"
+            @mousedown.prevent="tagColleague"
+          >
+            <AppIcon name="tag" :size="16" />
+            <span>Gắn thẻ</span>
+          </button>
           <button type="button" class="comment-composer__tool" @click="fileInput?.click()">
             <AppIcon name="paperclip" :size="16" />
             <span>Ảnh/File</span>

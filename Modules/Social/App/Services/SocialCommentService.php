@@ -33,9 +33,15 @@ class SocialCommentService
             ->all();
     }
 
-    public function searchMentions(User $viewer, string $query): array
+    /**
+     * @return array{users: list<array{id: int, name: string, avatar_url: ?string, department: ?string, job_title_name: ?string, company_name: ?string}>, has_more: bool}
+     */
+    public function searchMentions(User $viewer, string $query, int $limit = 20, int $offset = 0): array
     {
-        return $this->colleagueSearch->search($query, 8, $viewer->id);
+        $limit = max(1, min($limit, 30));
+        $offset = max(0, $offset);
+
+        return $this->colleagueSearch->searchPage($query, $limit, $offset, $viewer->id);
     }
 
     /**
