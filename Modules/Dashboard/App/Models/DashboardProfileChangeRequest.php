@@ -10,6 +10,10 @@ class DashboardProfileChangeRequest extends Model
 {
     public const STATUS_PENDING = 'pending';
 
+    public const STATUS_APPROVED = 'approved';
+
+    public const STATUS_REJECTED = 'rejected';
+
     protected $table = 'dashboard_profile_change_requests';
 
     protected $fillable = [
@@ -17,10 +21,12 @@ class DashboardProfileChangeRequest extends Model
         'changes',
         'note',
         'status',
+        'hrm_synced_at',
     ];
 
     protected $casts = [
         'changes' => 'array',
+        'hrm_synced_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

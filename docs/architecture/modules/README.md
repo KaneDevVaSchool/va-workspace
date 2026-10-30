@@ -5,6 +5,7 @@ File mới viết vào thư mục này. `docs/modules/` chỉ còn lối cũ.
 | Module | File |
 | --- | --- |
 | Attendance | [Attendance.md](./Attendance.md) |
+| Dashboard | [Dashboard.md](./Dashboard.md) |
 | Evaluation | [Evaluation.md](./Evaluation.md) |
 | Report | [Report.md](./Report.md) |
 | Social | [Social.md](./Social.md) |

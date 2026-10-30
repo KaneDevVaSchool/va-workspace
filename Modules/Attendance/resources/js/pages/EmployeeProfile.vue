@@ -616,7 +616,7 @@ onBeforeUnmount(() => {
         class="emp-profile__pending-card"
       >
         <p class="emp-profile__pending-meta">
-          Gửi lúc {{ formatDate(req.created_at) }}
+          Chờ HCNS duyệt · gửi lúc {{ formatDate(req.created_at) }}
         </p>
         <ul class="emp-profile__pending-list">
           <li v-for="(item, key) in req.changes" :key="key">

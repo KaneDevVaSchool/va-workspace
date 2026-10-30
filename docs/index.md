@@ -11,7 +11,7 @@ Mọi việc code bắt đầu bằng một file ở đây, không bắt đầu 
 | --- | --- | --- |
 | Tổng quan | [project-overview.md](./project-overview.md), [VA_WORKSPACE_OVERVIEW.md](./VA_WORKSPACE_OVERVIEW.md) | Chưa biết hệ thống, trạng thái code |
 | Kiến trúc | [architecture/index.md](./architecture/index.md) | Runtime, route |
-| Module | [architecture/modules/](./architecture/modules/README.md) | Sửa Attendance, Evaluation, Report, Social |
+| Module | [architecture/modules/](./architecture/modules/README.md) | Sửa Attendance, Dashboard, Evaluation, Report, Social |
 | Giao diện | [theme.md](./theme.md) | Token, viền |
 | Bẫy | [known-issues.md](./known-issues.md) | Trước khi fix bug |
 | Máy mới | [development-guide.md](./development-guide.md) | Cài repo |

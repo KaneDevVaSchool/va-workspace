@@ -4,10 +4,13 @@ namespace Modules\Dashboard\App\Services;
 
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Modules\Dashboard\App\Models\DashboardProfileChangeRequest;
+use Modules\Identity\App\Hrm\Exceptions\HrmApiUnavailable;
 use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
+use Modules\Identity\App\Hrm\Services\HrmApiClient;
 use Modules\Identity\App\Hrm\Services\HrmEmployeeDirectory;
 use Modules\Identity\App\Support\UserAvatarUrl;
 
@@ -44,6 +47,7 @@ class MyDashboardProfileService
 
     public function __construct(
         private readonly HrmEmployeeDirectory $hrmEmployees,
+        private readonly HrmApiClient $hrmApi,
     ) {}
 
     /**
@@ -53,6 +57,7 @@ class MyDashboardProfileService
      */
     public function profile(User $user): array
     {
+        $this->syncChangeRequests($user);
         $hrm = $this->resolveHrmProfile($user);
         $avatarUrl = filled($user->avatar_url)
             ? $user->avatar_url
@@ -134,12 +139,16 @@ class MyDashboardProfileService
             ]);
         }
 
-        return DashboardProfileChangeRequest::query()->create([
+        $record = DashboardProfileChangeRequest::query()->create([
             'user_id' => $user->id,
             'changes' => $normalized,
             'note' => filled($note) ? trim($note) : null,
             'status' => DashboardProfileChangeRequest::STATUS_PENDING,
         ]);
+
+        $this->pushChangeRequest($user, $record);
+
+        return $record;
     }
 
     /**
@@ -227,6 +236,66 @@ class MyDashboardProfileService
             return \Illuminate\Support\Carbon::parse($trimmed)->format('Y-m-d');
         } catch (\Throwable) {
             return $trimmed;
+        }
+    }
+
+    private function syncChangeRequests(User $user): void
+    {
+        if (! $this->hrmApi->canSubmitProfileChanges()) {
+            return;
+        }
+
+        $pending = DashboardProfileChangeRequest::query()
+            ->where('user_id', $user->id)
+            ->where('status', DashboardProfileChangeRequest::STATUS_PENDING)
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get();
+
+        foreach ($pending as $row) {
+            if ($row->hrm_synced_at === null) {
+                $this->pushChangeRequest($user, $row);
+
+                continue;
+            }
+
+            try {
+                $remote = $this->hrmApi->profileChangeRequestStatus((int) $row->id);
+            } catch (HrmApiUnavailable $e) {
+                Log::warning('workspace.profile_change.pull_failed', ['message' => $e->getMessage()]);
+
+                continue;
+            }
+
+            $status = is_array($remote) ? (string) ($remote['status'] ?? '') : '';
+            if (in_array($status, [DashboardProfileChangeRequest::STATUS_APPROVED, DashboardProfileChangeRequest::STATUS_REJECTED], true)) {
+                $row->forceFill(['status' => $status])->save();
+            }
+        }
+    }
+
+    private function pushChangeRequest(User $user, DashboardProfileChangeRequest $row): void
+    {
+        $uuid = trim((string) $user->hrm_employee_uuid);
+        if ($uuid === '' || ! $this->hrmApi->canSubmitProfileChanges()) {
+            return;
+        }
+
+        try {
+            $remote = $this->hrmApi->submitProfileChangeRequest([
+                'employee_uuid' => $uuid,
+                'workspace_request_id' => $row->id,
+                'changes' => $row->changes,
+                'note' => $row->note,
+            ]);
+        } catch (HrmApiUnavailable $e) {
+            Log::warning('workspace.profile_change.push_failed', ['message' => $e->getMessage()]);
+
+            return;
+        }
+
+        if ($remote !== null) {
+            $row->forceFill(['hrm_synced_at' => now()])->save();
         }
     }
 

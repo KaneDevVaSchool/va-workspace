@@ -92,6 +92,42 @@ class HrmApiClient
         return $this->get('/api/v1/companies') ?? [];
     }
 
+    public function canSubmitProfileChanges(): bool
+    {
+        return filled(config('services.hrm.api_token')) && HrmOutboundHttp::baseUrl() !== '';
+    }
+
+    /**
+     * Đẩy yêu cầu sửa hồ sơ vào hàng đợi HCNS. Null khi HRM chưa cấu hình.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>|null
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function submitProfileChangeRequest(array $payload): ?array
+    {
+        if (! $this->canSubmitProfileChanges()) {
+            return null;
+        }
+
+        return $this->postData('/api/v1/employees/profile-change-requests', $payload);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function profileChangeRequestStatus(int $workspaceRequestId): ?array
+    {
+        if (! $this->canSubmitProfileChanges()) {
+            return null;
+        }
+
+        return $this->get('/api/v1/employees/profile-change-requests/by-workspace/'.$workspaceRequestId);
+    }
+
     /**
      * Loại đơn nghỉ đang hoạt động — đồng bộ portal HRM /leave/types (ability leave:read).
      *
@@ -677,6 +713,29 @@ class HrmApiClient
     private function get(string $path, array $query = []): ?array
     {
         return $this->getFrom($this->client(), $path, $query);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>|null
+     *
+     * @throws HrmApiUnavailable
+     */
+    private function postData(string $path, array $payload): ?array
+    {
+        try {
+            $response = $this->client()->post($path, $payload);
+        } catch (ConnectionException $e) {
+            throw new HrmApiUnavailable("timeout/network lỗi khi gọi {$path}", $e);
+        }
+
+        if (! $response->successful()) {
+            throw new HrmApiUnavailable("HTTP {$response->status()} khi gọi {$path}");
+        }
+
+        $data = $response->json('data');
+
+        return is_array($data) ? $data : null;
     }
 
     /**
