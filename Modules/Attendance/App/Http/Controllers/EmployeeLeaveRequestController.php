@@ -5,7 +5,9 @@ namespace Modules\Attendance\App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Validation\Rule;
+use Modules\Attendance\App\Services\EmployeeLeaveFormService;
 use Modules\Attendance\App\Services\EmployeeLeaveSubmissionService;
 use Modules\Identity\App\Hrm\Exceptions\HrmApiUnavailable;
 
@@ -27,6 +29,22 @@ class EmployeeLeaveRequestController extends Controller
         }
 
         return response()->json(['data' => $items]);
+    }
+
+    public function form(Request $request, string $uuid, EmployeeLeaveFormService $forms): Response
+    {
+        try {
+            return $forms->downloadForUser($request->user(), $uuid);
+        } catch (HrmApiUnavailable $e) {
+            if (! $e->isConnectionFailure()) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            return response()->json([
+                'message' => 'Không xuất được đơn nghỉ phép từ HRM.',
+                'detail' => config('app.debug') ? $e->getMessage() : null,
+            ], 503);
+        }
     }
 
     public function store(Request $request, EmployeeLeaveSubmissionService $submissions): JsonResponse

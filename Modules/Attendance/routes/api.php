@@ -18,6 +18,9 @@ Route::middleware('auth')->prefix('attendance')->name('attendance.')->group(func
         ->name('leave-workflow.show');
     Route::get('/leave-requests', [EmployeeLeaveRequestController::class, 'index'])
         ->name('leave-requests.index');
+    Route::get('/leave-requests/{uuid}/form', [EmployeeLeaveRequestController::class, 'form'])
+        ->whereUuid('uuid')
+        ->name('leave-requests.form');
     Route::post('/leave-requests', [EmployeeLeaveRequestController::class, 'store'])
         ->name('leave-requests.store');
 

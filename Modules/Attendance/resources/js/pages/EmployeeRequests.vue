@@ -7,6 +7,7 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
+import { showClientToast } from '@/lib/clientToast';
 import EmployeeAttendanceHistory from '../components/EmployeeAttendanceHistory.vue';
 import EmployeePwaLogoClip from '../components/EmployeePwaLogoClip.vue';
 import { EMPLOYEE_HISTORY_UTILITIES, isHistoryUtilityId } from '../constants/employeeHistoryUtilities.js';
@@ -114,6 +115,7 @@ const loadError = ref('');
 const leaveLoaded = ref(false);
 
 const selected = ref(null);
+const exportingId = ref('');
 
 function statusMeta(status) {
   return STATUS_META[status] ?? STATUS_META.pending;
@@ -272,6 +274,51 @@ async function loadRequests() {
 // thay vì rời cả trang — PWA không có nút Back của trình duyệt.
 let sheetEntryPushed = false;
 
+async function exportLeaveForm(request) {
+  const id = String(request?.id ?? '');
+  if (!id || exportingId.value) return;
+  exportingId.value = id;
+  try {
+    const response = await window.axios.get(`/api/attendance/leave-requests/${id}/form`, {
+      responseType: 'blob',
+    });
+    const blob = response.data;
+    if (blob?.type && blob.type.includes('json')) {
+      const json = JSON.parse(await blob.text());
+      throw new Error(json.message || 'Không xuất được đơn nghỉ phép.');
+    }
+
+    const disposition = response.headers['content-disposition'] || '';
+    const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const plainMatch = disposition.match(/filename="?([^"]+)"?/i);
+    const filename = decodeURIComponent(utfMatch?.[1] || plainMatch?.[1] || 'Don-nghi-phep.pdf');
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+    showClientToast('success', 'Đã tải đơn nghỉ phép.');
+  } catch (err) {
+    let message = err?.message;
+    if (err?.response?.data instanceof Blob) {
+      try {
+        const json = JSON.parse(await err.response.data.text());
+        message = json.message || message;
+      } catch {
+        message = 'Không xuất được đơn nghỉ phép.';
+      }
+    } else {
+      message = err?.response?.data?.message || message;
+    }
+    showClientToast('error', message || 'Không xuất được đơn nghỉ phép.');
+  } finally {
+    exportingId.value = '';
+  }
+}
+
 function openDetail(request) {
   selected.value = request;
   if (sheetEntryPushed) return;
@@ -416,6 +463,7 @@ onBeforeUnmount(() => {
               </header>
               <ul class="requests-list">
                 <li v-for="req in group.items" :key="req.id">
+                  <div class="request-card" :class="`request-card--${req.status}`">
                   <button
                     type="button"
                     class="request-row"
@@ -438,6 +486,17 @@ onBeforeUnmount(() => {
                     </span>
                     <AppIcon name="chevronRight" :size="18" class="request-row__chev" aria-hidden="true" />
                   </button>
+                  <button
+                    v-if="req.status === 'approved'"
+                    type="button"
+                    class="request-export"
+                    :disabled="exportingId === req.id"
+                    @click="exportLeaveForm(req)"
+                  >
+                    <AppIcon name="download" :size="16" />
+                    {{ exportingId === req.id ? 'Đang xuất…' : 'Xuất đơn nghỉ phép' }}
+                  </button>
+                  </div>
                 </li>
               </ul>
             </section>
@@ -463,6 +522,17 @@ onBeforeUnmount(() => {
               <AppIcon name="close" :size="18" />
             </button>
           </div>
+
+          <button
+            v-if="selected.status === 'approved'"
+            type="button"
+            class="sheet__export"
+            :disabled="exportingId === selected.id"
+            @click="exportLeaveForm(selected)"
+          >
+            <AppIcon name="download" :size="16" />
+            {{ exportingId === selected.id ? 'Đang xuất…' : 'Xuất đơn nghỉ phép' }}
+          </button>
 
           <dl class="sheet__details">
             <div class="sheet__row">
@@ -760,6 +830,43 @@ onBeforeUnmount(() => {
   list-style: none;
 }
 
+.request-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.request-card::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 3px;
+  border-radius: 0;
+  background: var(--color-border);
+  z-index: 1;
+}
+
+.request-card--pending::before,
+.request-card--cancel_requested::before {
+  background: var(--color-warning);
+}
+
+.request-card--approved::before {
+  background: var(--color-success);
+}
+
+.request-card--rejected::before {
+  background: var(--color-primary);
+}
+
+.request-card--cancelled::before {
+  background: var(--color-text-muted);
+}
+
 .request-row {
   position: relative;
   display: flex;
@@ -769,44 +876,13 @@ onBeforeUnmount(() => {
   padding: var(--space-3) var(--space-3) var(--space-3)
     calc(var(--space-2) + 3px + var(--space-3));
   border: none;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   text-align: left;
   cursor: pointer;
   font-family: inherit;
   transition: background 0.15s ease;
-}
-
-.request-row::before {
-  content: '';
-  position: absolute;
-  top: var(--space-2);
-  bottom: var(--space-2);
-  left: var(--space-2);
-  width: 3px;
-  border-radius: 0;
-  background: var(--color-border);
-}
-
-.request-row--pending::before {
-  background: var(--color-warning);
-}
-
-.request-row--approved::before {
-  background: var(--color-success);
-}
-
-.request-row--rejected::before {
-  background: var(--color-primary);
-}
-
-.request-row--cancel_requested::before {
-  background: var(--color-warning);
-}
-
-.request-row--cancelled::before {
-  background: var(--color-text-muted);
 }
 
 .request-row:active {
@@ -886,6 +962,39 @@ onBeforeUnmount(() => {
 .request-row__chev {
   flex-shrink: 0;
   color: var(--color-border-strong);
+}
+
+.request-export,
+.sheet__export {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.request-export {
+  padding: 0.55rem var(--space-3);
+  box-shadow: inset 0 1px 0 var(--color-border);
+}
+
+.sheet__export {
+  margin-bottom: var(--space-3);
+  padding: 0.7rem 1rem;
+  border-radius: var(--radius-md);
+}
+
+.request-export:disabled,
+.sheet__export:disabled {
+  opacity: 0.65;
+  cursor: default;
 }
 
 .sheet-overlay {

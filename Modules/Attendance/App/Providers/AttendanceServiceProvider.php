@@ -17,6 +17,7 @@ class AttendanceServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->loadViewsFrom(module_path('Attendance', 'resources/views'), 'attendance');
         $this->registerRoutes();
     }
 
