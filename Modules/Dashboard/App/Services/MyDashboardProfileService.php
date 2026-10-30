@@ -41,8 +41,8 @@ class MyDashboardProfileService
         'profile_department_name' => ['label' => 'Phòng ban (hồ sơ)', 'type' => 'text'],
         'personnel_type' => ['label' => 'Loại nhân sự', 'type' => 'text'],
         'level_name' => ['label' => 'Cấp bậc', 'type' => 'text'],
-        'hired_at' => ['label' => 'Ngày vào làm', 'type' => 'date'],
-        'actual_start_date' => ['label' => 'Ngày bắt đầu thực tế', 'type' => 'date'],
+        // HRM coi «Ngày vào làm» và «Ngày vào làm thực tế» là một mốc — chỉ giữ một ô sửa; HRM ghi cả hai cột khi duyệt.
+        'hired_at' => ['label' => 'Ngày vào làm thực tế', 'type' => 'date'],
     ];
 
     public function __construct(

@@ -153,8 +153,7 @@ const workGroupRows = computed(() => {
     profileField('Trạng thái làm việc', formatEmploymentStatus(hrm?.employment_status), 'activity'),
     profileField('Trạng thái hồ sơ', formatHrmStatus(hrm?.status), 'shield'),
     profileField('Nơi làm việc', hrm?.workplace, 'globe'),
-    profileField('Ngày vào làm', formatDate(hrm?.hired_at), 'calendar'),
-    profileField('Ngày bắt đầu thực tế', formatDate(hrm?.actual_start_date), 'calendar'),
+    profileField('Ngày vào làm thực tế', formatDate(hrm?.actual_start_date || hrm?.hired_at), 'calendar'),
   ].filter(Boolean);
 });
 
@@ -225,7 +224,6 @@ const editableFieldGroups = computed(() => {
     'personnel_type',
     'level_name',
     'hired_at',
-    'actual_start_date',
   ]);
   const orgKeys = new Set([
     'manager_name',

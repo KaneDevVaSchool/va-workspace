@@ -111,6 +111,26 @@ class HrmEmployeeDirectoryTest extends TestCase
         });
     }
 
+    public function test_hired_at_and_actual_start_date_are_one_date(): void
+    {
+        $hrm = DB::connection('hrm');
+        foreach ([
+            ['id' => 1, 'uuid' => 'e-1', 'code' => 'NV001', 'full_name' => 'Chỉ có vào làm', 'status' => 'active', 'hired_at' => '2024-03-05'],
+            ['id' => 2, 'uuid' => 'e-2', 'code' => 'NV002', 'full_name' => 'Chỉ có thực tế', 'status' => 'active', 'actual_start_date' => '2023-02-01'],
+            ['id' => 3, 'uuid' => 'e-3', 'code' => 'NV003', 'full_name' => 'Cả hai', 'status' => 'active', 'hired_at' => '2020-01-02', 'actual_start_date' => '2021-06-07'],
+            ['id' => 4, 'uuid' => 'e-4', 'code' => 'NV004', 'full_name' => 'Trống', 'status' => 'active'],
+        ] as $row) {
+            $hrm->table('employees')->insert($row);
+        }
+
+        $employees = collect((new HrmEmployeeDirectory)->load()['employees'])->keyBy('code');
+
+        foreach (['NV001' => '2024-03-05', 'NV002' => '2023-02-01', 'NV003' => '2021-06-07', 'NV004' => null] as $code => $expected) {
+            $this->assertSame($expected, $employees[$code]['hired_at'], $code);
+            $this->assertSame($expected, $employees[$code]['actual_start_date'], $code);
+        }
+    }
+
     public function test_load_reads_primary_assignment_and_manager_from_database(): void
     {
         $hrm = DB::connection('hrm');

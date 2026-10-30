@@ -954,6 +954,9 @@ class HrmEmployeeDirectory
         $concurrentRows = $concurrent->get($row->id) ?? $concurrent->get((string) $row->id) ?? collect();
         $placement = $this->placementFromOrgUnit($row->org_unit_id, $unitsById);
         $accountAvatar = $avatars->get($row->id) ?? $avatars->get((string) $row->id) ?? $avatars->get((int) $row->id);
+        $workStartDate = filled($row->actual_start_date)
+            ? (string) $row->actual_start_date
+            : (filled($row->hired_at) ? (string) $row->hired_at : null);
 
         return [
             'uuid' => (string) $row->uuid,
@@ -967,8 +970,9 @@ class HrmEmployeeDirectory
             'personnel_type' => filled($row->personnel_type) ? (string) $row->personnel_type : null,
             'workplace' => filled($row->workplace) ? (string) $row->workplace : null,
             'attendance_code' => filled($row->attendance_code) ? (string) $row->attendance_code : null,
-            'hired_at' => filled($row->hired_at) ? (string) $row->hired_at : null,
-            'actual_start_date' => filled($row->actual_start_date) ? (string) $row->actual_start_date : null,
+            // «Ngày vào làm» và «Ngày vào làm thực tế» là MỘT mốc trên HRM (ưu tiên ô thực tế) — hai khóa luôn trùng nhau.
+            'hired_at' => $workStartDate,
+            'actual_start_date' => $workStartDate,
             'employment_status' => filled($row->employment_status) ? (string) $row->employment_status : null,
             'created_at' => filled($row->created_at) ? (string) $row->created_at : null,
             'profile_department_name' => filled($row->profile_department_name) ? (string) $row->profile_department_name : null,
