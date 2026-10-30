@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | **Cửa sổ** | Thứ 2 26/10/2026 → Chủ nhật 01/11/2026 |
-| **Commit** | **100** |
+| **Commit** | **104** |
 | **Ngày có commit** | 5 |
 | **Nhánh đối soát** | `main` |
 | **Bảng audit** | [2026-W44-audit](./2026-W44-audit.md) |
@@ -16,7 +16,7 @@
 | **27/10/2026** | Thứ 3 | 30 | 17 | [`2026-10-27`](../2026-10-27/README.md) |
 | **28/10/2026** | Thứ 4 | 29 | 14 | [`2026-10-28`](../2026-10-28/README.md) |
 | **29/10/2026** | Thứ 5 | 17 | 5 | [`2026-10-29`](../2026-10-29/README.md) |
-| **30/10/2026** | Thứ 6 | 7 | 7 | [`2026-10-30`](../2026-10-30/README.md) |
+| **30/10/2026** | Thứ 6 | 11 | 11 | [`2026-10-30`](../2026-10-30/README.md) |
 | **31/10/2026** | Thứ 7 | 0 | 0 | — |
 | **01/11/2026** | Chủ nhật | 0 | 0 | — |
 
@@ -26,12 +26,13 @@
 | --- | ---: |
 | Chấm công | 15 |
 | Chat | 24 |
-| Bảng tin | 6 |
+| Bảng tin | 8 |
 | Định danh và phân quyền | 1 |
 | Đơn từ | 31 |
+| Tổng quan | 1 |
 | Nền tảng | 2 |
 | Giao diện gốc | 15 |
-| Tài liệu | 2 |
+| Tài liệu | 3 |
 | Khác | 4 |
 
 ## Tính năng lớn
@@ -63,6 +64,9 @@
 | 30/10/2026 | Chat | Ô soạn không render lại danh sách tin, kéo tin sát bàn phím | 1 |
 | 30/10/2026 | Bảng tin | Khung gợi ý nhắc tên neo theo ô soạn, không bị thẻ bài cắt | 1 |
 | 30/10/2026 | Bảng tin | Nhận link YouTube dạng shorts, live và nocookie, gắn origin lúc phát để khỏi lỗi 153 | 1 |
+| 30/10/2026 | Bảng tin | Implement colleague tagging feature with mentions support | 1 |
+| 30/10/2026 | Bảng tin | Nhóm bảng tin theo pháp nhân VM, Viễn Đông, Hoàng Việt và CIT | 1 |
+| 30/10/2026 | Tổng quan | Đẩy yêu cầu sửa hồ sơ sang hàng đợi HCNS | 1 |
 
 ## Việc trong tuần
 
@@ -131,6 +135,10 @@
 - **5.** Khung gợi ý nhắc tên neo theo ô soạn, không bị thẻ bài cắt (1 lần lưu)
 - **6.** Nhận link YouTube dạng shorts, live và nocookie, gắn origin lúc phát để khỏi lỗi 153 (1 lần lưu)
 - **7.** Chuyển tài liệu module sang bố cục BMAD và thêm rule đối chiếu phiếu (1 lần lưu)
+- **8.** Phiếu release và audit ngày 30/10 (1 lần lưu)
+- **9.** Implement colleague tagging feature with mentions support (1 lần lưu)
+- **10.** Nhóm bảng tin theo pháp nhân VM, Viễn Đông, Hoàng Việt và CIT (1 lần lưu)
+- **11.** Đẩy yêu cầu sửa hồ sơ sang hàng đợi HCNS (1 lần lưu)
 
 [← Mục lục](../README.md)
 

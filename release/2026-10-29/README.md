@@ -8,7 +8,7 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 
 1. **Bảng tin.** Màn: Bảng tin. Bổ sung tab bài đã duyệt và nâng cấp trang duyệt bài Social (1 lần lưu)
 2. **Chấm công.** Màn: Chấm công nhân viên, Lịch sử, Quyền và nhật ký. Chuông thông báo shell mobile nhân viên và cải thiện lịch sử chấm công (1 lần lưu)
-3. **Chat.** Màn: Chat, Bảng tin, Quyền và nhật ký, Tổng quan của tôi. Sửa tiếp phần Chat (chưa ghi câu mô tả) (3 lần lưu)
+3. **Chat.** Màn: Chat, Bảng tin, Quyền và nhật ký, Hồ sơ cá nhân, Tổng quan của tôi. Sửa tiếp phần Chat (chưa ghi câu mô tả) (3 lần lưu)
 4. **Giao diện gốc.** Màn: Chat. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (3 lần lưu)
 5. **Chấm công.** Màn: Chấm công nhân viên, Chat. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (9 lần lưu)
 
@@ -39,14 +39,14 @@ Các lần lưu, từ cũ đến mới:
 ### 3. Sửa tiếp phần Chat (chưa ghi câu mô tả)
 
 - **Phần:** Chat
-- **Màn hình:** Chat, Bảng tin, Quyền và nhật ký, Tổng quan của tôi
+- **Màn hình:** Chat, Bảng tin, Quyền và nhật ký, Hồ sơ cá nhân, Tổng quan của tôi
 - **Lần lưu:** 3
 - **Đổi dữ liệu:** Chat thêm tâm trạng và màu nhóm
 
 Các lần lưu, từ cũ đến mới:
 
 - `901ba02` — Sửa tiếp cùng việc. Màn: Chat, Bảng tin, Quyền và nhật ký.
-- `211aee6` — Sửa tiếp cùng việc. Màn: Chat, Tổng quan của tôi.
+- `211aee6` — Sửa tiếp cùng việc. Màn: Chat, Hồ sơ cá nhân, Tổng quan của tôi.
 - `d4e6fc5` — Sửa tiếp cùng việc. Màn: Chat.
 
 ### 4. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)

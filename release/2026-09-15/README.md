@@ -6,9 +6,9 @@ Phiếu tuần: [2026-W38](../summary/2026-W38-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Bảng tin.** Màn: Bảng tin. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
+1. **Bảng tin.** Màn: Nhóm, Bảng tin. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
 2. **Dự án và công việc.** Màn: Công việc và dự án. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (1 lần lưu)
-3. **Bảng tin.** Màn: Bảng tin, Tổng quan của tôi. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
+3. **Bảng tin.** Màn: Nhóm, Bảng tin, Tổng quan của tôi. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
 4. **Đề xuất.** Màn: Cấu hình menu. Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (1 lần lưu)
 5. **Giao diện gốc.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
 6. **Đề xuất.** Màn: Cấu hình menu. Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (4 lần lưu)
@@ -22,13 +22,13 @@ Phiếu tuần: [2026-W38](../summary/2026-W38-summary.md) · Đối soát: [aud
 ### 1. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
 
 - **Phần:** Bảng tin
-- **Màn hình:** Bảng tin
+- **Màn hình:** Nhóm, Bảng tin
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 
 Các lần lưu, từ cũ đến mới:
 
-- `a031672` — Sửa tiếp cùng việc. Màn: Bảng tin.
+- `a031672` — Sửa tiếp cùng việc. Màn: Nhóm, Bảng tin.
 
 ### 2. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả)
 
@@ -44,13 +44,13 @@ Các lần lưu, từ cũ đến mới:
 ### 3. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
 
 - **Phần:** Bảng tin
-- **Màn hình:** Bảng tin, Tổng quan của tôi
+- **Màn hình:** Nhóm, Bảng tin, Tổng quan của tôi
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 
 Các lần lưu, từ cũ đến mới:
 
-- `c1b0fad` — Sửa tiếp cùng việc. Màn: Bảng tin, Tổng quan của tôi.
+- `c1b0fad` — Sửa tiếp cùng việc. Màn: Nhóm, Bảng tin, Tổng quan của tôi.
 
 ### 4. Sửa tiếp phần Đề xuất (chưa ghi câu mô tả)
 

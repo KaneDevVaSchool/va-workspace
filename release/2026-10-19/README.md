@@ -12,7 +12,7 @@ Phiếu tuần: [2026-W43](../summary/2026-W43-summary.md) · Đối soát: [aud
 4. **Chấm công.** Màn: Chấm công nhân viên, Bảng tin, Tổng quan của tôi. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (3 lần lưu)
 5. **Tổng quan.** Màn: Lịch sử, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (1 lần lưu)
 6. **Chấm công.** Màn: Chấm công nhân viên, Lịch sử, Nghỉ phép, Bảng tin, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (4 lần lưu)
-7. **Tổng quan.** Màn: Chat, Bảng tin, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (3 lần lưu)
+7. **Tổng quan.** Màn: Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (3 lần lưu)
 8. **Giao diện gốc.** Màn: Lịch sử, Nghỉ phép. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
 9. **Chấm công.** Màn: Nghỉ phép. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (1 lần lưu)
 10. **Tổng quan.** Màn: Lịch sử, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (1 lần lưu)
@@ -98,15 +98,15 @@ Các lần lưu, từ cũ đến mới:
 ### 7. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
 
 - **Phần:** Tổng quan
-- **Màn hình:** Chat, Bảng tin, Tổng quan của tôi, Cấu hình menu
+- **Màn hình:** Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu
 - **Lần lưu:** 3
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu
 
 Các lần lưu, từ cũ đến mới:
 
-- `486dbfd` — Sửa tiếp cùng việc. Màn: Chat, Bảng tin, Tổng quan của tôi, Cấu hình menu.
+- `486dbfd` — Sửa tiếp cùng việc. Màn: Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu.
 - `bc28972` — Sửa tiếp cùng việc. Màn: Tổng quan của tôi.
-- `cf2c823` — Sửa tiếp cùng việc. Màn: Chat, Tổng quan của tôi, Cấu hình menu.
+- `cf2c823` — Sửa tiếp cùng việc. Màn: Chat, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu.
 
 ### 8. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 

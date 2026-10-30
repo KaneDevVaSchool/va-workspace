@@ -17,8 +17,8 @@ Phiếu tuần: [2026-W35](../summary/2026-W35-summary.md) · Đối soát: [aud
 9. **Bảng tin.** Màn: Bảng tin. Giao diện tường cá nhân/phòng ban, bình chọn, chia sẻ, đính kèm ảnh (1 lần lưu)
 10. **Định danh và phân quyền.** Màn: Quyền và nhật ký. Thêm thông báo đẩy (web push) và trung tâm thông báo (1 lần lưu)
 11. **Bảng tin.** Màn: Bảng tin. Nhắc tên người dùng trong bài viết/bình luận (1 lần lưu)
-12. **Bảng tin.** Màn: Bảng tin. Thêm nhóm/phòng ban, tường nhóm và sửa thông báo đẩy (1 lần lưu)
-13. **Bảng tin.** Màn: Bảng tin. Mời thành viên vào nhóm, ảnh đại diện nhóm, chia sẻ bài viết vào nhóm (1 lần lưu)
+12. **Bảng tin.** Màn: Nhóm, Bảng tin. Thêm nhóm/phòng ban, tường nhóm và sửa thông báo đẩy (1 lần lưu)
+13. **Bảng tin.** Màn: Nhóm, Bảng tin. Mời thành viên vào nhóm, ảnh đại diện nhóm, chia sẻ bài viết vào nhóm (1 lần lưu)
 14. **Bảng tin.** Màn: Bảng tin. Sticker động (Lottie) trong bài viết/bình luận (1 lần lưu)
 15. **Định danh và phân quyền.** Màn: Bảng tin, Quyền và nhật ký. Mô tả nhật ký hoạt động không còn lẫn thẻ HTML (1 lần lưu)
 16. **Bảng tin.** Màn: Bảng tin. Cải thiện bảng tin, bình chọn, panel hồ sơ (1 lần lưu)
@@ -151,7 +151,7 @@ Các lần lưu, từ cũ đến mới:
 ### 12. Thêm nhóm/phòng ban, tường nhóm và sửa thông báo đẩy
 
 - **Phần:** Bảng tin
-- **Màn hình:** Bảng tin
+- **Màn hình:** Nhóm, Bảng tin
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu
 
@@ -162,7 +162,7 @@ Các lần lưu, từ cũ đến mới:
 ### 13. Mời thành viên vào nhóm, ảnh đại diện nhóm, chia sẻ bài viết vào nhóm
 
 - **Phần:** Bảng tin
-- **Màn hình:** Bảng tin
+- **Màn hình:** Nhóm, Bảng tin
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu
 

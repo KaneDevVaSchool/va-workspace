@@ -5,8 +5,8 @@ Tổng hợp **toàn bộ commit** trên nhánh `main`, chia theo ngày và tổ
 | | |
 | --- | --- |
 | **Cửa sổ** | 24/08/2026 → 30/10/2026 |
-| **Commit** | **456** |
-| **HEAD** | `71f0205` — docs: chuyển tài liệu module sang bố cục BMAD và thêm rule đối chiếu phiếu |
+| **Commit** | **460** |
+| **HEAD** | `a5f506e` — feat(dashboard): đẩy yêu cầu sửa hồ sơ sang hàng đợi HCNS |
 | **Đối tượng** | BA, QA — đối soát commit theo ngày |
 
 Commit message một chữ không được diễn giải thành nghiệp vụ mới. Cột diễn giải trong phiếu ngày trích file commit đó đụng.
@@ -24,8 +24,8 @@ Commit message một chữ không được diễn giải thành nghiệp vụ m�
 | **W41** | 5–11/10/2026 | 76 | [2026-W41](./summary/2026-W41-summary.md) | [audit](./summary/2026-W41-audit.md) |
 | **W42** | 12–18/10/2026 | 2 | [2026-W42](./summary/2026-W42-summary.md) | [audit](./summary/2026-W42-audit.md) |
 | **W43** | 19–25/10/2026 | 58 | [2026-W43](./summary/2026-W43-summary.md) | [audit](./summary/2026-W43-audit.md) |
-| **W44** | 26/10–1/11/2026 | 100 | [2026-W44](./summary/2026-W44-summary.md) | [audit](./summary/2026-W44-audit.md) |
-| **Tổng** | | **456** | | |
+| **W44** | 26/10–1/11/2026 | 104 | [2026-W44](./summary/2026-W44-summary.md) | [audit](./summary/2026-W44-audit.md) |
+| **Tổng** | | **460** | | |
 
 ## Ngày
 
@@ -89,5 +89,5 @@ Commit message một chữ không được diễn giải thành nghiệp vụ m�
 - [27/10/2026](./2026-10-27/README.md) — 30 lần lưu, 17 việc · [đối soát](./2026-10-27/audit.md)
 - [28/10/2026](./2026-10-28/README.md) — 29 lần lưu, 14 việc · [đối soát](./2026-10-28/audit.md)
 - [29/10/2026](./2026-10-29/README.md) — 17 lần lưu, 5 việc · [đối soát](./2026-10-29/audit.md)
-- [30/10/2026](./2026-10-30/README.md) — 7 lần lưu, 7 việc · [đối soát](./2026-10-30/audit.md)
+- [30/10/2026](./2026-10-30/README.md) — 11 lần lưu, 11 việc · [đối soát](./2026-10-30/audit.md)
 

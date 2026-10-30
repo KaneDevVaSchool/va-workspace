@@ -10,7 +10,7 @@
 | 2 | Thêm | Bảng tin | Bảng tin | Lượt xem bài viết và giới hạn hiển thị theo phòng ban | 1 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
 | 3 | Thêm | Đánh giá | Quyền và nhật ký, Tiêu chí đánh giá, Cấu hình menu | Tiêu chí ĐGNL, lịch sử và hub phòng ban | 1 | Đổi cấu trúc dữ liệu |
 | 4 | Thêm | Đánh giá | Tiêu chí đánh giá, Cấu hình menu | Mẫu đánh giá, vị trí đánh giá và import/export Excel | 1 | Đổi bảng mẫu đánh giá; Đổi cấu trúc dữ liệu; Đổi bảng mẫu đánh giá; Đổi cấu trúc dữ liệu |
-| 5 | Thêm | Bảng tin | Bảng tin | Hashtag trong bài viết | 1 | Đổi cấu trúc dữ liệu |
+| 5 | Thêm | Bảng tin | Nhóm, Bảng tin | Hashtag trong bài viết | 1 | Đổi cấu trúc dữ liệu |
 | 6 | Thêm | Định danh và phân quyền | Quyền và nhật ký | Hiện avatar + phòng ban trong nhật ký hoạt động | 1 | Không |
 | 7 | Cập nhật | Giao diện gốc | Không gắn màn hình | Thêm màu phụ "Nhân Ái" #009082 | 1 | Không |
 | 8 | Thêm | Cấu hình workspace | Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Cấu hình menu | Tuỳ chỉnh menu sidebar theo phòng ban | 1 | Đổi cấu trúc dữ liệu |
@@ -37,7 +37,7 @@
 | 08:31 | `73b45a3` | Thêm | Bảng tin | Bảng tin | Lượt xem bài viết và giới hạn hiển thị theo phòng ban | Social/SocialPostController.php, Social/StoreSocialPostRequest.php, Social/SocialPost.php, Social/SocialPostDepartmentVisibility.php (+16) |
 | 11:32 | `dda67ff` | Thêm | Đánh giá | Quyền và nhật ký, Tiêu chí đánh giá, Cấu hình menu | Tiêu chí ĐGNL, lịch sử và hub phòng ban | Evaluation/EvaluationCriteriaController.php, Evaluation/StoreEvaluationCriteriaRequest.php, Evaluation/UpdateEvaluationCriteriaRequest.php, Evaluation/EvaluationCriteria.php (+24) |
 | 16:55 | `2a11d10` | Thêm | Đánh giá | Tiêu chí đánh giá, Cấu hình menu | Mẫu đánh giá, vị trí đánh giá và import/export Excel | Evaluation/EvaluationCriteriaController.php, Evaluation/EvaluationPositionController.php, Evaluation/EvaluationTemplateController.php, Evaluation/ConfirmImportEvaluationCriteriaRequest.php (+57) |
-| 16:55 | `90842d3` | Thêm | Bảng tin | Bảng tin | Hashtag trong bài viết | Social/SocialHashtagController.php, Social/SocialPostController.php, Social/SocialHashtag.php, Social/SocialPost.php (+25) |
+| 16:55 | `90842d3` | Thêm | Bảng tin | Nhóm, Bảng tin | Hashtag trong bài viết | Social/SocialHashtagController.php, Social/SocialPostController.php, Social/SocialHashtag.php, Social/SocialPost.php (+25) |
 | 16:55 | `e324868` | Thêm | Định danh và phân quyền | Quyền và nhật ký | Hiện avatar + phòng ban trong nhật ký hoạt động | Identity/ActivityLogRepository.php, Identity/ActivityLogService.php, Identity/ActivityLog.vue, components/HeaderActivityLog.vue |
 | 16:56 | `4d2525b` | Cập nhật | Giao diện gốc | Không gắn màn hình | Thêm màu phụ "Nhân Ái" #009082 | css/theme.css |
 | 19:18 | `440e799` | Thêm | Cấu hình workspace | Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Cấu hình menu | Tuỳ chỉnh menu sidebar theo phòng ban | data-table/SKILL.md, rules/data-table.mdc, data-table/SKILL.md, data-table/reference.md (+33) |

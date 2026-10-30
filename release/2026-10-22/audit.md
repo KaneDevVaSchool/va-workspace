@@ -10,7 +10,7 @@
 | 2 | Sửa tiếp | Cấu hình workspace | Cấu hình menu | Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) | 1 | Đổi cấu trúc dữ liệu |
 | 3 | Sửa tiếp | Định danh và phân quyền | Chấm công nhân viên, Cấu hình menu | Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) | 1 | Không |
 | 4 | Sửa tiếp | Chấm công | Chấm công nhân viên, Lịch sử, Tổng quan của tôi | Sửa tiếp phần Chấm công (chưa ghi câu mô tả) | 3 | Không |
-| 5 | Sửa tiếp | Giao diện gốc | Chấm công nhân viên, Tổng quan của tôi | Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) | 2 | Không |
+| 5 | Sửa tiếp | Giao diện gốc | Chấm công nhân viên, Hồ sơ cá nhân, Tổng quan của tôi | Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) | 2 | Không |
 | 6 | Sửa tiếp | Chấm công | Chấm công nhân viên | Sửa tiếp phần Chấm công (chưa ghi câu mô tả) | 6 | Không |
 | 7 | Sửa tiếp | Tổng quan | Công việc và dự án, Tổng quan của tôi | Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) | 1 | Không |
 | 8 | Sửa tiếp | Chấm công | Chấm công nhân viên | Sửa tiếp phần Chấm công (chưa ghi câu mô tả) | 4 | Không |
@@ -28,7 +28,7 @@
 | 11:20 | `f20799b` | Sửa tiếp | Chấm công | Chấm công nhân viên, Lịch sử, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Chấm công nhân viên, Lịch sử, Tổng quan của tôi. | Attendance/EmployeeAttendanceHistory.vue, Attendance/EmployeeMobileLayout.vue, Attendance/employeeAttendanceHistory.js, Attendance/EmployeeAttendance.vue (+5) |
 | 11:29 | `7615c9b` | Sửa tiếp | Chấm công | Chấm công nhân viên | Sửa tiếp cùng việc. Màn: Chấm công nhân viên. | Attendance/EmployeeAttendance.vue |
 | 11:39 | `a8e4d8a` | Sửa tiếp | Chấm công | Chấm công nhân viên | Sửa tiếp cùng việc. Màn: Chấm công nhân viên. | Attendance/EmployeeMobileWorkspaceIntro.vue, Attendance/EmployeeMobileLayout.vue, Attendance/employeeMobileWorkspaceIntro.js, Attendance/EmployeeAttendance.vue (+5) |
-| 11:48 | `5b9a22b` | Sửa tiếp | Giao diện gốc | Chấm công nhân viên, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Chấm công nhân viên, Tổng quan của tôi. | Attendance/EmployeeAttendance.vue, Attendance/EmployeeProfile.vue, Dashboard/MyDashboardProfileService.php, Identity/HrmEmployeeDirectory.php (+10) |
+| 11:48 | `5b9a22b` | Sửa tiếp | Giao diện gốc | Chấm công nhân viên, Hồ sơ cá nhân, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Chấm công nhân viên, Hồ sơ cá nhân, Tổng quan của tôi. | Attendance/EmployeeAttendance.vue, Attendance/EmployeeProfile.vue, Dashboard/MyDashboardProfileService.php, Identity/HrmEmployeeDirectory.php (+10) |
 | 13:46 | `6d78590` | Sửa tiếp | Giao diện gốc | Chấm công nhân viên | Sửa tiếp cùng việc. Màn: Chấm công nhân viên. | Attendance/EmployeeMobileWorkspaceIntro.vue, Attendance/EmployeeMobileHeader.vue, Attendance/EmployeeMobileInstallBanner.vue, Attendance/EmployeeMobileTabbar.vue (+16) |
 | 13:51 | `617f8cc` | Sửa tiếp | Chấm công | Chấm công nhân viên | Sửa tiếp cùng việc. Màn: Chấm công nhân viên. | Attendance/EmployeeAttendance.vue |
 | 14:12 | `665db78` | Sửa tiếp | Chấm công | Chấm công nhân viên | Sửa tiếp cùng việc. Màn: Chấm công nhân viên. | Attendance/EmployeeAttendance.vue |

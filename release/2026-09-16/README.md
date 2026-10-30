@@ -8,7 +8,7 @@ Phiếu tuần: [2026-W38](../summary/2026-W38-summary.md) · Đối soát: [aud
 
 1. **Bảng tin.** Màn: Bảng tin. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (3 lần lưu)
 2. **Cấu hình workspace.** Màn: Bảng tin, Công việc và dự án, Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
-3. **Bảng tin.** Màn: Bảng tin, Cấu hình menu. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (6 lần lưu)
+3. **Bảng tin.** Màn: Nhóm, Bảng tin, Cấu hình menu. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (6 lần lưu)
 
 ## Từng việc
 
@@ -39,7 +39,7 @@ Các lần lưu, từ cũ đến mới:
 ### 3. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
 
 - **Phần:** Bảng tin
-- **Màn hình:** Bảng tin, Cấu hình menu
+- **Màn hình:** Nhóm, Bảng tin, Cấu hình menu
 - **Lần lưu:** 6
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu
 
@@ -49,7 +49,7 @@ Các lần lưu, từ cũ đến mới:
 - `06552ca` — Sửa tiếp cùng việc. Màn: Bảng tin.
 - `f1419a4` — Sửa tiếp cùng việc. Màn: Bảng tin.
 - `5755271` — Sửa tiếp cùng việc. Màn: Bảng tin.
-- `efa66e1` — Sửa tiếp cùng việc. Màn: Bảng tin.
+- `efa66e1` — Sửa tiếp cùng việc. Màn: Nhóm, Bảng tin.
 - `8d36e44` — Sửa tiếp cùng việc. Màn: Bảng tin, Cấu hình menu.
 
 ## Khi đưa lên máy chủ

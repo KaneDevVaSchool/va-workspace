@@ -10,7 +10,7 @@ Phiếu tuần: [2026-W43](../summary/2026-W43-summary.md) · Đối soát: [aud
 2. **Cấu hình workspace.** Màn: Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
 3. **Định danh và phân quyền.** Màn: Chấm công nhân viên, Cấu hình menu. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
 4. **Chấm công.** Màn: Chấm công nhân viên, Lịch sử, Tổng quan của tôi. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (3 lần lưu)
-5. **Giao diện gốc.** Màn: Chấm công nhân viên, Tổng quan của tôi. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (2 lần lưu)
+5. **Giao diện gốc.** Màn: Chấm công nhân viên, Hồ sơ cá nhân, Tổng quan của tôi. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (2 lần lưu)
 6. **Chấm công.** Màn: Chấm công nhân viên. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (6 lần lưu)
 7. **Tổng quan.** Màn: Công việc và dự án, Tổng quan của tôi. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (1 lần lưu)
 8. **Chấm công.** Màn: Chấm công nhân viên. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (4 lần lưu)
@@ -69,13 +69,13 @@ Các lần lưu, từ cũ đến mới:
 ### 5. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
-- **Màn hình:** Chấm công nhân viên, Tổng quan của tôi
+- **Màn hình:** Chấm công nhân viên, Hồ sơ cá nhân, Tổng quan của tôi
 - **Lần lưu:** 2
 - **Đổi dữ liệu:** Không
 
 Các lần lưu, từ cũ đến mới:
 
-- `5b9a22b` — Sửa tiếp cùng việc. Màn: Chấm công nhân viên, Tổng quan của tôi.
+- `5b9a22b` — Sửa tiếp cùng việc. Màn: Chấm công nhân viên, Hồ sơ cá nhân, Tổng quan của tôi.
 - `6d78590` — Sửa tiếp cùng việc. Màn: Chấm công nhân viên.
 
 ### 6. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)

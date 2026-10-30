@@ -6,9 +6,9 @@
 
 | # | Loại | Phần | Màn hình | Việc | Lần lưu | Đổi dữ liệu |
 | --- | --- | --- | --- | --- | ---: | --- |
-| 1 | Sửa tiếp | Bảng tin | Bảng tin | Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) | 1 | Không |
+| 1 | Sửa tiếp | Bảng tin | Nhóm, Bảng tin | Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) | 1 | Không |
 | 2 | Sửa tiếp | Dự án và công việc | Công việc và dự án | Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) | 1 | Không |
-| 3 | Sửa tiếp | Bảng tin | Bảng tin, Tổng quan của tôi | Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) | 1 | Không |
+| 3 | Sửa tiếp | Bảng tin | Nhóm, Bảng tin, Tổng quan của tôi | Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) | 1 | Không |
 | 4 | Sửa tiếp | Đề xuất | Cấu hình menu | Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) | 1 | Đổi cấu trúc dữ liệu |
 | 5 | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) | 1 | Không |
 | 6 | Sửa tiếp | Đề xuất | Cấu hình menu | Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) | 4 | Không |
@@ -21,9 +21,9 @@
 
 | Giờ | Mã | Loại | Phần | Màn hình | Đã ghi | Chỗ sửa |
 | --- | --- | --- | --- | --- | --- | --- |
-| 08:12 | `a031672` | Sửa tiếp | Bảng tin | Bảng tin | Sửa tiếp cùng việc. Màn: Bảng tin. | Social/SocialPostService.php, Social/SocialGroups.vue |
+| 08:12 | `a031672` | Sửa tiếp | Bảng tin | Nhóm, Bảng tin | Sửa tiếp cùng việc. Màn: Nhóm, Bảng tin. | Social/SocialPostService.php, Social/SocialGroups.vue |
 | 08:35 | `d607328` | Sửa tiếp | Dự án và công việc | Công việc và dự án | Sửa tiếp cùng việc. Màn: Công việc và dự án. | Project/ProjectQuickActionModals.vue, Project/ProjectTasksTab.vue, Project/TaskQuickActionModals.vue, Project/TaskRowContextMenu.vue (+3) |
-| 08:57 | `c1b0fad` | Sửa tiếp | Bảng tin | Bảng tin, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Bảng tin, Tổng quan của tôi. | Dashboard/EmployeeDataTable.vue, Dashboard/EmployeeProjectsModal.vue, Identity/NotificationService.php, Identity/DepartmentSeeder.php (+15) |
+| 08:57 | `c1b0fad` | Sửa tiếp | Bảng tin | Nhóm, Bảng tin, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Nhóm, Bảng tin, Tổng quan của tôi. | Dashboard/EmployeeDataTable.vue, Dashboard/EmployeeProjectsModal.vue, Identity/NotificationService.php, Identity/DepartmentSeeder.php (+15) |
 | 09:42 | `415f71d` | Sửa tiếp | Đề xuất | Cấu hình menu | Sửa tiếp cùng việc. Màn: Cấu hình menu. | FeatureRequest/FeatureRequestController.php, FeatureRequest/ApproveFeatureRequestRequest.php, FeatureRequest/RejectFeatureRequestRequest.php, FeatureRequest/StoreFeatureRequestRequest.php (+23) |
 | 09:45 | `c39f84c` | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp cùng việc. | components/DataStreamWidget.vue |
 | 09:56 | `34bcaf6` | Sửa tiếp | Đề xuất | Không gắn màn hình | Sửa tiếp cùng việc. | FeatureRequest/FeatureRequestController.php, components/DataStreamWidget.vue |

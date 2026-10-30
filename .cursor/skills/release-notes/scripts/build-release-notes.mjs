@@ -131,6 +131,7 @@ const SCREEN_RULES = [
   [/EmployeeRequests\.vue|EmployeeLeaveRequest|EmployeeLeaveForm|leave-requests/i, 'Lịch sử'],
   [/EmployeeLeave\.vue|EmployeeLeaveBalance|leave-balance/i, 'Nghỉ phép'],
   [/EmployeeChat|Modules\/Chat\//i, 'Chat'],
+  [/SocialGroup/i, 'Nhóm'],
   [/Modules\/Social\/|SocialPost|SocialModeration/i, 'Bảng tin'],
   [/PermissionMatrix|ActivityLog/i, 'Quyền và nhật ký'],
   [/Login\.vue|AuthCallback/i, 'Đăng nhập'],
@@ -139,6 +140,7 @@ const SCREEN_RULES = [
   [/TaskList|TaskCreate|ProjectList|Modules\/Project\//i, 'Công việc và dự án'],
   [/Modules\/DonTu\/|DonTuStatus/i, 'Đơn từ'],
   [/Modules\/Credential\//i, 'Hồ sơ đăng nhập'],
+  [/EmployeeProfile/i, 'Hồ sơ cá nhân'],
   [/DashboardMe|Modules\/Dashboard\//i, 'Tổng quan của tôi'],
   [/WorkspaceConfig|AppSidebar|navigation/i, 'Cấu hình menu'],
 ];

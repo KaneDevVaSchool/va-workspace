@@ -6,7 +6,7 @@
 
 | # | Loại | Phần | Màn hình | Việc | Lần lưu | Đổi dữ liệu |
 | --- | --- | --- | --- | --- | ---: | --- |
-| 1 | Sửa | Giao diện gốc | Chấm công nhân viên, Lịch sử, Nghỉ phép, Chat, Bảng tin, Đăng nhập, Tổng quan của tôi | Nới giao diện và bỏ safe-area iOS | 3 | Không |
+| 1 | Sửa | Giao diện gốc | Chấm công nhân viên, Lịch sử, Nghỉ phép, Chat, Bảng tin, Đăng nhập, Hồ sơ cá nhân, Tổng quan của tôi | Nới giao diện và bỏ safe-area iOS | 3 | Không |
 | 2 | Thêm | Chấm công | Chấm công nhân viên, Lịch sử, Chat, Bảng tin, Tổng quan của tôi | Onboarding và splash boot theo mẫu welcome VA | 1 | Không |
 | 3 | Sửa tiếp | Giao diện gốc | Tổng quan của tôi | Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) | 1 | Không |
 | 4 | Sửa tiếp | Chấm công | Tổng quan của tôi | Sửa tiếp phần Chấm công (chưa ghi câu mô tả) | 1 | Không |
@@ -19,7 +19,7 @@
 
 | Giờ | Mã | Loại | Phần | Màn hình | Đã ghi | Chỗ sửa |
 | --- | --- | --- | --- | --- | --- | --- |
-| 09:23 | `3c96197` | Sửa | Giao diện gốc | Chấm công nhân viên, Lịch sử, Nghỉ phép, Bảng tin, Đăng nhập | Nới giao diện và bỏ safe-area iOS | Attendance/EmployeeMobileTabbar.vue, Attendance/EmployeeMobileWorkspaceIntro.vue, Attendance/EmployeeAttendance.vue, Attendance/EmployeeFeed.vue (+22) |
+| 09:23 | `3c96197` | Sửa | Giao diện gốc | Chấm công nhân viên, Lịch sử, Nghỉ phép, Bảng tin, Đăng nhập, Hồ sơ cá nhân | Nới giao diện và bỏ safe-area iOS | Attendance/EmployeeMobileTabbar.vue, Attendance/EmployeeMobileWorkspaceIntro.vue, Attendance/EmployeeAttendance.vue, Attendance/EmployeeFeed.vue (+22) |
 | 09:30 | `08b96d9` | Sửa tiếp | Giao diện gốc | Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Tổng quan của tôi. | Attendance/EmployeeMobileTabbar.vue, Attendance/EmployeeMobileLayout.vue, Dashboard/DashboardEmployeeShellPreview.vue, Dashboard/employeePwaPreview.js (+4) |
 | 09:41 | `cee07d0` | Sửa tiếp | Giao diện gốc | Chat, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Chat, Tổng quan của tôi. | Attendance/useEmployeeHomeData.js, Attendance/EmployeeHome.vue, Chat/ChatConversationView.vue, Dashboard/DashboardEmployeeHomePreview.vue (+5) |
 | 10:04 | `13c294e` | Thêm | Chấm công | Chấm công nhân viên, Lịch sử, Chat, Bảng tin, Tổng quan của tôi | Onboarding và splash boot theo mẫu welcome VA | Attendance/EmployeeAttendanceHistory.vue, Attendance/EmployeePwaLogoClip.vue, Attendance/EmployeeMobileHeader.vue, Attendance/EmployeeMobileTabbar.vue (+36) |

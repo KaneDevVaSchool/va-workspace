@@ -1,6 +1,6 @@
 # 30/10/2026 — VA Workspace
 
-Hôm nay có **7 lần lưu**, gom thành **7 việc**.
+Hôm nay có **11 lần lưu**, gom thành **11 việc**.
 
 Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [audit.md](./audit.md) · [Mục lục](../README.md)
 
@@ -13,6 +13,10 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 5. **Bảng tin.** Màn: Bảng tin. Khung gợi ý nhắc tên neo theo ô soạn, không bị thẻ bài cắt (1 lần lưu)
 6. **Bảng tin.** Màn: Bảng tin. Nhận link YouTube dạng shorts, live và nocookie, gắn origin lúc phát để khỏi lỗi 153 (1 lần lưu)
 7. **Tài liệu.** Chuyển tài liệu module sang bố cục BMAD và thêm rule đối chiếu phiếu (1 lần lưu)
+8. **Tài liệu.** Phiếu release và audit ngày 30/10 (1 lần lưu)
+9. **Bảng tin.** Màn: Bảng tin. Implement colleague tagging feature with mentions support (1 lần lưu)
+10. **Bảng tin.** Màn: Nhóm, Bảng tin. Nhóm bảng tin theo pháp nhân VM, Viễn Đông, Hoàng Việt và CIT (1 lần lưu)
+11. **Tổng quan.** Màn: Hồ sơ cá nhân, Tổng quan của tôi. Đẩy yêu cầu sửa hồ sơ sang hàng đợi HCNS (1 lần lưu)
 
 ## Từng việc
 
@@ -93,7 +97,54 @@ Các lần lưu, từ cũ đến mới:
 
 - `71f0205` — Chuyển tài liệu module sang bố cục BMAD và thêm rule đối chiếu phiếu
 
+### 8. Phiếu release và audit ngày 30/10
+
+- **Phần:** Tài liệu
+- **Màn hình:** Không gắn một màn hình cụ thể
+- **Lần lưu:** 1
+- **Đổi dữ liệu:** Không
+
+Các lần lưu, từ cũ đến mới:
+
+- `9869398` — Phiếu release và audit ngày 30/10
+
+### 9. Implement colleague tagging feature with mentions support
+
+- **Phần:** Bảng tin
+- **Màn hình:** Bảng tin
+- **Lần lưu:** 1
+- **Đổi dữ liệu:** Không
+
+Các lần lưu, từ cũ đến mới:
+
+- `5c46bc8` — Implement colleague tagging feature with mentions support
+
+### 10. Nhóm bảng tin theo pháp nhân VM, Viễn Đông, Hoàng Việt và CIT
+
+- **Phần:** Bảng tin
+- **Màn hình:** Nhóm, Bảng tin
+- **Lần lưu:** 1
+- **Đổi dữ liệu:** Đổi cấu trúc dữ liệu
+
+Các lần lưu, từ cũ đến mới:
+
+- `40e219f` — Nhóm bảng tin theo pháp nhân VM, Viễn Đông, Hoàng Việt và CIT
+
+### 11. Đẩy yêu cầu sửa hồ sơ sang hàng đợi HCNS
+
+- **Phần:** Tổng quan
+- **Màn hình:** Hồ sơ cá nhân, Tổng quan của tôi
+- **Lần lưu:** 1
+- **Đổi dữ liệu:** Đổi cấu trúc dữ liệu
+
+Các lần lưu, từ cũ đến mới:
+
+- `a5f506e` — Đẩy yêu cầu sửa hồ sơ sang hàng đợi HCNS
+
 ## Khi đưa lên máy chủ
 
-Không đổi cấu trúc dữ liệu. Chỉ cần bản phần mềm mới.
+Ngày này có đổi dữ liệu. Cập nhật dữ liệu trước khi dùng:
+
+- Đổi cấu trúc dữ liệu
+- Đổi cấu trúc dữ liệu
 

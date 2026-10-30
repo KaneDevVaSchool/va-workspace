@@ -6,14 +6,14 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Chat.** Màn: Chấm công nhân viên, Chat, Bảng tin, Tổng quan của tôi. Mở rộng chat nhân viên (nhóm, poll, đính kèm, read receipt) và story social với sticker VA (3 lần lưu)
+1. **Chat.** Màn: Chấm công nhân viên, Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi. Mở rộng chat nhân viên (nhóm, poll, đính kèm, read receipt) và story social với sticker VA (3 lần lưu)
 2. **Chấm công.** Màn: Bảng tin. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (1 lần lưu)
 3. **Chat.** Màn: Chat. Sửa tiếp phần Chat (chưa ghi câu mô tả) (1 lần lưu)
 4. **Bảng tin.** Màn: Chat, Bảng tin. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
-5. **Chat.** Màn: Chat, Bảng tin, Tổng quan của tôi. Sửa tiếp phần Chat (chưa ghi câu mô tả) (2 lần lưu)
-6. **Giao diện gốc.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
+5. **Chat.** Màn: Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi. Sửa tiếp phần Chat (chưa ghi câu mô tả) (2 lần lưu)
+6. **Giao diện gốc.** Màn: Hồ sơ cá nhân. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
 7. **Bảng tin.** Màn: Chat, Bảng tin, Tổng quan của tôi. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
-8. **Giao diện gốc.** Màn: Chat. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
+8. **Giao diện gốc.** Màn: Chat, Hồ sơ cá nhân. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
 9. **Chat.** Màn: Chat, Bảng tin. Sửa tiếp phần Chat (chưa ghi câu mô tả) (7 lần lưu)
 10. **Giao diện gốc.** Màn: Bảng tin. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
 11. **Chat.** Màn: Chat. Sửa tiếp phần Chat (chưa ghi câu mô tả) (3 lần lưu)
@@ -26,7 +26,7 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 ### 1. Mở rộng chat nhân viên (nhóm, poll, đính kèm, read receipt) và story social với sticker VA
 
 - **Phần:** Chat
-- **Màn hình:** Chấm công nhân viên, Chat, Bảng tin, Tổng quan của tôi
+- **Màn hình:** Chấm công nhân viên, Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi
 - **Lần lưu:** 3
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu
 
@@ -72,25 +72,25 @@ Các lần lưu, từ cũ đến mới:
 ### 5. Sửa tiếp phần Chat (chưa ghi câu mô tả)
 
 - **Phần:** Chat
-- **Màn hình:** Chat, Bảng tin, Tổng quan của tôi
+- **Màn hình:** Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi
 - **Lần lưu:** 2
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu
 
 Các lần lưu, từ cũ đến mới:
 
 - `1f24332` — Sửa tiếp cùng việc. Màn: Chat, Bảng tin.
-- `025f950` — Sửa tiếp cùng việc. Màn: Chat, Tổng quan của tôi.
+- `025f950` — Sửa tiếp cùng việc. Màn: Chat, Hồ sơ cá nhân, Tổng quan của tôi.
 
 ### 6. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
-- **Màn hình:** Không gắn một màn hình cụ thể
+- **Màn hình:** Hồ sơ cá nhân
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 
 Các lần lưu, từ cũ đến mới:
 
-- `71e98f8` — Sửa tiếp cùng việc.
+- `71e98f8` — Sửa tiếp cùng việc. Màn: Hồ sơ cá nhân.
 
 ### 7. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
 
@@ -106,13 +106,13 @@ Các lần lưu, từ cũ đến mới:
 ### 8. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
-- **Màn hình:** Chat
+- **Màn hình:** Chat, Hồ sơ cá nhân
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 
 Các lần lưu, từ cũ đến mới:
 
-- `5a756a5` — Sửa tiếp cùng việc. Màn: Chat.
+- `5a756a5` — Sửa tiếp cùng việc. Màn: Chat, Hồ sơ cá nhân.
 
 ### 9. Sửa tiếp phần Chat (chưa ghi câu mô tả)
 

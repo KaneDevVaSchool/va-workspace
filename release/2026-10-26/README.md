@@ -6,7 +6,7 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Giao diện gốc.** Màn: Chấm công nhân viên, Lịch sử, Nghỉ phép, Chat, Bảng tin, Đăng nhập, Tổng quan của tôi. Nới giao diện và bỏ safe-area iOS (3 lần lưu)
+1. **Giao diện gốc.** Màn: Chấm công nhân viên, Lịch sử, Nghỉ phép, Chat, Bảng tin, Đăng nhập, Hồ sơ cá nhân, Tổng quan của tôi. Nới giao diện và bỏ safe-area iOS (3 lần lưu)
 2. **Chấm công.** Màn: Chấm công nhân viên, Lịch sử, Chat, Bảng tin, Tổng quan của tôi. Onboarding và splash boot theo mẫu welcome VA (1 lần lưu)
 3. **Giao diện gốc.** Màn: Tổng quan của tôi. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
 4. **Chấm công.** Màn: Tổng quan của tôi. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (1 lần lưu)
@@ -20,7 +20,7 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 ### 1. Nới giao diện và bỏ safe-area iOS
 
 - **Phần:** Giao diện gốc
-- **Màn hình:** Chấm công nhân viên, Lịch sử, Nghỉ phép, Chat, Bảng tin, Đăng nhập, Tổng quan của tôi
+- **Màn hình:** Chấm công nhân viên, Lịch sử, Nghỉ phép, Chat, Bảng tin, Đăng nhập, Hồ sơ cá nhân, Tổng quan của tôi
 - **Lần lưu:** 3
 - **Đổi dữ liệu:** Không
 

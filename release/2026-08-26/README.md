@@ -10,7 +10,7 @@ Phiếu tuần: [2026-W35](../summary/2026-W35-summary.md) · Đối soát: [aud
 2. **Bảng tin.** Màn: Bảng tin. Lượt xem bài viết và giới hạn hiển thị theo phòng ban (1 lần lưu)
 3. **Đánh giá.** Màn: Quyền và nhật ký, Tiêu chí đánh giá, Cấu hình menu. Tiêu chí ĐGNL, lịch sử và hub phòng ban (1 lần lưu)
 4. **Đánh giá.** Màn: Tiêu chí đánh giá, Cấu hình menu. Mẫu đánh giá, vị trí đánh giá và import/export Excel (1 lần lưu)
-5. **Bảng tin.** Màn: Bảng tin. Hashtag trong bài viết (1 lần lưu)
+5. **Bảng tin.** Màn: Nhóm, Bảng tin. Hashtag trong bài viết (1 lần lưu)
 6. **Định danh và phân quyền.** Màn: Quyền và nhật ký. Hiện avatar + phòng ban trong nhật ký hoạt động (1 lần lưu)
 7. **Giao diện gốc.** Thêm màu phụ "Nhân Ái" #009082 (1 lần lưu)
 8. **Cấu hình workspace.** Màn: Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Cấu hình menu. Tuỳ chỉnh menu sidebar theo phòng ban (1 lần lưu)
@@ -78,7 +78,7 @@ Các lần lưu, từ cũ đến mới:
 ### 5. Hashtag trong bài viết
 
 - **Phần:** Bảng tin
-- **Màn hình:** Bảng tin
+- **Màn hình:** Nhóm, Bảng tin
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu
 

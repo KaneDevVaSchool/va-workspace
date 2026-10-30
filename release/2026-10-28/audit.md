@@ -6,14 +6,14 @@
 
 | # | Loại | Phần | Màn hình | Việc | Lần lưu | Đổi dữ liệu |
 | --- | --- | --- | --- | --- | ---: | --- |
-| 1 | Cập nhật | Chat | Chấm công nhân viên, Chat, Bảng tin, Tổng quan của tôi | Mở rộng chat nhân viên (nhóm, poll, đính kèm, read receipt) và story social với sticker VA | 3 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
+| 1 | Cập nhật | Chat | Chấm công nhân viên, Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi | Mở rộng chat nhân viên (nhóm, poll, đính kèm, read receipt) và story social với sticker VA | 3 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
 | 2 | Sửa tiếp | Chấm công | Bảng tin | Sửa tiếp phần Chấm công (chưa ghi câu mô tả) | 1 | Không |
 | 3 | Sửa tiếp | Chat | Chat | Sửa tiếp phần Chat (chưa ghi câu mô tả) | 1 | Không |
 | 4 | Sửa tiếp | Bảng tin | Chat, Bảng tin | Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) | 1 | Không |
-| 5 | Sửa tiếp | Chat | Chat, Bảng tin, Tổng quan của tôi | Sửa tiếp phần Chat (chưa ghi câu mô tả) | 2 | Đổi cấu trúc dữ liệu |
-| 6 | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) | 1 | Không |
+| 5 | Sửa tiếp | Chat | Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi | Sửa tiếp phần Chat (chưa ghi câu mô tả) | 2 | Đổi cấu trúc dữ liệu |
+| 6 | Sửa tiếp | Giao diện gốc | Hồ sơ cá nhân | Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) | 1 | Không |
 | 7 | Sửa tiếp | Bảng tin | Chat, Bảng tin, Tổng quan của tôi | Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) | 1 | Đổi cấu trúc dữ liệu |
-| 8 | Sửa tiếp | Giao diện gốc | Chat | Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) | 1 | Không |
+| 8 | Sửa tiếp | Giao diện gốc | Chat, Hồ sơ cá nhân | Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) | 1 | Không |
 | 9 | Sửa tiếp | Chat | Chat, Bảng tin | Sửa tiếp phần Chat (chưa ghi câu mô tả) | 7 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
 | 10 | Sửa tiếp | Giao diện gốc | Bảng tin | Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) | 1 | Không |
 | 11 | Sửa tiếp | Chat | Chat | Sửa tiếp phần Chat (chưa ghi câu mô tả) | 3 | Không |
@@ -25,17 +25,17 @@
 
 | Giờ | Mã | Loại | Phần | Màn hình | Đã ghi | Chỗ sửa |
 | --- | --- | --- | --- | --- | --- | --- |
-| 09:17 | `67aa6f6` | Cập nhật | Chat | Chấm công nhân viên, Chat, Bảng tin, Tổng quan của tôi | Mở rộng chat nhân viên (nhóm, poll, đính kèm, read receipt) và story social với sticker VA | rules/no-dev-server.mdc, Attendance/EmployeeAttendancePunchService.php, Attendance/EmployeeMobileHeader.vue, Attendance/EmployeeMobileLayout.vue (+96) |
+| 09:17 | `67aa6f6` | Cập nhật | Chat | Chấm công nhân viên, Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi | Mở rộng chat nhân viên (nhóm, poll, đính kèm, read receipt) và story social với sticker VA | rules/no-dev-server.mdc, Attendance/EmployeeAttendancePunchService.php, Attendance/EmployeeMobileHeader.vue, Attendance/EmployeeMobileLayout.vue (+96) |
 | 09:20 | `2eaac86` | Sửa tiếp | Chat | Chat | Sửa tiếp cùng việc. Màn: Chat. | Chat/2026_10_28_120000_ensure_chat_core_tables.php, Chat/2026_10_28_130001_upgrade_chat_rooms.php |
 | 09:21 | `ceeb196` | Sửa tiếp | Chat | Chat | Sửa tiếp cùng việc. Màn: Chat. | Chat/2026_10_28_130001_upgrade_chat_rooms.php |
 | 09:25 | `889666c` | Sửa tiếp | Chấm công | Bảng tin | Sửa tiếp cùng việc. Màn: Bảng tin. | Attendance/EmployeeMobileHeader.vue, Attendance/useEmployeeSocialFeed.js, Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeFeed.vue (+4) |
 | 09:30 | `2f08f99` | Sửa tiếp | Chat | Chat | Sửa tiếp cùng việc. Màn: Chat. | Attendance/EmployeeMobileHeader.vue, Attendance/EmployeeMobileLayout.vue, Chat/ChatConversationList.vue, Chat/ChatConversationView.vue (+4) |
 | 09:37 | `0b53486` | Sửa tiếp | Bảng tin | Chat, Bảng tin | Sửa tiếp cùng việc. Màn: Chat, Bảng tin. | Chat/ChatConversationView.vue, Chat/ChatPicker.vue, Social/SocialPostComposer.vue, Social/SocialStoryRail.vue (+2) |
 | 09:49 | `1f24332` | Sửa tiếp | Chat | Chat, Bảng tin | Sửa tiếp cùng việc. Màn: Chat, Bảng tin. | Chat/MessageRead.php, Chat/ChatConversationController.php, Chat/Conversation.php, Chat/ChatService.php (+21) |
-| 09:56 | `025f950` | Sửa tiếp | Chat | Chat, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Chat, Tổng quan của tôi. | Attendance/EmployeeMobileHeader.vue, Attendance/EmployeeProfile.vue, Chat/HandlesChatFeatures.php, Chat/ChatConversationView.vue (+7) |
-| 09:56 | `71e98f8` | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp cùng việc. | Attendance/EmployeeProfile.vue, employee-mobile-shell/base.css, employee-mobile-shell/theme.css, Dashboard/MyDashboardProfileTest.php |
+| 09:56 | `025f950` | Sửa tiếp | Chat | Chat, Hồ sơ cá nhân, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Chat, Hồ sơ cá nhân, Tổng quan của tôi. | Attendance/EmployeeMobileHeader.vue, Attendance/EmployeeProfile.vue, Chat/HandlesChatFeatures.php, Chat/ChatConversationView.vue (+7) |
+| 09:56 | `71e98f8` | Sửa tiếp | Giao diện gốc | Hồ sơ cá nhân | Sửa tiếp cùng việc. Màn: Hồ sơ cá nhân. | Attendance/EmployeeProfile.vue, employee-mobile-shell/base.css, employee-mobile-shell/theme.css, Dashboard/MyDashboardProfileTest.php |
 | 10:03 | `669424e` | Sửa tiếp | Bảng tin | Chat, Bảng tin, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Chat, Bảng tin, Tổng quan của tôi. | Attendance/EmployeeMobileHeader.vue, Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeFeed.vue, Chat/ChatConversationView.vue (+20) |
-| 10:09 | `5a756a5` | Sửa tiếp | Giao diện gốc | Chat | Sửa tiếp cùng việc. Màn: Chat. | Attendance/EmployeeProfile.vue, Chat/ChatConversationView.vue, employee-mobile-shell/browser.css, composables/useEmployeeMobileViewport.js (+1) |
+| 10:09 | `5a756a5` | Sửa tiếp | Giao diện gốc | Chat, Hồ sơ cá nhân | Sửa tiếp cùng việc. Màn: Chat, Hồ sơ cá nhân. | Attendance/EmployeeProfile.vue, Chat/ChatConversationView.vue, employee-mobile-shell/browser.css, composables/useEmployeeMobileViewport.js (+1) |
 | 10:14 | `6997376` | Sửa tiếp | Chat | Chat | Sửa tiếp cùng việc. Màn: Chat. | Chat/ChatMemberDialog.vue |
 | 10:31 | `109eda6` | Sửa tiếp | Chat | Chat | Sửa tiếp cùng việc. Màn: Chat. | Chat/ChatConversationController.php, Chat/chatApi.js, Chat/ChatGroupDialog.vue, Chat/ChatMemberDialog.vue (+9) |
 | 10:37 | `5da24ab` | Sửa tiếp | Chat | Chat | Sửa tiếp cùng việc. Màn: Chat. | Chat/ChatService.php, Chat/ChatGroupDialog.vue, Chat/ChatUserSearch.vue, Chat/EmployeeChatHeaderToolbar.vue (+4) |

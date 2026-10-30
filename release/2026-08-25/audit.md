@@ -17,8 +17,8 @@
 | 9 | Thêm | Bảng tin | Bảng tin | Giao diện tường cá nhân/phòng ban, bình chọn, chia sẻ, đính kèm ảnh | 1 | Không |
 | 10 | Thêm | Định danh và phân quyền | Quyền và nhật ký | Thêm thông báo đẩy (web push) và trung tâm thông báo | 1 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
 | 11 | Thêm | Bảng tin | Bảng tin | Nhắc tên người dùng trong bài viết/bình luận | 1 | Không |
-| 12 | Thêm | Bảng tin | Bảng tin | Thêm nhóm/phòng ban, tường nhóm và sửa thông báo đẩy | 1 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
-| 13 | Thêm | Bảng tin | Bảng tin | Mời thành viên vào nhóm, ảnh đại diện nhóm, chia sẻ bài viết vào nhóm | 1 | Đổi cấu trúc dữ liệu |
+| 12 | Thêm | Bảng tin | Nhóm, Bảng tin | Thêm nhóm/phòng ban, tường nhóm và sửa thông báo đẩy | 1 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
+| 13 | Thêm | Bảng tin | Nhóm, Bảng tin | Mời thành viên vào nhóm, ảnh đại diện nhóm, chia sẻ bài viết vào nhóm | 1 | Đổi cấu trúc dữ liệu |
 | 14 | Thêm | Bảng tin | Bảng tin | Sticker động (Lottie) trong bài viết/bình luận | 1 | Không |
 | 15 | Sửa | Định danh và phân quyền | Bảng tin, Quyền và nhật ký | Mô tả nhật ký hoạt động không còn lẫn thẻ HTML | 1 | Không |
 | 16 | Thêm | Bảng tin | Bảng tin | Cải thiện bảng tin, bình chọn, panel hồ sơ | 1 | Không |
@@ -40,8 +40,8 @@
 | 13:48 | `f33b627` | Thêm | Bảng tin | Bảng tin | Giao diện tường cá nhân/phòng ban, bình chọn, chia sẻ, đính kèm ảnh | Social/SocialPostController.php, Social/SocialPostRepositoryInterface.php, Social/SocialPostRepository.php, Social/SocialPostService.php (+32) |
 | 13:49 | `c220592` | Thêm | Định danh và phân quyền | Quyền và nhật ký | Thêm thông báo đẩy (web push) và trung tâm thông báo | .env.example, Identity/GenerateVapidKeysCommand.php, Identity/NotificationController.php, Identity/SubscribePushRequest.php (+27) |
 | 13:49 | `1979e8e` | Thêm | Bảng tin | Bảng tin | Nhắc tên người dùng trong bài viết/bình luận | Social/SocialContentSanitizer.php, Social/SocialMentionService.php, Social/SocialPostService.php, Social/SocialMentionNotificationTest.php |
-| 15:08 | `00ff9cb` | Thêm | Bảng tin | Bảng tin | Thêm nhóm/phòng ban, tường nhóm và sửa thông báo đẩy | Identity/NotificationService.php, Social/SocialGroupController.php, Social/SocialPostController.php, Social/ShareSocialPostRequest.php (+33) |
-| 16:22 | `0a8c250` | Thêm | Bảng tin | Bảng tin | Mời thành viên vào nhóm, ảnh đại diện nhóm, chia sẻ bài viết vào nhóm | Identity/NotificationService.php, Social/SocialGroupController.php, Social/InviteSocialGroupMemberRequest.php, Social/StoreSocialGroupRequest.php (+15) |
+| 15:08 | `00ff9cb` | Thêm | Bảng tin | Nhóm, Bảng tin | Thêm nhóm/phòng ban, tường nhóm và sửa thông báo đẩy | Identity/NotificationService.php, Social/SocialGroupController.php, Social/SocialPostController.php, Social/ShareSocialPostRequest.php (+33) |
+| 16:22 | `0a8c250` | Thêm | Bảng tin | Nhóm, Bảng tin | Mời thành viên vào nhóm, ảnh đại diện nhóm, chia sẻ bài viết vào nhóm | Identity/NotificationService.php, Social/SocialGroupController.php, Social/InviteSocialGroupMemberRequest.php, Social/StoreSocialGroupRequest.php (+15) |
 | 16:22 | `d5692b6` | Thêm | Bảng tin | Bảng tin | Sticker động (Lottie) trong bài viết/bình luận | Social/SocialContentSanitizer.php, Social/SocialAnimatedSticker.vue, Social/SocialCommentComposer.vue, Social/SocialCommentItem.vue (+13) |
 | 16:23 | `3698874` | Sửa | Định danh và phân quyền | Bảng tin, Quyền và nhật ký | Mô tả nhật ký hoạt động không còn lẫn thẻ HTML | Identity/ActivityLogService.php, Social/SocialPostController.php |
 | 16:24 | `06859e8` | Thêm | Bảng tin | Bảng tin | Cải thiện bảng tin, bình chọn, panel hồ sơ | Social/SocialPollBlock.vue, Social/SocialProfilePanel.vue, Social/SocialFeed.vue, Social/SocialAnnouncementTest.php (+1) |
