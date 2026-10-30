@@ -50,6 +50,10 @@ class EmployeeLeaveFormTest extends TestCase
         $this->assertSame('NP-2610-0008', $data['documentCode']);
         $this->assertStringContainsString('BM.01/HN.QT.02', $html);
         $this->assertStringContainsString('va-form-logo.png', $html);
+        $this->assertStringContainsString('HỆ THỐNG TRƯỜNG VIỆT MỸ', $html);
+        $this->assertStringContainsString('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', $html);
+        $this->assertStringContainsString('Độc lập - Tự do - Hạnh phúc', $html);
+        $this->assertStringContainsString('Hệ thống Trường Việt Mỹ', $html);
         $this->assertStringContainsString('Phạm Quang Thái', $html);
         $this->assertStringContainsString('VA011276', $html);
         $this->assertStringContainsString('Nhân viên IT', $html);
@@ -57,7 +61,7 @@ class EmployeeLeaveFormTest extends TestCase
         $this->assertStringContainsString('Phòng Công Nghệ', $html);
         $this->assertStringContainsString('01/10/2025', $html);
         $this->assertStringContainsString('01/12/2025', $html);
-        $this->assertStringContainsString('từ', $html);
+        $this->assertStringContainsString('từ ngày', $html);
         $this->assertStringContainsString('10/10/2026', $html);
         $this->assertStringContainsString('10/10/2026 (07:30-17:00)', $html);
         $this->assertStringContainsString('07:30-17:00', $html);

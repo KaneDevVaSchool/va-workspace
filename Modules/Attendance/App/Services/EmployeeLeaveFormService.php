@@ -45,10 +45,13 @@ class EmployeeLeaveFormService
         $profile = $this->profileFor($user);
         $data = $this->formData($request, $profile);
         $logo = module_path('Attendance', 'resources/images/va-form-logo.png');
+        $mark = module_path('Attendance', 'resources/images/va-form-watermark.png');
         $data['logoPath'] = is_file($logo) ? str_replace('\\', '/', $logo) : null;
+        $data['watermarkPath'] = is_file($mark) ? str_replace('\\', '/', $mark) : null;
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('attendance::pdf.leave-form', $data)
-            ->setPaper('a4', 'portrait');
+            ->setPaper('a4', 'portrait')
+            ->setOption('isPhpEnabled', true);
 
         $filename = $data['documentCode'].' - Đơn nghỉ phép.pdf';
         $fallback = $data['documentCode'].' - Don nghi phep.pdf';
@@ -136,7 +139,9 @@ class EmployeeLeaveFormService
             'approvalNote' => trim((string) ($request['approval_note'] ?? '')) ?: null,
             'employeeSignDate' => $this->signatureDate($request['submitted_at'] ?? $request['created_at'] ?? null),
             'approverSignDate' => $this->signatureDate($request['decided_at'] ?? null),
+            'receivedAt' => $this->formatDate($request['decided_at'] ?? null),
             'approverName' => $approverName !== '' ? $approverName : '………………',
+            'watermarkPath' => null,
         ];
     }
 

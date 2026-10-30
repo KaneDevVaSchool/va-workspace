@@ -12,5 +12,8 @@ Nhân viên tải PDF đơn đã duyệt từ danh sách đơn. Mẫu **BM.01/HN
 
 - `EmployeeLeaveFormService` dựng dữ liệu và render view `attendance::pdf.leave-form` (A4 dọc, DomPDF).
 - View nạp trong `AttendanceServiceProvider` từ `Modules/Attendance/resources/views`.
-- Logo: `Modules/Attendance/resources/images/va-form-logo.png`.
-- Nút tải nằm trên `EmployeeRequests.vue`.
+- Logo: `Modules/Attendance/resources/images/va-form-logo.png`. Watermark giữa trang, nhỏ hơn họa tiết login (`va-form-watermark.png`, nguồn `public/images/background/background-logo.png`).
+- Đầu đơn: bên trái «HỆ THỐNG TRƯỜNG VIỆT MỸ», đơn vị, số phiếu; bên phải quốc hiệu giãn chữ «CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM» và «Độc lập - Tự do - Hạnh phúc».
+- Mỗi trường trên một hàng (họ tên, mã, chức danh, phòng, ngày, chi tiết, buổi, số ngày, loại nghỉ, lý do) có đường chấm riêng.
+- Chỗ ký (người làm đơn, trưởng đơn vị, Phòng HCNS, Ban TGĐ) chừa khoảng trống để ký tay. HCNS và TGĐ sang trang 2.
+- Nút tải nằm trên trang **Lịch sử** (`/dashboard/me/requests`, `EmployeeRequests.vue`). Trang **Nghỉ phép** (`/dashboard/me/leave`) là số dư, không phải chỗ tải đơn.
