@@ -431,6 +431,68 @@ class EmployeeAttendancePunchTest extends TestCase
             ->assertJsonPath('data.check_in_time', '08:15');
     }
 
+    public function test_selected_branch_enforces_its_radius_when_profile_does_not_match(): void
+    {
+        $branchUuid = '11111111-1111-4111-8111-111111111111';
+
+        Http::fake(function (Request $request) use ($branchUuid) {
+            if (str_contains($request->url(), 'check-in-context')) {
+                return Http::response([
+                    'data' => [
+                        'gps_enforced' => false,
+                        'wifi_enforced' => false,
+                        'branch' => null,
+                        'latitude' => null,
+                        'longitude' => null,
+                        'branches' => [[
+                            'uuid' => $branchUuid,
+                            'name' => 'Cơ sở A',
+                            'latitude' => 10.762622,
+                            'longitude' => 106.660172,
+                            'gps_tolerance_meters' => 80,
+                        ]],
+                    ],
+                ]);
+            }
+
+            if ($request->method() === 'GET') {
+                return Http::response(['data' => []]);
+            }
+
+            return Http::response([
+                'data' => [
+                    'check_in_time' => '08:15',
+                    'check_out_time' => null,
+                ],
+            ]);
+        });
+
+        $this->actingAs($this->employee())
+            ->postJson('/api/attendance/punches', [
+                'session' => 'morning',
+                'direction' => 'in',
+                'method' => 'Chấm bằng nút',
+                'latitude' => 10.800000,
+                'longitude' => 106.800000,
+                'accuracy_meters' => 10,
+                'branch_uuid' => $branchUuid,
+            ])
+            ->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Bạn đang ngoài vùng chấm công của Cơ sở A (dung sai 80 m). Hãy đến đúng cơ sở rồi thử lại.']);
+
+        $this->actingAs($this->employee())
+            ->postJson('/api/attendance/punches', [
+                'session' => 'morning',
+                'direction' => 'in',
+                'method' => 'Chấm bằng nút',
+                'latitude' => 10.800000,
+                'longitude' => 106.800000,
+                'accuracy_meters' => 10,
+            ])
+            ->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Hồ sơ chưa khớp chi nhánh. Hãy chọn cơ sở đang đứng rồi chấm công.']);
+    }
+
     private function employee(): User
     {
         return User::factory()->create([

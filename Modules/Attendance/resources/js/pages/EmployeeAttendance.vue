@@ -22,11 +22,14 @@ import {
   writeEmployeeAttendanceToday,
 } from '../lib/employeeAttendanceSession';
 import {
-  branchesFromCheckInContext,
-  contextWithBranchCenter,
+  branchUuidForPunch,
+  effectiveCheckInContext as buildEffectiveCheckInContext,
   evaluateCheckInLocation,
+  formatBranchAddress,
   formatBranchCoordinates,
-  nearestCheckInBranch,
+  gpsBranchOptions,
+  profileCheckInBranch,
+  resolveActiveCheckInBranch,
 } from '../lib/employeeAttendanceGeo';
 import { nextPunchAction } from '../lib/employeeAttendanceWorkSession';
 
@@ -226,30 +229,22 @@ const syncLine = computed(() => {
   }
   return null;
 });
-const branchOptions = computed(() => branchesFromCheckInContext(checkInContext.value));
+const branchOptions = computed(() => gpsBranchOptions(checkInContext.value));
 
-const autoNearestBranch = computed(() => {
-  const options = branchOptions.value;
-  if (!options.length) return null;
-  if (coords.value) return nearestCheckInBranch(options, coords.value) ?? options[0];
-  return options[0];
-});
+const activeResolution = computed(() => resolveActiveCheckInBranch(checkInContext.value, {
+  selectedId: selectedBranchId.value,
+  coords: coords.value,
+}));
 
-const activeCheckInBranch = computed(() => {
-  const options = branchOptions.value;
-  if (!options.length) return null;
-  if (selectedBranchId.value) {
-    return options.find((item) => item.id === selectedBranchId.value) ?? autoNearestBranch.value;
-  }
-  return autoNearestBranch.value;
-});
+const activeCheckInBranch = computed(() => activeResolution.value.branch);
 
-const effectiveCheckInContext = computed(() => {
-  const base = checkInContext.value;
-  const branch = activeCheckInBranch.value;
-  if (!base || !branch) return base;
-  return contextWithBranchCenter(base, branch);
-});
+const profileBranch = computed(() => profileCheckInBranch(checkInContext.value));
+
+const effectiveCheckInContext = computed(() => (
+  buildEffectiveCheckInContext(checkInContext.value, activeCheckInBranch.value)
+));
+
+const workplaceMatched = computed(() => Boolean(profileBranch.value));
 
 const locationEval = computed(() => evaluateCheckInLocation(effectiveCheckInContext.value, coords.value));
 
@@ -261,18 +256,37 @@ const branchCheckInLabel = computed(() => {
   return checkInContext.value?.workplace_label || null;
 });
 
-const activeBranchCoordsLabel = computed(() => formatBranchCoordinates(activeCheckInBranch.value));
+const activeBranchAddressLabel = computed(() => formatBranchAddress(activeCheckInBranch.value));
 
 const activeBranchSiteKicker = computed(() => (
   activeCheckInBranch.value?.schoolName ? 'Tên trường' : 'Chi nhánh'
 ));
 
-const canPickCheckInBranch = computed(() => branchOptions.value.length > 1);
+const canPickCheckInBranch = computed(() => (
+  branchOptions.value.some((item) => item.id !== activeCheckInBranch.value?.id)
+));
+
+const checkInSiteLead = computed(() => {
+  if (!activeCheckInBranch.value) return 'Chưa có vùng chấm công từ HRM.';
+  if (workplaceMatched.value && !activeResolution.value.explicit) {
+    return 'Bạn sẽ chấm công tại cơ sở trên hồ sơ.';
+  }
+  if (!workplaceMatched.value && !activeResolution.value.explicit) {
+    return 'Hồ sơ chưa khớp chi nhánh. Đang gợi ý cơ sở GPS gần bạn — bấm Đổi nếu không đúng.';
+  }
+  return 'Bạn sẽ chấm công tại chi nhánh đã chọn.';
+});
+
+const wifiCheckInNote = computed(() => {
+  if (activeResolution.value.explicit || !workplaceMatched.value) return '';
+  if (!checkInContext.value?.wifi_enforced) return '';
+  return 'Chi nhánh bật kiểm tra WiFi. Trình duyệt không đọc được tên mạng, nên không chặn chấm công theo WiFi.';
+});
 
 const geoBlockMessage = computed(() => {
-  if (!checkInContext.value?.gps_enforced) return '';
+  if (!effectiveCheckInContext.value?.gps_enforced) return '';
   const branch = branchCheckInLabel.value || 'cơ sở';
-  const tolerance = locationEval.value.toleranceMeters ?? checkInContext.value?.gps_tolerance_meters ?? 100;
+  const tolerance = locationEval.value.toleranceMeters ?? effectiveCheckInContext.value?.gps_tolerance_meters ?? 100;
   if (locationEval.value.state === 'outside' && locationEval.value.distanceMeters != null) {
     return `Ngoài vùng chấm công ${branch} (cách ${locationEval.value.distanceMeters} m, dung sai ${tolerance} m).`;
   }
@@ -289,15 +303,15 @@ const punchLocationBlocked = computed(() => {
   if (geoState.value === 'unsupported') return false;
   if (geoState.value !== 'granted') return true;
   if (geoState.value === 'pending') return true;
-  if (!checkInContext.value?.gps_enforced) return false;
+  if (!effectiveCheckInContext.value?.gps_enforced) return false;
   if (locationEval.value.state === 'outside') return true;
   return locationEval.value.state === 'unknown';
 });
 
 const checkInSiteStatus = computed(() => {
-  const enforced = Boolean(checkInContext.value?.gps_enforced);
+  const enforced = Boolean(effectiveCheckInContext.value?.gps_enforced);
   const branch = branchCheckInLabel.value;
-  const tolerance = locationEval.value.toleranceMeters ?? checkInContext.value?.gps_tolerance_meters;
+  const tolerance = locationEval.value.toleranceMeters ?? effectiveCheckInContext.value?.gps_tolerance_meters;
 
   if (geoState.value !== 'granted' && geoState.value !== 'pending') {
     const failure = GEO_MESSAGES[geoState.value];
@@ -663,7 +677,7 @@ async function onHero() {
     showClientToast('warning', geoBlockMessage.value || 'Chưa đủ điều kiện vị trí để chấm công.');
     return;
   }
-  if (checkInContext.value?.gps_enforced && locationEval.value.state === 'outside') {
+  if (effectiveCheckInContext.value?.gps_enforced && locationEval.value.state === 'outside') {
     showClientToast('warning', geoBlockMessage.value);
     return;
   }
@@ -701,10 +715,12 @@ async function commitPunch(methodId) {
   const { session, direction } = action;
   punching.value = true;
   hydrateToken += 1;
+  const before = recordSnapshot();
   const localAfter = applyLocalPunch(session.id, direction, label, methodLabel);
   rememberToday(localAfter);
   syncState.value = 'syncing';
   let synced = false;
+  let rejected = false;
   try {
     const payload = {
       session: session.id,
@@ -716,8 +732,8 @@ async function commitPunch(methodId) {
       payload.longitude = coords.value.lon;
       if (coords.value.accuracy > 0) payload.accuracy_meters = coords.value.accuracy;
     }
-    const branchId = activeCheckInBranch.value?.id;
-    if (branchId && branchId !== 'default') {
+    const branchId = branchUuidForPunch(checkInContext.value, activeCheckInBranch.value);
+    if (branchId) {
       payload.branch_uuid = branchId;
     }
     const { data } = await window.axios.post('/api/attendance/punches', payload);
@@ -727,12 +743,22 @@ async function commitPunch(methodId) {
     syncIssueMessage.value = '';
     syncState.value = 'synced';
   } catch (error) {
-    syncIssueMessage.value = punchApiMessage(error) || syncIssueMessage.value;
-    syncState.value = 'pending';
-    void pushLocalToHrm(readEmployeeAttendanceToday(), hydrateToken);
+    const message = punchApiMessage(error) || '';
+    syncIssueMessage.value = message;
+    if (error?.response?.status === 422) {
+      rejected = true;
+      punchRecord.value = before;
+      rememberToday(before);
+      syncState.value = hasAnyPunch(before) ? 'synced' : 'idle';
+      showClientToast('warning', message || 'Không chấm được công.');
+    } else {
+      syncState.value = 'pending';
+      void pushLocalToHrm(readEmployeeAttendanceToday(), hydrateToken);
+    }
   } finally {
     punching.value = false;
   }
+  if (rejected) return;
   lastResult.value = {
     action: direction,
     session: session.id,
@@ -918,9 +944,10 @@ async function initGeoMap() {
     iconSize: [34, 34],
     iconAnchor: [17, 30],
   });
-  if (branch && checkInContext.value?.gps_tolerance_meters) {
+  const zone = effectiveCheckInContext.value;
+  if (branch && zone?.gps_enforced && zone?.gps_tolerance_meters) {
     geoBranchRing = L.circle([branch.lat, branch.lon], {
-      radius: checkInContext.value.gps_tolerance_meters,
+      radius: zone.gps_tolerance_meters,
       className: 'att-geo-branch-ring',
       weight: 2,
       fillOpacity: 0.08,
@@ -943,7 +970,9 @@ async function initGeoMap() {
 
 function branchMapPoint() {
   const branch = activeCheckInBranch.value;
-  if (branch) return { lat: branch.lat, lon: branch.lon };
+  if (branch && typeof branch.lat === 'number' && typeof branch.lon === 'number') {
+    return { lat: branch.lat, lon: branch.lon };
+  }
   const ctx = checkInContext.value;
   if (typeof ctx?.latitude === 'number' && typeof ctx?.longitude === 'number') {
     return { lat: ctx.latitude, lon: ctx.longitude };
@@ -1249,7 +1278,7 @@ function stopQrCamera() {
           <p class="att-punch-hint">{{ punchHint }}</p>
 
           <article class="att-checkin-site">
-            <p class="att-checkin-site__lead">Bạn sẽ chấm công tại chi nhánh bên dưới.</p>
+            <p class="att-checkin-site__lead">{{ checkInSiteLead }}</p>
 
             <div v-if="activeCheckInBranch" class="att-checkin-site__branch">
               <span class="att-tile__icon att-tone--green">
@@ -1261,7 +1290,7 @@ function stopQrCamera() {
                 <small v-if="activeCheckInBranch.code" class="att-checkin-site__branch-code">
                   {{ activeCheckInBranch.code }}
                 </small>
-                <small class="att-checkin-site__coords">{{ activeBranchCoordsLabel }}</small>
+                <small v-if="activeBranchAddressLabel" class="att-checkin-site__address">{{ activeBranchAddressLabel }}</small>
               </div>
               <button
                 v-if="canPickCheckInBranch"
@@ -1296,12 +1325,16 @@ function stopQrCamera() {
                   >
                     <span class="att-checkin-site__option-name">{{ branch.name }}</span>
                     <small v-if="branch.code" class="att-checkin-site__option-code">{{ branch.code }}</small>
-                    <small class="att-checkin-site__option-coords">{{ formatBranchCoordinates(branch) }}</small>
+                    <small v-if="formatBranchAddress(branch)" class="att-checkin-site__option-address">{{ formatBranchAddress(branch) }}</small>
                   </button>
                 </li>
               </ul>
             </div>
 
+            <p v-if="wifiCheckInNote" class="att-checkin-site__status att-checkin-site__status--info">
+              <AppIcon name="info" :size="14" />
+              <span>{{ wifiCheckInNote }}</span>
+            </p>
             <p
               class="att-checkin-site__status"
               :class="`att-checkin-site__status--${checkInSiteStatus.tone}`"
@@ -1522,13 +1555,13 @@ function stopQrCamera() {
       :branch-name="activeCheckInBranch?.name || branchCheckInLabel || ''"
       :branch-school-name="activeCheckInBranch?.schoolName || ''"
       :branch-code="activeCheckInBranch?.code || ''"
-      :branch-coords="activeBranchCoordsLabel"
+      :branch-address="activeBranchAddressLabel"
       :device-coords="punchConfirmDeviceCoords"
       :accuracy-meters="coords?.accuracy ?? null"
       :location-state="locationEval.state"
       :distance-meters="locationEval.distanceMeters"
-      :tolerance-meters="locationEval.toleranceMeters ?? checkInContext?.gps_tolerance_meters ?? null"
-      :gps-enforced="Boolean(checkInContext?.gps_enforced)"
+      :tolerance-meters="locationEval.toleranceMeters ?? effectiveCheckInContext?.gps_tolerance_meters ?? null"
+      :gps-enforced="Boolean(effectiveCheckInContext?.gps_enforced)"
       :map-lat="coords?.lat ?? null"
       :map-lon="coords?.lon ?? null"
       :geo-pending="geoState === 'pending'"
@@ -2111,13 +2144,12 @@ function stopQrCamera() {
   font-weight: 700;
 }
 
-.att-checkin-site__coords {
+.att-checkin-site__address {
   display: block;
   color: var(--color-text-muted);
   font-size: 0.75rem;
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  line-height: 1.35;
 }
 
 .att-checkin-site__empty {
@@ -2173,10 +2205,10 @@ function stopQrCamera() {
   font-weight: 700;
 }
 
-.att-checkin-site__option-coords {
+.att-checkin-site__option-address {
   color: var(--color-text-muted);
   font-size: 0.72rem;
-  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
 }
 
 .att-checkin-site__status {

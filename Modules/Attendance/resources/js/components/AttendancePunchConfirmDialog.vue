@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import AttendanceGlyph from './AttendanceGlyph.vue';
-import { formatBranchCoordinates, googleMapsEmbedUrl, googleMapsPointUrl } from '../lib/employeeAttendanceGeo';
+import { formatBranchAddress, googleMapsEmbedUrl, googleMapsPointUrl } from '../lib/employeeAttendanceGeo';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -14,7 +14,7 @@ const props = defineProps({
   branchName: { type: String, default: '' },
   branchSchoolName: { type: String, default: '' },
   branchCode: { type: String, default: '' },
-  branchCoords: { type: String, default: '' },
+  branchAddress: { type: String, default: '' },
   deviceCoords: { type: String, default: '' },
   accuracyMeters: { type: Number, default: null },
   locationState: { type: String, default: 'unknown' },
@@ -231,7 +231,7 @@ onBeforeUnmount(() => {
                 >
                   <span>{{ branch.name }}</span>
                   <small v-if="branch.code">{{ branch.code }}</small>
-                  <small class="att-punch-confirm__branch-coords">{{ formatBranchCoordinates(branch) }}</small>
+                  <small v-if="formatBranchAddress(branch)" class="att-punch-confirm__branch-address">{{ formatBranchAddress(branch) }}</small>
                 </button>
               </li>
             </ul>
@@ -245,8 +245,8 @@ onBeforeUnmount(() => {
                 </dd>
               </div>
               <div class="att-punch-confirm__fact">
-                <dt>Điểm chấm (HRM)</dt>
-                <dd>{{ branchCoords || '—' }}</dd>
+                <dt>Địa chỉ</dt>
+                <dd>{{ branchAddress || '—' }}</dd>
               </div>
               <div class="att-punch-confirm__fact">
                 <dt>Hình thức</dt>
@@ -487,10 +487,10 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-tertiary-200) 75%, transparent);
 }
 
-.att-punch-confirm__branch-coords {
+.att-punch-confirm__branch-address {
   color: var(--color-text-muted);
   font-size: 0.72rem;
-  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
 }
 
 .att-punch-confirm__blocked {

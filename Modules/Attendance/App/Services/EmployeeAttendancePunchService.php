@@ -283,6 +283,8 @@ class EmployeeAttendancePunchService
         $context = $this->checkInContext->forUser($user);
         if ($branchUuid !== null && trim($branchUuid) !== '') {
             $context = $this->contextForSelectedBranch($context, trim($branchUuid));
+        } elseif ($this->needsBranchChoice($context)) {
+            throw HrmApiUnavailable::userFacing('Hồ sơ chưa khớp chi nhánh. Hãy chọn cơ sở đang đứng rồi chấm công.');
         }
         if (! ($context['gps_enforced'] ?? false)) {
             return;
@@ -355,6 +357,23 @@ class EmployeeAttendancePunchService
         }
 
         throw HrmApiUnavailable::userFacing('Chi nhánh chọn không hợp lệ hoặc chưa bật GPS trên HRM.');
+    }
+
+    /**
+     * Hồ sơ không khớp chi nhánh, nhưng HRM vẫn trả danh sách GPS để chọn.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    private function needsBranchChoice(array $context): bool
+    {
+        $profile = $context['branch'] ?? null;
+        if (is_array($profile) && trim((string) ($profile['uuid'] ?? '')) !== '') {
+            return false;
+        }
+
+        $branches = $context['branches'] ?? null;
+
+        return is_array($branches) && $branches !== [];
     }
 
     /** @throws HrmApiUnavailable */
