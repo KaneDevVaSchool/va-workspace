@@ -23,8 +23,8 @@ không trùng nội dung, không thay thế nhau:
 **Khi 1 plan hoàn tất triển khai:**
 
 1. Cập nhật `docs/VA_WORKSPACE_OVERVIEW.md` (mục lộ trình §19 + mục nghiệp vụ
-   liên quan) và `docs/modules/{TenModule}.md` (nếu module đủ lớn để có doc
-   riêng) phản ánh đúng trạng thái code mới.
+   liên quan) và `docs/architecture/modules/{TenModule}.md` (nếu module đủ lớn
+   để có doc riêng) phản ánh đúng trạng thái code mới.
 2. **Không xoá** file plan gốc — thêm 1 dòng trạng thái ở đầu file, dạng:
    `> **Trạng thái: ĐÃ TRIỂN KHAI (YYYY-MM-DD)** — xem docs/VA_WORKSPACE_OVERVIEW.md §...`
    Nếu chỉ triển khai một phần, ghi rõ phần nào xong/phần nào chưa thay vì

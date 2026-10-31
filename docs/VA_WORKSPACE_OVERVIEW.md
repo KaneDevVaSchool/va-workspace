@@ -109,6 +109,19 @@
 
 ---
 
+## VA-HRM — hệ sinh thái (đối chiếu bắt buộc)
+
+Theo cùng nguyên tắc **va-hrm** (`docs/index.md`, `docs/project-overview.md` §2):
+
+1. **HRM là SSOT** — hồ sơ, phân công, chấm công, nghỉ phép, duyệt bảng công; DB runtime `va_hrm` (tiền tố `va_hrm_`).
+2. **Workspace không lưu trùng nhân sự** — bảng `users` là tài khoản app + `hrm_employee_uuid`; roster đọc qua API v1 và/hoặc connection `hrm` (`HrmEmployeeDirectory`, mirror).
+3. **Tích hợp** — SSO JWT (HRM phát), M2M Sanctum (`HrmApiClient`), webhook HMAC (`VerifyHrmWebhookSignature`). Abilities và envelope: **va-hrm** `docs/api-contracts/index.md`; webhook events: `docs/architecture/modules/integration.md`.
+4. **Production** — một host API/SSO: `https://hrm.vaschools.edu.vn`; không trỏ `HRM_*` về `portal.hrm.*`. Chi tiết deploy: [PRODUCTION-WORKSPACE-HRM.md](./PRODUCTION-WORKSPACE-HRM.md) ↔ va-hrm `docs/deployment-guide.md` §4.1.
+
+Module Workspace doc riêng HRM: [architecture/modules/Identity.md](./architecture/modules/Identity.md), [Attendance.md](./architecture/modules/Attendance.md), [Dashboard.md](./architecture/modules/Dashboard.md).
+
+---
+
 ## Trạng thái triển khai
 
 Nền tảng **Phase 0 + Phase 1 đã xong**. `Project` đã dựng rất đầy đủ (Giai đoạn
@@ -130,14 +143,15 @@ dựng** — xem `plans/2026-09-30-ra-soat-hien-trang-phan-mem.md` để có b�
 | `FeatureRequest` | Ghi nhận yêu cầu tính năng của người dùng, duyệt/từ chối/hoàn thành, export Excel | **Ngoài lộ trình §19.** Thông báo chỉ tới superadmin + người gửi |
 | `Social` | Bảng tin nội bộ: đăng bài (4 loại tường), cảm xúc, bình luận đa cấp, poll, nhóm, sticker, `@mention`, ghim, lượt xem, giới hạn hiển thị theo phòng ban | **Không nằm trong kế hoạch gốc** — dựng ngoài lộ trình §19, chưa có ở bản đồ §2 trước bản cập nhật này. Chi tiết: `docs/architecture/modules/Social.md` |
 | `Project` | Giai đoạn 1: CRUD dự án (loại dự án, phạm vi/scope, nhãn, thành viên/theo dõi, đính kèm), import/export Excel, nhân bản dự án, ngày kế hoạch + thực tế. Giai đoạn 2: entity **`Task`** thật (bảng `tasks`, WBS đa cấp `parent_id`, `type ∈ {task,phase,category}`), trang **"Tất cả công việc"** xuyên project (`TaskList.vue`), tạo Task qua menu chuột phải (`ProjectQuickActionModals.vue`) hoặc trang riêng **`TaskCreate.vue`**. Bổ sung 2026-08-30 đợt 1: **Task Delegation hàng loạt** (`TaskService::bulkDelegate()`, 1 người nhận, permission `task.delegate`), **chế độ xem Lịch** (`TaskCalendarView.vue`, tháng/tuần), **Dual Progress Bar** dùng chung. Bổ sung 2026-08-30 đợt 2: **Task đứng độc lập** (`project_id` nullable — "công việc thường xuyên"), **watchers/collaborators** many-to-many, **creation settings** (ẩn/hiện chéo, tự hoàn thành theo báo cáo, yêu cầu mô tả/đính kèm báo cáo), mức độ quan trọng thống nhất thang B1 5 bậc, liên kết tiêu chí đánh giá phòng ban làm nguồn "loại công việc" (`use_for_task_type`) | Giai đoạn 1+2 đã xong. **Sprint board, Gantt và Worklog ĐÃ CÓ** (`ProjectSprintBoard.vue`, `ProjectGanttTab.vue`, worklog trong `TaskDetail.vue`). **Roll-up tiến độ Task → Project đã có** qua `ProjectProgressCalculator` (module Project, 30/09) — cả trang Dự án và Dashboard dùng chung, có test `ProjectProgressRollupTest`. Task Delegation (§6) đã có bulk delegate (bọc transaction, chỉ giao cho người `status=active`) nhưng **chưa** có luồng accept/reject của người nhận, và **chưa siết phạm vi theo phòng ban** (watchers/collaborators là theo dõi/phối hợp, không phải delegation). `progress_type`: chỉ `percent` + `quantity` có logic thật và được chọn trên UI (`TaskEnums::SELECTABLE_PROGRESS_TYPES`); 6 giá trị còn lại đã ẩn khỏi UI vì chưa có công thức. Creation settings đã có cột + validate, enforcement runtime chưa rà soát hết. `project_quick_items` chỉ còn dùng cho baseline/signature. Xem §2, §6, §10, §16 |
-| `Attendance` | Đơn nghỉ qua API VA-HRM (loại nghỉ, số dư, gửi đơn, luồng duyệt). **Duyệt bảng công** (2026-10-14): Trưởng đơn vị xem / duyệt / từ chối bảng chấm công HRM tại `/attendance/timesheet-approvals` (`EmployeeTimesheetApprovalController` → `HrmApiClient` → API v1 `attendance/timesheet-approvals*`, ability `attendance:approve`); webhook `attendance.timesheet.status_changed` → `ProcessTimesheetStatusChangedJob` → chuông + web push (`NotificationService::notifySystem`, không có actor) | HRM là nguồn quyền: Workspace chỉ gửi `hrm_employee_uuid` của user đăng nhập, không nhận uuid từ trình duyệt. Token riêng tùy chọn `HRM_TIMESHEET_API_TOKEN` (fallback `HRM_API_TOKEN`) — token phải **mint sau** khi cấp ability. Mục sidebar «Duyệt bảng công» chỉ hiện khi có bảng chờ (badge, cache 60s). Thông báo URL tuyệt đối (bảng trên HRM) mở tab mới. Thiết kế: `va-hrm/docs/checklist-timesheet-approval.md` |
+| `Attendance` | Đơn nghỉ qua API VA-HRM (`/api/v1/leave/*`, abilities `leave:read` / `leave:write`). **Duyệt bảng công** (2026-10-14): Trưởng đơn vị tại `/attendance/timesheet-approvals` → `HrmApiClient` → `/api/v1/attendance/timesheet-approvals*`, ability `attendance:approve`; chấm công PWA → `attendance:punch`. Webhook `attendance.timesheet.status_changed` → `ProcessTimesheetStatusChangedJob` → chuông + web push | HRM là nguồn quyền: Workspace chỉ gửi `hrm_employee_uuid` phiên đăng nhập. Token mint `integration:setup-va-workspace --mint` (va-hrm) — **mint lại** khi ability mới. Checklist: va-hrm `docs/qa/checklists/timesheet-approval.md`. PDF BM.01: `docs/architecture/modules/Attendance.md` |
+| `DonTu` | Hub cấu hình quy trình, bộ trạng thái, mẫu biểu. Sidebar chỉ «Cấu hình» (`/manager/don-tu`). API CRUD workflow/form/status | Nộp đơn / duyệt / giám sát còn placeholder, đã ẩn khỏi menu. Chi tiết: `docs/architecture/modules/DonTu.md` |
 | `Example` | Module mẫu | Copy khi tạo module mới (`new-module`) |
 
 **Quyết định đã chốt khi làm Identity/WorkspaceConfig (khác bản plan gốc):**
 
 - **9 role**, không phải 7: thêm `deputy_department_director` (Phó phòng) và `section_head` (Trưởng bộ phận).
 - **Team** thuộc `Identity` (sở hữu lâu dài của Workspace, `team_lead_id` không sync HRM). CRUD nhóm nằm trong tab Thành viên của WorkspaceConfig, không có trang `/manager/teams` riêng. `GET /manager/teams` chỉ còn dropdown cho ma trận phân quyền.
-- **User/Department** vẫn stub local; khi HRM có API chỉ đổi binding Repository.
+- **User/Department**: phòng ban + `hrm_employee_uuid` đồng bộ HRM (webhook, mirror, `HrmEmployeeDirectory`); `teams` vẫn local Workspace. Chi tiết: `docs/architecture/modules/Identity.md`.
 - JSON SPA của Identity/WorkspaceConfig đi middleware `web` + session (`/api/me`, `/api/workspace-config/*`), không dùng `routes/api.php` stateless — rủi ro §20.11 đã chốt.
 - Trưởng phòng chỉ gán được: `deputy_department_director`, `section_head`, `team_lead`, `member`, `viewer` — **không** tự gán `super_admin` / `admin` / `director_officer` / `department_director`.
 
@@ -217,7 +231,7 @@ VA Workspace vận hành trong một tổ chức nhiều phòng ban, nơi công 
 VA Workspace
 │
 │  ── ĐÃ CÓ ─────────────────────────────────────────────────────────
-├── Identity               SSO Google, User/Department (stub HRM), 9 role,
+├── Identity               SSO Google + HRM SSO, sync/webhook HRM, 9 role,
 │                          RBAC + ma trận, View-as, Team, activity log, shortcut
 ├── WorkspaceConfig        Hub cấu hình phòng ban (thành viên, nhóm, menu)
 │                          + overview super_admin (chỉ xem)
@@ -580,7 +594,7 @@ erDiagram
   PROCESS_INSTANCE }o--o| PROJECT : "gắn hoặc không gắn"
 ```
 
-> Hiện tại nhân sự là bảng `users` (Identity, stub HRM), không có bảng `employees` riêng. ERD trên mô tả mô hình đích; khi có HRM, `UserRepository` đổi implementation, không đổi tên entity nghiệp vụ ở các module sau. Mọi bảng dùng tiền tố `va_workspace_` tự động qua `DB_PREFIX` — không gõ tiền tố trong migration (xem §10 CLAUDE.md).
+> Tài khoản app: bảng `users` (Identity) + `hrm_employee_uuid` tham chiếu SSOT HRM; không có bảng `employees` riêng trên Workspace. ERD dưới gồm entity đích (Initiative, Process…) chưa dựng hết. Mọi bảng Workspace dùng tiền tố `va_workspace_` qua `DB_PREFIX` (xem §10 CLAUDE.md).
 
 ---
 
@@ -789,7 +803,7 @@ project_documents          -- "Tài liệu dự án": có folder, người dùng
 
 | Phase | Nội dung | Phụ thuộc | Trạng thái (2026-08-24) |
 |---|---|---|---|
-| **0** | Nền tảng: Auth, RBAC engine, Department/User (stub HRM), 4 file route global | — | **Xong** — nằm trong `Identity` |
+| **0** | Nền tảng: Auth, RBAC engine, Department/User + tích hợp HRM, 4 file route global | — | **Xong** — nằm trong `Identity` |
 | **1** | Bảng `teams`, 9 role, PermissionCatalog + UI ma trận, View-as, activity log | Phase 0 | **Xong** — Team trong Identity; CRUD nhóm trên hub WorkspaceConfig |
 | **1b** | Hub `WorkspaceConfig`: thành viên, gán role, sidebar theo phòng ban, overview super_admin | Phase 1 | **Xong** — thiếu tab Evaluation |
 | **1c** | Module `Evaluation` Giai đoạn B: tiêu chí đánh giá (2 kiểu), tab trong WorkspaceConfigHub | Phase 1b | **Xong** |
@@ -873,7 +887,7 @@ migration (drop bảng), mục sidebar, quyền `evaluation.manage_global_templa
 - ProcessEngine, ProjectFinance, MaterialPlanning — phụ thuộc Project/Task, dễ đứt nếu làm sớm (WBS đa cấp, Gantt UI và roll-up tiến độ đều đã xong).
 - Tách module `Auth` / `Department` / `Audit` khỏi Identity.
 - Đổi Laravel 10 → 11/12 (nợ bảo mật, xem `docs/known-issues.md`) — không chặn Evaluation.
-- Tích hợp HRM API — chưa có API; giữ stub Repository.
+- Mở rộng HRM ngoài contract v1 hiện tại — mọi endpoint mới phải ghi va-hrm `docs/api-contracts/index.md` trước.
 
 Khi triển khai từng phase, tạo `docs/architecture/modules/{TenModule}.md` và thêm một dòng vào `docs/architecture/modules/README.md`. Mục lục: `docs/index.md`.
 

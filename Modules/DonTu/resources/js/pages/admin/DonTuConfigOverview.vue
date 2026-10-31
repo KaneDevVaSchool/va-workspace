@@ -29,8 +29,6 @@ const canConfig = computed(
     auth.can('don_tu.*'),
 );
 
-const canSubmit = computed(() => auth.can('don_tu.submit') || auth.can('don_tu.*'));
-
 const progressOffset = computed(() => {
   const c = 2 * Math.PI * 36;
   return c - (progressPct.value / 100) * c;
@@ -143,31 +141,6 @@ function stepState(mod) {
           </div>
         </div>
       </section>
-
-      <aside v-if="canSubmit" class="dt-config-aside" aria-label="Vận hành đơn từ" data-tour="don-tu-config-links">
-        <router-link :to="{ name: 'manager.don-tu.start' }" class="dt-config-aside__card dt-config-aside__card--primary">
-          <div class="dt-config-aside__orb" aria-hidden="true" />
-          <span class="dt-config-aside__icon" aria-hidden="true">
-            <AppIcon name="fileText" :size="20" :stroke-width="1.75" />
-          </span>
-          <h3 class="dt-config-aside__title">Nộp đơn</h3>
-          <span class="dt-config-aside__cta">
-            Mở cổng
-            <AppIcon name="chevronRight" :size="14" :stroke-width="2" />
-          </span>
-        </router-link>
-
-        <router-link :to="{ name: 'manager.don-tu.inbox' }" class="dt-config-aside__card dt-config-aside__card--secondary">
-          <span class="dt-config-aside__icon dt-config-aside__icon--sky" aria-hidden="true">
-            <AppIcon name="mail" :size="20" :stroke-width="1.75" />
-          </span>
-          <h3 class="dt-config-aside__title">Cần tôi duyệt</h3>
-          <span class="dt-config-aside__cta">
-            Mở hộp thư
-            <AppIcon name="chevronRight" :size="14" :stroke-width="2" />
-          </span>
-        </router-link>
-      </aside>
     </div>
   </div>
 </template>

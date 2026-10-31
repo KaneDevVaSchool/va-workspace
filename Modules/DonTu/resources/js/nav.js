@@ -110,18 +110,10 @@ export const DON_TU_MONITOR_HUB = {
   configurableByDepartment: true,
 };
 
-const dailySidebar = DON_TU_GROUPS.find((g) => g.id === 'daily').items.filter((screen) => screen.sidebar !== false);
-
-/** Mục sidebar trái (AppSidebar) — đồng bộ DonTuSidebarMenuCatalog.php. */
-export const DON_TU_SIDEBAR_ITEMS = [
-  ...dailySidebar.map((screen) => ({
-    name: screen.name,
-    label: screen.title,
-    icon: screen.sidebarIcon,
-    configurableByDepartment: true,
-  })),
-  DON_TU_CONFIG_HUB,
-  DON_TU_MONITOR_HUB,
-];
+/**
+ * Sidebar chỉ hub Cấu hình. Nộp / duyệt / giám sát còn placeholder — ẩn tới khi có luồng thật.
+ * Đồng bộ DonTuSidebarMenuCatalog.php.
+ */
+export const DON_TU_SIDEBAR_ITEMS = [DON_TU_CONFIG_HUB];
 
 export const DON_TU_ROUTE_NAMES = new Set(DON_TU_SCREENS.map((screen) => screen.name));

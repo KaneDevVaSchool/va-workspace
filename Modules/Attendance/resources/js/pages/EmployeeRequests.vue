@@ -319,6 +319,19 @@ async function exportLeaveForm(request) {
   }
 }
 
+function leaveFormHint(status) {
+  if (status === 'pending' || status === 'cancel_requested') {
+    return 'Chỉ xuất PDF khi đơn đã được duyệt.';
+  }
+  if (status === 'rejected') {
+    return 'Đơn bị từ chối — không xuất được PDF.';
+  }
+  if (status === 'cancelled') {
+    return 'Đơn đã huỷ — không xuất được PDF.';
+  }
+  return 'Chỉ xuất PDF khi đơn đã được duyệt.';
+}
+
 function openDetail(request) {
   selected.value = request;
   if (sheetEntryPushed) return;
@@ -487,15 +500,17 @@ onBeforeUnmount(() => {
                     <AppIcon name="chevronRight" :size="18" class="request-row__chev" aria-hidden="true" />
                   </button>
                   <button
-                    v-if="req.status === 'approved'"
                     type="button"
                     class="request-export"
-                    :disabled="exportingId === req.id"
+                    :disabled="exportingId === req.id || req.status !== 'approved'"
                     @click="exportLeaveForm(req)"
                   >
                     <AppIcon name="download" :size="16" />
                     {{ exportingId === req.id ? 'Đang xuất…' : 'Xuất đơn nghỉ phép' }}
                   </button>
+                  <p v-if="req.status !== 'approved'" class="request-export-hint">
+                    {{ leaveFormHint(req.status) }}
+                  </p>
                   </div>
                 </li>
               </ul>
@@ -524,15 +539,17 @@ onBeforeUnmount(() => {
           </div>
 
           <button
-            v-if="selected.status === 'approved'"
             type="button"
             class="sheet__export"
-            :disabled="exportingId === selected.id"
+            :disabled="exportingId === selected.id || selected.status !== 'approved'"
             @click="exportLeaveForm(selected)"
           >
             <AppIcon name="download" :size="16" />
             {{ exportingId === selected.id ? 'Đang xuất…' : 'Xuất đơn nghỉ phép' }}
           </button>
+          <p v-if="selected.status !== 'approved'" class="request-export-hint sheet__export-hint">
+            {{ leaveFormHint(selected.status) }}
+          </p>
 
           <dl class="sheet__details">
             <div class="sheet__row">
@@ -995,6 +1012,19 @@ onBeforeUnmount(() => {
 .sheet__export:disabled {
   opacity: 0.65;
   cursor: default;
+}
+
+.request-export-hint {
+  margin: 0;
+  padding: 0 var(--space-3) 0.55rem;
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+.sheet__export-hint {
+  margin: -0.35rem 0 var(--space-3);
+  padding: 0 0.15rem;
 }
 
 .sheet-overlay {

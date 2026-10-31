@@ -15,7 +15,7 @@ export default [
   {
     path: '/manager/don-tu',
     component: () => import('./pages/DonTuLayout.vue'),
-    redirect: { name: 'manager.don-tu.start' },
+    redirect: { name: 'manager.don-tu.config' },
     meta: { requiresAuth: true, title: 'Đơn từ' },
     children: [
       {

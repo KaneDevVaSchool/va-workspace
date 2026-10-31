@@ -4,6 +4,7 @@ namespace Modules\Identity\App\Hrm\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Modules\Identity\App\Hrm\Exceptions\HrmDatabaseUnavailable;
@@ -384,6 +385,19 @@ class HrmEmployeeDatabaseMirrorService
                 return null;
             }
 
+            // Hai hồ sơ HRM cùng company_email: không đổi uuid đã lưu (thứ tự
+            // mirror sẽ nhảy uuid và list đơn nghỉ trỏ nhầm nhân sự).
+            if ($this->companyEmailIsShared($email)) {
+                Log::warning('hrm.employee_db_mirror.uuid_kept_duplicate_email', [
+                    'user_id' => $user->id,
+                    'email' => $email,
+                    'kept' => $user->hrm_employee_uuid,
+                    'skipped' => $employeeUuid,
+                ]);
+
+                return $user;
+            }
+
             Log::info('hrm.employee_db_mirror.uuid_reconciled', [
                 'user_id' => $user->id,
                 'email' => $email,
@@ -481,6 +495,27 @@ class HrmEmployeeDatabaseMirrorService
         $hrmStatus = (string) ($employee['status'] ?? 'active');
 
         return in_array($hrmStatus, self::ACTIVE_HRM_STATUSES, true) ? 'active' : 'inactive';
+    }
+
+    /**
+     * Nhiều dòng employees HRM dùng chung một company_email.
+     */
+    private function companyEmailIsShared(string $email): bool
+    {
+        if (! HrmEmployeeDirectory::isConfigured()) {
+            return false;
+        }
+
+        try {
+            $count = DB::connection('hrm')
+                ->table('employees')
+                ->whereRaw('LOWER(company_email) = ?', [strtolower($email)])
+                ->count();
+
+            return $count > 1;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /** @param array<string, mixed> $employee */

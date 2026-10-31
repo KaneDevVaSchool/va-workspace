@@ -54,7 +54,7 @@ const isMonitorArea = computed(() => DON_TU_MONITOR_ROUTE_NAMES.has(route.name))
 const breadcrumbs = computed(() => {
   const base = [
     { label: 'Trang chủ', to: { name: 'home' } },
-    { label: 'Đơn từ', to: { name: 'manager.don-tu.start' } },
+    { label: 'Đơn từ', to: { name: 'manager.don-tu.config' } },
   ];
   if (isConfigArea.value) {
     const crumbs = [...base, { label: 'Cấu hình', to: { name: 'manager.don-tu.config' } }];

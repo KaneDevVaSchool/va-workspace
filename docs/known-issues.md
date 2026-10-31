@@ -4,8 +4,18 @@
 
 Player nhúng hiện "Video player configuration error / Error 153" khi request embed không có header Referer, hoặc thiếu `origin` trùng origin trang. `SocialLinkPreviewCard.vue` phải giữ `referrerpolicy="strict-origin-when-cross-origin"`. `buildYoutubeEmbedSrc` trong `linkPreviewUtils.js` gắn `origin` lúc phát. Không lưu `origin` trong `embed_url` (máy local và production khác origin). Không thêm `sandbox` lên iframe YouTube.
 
+## ~~Mirror HRM ghi đè `hrm_employee_uuid` khi trùng `company_email`~~ — ĐÃ CHẶN (2026-10-31)
+
+`HrmEmployeeDatabaseMirrorService::mirrorOne` không đổi uuid đã lưu khi HRM có
+hơn một dòng `employees` cùng `company_email` (log
+`hrm.employee_db_mirror.uuid_kept_duplicate_email`). Một email — một hồ sơ thì
+vẫn reconcile. Dữ liệu trùng (`hungnv@`, `tamntt@`, `ngatt@`) vẫn nằm trên HRM;
+nếu uuid đang lưu là hồ sơ không có đơn, danh sách đơn vẫn trống cho đến khi
+đối soát tay (`identity:reconcile-hrm-employee-uuids`) hoặc gộp hồ sơ trên HRM.
+Tài liệu: [architecture/modules/Identity.md](./architecture/modules/Identity.md).
+
 ## 6 cách tính tiến độ Task đã ẩn khỏi UI vì chưa có công thức (2026-09-30)
-a
+
 `TaskEnums::PROGRESS_TYPES` khai 8 giá trị nhưng `TaskService` chỉ tự tính cho
 `quantity` (và `percent` là người dùng tự nhập). 6 giá trị còn lại —
 `checklist`, `child_weight`, `timeline`, `average`, `duration_weighted`,

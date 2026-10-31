@@ -52,41 +52,11 @@ export const SIDEBAR_MENU_CATALOG = {
     sectionLabel: 'Điều hành',
     description: 'Tạo và xem báo cáo phòng ban. Loại đánh giá nhân sự mở sang bảng chấm điểm sau khi tạo.',
   },
-  'manager.don-tu.start': {
-    icon: 'fileText',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Nộp đơn mới — bản xem trước, chưa khóa theo quyền.',
-  },
-  'manager.don-tu.mine': {
-    icon: 'folder',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Danh sách hồ sơ đơn từ của chính bạn.',
-  },
-  'manager.don-tu.inbox': {
-    icon: 'mail',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Hồ sơ đang chờ bạn duyệt.',
-  },
-  'manager.don-tu.registry': {
-    icon: 'search',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Tra cứu hồ sơ đơn từ toàn phòng ban.',
-  },
   'manager.don-tu.config': {
     icon: 'settings',
     section: 'don-tu',
     sectionLabel: 'Đơn từ',
-    description: 'Trạng thái, mẫu biểu, quy trình — tab trong trang.',
-  },
-  'manager.don-tu.monitor-hub': {
-    icon: 'activity',
-    section: 'don-tu',
-    sectionLabel: 'Đơn từ',
-    description: 'Tiến độ, SLA, báo cáo và nhật ký — tab trong trang.',
+    description: 'Trạng thái, mẫu biểu, quy trình. Nộp đơn và duyệt chưa mở trên menu.',
   },
   'manager.credential.index': {
     icon: 'lock',
