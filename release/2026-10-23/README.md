@@ -6,14 +6,14 @@ Phiếu tuần: [2026-W43](../summary/2026-W43-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Định danh và phân quyền.** Màn: Hồ sơ cá nhân, Tổng quan của tôi. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
-2. **Giao diện gốc.** PWA iOS đáy viewport trên trang hồ sơ (1 lần lưu)
-3. **Chấm công.** Màn: Hồ sơ cá nhân. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (1 lần lưu)
-4. **Giao diện gốc.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (3 lần lưu)
+1.1. **Định danh và phân quyền.** Màn: Hồ sơ cá nhân, Tổng quan của tôi. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
+1.2. **Giao diện gốc.** PWA iOS đáy viewport trên trang hồ sơ (1 lần lưu)
+1.3. **Chấm công.** Màn: Hồ sơ cá nhân. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (1 lần lưu)
+1.4. **Giao diện gốc.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (3 lần lưu)
 
 ## Từng việc
 
-### 1. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
+### 1.1. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
 
 - **Phần:** Định danh và phân quyền
 - **Màn hình:** Hồ sơ cá nhân, Tổng quan của tôi
@@ -24,7 +24,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `b1e0ed5` — Sửa tiếp cùng việc. Màn: Hồ sơ cá nhân, Tổng quan của tôi.
 
-### 2. PWA iOS đáy viewport trên trang hồ sơ
+### 1.2. PWA iOS đáy viewport trên trang hồ sơ
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Không gắn một màn hình cụ thể
@@ -35,7 +35,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `ae313c8` — PWA iOS đáy viewport trên trang hồ sơ
 
-### 3. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
+### 1.3. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
 
 - **Phần:** Chấm công
 - **Màn hình:** Hồ sơ cá nhân
@@ -46,7 +46,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `58c6138` — Sửa tiếp cùng việc. Màn: Hồ sơ cá nhân.
 
-### 4. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+### 1.4. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Không gắn một màn hình cụ thể

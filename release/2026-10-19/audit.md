@@ -2,55 +2,205 @@
 
 Đọc nhanh: [README.md](./README.md) · Tuần: [2026-W43](../summary/2026-W43-summary.md) · Bảng tuần: [2026-W43-audit](../summary/2026-W43-audit.md)
 
+Việc trong ngày đánh số version **1.1**, **1.2**, … Mỗi việc một bảng Đổi gì / Vì sao / Tác dụng. Thiếu trong commit thì ghi «chưa ghi», không suy diễn.
+
 ## Việc trong ngày
 
-| # | Loại | Phần | Màn hình | Việc | Lần lưu | Đổi dữ liệu |
-| --- | --- | --- | --- | --- | ---: | --- |
-| 1 | Cập nhật | Tổng quan | Tổng quan của tôi, Cấu hình menu | Thêm tiện ích nhanh dashboard (API + cấu hình superadmin) và làm mới sidebar cùng trang Dashboard của tôi | 1 | Đổi cấu trúc dữ liệu |
-| 2 | Sửa tiếp | Cấu hình workspace | Tổng quan của tôi, Cấu hình menu | Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) | 1 | Không |
-| 3 | Sửa tiếp | Tổng quan | Tổng quan của tôi, Cấu hình menu | Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) | 3 | Đổi cấu trúc dữ liệu |
-| 4 | Sửa tiếp | Chấm công | Chấm công nhân viên, Bảng tin, Tổng quan của tôi | Sửa tiếp phần Chấm công (chưa ghi câu mô tả) | 3 | Không |
-| 5 | Sửa tiếp | Tổng quan | Lịch sử, Tổng quan của tôi, Cấu hình menu | Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) | 1 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
-| 6 | Sửa tiếp | Chấm công | Chấm công nhân viên, Lịch sử, Nghỉ phép, Bảng tin, Tổng quan của tôi, Cấu hình menu | Sửa tiếp phần Chấm công (chưa ghi câu mô tả) | 4 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
-| 7 | Sửa tiếp | Tổng quan | Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu | Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) | 3 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
-| 8 | Sửa tiếp | Giao diện gốc | Lịch sử, Nghỉ phép | Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) | 1 | Không |
-| 9 | Sửa tiếp | Chấm công | Nghỉ phép | Sửa tiếp phần Chấm công (chưa ghi câu mô tả) | 1 | Không |
-| 10 | Sửa tiếp | Tổng quan | Lịch sử, Tổng quan của tôi, Cấu hình menu | Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) | 1 | Không |
-| 11 | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) | 7 | Không |
-| 12 | Sửa tiếp | Chat | Chat | Sửa tiếp phần Chat (chưa ghi câu mô tả) | 1 | Không |
-| 13 | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) | 2 | Không |
+### 1.1. Thêm tiện ích nhanh dashboard (API + cấu hình superadmin) và làm mới sidebar cùng trang Dashboard của tôi
 
-## Từng lần lưu
+Tổng quan · Tổng quan của tôi, Cấu hình menu · 1 lần lưu
 
-| Giờ | Mã | Loại | Phần | Màn hình | Đã ghi | Chỗ sửa |
-| --- | --- | --- | --- | --- | --- | --- |
-| 08:33 | `d4f06df` | Cập nhật | Tổng quan | Tổng quan của tôi, Cấu hình menu | Thêm tiện ích nhanh dashboard (API + cấu hình superadmin) và làm mới sidebar cùng trang Dashboard của tôi | Attendance/EmployeeHome.vue, Dashboard/DashboardQuickUtilityController.php, Dashboard/ReorderDashboardQuickUtilitiesRequest.php, Dashboard/StoreDashboardQuickUtilityRequest.php (+24) |
-| 08:40 | `079c0a1` | Sửa tiếp | Cấu hình workspace | Tổng quan của tôi, Cấu hình menu | Sửa tiếp cùng việc. Màn: Tổng quan của tôi, Cấu hình menu. | Dashboard/QuickUtilitiesGrid.vue, WorkspaceConfig/QuickUtilitiesConfigPanel.vue, WorkspaceConfig/WorkspaceConfigDashboardQuickUtilitiesSuperadmin.vue |
-| 08:44 | `07a08b0` | Sửa tiếp | Tổng quan | Tổng quan của tôi, Cấu hình menu | Sửa tiếp cùng việc. Màn: Tổng quan của tôi, Cấu hình menu. | Dashboard/DashboardEmployeeHomePreview.vue, Dashboard/DashboardMeContent.vue, Dashboard/DashboardQuickUtilitiesPreview.vue, Dashboard/dashboardMePreviewFixtures.js (+3) |
-| 08:56 | `d47b4fc` | Sửa tiếp | Tổng quan | Tổng quan của tôi, Cấu hình menu | Sửa tiếp cùng việc. Màn: Tổng quan của tôi, Cấu hình menu. | Attendance/EmployeeHome.vue, Attendance/EmployeeUtilitiesAll.vue, Attendance/router.js, Dashboard/StoreDashboardQuickUtilityRequest.php (+14) |
-| 09:05 | `6363314` | Sửa tiếp | Tổng quan | Tổng quan của tôi, Cấu hình menu | Sửa tiếp cùng việc. Màn: Tổng quan của tôi, Cấu hình menu. | Attendance/EmployeeHome.vue, Dashboard/DashboardEmployeeHomePreview.vue, Dashboard/DashboardEmployeeUtilitiesAllPreview.vue, Dashboard/DashboardMeContent.vue (+4) |
-| 09:08 | `682808d` | Sửa tiếp | Chấm công | Bảng tin, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Bảng tin, Tổng quan của tôi. | Attendance/EmployeeHome.vue, Dashboard/DashboardEmployeeHomePreview.vue, Social/postContentSnippet.js |
-| 09:19 | `406095c` | Sửa tiếp | Chấm công | Chấm công nhân viên, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Chấm công nhân viên, Tổng quan của tôi. | Attendance/useEmployeeHomeData.js, Attendance/EmployeeMobileLayout.vue, Attendance/employeeAttendanceSession.js, Attendance/EmployeeAttendance.vue (+9) |
-| 09:20 | `8977228` | Sửa tiếp | Chấm công | Không gắn màn hình | Sửa tiếp cùng việc. | Attendance/EmployeeMobileLayout.vue |
-| 09:32 | `bf5b463` | Sửa tiếp | Tổng quan | Lịch sử, Tổng quan của tôi, Cấu hình menu | Sửa tiếp cùng việc. Màn: Lịch sử, Tổng quan của tôi, Cấu hình menu. | Attendance/useEmployeeSocialFeed.js, Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeFeed.vue, Attendance/EmployeeHome.vue (+23) |
-| 09:39 | `525d165` | Sửa tiếp | Chấm công | Nghỉ phép, Tổng quan của tôi, Cấu hình menu | Sửa tiếp cùng việc. Màn: Nghỉ phép, Tổng quan của tôi, Cấu hình menu. | .env.example, Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeHome.vue, Attendance/EmployeeLeave.vue (+8) |
-| 09:49 | `d983e8b` | Sửa tiếp | Chấm công | Lịch sử, Nghỉ phép, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Lịch sử, Nghỉ phép, Tổng quan của tôi. | Attendance/EmployeeLeaveRequestController.php, Attendance/EmployeeLeaveBalanceService.php, Attendance/EmployeeLeaveSubmissionService.php, Attendance/useEmployeeSocialFeed.js (+8) |
-| 10:01 | `7408182` | Sửa tiếp | Chấm công | Lịch sử, Nghỉ phép, Tổng quan của tôi, Cấu hình menu | Sửa tiếp cùng việc. Màn: Lịch sử, Nghỉ phép, Tổng quan của tôi, Cấu hình menu. | .env.example, Attendance/EmployeeLeaveCatalogController.php, Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeFeed.vue (+14) |
-| 10:10 | `b769b0b` | Sửa tiếp | Chấm công | Chấm công nhân viên, Lịch sử, Nghỉ phép, Bảng tin, Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Chấm công nhân viên, Lịch sử, Nghỉ phép, Bảng tin, Tổng quan của tôi. | Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeAttendance.vue, Attendance/EmployeeFeed.vue, Attendance/EmployeeHome.vue (+8) |
-| 10:19 | `486dbfd` | Sửa tiếp | Tổng quan | Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu | Sửa tiếp cùng việc. Màn: Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu. | Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeFeed.vue, Attendance/EmployeeProfile.vue, Attendance/router.js (+37) |
-| 10:21 | `bc28972` | Sửa tiếp | Tổng quan | Tổng quan của tôi | Sửa tiếp cùng việc. Màn: Tổng quan của tôi. | Dashboard/2026_10_19_150000_create_dashboard_profile_change_requests_table.php |
-| 10:29 | `cf2c823` | Sửa tiếp | Tổng quan | Chat, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu | Sửa tiếp cùng việc. Màn: Chat, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu. | Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeProfile.vue, Attendance/EmployeeUtilitiesAll.vue, Chat/ChatService.php (+18) |
-| 10:36 | `5f8d79a` | Sửa tiếp | Giao diện gốc | Lịch sử, Nghỉ phép | Sửa tiếp cùng việc. Màn: Lịch sử, Nghỉ phép. | Attendance/EmployeeFeed.vue, Attendance/EmployeeLeave.vue, Attendance/EmployeeRequests.vue, css/employee-mobile-shell.css (+3) |
-| 10:40 | `b6b1a8b` | Sửa tiếp | Chấm công | Nghỉ phép | Sửa tiếp cùng việc. Màn: Nghỉ phép. | Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeLeave.vue, css/employee-mobile-shell.css |
-| 10:47 | `8ca5794` | Sửa tiếp | Tổng quan | Lịch sử, Tổng quan của tôi, Cấu hình menu | Sửa tiếp cùng việc. Màn: Lịch sử, Tổng quan của tôi, Cấu hình menu. | Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeRequests.vue, Dashboard/DashboardQuickUtilityController.php, Dashboard/DashboardQuickUtilityService.php (+4) |
-| 10:47 | `dbdfc75` | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp cùng việc. | Attendance/EmployeeMobileLayout.vue, css/employee-mobile-shell.css, js/App.vue, composables/useEmployeeMobileViewport.js |
-| 10:51 | `3693744` | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp cùng việc. | css/employee-mobile-shell.css, composables/useEmployeeMobileViewport.js |
-| 10:54 | `994abeb` | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp cùng việc. | css/app.css, css/employee-mobile-shell.css, composables/useEmployeeMobileViewport.js, lib/employeeMobileViewport.js (+1) |
-| 10:55 | `b31f45c` | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp cùng việc. | css/employee-mobile-shell.css, lib/employeeMobileViewport.js |
-| 11:02 | `5bde2be` | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp cùng việc. | css/employee-mobile-shell.css, css/pwa-standalone.css, js/app.js, components/ToastHost.vue (+1) |
-| 11:05 | `1bf0a4c` | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp cùng việc. | css/app.css, css/employee-mobile-shell.css, css/pwa-standalone.css, js/app.js (+3) |
-| 11:07 | `927d1b6` | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp cùng việc. | css/employee-mobile-shell.css, lib/pwaVisualViewport.js, views/app.blade.php |
-| 11:09 | `5929f01` | Sửa tiếp | Chat | Chat | Sửa tiếp cùng việc. Màn: Chat. | Chat/ChatConversationView.vue |
-| 11:13 | `dbccae5` | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp cùng việc. | css/employee-mobile-shell.css, components/ToastHost.vue, lib/employeeSafeArea.js |
-| 11:41 | `246e197` | Sửa tiếp | Giao diện gốc | Không gắn màn hình | Sửa tiếp cùng việc. | css/employee-mobile-shell.css, components/ToastHost.vue, lib/employeeSafeArea.js |
+| | |
+| --- | --- |
+| **Đổi gì** | Thêm tiện ích nhanh dashboard (API + cấu hình superadmin) và làm mới sidebar cùng trang Dashboard của tôi |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Đổi cấu trúc dữ liệu |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 08:33 | `d4f06df` | Cập nhật | Attendance/EmployeeHome.vue, Dashboard/DashboardQuickUtilityController.php, Dashboard/ReorderDashboardQuickUtilitiesRequest.php, Dashboard/StoreDashboardQuickUtilityRequest.php (+24) |
+
+### 1.2. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
+
+Cấu hình workspace · Tổng quan của tôi, Cấu hình menu · 1 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc trên màn Tổng quan của tôi, Cấu hình menu, đụng Dashboard/QuickUtilitiesGrid.vue, WorkspaceConfig/QuickUtilitiesConfigPanel.vue, WorkspaceConfig/WorkspaceConfigDashboardQuickUtilitiesSuperadmin.vue. |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Chưa ghi tác dụng trong commit |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 08:40 | `079c0a1` | Sửa tiếp | Dashboard/QuickUtilitiesGrid.vue, WorkspaceConfig/QuickUtilitiesConfigPanel.vue, WorkspaceConfig/WorkspaceConfigDashboardQuickUtilitiesSuperadmin.vue |
+
+### 1.3. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
+
+Tổng quan · Tổng quan của tôi, Cấu hình menu · 3 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc trên màn Tổng quan của tôi, Cấu hình menu, đụng Dashboard/DashboardEmployeeHomePreview.vue, Dashboard/DashboardMeContent.vue, Dashboard/DashboardQuickUtilitiesPreview.vue, Dashboard/dashboardMePreviewFixtures.js (+29). |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Đổi cấu trúc dữ liệu |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 08:44 | `07a08b0` | Sửa tiếp | Dashboard/DashboardEmployeeHomePreview.vue, Dashboard/DashboardMeContent.vue, Dashboard/DashboardQuickUtilitiesPreview.vue, Dashboard/dashboardMePreviewFixtures.js (+3) |
+| 08:56 | `d47b4fc` | Sửa tiếp | Attendance/EmployeeHome.vue, Attendance/EmployeeUtilitiesAll.vue, Attendance/router.js, Dashboard/StoreDashboardQuickUtilityRequest.php (+14) |
+| 09:05 | `6363314` | Sửa tiếp | Attendance/EmployeeHome.vue, Dashboard/DashboardEmployeeHomePreview.vue, Dashboard/DashboardEmployeeUtilitiesAllPreview.vue, Dashboard/DashboardMeContent.vue (+4) |
+
+### 1.4. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
+
+Chấm công · Chấm công nhân viên, Bảng tin, Tổng quan của tôi · 3 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc trên màn Chấm công nhân viên, Bảng tin, Tổng quan của tôi, đụng Attendance/EmployeeHome.vue, Dashboard/DashboardEmployeeHomePreview.vue, Social/postContentSnippet.js, Attendance/useEmployeeHomeData.js (+13). |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Chưa ghi tác dụng trong commit |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 09:08 | `682808d` | Sửa tiếp | Attendance/EmployeeHome.vue, Dashboard/DashboardEmployeeHomePreview.vue, Social/postContentSnippet.js |
+| 09:19 | `406095c` | Sửa tiếp | Attendance/useEmployeeHomeData.js, Attendance/EmployeeMobileLayout.vue, Attendance/employeeAttendanceSession.js, Attendance/EmployeeAttendance.vue (+9) |
+| 09:20 | `8977228` | Sửa tiếp | Attendance/EmployeeMobileLayout.vue |
+
+### 1.5. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
+
+Tổng quan · Lịch sử, Tổng quan của tôi, Cấu hình menu · 1 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc trên màn Lịch sử, Tổng quan của tôi, Cấu hình menu, đụng Attendance/useEmployeeSocialFeed.js, Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeFeed.vue, Attendance/EmployeeHome.vue (+23). |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 09:32 | `bf5b463` | Sửa tiếp | Attendance/useEmployeeSocialFeed.js, Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeFeed.vue, Attendance/EmployeeHome.vue (+23) |
+
+### 1.6. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
+
+Chấm công · Chấm công nhân viên, Lịch sử, Nghỉ phép, Bảng tin, Tổng quan của tôi, Cấu hình menu · 4 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc trên màn Chấm công nhân viên, Lịch sử, Nghỉ phép, Bảng tin, Tổng quan của tôi, Cấu hình menu, đụng .env.example, Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeHome.vue, Attendance/EmployeeLeave.vue (+50). |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 09:39 | `525d165` | Sửa tiếp | .env.example, Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeHome.vue, Attendance/EmployeeLeave.vue (+8) |
+| 09:49 | `d983e8b` | Sửa tiếp | Attendance/EmployeeLeaveRequestController.php, Attendance/EmployeeLeaveBalanceService.php, Attendance/EmployeeLeaveSubmissionService.php, Attendance/useEmployeeSocialFeed.js (+8) |
+| 10:01 | `7408182` | Sửa tiếp | .env.example, Attendance/EmployeeLeaveCatalogController.php, Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeFeed.vue (+14) |
+| 10:10 | `b769b0b` | Sửa tiếp | Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeAttendance.vue, Attendance/EmployeeFeed.vue, Attendance/EmployeeHome.vue (+8) |
+
+### 1.7. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
+
+Tổng quan · Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu · 3 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc trên màn Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu, đụng Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeFeed.vue, Attendance/EmployeeProfile.vue, Attendance/router.js (+60). |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 10:19 | `486dbfd` | Sửa tiếp | Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeFeed.vue, Attendance/EmployeeProfile.vue, Attendance/router.js (+37) |
+| 10:21 | `bc28972` | Sửa tiếp | Dashboard/2026_10_19_150000_create_dashboard_profile_change_requests_table.php |
+| 10:29 | `cf2c823` | Sửa tiếp | Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeProfile.vue, Attendance/EmployeeUtilitiesAll.vue, Chat/ChatService.php (+18) |
+
+### 1.8. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+
+Giao diện gốc · Lịch sử, Nghỉ phép · 1 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc trên màn Lịch sử, Nghỉ phép, đụng Attendance/EmployeeFeed.vue, Attendance/EmployeeLeave.vue, Attendance/EmployeeRequests.vue, css/employee-mobile-shell.css (+3). |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Chưa ghi tác dụng trong commit |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 10:36 | `5f8d79a` | Sửa tiếp | Attendance/EmployeeFeed.vue, Attendance/EmployeeLeave.vue, Attendance/EmployeeRequests.vue, css/employee-mobile-shell.css (+3) |
+
+### 1.9. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
+
+Chấm công · Nghỉ phép · 1 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc trên màn Nghỉ phép, đụng Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeLeave.vue, css/employee-mobile-shell.css. |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Chưa ghi tác dụng trong commit |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 10:40 | `b6b1a8b` | Sửa tiếp | Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeLeave.vue, css/employee-mobile-shell.css |
+
+### 1.10. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
+
+Tổng quan · Lịch sử, Tổng quan của tôi, Cấu hình menu · 1 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc trên màn Lịch sử, Tổng quan của tôi, Cấu hình menu, đụng Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeRequests.vue, Dashboard/DashboardQuickUtilityController.php, Dashboard/DashboardQuickUtilityService.php (+4). |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Chưa ghi tác dụng trong commit |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 10:47 | `8ca5794` | Sửa tiếp | Attendance/EmployeeMobileLayout.vue, Attendance/EmployeeRequests.vue, Dashboard/DashboardQuickUtilityController.php, Dashboard/DashboardQuickUtilityService.php (+4) |
+
+### 1.11. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+
+Giao diện gốc · Không gắn màn hình · 7 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc không gắn màn hình, đụng Attendance/EmployeeMobileLayout.vue, css/employee-mobile-shell.css, js/App.vue, composables/useEmployeeMobileViewport.js (+24). |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Chưa ghi tác dụng trong commit |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 10:47 | `dbdfc75` | Sửa tiếp | Attendance/EmployeeMobileLayout.vue, css/employee-mobile-shell.css, js/App.vue, composables/useEmployeeMobileViewport.js |
+| 10:51 | `3693744` | Sửa tiếp | css/employee-mobile-shell.css, composables/useEmployeeMobileViewport.js |
+| 10:54 | `994abeb` | Sửa tiếp | css/app.css, css/employee-mobile-shell.css, composables/useEmployeeMobileViewport.js, lib/employeeMobileViewport.js (+1) |
+| 10:55 | `b31f45c` | Sửa tiếp | css/employee-mobile-shell.css, lib/employeeMobileViewport.js |
+| 11:02 | `5bde2be` | Sửa tiếp | css/employee-mobile-shell.css, css/pwa-standalone.css, js/app.js, components/ToastHost.vue (+1) |
+| 11:05 | `1bf0a4c` | Sửa tiếp | css/app.css, css/employee-mobile-shell.css, css/pwa-standalone.css, js/app.js (+3) |
+| 11:07 | `927d1b6` | Sửa tiếp | css/employee-mobile-shell.css, lib/pwaVisualViewport.js, views/app.blade.php |
+
+### 1.12. Sửa tiếp phần Chat (chưa ghi câu mô tả)
+
+Chat · Chat · 1 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc trên màn Chat, đụng Chat/ChatConversationView.vue. |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Chưa ghi tác dụng trong commit |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 11:09 | `5929f01` | Sửa tiếp | Chat/ChatConversationView.vue |
+
+### 1.13. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+
+Giao diện gốc · Không gắn màn hình · 2 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc không gắn màn hình, đụng css/employee-mobile-shell.css, components/ToastHost.vue, lib/employeeSafeArea.js, css/employee-mobile-shell.css (+2). |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Chưa ghi tác dụng trong commit |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 11:13 | `dbccae5` | Sửa tiếp | css/employee-mobile-shell.css, components/ToastHost.vue, lib/employeeSafeArea.js |
+| 11:41 | `246e197` | Sửa tiếp | css/employee-mobile-shell.css, components/ToastHost.vue, lib/employeeSafeArea.js |
 

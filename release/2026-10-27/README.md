@@ -6,27 +6,27 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả) (10 lần lưu)
-2. **Định danh và phân quyền.** Màn: Chat. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
-3. **Nền tảng.** Sửa tiếp phần Nền tảng (chưa ghi câu mô tả) (1 lần lưu)
-4. **Bảng tin.** Màn: Chat, Bảng tin, Đơn từ. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
-5. **Đơn từ.** Màn: Chat, Bảng tin, Đăng nhập, Cấu hình đơn từ, Đơn từ. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả) (3 lần lưu)
-6. **Nền tảng.** Sửa tiếp phần Nền tảng (chưa ghi câu mô tả) (1 lần lưu)
-7. **Đơn từ.** Màn: Đơn từ. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả) (2 lần lưu)
-8. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ. Gom hub cấu hình đơn từ vào thiết lập trạng thái: redirect /config, content header và bỏ liên kết mẫu biểu/quy trình trên trang admin (1 lần lưu)
-9. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ. Khôi phục hub /config và thêm nút Về cấu hình trên header các màn cấu hình con (1 lần lưu)
-10. **Đơn từ.** Màn: Đơn từ. Thiết kế lại thanh chọn bộ trạng thái admin và Việt hoá nhãn mã trên giao diện (1 lần lưu)
-11. **Đơn từ.** Màn: Đơn từ. Gọn thanh chọn bộ trạng thái: bỏ badge và hint thừa, bố cục danh sách rõ hơn (1 lần lưu)
-12. **Đơn từ.** Màn: Đơn từ. Đổi sơ đồ trạng thái sang flow zigzag và hiện lối vào, lối ra ngay khi chọn bước (1 lần lưu)
-13. **Đơn từ.** Màn: Đơn từ. Gộp tiêu đề bộ trạng thái, số liệu và tab xem vào một hàng (1 lần lưu)
-14. **Đơn từ.** Màn: Đơn từ. Thu gọn sidebar bộ trạng thái, mở chi tiết bước bằng drawer, và đổi tab thành dải người phụ trách từng bước (1 lần lưu)
-15. **Đơn từ.** Màn: Đăng nhập, Cấu hình đơn từ, Đơn từ. Gọn drawer chi tiết bước, thu tóm tắt bộ vào mục đóng mở, thêm xóa bộ trạng thái, và bỏ nút sao chép link giới thiệu trên đăng nhập (1 lần lưu)
-16. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ. Thêm nút sửa bộ trạng thái để đổi tên, mã và mô tả ngay trên bộ đang chọn (1 lần lưu)
-17. **Đơn từ.** Màn: Đơn từ. Tách sơ đồ và người phụ trách theo hướng thành công hoặc hủy, và chỉ thêm trạng thái từ menu của bộ đã chọn (2 lần lưu)
+1.1. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả) (10 lần lưu)
+1.2. **Định danh và phân quyền.** Màn: Chat. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
+1.3. **Nền tảng.** Sửa tiếp phần Nền tảng (chưa ghi câu mô tả) (1 lần lưu)
+1.4. **Bảng tin.** Màn: Chat, Bảng tin, Đơn từ. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
+1.5. **Đơn từ.** Màn: Chat, Bảng tin, Đăng nhập, Cấu hình đơn từ, Đơn từ. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả) (3 lần lưu)
+1.6. **Nền tảng.** Sửa tiếp phần Nền tảng (chưa ghi câu mô tả) (1 lần lưu)
+1.7. **Đơn từ.** Màn: Đơn từ. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả) (2 lần lưu)
+1.8. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ. Gom hub cấu hình đơn từ vào thiết lập trạng thái: redirect /config, content header và bỏ liên kết mẫu biểu/quy trình trên trang admin (1 lần lưu)
+1.9. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ. Khôi phục hub /config và thêm nút Về cấu hình trên header các màn cấu hình con (1 lần lưu)
+1.10. **Đơn từ.** Màn: Đơn từ. Thiết kế lại thanh chọn bộ trạng thái admin và Việt hoá nhãn mã trên giao diện (1 lần lưu)
+1.11. **Đơn từ.** Màn: Đơn từ. Gọn thanh chọn bộ trạng thái: bỏ badge và hint thừa, bố cục danh sách rõ hơn (1 lần lưu)
+1.12. **Đơn từ.** Màn: Đơn từ. Đổi sơ đồ trạng thái sang flow zigzag và hiện lối vào, lối ra ngay khi chọn bước (1 lần lưu)
+1.13. **Đơn từ.** Màn: Đơn từ. Gộp tiêu đề bộ trạng thái, số liệu và tab xem vào một hàng (1 lần lưu)
+1.14. **Đơn từ.** Màn: Đơn từ. Thu gọn sidebar bộ trạng thái, mở chi tiết bước bằng drawer, và đổi tab thành dải người phụ trách từng bước (1 lần lưu)
+1.15. **Đơn từ.** Màn: Đăng nhập, Cấu hình đơn từ, Đơn từ. Gọn drawer chi tiết bước, thu tóm tắt bộ vào mục đóng mở, thêm xóa bộ trạng thái, và bỏ nút sao chép link giới thiệu trên đăng nhập (1 lần lưu)
+1.16. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ. Thêm nút sửa bộ trạng thái để đổi tên, mã và mô tả ngay trên bộ đang chọn (1 lần lưu)
+1.17. **Đơn từ.** Màn: Đơn từ. Tách sơ đồ và người phụ trách theo hướng thành công hoặc hủy, và chỉ thêm trạng thái từ menu của bộ đã chọn (2 lần lưu)
 
 ## Từng việc
 
-### 1. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả)
+### 1.1. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả)
 
 - **Phần:** Đơn từ
 - **Màn hình:** Cấu hình đơn từ, Đơn từ
@@ -46,7 +46,7 @@ Các lần lưu, từ cũ đến mới:
 - `48a8319` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ.
 - `be65614` — Sửa tiếp cùng việc. Màn: Đơn từ.
 
-### 2. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
+### 1.2. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
 
 - **Phần:** Định danh và phân quyền
 - **Màn hình:** Chat
@@ -57,7 +57,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `137d847` — Sửa tiếp cùng việc. Màn: Chat.
 
-### 3. Sửa tiếp phần Nền tảng (chưa ghi câu mô tả)
+### 1.3. Sửa tiếp phần Nền tảng (chưa ghi câu mô tả)
 
 - **Phần:** Nền tảng
 - **Màn hình:** Không gắn một màn hình cụ thể
@@ -68,7 +68,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `a87877d` — Sửa tiếp cùng việc.
 
-### 4. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
+### 1.4. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
 
 - **Phần:** Bảng tin
 - **Màn hình:** Chat, Bảng tin, Đơn từ
@@ -79,7 +79,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `2f88e4a` — Sửa tiếp cùng việc. Màn: Chat, Bảng tin, Đơn từ.
 
-### 5. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả)
+### 1.5. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả)
 
 - **Phần:** Đơn từ
 - **Màn hình:** Chat, Bảng tin, Đăng nhập, Cấu hình đơn từ, Đơn từ
@@ -92,7 +92,7 @@ Các lần lưu, từ cũ đến mới:
 - `a5a1759` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ.
 - `310a481` — Sửa tiếp cùng việc. Màn: Đơn từ.
 
-### 6. Sửa tiếp phần Nền tảng (chưa ghi câu mô tả)
+### 1.6. Sửa tiếp phần Nền tảng (chưa ghi câu mô tả)
 
 - **Phần:** Nền tảng
 - **Màn hình:** Không gắn một màn hình cụ thể
@@ -103,7 +103,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `0247917` — Sửa tiếp cùng việc.
 
-### 7. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả)
+### 1.7. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả)
 
 - **Phần:** Đơn từ
 - **Màn hình:** Đơn từ
@@ -115,7 +115,7 @@ Các lần lưu, từ cũ đến mới:
 - `7b4fd01` — Sửa tiếp cùng việc. Màn: Đơn từ.
 - `1f539cf` — Sửa tiếp cùng việc. Màn: Đơn từ.
 
-### 8. Gom hub cấu hình đơn từ vào thiết lập trạng thái: redirect /config, content header và bỏ liên kết mẫu biểu/quy trình trên trang admin
+### 1.8. Gom hub cấu hình đơn từ vào thiết lập trạng thái: redirect /config, content header và bỏ liên kết mẫu biểu/quy trình trên trang admin
 
 - **Phần:** Đơn từ
 - **Màn hình:** Cấu hình đơn từ, Đơn từ
@@ -126,7 +126,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `066ac8a` — Gom hub cấu hình đơn từ vào thiết lập trạng thái: redirect /config, content header và bỏ liên kết mẫu biểu/quy trình trên trang admin
 
-### 9. Khôi phục hub /config và thêm nút Về cấu hình trên header các màn cấu hình con
+### 1.9. Khôi phục hub /config và thêm nút Về cấu hình trên header các màn cấu hình con
 
 - **Phần:** Đơn từ
 - **Màn hình:** Cấu hình đơn từ, Đơn từ
@@ -137,7 +137,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `19ab061` — Khôi phục hub /config và thêm nút Về cấu hình trên header các màn cấu hình con
 
-### 10. Thiết kế lại thanh chọn bộ trạng thái admin và Việt hoá nhãn mã trên giao diện
+### 1.10. Thiết kế lại thanh chọn bộ trạng thái admin và Việt hoá nhãn mã trên giao diện
 
 - **Phần:** Đơn từ
 - **Màn hình:** Đơn từ
@@ -148,7 +148,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `86ec610` — Thiết kế lại thanh chọn bộ trạng thái admin và Việt hoá nhãn mã trên giao diện
 
-### 11. Gọn thanh chọn bộ trạng thái: bỏ badge và hint thừa, bố cục danh sách rõ hơn
+### 1.11. Gọn thanh chọn bộ trạng thái: bỏ badge và hint thừa, bố cục danh sách rõ hơn
 
 - **Phần:** Đơn từ
 - **Màn hình:** Đơn từ
@@ -159,7 +159,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `eef3cc0` — Gọn thanh chọn bộ trạng thái: bỏ badge và hint thừa, bố cục danh sách rõ hơn
 
-### 12. Đổi sơ đồ trạng thái sang flow zigzag và hiện lối vào, lối ra ngay khi chọn bước
+### 1.12. Đổi sơ đồ trạng thái sang flow zigzag và hiện lối vào, lối ra ngay khi chọn bước
 
 - **Phần:** Đơn từ
 - **Màn hình:** Đơn từ
@@ -170,7 +170,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `dc7aa6e` — Đổi sơ đồ trạng thái sang flow zigzag và hiện lối vào, lối ra ngay khi chọn bước
 
-### 13. Gộp tiêu đề bộ trạng thái, số liệu và tab xem vào một hàng
+### 1.13. Gộp tiêu đề bộ trạng thái, số liệu và tab xem vào một hàng
 
 - **Phần:** Đơn từ
 - **Màn hình:** Đơn từ
@@ -181,7 +181,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `f103a6c` — Gộp tiêu đề bộ trạng thái, số liệu và tab xem vào một hàng
 
-### 14. Thu gọn sidebar bộ trạng thái, mở chi tiết bước bằng drawer, và đổi tab thành dải người phụ trách từng bước
+### 1.14. Thu gọn sidebar bộ trạng thái, mở chi tiết bước bằng drawer, và đổi tab thành dải người phụ trách từng bước
 
 - **Phần:** Đơn từ
 - **Màn hình:** Đơn từ
@@ -192,7 +192,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `10755fd` — Thu gọn sidebar bộ trạng thái, mở chi tiết bước bằng drawer, và đổi tab thành dải người phụ trách từng bước
 
-### 15. Gọn drawer chi tiết bước, thu tóm tắt bộ vào mục đóng mở, thêm xóa bộ trạng thái, và bỏ nút sao chép link giới thiệu trên đăng nhập
+### 1.15. Gọn drawer chi tiết bước, thu tóm tắt bộ vào mục đóng mở, thêm xóa bộ trạng thái, và bỏ nút sao chép link giới thiệu trên đăng nhập
 
 - **Phần:** Đơn từ
 - **Màn hình:** Đăng nhập, Cấu hình đơn từ, Đơn từ
@@ -203,7 +203,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `2af468a` — Gọn drawer chi tiết bước, thu tóm tắt bộ vào mục đóng mở, thêm xóa bộ trạng thái, và bỏ nút sao chép link giới thiệu trên đăng nhập
 
-### 16. Thêm nút sửa bộ trạng thái để đổi tên, mã và mô tả ngay trên bộ đang chọn
+### 1.16. Thêm nút sửa bộ trạng thái để đổi tên, mã và mô tả ngay trên bộ đang chọn
 
 - **Phần:** Đơn từ
 - **Màn hình:** Cấu hình đơn từ, Đơn từ
@@ -214,7 +214,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `38d1141` — Thêm nút sửa bộ trạng thái để đổi tên, mã và mô tả ngay trên bộ đang chọn
 
-### 17. Tách sơ đồ và người phụ trách theo hướng thành công hoặc hủy, và chỉ thêm trạng thái từ menu của bộ đã chọn
+### 1.17. Tách sơ đồ và người phụ trách theo hướng thành công hoặc hủy, và chỉ thêm trạng thái từ menu của bộ đã chọn
 
 - **Phần:** Đơn từ
 - **Màn hình:** Đơn từ

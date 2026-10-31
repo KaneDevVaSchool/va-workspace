@@ -28,7 +28,7 @@ function gitOut(args) {
 }
 
 const branch = gitOut(['branch', '--show-current']).trim() || '(detached)';
-const raw = gitOut(['log', '--date=format:%Y-%m-%d %H:%M', '--name-only', '--pretty=format:---%ad|%h|%s']);
+const raw = gitOut(['log', '--date=format:%Y-%m-%d %H:%M', '--name-only', '--pretty=format:%x1e%ad|%h|%s%x1f%b%x1d']);
 
 const AREA_LABEL = {
   Attendance: 'Chấm công',
@@ -199,17 +199,25 @@ function touchedOf(files) {
 }
 
 const commits = [];
-let current = null;
-for (const line of raw.split(/\r?\n/)) {
-  if (line.startsWith('---')) {
-    const body = line.slice(3);
-    const [stamp, sha, ...rest] = body.split('|');
-    const [date, time] = stamp.trim().split(' ');
-    current = { date, time: time || '', sha, subject: rest.join('|').trim(), files: [] };
-    commits.push(current);
-  } else if (current && line.trim()) {
-    current.files.push(line.trim());
-  }
+for (const record of raw.split('\x1e')) {
+  if (!record.trim()) continue;
+  const us = record.indexOf('\x1f');
+  const head = us === -1 ? record : record.slice(0, us);
+  const rest = us === -1 ? '' : record.slice(us + 1);
+  const gs = rest.indexOf('\x1d');
+  const message = (gs === -1 ? rest : rest.slice(0, gs)).trim();
+  const fileBlock = gs === -1 ? '' : rest.slice(gs + 1);
+  const [stamp, sha, ...subjectParts] = head.split('|');
+  const [date, time] = (stamp || '').trim().split(' ');
+  if (!date || !sha) continue;
+  commits.push({
+    date,
+    time: time || '',
+    sha,
+    subject: subjectParts.join('|').trim(),
+    body: message,
+    files: fileBlock.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+  });
 }
 commits.reverse();
 
@@ -269,7 +277,7 @@ function featuresOf(dayCommits) {
     features.push(feature);
   }
   features.forEach((item, index) => {
-    item.code = String(index + 1);
+    item.code = `1.${index + 1}`;
   });
   return features;
 }
@@ -449,29 +457,98 @@ for (const [start, dates] of [...weeks.entries()].sort(([a], [b]) => a.localeCom
   write(`summary/${id}-audit.md`, `${weekAudit(id, weekNo, start, end, days).join('\n')}\n`);
 }
 
+function storySentences(text) {
+  return text
+    .replace(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function whyOf(text) {
+  const mark = /(?:^|[^\p{L}\p{N}_])(vì|để|do|because|so that)\s+([^.;]+)/iu;
+  const hits = [];
+  for (const sentence of storySentences(text)) {
+    const match = sentence.match(mark);
+    if (match) hits.push(`${match[1]} ${match[2].trim()}`.replace(/\s+/g, ' '));
+  }
+  if (!hits.length) return 'Chưa ghi lý do trong commit';
+  return hits.join(' ');
+}
+
+function effectOf(text, migs) {
+  const mark = /(?:^|[^\p{L}\p{N}_])(?:để|so that)(?=$|[^\p{L}\p{N}_])\s*(.+)$/iu;
+  const fromMarker = [];
+  for (const sentence of storySentences(text)) {
+    const match = sentence.match(mark);
+    if (match && match[1].trim()) fromMarker.push(match[1].trim().replace(/[.;]+$/, ''));
+  }
+  const parts = [...fromMarker, ...migs.map(migrationPlain)];
+  if (!parts.length) return 'Chưa ghi tác dụng trong commit';
+  return parts.join('; ');
+}
+
+function featureStory(feature) {
+  const files = featureFiles(feature);
+  const migs = migrations(feature.commits);
+  const bodies = feature.commits.map((commit) => (commit.body || '').trim()).filter(Boolean);
+  const lead = feature.commits.find((commit) => !isJunk(commit.subject));
+  let changed;
+  if (lead) {
+    const title = plainSubject(lead.subject);
+    const head = /[.!?]$/.test(title) ? title : `${title}.`;
+    changed = bodies.length ? `${head} ${bodies.join(' ')}` : title;
+  } else {
+    const screens = screensOf(files);
+    const where = screens.length ? `trên màn ${screens.join(', ')}` : 'không gắn màn hình';
+    changed = `Sửa tiếp cùng việc ${where}, đụng ${touchedOf(files)}.`;
+  }
+  const corpus = [lead ? plainSubject(lead.subject) : '', ...bodies]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => (/[.!?]$/.test(part) ? part : `${part}.`))
+    .join(' ');
+  return { changed, why: whyOf(corpus), effect: effectOf(corpus, migs) };
+}
+
+function storyTable(story) {
+  return [
+    '| | |',
+    '| --- | --- |',
+    `| **Đổi gì** | ${cell(story.changed)} |`,
+    `| **Vì sao** | ${cell(story.why)} |`,
+    `| **Tác dụng** | ${cell(story.effect)} |`,
+  ];
+}
+
 function dayAudit(day, id) {
   const lines = [
     `# Đối soát ${fmtVi(day.date)}`,
     '',
     `Đọc nhanh: [README.md](./README.md) · Tuần: [${id}](../summary/${id}-summary.md) · Bảng tuần: [${id}-audit](../summary/${id}-audit.md)`,
     '',
+    'Việc trong ngày đánh số version **1.1**, **1.2**, … Mỗi việc một bảng Đổi gì / Vì sao / Tác dụng. Thiếu trong commit thì ghi «chưa ghi», không suy diễn.',
+    '',
     '## Việc trong ngày',
     '',
-    '| # | Loại | Phần | Màn hình | Việc | Lần lưu | Đổi dữ liệu |',
-    '| --- | --- | --- | --- | --- | ---: | --- |',
   ];
   for (const feature of day.features) {
     const files = featureFiles(feature);
-    const migs = migrations(feature.commits);
-    const kind = changeKind(feature.commits[0].subject);
-    lines.push(`| ${feature.code} | ${kind} | ${cell(areaLabel(feature.area))} | ${cell(placeOf(files))} | ${cell(displayTitle(feature))} | ${feature.commits.length} | ${cell(migs.length ? migs.map(migrationPlain).join('; ') : 'Không')} |`);
+    lines.push(
+      `### ${feature.code}. ${displayTitle(feature)}`,
+      '',
+      `${areaLabel(feature.area)} · ${placeOf(files)} · ${feature.commits.length} lần lưu`,
+      '',
+      ...storyTable(featureStory(feature)),
+      '',
+      '| Giờ | Mã | Loại | Chỗ sửa |',
+      '| --- | --- | --- | --- |',
+    );
+    for (const commit of feature.commits) {
+      lines.push(`| ${commit.time || '—'} | \`${commit.sha}\` | ${changeKind(commit.subject)} | ${cell(touchedOf(commit.files))} |`);
+    }
+    lines.push('');
   }
-  lines.push('', '## Từng lần lưu', '', '| Giờ | Mã | Loại | Phần | Màn hình | Đã ghi | Chỗ sửa |', '| --- | --- | --- | --- | --- | --- | --- |');
-  for (const commit of day.commits) {
-    const feature = day.features.find((item) => item.commits.some((row) => row.sha === commit.sha));
-    lines.push(`| ${commit.time || '—'} | \`${commit.sha}\` | ${changeKind(commit.subject)} | ${cell(areaLabel(feature.area))} | ${cell(placeOf(commit.files))} | ${cell(explain(commit, feature.title))} | ${cell(touchedOf(commit.files))} |`);
-  }
-  lines.push('');
   return lines;
 }
 
@@ -481,23 +558,25 @@ function weekAudit(id, weekNo, start, end, days) {
     '',
     `Phiếu đọc: [${id}-summary](./${id}-summary.md) · [Mục lục](../README.md)`,
     '',
-    '## Việc cần đối soát',
+    'Mỗi việc một bảng: đổi gì, vì sao, tác dụng. Số version **1.1**, **1.2** là thứ tự việc trong ngày. Thiếu lý do hoặc tác dụng trong commit thì ghi «chưa ghi», không suy diễn.',
     '',
-    '| Ngày | Loại | Phần | Màn hình | Việc | Lần lưu | Đổi dữ liệu | Phiếu ngày |',
-    '| --- | --- | --- | --- | --- | ---: | --- | --- |',
   ];
   let any = false;
   for (const day of days) {
     for (const feature of day.features) {
       any = true;
       const files = featureFiles(feature);
-      const migs = migrations(feature.commits);
-      const kind = changeKind(feature.commits[0].subject);
-      lines.push(`| ${fmtVi(day.date)} | ${kind} | ${cell(areaLabel(feature.area))} | ${cell(placeOf(files))} | ${cell(displayTitle(feature))} | ${feature.commits.length} | ${cell(migs.length ? migs.map(migrationPlain).join('; ') : 'Không')} | [audit](../${day.date}/audit.md) |`);
+      lines.push(
+        `### ${fmtVi(day.date)} · ${feature.code}. ${displayTitle(feature)}`,
+        '',
+        `${areaLabel(feature.area)} · ${placeOf(files)} · ${feature.commits.length} lần lưu · [audit](../${day.date}/audit.md)`,
+        '',
+        ...storyTable(featureStory(feature)),
+        '',
+      );
     }
   }
-  if (!any) lines.push('| — | — | — | — | Không có lần lưu | 0 | Không | — |');
-  lines.push('');
+  if (!any) lines.push('Không có lần lưu.', '');
   return lines;
 }
 
@@ -505,7 +584,7 @@ const head = commits[commits.length - 1];
 const index = [
   `# Release — ${PRODUCT}`,
   '',
-  `Tổng hợp **toàn bộ commit** trên nhánh \`${branch}\`, chia theo ngày và tổng kết theo tuần (thứ 2 → Chủ nhật). Phiếu đọc nằm trong [\`summary/\`](./summary/). Mỗi ngày và mỗi tuần có thêm file \`audit.md\` — bảng đối soát việc đã sửa.`,
+  `Tổng hợp **toàn bộ commit** trên nhánh \`${branch}\`, chia theo ngày và tổng kết theo tuần (thứ 2 → Chủ nhật). Phiếu đọc nằm trong [\`summary/\`](./summary/). Mỗi ngày và mỗi tuần có thêm file \`audit.md\`: việc đánh số version **1.1**, **1.2**, mỗi việc một bảng Đổi gì / Vì sao / Tác dụng. Commit không ghi lý do hoặc tác dụng thì phiếu ghi «chưa ghi».`,
   '',
   '| | |',
   '| --- | --- |',

@@ -6,20 +6,20 @@ Phiếu tuần: [2026-W41](../summary/2026-W41-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Giao diện gốc.** Màn: Nghỉ phép. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
-2. **Chấm công.** Màn: Nghỉ phép. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (4 lần lưu)
-3. **Định danh và phân quyền.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
-4. **Chấm công.** Màn: Nghỉ phép. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (3 lần lưu)
-5. **Giao diện gốc.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (4 lần lưu)
-6. **Chấm công.** Màn: Lịch sử, Nghỉ phép. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (1 lần lưu)
-7. **Giao diện gốc.** Màn: Lịch sử, Nghỉ phép. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (2 lần lưu)
-8. **Định danh và phân quyền.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
-9. **Giao diện gốc.** Màn: Lịch sử, Nghỉ phép. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
-10. **Chấm công.** Màn: Nghỉ phép. Cải thiện thông báo lỗi khi gửi đơn nghỉ qua HRM (2 lần lưu)
+1.1. **Giao diện gốc.** Màn: Nghỉ phép. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
+1.2. **Chấm công.** Màn: Nghỉ phép. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (4 lần lưu)
+1.3. **Định danh và phân quyền.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
+1.4. **Chấm công.** Màn: Nghỉ phép. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (3 lần lưu)
+1.5. **Giao diện gốc.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (4 lần lưu)
+1.6. **Chấm công.** Màn: Lịch sử, Nghỉ phép. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (1 lần lưu)
+1.7. **Giao diện gốc.** Màn: Lịch sử, Nghỉ phép. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (2 lần lưu)
+1.8. **Định danh và phân quyền.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
+1.9. **Giao diện gốc.** Màn: Lịch sử, Nghỉ phép. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
+1.10. **Chấm công.** Màn: Nghỉ phép. Cải thiện thông báo lỗi khi gửi đơn nghỉ qua HRM (2 lần lưu)
 
 ## Từng việc
 
-### 1. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+### 1.1. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Nghỉ phép
@@ -30,7 +30,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `18c290b` — Sửa tiếp cùng việc. Màn: Nghỉ phép.
 
-### 2. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
+### 1.2. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
 
 - **Phần:** Chấm công
 - **Màn hình:** Nghỉ phép
@@ -44,7 +44,7 @@ Các lần lưu, từ cũ đến mới:
 - `0797dcf` — Sửa tiếp cùng việc. Màn: Nghỉ phép.
 - `7583919` — Sửa tiếp cùng việc. Màn: Nghỉ phép.
 
-### 3. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
+### 1.3. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
 
 - **Phần:** Định danh và phân quyền
 - **Màn hình:** Không gắn một màn hình cụ thể
@@ -55,7 +55,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `3033a26` — Sửa tiếp cùng việc.
 
-### 4. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
+### 1.4. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
 
 - **Phần:** Chấm công
 - **Màn hình:** Nghỉ phép
@@ -68,7 +68,7 @@ Các lần lưu, từ cũ đến mới:
 - `c8b96fc` — Sửa tiếp cùng việc. Màn: Nghỉ phép.
 - `b2e4888` — Sửa tiếp cùng việc. Màn: Nghỉ phép.
 
-### 5. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+### 1.5. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Không gắn một màn hình cụ thể
@@ -82,7 +82,7 @@ Các lần lưu, từ cũ đến mới:
 - `184f946` — Sửa tiếp cùng việc.
 - `301c3d1` — Sửa tiếp cùng việc.
 
-### 6. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
+### 1.6. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
 
 - **Phần:** Chấm công
 - **Màn hình:** Lịch sử, Nghỉ phép
@@ -93,7 +93,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `e2e731f` — Sửa tiếp cùng việc. Màn: Lịch sử, Nghỉ phép.
 
-### 7. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+### 1.7. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Lịch sử, Nghỉ phép
@@ -105,7 +105,7 @@ Các lần lưu, từ cũ đến mới:
 - `b007850` — Sửa tiếp cùng việc.
 - `068e350` — Sửa tiếp cùng việc. Màn: Lịch sử, Nghỉ phép.
 
-### 8. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
+### 1.8. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
 
 - **Phần:** Định danh và phân quyền
 - **Màn hình:** Không gắn một màn hình cụ thể
@@ -116,7 +116,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `02f3efb` — Sửa tiếp cùng việc.
 
-### 9. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+### 1.9. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Lịch sử, Nghỉ phép
@@ -127,7 +127,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `52fd43c` — Sửa tiếp cùng việc. Màn: Lịch sử, Nghỉ phép.
 
-### 10. Cải thiện thông báo lỗi khi gửi đơn nghỉ qua HRM
+### 1.10. Cải thiện thông báo lỗi khi gửi đơn nghỉ qua HRM
 
 - **Phần:** Chấm công
 - **Màn hình:** Nghỉ phép

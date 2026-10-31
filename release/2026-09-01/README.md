@@ -6,12 +6,12 @@ Phiếu tuần: [2026-W36](../summary/2026-W36-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Đánh giá.** Màn: Quyền và nhật ký, Tiêu chí đánh giá, Báo cáo, Công việc và dự án, Cấu hình menu. Báo cáo đánh giá nhân sự + tổng hợp đánh giá theo kỳ (1 lần lưu)
-2. **Đánh giá.** Màn: Báo cáo. 6 loại báo cáo + thiết kế lại màn Tổng hợp đánh giá (1 lần lưu)
+1.1. **Đánh giá.** Màn: Quyền và nhật ký, Tiêu chí đánh giá, Báo cáo, Công việc và dự án, Cấu hình menu. Báo cáo đánh giá nhân sự + tổng hợp đánh giá theo kỳ (1 lần lưu)
+1.2. **Đánh giá.** Màn: Báo cáo. 6 loại báo cáo + thiết kế lại màn Tổng hợp đánh giá (1 lần lưu)
 
 ## Từng việc
 
-### 1. Báo cáo đánh giá nhân sự + tổng hợp đánh giá theo kỳ
+### 1.1. Báo cáo đánh giá nhân sự + tổng hợp đánh giá theo kỳ
 
 - **Phần:** Đánh giá
 - **Màn hình:** Quyền và nhật ký, Tiêu chí đánh giá, Báo cáo, Công việc và dự án, Cấu hình menu
@@ -22,7 +22,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `e823038` — Báo cáo đánh giá nhân sự + tổng hợp đánh giá theo kỳ
 
-### 2. 6 loại báo cáo + thiết kế lại màn Tổng hợp đánh giá
+### 1.2. 6 loại báo cáo + thiết kế lại màn Tổng hợp đánh giá
 
 - **Phần:** Đánh giá
 - **Màn hình:** Báo cáo

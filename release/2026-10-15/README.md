@@ -6,11 +6,11 @@ Phiếu tuần: [2026-W42](../summary/2026-W42-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Chấm công.** Màn: Cấu hình menu. Thêm duyệt bảng chấm công HRM cho Trưởng đơn vị (2 lần lưu)
+1.1. **Chấm công.** Màn: Cấu hình menu. Thêm duyệt bảng chấm công HRM cho Trưởng đơn vị (2 lần lưu)
 
 ## Từng việc
 
-### 1. Thêm duyệt bảng chấm công HRM cho Trưởng đơn vị
+### 1.1. Thêm duyệt bảng chấm công HRM cho Trưởng đơn vị
 
 - **Phần:** Chấm công
 - **Màn hình:** Cấu hình menu

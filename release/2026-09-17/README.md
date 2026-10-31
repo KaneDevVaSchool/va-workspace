@@ -6,13 +6,13 @@ Phiếu tuần: [2026-W38](../summary/2026-W38-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Dự án và công việc.** Màn: Bảng tin, Công việc và dự án, Cấu hình menu. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (6 lần lưu)
-2. **Định danh và phân quyền.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
-3. **Dự án và công việc.** Màn: Công việc và dự án. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (4 lần lưu)
+1.1. **Dự án và công việc.** Màn: Bảng tin, Công việc và dự án, Cấu hình menu. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (6 lần lưu)
+1.2. **Định danh và phân quyền.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
+1.3. **Dự án và công việc.** Màn: Công việc và dự án. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (4 lần lưu)
 
 ## Từng việc
 
-### 1. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả)
+### 1.1. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả)
 
 - **Phần:** Dự án và công việc
 - **Màn hình:** Bảng tin, Công việc và dự án, Cấu hình menu
@@ -28,7 +28,7 @@ Các lần lưu, từ cũ đến mới:
 - `6c129fe` — Sửa tiếp cùng việc. Màn: Công việc và dự án.
 - `a45fe93` — Sửa tiếp cùng việc. Màn: Công việc và dự án.
 
-### 2. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
+### 1.2. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
 
 - **Phần:** Định danh và phân quyền
 - **Màn hình:** Không gắn một màn hình cụ thể
@@ -39,7 +39,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `76e984e` — Sửa tiếp cùng việc.
 
-### 3. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả)
+### 1.3. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả)
 
 - **Phần:** Dự án và công việc
 - **Màn hình:** Công việc và dự án

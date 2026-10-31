@@ -6,24 +6,24 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Chat.** Màn: Chấm công nhân viên, Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi. Mở rộng chat nhân viên (nhóm, poll, đính kèm, read receipt) và story social với sticker VA (3 lần lưu)
-2. **Chấm công.** Màn: Bảng tin. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (1 lần lưu)
-3. **Chat.** Màn: Chat. Sửa tiếp phần Chat (chưa ghi câu mô tả) (1 lần lưu)
-4. **Bảng tin.** Màn: Chat, Bảng tin. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
-5. **Chat.** Màn: Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi. Sửa tiếp phần Chat (chưa ghi câu mô tả) (2 lần lưu)
-6. **Giao diện gốc.** Màn: Hồ sơ cá nhân. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
-7. **Bảng tin.** Màn: Chat, Bảng tin, Tổng quan của tôi. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
-8. **Giao diện gốc.** Màn: Chat, Hồ sơ cá nhân. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
-9. **Chat.** Màn: Chat, Bảng tin. Sửa tiếp phần Chat (chưa ghi câu mô tả) (7 lần lưu)
-10. **Giao diện gốc.** Màn: Bảng tin. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
-11. **Chat.** Màn: Chat. Sửa tiếp phần Chat (chưa ghi câu mô tả) (3 lần lưu)
-12. **Giao diện gốc.** Màn: Chat. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (2 lần lưu)
-13. **Chat.** Màn: Chat. Sửa tiếp phần Chat (chưa ghi câu mô tả) (4 lần lưu)
-14. **Giao diện gốc.** Màn: Chấm công nhân viên, Lịch sử, Chat, Bảng tin, Tổng quan của tôi. Củng cố PWA, service worker và Web Push cho khu vực nhân viên (1 lần lưu)
+1.1. **Chat.** Màn: Chấm công nhân viên, Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi. Mở rộng chat nhân viên (nhóm, poll, đính kèm, read receipt) và story social với sticker VA (3 lần lưu)
+1.2. **Chấm công.** Màn: Bảng tin. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (1 lần lưu)
+1.3. **Chat.** Màn: Chat. Sửa tiếp phần Chat (chưa ghi câu mô tả) (1 lần lưu)
+1.4. **Bảng tin.** Màn: Chat, Bảng tin. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
+1.5. **Chat.** Màn: Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi. Sửa tiếp phần Chat (chưa ghi câu mô tả) (2 lần lưu)
+1.6. **Giao diện gốc.** Màn: Hồ sơ cá nhân. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
+1.7. **Bảng tin.** Màn: Chat, Bảng tin, Tổng quan của tôi. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
+1.8. **Giao diện gốc.** Màn: Chat, Hồ sơ cá nhân. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
+1.9. **Chat.** Màn: Chat, Bảng tin. Sửa tiếp phần Chat (chưa ghi câu mô tả) (7 lần lưu)
+1.10. **Giao diện gốc.** Màn: Bảng tin. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
+1.11. **Chat.** Màn: Chat. Sửa tiếp phần Chat (chưa ghi câu mô tả) (3 lần lưu)
+1.12. **Giao diện gốc.** Màn: Chat. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (2 lần lưu)
+1.13. **Chat.** Màn: Chat. Sửa tiếp phần Chat (chưa ghi câu mô tả) (4 lần lưu)
+1.14. **Giao diện gốc.** Màn: Chấm công nhân viên, Lịch sử, Chat, Bảng tin, Tổng quan của tôi. Củng cố PWA, service worker và Web Push cho khu vực nhân viên (1 lần lưu)
 
 ## Từng việc
 
-### 1. Mở rộng chat nhân viên (nhóm, poll, đính kèm, read receipt) và story social với sticker VA
+### 1.1. Mở rộng chat nhân viên (nhóm, poll, đính kèm, read receipt) và story social với sticker VA
 
 - **Phần:** Chat
 - **Màn hình:** Chấm công nhân viên, Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi
@@ -36,7 +36,7 @@ Các lần lưu, từ cũ đến mới:
 - `2eaac86` — Sửa tiếp cùng việc. Màn: Chat.
 - `ceeb196` — Sửa tiếp cùng việc. Màn: Chat.
 
-### 2. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
+### 1.2. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
 
 - **Phần:** Chấm công
 - **Màn hình:** Bảng tin
@@ -47,7 +47,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `889666c` — Sửa tiếp cùng việc. Màn: Bảng tin.
 
-### 3. Sửa tiếp phần Chat (chưa ghi câu mô tả)
+### 1.3. Sửa tiếp phần Chat (chưa ghi câu mô tả)
 
 - **Phần:** Chat
 - **Màn hình:** Chat
@@ -58,7 +58,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `2f08f99` — Sửa tiếp cùng việc. Màn: Chat.
 
-### 4. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
+### 1.4. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
 
 - **Phần:** Bảng tin
 - **Màn hình:** Chat, Bảng tin
@@ -69,7 +69,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `0b53486` — Sửa tiếp cùng việc. Màn: Chat, Bảng tin.
 
-### 5. Sửa tiếp phần Chat (chưa ghi câu mô tả)
+### 1.5. Sửa tiếp phần Chat (chưa ghi câu mô tả)
 
 - **Phần:** Chat
 - **Màn hình:** Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi
@@ -81,7 +81,7 @@ Các lần lưu, từ cũ đến mới:
 - `1f24332` — Sửa tiếp cùng việc. Màn: Chat, Bảng tin.
 - `025f950` — Sửa tiếp cùng việc. Màn: Chat, Hồ sơ cá nhân, Tổng quan của tôi.
 
-### 6. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+### 1.6. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Hồ sơ cá nhân
@@ -92,7 +92,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `71e98f8` — Sửa tiếp cùng việc. Màn: Hồ sơ cá nhân.
 
-### 7. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
+### 1.7. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
 
 - **Phần:** Bảng tin
 - **Màn hình:** Chat, Bảng tin, Tổng quan của tôi
@@ -103,7 +103,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `669424e` — Sửa tiếp cùng việc. Màn: Chat, Bảng tin, Tổng quan của tôi.
 
-### 8. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+### 1.8. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Chat, Hồ sơ cá nhân
@@ -114,7 +114,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `5a756a5` — Sửa tiếp cùng việc. Màn: Chat, Hồ sơ cá nhân.
 
-### 9. Sửa tiếp phần Chat (chưa ghi câu mô tả)
+### 1.9. Sửa tiếp phần Chat (chưa ghi câu mô tả)
 
 - **Phần:** Chat
 - **Màn hình:** Chat, Bảng tin
@@ -131,7 +131,7 @@ Các lần lưu, từ cũ đến mới:
 - `4710680` — Sửa tiếp cùng việc. Màn: Chat, Bảng tin.
 - `36b74df` — Sửa tiếp cùng việc. Màn: Chat, Bảng tin.
 
-### 10. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+### 1.10. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Bảng tin
@@ -142,7 +142,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `7d4405f` — Sửa tiếp cùng việc. Màn: Bảng tin.
 
-### 11. Sửa tiếp phần Chat (chưa ghi câu mô tả)
+### 1.11. Sửa tiếp phần Chat (chưa ghi câu mô tả)
 
 - **Phần:** Chat
 - **Màn hình:** Chat
@@ -155,7 +155,7 @@ Các lần lưu, từ cũ đến mới:
 - `36e70d6` — Sửa tiếp cùng việc. Màn: Chat.
 - `72d729d` — Sửa tiếp cùng việc. Màn: Chat.
 
-### 12. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+### 1.12. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Chat
@@ -167,7 +167,7 @@ Các lần lưu, từ cũ đến mới:
 - `c6a930e` — Sửa tiếp cùng việc. Màn: Chat.
 - `c5b7447` — Sửa tiếp cùng việc. Màn: Chat.
 
-### 13. Sửa tiếp phần Chat (chưa ghi câu mô tả)
+### 1.13. Sửa tiếp phần Chat (chưa ghi câu mô tả)
 
 - **Phần:** Chat
 - **Màn hình:** Chat
@@ -181,7 +181,7 @@ Các lần lưu, từ cũ đến mới:
 - `b5fc178` — Sửa tiếp cùng việc. Màn: Chat.
 - `bbeb4ba` — Sửa tiếp cùng việc. Màn: Chat.
 
-### 14. Củng cố PWA, service worker và Web Push cho khu vực nhân viên
+### 1.14. Củng cố PWA, service worker và Web Push cho khu vực nhân viên
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Chấm công nhân viên, Lịch sử, Chat, Bảng tin, Tổng quan của tôi

@@ -36,7 +36,7 @@
 
 ### 15/10/2026
 
-- **1.** Thêm duyệt bảng chấm công HRM cho Trưởng đơn vị (2 lần lưu)
+- **1.1.** Thêm duyệt bảng chấm công HRM cho Trưởng đơn vị (2 lần lưu)
 
 [← Mục lục](../README.md)
 

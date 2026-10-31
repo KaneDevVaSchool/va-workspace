@@ -6,17 +6,17 @@ Phiếu tuần: [2026-W40](../summary/2026-W40-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Kiểm thử.** Sửa tiếp phần Kiểm thử (chưa ghi câu mô tả) (1 lần lưu)
-2. **Dự án và công việc.** Màn: Đăng nhập, Tiêu chí đánh giá, Công việc và dự án, Tổng quan của tôi. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (1 lần lưu)
-3. **Định danh và phân quyền.** Màn: Đăng nhập. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
-4. **Khác.** Màn: Quyền và nhật ký, Cấu hình menu. Sửa tiếp phần Khác (chưa ghi câu mô tả) (3 lần lưu)
-5. **Cấu hình workspace.** Màn: Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
-6. **Định danh và phân quyền.** Màn: Quyền và nhật ký, Cấu hình menu. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (3 lần lưu)
-7. **Dự án và công việc.** Màn: Quyền và nhật ký, Công việc và dự án, Cấu hình menu. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (2 lần lưu)
+1.1. **Kiểm thử.** Sửa tiếp phần Kiểm thử (chưa ghi câu mô tả) (1 lần lưu)
+1.2. **Dự án và công việc.** Màn: Đăng nhập, Tiêu chí đánh giá, Công việc và dự án, Tổng quan của tôi. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (1 lần lưu)
+1.3. **Định danh và phân quyền.** Màn: Đăng nhập. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
+1.4. **Khác.** Màn: Quyền và nhật ký, Cấu hình menu. Sửa tiếp phần Khác (chưa ghi câu mô tả) (3 lần lưu)
+1.5. **Cấu hình workspace.** Màn: Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
+1.6. **Định danh và phân quyền.** Màn: Quyền và nhật ký, Cấu hình menu. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (3 lần lưu)
+1.7. **Dự án và công việc.** Màn: Quyền và nhật ký, Công việc và dự án, Cấu hình menu. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (2 lần lưu)
 
 ## Từng việc
 
-### 1. Sửa tiếp phần Kiểm thử (chưa ghi câu mô tả)
+### 1.1. Sửa tiếp phần Kiểm thử (chưa ghi câu mô tả)
 
 - **Phần:** Kiểm thử
 - **Màn hình:** Không gắn một màn hình cụ thể
@@ -27,7 +27,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `4945e8a` — Sửa tiếp cùng việc.
 
-### 2. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả)
+### 1.2. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả)
 
 - **Phần:** Dự án và công việc
 - **Màn hình:** Đăng nhập, Tiêu chí đánh giá, Công việc và dự án, Tổng quan của tôi
@@ -38,7 +38,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `c901aa4` — Sửa tiếp cùng việc. Màn: Đăng nhập, Tiêu chí đánh giá, Công việc và dự án, Tổng quan của tôi.
 
-### 3. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
+### 1.3. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
 
 - **Phần:** Định danh và phân quyền
 - **Màn hình:** Đăng nhập
@@ -49,7 +49,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `d68dbf4` — Sửa tiếp cùng việc. Màn: Đăng nhập.
 
-### 4. Sửa tiếp phần Khác (chưa ghi câu mô tả)
+### 1.4. Sửa tiếp phần Khác (chưa ghi câu mô tả)
 
 - **Phần:** Khác
 - **Màn hình:** Quyền và nhật ký, Cấu hình menu
@@ -62,7 +62,7 @@ Các lần lưu, từ cũ đến mới:
 - `eee3911` — Sửa tiếp cùng việc.
 - `d52dd62` — Sửa tiếp cùng việc. Màn: Quyền và nhật ký, Cấu hình menu.
 
-### 5. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
+### 1.5. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
 
 - **Phần:** Cấu hình workspace
 - **Màn hình:** Cấu hình menu
@@ -73,7 +73,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `4a1adec` — Sửa tiếp cùng việc. Màn: Cấu hình menu.
 
-### 6. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
+### 1.6. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
 
 - **Phần:** Định danh và phân quyền
 - **Màn hình:** Quyền và nhật ký, Cấu hình menu
@@ -86,7 +86,7 @@ Các lần lưu, từ cũ đến mới:
 - `9ea74f1` — Sửa tiếp cùng việc. Màn: Quyền và nhật ký, Cấu hình menu.
 - `8b057f6` — Sửa tiếp cùng việc. Màn: Quyền và nhật ký.
 
-### 7. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả)
+### 1.7. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả)
 
 - **Phần:** Dự án và công việc
 - **Màn hình:** Quyền và nhật ký, Công việc và dự án, Cấu hình menu

@@ -52,26 +52,26 @@
 
 ### 31/08/2026
 
-- **1.** Xóa backend + DB tính năng Mẫu đánh giá (1 lần lưu)
-- **2.** Gỡ route + Vue page tính năng Mẫu đánh giá (1 lần lưu)
-- **3.** Gỡ mục sidebar + quyền Mẫu đánh giá (1 lần lưu)
-- **4.** Cập nhật tài liệu sau khi xoá tính năng Mẫu đánh giá (1 lần lưu)
+- **1.1.** Xóa backend + DB tính năng Mẫu đánh giá (1 lần lưu)
+- **1.2.** Gỡ route + Vue page tính năng Mẫu đánh giá (1 lần lưu)
+- **1.3.** Gỡ mục sidebar + quyền Mẫu đánh giá (1 lần lưu)
+- **1.4.** Cập nhật tài liệu sau khi xoá tính năng Mẫu đánh giá (1 lần lưu)
 
 ### 01/09/2026
 
-- **1.** Báo cáo đánh giá nhân sự + tổng hợp đánh giá theo kỳ (1 lần lưu)
-- **2.** 6 loại báo cáo + thiết kế lại màn Tổng hợp đánh giá (1 lần lưu)
+- **1.1.** Báo cáo đánh giá nhân sự + tổng hợp đánh giá theo kỳ (1 lần lưu)
+- **1.2.** 6 loại báo cáo + thiết kế lại màn Tổng hợp đánh giá (1 lần lưu)
 
 ### 03/09/2026
 
-- **1.** Kit schema v2 cho Cách 2 + khoá kỳ báo cáo đã lưu (1 lần lưu)
-- **2.** Cải tiến UI trang Tiêu chí đánh giá (1 lần lưu)
-- **3.** PDF chung + xuất PDF tổng hợp đánh giá (1 lần lưu)
-- **4.** Khoá kỳ báo cáo đã lưu + phụ lục cột tiêu chí (1 lần lưu)
-- **5.** Kết nối bảng Đánh giá nhân sự với báo cáo (1 lần lưu)
-- **6.** Gỡ/thêm mục sidebar tương ứng (1 lần lưu)
-- **7.** Cập nhật tài liệu (1 lần lưu)
-- **8.** Trang Chi tiết công việc độc lập (1 lần lưu)
+- **1.1.** Kit schema v2 cho Cách 2 + khoá kỳ báo cáo đã lưu (1 lần lưu)
+- **1.2.** Cải tiến UI trang Tiêu chí đánh giá (1 lần lưu)
+- **1.3.** PDF chung + xuất PDF tổng hợp đánh giá (1 lần lưu)
+- **1.4.** Khoá kỳ báo cáo đã lưu + phụ lục cột tiêu chí (1 lần lưu)
+- **1.5.** Kết nối bảng Đánh giá nhân sự với báo cáo (1 lần lưu)
+- **1.6.** Gỡ/thêm mục sidebar tương ứng (1 lần lưu)
+- **1.7.** Cập nhật tài liệu (1 lần lưu)
+- **1.8.** Trang Chi tiết công việc độc lập (1 lần lưu)
 
 [← Mục lục](../README.md)
 

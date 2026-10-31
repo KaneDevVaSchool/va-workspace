@@ -42,14 +42,14 @@
 
 ### 08/09/2026
 
-- **1.** Liên kết TaskScore.is_passed vào tính điểm chất lượng (1 lần lưu)
-- **2.** Backend cho thảo luận, folder tài liệu, bulk task, báo cáo hoàn thành (1 lần lưu)
-- **3.** Trang Chi tiết dự án với tab Thảo luận, Tài liệu, Gantt, Công việc (1 lần lưu)
-- **4.** Hạ tầng xem trước PDF + icon mới + fix overflow TaskDetail (1 lần lưu)
+- **1.1.** Liên kết TaskScore.is_passed vào tính điểm chất lượng (1 lần lưu)
+- **1.2.** Backend cho thảo luận, folder tài liệu, bulk task, báo cáo hoàn thành (1 lần lưu)
+- **1.3.** Trang Chi tiết dự án với tab Thảo luận, Tài liệu, Gantt, Công việc (1 lần lưu)
+- **1.4.** Hạ tầng xem trước PDF + icon mới + fix overflow TaskDetail (1 lần lưu)
 
 ### 12/09/2026
 
-- **1.** Tab Feedback/Testcase/Report, module Credential, làm lại Permission Matrix (1 lần lưu)
+- **1.1.** Tab Feedback/Testcase/Report, module Credential, làm lại Permission Matrix (1 lần lưu)
 
 [← Mục lục](../README.md)
 

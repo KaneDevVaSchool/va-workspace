@@ -50,49 +50,49 @@
 
 ### 14/09/2026
 
-- **1.** Seed nhân sự CNTT, xuất Excel Credential, quản lý task nhanh, cấu hình menu sidebar (1 lần lưu)
-- **2.** Drop đúng tên FK tường minh khi rollback 3 migration (2 lần lưu)
-- **3.** Sửa tiếp phần Đánh giá (chưa ghi câu mô tả) (2 lần lưu)
-- **4.** Drop bảng pivot mồ côi trước khi rollback evaluation_criteria/positions (1 lần lưu)
-- **5.** Thu hẹp DatabaseSeeder chỉ còn quyền + nhân sự (1 lần lưu)
-- **6.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
-- **7.** Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (1 lần lưu)
-- **8.** Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (1 lần lưu)
-- **9.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
-- **10.** Sửa tiếp phần Nền tảng (chưa ghi câu mô tả) (2 lần lưu)
-- **11.** Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (1 lần lưu)
-- **12.** Updates task tiến độ (1 lần lưu)
+- **1.1.** Seed nhân sự CNTT, xuất Excel Credential, quản lý task nhanh, cấu hình menu sidebar (1 lần lưu)
+- **1.2.** Drop đúng tên FK tường minh khi rollback 3 migration (2 lần lưu)
+- **1.3.** Sửa tiếp phần Đánh giá (chưa ghi câu mô tả) (2 lần lưu)
+- **1.4.** Drop bảng pivot mồ côi trước khi rollback evaluation_criteria/positions (1 lần lưu)
+- **1.5.** Thu hẹp DatabaseSeeder chỉ còn quyền + nhân sự (1 lần lưu)
+- **1.6.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
+- **1.7.** Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (1 lần lưu)
+- **1.8.** Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (1 lần lưu)
+- **1.9.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
+- **1.10.** Sửa tiếp phần Nền tảng (chưa ghi câu mô tả) (2 lần lưu)
+- **1.11.** Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (1 lần lưu)
+- **1.12.** Updates task tiến độ (1 lần lưu)
 
 ### 15/09/2026
 
-- **1.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
-- **2.** Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (1 lần lưu)
-- **3.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
-- **4.** Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (1 lần lưu)
-- **5.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
-- **6.** Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (4 lần lưu)
-- **7.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
-- **8.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (4 lần lưu)
-- **9.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (2 lần lưu)
-- **10.** Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (2 lần lưu)
+- **1.1.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
+- **1.2.** Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (1 lần lưu)
+- **1.3.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
+- **1.4.** Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (1 lần lưu)
+- **1.5.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
+- **1.6.** Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (4 lần lưu)
+- **1.7.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
+- **1.8.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (4 lần lưu)
+- **1.9.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (2 lần lưu)
+- **1.10.** Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (2 lần lưu)
 
 ### 16/09/2026
 
-- **1.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (3 lần lưu)
-- **2.** Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
-- **3.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (6 lần lưu)
+- **1.1.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (3 lần lưu)
+- **1.2.** Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
+- **1.3.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (6 lần lưu)
 
 ### 17/09/2026
 
-- **1.** Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (6 lần lưu)
-- **2.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
-- **3.** Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (4 lần lưu)
+- **1.1.** Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (6 lần lưu)
+- **1.2.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
+- **1.3.** Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (4 lần lưu)
 
 ### 18/09/2026
 
-- **1.** Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (3 lần lưu)
-- **2.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
-- **3.** Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (3 lần lưu)
+- **1.1.** Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (3 lần lưu)
+- **1.2.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
+- **1.3.** Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (3 lần lưu)
 
 [← Mục lục](../README.md)
 

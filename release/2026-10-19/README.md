@@ -6,23 +6,23 @@ Phiếu tuần: [2026-W43](../summary/2026-W43-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Tổng quan.** Màn: Tổng quan của tôi, Cấu hình menu. Thêm tiện ích nhanh dashboard (API + cấu hình superadmin) và làm mới sidebar cùng trang Dashboard của tôi (1 lần lưu)
-2. **Cấu hình workspace.** Màn: Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
-3. **Tổng quan.** Màn: Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (3 lần lưu)
-4. **Chấm công.** Màn: Chấm công nhân viên, Bảng tin, Tổng quan của tôi. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (3 lần lưu)
-5. **Tổng quan.** Màn: Lịch sử, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (1 lần lưu)
-6. **Chấm công.** Màn: Chấm công nhân viên, Lịch sử, Nghỉ phép, Bảng tin, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (4 lần lưu)
-7. **Tổng quan.** Màn: Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (3 lần lưu)
-8. **Giao diện gốc.** Màn: Lịch sử, Nghỉ phép. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
-9. **Chấm công.** Màn: Nghỉ phép. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (1 lần lưu)
-10. **Tổng quan.** Màn: Lịch sử, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (1 lần lưu)
-11. **Giao diện gốc.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (7 lần lưu)
-12. **Chat.** Màn: Chat. Sửa tiếp phần Chat (chưa ghi câu mô tả) (1 lần lưu)
-13. **Giao diện gốc.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (2 lần lưu)
+1.1. **Tổng quan.** Màn: Tổng quan của tôi, Cấu hình menu. Thêm tiện ích nhanh dashboard (API + cấu hình superadmin) và làm mới sidebar cùng trang Dashboard của tôi (1 lần lưu)
+1.2. **Cấu hình workspace.** Màn: Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
+1.3. **Tổng quan.** Màn: Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (3 lần lưu)
+1.4. **Chấm công.** Màn: Chấm công nhân viên, Bảng tin, Tổng quan của tôi. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (3 lần lưu)
+1.5. **Tổng quan.** Màn: Lịch sử, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (1 lần lưu)
+1.6. **Chấm công.** Màn: Chấm công nhân viên, Lịch sử, Nghỉ phép, Bảng tin, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (4 lần lưu)
+1.7. **Tổng quan.** Màn: Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (3 lần lưu)
+1.8. **Giao diện gốc.** Màn: Lịch sử, Nghỉ phép. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
+1.9. **Chấm công.** Màn: Nghỉ phép. Sửa tiếp phần Chấm công (chưa ghi câu mô tả) (1 lần lưu)
+1.10. **Tổng quan.** Màn: Lịch sử, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả) (1 lần lưu)
+1.11. **Giao diện gốc.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (7 lần lưu)
+1.12. **Chat.** Màn: Chat. Sửa tiếp phần Chat (chưa ghi câu mô tả) (1 lần lưu)
+1.13. **Giao diện gốc.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (2 lần lưu)
 
 ## Từng việc
 
-### 1. Thêm tiện ích nhanh dashboard (API + cấu hình superadmin) và làm mới sidebar cùng trang Dashboard của tôi
+### 1.1. Thêm tiện ích nhanh dashboard (API + cấu hình superadmin) và làm mới sidebar cùng trang Dashboard của tôi
 
 - **Phần:** Tổng quan
 - **Màn hình:** Tổng quan của tôi, Cấu hình menu
@@ -33,7 +33,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `d4f06df` — Thêm tiện ích nhanh dashboard (API + cấu hình superadmin) và làm mới sidebar cùng trang Dashboard của tôi
 
-### 2. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
+### 1.2. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
 
 - **Phần:** Cấu hình workspace
 - **Màn hình:** Tổng quan của tôi, Cấu hình menu
@@ -44,7 +44,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `079c0a1` — Sửa tiếp cùng việc. Màn: Tổng quan của tôi, Cấu hình menu.
 
-### 3. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
+### 1.3. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
 
 - **Phần:** Tổng quan
 - **Màn hình:** Tổng quan của tôi, Cấu hình menu
@@ -57,7 +57,7 @@ Các lần lưu, từ cũ đến mới:
 - `d47b4fc` — Sửa tiếp cùng việc. Màn: Tổng quan của tôi, Cấu hình menu.
 - `6363314` — Sửa tiếp cùng việc. Màn: Tổng quan của tôi, Cấu hình menu.
 
-### 4. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
+### 1.4. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
 
 - **Phần:** Chấm công
 - **Màn hình:** Chấm công nhân viên, Bảng tin, Tổng quan của tôi
@@ -70,7 +70,7 @@ Các lần lưu, từ cũ đến mới:
 - `406095c` — Sửa tiếp cùng việc. Màn: Chấm công nhân viên, Tổng quan của tôi.
 - `8977228` — Sửa tiếp cùng việc.
 
-### 5. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
+### 1.5. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
 
 - **Phần:** Tổng quan
 - **Màn hình:** Lịch sử, Tổng quan của tôi, Cấu hình menu
@@ -81,7 +81,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `bf5b463` — Sửa tiếp cùng việc. Màn: Lịch sử, Tổng quan của tôi, Cấu hình menu.
 
-### 6. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
+### 1.6. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
 
 - **Phần:** Chấm công
 - **Màn hình:** Chấm công nhân viên, Lịch sử, Nghỉ phép, Bảng tin, Tổng quan của tôi, Cấu hình menu
@@ -95,7 +95,7 @@ Các lần lưu, từ cũ đến mới:
 - `7408182` — Sửa tiếp cùng việc. Màn: Lịch sử, Nghỉ phép, Tổng quan của tôi, Cấu hình menu.
 - `b769b0b` — Sửa tiếp cùng việc. Màn: Chấm công nhân viên, Lịch sử, Nghỉ phép, Bảng tin, Tổng quan của tôi.
 
-### 7. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
+### 1.7. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
 
 - **Phần:** Tổng quan
 - **Màn hình:** Chat, Bảng tin, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu
@@ -108,7 +108,7 @@ Các lần lưu, từ cũ đến mới:
 - `bc28972` — Sửa tiếp cùng việc. Màn: Tổng quan của tôi.
 - `cf2c823` — Sửa tiếp cùng việc. Màn: Chat, Hồ sơ cá nhân, Tổng quan của tôi, Cấu hình menu.
 
-### 8. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+### 1.8. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Lịch sử, Nghỉ phép
@@ -119,7 +119,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `5f8d79a` — Sửa tiếp cùng việc. Màn: Lịch sử, Nghỉ phép.
 
-### 9. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
+### 1.9. Sửa tiếp phần Chấm công (chưa ghi câu mô tả)
 
 - **Phần:** Chấm công
 - **Màn hình:** Nghỉ phép
@@ -130,7 +130,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `b6b1a8b` — Sửa tiếp cùng việc. Màn: Nghỉ phép.
 
-### 10. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
+### 1.10. Sửa tiếp phần Tổng quan (chưa ghi câu mô tả)
 
 - **Phần:** Tổng quan
 - **Màn hình:** Lịch sử, Tổng quan của tôi, Cấu hình menu
@@ -141,7 +141,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `8ca5794` — Sửa tiếp cùng việc. Màn: Lịch sử, Tổng quan của tôi, Cấu hình menu.
 
-### 11. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+### 1.11. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Không gắn một màn hình cụ thể
@@ -158,7 +158,7 @@ Các lần lưu, từ cũ đến mới:
 - `1bf0a4c` — Sửa tiếp cùng việc.
 - `927d1b6` — Sửa tiếp cùng việc.
 
-### 12. Sửa tiếp phần Chat (chưa ghi câu mô tả)
+### 1.12. Sửa tiếp phần Chat (chưa ghi câu mô tả)
 
 - **Phần:** Chat
 - **Màn hình:** Chat
@@ -169,7 +169,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `5929f01` — Sửa tiếp cùng việc. Màn: Chat.
 
-### 13. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
+### 1.13. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả)
 
 - **Phần:** Giao diện gốc
 - **Màn hình:** Không gắn một màn hình cụ thể

@@ -6,11 +6,11 @@ Phiếu tuần: [2026-W37](../summary/2026-W37-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Dự án và công việc.** Màn: Quyền và nhật ký, Công việc và dự án, Hồ sơ đăng nhập, Cấu hình menu. Tab Feedback/Testcase/Report, module Credential, làm lại Permission Matrix (1 lần lưu)
+1.1. **Dự án và công việc.** Màn: Quyền và nhật ký, Công việc và dự án, Hồ sơ đăng nhập, Cấu hình menu. Tab Feedback/Testcase/Report, module Credential, làm lại Permission Matrix (1 lần lưu)
 
 ## Từng việc
 
-### 1. Tab Feedback/Testcase/Report, module Credential, làm lại Permission Matrix
+### 1.1. Tab Feedback/Testcase/Report, module Credential, làm lại Permission Matrix
 
 - **Phần:** Dự án và công việc
 - **Màn hình:** Quyền và nhật ký, Công việc và dự án, Hồ sơ đăng nhập, Cấu hình menu

@@ -6,13 +6,13 @@ Phiếu tuần: [2026-W38](../summary/2026-W38-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Bảng tin.** Màn: Bảng tin. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (3 lần lưu)
-2. **Cấu hình workspace.** Màn: Bảng tin, Công việc và dự án, Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
-3. **Bảng tin.** Màn: Nhóm, Bảng tin, Cấu hình menu. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (6 lần lưu)
+1.1. **Bảng tin.** Màn: Bảng tin. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (3 lần lưu)
+1.2. **Cấu hình workspace.** Màn: Bảng tin, Công việc và dự án, Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
+1.3. **Bảng tin.** Màn: Nhóm, Bảng tin, Cấu hình menu. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (6 lần lưu)
 
 ## Từng việc
 
-### 1. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
+### 1.1. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
 
 - **Phần:** Bảng tin
 - **Màn hình:** Bảng tin
@@ -25,7 +25,7 @@ Các lần lưu, từ cũ đến mới:
 - `48de2f9` — Sửa tiếp cùng việc. Màn: Bảng tin.
 - `27fa5b9` — Sửa tiếp cùng việc. Màn: Bảng tin.
 
-### 2. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
+### 1.2. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
 
 - **Phần:** Cấu hình workspace
 - **Màn hình:** Bảng tin, Công việc và dự án, Cấu hình menu
@@ -36,7 +36,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `b585274` — Sửa tiếp cùng việc. Màn: Bảng tin, Công việc và dự án, Cấu hình menu.
 
-### 3. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
+### 1.3. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
 
 - **Phần:** Bảng tin
 - **Màn hình:** Nhóm, Bảng tin, Cấu hình menu
