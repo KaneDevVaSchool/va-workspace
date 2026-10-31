@@ -1,6 +1,6 @@
 # 31/10/2026 — VA Workspace
 
-Hôm nay có **3 lần lưu**, gom thành **3 việc**.
+Hôm nay có **4 lần lưu**, gom thành **4 việc**.
 
 Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [audit.md](./audit.md) · [Mục lục](../README.md)
 
@@ -9,6 +9,7 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 1.1. **Đơn từ.** Màn: Lịch sử, Cấu hình đơn từ, Đơn từ. Giữ UUID khi trùng email, ẩn menu đơn từ chưa mở và giải thích xuất PDF (1 lần lưu)
 1.2. **Tài liệu.** Phieu release va audit ngay 31/10 (1 lần lưu)
 1.3. **Tài liệu.** Audit BMAD theo version 1.1 và 1.2 (1 lần lưu)
+1.4. **Tài liệu.** Đồng bộ audit BMAD với VA-HRM, version 1.1 (1 lần lưu)
 
 ## Từng việc
 
@@ -44,6 +45,17 @@ Các lần lưu, từ cũ đến mới:
 Các lần lưu, từ cũ đến mới:
 
 - `427206a` — Audit BMAD theo version 1.1 và 1.2
+
+### 1.4. Đồng bộ audit BMAD với VA-HRM, version 1.1
+
+- **Phần:** Tài liệu
+- **Màn hình:** Không gắn một màn hình cụ thể
+- **Lần lưu:** 1
+- **Đổi dữ liệu:** Không
+
+Các lần lưu, từ cũ đến mới:
+
+- `1542b90` — Đồng bộ audit BMAD với VA-HRM, version 1.1
 
 ## Khi đưa lên máy chủ
 

@@ -1,12 +1,12 @@
 # Release — VA Workspace
 
-Tổng hợp **toàn bộ commit** trên nhánh `main`, chia theo ngày và tổng kết theo tuần (thứ 2 → Chủ nhật). Phiếu đọc nằm trong [`summary/`](./summary/). Mỗi ngày và mỗi tuần có thêm file `audit.md`: việc đánh số version **1.1**, **1.2**, mỗi việc một bảng Đổi gì / Vì sao / Tác dụng. Commit không ghi lý do hoặc tác dụng thì phiếu ghi «chưa ghi».
+Tổng hợp **toàn bộ commit** trên nhánh `main`, chia theo ngày và tổng kết theo tuần (thứ 2 → Chủ nhật). Phiếu đọc nằm trong [`summary/`](./summary/). Mỗi ngày và mỗi tuần có thêm file `audit.md`: việc đánh số version **1.1**, **1.2**, mỗi lần lưu là **1.1.1**, **1.1.2**. Bảng có Đổi gì / Vì sao / Tác dụng / Giải thích đơn giản. Commit không ghi lý do hoặc tác dụng thì phiếu ghi «chưa ghi».
 
 | | |
 | --- | --- |
 | **Cửa sổ** | 24/08/2026 → 31/10/2026 |
-| **Commit** | **465** |
-| **HEAD** | `427206a` — docs: audit BMAD theo version 1.1 và 1.2 |
+| **Commit** | **466** |
+| **HEAD** | `1542b90` — docs: đồng bộ audit BMAD với VA-HRM, version 1.1 |
 | **Đối tượng** | BA, QA — đối soát commit theo ngày |
 
 Commit message một chữ không được diễn giải thành nghiệp vụ mới. Cột diễn giải trong phiếu ngày trích file commit đó đụng.
@@ -24,8 +24,8 @@ Commit message một chữ không được diễn giải thành nghiệp vụ m�
 | **W41** | 5–11/10/2026 | 76 | [2026-W41](./summary/2026-W41-summary.md) | [audit](./summary/2026-W41-audit.md) |
 | **W42** | 12–18/10/2026 | 2 | [2026-W42](./summary/2026-W42-summary.md) | [audit](./summary/2026-W42-audit.md) |
 | **W43** | 19–25/10/2026 | 58 | [2026-W43](./summary/2026-W43-summary.md) | [audit](./summary/2026-W43-audit.md) |
-| **W44** | 26/10–1/11/2026 | 109 | [2026-W44](./summary/2026-W44-summary.md) | [audit](./summary/2026-W44-audit.md) |
-| **Tổng** | | **465** | | |
+| **W44** | 26/10–1/11/2026 | 110 | [2026-W44](./summary/2026-W44-summary.md) | [audit](./summary/2026-W44-audit.md) |
+| **Tổng** | | **466** | | |
 
 ## Ngày
 
@@ -90,5 +90,5 @@ Commit message một chữ không được diễn giải thành nghiệp vụ m�
 - [28/10/2026](./2026-10-28/README.md) — 29 lần lưu, 14 việc · [đối soát](./2026-10-28/audit.md)
 - [29/10/2026](./2026-10-29/README.md) — 17 lần lưu, 5 việc · [đối soát](./2026-10-29/audit.md)
 - [30/10/2026](./2026-10-30/README.md) — 13 lần lưu, 13 việc · [đối soát](./2026-10-30/audit.md)
-- [31/10/2026](./2026-10-31/README.md) — 3 lần lưu, 3 việc · [đối soát](./2026-10-31/audit.md)
+- [31/10/2026](./2026-10-31/README.md) — 4 lần lưu, 4 việc · [đối soát](./2026-10-31/audit.md)
 

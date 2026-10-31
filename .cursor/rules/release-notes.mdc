@@ -12,7 +12,7 @@ Mẫu: `release/README.md`, `release/summary/2026-W44-summary.md`, `release/summ
 
 Khi sửa hoặc viết phiếu trong `release/`:
 
-- Một ngày một thư mục `release/YYYY-MM-DD/`: `README.md` (tiếng thường) và `audit.md` (việc **1.1**, **1.2**, mỗi việc bảng Đổi gì / Vì sao / Tác dụng). Phiếu tuần nằm trong `release/summary/YYYY-Wnn-summary.md` và `YYYY-Wnn-audit.md` (thứ 2 → Chủ nhật) — không để `*-summary.md` ở gốc `release/`. Mục lục là `release/README.md`.
+- Một ngày một thư mục `release/YYYY-MM-DD/`: `README.md` (tiếng thường) và `audit.md` (việc **1.1**, **1.2**; mỗi commit **1.1.1**, **1.1.2**; bảng Đổi gì / Vì sao / Tác dụng / Giải thích đơn giản). Phiếu tuần nằm trong `release/summary/YYYY-Wnn-summary.md` và `YYYY-Wnn-audit.md` (thứ 2 → Chủ nhật) — không để `*-summary.md` ở gốc `release/`. Mục lục là `release/README.md`.
 - Phiếu tuần có mục **Module** (commit theo vùng) và **Tính năng lớn** (message đủ nghĩa). «Sửa tiếp …» từ commit một chữ không tính là tính năng.
 - Bảng commit **cũ → mới**. Message một chữ (`a`, `s`, `updating`…) ghi «Sửa tiếp cùng việc» và màn hình nếu nhận ra. Không bịa nghiệp vụ.
 - Tên màn là `meta.title` của trang Vue, không lấy từ tiền tố controller. `EmployeeLeaveRequest` / `EmployeeRequests.vue` = **Lịch sử**. `EmployeeLeave.vue` = **Nghỉ phép**. Phần Attendance vẫn là Chấm công.

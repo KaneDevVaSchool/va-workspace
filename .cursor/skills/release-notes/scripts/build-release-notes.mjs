@@ -509,17 +509,95 @@ function featureStory(feature) {
     .filter(Boolean)
     .map((part) => (/[.!?]$/.test(part) ? part : `${part}.`))
     .join(' ');
-  return { changed, why: whyOf(corpus), effect: effectOf(corpus, migs) };
+  const story = { changed, why: whyOf(corpus), effect: effectOf(corpus, migs) };
+  if (feature.commits.length === 1) {
+    story.plain = lowTechPlain(feature.commits[0]);
+  } else {
+    story.plain = `Gom ${feature.commits.length} lần lưu cùng một việc; xem bảng từng version bên dưới.`;
+  }
+  return story;
 }
 
 function storyTable(story) {
-  return [
+  const rows = [
     '| | |',
     '| --- | --- |',
     `| **Đổi gì** | ${cell(story.changed)} |`,
     `| **Vì sao** | ${cell(story.why)} |`,
     `| **Tác dụng** | ${cell(story.effect)} |`,
   ];
+  if (story.plain) {
+    rows.push(`| **Giải thích đơn giản** | ${cell(story.plain)} |`);
+  }
+  return rows;
+}
+
+function commitVersion(featureCode, indexInFeature) {
+  return `${featureCode}.${indexInFeature}`;
+}
+
+function lowTechPlain(commit) {
+  const area = areaLabel(primaryArea(commit.files));
+  const screens = screensOf(commit.files);
+  const migs = migrations([commit]);
+  const where = screens.length ? ` trên màn ${screens.join(', ')}` : '';
+  const parts = [];
+  if (!isJunk(commit.subject)) {
+    parts.push(plainSubject(commit.subject));
+  } else {
+    parts.push(`Sửa nốt phần ${area}${where}.`);
+  }
+  if (migs.length) {
+    parts.push(`Khi đưa lên máy chủ cần chạy cập nhật dữ liệu (${migs.map(migrationPlain).join('; ')}).`);
+  } else {
+    parts.push('Không đổi cấu trúc dữ liệu — chỉ cần bản phần mềm mới.');
+  }
+  const files = touchedOf(commit.files);
+  if (files !== '—') parts.push(`File chính: ${files}.`);
+  return parts
+    .map((part) => {
+      const text = part.trim();
+      if (!text) return '';
+      return /[.!?]$/.test(text) ? text : `${text}.`;
+    })
+    .filter(Boolean)
+    .join(' ');
+}
+
+function commitStory(commit) {
+  const migs = migrations([commit]);
+  const body = (commit.body || '').trim();
+  let changed;
+  if (!isJunk(commit.subject)) {
+    const title = plainSubject(commit.subject);
+    changed = body ? `${title}. ${body}` : title;
+  } else {
+    changed = explain(commit, commit.subject);
+  }
+  const corpus = [
+    isJunk(commit.subject) ? '' : plainSubject(commit.subject),
+    body,
+  ]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(' ');
+  return {
+    changed,
+    why: whyOf(corpus),
+    effect: effectOf(corpus, migs),
+    plain: lowTechPlain(commit),
+  };
+}
+
+function perCommitAuditBlocks(feature) {
+  const lines = ['#### Chi tiết từng lần lưu (version)', ''];
+  feature.commits.forEach((commit, index) => {
+    const ver = commitVersion(feature.code, index + 1);
+    const time = commit.time ? ` · ${commit.time}` : '';
+    lines.push(`##### Version ${ver} — mã \`${commit.sha}\`${time}`, '');
+    lines.push(...storyTable(commitStory(commit)), '');
+  });
+  return lines;
 }
 
 function dayAudit(day, id) {
@@ -528,7 +606,7 @@ function dayAudit(day, id) {
     '',
     `Đọc nhanh: [README.md](./README.md) · Tuần: [${id}](../summary/${id}-summary.md) · Bảng tuần: [${id}-audit](../summary/${id}-audit.md)`,
     '',
-    'Việc trong ngày đánh số version **1.1**, **1.2**, … Mỗi việc một bảng Đổi gì / Vì sao / Tác dụng. Thiếu trong commit thì ghi «chưa ghi», không suy diễn.',
+    'Việc trong ngày đánh số **1.1**, **1.2**, … Mỗi lần lưu (commit) là **1.1.1**, **1.1.2**, … Bảng có thêm dòng **Giải thích đơn giản** cho người không rành kỹ thuật. Thiếu trong commit thì ghi «chưa ghi», không suy diễn.',
     '',
     '## Việc trong ngày',
     '',
@@ -548,7 +626,7 @@ function dayAudit(day, id) {
     for (const commit of feature.commits) {
       lines.push(`| ${commit.time || '—'} | \`${commit.sha}\` | ${changeKind(commit.subject)} | ${cell(touchedOf(commit.files))} |`);
     }
-    lines.push('');
+    lines.push('', ...perCommitAuditBlocks(feature));
   }
   return lines;
 }
@@ -559,7 +637,7 @@ function weekAudit(id, weekNo, start, end, days) {
     '',
     `Phiếu đọc: [${id}-summary](./${id}-summary.md) · [Mục lục](../README.md)`,
     '',
-    'Mỗi việc một bảng: đổi gì, vì sao, tác dụng. Số version **1.1**, **1.2** là thứ tự việc trong ngày. Thiếu lý do hoặc tác dụng trong commit thì ghi «chưa ghi», không suy diễn.',
+    'Mỗi việc một bảng tóm tắt; chi tiết từng lần lưu nằm ở phiếu ngày (version **1.1.1**, **1.1.2**, …). Có dòng **Giải thích đơn giản**. Thiếu lý do hoặc tác dụng trong commit thì ghi «chưa ghi», không suy diễn.',
     '',
   ];
   let any = false;
@@ -575,6 +653,17 @@ function weekAudit(id, weekNo, start, end, days) {
         ...storyTable(featureStory(feature)),
         '',
       );
+      if (feature.commits.length === 1) continue;
+      for (const commit of feature.commits) {
+        const index = feature.commits.indexOf(commit);
+        const ver = commitVersion(feature.code, index + 1);
+        lines.push(
+          `#### ${fmtVi(day.date)} · version ${ver} · \`${commit.sha}\``,
+          '',
+          ...storyTable(commitStory(commit)),
+          '',
+        );
+      }
     }
   }
   if (!any) lines.push('Không có lần lưu.', '');
@@ -585,7 +674,7 @@ const head = commits[commits.length - 1];
 const index = [
   `# Release — ${PRODUCT}`,
   '',
-  `Tổng hợp **toàn bộ commit** trên nhánh \`${branch}\`, chia theo ngày và tổng kết theo tuần (thứ 2 → Chủ nhật). Phiếu đọc nằm trong [\`summary/\`](./summary/). Mỗi ngày và mỗi tuần có thêm file \`audit.md\`: việc đánh số version **1.1**, **1.2**, mỗi việc một bảng Đổi gì / Vì sao / Tác dụng. Commit không ghi lý do hoặc tác dụng thì phiếu ghi «chưa ghi».`,
+  `Tổng hợp **toàn bộ commit** trên nhánh \`${branch}\`, chia theo ngày và tổng kết theo tuần (thứ 2 → Chủ nhật). Phiếu đọc nằm trong [\`summary/\`](./summary/). Mỗi ngày và mỗi tuần có thêm file \`audit.md\`: việc đánh số version **1.1**, **1.2**, mỗi lần lưu là **1.1.1**, **1.1.2**. Bảng có Đổi gì / Vì sao / Tác dụng / Giải thích đơn giản. Commit không ghi lý do hoặc tác dụng thì phiếu ghi «chưa ghi».`,
   '',
   '| | |',
   '| --- | --- |',
