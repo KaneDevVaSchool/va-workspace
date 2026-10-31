@@ -1,6 +1,6 @@
 # 31/10/2026 — VA Workspace
 
-Hôm nay có **4 lần lưu**, gom thành **4 việc**.
+Hôm nay có **5 lần lưu**, gom thành **5 việc**.
 
 Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [audit.md](./audit.md) · [Mục lục](../README.md)
 
@@ -10,6 +10,7 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 1.2. **Tài liệu.** Phieu release va audit ngay 31/10 (1 lần lưu)
 1.3. **Tài liệu.** Audit BMAD theo version 1.1 và 1.2 (1 lần lưu)
 1.4. **Tài liệu.** Đồng bộ audit BMAD với VA-HRM, version 1.1 (1 lần lưu)
+1.5. **Tài liệu.** Đồng bộ phiếu audit với VA-HRM (1 lần lưu)
 
 ## Từng việc
 
@@ -56,6 +57,17 @@ Các lần lưu, từ cũ đến mới:
 Các lần lưu, từ cũ đến mới:
 
 - `1542b90` — Đồng bộ audit BMAD với VA-HRM, version 1.1
+
+### 1.5. Đồng bộ phiếu audit với VA-HRM
+
+- **Phần:** Tài liệu
+- **Màn hình:** Không gắn một màn hình cụ thể
+- **Lần lưu:** 1
+- **Đổi dữ liệu:** Không
+
+Các lần lưu, từ cũ đến mới:
+
+- `bcb2efa` — Đồng bộ phiếu audit với VA-HRM
 
 ## Khi đưa lên máy chủ
 

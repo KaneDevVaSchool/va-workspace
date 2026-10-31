@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | **Cửa sổ** | Thứ 2 26/10/2026 → Chủ nhật 01/11/2026 |
-| **Commit** | **110** |
+| **Commit** | **111** |
 | **Ngày có commit** | 6 |
 | **Nhánh đối soát** | `main` |
 | **Bảng audit** | [2026-W44-audit](./2026-W44-audit.md) |
@@ -17,7 +17,7 @@
 | **28/10/2026** | Thứ 4 | 29 | 14 | [`2026-10-28`](../2026-10-28/README.md) |
 | **29/10/2026** | Thứ 5 | 17 | 5 | [`2026-10-29`](../2026-10-29/README.md) |
 | **30/10/2026** | Thứ 6 | 13 | 13 | [`2026-10-30`](../2026-10-30/README.md) |
-| **31/10/2026** | Thứ 7 | 4 | 4 | [`2026-10-31`](../2026-10-31/README.md) |
+| **31/10/2026** | Thứ 7 | 5 | 5 | [`2026-10-31`](../2026-10-31/README.md) |
 | **01/11/2026** | Chủ nhật | 0 | 0 | — |
 
 ## Module
@@ -32,7 +32,7 @@
 | Tổng quan | 1 |
 | Nền tảng | 2 |
 | Giao diện gốc | 15 |
-| Tài liệu | 7 |
+| Tài liệu | 8 |
 | Khác | 4 |
 
 ## Tính năng lớn
@@ -150,6 +150,7 @@
 - **1.2.** Phieu release va audit ngay 31/10 (1 lần lưu)
 - **1.3.** Audit BMAD theo version 1.1 và 1.2 (1 lần lưu)
 - **1.4.** Đồng bộ audit BMAD với VA-HRM, version 1.1 (1 lần lưu)
+- **1.5.** Đồng bộ phiếu audit với VA-HRM (1 lần lưu)
 
 [← Mục lục](../README.md)
 

@@ -110,3 +110,29 @@ Tài liệu · Không gắn màn hình · 1 lần lưu
 | **Tác dụng** | trong chỉ để thành lý do |
 | **Giải thích đơn giản** | Đồng bộ audit BMAD với VA-HRM, version 1.1. Không đổi cấu trúc dữ liệu — chỉ cần bản phần mềm mới. File chính: release-notes/SKILL.md, scripts/build-release-notes.mjs, 2026-08-24/README.md, 2026-08-24/audit.md (+13). |
 
+### 1.5. Đồng bộ phiếu audit với VA-HRM
+
+Tài liệu · Không gắn màn hình · 1 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Đồng bộ phiếu audit với VA-HRM. Mỗi việc đánh số 1.1, mỗi lần lưu 1.1.1, và thêm dòng Giải thích đơn giản để phiếu Workspace đọc cùng kiểu VA-HRM. |
+| **Vì sao** | để phiếu Workspace đọc cùng kiểu VA-HRM |
+| **Tác dụng** | phiếu Workspace đọc cùng kiểu VA-HRM |
+| **Giải thích đơn giản** | Đồng bộ phiếu audit với VA-HRM. Không đổi cấu trúc dữ liệu — chỉ cần bản phần mềm mới. File chính: rules/release-notes.mdc, release-notes/SKILL.md, scripts/build-release-notes.mjs, 2026-08-24/audit.md (+45). |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
+| 09:23 | `bcb2efa` | Tài liệu | rules/release-notes.mdc, release-notes/SKILL.md, scripts/build-release-notes.mjs, 2026-08-24/audit.md (+45) |
+
+#### Chi tiết từng lần lưu (version)
+
+##### Version 1.5.1 — mã `bcb2efa` · 09:23
+
+| | |
+| --- | --- |
+| **Đổi gì** | Đồng bộ phiếu audit với VA-HRM. Mỗi việc đánh số 1.1, mỗi lần lưu 1.1.1, và thêm dòng Giải thích đơn giản để phiếu Workspace đọc cùng kiểu VA-HRM. |
+| **Vì sao** | để phiếu Workspace đọc cùng kiểu VA-HRM |
+| **Tác dụng** | phiếu Workspace đọc cùng kiểu VA-HRM |
+| **Giải thích đơn giản** | Đồng bộ phiếu audit với VA-HRM. Không đổi cấu trúc dữ liệu — chỉ cần bản phần mềm mới. File chính: rules/release-notes.mdc, release-notes/SKILL.md, scripts/build-release-notes.mjs, 2026-08-24/audit.md (+45). |
+
