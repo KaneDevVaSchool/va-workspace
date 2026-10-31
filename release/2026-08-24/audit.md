@@ -190,7 +190,7 @@ Tài liệu · Không gắn màn hình · 1 lần lưu
 
 ### 1.14. Chuẩn hoá bảng dữ liệu theo pattern data-table + export Excel
 
-Tài liệu · Quyền và nhật ký · 1 lần lưu
+Định danh và phân quyền · Quyền và nhật ký · 1 lần lưu
 
 | | |
 | --- | --- |

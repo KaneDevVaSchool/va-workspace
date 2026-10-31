@@ -1,6 +1,6 @@
 # 15/09/2026 — VA Workspace
 
-Hôm nay có **18 lần lưu**, gom thành **10 việc**.
+Hôm nay có **18 lần lưu**, gom thành **12 việc**.
 
 Phiếu tuần: [2026-W38](../summary/2026-W38-summary.md) · Đối soát: [audit.md](./audit.md) · [Mục lục](../README.md)
 
@@ -11,11 +11,13 @@ Phiếu tuần: [2026-W38](../summary/2026-W38-summary.md) · Đối soát: [aud
 1.3. **Bảng tin.** Màn: Nhóm, Bảng tin, Tổng quan của tôi. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
 1.4. **Đề xuất.** Màn: Cấu hình menu. Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (1 lần lưu)
 1.5. **Giao diện gốc.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
-1.6. **Đề xuất.** Màn: Cấu hình menu. Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (4 lần lưu)
-1.7. **Định danh và phân quyền.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
-1.8. **Bảng tin.** Màn: Bảng tin, Công việc và dự án, Cấu hình menu. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (4 lần lưu)
-1.9. **Định danh và phân quyền.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (2 lần lưu)
-1.10. **Cấu hình workspace.** Màn: Công việc và dự án, Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (2 lần lưu)
+1.6. **Đề xuất.** Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (2 lần lưu)
+1.7. **Cấu hình workspace.** Màn: Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
+1.8. **Đề xuất.** Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (1 lần lưu)
+1.9. **Định danh và phân quyền.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
+1.10. **Bảng tin.** Màn: Bảng tin, Công việc và dự án, Cấu hình menu. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (4 lần lưu)
+1.11. **Định danh và phân quyền.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (2 lần lưu)
+1.12. **Cấu hình workspace.** Màn: Công việc và dự án, Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (2 lần lưu)
 
 ## Từng việc
 
@@ -77,18 +79,38 @@ Các lần lưu, từ cũ đến mới:
 ### 1.6. Sửa tiếp phần Đề xuất (chưa ghi câu mô tả)
 
 - **Phần:** Đề xuất
-- **Màn hình:** Cấu hình menu
-- **Lần lưu:** 4
+- **Màn hình:** Không gắn một màn hình cụ thể
+- **Lần lưu:** 2
 - **Đổi dữ liệu:** Không
 
 Các lần lưu, từ cũ đến mới:
 
 - `34bcaf6` — Sửa tiếp cùng việc.
 - `b54641c` — Sửa tiếp cùng việc.
+
+### 1.7. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
+
+- **Phần:** Cấu hình workspace
+- **Màn hình:** Cấu hình menu
+- **Lần lưu:** 1
+- **Đổi dữ liệu:** Không
+
+Các lần lưu, từ cũ đến mới:
+
 - `c9ab34c` — Sửa tiếp cùng việc. Màn: Cấu hình menu.
+
+### 1.8. Sửa tiếp phần Đề xuất (chưa ghi câu mô tả)
+
+- **Phần:** Đề xuất
+- **Màn hình:** Không gắn một màn hình cụ thể
+- **Lần lưu:** 1
+- **Đổi dữ liệu:** Không
+
+Các lần lưu, từ cũ đến mới:
+
 - `f2f3a30` — Sửa tiếp cùng việc.
 
-### 1.7. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
+### 1.9. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
 
 - **Phần:** Định danh và phân quyền
 - **Màn hình:** Không gắn một màn hình cụ thể
@@ -99,7 +121,7 @@ Các lần lưu, từ cũ đến mới:
 
 - `29329b9` — Sửa tiếp cùng việc.
 
-### 1.8. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
+### 1.10. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
 
 - **Phần:** Bảng tin
 - **Màn hình:** Bảng tin, Công việc và dự án, Cấu hình menu
@@ -113,7 +135,7 @@ Các lần lưu, từ cũ đến mới:
 - `0928434` — Sửa tiếp cùng việc. Màn: Bảng tin.
 - `d69f815` — Sửa tiếp cùng việc. Màn: Bảng tin.
 
-### 1.9. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
+### 1.11. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
 
 - **Phần:** Định danh và phân quyền
 - **Màn hình:** Không gắn một màn hình cụ thể
@@ -125,7 +147,7 @@ Các lần lưu, từ cũ đến mới:
 - `a663182` — Sửa tiếp cùng việc.
 - `61ff7a3` — Sửa tiếp cùng việc.
 
-### 1.10. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
+### 1.12. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
 
 - **Phần:** Cấu hình workspace
 - **Màn hình:** Công việc và dự án, Cấu hình menu

@@ -5,8 +5,8 @@ Tổng hợp **toàn bộ commit** trên nhánh `main`, chia theo ngày và tổ
 | | |
 | --- | --- |
 | **Cửa sổ** | 24/08/2026 → 31/10/2026 |
-| **Commit** | **464** |
-| **HEAD** | `ea2200e` — docs: phieu release va audit ngay 31/10 |
+| **Commit** | **465** |
+| **HEAD** | `427206a` — docs: audit BMAD theo version 1.1 và 1.2 |
 | **Đối tượng** | BA, QA — đối soát commit theo ngày |
 
 Commit message một chữ không được diễn giải thành nghiệp vụ mới. Cột diễn giải trong phiếu ngày trích file commit đó đụng.
@@ -24,8 +24,8 @@ Commit message một chữ không được diễn giải thành nghiệp vụ m�
 | **W41** | 5–11/10/2026 | 76 | [2026-W41](./summary/2026-W41-summary.md) | [audit](./summary/2026-W41-audit.md) |
 | **W42** | 12–18/10/2026 | 2 | [2026-W42](./summary/2026-W42-summary.md) | [audit](./summary/2026-W42-audit.md) |
 | **W43** | 19–25/10/2026 | 58 | [2026-W43](./summary/2026-W43-summary.md) | [audit](./summary/2026-W43-audit.md) |
-| **W44** | 26/10–1/11/2026 | 108 | [2026-W44](./summary/2026-W44-summary.md) | [audit](./summary/2026-W44-audit.md) |
-| **Tổng** | | **464** | | |
+| **W44** | 26/10–1/11/2026 | 109 | [2026-W44](./summary/2026-W44-summary.md) | [audit](./summary/2026-W44-audit.md) |
+| **Tổng** | | **465** | | |
 
 ## Ngày
 
@@ -52,7 +52,7 @@ Commit message một chữ không được diễn giải thành nghiệp vụ m�
 ### W38
 
 - [14/09/2026](./2026-09-14/README.md) — 15 lần lưu, 12 việc · [đối soát](./2026-09-14/audit.md)
-- [15/09/2026](./2026-09-15/README.md) — 18 lần lưu, 10 việc · [đối soát](./2026-09-15/audit.md)
+- [15/09/2026](./2026-09-15/README.md) — 18 lần lưu, 12 việc · [đối soát](./2026-09-15/audit.md)
 - [16/09/2026](./2026-09-16/README.md) — 10 lần lưu, 3 việc · [đối soát](./2026-09-16/audit.md)
 - [17/09/2026](./2026-09-17/README.md) — 11 lần lưu, 3 việc · [đối soát](./2026-09-17/audit.md)
 - [18/09/2026](./2026-09-18/README.md) — 7 lần lưu, 3 việc · [đối soát](./2026-09-18/audit.md)
@@ -90,5 +90,5 @@ Commit message một chữ không được diễn giải thành nghiệp vụ m�
 - [28/10/2026](./2026-10-28/README.md) — 29 lần lưu, 14 việc · [đối soát](./2026-10-28/audit.md)
 - [29/10/2026](./2026-10-29/README.md) — 17 lần lưu, 5 việc · [đối soát](./2026-10-29/audit.md)
 - [30/10/2026](./2026-10-30/README.md) — 13 lần lưu, 13 việc · [đối soát](./2026-10-30/audit.md)
-- [31/10/2026](./2026-10-31/README.md) — 2 lần lưu, 2 việc · [đối soát](./2026-10-31/audit.md)
+- [31/10/2026](./2026-10-31/README.md) — 3 lần lưu, 3 việc · [đối soát](./2026-10-31/audit.md)
 

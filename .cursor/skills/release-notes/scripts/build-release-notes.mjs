@@ -64,9 +64,10 @@ function areaLabel(area) {
 
 function primaryArea(files) {
   const counts = new Map();
-  const source = files.some((file) => areaOf(file) !== 'tests')
-    ? files.filter((file) => areaOf(file) !== 'tests')
-    : files;
+  let source = files.filter((file) => areaOf(file) !== 'tests');
+  if (!source.length) source = files;
+  const product = source.filter((file) => !['docs', 'tooling'].includes(areaOf(file)));
+  if (product.length) source = product;
   for (const file of source) {
     const area = areaOf(file);
     counts.set(area, (counts.get(area) || 0) + 1);
@@ -466,7 +467,7 @@ function storySentences(text) {
 }
 
 function whyOf(text) {
-  const mark = /(?:^|[^\p{L}\p{N}_])(vì|để|do|because|so that)\s+([^.;]+)/iu;
+  const mark = /(?<!chỉ)(?:^|[^\p{L}\p{N}_])(vì|để|do|because|so that)\s+([^.;]+)/iu;
   const hits = [];
   for (const sentence of storySentences(text)) {
     const match = sentence.match(mark);
@@ -477,7 +478,7 @@ function whyOf(text) {
 }
 
 function effectOf(text, migs) {
-  const mark = /(?:^|[^\p{L}\p{N}_])(?:để|so that)(?=$|[^\p{L}\p{N}_])\s*(.+)$/iu;
+  const mark = /(?<!chỉ)(?:^|[^\p{L}\p{N}_])(?:để|so that)(?=$|[^\p{L}\p{N}_])\s*(.+)$/iu;
   const fromMarker = [];
   for (const sentence of storySentences(text)) {
     const match = sentence.match(mark);

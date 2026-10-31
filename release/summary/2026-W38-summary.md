@@ -13,7 +13,7 @@
 | Ngày | Thứ | Commit | Nhóm việc | Phiếu |
 | --- | --- | ---: | ---: | --- |
 | **14/09/2026** | Thứ 2 | 15 | 12 | [`2026-09-14`](../2026-09-14/README.md) |
-| **15/09/2026** | Thứ 3 | 18 | 10 | [`2026-09-15`](../2026-09-15/README.md) |
+| **15/09/2026** | Thứ 3 | 18 | 12 | [`2026-09-15`](../2026-09-15/README.md) |
 | **16/09/2026** | Thứ 4 | 10 | 3 | [`2026-09-16`](../2026-09-16/README.md) |
 | **17/09/2026** | Thứ 5 | 11 | 3 | [`2026-09-17`](../2026-09-17/README.md) |
 | **18/09/2026** | Thứ 6 | 7 | 3 | [`2026-09-18`](../2026-09-18/README.md) |
@@ -28,12 +28,11 @@
 | Định danh và phân quyền | 6 |
 | Đánh giá | 3 |
 | Dự án và công việc | 21 |
-| Cấu hình workspace | 2 |
+| Cấu hình workspace | 3 |
 | Tổng quan | 3 |
 | Đề xuất | 4 |
 | Nền tảng | 3 |
 | Giao diện gốc | 1 |
-| Tài liệu | 1 |
 | Kiểm thử | 1 |
 
 ## Tính năng lớn
@@ -70,11 +69,13 @@
 - **1.3.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
 - **1.4.** Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (1 lần lưu)
 - **1.5.** Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (1 lần lưu)
-- **1.6.** Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (4 lần lưu)
-- **1.7.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
-- **1.8.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (4 lần lưu)
-- **1.9.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (2 lần lưu)
-- **1.10.** Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (2 lần lưu)
+- **1.6.** Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (2 lần lưu)
+- **1.7.** Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
+- **1.8.** Sửa tiếp phần Đề xuất (chưa ghi câu mô tả) (1 lần lưu)
+- **1.9.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
+- **1.10.** Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (4 lần lưu)
+- **1.11.** Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (2 lần lưu)
+- **1.12.** Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (2 lần lưu)
 
 ### 16/09/2026
 

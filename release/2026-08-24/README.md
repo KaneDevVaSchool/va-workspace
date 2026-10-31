@@ -19,7 +19,7 @@ Phiếu tuần: [2026-W35](../summary/2026-W35-summary.md) · Đối soát: [aud
 1.11. **Định danh và phân quyền.** Màn: Quyền và nhật ký. Hoàn thiện ma trận phân quyền và quản lý nhóm (1 lần lưu)
 1.12. **Định danh và phân quyền.** Màn: Quyền và nhật ký, Cấu hình menu. Header mới, shortcut cá nhân và nhật ký hoạt động (1 lần lưu)
 1.13. **Định danh và phân quyền.** Màn: Quyền và nhật ký. Export excel nhật ký hoạt động + lọc nâng cao (1 lần lưu)
-1.14. **Tài liệu.** Màn: Quyền và nhật ký. Chuẩn hoá bảng dữ liệu theo pattern data-table + export Excel (1 lần lưu)
+1.14. **Định danh và phân quyền.** Màn: Quyền và nhật ký. Chuẩn hoá bảng dữ liệu theo pattern data-table + export Excel (1 lần lưu)
 1.15. **Giao diện gốc.** Trang Tổng quan (Home) mới với widget dòng hoạt động (1 lần lưu)
 1.16. **Định danh và phân quyền.** Màn: Quyền và nhật ký. Nâng cấp trang Ma trận phân quyền theo pattern data-table (1 lần lưu)
 1.17. **Cấu hình workspace.** Màn: Quyền và nhật ký, Cấu hình menu. Hub cấu hình workspace theo phòng ban (1 lần lưu)
@@ -174,7 +174,7 @@ Các lần lưu, từ cũ đến mới:
 
 ### 1.14. Chuẩn hoá bảng dữ liệu theo pattern data-table + export Excel
 
-- **Phần:** Tài liệu
+- **Phần:** Định danh và phân quyền
 - **Màn hình:** Quyền và nhật ký
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không

@@ -78,11 +78,11 @@ Giao diện gốc · Không gắn màn hình · 1 lần lưu
 
 ### 1.6. Sửa tiếp phần Đề xuất (chưa ghi câu mô tả)
 
-Đề xuất · Cấu hình menu · 4 lần lưu
+Đề xuất · Không gắn màn hình · 2 lần lưu
 
 | | |
 | --- | --- |
-| **Đổi gì** | Sửa tiếp cùng việc trên màn Cấu hình menu, đụng FeatureRequest/FeatureRequestController.php, components/DataStreamWidget.vue, FeatureRequest/FeatureRequestController.php, FeatureRequest/FeatureRequestService.php (+5). |
+| **Đổi gì** | Sửa tiếp cùng việc không gắn màn hình, đụng FeatureRequest/FeatureRequestController.php, components/DataStreamWidget.vue, FeatureRequest/FeatureRequestController.php, FeatureRequest/FeatureRequestService.php (+1). |
 | **Vì sao** | Chưa ghi lý do trong commit |
 | **Tác dụng** | Chưa ghi tác dụng trong commit |
 
@@ -90,10 +90,36 @@ Giao diện gốc · Không gắn màn hình · 1 lần lưu
 | --- | --- | --- | --- |
 | 09:56 | `34bcaf6` | Sửa tiếp | FeatureRequest/FeatureRequestController.php, components/DataStreamWidget.vue |
 | 10:12 | `b54641c` | Sửa tiếp | FeatureRequest/FeatureRequestController.php, FeatureRequest/FeatureRequestService.php, FeatureRequest/FeatureRequestSuperAdmin.vue |
+
+### 1.7. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
+
+Cấu hình workspace · Cấu hình menu · 1 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc trên màn Cấu hình menu, đụng .claude/CLAUDE.md, WorkspaceConfig/GlobalMenuVisibilityService.php, WorkspaceConfig/WorkspaceConfigGlobalMenuVisibilityTest.php. |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Chưa ghi tác dụng trong commit |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
 | 10:25 | `c9ab34c` | Sửa tiếp | .claude/CLAUDE.md, WorkspaceConfig/GlobalMenuVisibilityService.php, WorkspaceConfig/WorkspaceConfigGlobalMenuVisibilityTest.php |
+
+### 1.8. Sửa tiếp phần Đề xuất (chưa ghi câu mô tả)
+
+Đề xuất · Không gắn màn hình · 1 lần lưu
+
+| | |
+| --- | --- |
+| **Đổi gì** | Sửa tiếp cùng việc không gắn màn hình, đụng FeatureRequest/FeatureRequestSuperAdmin.vue. |
+| **Vì sao** | Chưa ghi lý do trong commit |
+| **Tác dụng** | Chưa ghi tác dụng trong commit |
+
+| Giờ | Mã | Loại | Chỗ sửa |
+| --- | --- | --- | --- |
 | 10:29 | `f2f3a30` | Sửa tiếp | FeatureRequest/FeatureRequestSuperAdmin.vue |
 
-### 1.7. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
+### 1.9. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
 
 Định danh và phân quyền · Không gắn màn hình · 1 lần lưu
 
@@ -107,7 +133,7 @@ Giao diện gốc · Không gắn màn hình · 1 lần lưu
 | --- | --- | --- | --- |
 | 10:55 | `29329b9` | Sửa tiếp | Identity/2026_09_15_000001_widen_avatar_url_on_users_table.php |
 
-### 1.8. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
+### 1.10. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả)
 
 Bảng tin · Bảng tin, Công việc và dự án, Cấu hình menu · 4 lần lưu
 
@@ -124,7 +150,7 @@ Bảng tin · Bảng tin, Công việc và dự án, Cấu hình menu · 4 lần
 | 13:54 | `0928434` | Sửa tiếp | Social/SocialEmojiPicker.vue, Social/SocialGifPicker.vue |
 | 13:55 | `d69f815` | Sửa tiếp | Social/SocialGifPicker.vue |
 
-### 1.9. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
+### 1.11. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
 
 Định danh và phân quyền · Không gắn màn hình · 2 lần lưu
 
@@ -139,7 +165,7 @@ Bảng tin · Bảng tin, Công việc và dự án, Cấu hình menu · 4 lần
 | 15:07 | `a663182` | Sửa tiếp | Identity/DepartmentSeeder.php, Identity/KinhDoanhTeamSeeder.php, seeders/DatabaseSeeder.php |
 | 15:14 | `61ff7a3` | Sửa tiếp | Identity/KinhDoanhTeamSeeder.php |
 
-### 1.10. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
+### 1.12. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
 
 Cấu hình workspace · Công việc và dự án, Cấu hình menu · 2 lần lưu
 

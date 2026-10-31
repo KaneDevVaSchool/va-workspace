@@ -25,13 +25,13 @@
 | Module | Commit |
 | --- | ---: |
 | Bảng tin | 12 |
-| Định danh và phân quyền | 15 |
+| Định danh và phân quyền | 16 |
 | Đánh giá | 11 |
 | Dự án và công việc | 23 |
 | Cấu hình workspace | 8 |
 | Nền tảng | 1 |
 | Giao diện gốc | 12 |
-| Tài liệu | 10 |
+| Tài liệu | 9 |
 | Khác | 5 |
 | Khác | 1 |
 
@@ -50,6 +50,7 @@
 | 24/08/2026 | Định danh và phân quyền | Hoàn thiện ma trận phân quyền và quản lý nhóm | 1 |
 | 24/08/2026 | Định danh và phân quyền | Header mới, shortcut cá nhân và nhật ký hoạt động | 1 |
 | 24/08/2026 | Định danh và phân quyền | Export excel nhật ký hoạt động + lọc nâng cao | 1 |
+| 24/08/2026 | Định danh và phân quyền | Chuẩn hoá bảng dữ liệu theo pattern data-table + export Excel | 1 |
 | 24/08/2026 | Giao diện gốc | Trang Tổng quan (Home) mới với widget dòng hoạt động | 1 |
 | 24/08/2026 | Định danh và phân quyền | Nâng cấp trang Ma trận phân quyền theo pattern data-table | 1 |
 | 24/08/2026 | Cấu hình workspace | Hub cấu hình workspace theo phòng ban | 1 |
