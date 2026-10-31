@@ -1,6 +1,6 @@
 # 30/10/2026 — VA Workspace
 
-Hôm nay có **11 lần lưu**, gom thành **11 việc**.
+Hôm nay có **13 lần lưu**, gom thành **13 việc**.
 
 Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [audit.md](./audit.md) · [Mục lục](../README.md)
 
@@ -17,6 +17,8 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 9. **Bảng tin.** Màn: Bảng tin. Implement colleague tagging feature with mentions support (1 lần lưu)
 10. **Bảng tin.** Màn: Nhóm, Bảng tin. Nhóm bảng tin theo pháp nhân VM, Viễn Đông, Hoàng Việt và CIT (1 lần lưu)
 11. **Tổng quan.** Màn: Hồ sơ cá nhân, Tổng quan của tôi. Đẩy yêu cầu sửa hồ sơ sang hàng đợi HCNS (1 lần lưu)
+12. **Tài liệu.** Phiếu release và audit ngày 30/10 (1 lần lưu)
+13. **Chấm công.** Màn: Hồ sơ cá nhân, Tổng quan của tôi. Unify 'hired_at' and 'actual_start_date' fields in employee profile (1 lần lưu)
 
 ## Từng việc
 
@@ -140,6 +142,28 @@ Các lần lưu, từ cũ đến mới:
 Các lần lưu, từ cũ đến mới:
 
 - `a5f506e` — Đẩy yêu cầu sửa hồ sơ sang hàng đợi HCNS
+
+### 12. Phiếu release và audit ngày 30/10
+
+- **Phần:** Tài liệu
+- **Màn hình:** Không gắn một màn hình cụ thể
+- **Lần lưu:** 1
+- **Đổi dữ liệu:** Không
+
+Các lần lưu, từ cũ đến mới:
+
+- `0933b39` — Phiếu release và audit ngày 30/10
+
+### 13. Unify 'hired_at' and 'actual_start_date' fields in employee profile
+
+- **Phần:** Chấm công
+- **Màn hình:** Hồ sơ cá nhân, Tổng quan của tôi
+- **Lần lưu:** 1
+- **Đổi dữ liệu:** Không
+
+Các lần lưu, từ cũ đến mới:
+
+- `130f9a4` — Unify 'hired_at' and 'actual_start_date' fields in employee profile
 
 ## Khi đưa lên máy chủ
 

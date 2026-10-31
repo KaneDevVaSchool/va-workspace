@@ -11,7 +11,7 @@ Phiếu tuần: [2026-W36](../summary/2026-W36-summary.md) · Đối soát: [aud
 3. **Đánh giá.** PDF chung + xuất PDF tổng hợp đánh giá (1 lần lưu)
 4. **Báo cáo.** Màn: Quyền và nhật ký, Báo cáo. Khoá kỳ báo cáo đã lưu + phụ lục cột tiêu chí (1 lần lưu)
 5. **Báo cáo.** Màn: Báo cáo. Kết nối bảng Đánh giá nhân sự với báo cáo (1 lần lưu)
-6. **Cấu hình workspace.** Màn: Cấu hình menu. Gỡ/thêm mục sidebar tương ứng (1 lần lưu)
+6. **Cấu hình workspace.** Màn: Cấu hình đơn từ, Cấu hình menu. Gỡ/thêm mục sidebar tương ứng (1 lần lưu)
 7. **Tài liệu.** Cập nhật tài liệu (1 lần lưu)
 8. **Dự án và công việc.** Màn: Công việc và dự án, Cấu hình menu. Trang Chi tiết công việc độc lập (1 lần lưu)
 
@@ -75,7 +75,7 @@ Các lần lưu, từ cũ đến mới:
 ### 6. Gỡ/thêm mục sidebar tương ứng
 
 - **Phần:** Cấu hình workspace
-- **Màn hình:** Cấu hình menu
+- **Màn hình:** Cấu hình đơn từ, Cấu hình menu
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 

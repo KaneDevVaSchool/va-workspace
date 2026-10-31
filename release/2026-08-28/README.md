@@ -16,7 +16,7 @@ Phiếu tuần: [2026-W35](../summary/2026-W35-summary.md) · Đối soát: [aud
 8. **Dự án và công việc.** Màn: Công việc và dự án. PR4 - trang "Tất cả công việc" (TaskList.vue) (1 lần lưu)
 9. **Dự án và công việc.** Màn: Công việc và dự án. PR5 - ProjectQuickActionModals dùng API Task thật (1 lần lưu)
 10. **Dự án và công việc.** Màn: Công việc và dự án. Cập nhật overview + README — Task thật (Giai đoạn 2) (1 lần lưu)
-11. **Dự án và công việc.** Màn: Công việc và dự án, Cấu hình menu. Tab lọc nhanh, Kanban và nhóm theo dự án trên TaskList (1 lần lưu)
+11. **Dự án và công việc.** Màn: Công việc và dự án, Cấu hình đơn từ, Cấu hình menu. Tab lọc nhanh, Kanban và nhóm theo dự án trên TaskList (1 lần lưu)
 12. **Dự án và công việc.** Màn: Công việc và dự án. TaskSeeder + hoàn thiện Kanban/quick-actions cho TaskList (1 lần lưu)
 13. **Dự án và công việc.** Màn: Công việc và dự án. PR1 - migration + model nền tảng mở rộng Task (1 lần lưu)
 14. **Dự án và công việc.** Màn: Công việc và dự án. PR2 - present() + validate + tính toán runtime cho Task (1 lần lưu)
@@ -29,7 +29,7 @@ Phiếu tuần: [2026-W35](../summary/2026-W35-summary.md) · Đối soát: [aud
 21. **Tài liệu.** Lưu đề xuất UI Chuyển giao (Task Delegation §6) làm roadmap tương lai (1 lần lưu)
 22. **Dự án và công việc.** Màn: Công việc và dự án. PR8 - Export/Import Excel cho Task (Modal "Dữ liệu") (1 lần lưu)
 23. **Khác.** Merge: mở rộng entity Task — PR1-PR8 (migration, backend, UI, attachments, worklogs, scores, filter/sort/bulk, Excel) (1 lần lưu)
-24. **Cấu hình workspace.** Màn: Cấu hình menu. Menu toàn hệ thống áp dụng đúng cho super_admin + fix thứ tự sidebar (1 lần lưu)
+24. **Cấu hình workspace.** Màn: Cấu hình đơn từ, Cấu hình menu. Menu toàn hệ thống áp dụng đúng cho super_admin + fix thứ tự sidebar (1 lần lưu)
 25. **Khác.** Merge: fix menu toàn hệ thống áp dụng cho super_admin + thứ tự sidebar (1 lần lưu)
 
 ## Từng việc
@@ -147,7 +147,7 @@ Các lần lưu, từ cũ đến mới:
 ### 11. Tab lọc nhanh, Kanban và nhóm theo dự án trên TaskList
 
 - **Phần:** Dự án và công việc
-- **Màn hình:** Công việc và dự án, Cấu hình menu
+- **Màn hình:** Công việc và dự án, Cấu hình đơn từ, Cấu hình menu
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 
@@ -290,7 +290,7 @@ Các lần lưu, từ cũ đến mới:
 ### 24. Menu toàn hệ thống áp dụng đúng cho super_admin + fix thứ tự sidebar
 
 - **Phần:** Cấu hình workspace
-- **Màn hình:** Cấu hình menu
+- **Màn hình:** Cấu hình đơn từ, Cấu hình menu
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 

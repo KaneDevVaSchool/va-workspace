@@ -13,8 +13,8 @@ Phiếu tuần: [2026-W35](../summary/2026-W35-summary.md) · Đối soát: [aud
 5. **Dự án và công việc.** Màn: Công việc và dự án. Dữ liệu mẫu cho Lịch công việc (theo sau Calendar View) (1 lần lưu)
 6. **Tài liệu.** Cập nhật overview theo Task Delegation/Calendar/Dual Progress + rà soát repo (1 lần lưu)
 7. **Khác.** Hook tự động cảnh báo vi phạm CLAUDE.md mục 2/12 sau mỗi Edit/Write .vue|.css (1 lần lưu)
-8. **Dự án và công việc.** Màn: Tiêu chí đánh giá, Công việc và dự án, Cấu hình menu. Task đứng độc lập + watchers/collaborators + creation settings (1 lần lưu)
-9. **Đánh giá.** Màn: Tiêu chí đánh giá, Công việc và dự án, Cấu hình menu. Bộ điểm tiêu chí đánh giá + mức độ ưu tiên task nâng cao (1 lần lưu)
+8. **Dự án và công việc.** Màn: Tiêu chí đánh giá, Công việc và dự án. Task đứng độc lập + watchers/collaborators + creation settings (1 lần lưu)
+9. **Đánh giá.** Màn: Tiêu chí đánh giá, Công việc và dự án, Cấu hình đơn từ, Cấu hình menu. Bộ điểm tiêu chí đánh giá + mức độ ưu tiên task nâng cao (1 lần lưu)
 
 ## Từng việc
 
@@ -98,7 +98,7 @@ Các lần lưu, từ cũ đến mới:
 ### 8. Task đứng độc lập + watchers/collaborators + creation settings
 
 - **Phần:** Dự án và công việc
-- **Màn hình:** Tiêu chí đánh giá, Công việc và dự án, Cấu hình menu
+- **Màn hình:** Tiêu chí đánh giá, Công việc và dự án
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu; Đổi bảng công việc; Đổi bảng công việc
 
@@ -109,7 +109,7 @@ Các lần lưu, từ cũ đến mới:
 ### 9. Bộ điểm tiêu chí đánh giá + mức độ ưu tiên task nâng cao
 
 - **Phần:** Đánh giá
-- **Màn hình:** Tiêu chí đánh giá, Công việc và dự án, Cấu hình menu
+- **Màn hình:** Tiêu chí đánh giá, Công việc và dự án, Cấu hình đơn từ, Cấu hình menu
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu
 

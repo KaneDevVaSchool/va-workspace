@@ -4,9 +4,9 @@ Tổng hợp **toàn bộ commit** trên nhánh `main`, chia theo ngày và tổ
 
 | | |
 | --- | --- |
-| **Cửa sổ** | 24/08/2026 → 30/10/2026 |
-| **Commit** | **460** |
-| **HEAD** | `a5f506e` — feat(dashboard): đẩy yêu cầu sửa hồ sơ sang hàng đợi HCNS |
+| **Cửa sổ** | 24/08/2026 → 31/10/2026 |
+| **Commit** | **463** |
+| **HEAD** | `fe9e4a3` — feat(attendance): giữ UUID khi trùng email, ẩn menu đơn từ chưa mở và giải thích xuất PDF |
 | **Đối tượng** | BA, QA — đối soát commit theo ngày |
 
 Commit message một chữ không được diễn giải thành nghiệp vụ mới. Cột diễn giải trong phiếu ngày trích file commit đó đụng.
@@ -24,8 +24,8 @@ Commit message một chữ không được diễn giải thành nghiệp vụ m�
 | **W41** | 5–11/10/2026 | 76 | [2026-W41](./summary/2026-W41-summary.md) | [audit](./summary/2026-W41-audit.md) |
 | **W42** | 12–18/10/2026 | 2 | [2026-W42](./summary/2026-W42-summary.md) | [audit](./summary/2026-W42-audit.md) |
 | **W43** | 19–25/10/2026 | 58 | [2026-W43](./summary/2026-W43-summary.md) | [audit](./summary/2026-W43-audit.md) |
-| **W44** | 26/10–1/11/2026 | 104 | [2026-W44](./summary/2026-W44-summary.md) | [audit](./summary/2026-W44-audit.md) |
-| **Tổng** | | **460** | | |
+| **W44** | 26/10–1/11/2026 | 107 | [2026-W44](./summary/2026-W44-summary.md) | [audit](./summary/2026-W44-audit.md) |
+| **Tổng** | | **463** | | |
 
 ## Ngày
 
@@ -89,5 +89,6 @@ Commit message một chữ không được diễn giải thành nghiệp vụ m�
 - [27/10/2026](./2026-10-27/README.md) — 30 lần lưu, 17 việc · [đối soát](./2026-10-27/audit.md)
 - [28/10/2026](./2026-10-28/README.md) — 29 lần lưu, 14 việc · [đối soát](./2026-10-28/audit.md)
 - [29/10/2026](./2026-10-29/README.md) — 17 lần lưu, 5 việc · [đối soát](./2026-10-29/audit.md)
-- [30/10/2026](./2026-10-30/README.md) — 11 lần lưu, 11 việc · [đối soát](./2026-10-30/audit.md)
+- [30/10/2026](./2026-10-30/README.md) — 13 lần lưu, 13 việc · [đối soát](./2026-10-30/audit.md)
+- [31/10/2026](./2026-10-31/README.md) — 1 lần lưu, 1 việc · [đối soát](./2026-10-31/audit.md)
 

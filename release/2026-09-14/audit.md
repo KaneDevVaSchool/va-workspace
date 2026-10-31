@@ -6,7 +6,7 @@
 
 | # | Loại | Phần | Màn hình | Việc | Lần lưu | Đổi dữ liệu |
 | --- | --- | --- | --- | --- | ---: | --- |
-| 1 | Thêm | Tổng quan | Quyền và nhật ký, Công việc và dự án, Hồ sơ đăng nhập, Tổng quan của tôi, Cấu hình menu | Seed nhân sự CNTT, xuất Excel Credential, quản lý task nhanh, cấu hình menu sidebar | 1 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
+| 1 | Thêm | Tổng quan | Quyền và nhật ký, Công việc và dự án, Cấu hình đơn từ, Hồ sơ đăng nhập, Tổng quan của tôi, Cấu hình menu | Seed nhân sự CNTT, xuất Excel Credential, quản lý task nhanh, cấu hình menu sidebar | 1 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
 | 2 | Sửa | Dự án và công việc | Quyền và nhật ký, Công việc và dự án, Hồ sơ đăng nhập | Drop đúng tên FK tường minh khi rollback 3 migration | 2 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi bảng công việc |
 | 3 | Sửa tiếp | Đánh giá | Không gắn màn hình | Sửa tiếp phần Đánh giá (chưa ghi câu mô tả) | 2 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
 | 4 | Sửa | Đánh giá | Không gắn màn hình | Drop bảng pivot mồ côi trước khi rollback evaluation_criteria/positions | 1 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
@@ -23,7 +23,7 @@
 
 | Giờ | Mã | Loại | Phần | Màn hình | Đã ghi | Chỗ sửa |
 | --- | --- | --- | --- | --- | --- | --- |
-| 14:54 | `1d1d158` | Thêm | Tổng quan | Quyền và nhật ký, Công việc và dự án, Hồ sơ đăng nhập, Tổng quan của tôi, Cấu hình menu | Seed nhân sự CNTT, xuất Excel Credential, quản lý task nhanh, cấu hình menu sidebar | Credential/CredentialEnums.php, Credential/CredentialController.php, Credential/CredentialViewerController.php, Credential/StoreCredentialRequest.php (+108) |
+| 14:54 | `1d1d158` | Thêm | Tổng quan | Quyền và nhật ký, Công việc và dự án, Cấu hình đơn từ, Hồ sơ đăng nhập, Tổng quan của tôi, Cấu hình menu | Seed nhân sự CNTT, xuất Excel Credential, quản lý task nhanh, cấu hình menu sidebar | Credential/CredentialEnums.php, Credential/CredentialController.php, Credential/CredentialViewerController.php, Credential/StoreCredentialRequest.php (+108) |
 | 15:05 | `44ea7ae` | Sửa | Dự án và công việc | Công việc và dự án | Drop đúng tên FK tường minh khi rollback 3 migration | Project/2026_08_27_100005_add_departments_to_projects_table.php, Project/2026_08_28_100001_upgrade_project_create_fields.php, Project/2026_09_09_100002_add_folder_id_to_project_attachments_table.php |
 | 15:30 | `225b03b` | Sửa tiếp | Dự án và công việc | Quyền và nhật ký, Công việc và dự án, Hồ sơ đăng nhập | Sửa tiếp cùng việc. Màn: Quyền và nhật ký, Công việc và dự án, Hồ sơ đăng nhập. | Credential/CredentialProviderService.php, Credential/CredentialService.php, Evaluation/EvaluationCriteriaController.php, Identity/ShortcutController.php (+22) |
 | 15:32 | `704e310` | Sửa tiếp | Đánh giá | Không gắn màn hình | Sửa tiếp cùng việc. | Evaluation/2026_08_26_150001_add_unique_name_per_department_to_evaluation_criteria_table.php |

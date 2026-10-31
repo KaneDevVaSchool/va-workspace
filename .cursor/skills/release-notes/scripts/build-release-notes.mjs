@@ -138,11 +138,12 @@ const SCREEN_RULES = [
   [/EvaluationScoreKit|WorkspaceConfigEvaluation|evaluation-templates/i, 'Tiêu chí đánh giá'],
   [/Modules\/Report\/|ReportList|ReportCreate/i, 'Báo cáo'],
   [/TaskList|TaskCreate|ProjectList|Modules\/Project\//i, 'Công việc và dự án'],
+  [/DonTuConfig|DonTuSidebarMenuCatalog|sidebarMenus\.js/i, 'Cấu hình đơn từ'],
   [/Modules\/DonTu\/|DonTuStatus/i, 'Đơn từ'],
   [/Modules\/Credential\//i, 'Hồ sơ đăng nhập'],
   [/EmployeeProfile/i, 'Hồ sơ cá nhân'],
   [/DashboardMe|Modules\/Dashboard\//i, 'Tổng quan của tôi'],
-  [/WorkspaceConfig|AppSidebar|navigation/i, 'Cấu hình menu'],
+  [/WorkspaceConfig\/(?!resources\/js\/constants\/sidebarMenus)|AppSidebar|navigation/i, 'Cấu hình menu'],
 ];
 
 function screensOf(files) {

@@ -17,6 +17,8 @@
 | 9 | Thêm | Bảng tin | Bảng tin | Implement colleague tagging feature with mentions support | 1 | Không |
 | 10 | Thêm | Bảng tin | Nhóm, Bảng tin | Nhóm bảng tin theo pháp nhân VM, Viễn Đông, Hoàng Việt và CIT | 1 | Đổi cấu trúc dữ liệu |
 | 11 | Thêm | Tổng quan | Hồ sơ cá nhân, Tổng quan của tôi | Đẩy yêu cầu sửa hồ sơ sang hàng đợi HCNS | 1 | Đổi cấu trúc dữ liệu |
+| 12 | Tài liệu | Tài liệu | Không gắn màn hình | Phiếu release và audit ngày 30/10 | 1 | Không |
+| 13 | Thêm | Chấm công | Hồ sơ cá nhân, Tổng quan của tôi | Unify 'hired_at' and 'actual_start_date' fields in employee profile | 1 | Không |
 
 ## Từng lần lưu
 
@@ -33,4 +35,6 @@
 | 14:53 | `5c46bc8` | Thêm | Bảng tin | Bảng tin | Implement colleague tagging feature with mentions support | Social/SocialCommentController.php, Social/SocialCommentService.php, Social/SocialCommentComposer.vue, Social/SocialCommentItem.vue (+7) |
 | 15:52 | `40e219f` | Thêm | Bảng tin | Nhóm, Bảng tin | Nhóm bảng tin theo pháp nhân VM, Viễn Đông, Hoàng Việt và CIT | Social/SocialGroupController.php, Social/StoreSocialGroupRequest.php, Social/UpdateSocialGroupRequest.php, Social/SocialGroup.php (+11) |
 | 15:52 | `a5f506e` | Thêm | Tổng quan | Hồ sơ cá nhân, Tổng quan của tôi | Đẩy yêu cầu sửa hồ sơ sang hàng đợi HCNS | Attendance/EmployeeProfile.vue, Dashboard/DashboardProfileChangeRequest.php, Dashboard/MyDashboardProfileService.php, Dashboard/2026_10_30_160100_add_hrm_synced_at_to_dashboard_profile_change_requests.php (+4) |
+| 15:56 | `0933b39` | Tài liệu | Tài liệu | Không gắn màn hình | Phiếu release và audit ngày 30/10 | scripts/build-release-notes.mjs, 2026-08-25/README.md, 2026-08-25/audit.md, 2026-08-26/README.md (+25) |
+| 16:57 | `130f9a4` | Thêm | Chấm công | Hồ sơ cá nhân, Tổng quan của tôi | Unify 'hired_at' and 'actual_start_date' fields in employee profile | Attendance/EmployeeProfile.vue, Dashboard/MyDashboardProfileService.php, Identity/HrmEmployeeDirectory.php, Identity/HrmEmployeeDirectoryTest.php |
 

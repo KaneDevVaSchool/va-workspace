@@ -13,7 +13,7 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 5. **Giao diện gốc.** Màn: Chat, Bảng tin. Sửa tiếp phần Giao diện gốc (chưa ghi câu mô tả) (3 lần lưu)
 6. **Giao diện gốc.** Màn: Bảng tin, Tổng quan của tôi. Tab bar PWA sát đáy; overlay sinh nhật đồng nghiệp (1 lần lưu)
 7. **Khác.** Script prod-sync-code khi git pull bi chan boi sua local (2 lần lưu)
-8. **Đơn từ.** Màn: Đơn từ, Tổng quan của tôi, Cấu hình menu. Thêm hub xem trước Đơn từ và kế hoạch thiết kế chi tiết (5 lần lưu)
+8. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ, Tổng quan của tôi, Cấu hình menu. Thêm hub xem trước Đơn từ và kế hoạch thiết kế chi tiết (5 lần lưu)
 
 ## Từng việc
 
@@ -102,17 +102,17 @@ Các lần lưu, từ cũ đến mới:
 ### 8. Thêm hub xem trước Đơn từ và kế hoạch thiết kế chi tiết
 
 - **Phần:** Đơn từ
-- **Màn hình:** Đơn từ, Tổng quan của tôi, Cấu hình menu
+- **Màn hình:** Cấu hình đơn từ, Đơn từ, Tổng quan của tôi, Cấu hình menu
 - **Lần lưu:** 5
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu
 
 Các lần lưu, từ cũ đến mới:
 
 - `7b14927` — Thêm hub xem trước Đơn từ và kế hoạch thiết kế chi tiết
-- `07f2a5c` — Sửa tiếp cùng việc. Màn: Đơn từ, Tổng quan của tôi, Cấu hình menu.
-- `0402962` — Sửa tiếp cùng việc. Màn: Đơn từ, Cấu hình menu.
-- `1e0b4b7` — Sửa tiếp cùng việc. Màn: Đơn từ, Cấu hình menu.
-- `c790213` — Sửa tiếp cùng việc. Màn: Đơn từ.
+- `07f2a5c` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ, Tổng quan của tôi, Cấu hình menu.
+- `0402962` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ, Cấu hình menu.
+- `1e0b4b7` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ, Cấu hình menu.
+- `c790213` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ.
 
 ## Khi đưa lên máy chủ
 

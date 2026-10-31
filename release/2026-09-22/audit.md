@@ -11,8 +11,8 @@
 | 3 | Sửa tiếp | Chat | Chat | Sửa tiếp phần Chat (chưa ghi câu mô tả) | 1 | Không |
 | 4 | Sửa tiếp | Nền tảng | Không gắn màn hình | Sửa tiếp phần Nền tảng (chưa ghi câu mô tả) | 1 | Không |
 | 5 | Sửa tiếp | Chat | Chat | Sửa tiếp phần Chat (chưa ghi câu mô tả) | 2 | Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu |
-| 6 | Sửa tiếp | Dự án và công việc | Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Công việc và dự án, Tổng quan của tôi, Cấu hình menu | Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) | 1 | Không |
-| 7 | Sửa tiếp | Cấu hình workspace | Cấu hình menu | Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) | 1 | Không |
+| 6 | Sửa tiếp | Dự án và công việc | Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Công việc và dự án, Cấu hình đơn từ, Tổng quan của tôi, Cấu hình menu | Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) | 1 | Không |
+| 7 | Sửa tiếp | Cấu hình workspace | Cấu hình đơn từ, Cấu hình menu | Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) | 1 | Không |
 
 ## Từng lần lưu
 
@@ -24,6 +24,6 @@
 | 10:24 | `c32aaeb` | Sửa tiếp | Nền tảng | Không gắn màn hình | Sửa tiếp cùng việc. | config/broadcasting.php |
 | 10:40 | `5bdc32d` | Sửa tiếp | Chat | Chat | Sửa tiếp cùng việc. Màn: Chat. | Chat/MessageUpdated.php, Chat/ChatMessageController.php, Chat/SendChatMessageRequest.php, Chat/UpdateChatMessageRequest.php (+23) |
 | 10:48 | `efe822b` | Sửa tiếp | Chat | Chat | Sửa tiếp cùng việc. Màn: Chat. | Chat/SendChatMessageRequest.php, Chat/Message.php, Chat/MessageAttachment.php, Chat/MessageRepository.php (+8) |
-| 11:28 | `62a8ed3` | Sửa tiếp | Dự án và công việc | Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Công việc và dự án, Tổng quan của tôi, Cấu hình menu | Sửa tiếp cùng việc. Màn: Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Công việc và dự án, Tổng quan của tôi, Cấu hình menu. | Dashboard/DashboardCompany.vue, Evaluation/EvaluationView.vue, Evaluation/WorkspaceConfigEvaluation.vue, FeatureRequest/FeatureRequestService.php (+28) |
-| 15:46 | `2125b0d` | Sửa tiếp | Cấu hình workspace | Cấu hình menu | Sửa tiếp cùng việc. Màn: Cấu hình menu. | WorkspaceConfig/DepartmentSidebarConfigService.php, WorkspaceConfig/GlobalMenuVisibilityService.php, WorkspaceConfig/sidebarMenus.js, components/AppSidebar.vue (+3) |
+| 11:28 | `62a8ed3` | Sửa tiếp | Dự án và công việc | Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Công việc và dự án, Cấu hình đơn từ, Tổng quan của tôi, Cấu hình menu | Sửa tiếp cùng việc. Màn: Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Công việc và dự án, Cấu hình đơn từ, Tổng quan của tôi, Cấu hình menu. | Dashboard/DashboardCompany.vue, Evaluation/EvaluationView.vue, Evaluation/WorkspaceConfigEvaluation.vue, FeatureRequest/FeatureRequestService.php (+28) |
+| 15:46 | `2125b0d` | Sửa tiếp | Cấu hình workspace | Cấu hình đơn từ, Cấu hình menu | Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Cấu hình menu. | WorkspaceConfig/DepartmentSidebarConfigService.php, WorkspaceConfig/GlobalMenuVisibilityService.php, WorkspaceConfig/sidebarMenus.js, components/AppSidebar.vue (+3) |
 

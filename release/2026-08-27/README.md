@@ -8,7 +8,7 @@ Phiếu tuần: [2026-W35](../summary/2026-W35-summary.md) · Đối soát: [aud
 
 1. **Giao diện gốc.** Thêm màu tertiary và gold vào theme.css (1 lần lưu)
 2. **Cấu hình workspace.** Màn: Cấu hình menu. Sửa toggle ẩn/hiện menu toàn hệ thống và bỏ hint Brave không dùng (1 lần lưu)
-3. **Đánh giá.** Màn: Tiêu chí đánh giá, Cấu hình menu. Bỏ CRUD tay Vị trí đánh giá, đổi trọng số sang %, gộp field tùy biến (1 lần lưu)
+3. **Đánh giá.** Màn: Tiêu chí đánh giá. Bỏ CRUD tay Vị trí đánh giá, đổi trọng số sang %, gộp field tùy biến (1 lần lưu)
 4. **Dự án và công việc.** Màn: Công việc và dự án, Cấu hình menu. Thêm module Dự án (giai đoạn 1 — CRUD) (1 lần lưu)
 
 ## Từng việc
@@ -38,7 +38,7 @@ Các lần lưu, từ cũ đến mới:
 ### 3. Bỏ CRUD tay Vị trí đánh giá, đổi trọng số sang %, gộp field tùy biến
 
 - **Phần:** Đánh giá
-- **Màn hình:** Tiêu chí đánh giá, Cấu hình menu
+- **Màn hình:** Tiêu chí đánh giá
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Đổi bảng mẫu đánh giá; Đổi cấu trúc dữ liệu
 

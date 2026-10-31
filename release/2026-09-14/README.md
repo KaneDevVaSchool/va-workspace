@@ -6,7 +6,7 @@ Phiếu tuần: [2026-W38](../summary/2026-W38-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Tổng quan.** Màn: Quyền và nhật ký, Công việc và dự án, Hồ sơ đăng nhập, Tổng quan của tôi, Cấu hình menu. Seed nhân sự CNTT, xuất Excel Credential, quản lý task nhanh, cấu hình menu sidebar (1 lần lưu)
+1. **Tổng quan.** Màn: Quyền và nhật ký, Công việc và dự án, Cấu hình đơn từ, Hồ sơ đăng nhập, Tổng quan của tôi, Cấu hình menu. Seed nhân sự CNTT, xuất Excel Credential, quản lý task nhanh, cấu hình menu sidebar (1 lần lưu)
 2. **Dự án và công việc.** Màn: Quyền và nhật ký, Công việc và dự án, Hồ sơ đăng nhập. Drop đúng tên FK tường minh khi rollback 3 migration (2 lần lưu)
 3. **Đánh giá.** Sửa tiếp phần Đánh giá (chưa ghi câu mô tả) (2 lần lưu)
 4. **Đánh giá.** Drop bảng pivot mồ côi trước khi rollback evaluation_criteria/positions (1 lần lưu)
@@ -24,7 +24,7 @@ Phiếu tuần: [2026-W38](../summary/2026-W38-summary.md) · Đối soát: [aud
 ### 1. Seed nhân sự CNTT, xuất Excel Credential, quản lý task nhanh, cấu hình menu sidebar
 
 - **Phần:** Tổng quan
-- **Màn hình:** Quyền và nhật ký, Công việc và dự án, Hồ sơ đăng nhập, Tổng quan của tôi, Cấu hình menu
+- **Màn hình:** Quyền và nhật ký, Công việc và dự án, Cấu hình đơn từ, Hồ sơ đăng nhập, Tổng quan của tôi, Cấu hình menu
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu
 

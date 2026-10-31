@@ -6,22 +6,22 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Đơn từ.** Màn: Đơn từ. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả) (10 lần lưu)
+1. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả) (10 lần lưu)
 2. **Định danh và phân quyền.** Màn: Chat. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả) (1 lần lưu)
 3. **Nền tảng.** Sửa tiếp phần Nền tảng (chưa ghi câu mô tả) (1 lần lưu)
 4. **Bảng tin.** Màn: Chat, Bảng tin, Đơn từ. Sửa tiếp phần Bảng tin (chưa ghi câu mô tả) (1 lần lưu)
-5. **Đơn từ.** Màn: Chat, Bảng tin, Đăng nhập, Đơn từ. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả) (3 lần lưu)
+5. **Đơn từ.** Màn: Chat, Bảng tin, Đăng nhập, Cấu hình đơn từ, Đơn từ. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả) (3 lần lưu)
 6. **Nền tảng.** Sửa tiếp phần Nền tảng (chưa ghi câu mô tả) (1 lần lưu)
 7. **Đơn từ.** Màn: Đơn từ. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả) (2 lần lưu)
-8. **Đơn từ.** Màn: Đơn từ. Gom hub cấu hình đơn từ vào thiết lập trạng thái: redirect /config, content header và bỏ liên kết mẫu biểu/quy trình trên trang admin (1 lần lưu)
-9. **Đơn từ.** Màn: Đơn từ. Khôi phục hub /config và thêm nút Về cấu hình trên header các màn cấu hình con (1 lần lưu)
+8. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ. Gom hub cấu hình đơn từ vào thiết lập trạng thái: redirect /config, content header và bỏ liên kết mẫu biểu/quy trình trên trang admin (1 lần lưu)
+9. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ. Khôi phục hub /config và thêm nút Về cấu hình trên header các màn cấu hình con (1 lần lưu)
 10. **Đơn từ.** Màn: Đơn từ. Thiết kế lại thanh chọn bộ trạng thái admin và Việt hoá nhãn mã trên giao diện (1 lần lưu)
 11. **Đơn từ.** Màn: Đơn từ. Gọn thanh chọn bộ trạng thái: bỏ badge và hint thừa, bố cục danh sách rõ hơn (1 lần lưu)
 12. **Đơn từ.** Màn: Đơn từ. Đổi sơ đồ trạng thái sang flow zigzag và hiện lối vào, lối ra ngay khi chọn bước (1 lần lưu)
 13. **Đơn từ.** Màn: Đơn từ. Gộp tiêu đề bộ trạng thái, số liệu và tab xem vào một hàng (1 lần lưu)
 14. **Đơn từ.** Màn: Đơn từ. Thu gọn sidebar bộ trạng thái, mở chi tiết bước bằng drawer, và đổi tab thành dải người phụ trách từng bước (1 lần lưu)
-15. **Đơn từ.** Màn: Đăng nhập, Đơn từ. Gọn drawer chi tiết bước, thu tóm tắt bộ vào mục đóng mở, thêm xóa bộ trạng thái, và bỏ nút sao chép link giới thiệu trên đăng nhập (1 lần lưu)
-16. **Đơn từ.** Màn: Đơn từ. Thêm nút sửa bộ trạng thái để đổi tên, mã và mô tả ngay trên bộ đang chọn (1 lần lưu)
+15. **Đơn từ.** Màn: Đăng nhập, Cấu hình đơn từ, Đơn từ. Gọn drawer chi tiết bước, thu tóm tắt bộ vào mục đóng mở, thêm xóa bộ trạng thái, và bỏ nút sao chép link giới thiệu trên đăng nhập (1 lần lưu)
+16. **Đơn từ.** Màn: Cấu hình đơn từ, Đơn từ. Thêm nút sửa bộ trạng thái để đổi tên, mã và mô tả ngay trên bộ đang chọn (1 lần lưu)
 17. **Đơn từ.** Màn: Đơn từ. Tách sơ đồ và người phụ trách theo hướng thành công hoặc hủy, và chỉ thêm trạng thái từ menu của bộ đã chọn (2 lần lưu)
 
 ## Từng việc
@@ -29,21 +29,21 @@ Phiếu tuần: [2026-W44](../summary/2026-W44-summary.md) · Đối soát: [aud
 ### 1. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả)
 
 - **Phần:** Đơn từ
-- **Màn hình:** Đơn từ
+- **Màn hình:** Cấu hình đơn từ, Đơn từ
 - **Lần lưu:** 10
 - **Đổi dữ liệu:** Không
 
 Các lần lưu, từ cũ đến mới:
 
-- `9fabb0b` — Sửa tiếp cùng việc. Màn: Đơn từ.
-- `e738a40` — Sửa tiếp cùng việc. Màn: Đơn từ.
-- `e97be85` — Sửa tiếp cùng việc. Màn: Đơn từ.
-- `a134c84` — Sửa tiếp cùng việc. Màn: Đơn từ.
+- `9fabb0b` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ.
+- `e738a40` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ.
+- `e97be85` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ.
+- `a134c84` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ.
 - `d992c90` — Sửa tiếp cùng việc. Màn: Đơn từ.
-- `4e6ab65` — Sửa tiếp cùng việc. Màn: Đơn từ.
-- `7e553b6` — Sửa tiếp cùng việc. Màn: Đơn từ.
-- `a7c4ace` — Sửa tiếp cùng việc. Màn: Đơn từ.
-- `48a8319` — Sửa tiếp cùng việc. Màn: Đơn từ.
+- `4e6ab65` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ.
+- `7e553b6` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ.
+- `a7c4ace` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ.
+- `48a8319` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ.
 - `be65614` — Sửa tiếp cùng việc. Màn: Đơn từ.
 
 ### 2. Sửa tiếp phần Định danh và phân quyền (chưa ghi câu mô tả)
@@ -82,14 +82,14 @@ Các lần lưu, từ cũ đến mới:
 ### 5. Sửa tiếp phần Đơn từ (chưa ghi câu mô tả)
 
 - **Phần:** Đơn từ
-- **Màn hình:** Chat, Bảng tin, Đăng nhập, Đơn từ
+- **Màn hình:** Chat, Bảng tin, Đăng nhập, Cấu hình đơn từ, Đơn từ
 - **Lần lưu:** 3
 - **Đổi dữ liệu:** Không
 
 Các lần lưu, từ cũ đến mới:
 
-- `d4fcd95` — Sửa tiếp cùng việc. Màn: Chat, Bảng tin, Đăng nhập, Đơn từ.
-- `a5a1759` — Sửa tiếp cùng việc. Màn: Đơn từ.
+- `d4fcd95` — Sửa tiếp cùng việc. Màn: Chat, Bảng tin, Đăng nhập, Cấu hình đơn từ, Đơn từ.
+- `a5a1759` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Đơn từ.
 - `310a481` — Sửa tiếp cùng việc. Màn: Đơn từ.
 
 ### 6. Sửa tiếp phần Nền tảng (chưa ghi câu mô tả)
@@ -118,7 +118,7 @@ Các lần lưu, từ cũ đến mới:
 ### 8. Gom hub cấu hình đơn từ vào thiết lập trạng thái: redirect /config, content header và bỏ liên kết mẫu biểu/quy trình trên trang admin
 
 - **Phần:** Đơn từ
-- **Màn hình:** Đơn từ
+- **Màn hình:** Cấu hình đơn từ, Đơn từ
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 
@@ -129,7 +129,7 @@ Các lần lưu, từ cũ đến mới:
 ### 9. Khôi phục hub /config và thêm nút Về cấu hình trên header các màn cấu hình con
 
 - **Phần:** Đơn từ
-- **Màn hình:** Đơn từ
+- **Màn hình:** Cấu hình đơn từ, Đơn từ
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 
@@ -195,7 +195,7 @@ Các lần lưu, từ cũ đến mới:
 ### 15. Gọn drawer chi tiết bước, thu tóm tắt bộ vào mục đóng mở, thêm xóa bộ trạng thái, và bỏ nút sao chép link giới thiệu trên đăng nhập
 
 - **Phần:** Đơn từ
-- **Màn hình:** Đăng nhập, Đơn từ
+- **Màn hình:** Đăng nhập, Cấu hình đơn từ, Đơn từ
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 
@@ -206,7 +206,7 @@ Các lần lưu, từ cũ đến mới:
 ### 16. Thêm nút sửa bộ trạng thái để đổi tên, mã và mô tả ngay trên bộ đang chọn
 
 - **Phần:** Đơn từ
-- **Màn hình:** Đơn từ
+- **Màn hình:** Cấu hình đơn từ, Đơn từ
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 

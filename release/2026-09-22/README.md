@@ -11,8 +11,8 @@ Phiếu tuần: [2026-W39](../summary/2026-W39-summary.md) · Đối soát: [aud
 3. **Chat.** Màn: Chat. Sửa tiếp phần Chat (chưa ghi câu mô tả) (1 lần lưu)
 4. **Nền tảng.** Sửa tiếp phần Nền tảng (chưa ghi câu mô tả) (1 lần lưu)
 5. **Chat.** Màn: Chat. Sửa tiếp phần Chat (chưa ghi câu mô tả) (2 lần lưu)
-6. **Dự án và công việc.** Màn: Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Công việc và dự án, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (1 lần lưu)
-7. **Cấu hình workspace.** Màn: Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
+6. **Dự án và công việc.** Màn: Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Công việc và dự án, Cấu hình đơn từ, Tổng quan của tôi, Cấu hình menu. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả) (1 lần lưu)
+7. **Cấu hình workspace.** Màn: Cấu hình đơn từ, Cấu hình menu. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả) (1 lần lưu)
 
 ## Từng việc
 
@@ -75,24 +75,24 @@ Các lần lưu, từ cũ đến mới:
 ### 6. Sửa tiếp phần Dự án và công việc (chưa ghi câu mô tả)
 
 - **Phần:** Dự án và công việc
-- **Màn hình:** Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Công việc và dự án, Tổng quan của tôi, Cấu hình menu
+- **Màn hình:** Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Công việc và dự án, Cấu hình đơn từ, Tổng quan của tôi, Cấu hình menu
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 
 Các lần lưu, từ cũ đến mới:
 
-- `62a8ed3` — Sửa tiếp cùng việc. Màn: Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Công việc và dự án, Tổng quan của tôi, Cấu hình menu.
+- `62a8ed3` — Sửa tiếp cùng việc. Màn: Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Công việc và dự án, Cấu hình đơn từ, Tổng quan của tôi, Cấu hình menu.
 
 ### 7. Sửa tiếp phần Cấu hình workspace (chưa ghi câu mô tả)
 
 - **Phần:** Cấu hình workspace
-- **Màn hình:** Cấu hình menu
+- **Màn hình:** Cấu hình đơn từ, Cấu hình menu
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 
 Các lần lưu, từ cũ đến mới:
 
-- `2125b0d` — Sửa tiếp cùng việc. Màn: Cấu hình menu.
+- `2125b0d` — Sửa tiếp cùng việc. Màn: Cấu hình đơn từ, Cấu hình menu.
 
 ## Khi đưa lên máy chủ
 

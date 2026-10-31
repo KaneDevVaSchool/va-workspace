@@ -8,7 +8,7 @@ Phiếu tuần: [2026-W36](../summary/2026-W36-summary.md) · Đối soát: [aud
 
 1. **Đánh giá.** Xóa backend + DB tính năng Mẫu đánh giá (1 lần lưu)
 2. **Đánh giá.** Gỡ route + Vue page tính năng Mẫu đánh giá (1 lần lưu)
-3. **Cấu hình workspace.** Màn: Cấu hình menu. Gỡ mục sidebar + quyền Mẫu đánh giá (1 lần lưu)
+3. **Cấu hình workspace.** Màn: Cấu hình đơn từ, Cấu hình menu. Gỡ mục sidebar + quyền Mẫu đánh giá (1 lần lưu)
 4. **Dự án và công việc.** Màn: Công việc và dự án, Cấu hình menu. Cập nhật tài liệu sau khi xoá tính năng Mẫu đánh giá (1 lần lưu)
 
 ## Từng việc
@@ -38,7 +38,7 @@ Các lần lưu, từ cũ đến mới:
 ### 3. Gỡ mục sidebar + quyền Mẫu đánh giá
 
 - **Phần:** Cấu hình workspace
-- **Màn hình:** Cấu hình menu
+- **Màn hình:** Cấu hình đơn từ, Cấu hình menu
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 

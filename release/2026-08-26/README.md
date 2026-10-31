@@ -6,35 +6,35 @@ Phiếu tuần: [2026-W35](../summary/2026-W35-summary.md) · Đối soát: [aud
 
 ## Nhìn nhanh
 
-1. **Đánh giá.** Màn: Tiêu chí đánh giá, Cấu hình menu. Định dạng lại modal tiêu chí đánh giá (1 lần lưu)
+1. **Đánh giá.** Màn: Tiêu chí đánh giá. Định dạng lại modal tiêu chí đánh giá (1 lần lưu)
 2. **Bảng tin.** Màn: Bảng tin. Lượt xem bài viết và giới hạn hiển thị theo phòng ban (1 lần lưu)
 3. **Đánh giá.** Màn: Quyền và nhật ký, Tiêu chí đánh giá, Cấu hình menu. Tiêu chí ĐGNL, lịch sử và hub phòng ban (1 lần lưu)
 4. **Đánh giá.** Màn: Tiêu chí đánh giá, Cấu hình menu. Mẫu đánh giá, vị trí đánh giá và import/export Excel (1 lần lưu)
 5. **Bảng tin.** Màn: Nhóm, Bảng tin. Hashtag trong bài viết (1 lần lưu)
 6. **Định danh và phân quyền.** Màn: Quyền và nhật ký. Hiện avatar + phòng ban trong nhật ký hoạt động (1 lần lưu)
 7. **Giao diện gốc.** Thêm màu phụ "Nhân Ái" #009082 (1 lần lưu)
-8. **Cấu hình workspace.** Màn: Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Cấu hình menu. Tuỳ chỉnh menu sidebar theo phòng ban (1 lần lưu)
+8. **Cấu hình workspace.** Màn: Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Cấu hình đơn từ, Cấu hình menu. Tuỳ chỉnh menu sidebar theo phòng ban (1 lần lưu)
 9. **Tài liệu.** Panel chi tiết 28rem + mẫu thao tác dòng gộp 1 dropdown (1 lần lưu)
 10. **Cấu hình workspace.** Màn: Quyền và nhật ký, Cấu hình menu. Áp width 28rem cho panel chi tiết theo mẫu vàng mới (1 lần lưu)
 11. **Đánh giá.** Chặn trùng tên tiêu chí đánh giá trong cùng phòng ban (1 lần lưu)
-12. **Đánh giá.** Màn: Tiêu chí đánh giá, Cấu hình menu. Gộp thao tác theo dòng vào 1 dropdown (mẫu vàng data-table) (1 lần lưu)
+12. **Đánh giá.** Màn: Tiêu chí đánh giá. Gộp thao tác theo dòng vào 1 dropdown (mẫu vàng data-table) (1 lần lưu)
 13. **Bảng tin.** Màn: Bảng tin, Quyền và nhật ký. Đăng ẩn danh + kiểm duyệt bài viết trước khi hiển thị công khai (1 lần lưu)
-14. **Cấu hình workspace.** Màn: Cấu hình menu. Sắp xếp lại thứ tự và nhóm menu sidebar theo phòng ban (1 lần lưu)
+14. **Cấu hình workspace.** Màn: Cấu hình đơn từ, Cấu hình menu. Sắp xếp lại thứ tự và nhóm menu sidebar theo phòng ban (1 lần lưu)
 15. **Đánh giá.** Áp width 28rem cho panel chi tiết ở trang xem đánh giá (1 lần lưu)
 16. **Giao diện gốc.** Nút hiện lại header căn giữa tuyệt đối, không lệch theo flex (1 lần lưu)
 17. **Giao diện gốc.** Thêm trang 404 khi truy cập route không tồn tại (1 lần lưu)
-18. **Định danh và phân quyền.** Màn: Bảng tin, Quyền và nhật ký, Cấu hình menu. Ẩn/hiện menu sidebar toàn hệ thống (superadmin) (1 lần lưu)
+18. **Định danh và phân quyền.** Màn: Bảng tin, Quyền và nhật ký, Cấu hình đơn từ, Cấu hình menu. Ẩn/hiện menu sidebar toàn hệ thống (superadmin) (1 lần lưu)
 19. **Đánh giá.** Cho phép super_admin tạo mẫu đánh giá dùng chung toàn hệ thống (1 lần lưu)
 20. **Định danh và phân quyền.** Màn: Cấu hình menu. Ẩn/hiện menu toàn hệ thống áp dụng cho cả super_admin, nâng cấp trang quản lý (1 lần lưu)
 21. **Tài liệu.** Cập nhật VA_WORKSPACE_OVERVIEW.md — sửa ẩn/hiện menu toàn hệ thống (1 lần lưu)
-22. **Định danh và phân quyền.** Màn: Cấu hình menu. Đổi tên, sắp xếp và cấu hình nhóm menu sidebar toàn hệ thống (1 lần lưu)
+22. **Định danh và phân quyền.** Màn: Cấu hình đơn từ, Cấu hình menu. Đổi tên, sắp xếp và cấu hình nhóm menu sidebar toàn hệ thống (1 lần lưu)
 
 ## Từng việc
 
 ### 1. Định dạng lại modal tiêu chí đánh giá
 
 - **Phần:** Đánh giá
-- **Màn hình:** Tiêu chí đánh giá, Cấu hình menu
+- **Màn hình:** Tiêu chí đánh giá
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 
@@ -111,7 +111,7 @@ Các lần lưu, từ cũ đến mới:
 ### 8. Tuỳ chỉnh menu sidebar theo phòng ban
 
 - **Phần:** Cấu hình workspace
-- **Màn hình:** Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Cấu hình menu
+- **Màn hình:** Bảng tin, Quyền và nhật ký, Tiêu chí đánh giá, Cấu hình đơn từ, Cấu hình menu
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu
 
@@ -155,7 +155,7 @@ Các lần lưu, từ cũ đến mới:
 ### 12. Gộp thao tác theo dòng vào 1 dropdown (mẫu vàng data-table)
 
 - **Phần:** Đánh giá
-- **Màn hình:** Tiêu chí đánh giá, Cấu hình menu
+- **Màn hình:** Tiêu chí đánh giá
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Không
 
@@ -177,7 +177,7 @@ Các lần lưu, từ cũ đến mới:
 ### 14. Sắp xếp lại thứ tự và nhóm menu sidebar theo phòng ban
 
 - **Phần:** Cấu hình workspace
-- **Màn hình:** Cấu hình menu
+- **Màn hình:** Cấu hình đơn từ, Cấu hình menu
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu
 
@@ -221,7 +221,7 @@ Các lần lưu, từ cũ đến mới:
 ### 18. Ẩn/hiện menu sidebar toàn hệ thống (superadmin)
 
 - **Phần:** Định danh và phân quyền
-- **Màn hình:** Bảng tin, Quyền và nhật ký, Cấu hình menu
+- **Màn hình:** Bảng tin, Quyền và nhật ký, Cấu hình đơn từ, Cấu hình menu
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu
 
@@ -265,7 +265,7 @@ Các lần lưu, từ cũ đến mới:
 ### 22. Đổi tên, sắp xếp và cấu hình nhóm menu sidebar toàn hệ thống
 
 - **Phần:** Định danh và phân quyền
-- **Màn hình:** Cấu hình menu
+- **Màn hình:** Cấu hình đơn từ, Cấu hình menu
 - **Lần lưu:** 1
 - **Đổi dữ liệu:** Đổi cấu trúc dữ liệu; Đổi cấu trúc dữ liệu
 
