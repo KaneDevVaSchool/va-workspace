@@ -20,7 +20,9 @@ const LEAVE_FILTERS = [
   { id: 'all', label: 'Tất cả' },
   { id: 'pending', label: 'Chờ duyệt' },
   { id: 'approved', label: 'Đã duyệt' },
+  { id: 'cancel_requested', label: 'Chờ duyệt huỷ' },
   { id: 'rejected', label: 'Từ chối' },
+  { id: 'cancelled', label: 'Đã huỷ' },
 ];
 
 const route = useRoute();
@@ -116,6 +118,10 @@ const leaveLoaded = ref(false);
 
 const selected = ref(null);
 const exportingId = ref('');
+const cancelDialogOpen = ref(false);
+const cancelReason = ref('');
+const cancelSubmitting = ref(false);
+const cancelTarget = ref(null);
 
 function statusMeta(status) {
   return STATUS_META[status] ?? STATUS_META.pending;
@@ -316,6 +322,57 @@ async function exportLeaveForm(request) {
     showClientToast('error', message || 'Không xuất được đơn nghỉ phép.');
   } finally {
     exportingId.value = '';
+  }
+}
+
+function canCancelLeave(status) {
+  return status === 'pending' || status === 'approved';
+}
+
+function cancelRequiresReason(status) {
+  return status === 'approved';
+}
+
+function openCancelDialog(request) {
+  cancelTarget.value = request;
+  cancelReason.value = '';
+  cancelDialogOpen.value = true;
+}
+
+function closeCancelDialog() {
+  if (cancelSubmitting.value) return;
+  cancelDialogOpen.value = false;
+  cancelTarget.value = null;
+  cancelReason.value = '';
+}
+
+async function submitCancelLeave() {
+  const request = cancelTarget.value;
+  const id = String(request?.id ?? '');
+  if (!id || cancelSubmitting.value) return;
+
+  const reason = cancelReason.value.trim();
+  if (cancelRequiresReason(request.status) && !reason) {
+    showClientToast('warning', 'Nhập lý do xin hủy đơn.');
+    return;
+  }
+
+  cancelSubmitting.value = true;
+  try {
+    const { data } = await window.axios.post(`/api/attendance/leave-requests/${id}/cancel`, {
+      cancel_reason: reason || null,
+    });
+    const updated = mapLeaveRow(data?.data ?? {}, 0);
+    requests.value = requests.value.map((row) => (row.id === id ? { ...row, ...updated, id } : row));
+    if (selected.value?.id === id) {
+      selected.value = { ...selected.value, ...updated, id };
+    }
+    closeCancelDialog();
+    showClientToast('success', data?.message || 'Đã gửi yêu cầu hủy đơn.');
+  } catch (err) {
+    showClientToast('error', err?.response?.data?.message || 'Không hủy được đơn nghỉ.');
+  } finally {
+    cancelSubmitting.value = false;
   }
 }
 
@@ -551,6 +608,19 @@ onBeforeUnmount(() => {
             {{ leaveFormHint(selected.status) }}
           </p>
 
+          <button
+            v-if="canCancelLeave(selected.status)"
+            type="button"
+            class="sheet__cancel"
+            @click="openCancelDialog(selected)"
+          >
+            <AppIcon name="close" :size="16" />
+            Hủy đơn nghỉ
+          </button>
+          <p v-if="selected.status === 'approved'" class="sheet__cancel-hint">
+            Đơn đã duyệt — cần nhập lý do và chờ người duyệt đồng ý hủy trên HRM.
+          </p>
+
           <dl class="sheet__details">
             <div class="sheet__row">
               <dt>Thời điểm gửi</dt>
@@ -620,6 +690,60 @@ onBeforeUnmount(() => {
               <dd class="sheet__reason">{{ selected.cancelReason }}</dd>
             </div>
           </dl>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="cancelDialogOpen && cancelTarget"
+        class="cancel-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="leave-cancel-title"
+        @click.self="closeCancelDialog"
+      >
+        <div class="cancel-panel hide-scrollbar">
+          <div class="cancel-panel__handle" aria-hidden="true" />
+          <header class="cancel-panel__head">
+            <h2 id="leave-cancel-title">Hủy đơn nghỉ</h2>
+            <button type="button" class="cancel-panel__close" aria-label="Đóng" @click="closeCancelDialog">
+              <AppIcon name="close" :size="18" />
+            </button>
+          </header>
+          <p class="cancel-panel__lead">
+            <template v-if="cancelRequiresReason(cancelTarget.status)">
+              Nhập lý do xin hủy. Người duyệt sẽ xử lý trên HRM.
+            </template>
+            <template v-else>
+              Đơn đang chờ duyệt sẽ bị hủy ngay trên HRM.
+            </template>
+          </p>
+          <label v-if="cancelRequiresReason(cancelTarget.status)" class="cancel-panel__label" for="leave-cancel-reason">
+            Lý do huỷ
+          </label>
+          <textarea
+            v-if="cancelRequiresReason(cancelTarget.status)"
+            id="leave-cancel-reason"
+            v-model="cancelReason"
+            class="cancel-panel__input"
+            rows="4"
+            maxlength="2000"
+            placeholder="Ví dụ: đổi lịch, không nghỉ nữa…"
+          />
+          <div class="cancel-panel__actions">
+            <button type="button" class="cancel-panel__btn cancel-panel__btn--ghost" @click="closeCancelDialog">
+              Quay lại
+            </button>
+            <button
+              type="button"
+              class="cancel-panel__btn cancel-panel__btn--danger"
+              :disabled="cancelSubmitting"
+              @click="submitCancelLeave"
+            >
+              {{ cancelSubmitting ? 'Đang gửi…' : 'Xác nhận hủy' }}
+            </button>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -1025,6 +1149,143 @@ onBeforeUnmount(() => {
 .sheet__export-hint {
   margin: -0.35rem 0 var(--space-3);
   padding: 0 0.15rem;
+}
+
+.sheet__cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-bottom: var(--space-2);
+  padding: 0.7rem 1rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.sheet__cancel-hint {
+  margin: 0 0 var(--space-3);
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+.cancel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 650;
+  display: flex;
+  align-items: flex-end;
+  background: var(--color-sidebar-overlay, rgba(15, 23, 42, 0.45));
+}
+
+.cancel-panel {
+  width: 100%;
+  max-height: min(85vh, 28rem);
+  padding: var(--space-3) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.cancel-panel__handle {
+  width: 2.5rem;
+  height: 0.25rem;
+  margin: 0 auto var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+}
+
+.cancel-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.cancel-panel__head h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.cancel-panel__close {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.cancel-panel__lead {
+  margin: 0 0 var(--space-3);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+.cancel-panel__label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.cancel-panel__input {
+  width: 100%;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font-family: inherit;
+  font-size: 0.875rem;
+  resize: vertical;
+}
+
+.cancel-panel__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.cancel-panel__btn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cancel-panel__btn--ghost {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.cancel-panel__btn--danger {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.cancel-panel__btn:disabled {
+  opacity: 0.65;
+  cursor: default;
 }
 
 .sheet-overlay {

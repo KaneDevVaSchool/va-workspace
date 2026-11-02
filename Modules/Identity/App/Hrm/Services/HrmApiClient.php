@@ -278,6 +278,57 @@ class HrmApiClient
     }
 
     /**
+     * Xin hủy đơn nghỉ — POST /api/v1/leave/requests/{uuid}/cancel (ability leave:write).
+     *
+     * @return array<string, mixed>
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function cancelLeaveRequest(string $requestUuid, string $employeeUuid, ?string $cancelReason = null): array
+    {
+        $payload = ['employee_uuid' => $employeeUuid];
+        if (filled($cancelReason)) {
+            $payload['cancel_reason'] = $cancelReason;
+        }
+
+        try {
+            $response = HrmOutboundHttp::leaveCatalogClient(30)->post(
+                '/api/v1/leave/requests/'.$requestUuid.'/cancel',
+                $payload,
+            );
+        } catch (ConnectionException $e) {
+            throw new HrmApiUnavailable('timeout/network lỗi khi gọi POST /api/v1/leave/requests/{uuid}/cancel', $e);
+        }
+
+        if ($response->status() === 422) {
+            throw HrmApiUnavailable::userFacing(
+                $this->humanizeLeaveRequestErrorMessage($this->firstLeaveRequestErrorMessage($response)),
+            );
+        }
+
+        if ($response->status() === 403) {
+            $code = $response->json('error.code');
+            $message = (string) ($response->json('error.message') ?? '');
+            if ($code === 'MISSING_ABILITY' || $this->isVerifyTokenAbilityDenied($message, $code)) {
+                throw HrmApiUnavailable::userFacing(
+                    'Hệ thống chưa được cấp quyền hủy đơn nghỉ trên HRM. Liên hệ IT hoặc HR.'
+                );
+            }
+            if ($message !== '') {
+                throw HrmApiUnavailable::userFacing($message);
+            }
+        }
+
+        if (! $response->successful()) {
+            $this->failLeaveCatalogResponse($response, 'POST /api/v1/leave/requests/{uuid}/cancel');
+        }
+
+        $data = $response->json('data');
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
      * Số dư phép năm — GET /api/v1/leave/balances (ability leave:read).
      *
      * @return array<string, mixed>

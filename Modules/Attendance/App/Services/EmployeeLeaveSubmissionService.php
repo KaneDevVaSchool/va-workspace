@@ -88,4 +88,21 @@ class EmployeeLeaveSubmissionService
 
         return $page['items'];
     }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * @throws HrmApiUnavailable
+     */
+    public function cancelForUser(User $user, string $requestUuid, ?string $cancelReason): array
+    {
+        if (! filled($user->hrm_employee_uuid) && ! filled($user->email)) {
+            throw HrmApiUnavailable::userFacing('Tài khoản chưa liên kết nhân sự HRM.');
+        }
+
+        $employeeUuid = $this->hrmApi->resolveLeaveCatalogEmployeeUuid($user);
+        $reason = filled($cancelReason) ? trim($cancelReason) : null;
+
+        return $this->hrmApi->cancelLeaveRequest($requestUuid, (string) $employeeUuid, $reason);
+    }
 }

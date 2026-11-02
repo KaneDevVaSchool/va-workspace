@@ -124,6 +124,42 @@ class EmployeeLeaveRequestTest extends TestCase
         $this->assertStringContainsString('NP-2610-0008', urldecode((string) $response->headers->get('content-disposition')));
     }
 
+    public function test_cancels_leave_request_via_hrm(): void
+    {
+        $uuid = '33333333-3333-4333-8333-333333333333';
+
+        Http::fake([
+            'https://hrm-leave.test/api/v1/employees/emp-uuid-1' => Http::response([
+                'data' => ['uuid' => 'emp-uuid-1'],
+            ]),
+            'https://hrm-leave.test/api/v1/leave/requests/'.$uuid.'/cancel' => Http::response([
+                'data' => [
+                    'uuid' => $uuid,
+                    'status' => 'cancel_requested',
+                    'cancel_reason' => 'Đổi lịch',
+                ],
+            ]),
+        ]);
+
+        $user = User::factory()->create([
+            'hrm_employee_uuid' => 'emp-uuid-1',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/api/attendance/leave-requests/'.$uuid.'/cancel', [
+                'cancel_reason' => 'Đổi lịch',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'cancel_requested');
+
+        Http::assertSent(function ($request) use ($uuid) {
+            return $request->url() === 'https://hrm-leave.test/api/v1/leave/requests/'.$uuid.'/cancel'
+                && $request['employee_uuid'] === 'emp-uuid-1'
+                && $request['cancel_reason'] === 'Đổi lịch';
+        });
+    }
+
     public function test_refuses_leave_form_when_not_approved(): void
     {
         config(['database.connections.hrm.database' => null]);

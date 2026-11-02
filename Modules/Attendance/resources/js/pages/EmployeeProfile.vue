@@ -1,12 +1,17 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import AppIcon from '@/components/AppIcon.vue';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { showClientToast } from '@/lib/clientToast';
 import { useEmployeeMobileView } from '@/composables/useEmployeeMobileView';
 import { useAuthStore } from '@modules/Identity/resources/js/stores/auth.js';
 
 const auth = useAuthStore();
+const router = useRouter();
 const { isEmployeeMobile } = useEmployeeMobileView();
+const logoutConfirmOpen = ref(false);
+const loggingOut = ref(false);
 /** Trong shell mobile: một header (EmployeeMobileLayout), không hero gradient thứ hai. */
 const useMobileShellProfile = computed(() => isEmployeeMobile.value);
 const registerPageRefresh = inject('employeePageRefreshRegister', null);
@@ -409,6 +414,20 @@ function closeChangeDialog() {
   changeDialogOpen.value = false;
 }
 
+async function confirmLogout() {
+  loggingOut.value = true;
+  try {
+    await auth.logout();
+    logoutConfirmOpen.value = false;
+    await router.push({ name: 'login' });
+    showClientToast('success', 'Đã đăng xuất.');
+  } catch {
+    showClientToast('error', 'Đăng xuất thất bại. Vui lòng thử lại.');
+  } finally {
+    loggingOut.value = false;
+  }
+}
+
 async function submitChangeRequest() {
   changeSubmitting.value = true;
   try {
@@ -698,6 +717,23 @@ onBeforeUnmount(() => {
       </ul>
     </section>
 
+    <section v-if="!loading" class="emp-profile__card emp-profile__card--session">
+      <button type="button" class="emp-profile__logout" @click="logoutConfirmOpen = true">
+        <AppIcon name="logout" :size="18" :stroke-width="2" />
+        <span>Đăng xuất</span>
+      </button>
+    </section>
+
+    <ConfirmDialog
+      v-model:open="logoutConfirmOpen"
+      title="Xác nhận đăng xuất"
+      description="Bạn sẽ thoát tài khoản trên thiết bị này. Phiên làm việc hiện tại sẽ kết thúc."
+      confirm-label="Đăng xuất"
+      danger
+      :loading="loggingOut"
+      @confirm="confirmLogout"
+    />
+
     <Teleport to="body">
       <Transition name="emp-sheet">
         <div
@@ -910,6 +946,34 @@ onBeforeUnmount(() => {
 
 .emp-profile__hub-cta:active {
   transform: scale(0.99);
+}
+
+.emp-profile__card--session {
+  padding: var(--space-3);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
+}
+
+.emp-profile__logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.emp-profile__logout:active {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface-muted));
 }
 
 .emp-profile__avatar-btn--hub {

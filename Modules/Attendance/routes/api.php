@@ -23,6 +23,9 @@ Route::middleware('auth')->prefix('attendance')->name('attendance.')->group(func
         ->name('leave-requests.form');
     Route::post('/leave-requests', [EmployeeLeaveRequestController::class, 'store'])
         ->name('leave-requests.store');
+    Route::post('/leave-requests/{uuid}/cancel', [EmployeeLeaveRequestController::class, 'cancel'])
+        ->whereUuid('uuid')
+        ->name('leave-requests.cancel');
 
     Route::get('/check-in-context', [EmployeeAttendanceCheckInContextController::class, 'show'])
         ->name('check-in-context.show');

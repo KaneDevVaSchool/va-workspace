@@ -99,4 +99,38 @@ class EmployeeLeaveRequestController extends Controller
             'data' => $created,
         ], 201);
     }
+
+    public function cancel(Request $request, string $uuid, EmployeeLeaveSubmissionService $submissions): JsonResponse
+    {
+        $validated = $request->validate([
+            'cancel_reason' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $updated = $submissions->cancelForUser(
+                $request->user(),
+                $uuid,
+                $validated['cancel_reason'] ?? null,
+            );
+        } catch (HrmApiUnavailable $e) {
+            if (! $e->isConnectionFailure()) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            return response()->json([
+                'message' => 'Không hủy được đơn nghỉ qua HRM.',
+                'detail' => config('app.debug') ? $e->getMessage() : null,
+            ], 503);
+        }
+
+        $status = (string) ($updated['status'] ?? '');
+        $message = $status === 'cancelled'
+            ? 'Đã hủy đơn nghỉ.'
+            : 'Đã gửi yêu cầu hủy đơn, chờ người duyệt trên HRM.';
+
+        return response()->json([
+            'message' => $message,
+            'data' => $updated,
+        ]);
+    }
 }

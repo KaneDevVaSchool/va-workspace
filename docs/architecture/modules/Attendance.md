@@ -19,6 +19,7 @@ Hub **Lịch sử** (`/dashboard/me/requests` không có query) chỉ hiện 2 �
 
 - `GET /api/attendance/leave-requests` — `EmployeeLeaveRequestController::index` → `EmployeeLeaveSubmissionService::recentForUser` → `HrmApiClient::listLeaveRequests` (uuid từ `resolveLeaveCatalogEmployeeUuid`).
 - `POST /api/attendance/leave-requests` — tạo đơn trên HRM.
+- `POST /api/attendance/leave-requests/{uuid}/cancel` — hủy đơn (`EmployeeLeaveSubmissionService::cancelForUser` → HRM `POST /api/v1/leave/requests/{uuid}/cancel`). Đơn **pending** hủy ngay; đơn **approved** cần `cancel_reason`, chuyển `cancel_requested` chờ duyệt trên HRM.
 - `GET /api/attendance/leave-requests/{uuid}/form` — PDF BM.01 (`EmployeeLeaveFormService::downloadForUser`).
 
 Uuid nhân viên: ưu tiên `users.hrm_employee_uuid` nếu HRM catalog biết uuid đó, không thì tra theo email (`company_email`). Chi tiết mirror: [Identity.md](./Identity.md).
@@ -30,7 +31,8 @@ Mẫu **BM.01/HN.QT.02**, hiệu lực 01/07/2025, revision 01. Mã phiếu `NP-
 - Chỉ đơn **của chính người đăng nhập**, trạng thái **`approved`**. Khác trạng thái: 422 «Chỉ xuất được đơn đã được duyệt.» Không thấy đơn: 404.
 - HRM không kết nối: 503 «Không xuất được đơn nghỉ phép từ HRM.»
 - `EmployeeLeaveFormService` render `attendance::pdf.leave-form` (DomPDF A4). Logo/watermark: `Modules/Attendance/resources/images/va-form-*.png`.
-- UI (`EmployeeRequests.vue`, `/dashboard/me/requests?view=leave`, `meta.title` Lịch sử): nút «Xuất đơn nghỉ phép» luôn hiện; chỉ bấm được khi `approved`. Đơn chờ / từ chối / huỷ thì nút disabled và dòng chữ nghiêng giải thích (chỉ xuất PDF khi đã duyệt). **Không** đặt trên trang Nghỉ phép (`/dashboard/me/leave`).
+- UI (`EmployeeRequests.vue`, `/dashboard/me/requests?view=leave`, `meta.title` Lịch sử): nút «Xuất đơn nghỉ phép» luôn hiện; chỉ bấm được khi `approved`. Đơn chờ / từ chối / huỷ thì nút disabled và dòng chữ nghiêng giải thích (chỉ xuất PDF khi đã duyệt). Trong sheet chi tiết: nút **Hủy đơn nghỉ** khi `pending` hoặc `approved` (đã duyệt bắt buộc nhập lý do). **Không** đặt trên trang Nghỉ phép (`/dashboard/me/leave`).
+- PWA hồ sơ (`EmployeeProfile.vue`, `/dashboard/me/profile`): nút **Đăng xuất** cuối trang (xác nhận qua `ConfirmDialog`, gọi `auth.logout()`).
 
 ## Việc in (layout)
 
